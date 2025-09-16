@@ -472,9 +472,6 @@
                 <input type="email" id="email" name="email" class="form-input" required>
             </div>
             
-            <input type="hidden" name="timestamp" id="timestamp">
-            <input type="hidden" name="spot_number" id="spot_number">
-            
             <button type="submit" class="submit-button" id="submitButton">
                 Claim Your Spot
             </button>
@@ -541,9 +538,7 @@
             // Get form data
             const formData = {
                 name: document.getElementById('name').value,
-                email: document.getElementById('email').value,
-                timestamp: new Date().toISOString(),
-                spot_number: 21 - spotsRemaining // Calculate which spot they got
+                email: document.getElementById('email').value
             };
             
             // Update button
