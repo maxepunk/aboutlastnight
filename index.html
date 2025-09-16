@@ -54,47 +54,26 @@
 
         /* Glitch Text Effect */
         @keyframes glitchText {
-            0% {
+            0%, 94%, 100% {
                 text-shadow: 
-                    0.05em 0 0 rgba(255, 0, 0, 0.75),
-                    -0.05em -0.025em 0 rgba(0, 255, 255, 0.75),
-                    0.025em 0.05em 0 rgba(255, 255, 0, 0.75);
+                    0 0 30px rgba(255, 0, 0, 0.8),
+                    0 0 60px rgba(255, 0, 0, 0.5),
+                    0 0 90px rgba(255, 0, 0, 0.3);
+                transform: translateX(0);
             }
-            15% {
+            95% {
                 text-shadow: 
-                    0.05em 0 0 rgba(255, 0, 0, 0.75),
-                    -0.05em -0.025em 0 rgba(0, 255, 255, 0.75),
-                    0.025em 0.05em 0 rgba(255, 255, 0, 0.75);
+                    -2px 0 30px rgba(0, 255, 255, 0.8),
+                    2px 0 30px rgba(255, 0, 255, 0.8),
+                    0 0 60px rgba(255, 0, 0, 0.5);
+                transform: translateX(2px);
             }
-            16% {
+            96% {
                 text-shadow: 
-                    -0.05em -0.025em 0 rgba(255, 0, 0, 0.75),
-                    0.025em 0.025em 0 rgba(0, 255, 255, 0.75),
-                    -0.05em -0.05em 0 rgba(255, 255, 0, 0.75);
-            }
-            49% {
-                text-shadow: 
-                    -0.05em -0.025em 0 rgba(255, 0, 0, 0.75),
-                    0.025em 0.025em 0 rgba(0, 255, 255, 0.75),
-                    -0.05em -0.05em 0 rgba(255, 255, 0, 0.75);
-            }
-            50% {
-                text-shadow: 
-                    0.025em 0.05em 0 rgba(255, 0, 0, 0.75),
-                    0.05em 0 0 rgba(0, 255, 255, 0.75),
-                    0 -0.05em 0 rgba(255, 255, 0, 0.75);
-            }
-            99% {
-                text-shadow: 
-                    0.025em 0.05em 0 rgba(255, 0, 0, 0.75),
-                    0.05em 0 0 rgba(0, 255, 255, 0.75),
-                    0 -0.05em 0 rgba(255, 255, 0, 0.75);
-            }
-            100% {
-                text-shadow: 
-                    -0.025em 0 0 rgba(255, 0, 0, 0.75),
-                    -0.025em -0.025em 0 rgba(0, 255, 255, 0.75),
-                    -0.025em -0.05em 0 rgba(255, 255, 0, 0.75);
+                    2px 0 30px rgba(0, 255, 255, 0.8),
+                    -2px 0 30px rgba(255, 0, 255, 0.8),
+                    0 0 60px rgba(255, 0, 0, 0.5);
+                transform: translateX(-1px);
             }
         }
 
@@ -152,7 +131,8 @@
                 0 0 60px rgba(255, 0, 0, 0.5),
                 0 0 90px rgba(255, 0, 0, 0.3);
             margin-bottom: 1rem;
-            animation: glitchText 2s infinite;
+            animation: glitchText 15s ease-in-out infinite;
+            animation-delay: 2s;
         }
 
         .tagline {
@@ -415,7 +395,12 @@
         /* Creators as Interrogation Files */
         .creators {
             padding: 6rem 2rem;
-            background: #0a0a0a;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(204,0,0,0.03), transparent 40%),
+                radial-gradient(circle at 80% 50%, rgba(204,0,0,0.02), transparent 40%),
+                linear-gradient(rgba(0,0,0,0.93), rgba(0,0,0,0.95)),
+                url('images/Noirroom.png') center/cover fixed;
+            position: relative;
         }
 
         .file-cabinet {
@@ -547,15 +532,31 @@
             position: sticky;
             top: 0;
             background: linear-gradient(to bottom, 
-                        rgba(0, 0, 0, 1) 0%, 
-                        rgba(0, 0, 0, 0.98) 50%, 
-                        rgba(0, 0, 0, 0.95) 100%);
-            border-bottom: 2px solid #cc0000;
-            padding: 1rem 2rem;
+                        rgba(0, 0, 0, 0.98) 0%, 
+                        rgba(10, 0, 0, 0.96) 50%, 
+                        rgba(0, 0, 0, 0.94) 100%);
+            border-bottom: 1px solid rgba(204, 0, 0, 0.3);
+            padding: 0.8rem 2rem;
             z-index: 90;
             backdrop-filter: blur(10px);
-            margin: 0; /* Remove any default margins */
-            box-shadow: 0 4px 20px rgba(0,0,0,0.8); /* Add depth */
+            margin: 0;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.9),
+                        inset 0 -1px 0 rgba(204, 0, 0, 0.1);
+            position: relative;
+        }
+        
+        .booking-bar::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(to right, 
+                transparent,
+                rgba(204, 0, 0, 0.2) 20%,
+                rgba(204, 0, 0, 0.2) 80%,
+                transparent);
         }
 
         .booking-content {
@@ -567,13 +568,16 @@
         }
 
         .booking-dates {
-            font-size: 1.1rem;
-            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'Barlow', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
 
         .preview-dates {
-            color: #cc0000;
-            font-weight: 700;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
         }
 
         .divider {
@@ -582,20 +586,40 @@
         }
 
         .booking-cta {
-            padding: 0.8rem 2rem;
-            background: #cc0000;
-            color: white;
+            padding: 0.6rem 1.8rem;
+            background: transparent;
+            border: 1px solid rgba(204, 0, 0, 0.5);
+            color: rgba(255, 255, 255, 0.9);
             text-decoration: none;
-            font-weight: 700;
+            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.12em;
             transition: all 0.3s;
+            font-size: 0.95rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .booking-cta::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(204, 0, 0, 0.2);
+            transition: left 0.3s;
+            z-index: -1;
         }
 
         .booking-cta:hover {
-            background: #ff0000;
-            box-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
-            animation: policeLights 1s infinite;
+            border-color: #cc0000;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(204, 0, 0, 0.3);
+        }
+        
+        .booking-cta:hover::before {
+            left: 0;
         }
 
         /* Container */
@@ -855,7 +879,13 @@
             }
             
             .booking-dates {
-                font-size: 0.9rem;
+                font-size: 0.7rem;
+                line-height: 1.5;
+            }
+            
+            .booking-dates span[style*="CASE"] {
+                display: block;
+                margin-bottom: 0.3rem;
             }
             
             .process-grid {
@@ -886,8 +916,29 @@
 
         /* Scan Line Effect */
         @keyframes scanline {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(100vh); }
+            0% { 
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            5% {
+                opacity: 0.6;
+            }
+            95% {
+                opacity: 0.6;
+            }
+            100% { 
+                transform: translateY(100vh);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes scanline-fast {
+            0% { 
+                transform: translateY(-100%);
+            }
+            100% { 
+                transform: translateY(100vh);
+            }
         }
 
         .scanline {
@@ -895,12 +946,36 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
-            background: linear-gradient(to bottom, transparent, rgba(204, 0, 0, 0.8), transparent);
-            animation: scanline 8s linear infinite;
+            height: 2px;
+            background: linear-gradient(to bottom, 
+                transparent, 
+                rgba(204, 0, 0, 0.2) 20%,
+                rgba(204, 0, 0, 0.3) 50%,
+                rgba(204, 0, 0, 0.2) 80%,
+                transparent);
+            animation: scanline 30s ease-in-out infinite;
+            animation-delay: 5s; /* Initial delay before first scan */
             pointer-events: none;
             z-index: 100;
+            mix-blend-mode: screen;
+            will-change: transform, opacity;
         }
+        
+        /* Ghost trail effect */
+        .scanline::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            height: 10px;
+            background: linear-gradient(to bottom,
+                rgba(204, 0, 0, 0.05),
+                transparent);
+            filter: blur(3px);
+        }
+        
+        /* Removed broken CSS - will handle in JavaScript */
 
         /* Section Dividers */
         .section-divider {
@@ -935,16 +1010,21 @@
 
         /* Respect reduced motion preferences */
         @media (prefers-reduced-motion: reduce) {
-            .hero-bg-image,
-            .narrative-bg {
+            .hero-bg-image {
                 transform: none !important;
+            }
+            .scanline {
+                display: none;
+            }
+            h1 {
+                animation: none;
             }
         }
     </style>
 </head>
 <body>
     <!-- Scanning Effect -->
-    <div class="scanline"></div>
+    <div class="scanline" aria-hidden="true"></div>
 
     <!-- Hero Section with Rave Background -->
     <section class="hero">
@@ -960,17 +1040,20 @@
         </div>
     </section>
 
-    <!-- Booking Info Bar -->
+    <!-- Investigation Status Bar -->
     <div class="booking-bar" id="booking-bar">
         <div class="booking-content">
             <div class="booking-dates">
-                <span class="preview-dates">PREVIEW: Oct 4-12</span>
+                <span style="color: rgba(204, 0, 0, 0.7); font-weight: 700; letter-spacing: 0.15em; margin-right: 1rem;">CASE #ALN-2025</span>
+                <span class="preview-dates">STATUS: ACCEPTING INVESTIGATORS</span>
                 <span class="divider">•</span>
-                <span class="main-dates">MAIN RUN: Oct 18 - Nov 9</span>
+                <span class="main-dates">Oct 4-12 Preview</span>
                 <span class="divider">•</span>
-                <span class="min-players">5 player minimum • $75</span>
+                <span class="min-players">Oct 18-Nov 9 Full Investigation</span>
+                <span class="divider">•</span>
+                <span style="color: rgba(204, 0, 0, 0.9);">$75/person</span>
             </div>
-            <a href="#submit-evidence" class="booking-cta">Join Preview List</a>
+            <a href="#submit-evidence" class="booking-cta">Claim Your Identity</a>
         </div>
     </div>
 
@@ -1410,6 +1493,61 @@
                 this.style.animation = '';
             });
         });
+        
+        // Intelligent animation control
+        (function() {
+            const scanline = document.querySelector('.scanline');
+            const heroTitle = document.querySelector('h1');
+            let scrollTimer = null;
+            let isScrolling = false;
+            
+            // Pause scanline while scrolling for better readability
+            window.addEventListener('scroll', function() {
+                if (!isScrolling) {
+                    isScrolling = true;
+                    scanline.style.animationPlayState = 'paused';
+                }
+                
+                clearTimeout(scrollTimer);
+                scrollTimer = setTimeout(function() {
+                    isScrolling = false;
+                    scanline.style.animationPlayState = 'running';
+                }, 500);
+            }, { passive: true });
+            
+            // Reduce animation intensity when user is reading (no mouse movement)
+            let mouseTimer;
+            let reduceAnimations = false;
+            
+            function handleMouseMove() {
+                if (reduceAnimations) {
+                    reduceAnimations = false;
+                    if (scanline) scanline.style.opacity = '1';
+                    if (heroTitle) heroTitle.style.animationDuration = '15s';
+                }
+                
+                clearTimeout(mouseTimer);
+                mouseTimer = setTimeout(function() {
+                    reduceAnimations = true;
+                    if (scanline) scanline.style.opacity = '0.3';
+                    if (heroTitle) heroTitle.style.animationDuration = '30s';
+                }, 10000); // After 10 seconds of no movement
+            }
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            handleMouseMove(); // Initialize
+            
+            // Fast scan when hovering hero section
+            const heroSection = document.querySelector('.hero');
+            if (heroSection && scanline) {
+                heroSection.addEventListener('mouseenter', function() {
+                    scanline.style.animationDuration = '3s';
+                });
+                heroSection.addEventListener('mouseleave', function() {
+                    scanline.style.animationDuration = '30s';
+                });
+            }
+        })();
 
         // Reveal memory blocks and sections on scroll
         const observerOptions = {
