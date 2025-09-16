@@ -19,15 +19,68 @@ function doPost(e) {
     // Append to sheet
     sheet.appendRow(newRow);
     
-    // Send email notification for early signups (first 50)
+    const memoryId = sheet.getLastRow() - 1; // Store for use in both emails
+    
+    // Send confirmation email to participant
+    if (formData.email) {
+      MailApp.sendEmail({
+        to: formData.email,
+        subject: 'MEMORY RECOVERY INITIATED | About Last Night',
+        htmlBody: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #000;">
+            <div style="background: linear-gradient(135deg, #000 0%, #1a0000 100%); padding: 30px; text-align: center; border-bottom: 2px solid #cc0000;">
+              <h1 style="color: #cc0000; margin: 0; font-size: 28px; letter-spacing: 2px; text-shadow: 0 0 20px rgba(204, 0, 0, 0.5);">MEMORY RECOVERY INITIATED</h1>
+              <p style="color: rgba(255, 255, 255, 0.6); margin-top: 10px; font-size: 12px; letter-spacing: 3px;">SUBJECT #${memoryId}</p>
+            </div>
+            <div style="background: #0a0a0a; padding: 40px 30px; color: #fff;">
+              <div style="border-left: 3px solid #cc0000; padding-left: 20px; margin-bottom: 30px;">
+                <h2 style="color: #fff; font-size: 20px; margin-bottom: 15px;">Your memories are being processed...</h2>
+                <p style="color: rgba(255, 255, 255, 0.8); line-height: 1.6; font-size: 16px;">
+                  The fragments from last night are locked away, but not lost. When the investigation opens, you'll be among the first to know.
+                </p>
+              </div>
+              
+              <div style="background: rgba(204, 0, 0, 0.1); border: 1px solid rgba(204, 0, 0, 0.3); padding: 20px; margin: 25px 0;">
+                <h3 style="color: #cc0000; margin-top: 0; font-size: 14px; letter-spacing: 2px; text-transform: uppercase;">Investigation Timeline</h3>
+                <p style="color: rgba(255, 255, 255, 0.9); margin: 10px 0; font-size: 15px;">
+                  <strong style="color: #cc0000;">OCT 4-12:</strong> Preview investigations (limited access)<br>
+                  <strong style="color: #cc0000;">OCT 18 - NOV 9:</strong> Full investigation opens
+                </p>
+                <p style="color: rgba(255, 255, 255, 0.7); margin-top: 15px; font-size: 14px;">
+                  <strong>Location:</strong> Off the Couch Games, Fremont CA<br>
+                  <strong>Duration:</strong> 90 minutes<br>
+                  <strong>Players:</strong> 5-20 per session<br>
+                  <strong>Price:</strong> $75 per investigator
+                </p>
+              </div>
+              
+              <div style="margin-top: 30px; padding: 20px; background: rgba(0, 0, 0, 0.5); border-top: 1px solid rgba(204, 0, 0, 0.2);">
+                <p style="color: rgba(255, 255, 255, 0.6); font-size: 14px; line-height: 1.6; font-style: italic; text-align: center;">
+                  "Some memories are worth killing for."
+                </p>
+              </div>
+              
+              <div style="margin-top: 30px; text-align: center;">
+                <p style="color: rgba(255, 255, 255, 0.5); font-size: 13px;">
+                  You're receiving this because you initiated memory recovery at aboutlastnight.live<br>
+                  Your memory ID: #${memoryId}
+                </p>
+              </div>
+            </div>
+          </div>
+        `
+      });
+    }
+    
+    // Send notification to organizers for early signups (first 50)
     if (formData.email && sheet.getLastRow() <= 51) { // Including header row
       MailApp.sendEmail({
         to: 'max@maxepunk.com, Hello@gr8ergoodgames.com', // <-- CHANGE THIS (ADD SHUAI)
-        subject: `[MEMORY #${sheet.getLastRow() - 1}] ${formData.email}`,
+        subject: `[MEMORY #${memoryId}] ${formData.email}`,
         htmlBody: `
           <h3>MEMORY RECOVERY INITIATED</h3>
           <p><b>Subject:</b> ${formData.email}</p>
-          <p><b>Memory ID:</b> #${sheet.getLastRow() - 1}</p>
+          <p><b>Memory ID:</b> #${memoryId}</p>
           <p><b>Source:</b> ${formData.utm_source || 'direct'}</p>
           <p><b>Device:</b> ${formData.device_type || 'unknown'}</p>
           <hr>
@@ -38,7 +91,7 @@ function doPost(e) {
     
     // Return success
     return ContentService
-      .createTextOutput(JSON.stringify({'result': 'success', 'memory_id': sheet.getLastRow() - 1}))
+      .createTextOutput(JSON.stringify({'result': 'success', 'memory_id': memoryId}))
       .setMimeType(ContentService.MimeType.JSON);
       
   } catch(error) {

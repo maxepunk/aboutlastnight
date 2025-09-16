@@ -1,5 +1,11 @@
 // Google Apps Script for About Last Night Playtest Signup
 // This script handles form submissions from the playtest signup page
+//
+// IMPORTANT DEPLOYMENT SETTINGS:
+// 1. Deploy as Web App
+// 2. Execute as: Me (your account)
+// 3. Who has access: Anyone (required for CORS to work)
+// 4. Copy the deployment URL to playtest.html
 
 function doPost(e) {
   try {
@@ -51,26 +57,28 @@ function doPost(e) {
               <div style="background: #fff; border-left: 4px solid #cc0000; padding: 20px; margin: 20px 0;">
                 <p style="margin: 5px 0;"><strong>Date:</strong> Sunday, September 21</p>
                 <p style="margin: 5px 0;"><strong>Time:</strong> 4:00 PM</p>
-                <p style="margin: 5px 0;"><strong>Duration:</strong> 90 minutes</p>
+                <p style="margin: 5px 0;"><strong>Duration:</strong> 2-2.5 hrs including playtest feedback session</p>
                 <p style="margin: 5px 0;"><strong>Location:</strong> Off the Couch Games, Fremont</p>
                 <p style="margin: 5px 0;"><strong>Your Spot:</strong> #${actualSpotNumber} of ${spotsTotal}</p>
               </div>
               
               <h3 style="color: #cc0000;">What to Expect:</h3>
               <ul style="line-height: 1.8;">
-                <li>90-minute immersive crime thriller experience</li>
+                <li>90ish...minute immersive crime thriller experience</li>
                 <li>Puzzle solving, roleplay, and memory trading mechanics</li>
                 <li>You'll be testing an in-progress version - your feedback is valuable!</li>
                 <li>Comfortable clothes recommended</li>
               </ul>
               
               <p style="background: #fff0f0; border: 1px solid #cc0000; padding: 15px; margin-top: 20px;">
-                <strong style="color: #cc0000;">Important:</strong> Please arrive 10 minutes early for check-in. 
-                If you can't make it, please let us know ASAP so we can offer your spot to someone on the waitlist.
+                <strong style="color: #cc0000;">Important:</strong> Please arrive 10 minutes early if possible, to get settled. 
+                <br>If you can't make it, please let us know ASAP so we can offer your spot to someone on the waitlist.
+                 
               </p>
               
               <p style="margin-top: 20px; color: #666;">
-                Questions? Reply to this email.<br>
+                Questions? Reply to this email or 
+                <br> text Max at (949) 331-6879 with last minute updates/changes/questions..
                 Can't wait to see what you remember about last night...
               </p>
             </div>
@@ -112,42 +120,39 @@ function doPost(e) {
       });
     }
     
-    // Send notification to organizers for key milestones
+    // Send notification to organizers
     const organizerEmail = 'max@maxepunk.com, Hello@gr8ergoodgames.com'; // <-- REPLACE WITH YOUR EMAIL
     
-    if (spotsTaken === 15 || spotsTaken === 17 || spotsTaken === 19 || spotsTaken === 20) {
+    // Calculate actual remaining spots AFTER adding this signup
+    const actualSpotsRemaining = Math.max(0, spotsTotal - (spotsTaken + 1));
+    
       MailApp.sendEmail({
         to: organizerEmail,
-        subject: `🚨 Playtest Alert: ${spotsRemaining} spots remaining!`,
+        subject: `🚨 Playtest Alert: ${actualSpotsRemaining} spots remaining!`,
         htmlBody: `
           <h2>Playtest Signup Update</h2>
           <p><strong>${formData.name}</strong> just claimed spot #${actualSpotNumber}</p>
-          <p style="font-size: 24px; color: ${spotsRemaining <= 3 ? '#cc0000' : '#ff9900'};">
-            <strong>${spotsRemaining} spots remaining</strong>
+          <p style="font-size: 24px; color: ${actualSpotsRemaining <= 3 ? '#cc0000' : '#ff9900'};">
+            <strong>${actualSpotsRemaining} spots remaining</strong>
           </p>
           <p><a href="https://docs.google.com/spreadsheets/d/1s9dDSSqTKc9wTtVvj-4U4fY_jzIdNCrIiI5E_atSKG4/edit?usp=sharing">View signup sheet</a></p>
         `
       });
-    }
+
     
-    // Return current status with CORS headers
+    // Return current status (CORS is handled automatically by Google Apps Script)
     return ContentService
       .createTextOutput(JSON.stringify({
         'result': 'success',
         'spot_number': actualSpotNumber,
         'status': status,
-        'spots_remaining': spotsRemaining,
+        'spots_remaining': actualSpotsRemaining,  // Use the corrected value
         'spots_taken': spotsTaken + 1, // +1 for the just-added signup
         'spots_total': spotsTotal,
         'minimum_players': minimumPlayers,
         'has_minimum': (spotsTaken + 1) >= minimumPlayers
       }))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeaders({
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      });
+      .setMimeType(ContentService.MimeType.JSON);
       
   } catch(error) {
     // Return error
@@ -170,7 +175,7 @@ function doGet(e) {
     const spotsTaken = currentRows - 1; // Subtract header row
     const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
     
-    // Set CORS headers for GET requests
+    // Return JSON response (CORS is handled automatically by Google Apps Script)
     const output = ContentService
       .createTextOutput(JSON.stringify({
         'spots_total': spotsTotal,
