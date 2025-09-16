@@ -994,47 +994,43 @@
             <div class="memory-block">
                 90 minutes to piece together the truth. 5-20 players caught in the same web. What cost would you bear to uncover the truth about last night?
             </div>
+            
+            <p style="text-align: center; margin-top: 3rem; font-size: 1.3rem; color: rgba(204, 0, 0, 0.9); font-style: italic;">
+                But how did it begin? Think back to the party...
+            </p>
         </div>
     </section>
 
     <div class="section-divider"></div>
 
-    <!-- Warehouse Scene Divider -->
-    <section class="warehouse-scene fade-in-section">
+    <!-- Party Scene - What Happened Last Night -->
+    <section class="party-scene fade-in-section">
+        <div class="party-overlay"></div>
+        <div class="party-content">
+            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; margin-bottom: 1rem; text-shadow: 0 0 30px rgba(139, 0, 255, 0.8);">What Happened Last Night</h2>
+            <p style="font-size: 1.5rem; color: rgba(255, 255, 255, 0.9); max-width: 800px; margin: 0 auto 2rem;">
+                Marcus Blackwood's underground party. NeurAI's CEO playing host to Silicon Valley's shadow players. The warehouse. The music. Sarah was there. You were there.
+            </p>
+            <p style="font-size: 1.2rem; color: rgba(255, 255, 255, 0.7); max-width: 600px; margin: 0 auto;">
+                Now he's dead, and everyone's memories are up for sale.
+            </p>
+            <div style="text-align: center; margin-top: 3rem;">
+                <a href="#investigation" class="cta-primary">Learn What You Did</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Investigation Bridge -->
+    <section id="investigation" class="warehouse-scene fade-in-section">
         <div class="warehouse-overlay"></div>
         <div class="warehouse-text">
-            <h2>Enter the Crime Scene</h2>
-            <p style="font-size: 1.3rem; color: rgba(255, 255, 255, 0.8);">Silicon Valley's Underground Meets Murder Mystery</p>
-        </div>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- Evidence Room (Mechanics) -->
-    <section class="evidence-room fade-in-section">
-        <div class="container">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 3rem;">Collected Evidence</h2>
-            
-            <div class="evidence-grid">
-                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
-                    <h3>Puzzle Mechanisms</h3>
-                    <p>Physical puzzles unlock memory fragments. Each solution reveals another piece of last night's events – but whose version of the truth?</p>
-                </div>
-                
-                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
-                    <h3>Identity Files</h3>
-                    <p>You're not just a player. You're a suspect with a backstory, connections, and secrets. Old friends become rivals. Trust becomes currency.</p>
-                </div>
-                
-                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
-                    <h3>Memory Market</h3>
-                    <p>Your recovered memories have value to others. Trade for power. Sell for advantage. Or use them as leverage in a game where everyone has something to hide.</p>
-                </div>
-                
-                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
-                    <h3>Deduction Protocol</h3>
-                    <p>Observe. Deduce. Manipulate. In a room full of fragmented memories and hidden agendas, the truth is whatever you can prove.</p>
-                </div>
+            <h2>The Investigation Begins</h2>
+            <p style="font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 2rem;">That was then. This is now.</p>
+            <p style="font-size: 1.1rem; color: rgba(255, 255, 255, 0.6); max-width: 600px; margin: 0 auto;">20 suspects. 90 minutes. Your memories are the evidence.</p>
+            <div style="text-align: center; margin-top: 2rem;">
+                <a href="#how-it-works" class="cta-primary">See How To Solve This</a>
             </div>
         </div>
     </section>
@@ -1044,9 +1040,9 @@
     <!-- How It Works Section -->
     <section id="how-it-works" class="how-it-works fade-in-section">
         <div class="container">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">How The Investigation Works</h2>
+            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">How You'll Find The Truth</h2>
             <p style="text-align: center; font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 3rem;">
-                90 minutes. Multiple suspects. Your memories are the evidence.
+                Four steps. 90 minutes. Every choice matters.
             </p>
             
             <div class="process-grid">
@@ -1089,19 +1085,32 @@
                     <span class="stat-label">Outcomes</span>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- Party Scene with Overlaid Content -->
-    <section class="party-scene fade-in-section">
-        <div class="party-overlay"></div>
-        <div class="party-content">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; margin-bottom: 1rem; text-shadow: 0 0 30px rgba(139, 0, 255, 0.8);">The Night Before</h2>
-            <p style="font-size: 1.5rem; color: rgba(255, 255, 255, 0.9); max-width: 800px; margin: 0 auto;">
-                Marcus Blackwood's underground party. NeurAI's CEO playing host to Silicon Valley's shadow players. Now he's dead, and everyone's memories are up for sale.
-            </p>
+            
+            <!-- Merged Evidence Mechanics -->
+            <div style="margin-top: 4rem; padding-top: 3rem; border-top: 1px solid rgba(204, 0, 0, 0.3);">
+                <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 2rem; text-align: center; color: #fff; margin-bottom: 2rem;">The Evidence You'll Uncover</h3>
+                
+                <div class="evidence-grid">
+                    <div class="evidence-item" style="background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(204, 0, 0, 0.2); padding: 1.5rem;">
+                        <h4 style="color: #cc0000; margin-bottom: 0.5rem;">Physical Puzzles</h4>
+                        <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem;">Unlock memory fragments hidden throughout the space. Each solution reveals another piece of last night's events.</p>
+                    </div>
+                    
+                    <div class="evidence-item" style="background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(204, 0, 0, 0.2); padding: 1.5rem;">
+                        <h4 style="color: #cc0000; margin-bottom: 0.5rem;">Memory Trading</h4>
+                        <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem;">Your recovered memories have value. Trade for power, sell for advantage, or use as leverage.</p>
+                    </div>
+                    
+                    <div class="evidence-item" style="background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(204, 0, 0, 0.2); padding: 1.5rem;">
+                        <h4 style="color: #cc0000; margin-bottom: 0.5rem;">Social Deduction</h4>
+                        <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem;">Observe. Deduce. Manipulate. The truth is whatever you can prove to the others.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 3rem;">
+                <a href="#submit-evidence" class="cta-primary">I Need To Remember</a>
+            </div>
         </div>
     </section>
 
@@ -1110,7 +1119,7 @@
     <!-- Creators Section -->
     <section class="creators">
         <div class="file-cabinet">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 3rem;">Case Files: The Creators</h2>
+            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 3rem;">Who Would Create This?</h2>
             
             <div class="personnel-file">
                 <h3>Shuai Chen</h3>
@@ -1135,6 +1144,11 @@
                     Silicon Valley's hub for innovative gaming experiences. Partnering to bring this groundbreaking fusion of escape room mechanics and immersive theater to life in their transformed warehouse space.
                 </p>
             </div>
+            
+            <div style="text-align: center; margin-top: 3rem;">
+                <p style="font-size: 1.2rem; color: rgba(255, 255, 255, 0.6); margin-bottom: 1.5rem; font-style: italic;">Still have questions?</p>
+                <a href="#faq" class="cta-primary">Get The Essential Intel</a>
+            </div>
         </div>
     </section>
 
@@ -1143,9 +1157,9 @@
     <!-- FAQ Section -->
     <section id="faq" class="faq-section">
         <div class="container">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">Classified Information</h2>
+            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">Before You Enter: Essential Intel</h2>
             <p style="text-align: center; font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 3rem;">
-                What you need to know before entering the investigation.
+                Real answers to real questions.
             </p>
             
             <div class="faq-grid">
@@ -1170,15 +1184,26 @@
                 </div>
                 
                 <div class="faq-item">
-                    <h3 class="faq-question">When can I play?</h3>
-                    <p class="faq-answer">Preview performances: October 4-12<br>
+                    <h3 class="faq-question">How much does it cost?</h3>
+                    <p class="faq-answer">$75 per person for all October performances. Groups of 20 can book the entire experience privately for a group rate. Contact us for corporate packages.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3 class="faq-question">When and where?</h3>
+                    <p class="faq-answer">Off the Couch Games in Fremont, CA<br>
+                    Preview: October 4-12 (limited spots)<br>
                     Main run: October 18 - November 9<br>
-                    Friday-Sunday performances, multiple time slots.</p>
+                    Friday-Sunday performances, multiple time slots</p>
                 </div>
                 
                 <div class="faq-item">
                     <h3 class="faq-question">Is this scary?</h3>
                     <p class="faq-answer">No jump scares or horror elements. This is a psychological thriller focused on mystery, deduction, and social dynamics. Think noir detective story, not haunted house.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3 class="faq-question">What should I know before coming?</h3>
+                    <p class="faq-answer">Wear comfortable clothes you can move in. No special equipment needed. Come with an open mind and ready to interact with other players. The experience involves light physical activity (walking, searching) but is accessible to most fitness levels.</p>
                 </div>
                 
                 <div class="faq-item">
@@ -1190,6 +1215,21 @@
                     <h3 class="faq-question">Content warnings?</h3>
                     <p class="faq-answer">Themes include: memory loss, corporate conspiracy, infidelity, substance use references, artificial intelligence, and psychological manipulation. No physical contact required between players.</p>
                 </div>
+                
+                <div class="faq-item">
+                    <h3 class="faq-question">How do I book?</h3>
+                    <p class="faq-answer">Join our preview list now for early access to tickets. You'll receive booking instructions via email when spots open. Limited availability for October.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3 class="faq-question">What about parking?</h3>
+                    <p class="faq-answer">Free parking available at Off the Couch Games. Venue is also accessible via BART (Warm Springs/South Fremont station) with a short rideshare.</p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 3rem;">
+                <p style="font-size: 1.3rem; color: rgba(204, 0, 0, 0.9); font-weight: 600;">No more questions. Time to remember.</p>
+                <a href="#submit-evidence" class="cta-primary" style="margin-top: 1rem;">Begin Memory Recovery</a>
             </div>
         </div>
     </section>
@@ -1221,12 +1261,12 @@
                 
                 <p class="system-note">
                     SYSTEM: Preview access October 4-12<br>
-                    WARNING: Full investigation $75 • October 18 - November 9
+                    PROTOCOL: Full investigation • October 18 - November 9
                 </p>
             </form>
 
             <div id="form-message" class="recovery-status" style="display: none;">
-                <p class="success-msg">✓ MEMORY RECOVERY INITIATED • CHECK EMAIL FOR PROTOCOL</p>
+                <p class="success-msg">✓ MEMORIES DECRYPTING • CHECK YOUR FREQUENCY FOR ACCESS</p>
             </div>
         </div>
     </section>
@@ -1272,7 +1312,7 @@
             }
             
             // Visual feedback
-            button.textContent = 'ACCESSING MEMORY CORE...';
+            button.textContent = 'DECRYPTING...';
             button.disabled = true;
             button.style.opacity = '0.7';
             
@@ -1288,7 +1328,7 @@
                 });
                 
                 // Success state (we assume success with no-cors)
-                button.textContent = 'MEMORY RECOVERED';
+                button.textContent = 'MEMORIES UNLOCKED';
                 button.style.background = '#00ff00';
                 button.style.borderColor = '#00ff00';
                 formMessage.style.display = 'block';
