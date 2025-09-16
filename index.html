@@ -54,26 +54,44 @@
 
         /* Glitch Text Effect */
         @keyframes glitchText {
-            0%, 94%, 100% {
+            0%, 89%, 100% {
                 text-shadow: 
                     0 0 30px rgba(255, 0, 0, 0.8),
                     0 0 60px rgba(255, 0, 0, 0.5),
                     0 0 90px rgba(255, 0, 0, 0.3);
                 transform: translateX(0);
             }
-            95% {
+            90% {
                 text-shadow: 
-                    -2px 0 30px rgba(0, 255, 255, 0.8),
-                    2px 0 30px rgba(255, 0, 255, 0.8),
-                    0 0 60px rgba(255, 0, 0, 0.5);
+                    -3px 0 30px rgba(0, 255, 255, 0.9),
+                    3px 0 30px rgba(255, 0, 255, 0.9),
+                    0 0 60px rgba(255, 255, 0, 0.4),
+                    0 0 90px rgba(255, 0, 0, 0.3);
                 transform: translateX(2px);
             }
-            96% {
+            91% {
                 text-shadow: 
-                    2px 0 30px rgba(0, 255, 255, 0.8),
-                    -2px 0 30px rgba(255, 0, 255, 0.8),
-                    0 0 60px rgba(255, 0, 0, 0.5);
+                    2px 0 30px rgba(255, 0, 255, 0.9),
+                    -2px 0 30px rgba(0, 255, 0, 0.9),
+                    0 0 60px rgba(0, 255, 255, 0.4),
+                    0 0 90px rgba(255, 0, 0, 0.3);
                 transform: translateX(-1px);
+            }
+            92% {
+                text-shadow: 
+                    0 0 30px rgba(255, 255, 0, 0.9),
+                    -2px 0 30px rgba(255, 0, 255, 0.9),
+                    2px 0 30px rgba(0, 255, 255, 0.9),
+                    0 0 90px rgba(255, 0, 0, 0.3);
+                transform: translateX(0);
+            }
+            93% {
+                text-shadow: 
+                    -1px 0 30px rgba(0, 255, 0, 0.9),
+                    1px 0 30px rgba(255, 0, 255, 0.9),
+                    0 0 60px rgba(255, 255, 0, 0.4),
+                    0 0 90px rgba(255, 0, 0, 0.3);
+                transform: translateX(1px);
             }
         }
 
@@ -961,6 +979,20 @@
             will-change: transform, opacity;
         }
         
+        /* Secondary scanline for depth */
+        .scanline-secondary {
+            height: 1px;
+            background: linear-gradient(to bottom, 
+                transparent, 
+                rgba(204, 0, 0, 0.1) 30%,
+                rgba(204, 0, 0, 0.15) 50%,
+                rgba(204, 0, 0, 0.1) 70%,
+                transparent);
+            animation-delay: 15s;
+            animation-duration: 45s;
+            opacity: 0.7;
+        }
+        
         /* Ghost trail effect */
         .scanline::after {
             content: '';
@@ -1023,8 +1055,9 @@
     </style>
 </head>
 <body>
-    <!-- Scanning Effect -->
+    <!-- Scanning Effects -->
     <div class="scanline" aria-hidden="true"></div>
+    <div class="scanline scanline-secondary" aria-hidden="true"></div>
 
     <!-- Hero Section with Rave Background -->
     <section class="hero">
@@ -1365,7 +1398,14 @@
 
     <script>
         // IMPORTANT: Paste your Google Script Web App URL here
-        const GOOGLE_SCRIPT_URL = 'YOUR-WEB-APP-URL-HERE'; // <-- PASTE YOUR URL HERE!
+        // IMPORTANT: Replace this with your actual Google Apps Script Web App URL
+        // Get this URL from your Google Apps Script deployment (step 1.3 in the setup)
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzZ7Xep091AvDFGPADN6CzRCHJUgD0-rPEcBFsuDWEtDTNUiFJGQ_cWIlEwX8gZm8Nk2g/exec'; // <-- PASTE YOUR URL HERE!
+        
+        // If form submission fails, check:
+        // 1. You've replaced the URL above with your actual deployment URL
+        // 2. Your Google Apps Script is deployed as a Web App with "Anyone" access
+        // 3. The Google Sheet is properly connected to your script
 
         // Populate hidden fields on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -1539,13 +1579,23 @@
             
             // Fast scan when hovering hero section
             const heroSection = document.querySelector('.hero');
+            const scanline2 = document.querySelector('.scanline-secondary');
             if (heroSection && scanline) {
                 heroSection.addEventListener('mouseenter', function() {
                     scanline.style.animationDuration = '3s';
+                    if (scanline2) scanline2.style.animationDuration = '4s';
                 });
                 heroSection.addEventListener('mouseleave', function() {
                     scanline.style.animationDuration = '30s';
+                    if (scanline2) scanline2.style.animationDuration = '45s';
                 });
+            }
+            
+            // Also apply to secondary scanline
+            if (scanline2) {
+                window.addEventListener('scroll', function() {
+                    scanline2.style.animationPlayState = isScrolling ? 'paused' : 'running';
+                }, { passive: true });
             }
         })();
 
