@@ -214,7 +214,7 @@ PREVIEW: Oct 4-12 | $75/person | 5 person minimum | MAIN RUN: Oct 18-Nov 9
 1. **Memory trading mechanic** - First of its kind
 2. **Flexible group size** - 5-20 players (most are fixed)
 3. **Silicon Valley setting** - Local relevance
-4. **Creator credentials** - MIT neuroscientist + theater innovator
+4. **Creator credentials** - MIT/Stanford neurobiologist + World Championship puzzle expert + theater innovator
 5. **Jubensha influence** - Trending international format
 
 ### Differentiation from Competitors
@@ -230,7 +230,7 @@ PREVIEW: Oct 4-12 | $75/person | 5 person minimum | MAIN RUN: Oct 18-Nov 9
 1. **Low preview turnout** → Aggressive local marketing, influencer invites
 2. **Confusion about format** → Clear "How It Works" video, FAQ emphasis
 3. **Booking hesitation** → Flexible cancellation policy, group discounts
-4. **Tech audience skepticism** → Emphasize MIT neuroscience credentials
+4. **Tech audience skepticism** → Emphasize MIT/Stanford neurobiology credentials + World Escape Room Championship experience
 5. **Spoiler management** → Review guidelines, social media monitoring
 
 ---
