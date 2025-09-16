@@ -412,8 +412,8 @@
         
         <!-- Spot counter -->
         <div id="spotCounter" class="spot-counter">
-            <div class="spots-remaining" id="spotsNumber">20</div>
-            <div class="spots-text">SPOTS REMAINING</div>
+            <div class="spots-remaining" id="spotsNumber">0/5</div>
+            <div class="spots-text" id="spotsText">MINIMUM PLAYERS REQUIRED</div>
         </div>
         
         <!-- Game info -->
@@ -494,32 +494,52 @@
     
     <script>
         // Google Apps Script URL - REPLACE WITH YOUR PLAYTEST SHEET URL
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyzl3LWkETG4XdGgZmgYlmgOwqnjtD02jcRpRROk-Lzd3ig9UTsVP1FEabfuRWeTZwLIg/exec'; // <-- REPLACE THIS!
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypIVyTqnposIYclTgLiYv3xxXkQSRXcTH7hXF3lAC6RbKSDNHOckOrE7VhO1MbGMRbQA/exec'; // <-- REPLACE THIS!
         
-        // Track spots (in production, this would check the sheet for actual count)
-        let spotsRemaining = 20;
+        // Track spots data
+        let spotsData = {
+            spotsRemaining: 20,
+            spotsTaken: 0,
+            spotsTotal: 20,
+            minimumPlayers: 5,
+            hasMinimum: false
+        };
         
         // Update spot counter display
         function updateSpotCounter() {
             const counter = document.getElementById('spotCounter');
             const spotsNumber = document.getElementById('spotsNumber');
+            const spotsText = document.getElementById('spotsText');
             const submitButton = document.getElementById('submitButton');
-            
-            spotsNumber.textContent = spotsRemaining;
             
             // Remove all state classes
             counter.classList.remove('warning-low', 'warning-critical', 'full');
             
-            if (spotsRemaining === 0) {
-                counter.classList.add('full');
-                submitButton.textContent = 'PLAYTEST FULL';
-                submitButton.disabled = true;
-                document.getElementById('name').disabled = true;
-                document.getElementById('email').disabled = true;
-            } else if (spotsRemaining <= 3) {
-                counter.classList.add('warning-critical');
-            } else if (spotsRemaining <= 5) {
-                counter.classList.add('warning-low');
+            if (!spotsData.hasMinimum) {
+                // Show minimum players progress
+                spotsNumber.textContent = `${spotsData.spotsTaken}/${spotsData.minimumPlayers}`;
+                spotsText.textContent = 'MINIMUM PLAYERS REQUIRED';
+                
+                // Add visual feedback for progress
+                if (spotsData.spotsTaken >= 3) {
+                    counter.classList.add('warning-low');
+                }
+            } else {
+                // Show spots remaining
+                spotsNumber.textContent = spotsData.spotsRemaining;
+                spotsText.textContent = 'SPOTS REMAINING';
+                
+                if (spotsData.spotsRemaining === 0) {
+                    counter.classList.add('full');
+                    submitButton.textContent = 'PLAYTEST FULL';
+                    submitButton.disabled = true;
+                    document.getElementById('name').disabled = true;
+                    document.getElementById('email').disabled = true;
+                } else if (spotsData.spotsRemaining <= 3) {
+                    counter.classList.add('warning-critical');
+                } else if (spotsData.spotsRemaining <= 5) {
+                    counter.classList.add('warning-low');
+                }
             }
         }
         
@@ -546,32 +566,45 @@
             submitButton.disabled = true;
             
             try {
-                // Submit to Google Sheets
+                // Submit to Google Sheets (without no-cors to read response)
                 const response = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
                     body: new URLSearchParams(formData)
                 });
                 
-                // Assume success with no-cors
-                spotsRemaining--;
-                updateSpotCounter();
+                const result = await response.json();
                 
-                // Show success
-                successMessage.classList.add('show');
-                this.reset();
-                
-                // Reset button after delay
-                setTimeout(() => {
-                    if (spotsRemaining > 0) {
-                        submitButton.textContent = 'Claim Your Spot';
-                        submitButton.disabled = false;
-                    }
-                    successMessage.classList.remove('show');
-                }, 5000);
+                if (result.result === 'success') {
+                    // Update spots data with server response
+                    spotsData.spotsRemaining = result.spots_remaining;
+                    spotsData.spotsTaken = result.spots_taken;
+                    spotsData.hasMinimum = result.has_minimum;
+                    updateSpotCounter();
+                    
+                    // Update success message based on status
+                    const successMsg = result.status === 'Confirmed' 
+                        ? `✓ SPOT ${result.spot_number} CONFIRMED • CHECK YOUR EMAIL`
+                        : `⏳ WAITLIST POSITION ${result.spot_number - result.spots_total} • CHECK YOUR EMAIL`;
+                    document.getElementById('successMessage').textContent = successMsg;
+                    
+                    // Show success
+                    successMessage.classList.add('show');
+                    this.reset();
+                    
+                    // Reset button after delay
+                    setTimeout(() => {
+                        if (spotsData.spotsRemaining > 0) {
+                            submitButton.textContent = 'Claim Your Spot';
+                            submitButton.disabled = false;
+                        }
+                        successMessage.classList.remove('show');
+                    }, 5000);
+                } else {
+                    throw new Error(result.error || 'Submission failed');
+                }
                 
             } catch (error) {
                 console.error('Submission error:', error);
@@ -585,8 +618,31 @@
             }
         });
         
+        // Fetch initial spot count on page load
+        async function fetchSpotCount() {
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                const data = await response.json();
+                
+                // Update spots data from server
+                spotsData.spotsRemaining = data.spots_remaining;
+                spotsData.spotsTaken = data.spots_taken;
+                spotsData.spotsTotal = data.spots_total;
+                spotsData.minimumPlayers = data.minimum_players;
+                spotsData.hasMinimum = data.has_minimum;
+                
+                updateSpotCounter();
+            } catch (error) {
+                console.log('Could not fetch initial spot count, using defaults');
+                updateSpotCounter();
+            }
+        }
+        
         // Initialize
-        updateSpotCounter();
+        fetchSpotCount();
+        
+        // Optional: Refresh spot count every 30 seconds
+        setInterval(fetchSpotCount, 30000);
     </script>
 </body>
 </html>
