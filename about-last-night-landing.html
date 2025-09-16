@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Last Night... | An Immersive Crime Thriller</title>
+    <meta name="description" content="Some memories are worth killing for. A 90-minute immersive crime thriller in Silicon Valley. October 18-November 9, 2025.">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Barlow', sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #000;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #cc0000;
+        }
+
+        /* Red Police Light Animation */
+        @keyframes policeLights {
+            0%, 100% { 
+                box-shadow: 
+                    0 0 20px rgba(255, 0, 0, 0),
+                    0 0 40px rgba(255, 0, 0, 0),
+                    0 0 60px rgba(255, 0, 0, 0);
+            }
+            50% { 
+                box-shadow: 
+                    0 0 20px rgba(255, 0, 0, 0.8),
+                    0 0 40px rgba(255, 0, 0, 0.6),
+                    0 0 60px rgba(255, 0, 0, 0.4);
+            }
+        }
+
+        /* Glitch Text Effect */
+        @keyframes glitchText {
+            0% {
+                text-shadow: 
+                    0.05em 0 0 rgba(255, 0, 0, 0.75),
+                    -0.05em -0.025em 0 rgba(0, 255, 255, 0.75),
+                    0.025em 0.05em 0 rgba(255, 255, 0, 0.75);
+            }
+            15% {
+                text-shadow: 
+                    0.05em 0 0 rgba(255, 0, 0, 0.75),
+                    -0.05em -0.025em 0 rgba(0, 255, 255, 0.75),
+                    0.025em 0.05em 0 rgba(255, 255, 0, 0.75);
+            }
+            16% {
+                text-shadow: 
+                    -0.05em -0.025em 0 rgba(255, 0, 0, 0.75),
+                    0.025em 0.025em 0 rgba(0, 255, 255, 0.75),
+                    -0.05em -0.05em 0 rgba(255, 255, 0, 0.75);
+            }
+            49% {
+                text-shadow: 
+                    -0.05em -0.025em 0 rgba(255, 0, 0, 0.75),
+                    0.025em 0.025em 0 rgba(0, 255, 255, 0.75),
+                    -0.05em -0.05em 0 rgba(255, 255, 0, 0.75);
+            }
+            50% {
+                text-shadow: 
+                    0.025em 0.05em 0 rgba(255, 0, 0, 0.75),
+                    0.05em 0 0 rgba(0, 255, 255, 0.75),
+                    0 -0.05em 0 rgba(255, 255, 0, 0.75);
+            }
+            99% {
+                text-shadow: 
+                    0.025em 0.05em 0 rgba(255, 0, 0, 0.75),
+                    0.05em 0 0 rgba(0, 255, 255, 0.75),
+                    0 -0.05em 0 rgba(255, 255, 0, 0.75);
+            }
+            100% {
+                text-shadow: 
+                    -0.025em 0 0 rgba(255, 0, 0, 0.75),
+                    -0.025em -0.025em 0 rgba(0, 255, 255, 0.75),
+                    -0.025em -0.05em 0 rgba(255, 255, 0, 0.75);
+            }
+        }
+
+        /* Hero Section with Full Background */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .hero-bg-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('/mnt/user-data/uploads/ALN3back2.png') center/cover;
+            opacity: 0.3;
+            filter: contrast(1.2) brightness(0.8);
+        }
+
+        .hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.9) 100%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            padding: 2rem;
+            max-width: 1000px;
+        }
+
+        h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(5rem, 12vw, 10rem);
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            line-height: 0.9;
+            color: #fff;
+            text-shadow: 
+                0 0 30px rgba(255, 0, 0, 0.8),
+                0 0 60px rgba(255, 0, 0, 0.5),
+                0 0 90px rgba(255, 0, 0, 0.3);
+            margin-bottom: 1rem;
+            animation: glitchText 2s infinite;
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: rgba(255, 100, 100, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 0.5em;
+            margin-bottom: 2rem;
+            font-weight: 300;
+        }
+
+        .hook {
+            font-size: 2rem;
+            font-weight: 300;
+            margin-bottom: 3rem;
+            line-height: 1.4;
+            color: rgba(255, 255, 255, 0.9);
+            font-style: italic;
+        }
+
+        /* CTA Buttons */
+        .cta-primary {
+            display: inline-block;
+            padding: 1.2rem 3rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            background: transparent;
+            border: 2px solid #cc0000;
+            color: #fff;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+            text-decoration: none;
+            margin: 0.5rem;
+        }
+
+        .cta-primary:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: #cc0000;
+            transition: left 0.3s;
+            z-index: -1;
+        }
+
+        .cta-primary:hover:before {
+            left: 0;
+        }
+
+        .cta-primary:hover {
+            animation: policeLights 1s infinite;
+        }
+
+        /* Narrative Section with Crime Board Background */
+        .narrative {
+            position: relative;
+            padding: 8rem 2rem;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .narrative-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('/mnt/user-data/uploads/Gemini_Generated_Image_l6ofy0l6ofy0l6of.png') center/cover;
+            opacity: 0.1;
+            filter: sepia(1) hue-rotate(320deg);
+        }
+
+        .narrative-content {
+            position: relative;
+            max-width: 900px;
+            margin: 0 auto;
+            z-index: 2;
+        }
+
+        .narrative-content h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 4rem;
+            margin-bottom: 3rem;
+            text-align: center;
+            color: #cc0000;
+            text-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
+        }
+
+        .memory-block {
+            background: rgba(0, 0, 0, 0.8);
+            border-left: 4px solid #cc0000;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            font-size: 1.3rem;
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.85);
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .memory-block:hover {
+            background: rgba(20, 0, 0, 0.9);
+            transform: translateX(10px);
+        }
+
+        .memory-block:before {
+            content: 'MEMORY FRAGMENT';
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: #cc0000;
+            padding: 0.2rem 0.8rem;
+            font-size: 0.8rem;
+            letter-spacing: 0.2em;
+            font-weight: 700;
+        }
+
+        .corrupt {
+            color: #cc0000;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Warehouse Scene Section */
+        .warehouse-scene {
+            position: relative;
+            min-height: 60vh;
+            background: url('/mnt/user-data/uploads/Gemini_Generated_Image_gsrsfugsrsfugsrs.png') center/cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .warehouse-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.8));
+        }
+
+        .warehouse-text {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .warehouse-text h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3rem;
+            color: #fff;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 30px rgba(139, 0, 255, 0.8);
+        }
+
+        /* Mechanics as Interactive Evidence */
+        .evidence-room {
+            background: #000;
+            padding: 6rem 2rem;
+            position: relative;
+        }
+
+        .evidence-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .evidence-item {
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid rgba(204, 0, 0, 0.2);
+            padding: 2rem;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+
+        .evidence-item:before {
+            content: 'EVIDENCE';
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #cc0000;
+            padding: 0.3rem 1rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            font-weight: 700;
+        }
+
+        .evidence-item:hover {
+            border-color: #cc0000;
+            transform: scale(1.05);
+            background: rgba(30, 0, 0, 0.9);
+            box-shadow: 
+                0 0 30px rgba(204, 0, 0, 0.5),
+                inset 0 0 30px rgba(204, 0, 0, 0.1);
+        }
+
+        .evidence-item h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s;
+        }
+
+        .evidence-item:hover h3 {
+            color: #cc0000;
+            animation: glitchText 0.5s;
+        }
+
+        .evidence-item p {
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+        }
+
+        /* Party Scene with Sarah */
+        .party-scene {
+            position: relative;
+            background: url('/mnt/user-data/uploads/ALN3back4wsarah2.png') center/cover;
+            min-height: 80vh;
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .party-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent 50%);
+        }
+
+        .party-content {
+            position: relative;
+            z-index: 2;
+            padding: 4rem 2rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Creators as Interrogation Files */
+        .creators {
+            padding: 6rem 2rem;
+            background: #0a0a0a;
+        }
+
+        .file-cabinet {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .personnel-file {
+            background: rgba(20, 20, 20, 0.9);
+            border: 1px solid rgba(204, 0, 0, 0.3);
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .personnel-file:before {
+            content: 'CLASSIFIED';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #cc0000;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            opacity: 0.3;
+            font-size: 0.9rem;
+        }
+
+        .personnel-file:hover {
+            background: rgba(30, 10, 10, 0.9);
+            border-color: #cc0000;
+        }
+
+        .personnel-file h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            color: #cc0000;
+            margin-bottom: 0.5rem;
+        }
+
+        .personnel-file .subtitle {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+
+        .personnel-file .credentials {
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.8;
+            font-size: 1.1rem;
+        }
+
+        /* Interest Form as Evidence Submission */
+        .interest-form {
+            padding: 6rem 2rem;
+            background: linear-gradient(180deg, #0a0a0a 0%, #000 100%);
+            position: relative;
+        }
+
+        .form-container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .form-container h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3rem;
+            color: #cc0000;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
+        }
+
+        .form-warning {
+            font-size: 1.3rem;
+            margin-bottom: 3rem;
+            color: rgba(255, 100, 100, 0.9);
+            font-style: italic;
+        }
+
+        .form-group {
+            margin-bottom: 2rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid rgba(204, 0, 0, 0.3);
+            color: #fff;
+            transition: all 0.3s;
+            font-family: 'Barlow', sans-serif;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #cc0000;
+            background: rgba(30, 0, 0, 0.9);
+            box-shadow: 0 0 20px rgba(204, 0, 0, 0.3);
+        }
+
+        /* Footer as Case File */
+        .footer {
+            padding: 3rem 2rem;
+            background: #000;
+            text-align: center;
+            border-top: 2px solid rgba(204, 0, 0, 0.2);
+        }
+
+        .case-details {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.8rem;
+            color: #cc0000;
+            margin-bottom: 1rem;
+            letter-spacing: 0.1em;
+        }
+
+        .location-detail {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 2rem;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 4rem;
+            }
+            
+            .narrative-content h2,
+            .warehouse-text h2 {
+                font-size: 2.5rem;
+            }
+            
+            .hook {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Scan Line Effect */
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(to bottom, transparent, rgba(204, 0, 0, 0.8), transparent);
+            animation: scanline 8s linear infinite;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <!-- Scanning Effect -->
+    <div class="scanline"></div>
+
+    <!-- Hero Section with Rave Background -->
+    <section class="hero">
+        <div class="hero-bg-image"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <h1>About Last<br>Night...</h1>
+            <p class="tagline">An Immersive Crime Thriller</p>
+            <p class="hook">Some memories are worth killing for.</p>
+            <a href="#submit-evidence" class="cta-primary">Secure Your Spot</a>
+            <a href="#narrative" class="cta-primary">Investigate</a>
+        </div>
+    </section>
+
+    <!-- Narrative Section with Crime Board BG -->
+    <section id="narrative" class="narrative">
+        <div class="narrative-bg"></div>
+        <div class="narrative-content">
+            <h2>Fragmented Memories</h2>
+            
+            <div class="memory-block">
+                You remember the party. Sort of. A warehouse rave in Fremont, thrown by VC darling Marcus Blackwood.
+            </div>
+            
+            <div class="memory-block">
+                Now you're in a room with other guests. A detective is asking questions. <span class="corrupt">Marcus is dead.</span>
+            </div>
+            
+            <div class="memory-block">
+                Your memories have been locked in physical objects throughout the space. But they're more than just memories now – they're commodities. Tradeable. Valuable. <span class="corrupt">Dangerous.</span>
+            </div>
+            
+            <div class="memory-block">
+                90 minutes to piece together the truth. 5-20 players caught in the same web. What cost would you bear to uncover what really happened?
+            </div>
+        </div>
+    </section>
+
+    <!-- Warehouse Scene Divider -->
+    <section class="warehouse-scene">
+        <div class="warehouse-overlay"></div>
+        <div class="warehouse-text">
+            <h2>Enter the Crime Scene</h2>
+            <p style="font-size: 1.3rem; color: rgba(255, 255, 255, 0.8);">Silicon Valley's Underground Meets Murder Mystery</p>
+        </div>
+    </section>
+
+    <!-- Evidence Room (Mechanics) -->
+    <section class="evidence-room">
+        <div class="container">
+            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 3rem;">Collected Evidence</h2>
+            
+            <div class="evidence-grid">
+                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
+                    <h3>Puzzle Mechanisms</h3>
+                    <p>Physical puzzles unlock memory fragments. Each solution reveals another piece of last night's events – but whose version of the truth?</p>
+                </div>
+                
+                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
+                    <h3>Identity Files</h3>
+                    <p>You're not just a player. You're a suspect with a backstory, connections, and secrets. Old friends become rivals. Trust becomes currency.</p>
+                </div>
+                
+                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
+                    <h3>Memory Market</h3>
+                    <p>Your recovered memories have value to others. Trade for power. Sell for advantage. Or use them as leverage in a game where everyone has something to hide.</p>
+                </div>
+                
+                <div class="evidence-item" onclick="this.style.animation='glitchText 0.5s'">
+                    <h3>Deduction Protocol</h3>
+                    <p>Observe. Deduce. Manipulate. In a room full of fragmented memories and hidden agendas, the truth is whatever you can prove.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Party Scene with Overlaid Content -->
+    <section class="party-scene">
+        <div class="party-overlay"></div>
+        <div class="party-content">
+            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; margin-bottom: 1rem; text-shadow: 0 0 30px rgba(139, 0, 255, 0.8);">The Night Before</h2>
+            <p style="font-size: 1.5rem; color: rgba(255, 255, 255, 0.9); max-width: 800px; margin: 0 auto;">
+                Marcus Blackwood's underground party. NeurAI's CEO playing host to Silicon Valley's shadow players. Now he's dead, and everyone's memories are up for sale.
+            </p>
+        </div>
+    </section>
+
+    <!-- Creators Section -->
+    <section class="creators">
+        <div class="file-cabinet">
+            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 3rem;">Case Files: The Creators</h2>
+            
+            <div class="personnel-file">
+                <h3>Shuai Chen</h3>
+                <p class="subtitle">MIT Neuroscientist | Patchwork Adventures</p>
+                <p class="credentials">
+                    Creator of "The Order of the Golden Scribe," winner of the industry's highest immersive theater honors. Chen's neuroscience background shapes experiences where memory, perception, and reality blur. Previous works featured on CNN, ABC, and the New York Times.
+                </p>
+            </div>
+            
+            <div class="personnel-file">
+                <h3>Max Bora Koknar</h3>
+                <p class="subtitle">StoryPunk Founder | Theater Innovator</p>
+                <p class="credentials">
+                    Pioneer of America's first AI co-written theatrical production. Recipient of the 2022 CALI Catalyst Award for advancing equity in California arts. Koknar's immersive works challenge the boundaries between performer and participant, story and game.
+                </p>
+            </div>
+
+            <div class="personnel-file">
+                <h3>Off the Couch Games</h3>
+                <p class="subtitle">Fremont's Premier Escape Room Venue</p>
+                <p class="credentials">
+                    Silicon Valley's hub for innovative gaming experiences. Partnering to bring this groundbreaking fusion of escape room mechanics and immersive theater to life in their transformed warehouse space.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interest Form -->
+    <section id="submit-evidence" class="interest-form">
+        <div class="form-container">
+            <h2>Submit Your Statement</h2>
+            <p class="form-warning">
+                Limited interrogation slots available.<br>
+                October 18 - November 9, 2025
+            </p>
+            
+            <form id="interestForm">
+                <div class="form-group">
+                    <input type="email" class="form-input" placeholder="Email Address" required>
+                </div>
+                <div class="form-group">
+                    <input type="text" class="form-input" placeholder="Party Size (5-20 guests)">
+                </div>
+                <button type="submit" class="cta-primary" style="width: 100%;">Lock In Your Memory</button>
+            </form>
+            
+            <p style="margin-top: 2rem; color: rgba(255, 100, 100, 0.7);">
+                Preview: October 4-12 | $75 per person | 5 person minimum
+            </p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p class="case-details">CASE FILE: ABOUT LAST NIGHT</p>
+        <p class="location-detail">Off the Couch Games | Fremont, California</p>
+        <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 2rem;">
+            A Patchwork Adventures × StoryPunk Production
+        </p>
+    </footer>
+
+    <script>
+        // Form submission
+        document.getElementById('interestForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const button = this.querySelector('button');
+            button.textContent = 'STATEMENT RECORDED';
+            button.style.background = '#cc0000';
+            setTimeout(() => {
+                this.reset();
+                button.textContent = 'Lock In Your Memory';
+                button.style.background = '';
+            }, 3000);
+        });
+
+        // Smooth scrolling
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        // Parallax effect on scroll
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const parallaxElements = document.querySelectorAll('.hero-bg-image, .narrative-bg');
+            
+            parallaxElements.forEach(element => {
+                const speed = 0.5;
+                element.style.transform = `translateY(${scrolled * speed}px)`;
+            });
+        });
+
+        // Add police light effect on hover to evidence items
+        document.querySelectorAll('.evidence-item').forEach(item => {
+            item.addEventListener('mouseenter', function() {
+                this.style.animation = 'policeLights 1s infinite';
+            });
+            item.addEventListener('mouseleave', function() {
+                this.style.animation = '';
+            });
+        });
+
+        // Reveal memory blocks on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateX(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.memory-block').forEach(block => {
+            block.style.opacity = '0';
+            block.style.transform = 'translateX(-50px)';
+            block.style.transition = 'all 0.8s ease-out';
+            observer.observe(block);
+        });
+    </script>
+</body>
+</html>
