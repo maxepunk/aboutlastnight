@@ -12,6 +12,7 @@ function doPost(e) {
     // Get current row count to determine spot number
     const currentRows = sheet.getLastRow();
     const spotsTotal = 20;
+    const minimumPlayers = 5;
     const spotsTaken = currentRows - 1; // Subtract header row
     const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
     
@@ -112,7 +113,7 @@ function doPost(e) {
     }
     
     // Send notification to organizers for key milestones
-    const organizerEmail = 'max@maxepunk.com'; // <-- REPLACE WITH YOUR EMAIL
+    const organizerEmail = 'max@maxepunk.com, Hello@gr8ergoodgames.com'; // <-- REPLACE WITH YOUR EMAIL
     
     if (spotsTaken === 15 || spotsTaken === 17 || spotsTaken === 19 || spotsTaken === 20) {
       MailApp.sendEmail({
@@ -129,15 +130,24 @@ function doPost(e) {
       });
     }
     
-    // Return current status
+    // Return current status with CORS headers
     return ContentService
       .createTextOutput(JSON.stringify({
         'result': 'success',
         'spot_number': actualSpotNumber,
         'status': status,
-        'spots_remaining': spotsRemaining
+        'spots_remaining': spotsRemaining,
+        'spots_taken': spotsTaken + 1, // +1 for the just-added signup
+        'spots_total': spotsTotal,
+        'minimum_players': minimumPlayers,
+        'has_minimum': (spotsTaken + 1) >= minimumPlayers
       }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeaders({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      });
       
   } catch(error) {
     // Return error
@@ -156,17 +166,25 @@ function doGet(e) {
     const sheet = SpreadsheetApp.getActiveSheet();
     const currentRows = sheet.getLastRow();
     const spotsTotal = 20;
+    const minimumPlayers = 5;
     const spotsTaken = currentRows - 1; // Subtract header row
     const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
     
-    return ContentService
+    // Set CORS headers for GET requests
+    const output = ContentService
       .createTextOutput(JSON.stringify({
         'spots_total': spotsTotal,
         'spots_taken': spotsTaken,
         'spots_remaining': spotsRemaining,
+        'minimum_players': minimumPlayers,
+        'has_minimum': spotsTaken >= minimumPlayers,
         'is_full': spotsTaken >= spotsTotal
       }))
       .setMimeType(ContentService.MimeType.JSON);
+    
+    // Note: Google Apps Script doesn't support setting custom headers on GET responses
+    // CORS will work with the default '*' origin allowed by Google
+    return output;
       
   } catch(error) {
     return ContentService
