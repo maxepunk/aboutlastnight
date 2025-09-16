@@ -107,6 +107,7 @@
             justify-content: center;
             overflow: hidden;
             background: #000;
+            margin-bottom: 0; /* Remove any gap */
         }
 
         .hero-bg-image {
@@ -224,20 +225,10 @@
         .narrative {
             position: relative;
             padding: 8rem 2rem;
-            background: #000;
+            background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),
+                        url('images/Sleepyparty.png') center/cover fixed;
             overflow: hidden;
-        }
-
-        .narrative-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: url('images/Sleepyparty.png') center/cover;
-            opacity: 0.5;
-            filter: brightness(0.8) contrast(1.2);
-            will-change: transform;
+            margin-top: 0; /* Ensure no gap from booking bar */
         }
 
         .narrative-content {
@@ -296,11 +287,12 @@
         .warehouse-scene {
             position: relative;
             min-height: 60vh;
-            background: url('images/Sarahlookback.png') center/cover;
+            background: url('images/Sarahlookback.png') center/cover fixed;
             background-position: center center;
             display: flex;
             align-items: center;
             justify-content: center;
+            margin: 0; /* Remove gaps */
         }
 
         .warehouse-overlay {
@@ -396,7 +388,7 @@
         /* Party Scene with Sarah */
         .party-scene {
             position: relative;
-            background: url('images/Sarahfacingaway.png') center/cover;
+            background: url('images/Sarahfacingaway.png') center/cover fixed;
             background-position: center top;
             min-height: 80vh;
             display: flex;
@@ -554,11 +546,16 @@
         .booking-bar {
             position: sticky;
             top: 0;
-            background: rgba(0, 0, 0, 0.95);
+            background: linear-gradient(to bottom, 
+                        rgba(0, 0, 0, 1) 0%, 
+                        rgba(0, 0, 0, 0.98) 50%, 
+                        rgba(0, 0, 0, 0.95) 100%);
             border-bottom: 2px solid #cc0000;
             padding: 1rem 2rem;
             z-index: 90;
             backdrop-filter: blur(10px);
+            margin: 0; /* Remove any default margins */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8); /* Add depth */
         }
 
         .booking-content {
@@ -978,8 +975,7 @@
     </div>
 
     <!-- Narrative Section with Crime Board BG -->
-    <section id="narrative" class="narrative">
-        <div class="narrative-bg"></div>
+    <section id="narrative" class="narrative fade-in-section">
         <div class="narrative-content">
             <h2>Fragmented Memories</h2>
             
@@ -1001,8 +997,10 @@
         </div>
     </section>
 
+    <div class="section-divider"></div>
+
     <!-- Warehouse Scene Divider -->
-    <section class="warehouse-scene">
+    <section class="warehouse-scene fade-in-section">
         <div class="warehouse-overlay"></div>
         <div class="warehouse-text">
             <h2>Enter the Crime Scene</h2>
@@ -1010,8 +1008,10 @@
         </div>
     </section>
 
+    <div class="section-divider"></div>
+
     <!-- Evidence Room (Mechanics) -->
-    <section class="evidence-room">
+    <section class="evidence-room fade-in-section">
         <div class="container">
             <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 3rem;">Collected Evidence</h2>
             
@@ -1039,8 +1039,10 @@
         </div>
     </section>
 
+    <div class="section-divider"></div>
+
     <!-- How It Works Section -->
-    <section id="how-it-works" class="how-it-works">
+    <section id="how-it-works" class="how-it-works fade-in-section">
         <div class="container">
             <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">How The Investigation Works</h2>
             <p style="text-align: center; font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 3rem;">
@@ -1090,8 +1092,10 @@
         </div>
     </section>
 
+    <div class="section-divider"></div>
+
     <!-- Party Scene with Overlaid Content -->
-    <section class="party-scene">
+    <section class="party-scene fade-in-section">
         <div class="party-overlay"></div>
         <div class="party-content">
             <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; margin-bottom: 1rem; text-shadow: 0 0 30px rgba(139, 0, 255, 0.8);">The Night Before</h2>
@@ -1100,6 +1104,8 @@
             </p>
         </div>
     </section>
+
+    <div class="section-divider"></div>
 
     <!-- Creators Section -->
     <section class="creators">
@@ -1131,6 +1137,8 @@
             </div>
         </div>
     </section>
+
+    <div class="section-divider"></div>
 
     <!-- FAQ Section -->
     <section id="faq" class="faq-section">
@@ -1185,6 +1193,8 @@
             </div>
         </div>
     </section>
+
+    <div class="section-divider"></div>
 
     <!-- Memory Recovery Form -->
     <section id="submit-evidence" class="interest-form">
@@ -1324,7 +1334,7 @@
                 return; // Respect user preference
             }
 
-            const parallaxElements = document.querySelectorAll('.hero-bg-image, .narrative-bg');
+            const parallaxElements = document.querySelectorAll('.hero-bg-image');
             if (!parallaxElements.length) return;
 
             let lastY = window.pageYOffset || document.documentElement.scrollTop || 0;
@@ -1361,7 +1371,7 @@
             });
         });
 
-        // Reveal memory blocks on scroll
+        // Reveal memory blocks and sections on scroll
         const observerOptions = {
             threshold: 0.1,
             rootMargin: '0px 0px -100px 0px'
@@ -1372,6 +1382,9 @@
                 if (entry.isIntersecting) {
                     entry.target.style.opacity = '1';
                     entry.target.style.transform = 'translateX(0)';
+                    if (entry.target.classList.contains('fade-in-section')) {
+                        entry.target.style.transform = 'translateY(0)';
+                    }
                 }
             });
         }, observerOptions);
@@ -1381,6 +1394,14 @@
             block.style.transform = 'translateX(-50px)';
             block.style.transition = 'all 0.8s ease-out';
             observer.observe(block);
+        });
+
+        // Apply fade-in animation to sections
+        document.querySelectorAll('.fade-in-section').forEach(section => {
+            section.style.opacity = '0';
+            section.style.transform = 'translateY(30px)';
+            section.style.transition = 'all 1s ease-out';
+            observer.observe(section);
         });
     </script>
 </body>
