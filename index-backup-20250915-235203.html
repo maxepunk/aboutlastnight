@@ -110,16 +110,15 @@
         }
 
         .hero-bg-image {
+            background-position: center top;
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             background: url('images/Sarahlookback.png') center/cover;
-            background-position: center top;
             opacity: 0.3;
             filter: contrast(1.2) brightness(0.8);
-            will-change: transform;
         }
 
         .hero-overlay {
@@ -159,16 +158,7 @@
             color: rgba(255, 100, 100, 0.9);
             text-transform: uppercase;
             letter-spacing: 0.5em;
-            margin-bottom: 1rem;
-            font-weight: 300;
-        }
-
-        .awards-badge {
-            font-size: 1rem;
-            color: rgba(255, 200, 0, 0.9);
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-            margin-bottom: 1.5rem;
+            margin-bottom: 2rem;
             font-weight: 300;
         }
 
@@ -237,7 +227,6 @@
             background: url('images/Noirroom.png') center/cover;
             opacity: 0.3;
             filter: sepia(1) hue-rotate(320deg);
-            will-change: transform;
         }
 
         .narrative-content {
@@ -294,10 +283,10 @@
 
         /* Warehouse Scene Section */
         .warehouse-scene {
+            background-position: center 80%;
             position: relative;
             min-height: 60vh;
             background: url('images/Sleepyparty.png') center/cover;
-            background-position: center 80%;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -393,9 +382,9 @@
 
         /* Party Scene with Sarah */
         .party-scene {
+            background-position: center top;
             position: relative;
             background: url('images/Sarahfacingaway.png') center/cover;
-            background-position: center top;
             min-height: 80vh;
             display: flex;
             align-items: flex-end;
@@ -407,7 +396,8 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle at center, rgba(0,0,0,0.3), rgba(0,0,0,0.8));        }
+            background: radial-gradient(circle to center, rgba(0,0,0,0.3), rgba(0,0,0,0.8)); 
+        }
 
         .party-content {
             position: relative;
@@ -545,325 +535,8 @@
             margin-bottom: 2rem;
         }
 
-        /* Booking Bar */
-        .booking-bar {
-            position: sticky;
-            top: 0;
-            background: rgba(0, 0, 0, 0.95);
-            border-bottom: 2px solid #cc0000;
-            padding: 1rem 2rem;
-            z-index: 90;
-            backdrop-filter: blur(10px);
-        }
-
-        .booking-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .booking-dates {
-            font-size: 1.1rem;
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        .preview-dates {
-            color: #cc0000;
-            font-weight: 700;
-        }
-
-        .divider {
-            margin: 0 1rem;
-            color: rgba(255, 255, 255, 0.3);
-        }
-
-        .booking-cta {
-            padding: 0.8rem 2rem;
-            background: #cc0000;
-            color: white;
-            text-decoration: none;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            transition: all 0.3s;
-        }
-
-        .booking-cta:hover {
-            background: #ff0000;
-            box-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
-            animation: policeLights 1s infinite;
-        }
-
-        /* Container */
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
-        }
-
-        /* How It Works Section */
-        .how-it-works {
-            padding: 6rem 2rem;
-            background: #000;
-            position: relative;
-            border-top: 1px solid rgba(204, 0, 0, 0.2);
-        }
-
-        .process-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin: 4rem 0;
-        }
-
-        .process-step {
-            text-align: center;
-            padding: 2rem;
-            background: rgba(10, 10, 10, 0.9);
-            border: 1px solid rgba(204, 0, 0, 0.2);
-            transition: all 0.3s;
-            position: relative;
-        }
-
-        .process-step:hover {
-            border-color: #cc0000;
-            transform: translateY(-5px);
-            background: rgba(30, 0, 0, 0.9);
-            box-shadow: 0 10px 30px rgba(204, 0, 0, 0.3);
-        }
-
-        .step-number {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 3rem;
-            color: #cc0000;
-            opacity: 0.5;
-            margin-bottom: 1rem;
-        }
-
-        .process-step h3 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.8rem;
-            color: #fff;
-            margin-bottom: 1rem;
-        }
-
-        .process-step p {
-            color: rgba(255, 255, 255, 0.7);
-            line-height: 1.6;
-        }
-
-        .experience-stats {
-            display: flex;
-            justify-content: center;
-            gap: 4rem;
-            margin-top: 4rem;
-            padding-top: 3rem;
-            border-top: 1px solid rgba(204, 0, 0, 0.3);
-        }
-
-        .stat {
-            text-align: center;
-        }
-
-        .stat-number {
-            display: block;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 3rem;
-            color: #cc0000;
-            text-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
-        }
-
-        .stat-label {
-            display: block;
-            font-size: 1rem;
-            color: rgba(255, 255, 255, 0.6);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        /* FAQ Section */
-        .faq-section {
-            padding: 6rem 2rem;
-            background: linear-gradient(180deg, #0a0a0a 0%, #000 100%);
-        }
-
-        .faq-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 2rem;
-            margin-top: 3rem;
-        }
-
-        .faq-item {
-            background: rgba(20, 20, 20, 0.6);
-            border-left: 3px solid #cc0000;
-            padding: 2rem;
-            transition: all 0.3s;
-        }
-
-        .faq-item:hover {
-            background: rgba(30, 10, 10, 0.8);
-            transform: translateX(5px);
-        }
-
-        .faq-question {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.5rem;
-            color: #fff;
-            margin-bottom: 1rem;
-        }
-
-        .faq-answer {
-            color: rgba(255, 255, 255, 0.8);
-            line-height: 1.6;
-        }
-
-        /* Memory Recovery Form */
-        .memory-form {
-            max-width: 500px;
-            margin: 0 auto;
-            text-align: center;
-        }
-
-        .corrupted-header {
-            margin-bottom: 2rem;
-            padding: 1rem;
-            background: rgba(204, 0, 0, 0.1);
-            border: 1px solid rgba(204, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .corrupted-header:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(204, 0, 0, 0.2), transparent);
-            animation: scan 3s infinite;
-        }
-
-        @keyframes scan {
-            0% { left: -100%; }
-            100% { left: 100%; }
-        }
-
-        .memory-input {
-            width: 100%;
-            padding: 1.2rem;
-            font-size: 1.1rem;
-            background: rgba(10, 10, 10, 0.9);
-            border: 2px solid rgba(204, 0, 0, 0.3);
-            color: #fff;
-            text-align: center;
-            margin-bottom: 1.5rem;
-            transition: all 0.3s;
-            font-family: 'Barlow', sans-serif;
-        }
-
-        .memory-input::placeholder {
-            color: rgba(204, 0, 0, 0.5);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-size: 0.9rem;
-        }
-
-        .memory-input:focus {
-            outline: none;
-            border-color: #cc0000;
-            background: rgba(30, 0, 0, 0.9);
-            box-shadow: 0 0 30px rgba(204, 0, 0, 0.3);
-            transform: scale(1.02);
-        }
-
-        .recover-button {
-            width: 100%;
-            padding: 1.2rem 2rem;
-            font-size: 1.1rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            background: transparent;
-            border: 2px solid #cc0000;
-            color: #fff;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s;
-            margin-bottom: 2rem;
-        }
-
-        .recover-button:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: #cc0000;
-            transition: left 0.3s;
-            z-index: -1;
-        }
-
-        .recover-button:hover:before {
-            left: 0;
-        }
-
-        .recover-button:hover {
-            animation: policeLights 1s infinite;
-        }
-
-        .system-note {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.6;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        .recovery-status {
-            margin-top: 2rem;
-            padding: 1rem;
-            background: rgba(0, 255, 0, 0.1);
-            border: 1px solid rgba(0, 255, 0, 0.3);
-            text-align: center;
-        }
-
-        .success-msg {
-            color: #00ff00;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-size: 0.9rem;
-        }
-
         /* Mobile Responsive */
         @media (max-width: 768px) {
-            .booking-content {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-            
-            .booking-dates {
-                font-size: 0.9rem;
-            }
-            
-            .process-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .experience-stats {
-                gap: 2rem;
-            }
-            
-            .faq-grid {
-                grid-template-columns: 1fr;
-            }
-            
             h1 {
                 font-size: 4rem;
             }
@@ -895,14 +568,6 @@
             pointer-events: none;
             z-index: 100;
         }
-
-        /* Respect reduced motion preferences */
-        @media (prefers-reduced-motion: reduce) {
-            .hero-bg-image,
-            .narrative-bg {
-                transform: none !important;
-            }
-        }
     </style>
 </head>
 <body>
@@ -916,26 +581,11 @@
         <div class="hero-content">
             <h1>About Last<br>Night...</h1>
             <p class="tagline">An Immersive Crime Thriller</p>
-            <p class="awards-badge">From the creators of Golden Lock Award Winner</p>
             <p class="hook">Some memories are worth killing for.</p>
             <a href="#submit-evidence" class="cta-primary">Secure Your Spot</a>
             <a href="#narrative" class="cta-primary">Investigate</a>
         </div>
     </section>
-
-    <!-- Booking Info Bar -->
-    <div class="booking-bar" id="booking-bar">
-        <div class="booking-content">
-            <div class="booking-dates">
-                <span class="preview-dates">PREVIEW: Oct 4-12</span>
-                <span class="divider">•</span>
-                <span class="main-dates">MAIN RUN: Oct 18 - Nov 9</span>
-                <span class="divider">•</span>
-                <span class="min-players">5 player minimum • $75</span>
-            </div>
-            <a href="#submit-evidence" class="booking-cta">Join Preview List</a>
-        </div>
-    </div>
 
     <!-- Narrative Section with Crime Board BG -->
     <section id="narrative" class="narrative">
@@ -999,57 +649,6 @@
         </div>
     </section>
 
-    <!-- How It Works Section -->
-    <section id="how-it-works" class="how-it-works">
-        <div class="container">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">How The Investigation Works</h2>
-            <p style="text-align: center; font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 3rem;">
-                90 minutes. Multiple suspects. Your memories are the evidence.
-            </p>
-            
-            <div class="process-grid">
-                <div class="process-step">
-                    <div class="step-number">01</div>
-                    <h3>Gather Your Suspects</h3>
-                    <p>5-20 players enter together. You might know some. Others are strangers with their own agendas.</p>
-                </div>
-                
-                <div class="process-step">
-                    <div class="step-number">02</div>
-                    <h3>Receive Your Identity</h3>
-                    <p>You're not just a player. You're a character with a past, connections, and secrets worth protecting.</p>
-                </div>
-                
-                <div class="process-step">
-                    <div class="step-number">03</div>
-                    <h3>Recover Your Memories</h3>
-                    <p>Solve physical puzzles scattered throughout the space. Each unlocks memory fragments from last night.</p>
-                </div>
-                
-                <div class="process-step">
-                    <div class="step-number">04</div>
-                    <h3>Trade, Betray, or Trust</h3>
-                    <p>Your memories have value to others. Negotiate, trade, or hoard them. Every choice changes the outcome.</p>
-                </div>
-            </div>
-            
-            <div class="experience-stats">
-                <div class="stat">
-                    <span class="stat-number">90</span>
-                    <span class="stat-label">Minutes</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-number">5-20</span>
-                    <span class="stat-label">Players</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-number">∞</span>
-                    <span class="stat-label">Outcomes</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <!-- Party Scene with Overlaid Content -->
     <section class="party-scene">
         <div class="party-overlay"></div>
@@ -1092,92 +691,28 @@
         </div>
     </section>
 
-    <!-- FAQ Section -->
-    <section id="faq" class="faq-section">
-        <div class="container">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">Classified Information</h2>
-            <p style="text-align: center; font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 3rem;">
-                What you need to know before entering the investigation.
-            </p>
-            
-            <div class="faq-grid">
-                <div class="faq-item">
-                    <h3 class="faq-question">What exactly is this experience?</h3>
-                    <p class="faq-answer">A 90-minute immersive crime thriller where you play a character with fragmented memories. Solve puzzles to recover your memories, then decide whether to trade, keep, or weaponize them. Part escape room, part roleplay, part social strategy game.</p>
-                </div>
-                
-                <div class="faq-item">
-                    <h3 class="faq-question">How many people do I need?</h3>
-                    <p class="faq-answer">Minimum 5 players, maximum 20. Don't have a full group? You'll be paired with others – and trust us, playing with strangers adds to the tension and strategy.</p>
-                </div>
-                
-                <div class="faq-item">
-                    <h3 class="faq-question">Will we be paired with strangers?</h3>
-                    <p class="faq-answer">Possibly, yes. This game thrives on unexpected alliances and rivalries. However, groups can book all 20 spots for a fully private experience.</p>
-                </div>
-                
-                <div class="faq-item">
-                    <h3 class="faq-question">How long does it take?</h3>
-                    <p class="faq-answer">Plan for 90-120 minutes. Most groups finish around 90 minutes, but complex negotiations can extend gameplay.</p>
-                </div>
-                
-                <div class="faq-item">
-                    <h3 class="faq-question">When can I play?</h3>
-                    <p class="faq-answer">Preview performances: October 4-12<br>
-                    Main run: October 18 - November 9<br>
-                    Friday-Sunday performances, multiple time slots.</p>
-                </div>
-                
-                <div class="faq-item">
-                    <h3 class="faq-question">Is this scary?</h3>
-                    <p class="faq-answer">No jump scares or horror elements. This is a psychological thriller focused on mystery, deduction, and social dynamics. Think noir detective story, not haunted house.</p>
-                </div>
-                
-                <div class="faq-item">
-                    <h3 class="faq-question">Age requirements?</h3>
-                    <p class="faq-answer">16+ recommended due to complex themes and strategic gameplay. Under 18 must be accompanied by an adult.</p>
-                </div>
-                
-                <div class="faq-item">
-                    <h3 class="faq-question">Content warnings?</h3>
-                    <p class="faq-answer">Themes include: memory loss, corporate conspiracy, infidelity, substance use references, artificial intelligence, and psychological manipulation. No physical contact required between players.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Memory Recovery Form -->
+    <!-- Interest Form -->
     <section id="submit-evidence" class="interest-form">
         <div class="form-container">
-            <form id="interestForm" class="memory-form">
-                <div class="corrupted-header">
-                    <span class="glitch">MEMORY_RECOVERY_PROTOCOL</span>
+            <h2>Submit Your Statement</h2>
+            <p class="form-warning">
+                Limited interrogation slots available.<br>
+                October 18 - November 9, 2025
+            </p>
+            
+            <form id="interestForm">
+                <div class="form-group">
+                    <input type="email" class="form-input" placeholder="Email Address" required>
                 </div>
-                
-                <input type="email" 
-                       name="email"
-                       class="memory-input" 
-                       placeholder="Initialize memory recovery sequence"
-                       required>
-                
-                <!-- Hidden fields for tracking -->
-                <input type="hidden" name="utm_source" id="utm_source">
-                <input type="hidden" name="referrer" id="referrer">
-                <input type="hidden" name="device_type" id="device_type">
-                
-                <button type="submit" class="recover-button">
-                    Begin Recovery
-                </button>
-                
-                <p class="system-note">
-                    SYSTEM: Preview access October 4-12<br>
-                    WARNING: Full investigation $75 • October 18 - November 9
-                </p>
+                <div class="form-group">
+                    <input type="text" class="form-input" placeholder="Party Size (5-20 guests)">
+                </div>
+                <button type="submit" class="cta-primary" style="width: 100%;">Lock In Your Memory</button>
             </form>
-
-            <div id="form-message" class="recovery-status" style="display: none;">
-                <p class="success-msg">✓ MEMORY RECOVERY INITIATED • CHECK EMAIL FOR PROTOCOL</p>
-            </div>
+            
+            <p style="margin-top: 2rem; color: rgba(255, 100, 100, 0.7);">
+                Preview: October 4-12 | $75 per person | 5 person minimum
+            </p>
         </div>
     </section>
 
@@ -1191,81 +726,17 @@
     </footer>
 
     <script>
-        // IMPORTANT: Paste your Google Script Web App URL here
-        const GOOGLE_SCRIPT_URL = 'YOUR-WEB-APP-URL-HERE'; // <-- PASTE YOUR URL HERE!
-
-        // Populate hidden fields on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get UTM parameters from URL
-            const urlParams = new URLSearchParams(window.location.search);
-            document.getElementById('utm_source').value = urlParams.get('utm_source') || 'direct';
-            document.getElementById('referrer').value = document.referrer || '';
-            
-            // Simple device detection
-            const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
-            document.getElementById('device_type').value = isMobile ? 'Mobile' : 'Desktop';
-        });
-
-        // Form submission with Google Sheets
-        document.getElementById('interestForm').addEventListener('submit', async function(e) {
+        // Form submission
+        document.getElementById('interestForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
-            const button = this.querySelector('.recover-button');
-            const originalText = button.textContent;
-            const formMessage = document.getElementById('form-message');
-            
-            // Collect form data
-            const formData = new FormData(this);
-            const data = {};
-            for (let [key, value] of formData.entries()) {
-                data[key] = value;
-            }
-            
-            // Visual feedback
-            button.textContent = 'ACCESSING MEMORY CORE...';
-            button.disabled = true;
-            button.style.opacity = '0.7';
-            
-            try {
-                // Submit to Google Sheets
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams(data)
-                });
-                
-                // Success state (we assume success with no-cors)
-                button.textContent = 'MEMORY RECOVERED';
-                button.style.background = '#00ff00';
-                button.style.borderColor = '#00ff00';
-                formMessage.style.display = 'block';
-                
-                // Reset form after delay
-                setTimeout(() => {
-                    this.reset();
-                    button.textContent = originalText;
-                    button.disabled = false;
-                    button.style.background = '';
-                    button.style.borderColor = '';
-                    button.style.opacity = '1';
-                    formMessage.style.display = 'none';
-                }, 5000);
-                
-            } catch (error) {
-                console.error('Submission error:', error);
-                button.textContent = 'ERROR - TRY AGAIN';
-                button.style.background = '#ff0000';
-                button.disabled = false;
-                button.style.opacity = '1';
-                
-                setTimeout(() => {
-                    button.textContent = originalText;
-                    button.style.background = '';
-                }, 3000);
-            }
+            const button = this.querySelector('button');
+            button.textContent = 'STATEMENT RECORDED';
+            button.style.background = '#cc0000';
+            setTimeout(() => {
+                this.reset();
+                button.textContent = 'Lock In Your Memory';
+                button.style.background = '';
+            }, 3000);
         });
 
         // Smooth scrolling
@@ -1277,39 +748,16 @@
             });
         });
 
-        // Parallax effect (cached nodes + rAF + passive scroll)
-        (function setupParallax() {
-            const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (prefersReducedMotion) {
-                return; // Respect user preference
-            }
-
+        // Parallax effect on scroll
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
             const parallaxElements = document.querySelectorAll('.hero-bg-image, .narrative-bg');
-            if (!parallaxElements.length) return;
-
-            let lastY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            let ticking = false;
-            const speed = 0.5;
-
-            function update() {
-                parallaxElements.forEach(element => {
-                    element.style.transform = `translateY(${lastY * speed}px)`;
-                });
-                ticking = false;
-            }
-
-            function onScroll() {
-                lastY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                if (!ticking) {
-                    window.requestAnimationFrame(update);
-                    ticking = true;
-                }
-            }
-
-            window.addEventListener('scroll', onScroll, { passive: true });
-            // Initial position
-            update();
-        })();
+            
+            parallaxElements.forEach(element => {
+                const speed = 0.5;
+                element.style.transform = `translateY(${scrolled * speed}px)`;
+            });
+        });
 
         // Add police light effect on hover to evidence items
         document.querySelectorAll('.evidence-item').forEach(item => {

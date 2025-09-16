@@ -17,14 +17,10 @@ A step-by-step guide to implement the marketing strategy using Google Sheets for
    ```
    A: Timestamp
    B: Email
-   C: Phone
-   D: Group_Size
-   E: Preferred_Dates
-   F: Interest_Preview
-   G: Interest_MainRun
-   H: Interest_Corporate
-   I: Source
-   J: Notes
+   C: Source (UTM tracking)
+   D: Referrer
+   E: Device_Type
+   F: Notes
    ```
 3. Format Row 1 as header (bold, freeze row)
 4. Share sheet with team members who need access
@@ -42,49 +38,39 @@ function doPost(e) {
     // Parse form data
     const formData = e.parameter;
     
-    // Prepare row data
+    // Prepare row data (simplified for single email field)
     const newRow = [
       timestamp,
       formData.email || '',
-      formData.phone || '',
-      formData.group_size || '',
-      formData.preferred_dates || '',
-      formData.interest_preview || 'No',
-      formData.interest_mainrun || 'No',
-      formData.interest_corporate || 'No',
-      formData.source || '',
+      formData.utm_source || 'direct',
+      formData.referrer || '',
+      formData.device_type || '',
       '' // Notes column - empty for now
     ];
     
     // Append to sheet
     sheet.appendRow(newRow);
     
-    // Send email notification (optional but recommended)
-    if (formData.email) {
+    // Send email notification for early signups (first 50)
+    if (formData.email && sheet.getLastRow() <= 51) { // Including header row
       MailApp.sendEmail({
         to: 'YOUR-EMAIL@gmail.com', // <-- CHANGE THIS
-        subject: `New Lead: ${formData.email}`,
+        subject: `[MEMORY #${sheet.getLastRow() - 1}] ${formData.email}`,
         htmlBody: `
-          <h3>New About Last Night Interest!</h3>
-          <p><b>Email:</b> ${formData.email}</p>
-          <p><b>Phone:</b> ${formData.phone || 'Not provided'}</p>
-          <p><b>Group Size:</b> ${formData.group_size}</p>
-          <p><b>Preferred Dates:</b> ${formData.preferred_dates || 'Flexible'}</p>
-          <p><b>Interests:</b> 
-            ${formData.interest_preview === 'Yes' ? 'Preview ' : ''}
-            ${formData.interest_mainrun === 'Yes' ? 'Main Run ' : ''}
-            ${formData.interest_corporate === 'Yes' ? 'Corporate' : ''}
-          </p>
-          <p><b>Source:</b> ${formData.source || 'Not specified'}</p>
+          <h3>MEMORY RECOVERY INITIATED</h3>
+          <p><b>Subject:</b> ${formData.email}</p>
+          <p><b>Memory ID:</b> #${sheet.getLastRow() - 1}</p>
+          <p><b>Source:</b> ${formData.utm_source || 'direct'}</p>
+          <p><b>Device:</b> ${formData.device_type || 'unknown'}</p>
           <hr>
-          <p><a href="YOUR-SHEET-URL">View in Sheet</a></p>
+          <p><a href="YOUR-SHEET-URL">Access Memory Database</a></p>
         `
       });
     }
     
     // Return success
     return ContentService
-      .createTextOutput(JSON.stringify({'result': 'success', 'row': sheet.getLastRow()}))
+      .createTextOutput(JSON.stringify({'result': 'success', 'memory_id': sheet.getLastRow() - 1}))
       .setMimeType(ContentService.MimeType.JSON);
       
   } catch(error) {
@@ -100,8 +86,8 @@ function testSetup() {
   const testData = {
     parameter: {
       email: 'test@example.com',
-      group_size: '5-7',
-      interest_preview: 'Yes'
+      utm_source: 'test',
+      device_type: 'Desktop'
     }
   };
   
@@ -121,6 +107,8 @@ function testSetup() {
    - Who has access: Anyone
 3. Click "Deploy"
 4. **COPY THE WEB APP URL** - You'll need this!
+    https://script.google.com/macros/s/AKfycbzZ7Xep091AvDFGPADN6CzRCHJUgD0-rPEcBFsuDWEtDTNUiFJGQ_cWIlEwX8gZm8Nk2g/exec
+    **deployment ID** AKfycbzZ7Xep091AvDFGPADN6CzRCHJUgD0-rPEcBFsuDWEtDTNUiFJGQ_cWIlEwX8gZm8Nk2g
 5. Test by clicking "Test deployments"
 
 ---
@@ -404,89 +392,34 @@ Add to existing `<style>` tag:
 Replace the existing form in the Interest Form section:
 
 ```html
-<form id="interestForm" class="enhanced-form">
-    <div class="form-row">
-        <div class="form-group full-width">
-            <input type="email" name="email" class="form-input" placeholder="Email Address*" required>
-        </div>
+<form id="interestForm" class="memory-form">
+    <div class="corrupted-header">
+        <span class="glitch">MEMORY_RECOVERY_PROTOCOL</span>
     </div>
     
-    <div class="form-row">
-        <div class="form-group half-width">
-            <input type="tel" name="phone" class="form-input" placeholder="Phone (optional for urgent updates)">
-        </div>
-        <div class="form-group half-width">
-            <select name="group_size" class="form-input" required>
-                <option value="">Group Size*</option>
-                <option value="5-7">5-7 players</option>
-                <option value="8-12">8-12 players</option>
-                <option value="13-16">13-16 players</option>
-                <option value="17-20">17-20 players (full buyout)</option>
-                <option value="unsure">Not sure yet</option>
-            </select>
-        </div>
-    </div>
+    <input type="email" 
+           name="email"
+           class="memory-input" 
+           placeholder="Initialize memory recovery sequence"
+           required>
     
-    <div class="form-row">
-        <div class="form-group full-width">
-            <select name="preferred_dates" class="form-input">
-                <option value="">Preferred Dates (optional)</option>
-                <option value="preview-weekend1">Oct 4-6 (Preview Weekend 1)</option>
-                <option value="preview-weekend2">Oct 11-12 (Preview Weekend 2)</option>
-                <option value="mainrun-weekend1">Oct 18-20 (Opening Weekend)</option>
-                <option value="mainrun-weekend2">Oct 25-27</option>
-                <option value="mainrun-weekend3">Nov 1-3</option>
-                <option value="mainrun-weekend4">Nov 8-9 (Closing Weekend)</option>
-                <option value="flexible">Flexible</option>
-            </select>
-        </div>
-    </div>
+    <!-- Hidden fields for tracking -->
+    <input type="hidden" name="utm_source" id="utm_source">
+    <input type="hidden" name="referrer" id="referrer">
+    <input type="hidden" name="device_type" id="device_type">
     
-    <div class="form-row">
-        <div class="form-group full-width">
-            <div class="interest-options">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="interest_preview" value="Yes">
-                    <span>Interested in Preview ($75/person)</span>
-                </label>
-                <label class="checkbox-label">
-                    <input type="checkbox" name="interest_mainrun" value="Yes">
-                    <span>Interested in Main Run</span>
-                </label>
-                <label class="checkbox-label">
-                    <input type="checkbox" name="interest_corporate" value="Yes">
-                    <span>Corporate/Private Booking</span>
-                </label>
-            </div>
-        </div>
-    </div>
-    
-    <div class="form-row">
-        <div class="form-group full-width">
-            <select name="source" class="form-input">
-                <option value="">How did you hear about us? (optional)</option>
-                <option value="social">Social Media</option>
-                <option value="friend">Friend/Word of Mouth</option>
-                <option value="otc">Off the Couch Games</option>
-                <option value="press">Press/Media</option>
-                <option value="creator">From Creators' Previous Work</option>
-                <option value="other">Other</option>
-            </select>
-        </div>
-    </div>
-    
-    <button type="submit" class="cta-primary" style="width: 100%;">
-        Lock In Your Memory - Get Preview Access
+    <button type="submit" class="recover-button">
+        Begin Recovery
     </button>
     
-    <p class="form-disclaimer">
-        First 50 preview spots at $75. Main run pricing TBA.<br>
-        <span style="color: rgba(255, 100, 100, 0.7);">No payment required now. We'll contact you when booking opens.</span>
+    <p class="system-note">
+        SYSTEM: Preview access October 4-12<br>
+        WARNING: Full investigation $75 • October 18 - November 9
     </p>
 </form>
 
-<div id="form-message" style="display: none; margin-top: 2rem; padding: 1rem; background: rgba(0, 255, 0, 0.1); border: 1px solid #00ff00; text-align: center;">
-    <p style="color: #00ff00;">✓ Your spot in the investigation is secured. Check your email for next steps.</p>
+<div id="form-message" class="recovery-status" style="display: none;">
+    <p class="success-msg">✓ MEMORY RECOVERY INITIATED • CHECK EMAIL FOR PROTOCOL</p>
 </div>
 ```
 
@@ -494,70 +427,137 @@ Replace the existing form in the Interest Form section:
 Add to existing styles:
 
 ```css
-/* Enhanced Form Styles */
-.enhanced-form {
-    max-width: 600px;
+/* Memory Recovery Form Styles */
+.memory-form {
+    max-width: 500px;
     margin: 0 auto;
-}
-
-.form-row {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.full-width {
-    width: 100%;
-}
-
-.half-width {
-    width: 50%;
-}
-
-.interest-options {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: 1rem;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(204, 0, 0, 0.2);
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.8);
-    transition: color 0.3s;
-}
-
-.checkbox-label:hover {
-    color: #cc0000;
-}
-
-.checkbox-label input {
-    margin-right: 0.8rem;
-    width: 20px;
-    height: 20px;
-    accent-color: #cc0000;
-}
-
-.form-disclaimer {
     text-align: center;
-    margin-top: 2rem;
-    font-size: 1rem;
-    color: rgba(255, 255, 255, 0.7);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .form-row {
-        flex-direction: column;
-    }
-    
-    .half-width {
-        width: 100%;
-    }
+.corrupted-header {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: rgba(204, 0, 0, 0.1);
+    border: 1px solid rgba(204, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.corrupted-header:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(204, 0, 0, 0.2), transparent);
+    animation: scan 3s infinite;
+}
+
+@keyframes scan {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+.glitch {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: 0.2em;
+    color: #cc0000;
+    text-transform: uppercase;
+    animation: glitchText 3s infinite;
+}
+
+.memory-input {
+    width: 100%;
+    padding: 1.2rem;
+    font-size: 1.1rem;
+    background: rgba(10, 10, 10, 0.9);
+    border: 2px solid rgba(204, 0, 0, 0.3);
+    color: #fff;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s;
+    font-family: 'Barlow', sans-serif;
+}
+
+.memory-input::placeholder {
+    color: rgba(204, 0, 0, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.9rem;
+}
+
+.memory-input:focus {
+    outline: none;
+    border-color: #cc0000;
+    background: rgba(30, 0, 0, 0.9);
+    box-shadow: 0 0 30px rgba(204, 0, 0, 0.3);
+    transform: scale(1.02);
+}
+
+.recover-button {
+    width: 100%;
+    padding: 1.2rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    background: transparent;
+    border: 2px solid #cc0000;
+    color: #fff;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+    margin-bottom: 2rem;
+}
+
+.recover-button:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: #cc0000;
+    transition: left 0.3s;
+    z-index: -1;
+}
+
+.recover-button:hover:before {
+    left: 0;
+}
+
+.recover-button:hover {
+    animation: policeLights 1s infinite;
+}
+
+.system-note {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.6;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.system-note br {
+    margin-bottom: 0.5rem;
+}
+
+.recovery-status {
+    margin-top: 2rem;
+    padding: 1rem;
+    background: rgba(0, 255, 0, 0.1);
+    border: 1px solid rgba(0, 255, 0, 0.3);
+    text-align: center;
+}
+
+.success-msg {
+    color: #00ff00;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.9rem;
 }
 ```
 
@@ -568,10 +568,22 @@ Replace existing form submission handler:
 // Google Sheets Integration
 const GOOGLE_SCRIPT_URL = 'YOUR-WEB-APP-URL-HERE'; // <-- PASTE YOUR URL HERE!
 
+// Populate hidden fields
+document.addEventListener('DOMContentLoaded', function() {
+    // Get UTM parameters from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    document.getElementById('utm_source').value = urlParams.get('utm_source') || 'direct';
+    document.getElementById('referrer').value = document.referrer || '';
+    
+    // Simple device detection
+    const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
+    document.getElementById('device_type').value = isMobile ? 'Mobile' : 'Desktop';
+});
+
 document.getElementById('interestForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    const button = this.querySelector('button[type="submit"]');
+    const button = this.querySelector('.recover-button');
     const originalText = button.textContent;
     const formMessage = document.getElementById('form-message');
     
@@ -583,7 +595,7 @@ document.getElementById('interestForm').addEventListener('submit', async functio
     }
     
     // Visual feedback
-    button.textContent = 'PROCESSING MEMORY...';
+    button.textContent = 'ACCESSING MEMORY CORE...';
     button.disabled = true;
     button.style.opacity = '0.7';
     
@@ -599,8 +611,9 @@ document.getElementById('interestForm').addEventListener('submit', async functio
         });
         
         // Success state (we assume success with no-cors)
-        button.textContent = 'MEMORY LOCKED';
+        button.textContent = 'MEMORY RECOVERED';
         button.style.background = '#00ff00';
+        button.style.borderColor = '#00ff00';
         formMessage.style.display = 'block';
         
         // Reset form after delay
