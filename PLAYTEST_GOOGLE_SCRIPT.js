@@ -112,7 +112,7 @@ function doPost(e) {
     }
     
     // Send notification to organizers for key milestones
-    const organizerEmail = 'YOUR-EMAIL@EXAMPLE.COM'; // <-- REPLACE WITH YOUR EMAIL
+    const organizerEmail = 'max@maxepunk.com'; // <-- REPLACE WITH YOUR EMAIL
     
     if (spotsTaken === 15 || spotsTaken === 17 || spotsTaken === 19 || spotsTaken === 20) {
       MailApp.sendEmail({
@@ -124,7 +124,7 @@ function doPost(e) {
           <p style="font-size: 24px; color: ${spotsRemaining <= 3 ? '#cc0000' : '#ff9900'};">
             <strong>${spotsRemaining} spots remaining</strong>
           </p>
-          <p><a href="YOUR-SHEET-URL">View signup sheet</a></p>
+          <p><a href="https://docs.google.com/spreadsheets/d/1s9dDSSqTKc9wTtVvj-4U4fY_jzIdNCrIiI5E_atSKG4/edit?usp=sharing">View signup sheet</a></p>
         `
       });
     }
