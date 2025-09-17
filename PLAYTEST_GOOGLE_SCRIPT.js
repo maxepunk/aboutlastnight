@@ -85,10 +85,10 @@ function doPost(e) {
                 </p>
               </div>
               ` : `
-              <div style="background: rgba(255, 0, 0, 0.05); border-left: 3px solid #cc0000; padding: 15px; margin: 20px 0;">
-                <p style="margin: 0; color: #cc0000; font-size: 14px;">
-                  <strong>SURVEILLANCE REQUIRED:</strong> Documentation is mandatory for this classified operation. 
-                  Please contact us if you have security concerns about being photographed.
+              <div style="background: rgba(255, 200, 0, 0.05); border-left: 3px solid rgba(255, 200, 0, 0.5); padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #666; font-size: 14px;">
+                  <strong style="color: #cc9900;">SURVEILLANCE DECLINED:</strong> You've opted out of documentation. 
+                  We'll do our best to keep you out of promotional materials. Please remind us at check-in.
                 </p>
               </div>
               `}
