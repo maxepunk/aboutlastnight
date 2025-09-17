@@ -517,7 +517,7 @@
             <!-- Surveillance Protocol -->
             <div class="form-group" style="background: rgba(204, 0, 0, 0.05); padding: 1.5rem; border-left: 2px solid rgba(204, 0, 0, 0.3); margin-bottom: 1.5rem;">
                 <label style="display: flex; align-items: flex-start; cursor: pointer; color: rgba(255, 255, 255, 0.9);">
-                    <input type="checkbox" id="photoConsent" name="photoConsent" required style="margin-right: 1rem; margin-top: 0.2rem;">
+                    <input type="checkbox" id="photoConsent" name="photoConsent" style="margin-right: 1rem; margin-top: 0.2rem;">
                     <div style="flex: 1; line-height: 1.6;">
                         <strong style="color: #cc0000; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.9rem;">SURVEILLANCE PROTOCOL</strong><br>
                         <span style="font-size: 0.95rem;">
@@ -606,16 +606,7 @@
             }
         }
         
-        // Set custom validation message for checkbox
-        document.addEventListener('DOMContentLoaded', function() {
-            const photoConsent = document.getElementById('photoConsent');
-            if (photoConsent) {
-                photoConsent.setCustomValidity('Surveillance authorization required for entry');
-                photoConsent.addEventListener('change', function() {
-                    this.setCustomValidity(this.checked ? '' : 'Surveillance authorization required for entry');
-                });
-            }
-        });
+        // Photo consent is optional - no validation needed
         
         // Form submission
         document.getElementById('playtestForm').addEventListener('submit', async function(e) {
