@@ -6,6 +6,10 @@
 // 2. Execute as: Me (your account)
 // 3. Who has access: Anyone (required for CORS to work)
 // 4. Copy the deployment URL to playtest.html
+//
+// GOOGLE SHEET SETUP:
+// Make sure your sheet has these column headers:
+// Name | Email | Timestamp | Spot Number | Status | Photo Consent | Consent Timestamp
 
 function doPost(e) {
   try {
@@ -29,13 +33,15 @@ function doPost(e) {
     // Create timestamp
     const timestamp = new Date();
     
-    // Append data to sheet
+    // Append data to sheet (including photo consent)
     sheet.appendRow([
       formData.name || '',
       formData.email || '',
       timestamp,
       actualSpotNumber,
-      status
+      status,
+      formData.photoConsent || 'No',  // Photo consent
+      timestamp  // Consent timestamp (same as registration)
     ]);
     
     // Send confirmation email to participant
@@ -60,6 +66,7 @@ function doPost(e) {
                 <p style="margin: 5px 0;"><strong>Duration:</strong> 2-2.5 hrs including playtest feedback session</p>
                 <p style="margin: 5px 0;"><strong>Location:</strong> Off the Couch Games, Fremont</p>
                 <p style="margin: 5px 0;"><strong>Your Spot:</strong> #${actualSpotNumber} of ${spotsTotal}</p>
+                <p style="margin: 5px 0;"><strong>Surveillance Auth:</strong> ${formData.photoConsent === 'Yes' ? '✓ Authorized' : 'Not Authorized'}</p>
               </div>
               
               <h3 style="color: #cc0000;">What to Expect:</h3>
@@ -69,6 +76,22 @@ function doPost(e) {
                 <li>You'll be testing an in-progress version - your feedback is valuable!</li>
                 <li>Comfortable clothes recommended</li>
               </ul>
+              
+              ${formData.photoConsent === 'Yes' ? `
+              <div style="background: rgba(0, 255, 0, 0.05); border-left: 3px solid rgba(0, 255, 0, 0.3); padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #333; font-size: 14px;">
+                  <strong style="color: #008800;">SURVEILLANCE AUTHORIZED:</strong> You've cleared documentation protocols. 
+                  The investigation will be recorded for development purposes. Need to avoid close surveillance? Inform security at entry.
+                </p>
+              </div>
+              ` : `
+              <div style="background: rgba(255, 0, 0, 0.05); border-left: 3px solid #cc0000; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #cc0000; font-size: 14px;">
+                  <strong>SURVEILLANCE REQUIRED:</strong> Documentation is mandatory for this classified operation. 
+                  Please contact us if you have security concerns about being photographed.
+                </p>
+              </div>
+              `}
               
               <p style="background: #fff0f0; border: 1px solid #cc0000; padding: 15px; margin-top: 20px;">
                 <strong style="color: #cc0000;">Important:</strong> Please arrive 10 minutes early if possible, to get settled. 
@@ -132,6 +155,8 @@ function doPost(e) {
         htmlBody: `
           <h2>Playtest Signup Update</h2>
           <p><strong>${formData.name}</strong> just claimed spot #${actualSpotNumber}</p>
+          <p>Email: ${formData.email}</p>
+          <p>Photo Consent: ${formData.photoConsent === 'Yes' ? '✅ Yes' : '❌ No'}</p>
           <p style="font-size: 24px; color: ${actualSpotsRemaining <= 3 ? '#cc0000' : '#ff9900'};">
             <strong>${actualSpotsRemaining} spots remaining</strong>
           </p>
