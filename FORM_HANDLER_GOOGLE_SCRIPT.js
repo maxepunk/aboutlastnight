@@ -19,7 +19,11 @@ function doPost(e) {
     // Append to sheet
     sheet.appendRow(newRow);
     
-    const memoryId = sheet.getLastRow() - 1; // Store for use in both emails
+    // Generate a hash-based memory ID from timestamp
+    // This creates a 5-digit number that looks random but is deterministic
+    const timeHash = timestamp.getTime().toString();
+    const hashValue = timeHash.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const memoryId = 28354 + (hashValue % 71646); // Results in range 28354-99999
     
     // Send confirmation email to participant
     if (formData.email) {
@@ -60,9 +64,15 @@ function doPost(e) {
                 </p>
               </div>
               
+              <div style="margin-top: 35px; text-align: center;">
+                <a href="https://aboutlastnightgame.com" style="display: inline-block; padding: 12px 30px; background: transparent; border: 2px solid #cc0000; color: #fff; text-decoration: none; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; font-size: 14px; transition: all 0.3s;">
+                  Return to Investigation
+                </a>
+              </div>
+              
               <div style="margin-top: 30px; text-align: center;">
                 <p style="color: rgba(255, 255, 255, 0.5); font-size: 13px;">
-                  You're receiving this because you initiated memory recovery at aboutlastnight.live<br>
+                  You're receiving this because you initiated memory recovery at aboutlastnightgame.com<br>
                   Your memory ID: #${memoryId}
                 </p>
               </div>
