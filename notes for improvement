@@ -1,0 +1,6 @@
+-make the component between the hero section and fragmented memories stick at the top as a header once the user scrolls past it.
+-How You'll Find the Truth - change the 4 boxes to be collapsed to only show Gather Your Suspects, Receive your Identity, etc, and be expandible to show the additional text. Nice clean animation.
+-Same for the evidence you'll uncover
+-Same for the creators, keep name and title, and collapse the bio until clicked.
+-Same for all FAQ boxes. Progressive disclosure of answers
+-Use this set of visual updates as an opportunity to further enhance the storytelling of this page through subtle and intentional alignment of aesthetic, narrative, and function to create an experience greater than the sum of its parts. Be very intentional and specific about the visual language you use with the animations and collapsed/expanded state visual indicators. 
