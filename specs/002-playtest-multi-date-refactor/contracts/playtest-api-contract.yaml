@@ -1,0 +1,345 @@
+openapi: 3.0.3
+info:
+  title: Playtest Multi-Date Signup API
+  description: |
+    Google Apps Script backend contract for playtest signup form with multiple date selection.
+    This contract defines the request/response schema for the playtest.html form submission.
+
+    **Backend Implementation**: PLAYTEST_GOOGLE_SCRIPT.js (Google Apps Script)
+    **Storage**: Google Sheets (Playtest Signups sheet)
+    **CORS**: Handled automatically by Google Apps Script (allows all origins)
+  version: 2.0.0
+  contact:
+    name: About Last Night Development Team
+    email: max@maxepunk.com
+
+servers:
+  - url: https://script.google.com/macros/s/{deployment-id}/exec
+    description: Google Apps Script Web App endpoint
+    variables:
+      deployment-id:
+        default: AKfycbypIVyTqnposIYclTgLiYv3xxXkQSRXcTH7hXF3lAC6RbKSDNHOckOrE7VhO1MbGMRbQA
+        description: Google Apps Script deployment ID (replace on new deployment)
+
+paths:
+  /:
+    get:
+      summary: Get capacity for all playtest dates
+      description: |
+        Returns current signup counts and remaining spots for all configured playtest dates.
+        Called on page load and every 30 seconds for real-time updates.
+      operationId: getPlaytestCapacity
+      responses:
+        '200':
+          description: Capacity data for all dates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapacityResponse'
+              examples:
+                multipleActiveDates:
+                  summary: Three active playtest dates with varying capacity
+                  value:
+                    dates:
+                      - date: "2025-09-21 16:00"
+                        displayText: "September 21 at 4:00 PM"
+                        spots_total: 20
+                        spots_taken: 18
+                        spots_remaining: 2
+                        minimum_players: 5
+                        has_minimum: true
+                        is_full: false
+                      - date: "2025-10-26 15:00"
+                        displayText: "October 26 at 3:00 PM"
+                        spots_total: 20
+                        spots_taken: 20
+                        spots_remaining: 0
+                        minimum_players: 5
+                        has_minimum: true
+                        is_full: true
+                      - date: "2025-11-04 18:30"
+                        displayText: "November 4 at 6:30 PM"
+                        spots_total: 20
+                        spots_taken: 3
+                        spots_remaining: 17
+                        minimum_players: 5
+                        has_minimum: false
+                        is_full: false
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Submit playtest signup with date selection
+      description: |
+        Processes a new playtest signup for a specific date. Validates data, assigns spot number,
+        determines confirmation vs. waitlist status, stores in Google Sheets, and sends email confirmations.
+      operationId: submitPlaytestSignup
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+            examples:
+              confirmedSpot:
+                summary: Signup with available spots (confirmed)
+                value:
+                  name: "Jane Doe"
+                  email: "jane@example.com"
+                  playtestDate: "2025-09-21 16:00"
+                  photoConsent: "Yes"
+              waitlistSpot:
+                summary: Signup when full (waitlist)
+                value:
+                  name: "John Smith"
+                  email: "john@example.com"
+                  playtestDate: "2025-10-26 15:00"
+                  photoConsent: "No"
+      responses:
+        '200':
+          description: Signup processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupResponse'
+              examples:
+                confirmedSpotResponse:
+                  summary: User confirmed for playtest
+                  value:
+                    result: "success"
+                    spot_number: 19
+                    status: "Confirmed"
+                    selected_date: "2025-09-21 16:00"
+                    spots_remaining: 1
+                    spots_taken: 19
+                    spots_total: 20
+                    minimum_players: 5
+                    has_minimum: true
+                waitlistResponse:
+                  summary: User placed on waitlist
+                  value:
+                    result: "success"
+                    spot_number: 23
+                    status: "Waitlist"
+                    selected_date: "2025-10-26 15:00"
+                    waitlist_position: 3
+                    spots_remaining: 0
+                    spots_taken: 23
+                    spots_total: 20
+                    minimum_players: 5
+                    has_minimum: true
+        '400':
+          description: Validation error (missing date, invalid email, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingDate:
+                  summary: No date selected
+                  value:
+                    result: "error"
+                    error: "Missing required field: playtestDate"
+                invalidEmail:
+                  summary: Invalid email format
+                  value:
+                    result: "error"
+                    error: "Invalid email format"
+        '500':
+          description: Server error (failed to write to sheet, email send failure, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SignupRequest:
+      type: object
+      required:
+        - name
+        - email
+        - playtestDate
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Participant's full name
+          example: "Jane Doe"
+        email:
+          type: string
+          format: email
+          description: Participant's email address
+          example: "jane@example.com"
+        playtestDate:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$'
+          description: Selected playtest date in ISO 8601 format (YYYY-MM-DD HH:MM)
+          example: "2025-09-21 16:00"
+          enum:
+            - "2025-09-21 16:00"
+            - "2025-10-26 15:00"
+            - "2025-11-04 18:30"
+        photoConsent:
+          type: string
+          enum: ["Yes", "No"]
+          default: "No"
+          description: Photo/video consent for promotional materials
+          example: "Yes"
+
+    SignupResponse:
+      type: object
+      required:
+        - result
+        - spot_number
+        - status
+        - selected_date
+        - spots_remaining
+        - spots_taken
+        - spots_total
+        - minimum_players
+        - has_minimum
+      properties:
+        result:
+          type: string
+          enum: ["success"]
+          description: Operation result indicator
+        spot_number:
+          type: integer
+          minimum: 1
+          description: Assigned spot number (sequential per date, includes waitlist)
+          example: 19
+        status:
+          type: string
+          enum: ["Confirmed", "Waitlist"]
+          description: Signup status based on capacity at submission time
+        selected_date:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$'
+          description: Playtest date user signed up for
+          example: "2025-09-21 16:00"
+        waitlist_position:
+          type: integer
+          minimum: 1
+          description: Position on waitlist (only present if status=Waitlist)
+          example: 3
+        spots_remaining:
+          type: integer
+          minimum: 0
+          description: Spots remaining for this date after this signup
+          example: 1
+        spots_taken:
+          type: integer
+          minimum: 0
+          description: Total signups for this date (including this one)
+          example: 19
+        spots_total:
+          type: integer
+          minimum: 1
+          description: Maximum capacity for this date
+          example: 20
+        minimum_players:
+          type: integer
+          minimum: 1
+          description: Minimum players required for session viability
+          example: 5
+        has_minimum:
+          type: boolean
+          description: Whether minimum player threshold has been met
+          example: true
+
+    CapacityResponse:
+      type: object
+      required:
+        - dates
+      properties:
+        dates:
+          type: array
+          description: Capacity data for all configured playtest dates
+          items:
+            $ref: '#/components/schemas/DateCapacity'
+
+    DateCapacity:
+      type: object
+      required:
+        - date
+        - displayText
+        - spots_total
+        - spots_taken
+        - spots_remaining
+        - minimum_players
+        - has_minimum
+        - is_full
+      properties:
+        date:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$'
+          description: Playtest date value (unique identifier)
+          example: "2025-09-21 16:00"
+        displayText:
+          type: string
+          description: Human-readable date label for UI
+          example: "September 21 at 4:00 PM"
+        spots_total:
+          type: integer
+          minimum: 1
+          description: Maximum capacity for this date
+          example: 20
+        spots_taken:
+          type: integer
+          minimum: 0
+          description: Current signup count (confirmed + waitlist)
+          example: 18
+        spots_remaining:
+          type: integer
+          minimum: 0
+          description: Available confirmed spots (0 if full)
+          example: 2
+        minimum_players:
+          type: integer
+          minimum: 1
+          description: Minimum required for session viability
+          example: 5
+        has_minimum:
+          type: boolean
+          description: Whether minimum threshold met
+          example: true
+        is_full:
+          type: boolean
+          description: Whether all confirmed spots filled (spots_remaining == 0)
+          example: false
+
+    ErrorResponse:
+      type: object
+      required:
+        - result
+        - error
+      properties:
+        result:
+          type: string
+          enum: ["error"]
+          description: Operation result indicator
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Missing required field: playtestDate"
+
+  securitySchemes: {}
+
+tags:
+  - name: capacity
+    description: Operations related to playtest capacity queries
+  - name: signup
+    description: Operations related to playtest signup submissions
+
+externalDocs:
+  description: Implementation details in PLAYTEST_GOOGLE_SCRIPT.js
+  url: file://../../PLAYTEST_GOOGLE_SCRIPT.js

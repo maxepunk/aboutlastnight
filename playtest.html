@@ -1,477 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- ⚠ DO NOT EDIT: Document metadata and configuration ⚠ -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About Last Night - Playtest Signup</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;600;700&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=Barlow:wght@300;400;600;700&amp;display=swap" rel="stylesheet">
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="alternate icon" href="favicon.svg">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
 
-        body {
-            font-family: 'Barlow', sans-serif;
-            background: #000;
-            color: #fff;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-        
-        /* Subtle scanline - less aggressive for focused signup */
-        @keyframes scanline {
-            0% { 
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-            5% {
-                opacity: 0.3;
-            }
-            95% {
-                opacity: 0.3;
-            }
-            100% { 
-                transform: translateY(100vh);
-                opacity: 0;
-            }
-        }
-        
-        .scanline {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(to bottom, 
-                transparent, 
-                rgba(204, 0, 0, 0.2) 20%,
-                rgba(204, 0, 0, 0.25) 50%,
-                rgba(204, 0, 0, 0.2) 80%,
-                transparent);
-            animation: scanline 45s ease-in-out infinite;
-            animation-delay: 10s;
-            pointer-events: none;
-            z-index: 100;
-            mix-blend-mode: screen;
-        }
-        
-        /* Main container */
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 3rem 2rem;
-            position: relative;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        
-        /* Background with Noirroom image */
-        .background {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: 
-                linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.9)),
-                url('images/Noirroom.png') center/cover;
-            z-index: -1;
-        }
-        
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
-        
-        h1 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: clamp(3rem, 8vw, 6rem);
-            color: #fff;
-            text-shadow: 
-                0 0 30px rgba(255, 0, 0, 0.8),
-                0 0 60px rgba(255, 0, 0, 0.5);
-            margin-bottom: 0.5rem;
-            letter-spacing: 0.02em;
-        }
-        
-        .subtitle {
-            font-size: 1.3rem;
-            color: rgba(255, 100, 100, 0.9);
-            text-transform: uppercase;
-            letter-spacing: 0.3em;
-            margin-bottom: 1rem;
-        }
-        
-        /* Spot counter */
-        .spot-counter {
-            background: rgba(204, 0, 0, 0.1);
-            border: 1px solid rgba(204, 0, 0, 0.5);
-            padding: 1rem;
-            margin-bottom: 2rem;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .spot-counter::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(204, 0, 0, 0.2), transparent);
-            animation: scan 3s infinite;
-        }
-        
-        @keyframes scan {
-            0% { left: -100%; }
-            100% { left: 100%; }
-        }
-        
-        .spots-remaining {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.5rem;
-            color: #cc0000;
-            margin-bottom: 0.5rem;
-        }
-        
-        .spots-text {
-            color: rgba(255, 255, 255, 0.8);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-size: 0.9rem;
-        }
-        
-        /* Warning states */
-        .spot-counter.warning-low {
-            border-color: rgba(255, 200, 0, 0.6);
-            background: rgba(255, 200, 0, 0.1);
-        }
-        
-        .spot-counter.warning-critical {
-            border-color: rgba(255, 0, 0, 0.8);
-            background: rgba(255, 0, 0, 0.15);
-            animation: pulse 1s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        
-        .spot-counter.full {
-            border-color: rgba(100, 100, 100, 0.4);
-            background: rgba(50, 50, 50, 0.2);
-        }
-        
-        .spot-counter.full .spots-remaining {
-            color: rgba(255, 255, 255, 0.4);
-        }
-        
-        /* Game info section */
-        .game-info {
-            background: rgba(0, 0, 0, 0.7);
-            border-left: 3px solid #cc0000;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-        
-        .game-info h2 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2rem;
-            color: #cc0000;
-            margin-bottom: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-        
-        .game-description {
-            font-size: 1.1rem;
-            line-height: 1.7;
-            color: rgba(255, 255, 255, 0.85);
-            margin-bottom: 1.5rem;
-        }
-        
-        /* Event details */
-        .event-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            background: rgba(10, 10, 10, 0.8);
-            border: 1px solid rgba(204, 0, 0, 0.3);
-        }
-        
-        .detail-item {
-            text-align: center;
-        }
-        
-        .detail-label {
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 0.2em;
-            color: rgba(255, 255, 255, 0.5);
-            margin-bottom: 0.5rem;
-        }
-        
-        .detail-value {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.8rem;
-            color: #cc0000;
-        }
-        
-        /* Form */
-        .signup-form {
-            background: rgba(10, 10, 10, 0.9);
-            border: 1px solid rgba(204, 0, 0, 0.3);
-            padding: 2rem;
-            position: relative;
-        }
-        
-        .signup-form::before {
-            content: 'PLAYTEST REGISTRATION';
-            position: absolute;
-            top: -12px;
-            left: 20px;
-            background: #000;
-            padding: 0 1rem;
-            color: #cc0000;
-            font-weight: 700;
-            letter-spacing: 0.2em;
-            font-size: 0.9rem;
-        }
-        
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: rgba(255, 255, 255, 0.7);
-            text-transform: uppercase;
-            font-size: 0.9rem;
-            letter-spacing: 0.1em;
-        }
-        
-        .form-input {
-            width: 100%;
-            padding: 1rem;
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid rgba(204, 0, 0, 0.3);
-            color: #fff;
-            font-size: 1rem;
-            font-family: 'Barlow', sans-serif;
-            transition: all 0.3s;
-        }
-        
-        .form-input:focus {
-            outline: none;
-            border-color: #cc0000;
-            background: rgba(30, 0, 0, 0.9);
-            box-shadow: 0 0 20px rgba(204, 0, 0, 0.2);
-        }
-        
-        .form-input:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .submit-button {
-            width: 100%;
-            padding: 1.2rem;
-            font-size: 1.1rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            background: transparent;
-            border: 2px solid #cc0000;
-            color: #fff;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s;
-        }
-        
-        .submit-button::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: #cc0000;
-            transition: left 0.3s;
-            z-index: -1;
-        }
-        
-        .submit-button:hover::before {
-            left: 0;
-        }
-        
-        .submit-button:disabled {
-            border-color: #666;
-            color: #666;
-            cursor: not-allowed;
-        }
-        
-        .submit-button:disabled::before {
-            display: none;
-        }
-        
-        /* Messages */
-        .message {
-            margin-top: 1rem;
-            padding: 1rem;
-            text-align: center;
-            display: none;
-        }
-        
-        .message.success {
-            background: rgba(0, 255, 0, 0.1);
-            border: 1px solid rgba(0, 255, 0, 0.3);
-            color: #00ff00;
-        }
-        
-        .message.error {
-            background: rgba(255, 0, 0, 0.1);
-            border: 1px solid rgba(255, 0, 0, 0.3);
-            color: #ff0000;
-        }
-        
-        .message.show {
-            display: block;
-        }
-        
-        /* Footer */
-        .footer {
-            margin-top: 3rem;
-            padding-top: 2rem;
-            border-top: 1px solid rgba(204, 0, 0, 0.2);
-            text-align: center;
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 0.9rem;
-        }
-        
-        /* Mobile responsive */
-        @media (max-width: 768px) {
-            .container {
-                padding: 2rem 1rem;
-            }
-            
-            h1 {
-                font-size: 3rem;
-            }
-            
-            .event-details {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-            }
-        }
-        
-        /* Custom checkbox styling */
-        input[type="checkbox"]#photoConsent {
-            appearance: none;
-            -webkit-appearance: none;
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid rgba(204, 0, 0, 0.5);
-            border-radius: 3px;
-            position: relative;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-        
-        input[type="checkbox"]#photoConsent:checked {
-            background: #cc0000;
-            border-color: #cc0000;
-        }
-        
-        input[type="checkbox"]#photoConsent:checked::after {
-            content: '✓';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #fff;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        
-        input[type="checkbox"]#photoConsent:hover {
-            border-color: #cc0000;
-            box-shadow: 0 0 10px rgba(204, 0, 0, 0.3);
-        }
-        
-        /* Focus state for accessibility */
-        input[type="checkbox"]#photoConsent:focus {
-            outline: 2px solid rgba(204, 0, 0, 0.5);
-            outline-offset: 2px;
-        }
-        
-        /* Reduced motion */
-        @media (prefers-reduced-motion: reduce) {
-            .scanline {
-                display: none;
-            }
-            
-            .spot-counter::before {
-                animation: none;
-            }
-            
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-            }
-        }
-    </style>
+    <!-- ⚠ DO NOT EDIT: External stylesheets required for site functionality ⚠ -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/playtest.css">
 </head>
 <body>
-    <!-- Background -->
+    <!-- ⚠ DO NOT EDIT: Background and visual effects ⚠ -->
     <div class="background"></div>
-    
+
     <!-- Scanning effect -->
     <div class="scanline" aria-hidden="true"></div>
-    
+
     <!-- Main container -->
     <div class="container">
-        <!-- Header -->
+        <!-- ⚠ DO NOT EDIT: Header structure ⚠ -->
         <header class="header">
             <h1>About Last Night</h1>
             <p class="subtitle">Playtest Session</p>
         </header>
         
-        <!-- Spot counter -->
+        <!-- ⚠ DO NOT EDIT: Spot counter (dynamically updated by JavaScript) ⚠ -->
         <div id="spotCounter" class="spot-counter">
             <div class="spots-remaining" id="spotsNumber">0/5</div>
             <div class="spots-text" id="spotsText">MINIMUM PLAYERS REQUIRED</div>
         </div>
         
-        <!-- Game info -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- EDITABLE CONTENT: PLAYTEST DESCRIPTION                  -->
+        <!-- SAFE TO EDIT: Event description, session details        -->
+        <!-- FIND WITH: Search for "PLAYTEST DESCRIPTION" or "90"    -->
+        <!-- ═══════════════════════════════════════════════════════ -->
         <section class="game-info">
             <h2>The Experience</h2>
             <p class="game-description">
-                You remember the party. Sort of. Now you're in a room with other guests, all trying to recall what happened. 
+                You remember the party. Sort of. Now you're in a room with other guests, all trying to recall what happened.
                 But as memories surface, you realize they might earn you more than just answers.
             </p>
             <p class="game-description">
-                <strong>About Last Night</strong> is a 90-minute immersive crime thriller combining escape room puzzles, 
-                role-play, social deduction, and strategic trading mechanics. Memory makes rivals in this game of mystery, 
+                <strong>About Last Night</strong> is a 90-120 minute immersive crime thriller combining escape room puzzles,
+                role-play, social deduction, and strategic trading mechanics. Memory makes rivals in this game of mystery,
                 manipulation and unexpected alliances.
             </p>
             <p class="game-description">
@@ -479,11 +61,16 @@
                 <strong>THANK YOU </strong> for helping make our game better with your time and feedback!
            </p>
             <p class="game-description" style="margin-top: 1rem; color: rgba(255, 200, 0, 0.9);">
-                <strong>Note:</strong> This playtest session will run 2-2.5 hours including a feedback discussion. <br>
+                <strong>Note:</strong> This playtest session will run 2.5-3 hours including a feedback discussion. <br>
             </p>
         </section>
+        <!-- END CONTENT SECTION: PLAYTEST DESCRIPTION -->
         
-        <!-- Event details -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- EDITABLE CONTENT: EVENT DETAILS                         -->
+        <!-- SAFE TO EDIT: Duration, player count, location          -->
+        <!-- FIND WITH: Search for "EVENT DETAILS" or "2.5-3 HRS"    -->
+        <!-- ═══════════════════════════════════════════════════════ -->
         <div class="event-details">
             <div class="detail-item">
                 <div class="detail-label">Date</div>
@@ -495,23 +82,53 @@
             </div>
             <div class="detail-item">
                 <div class="detail-label">Duration</div>
-                <div class="detail-value">2-2.5 HRS</div>
+                <div class="detail-value">2.5 - 3 HRS</div>
             </div>
             <div class="detail-item">
                 <div class="detail-label">Players</div>
                 <div class="detail-value">20 MAX</div>
             </div>
         </div>
-        
+
         <!-- Location as separate centered block -->
         <div style="background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(204, 0, 0, 0.3); padding: 1.5rem; margin-bottom: 2rem; text-align: center;">
             <div class="detail-label" style="text-align: center;">Location</div>
             <div class="detail-value" style="font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; color: #cc0000; margin-bottom: 0.5rem;">OFF THE COUCH GAMES</div>
             <div style="color: rgba(255, 255, 255, 0.8); font-size: 1rem;">555 Mowry Ave, Fremont, CA 94536</div>
         </div>
-        
+        <!-- END CONTENT SECTION: EVENT DETAILS -->
+
         <!-- Signup form -->
         <form id="playtestForm" class="signup-form">
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- EDITABLE CONTENT: PLAYTEST DATES                        -->
+            <!-- SAFE TO EDIT: Date labels, times, add/remove dates      -->
+            <!-- FIND WITH: Search for "PLAYTEST DATES" or "September"   -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <fieldset class="date-selection-fieldset">
+                <legend class="date-selection-legend">Select Your Session</legend>
+
+                <label class="date-option">
+                    <input type="radio" name="playtestDate" value="2025-09-21 16:00" required>
+                    <span class="date-label">September 21 at 4:00 PM</span>
+                    <span class="date-capacity" data-date="2025-09-21 16:00">Loading...</span>
+                </label>
+
+                <label class="date-option">
+                    <input type="radio" name="playtestDate" value="2025-10-26 15:00">
+                    <span class="date-label">October 26 at 3:00 PM</span>
+                    <span class="date-capacity" data-date="2025-10-26 15:00">Loading...</span>
+                </label>
+
+                <label class="date-option">
+                    <input type="radio" name="playtestDate" value="2025-11-04 18:30">
+                    <span class="date-label">November 4 at 6:30 PM</span>
+                    <span class="date-capacity" data-date="2025-11-04 18:30">Loading...</span>
+                </label>
+            </fieldset>
+            <!-- END CONTENT SECTION: PLAYTEST DATES -->
+
+            <!-- ⚠ DO NOT EDIT: Form fields structure required for submission ⚠ -->
             <div class="form-group">
                 <label for="name">Your Name</label>
                 <input type="text" id="name" name="name" class="form-input" required>
@@ -522,201 +139,58 @@
                 <input type="email" id="email" name="email" class="form-input" required>
             </div>
             
-            <!-- Surveillance Protocol -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- EDITABLE CONTENT: SURVEILLANCE PROTOCOL                 -->
+            <!-- SAFE TO EDIT: Consent text, list items                  -->
+            <!-- FIND WITH: Search for "SURVEILLANCE PROTOCOL"           -->
+            <!-- ═══════════════════════════════════════════════════════ -->
             <div class="form-group" style="background: rgba(204, 0, 0, 0.05); padding: 1.5rem; border-left: 2px solid rgba(204, 0, 0, 0.3); margin-bottom: 1.5rem;">
-                <label style="display: flex; align-items: flex-start; cursor: pointer; color: rgba(255, 255, 255, 0.9);">
+                <div style="display: flex; align-items: flex-start; color: rgba(255, 255, 255, 0.9);">
                     <input type="checkbox" id="photoConsent" name="photoConsent" style="margin-right: 1rem; margin-top: 0.2rem;">
                     <div style="flex: 1; line-height: 1.6;">
-                        <strong style="color: #cc0000; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.9rem;">SURVEILLANCE PROTOCOL</strong><br>
+                        <label for="photoConsent" style="cursor: pointer; display: block; margin-bottom: 0.5rem;">
+                            <strong style="color: #cc0000; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.9rem;">SURVEILLANCE PROTOCOL</strong>
+                        </label>
                         <span style="font-size: 0.95rem;">
                             The investigation will be documented. I consent to being captured in:
-                            <ul style="margin: 0.5rem 0 0.5rem 1.5rem; font-size: 0.9rem; color: rgba(255, 255, 255, 0.8);">
-                                <li>Evidence photos during gameplay</li>
-                                <li>Promotional materials (you may be identified)</li>
-                                <li>Development archives</li>
-                            </ul>
-                            <em style="color: rgba(255, 200, 0, 0.9); font-size: 0.85rem;">
-                                Need to stay in the shadows? Let us know at check-in.
-                            </em>
                         </span>
+                        <ul style="margin: 0.5rem 0 0.5rem 1.5rem; font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); list-style-type: disc;">
+                            <li>Evidence photos during gameplay</li>
+                            <li>Promotional materials (you may be identified)</li>
+                            <li>Development archives</li>
+                        </ul>
+                        <em style="color: rgba(255, 200, 0, 0.9); font-size: 0.85rem;">
+                            Need to stay in the shadows? Let us know at check-in.
+                        </em>
                     </div>
-                </label>
+                </div>
             </div>
-            
+            <!-- END CONTENT SECTION: SURVEILLANCE PROTOCOL -->
+
+            <!-- ⚠ DO NOT EDIT: Submit button and message elements ⚠ -->
             <button type="submit" class="submit-button" id="submitButton">
                 Claim Your Spot
             </button>
-            
+
             <div id="successMessage" class="message success">
                 ✓ SPOT CONFIRMED • CHECK YOUR EMAIL FOR DETAILS
             </div>
-            
+
             <div id="errorMessage" class="message error">
                 ERROR • PLEASE TRY AGAIN
             </div>
         </form>
-        
-        <!-- Footer -->
+
+        <!-- ⚠ DO NOT EDIT: Footer structure ⚠ -->
         <footer class="footer">
             <p>Off the Couch Games • Fremont, California</p>
             <p style="margin-top: 0.5rem;">A Patchwork Adventures × StoryPunk Production</p>
         </footer>
     </div>
-    
-    <script>
-        // Google Apps Script URL - REPLACE WITH YOUR PLAYTEST SHEET URL
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypIVyTqnposIYclTgLiYv3xxXkQSRXcTH7hXF3lAC6RbKSDNHOckOrE7VhO1MbGMRbQA/exec'; // <-- REPLACE THIS!
-        
-        // Track spots data
-        let spotsData = {
-            spotsRemaining: 20,
-            spotsTaken: 0,
-            spotsTotal: 20,
-            minimumPlayers: 5,
-            hasMinimum: false
-        };
-        
-        // Update spot counter display
-        function updateSpotCounter() {
-            const counter = document.getElementById('spotCounter');
-            const spotsNumber = document.getElementById('spotsNumber');
-            const spotsText = document.getElementById('spotsText');
-            const submitButton = document.getElementById('submitButton');
-            
-            // Remove all state classes
-            counter.classList.remove('warning-low', 'warning-critical', 'full');
-            
-            if (!spotsData.hasMinimum) {
-                // Show minimum players progress
-                spotsNumber.textContent = `${spotsData.spotsTaken}/${spotsData.minimumPlayers}`;
-                spotsText.textContent = 'MINIMUM PLAYERS REQUIRED';
-                
-                // Add visual feedback for progress
-                if (spotsData.spotsTaken >= 3) {
-                    counter.classList.add('warning-low');
-                }
-            } else {
-                // Show spots remaining
-                spotsNumber.textContent = spotsData.spotsRemaining;
-                spotsText.textContent = 'SPOTS REMAINING';
-                
-                if (spotsData.spotsRemaining === 0) {
-                    counter.classList.add('full');
-                    submitButton.textContent = 'PLAYTEST FULL';
-                    submitButton.disabled = true;
-                    document.getElementById('name').disabled = true;
-                    document.getElementById('email').disabled = true;
-                } else if (spotsData.spotsRemaining <= 3) {
-                    counter.classList.add('warning-critical');
-                } else if (spotsData.spotsRemaining <= 5) {
-                    counter.classList.add('warning-low');
-                }
-            }
-        }
-        
-        // Photo consent is optional - no validation needed
-        
-        // Form submission
-        document.getElementById('playtestForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const submitButton = document.getElementById('submitButton');
-            const successMessage = document.getElementById('successMessage');
-            const errorMessage = document.getElementById('errorMessage');
-            
-            // Hide messages
-            successMessage.classList.remove('show');
-            errorMessage.classList.remove('show');
-            
-            // Get form data
-            const formData = {
-                name: document.getElementById('name').value,
-                email: document.getElementById('email').value,
-                photoConsent: document.getElementById('photoConsent').checked ? 'Yes' : 'No'
-            };
-            
-            // Update button
-            submitButton.textContent = 'PROCESSING...';
-            submitButton.disabled = true;
-            
-            try {
-                // Submit to Google Sheets (without no-cors to read response)
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams(formData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.result === 'success') {
-                    // Update spots data with server response
-                    spotsData.spotsRemaining = result.spots_remaining;
-                    spotsData.spotsTaken = result.spots_taken;
-                    spotsData.hasMinimum = result.has_minimum;
-                    updateSpotCounter();
-                    
-                    // Update success message based on status
-                    const successMsg = result.status === 'Confirmed' 
-                        ? `✓ SPOT ${result.spot_number} CONFIRMED • CHECK YOUR EMAIL`
-                        : `⏳ WAITLIST POSITION ${result.spot_number - result.spots_total} • CHECK YOUR EMAIL`;
-                    document.getElementById('successMessage').textContent = successMsg;
-                    
-                    // Show success
-                    successMessage.classList.add('show');
-                    this.reset();
-                    
-                    // Reset button after delay
-                    setTimeout(() => {
-                        if (spotsData.spotsRemaining > 0) {
-                            submitButton.textContent = 'Claim Your Spot';
-                            submitButton.disabled = false;
-                        }
-                        successMessage.classList.remove('show');
-                    }, 5000);
-                } else {
-                    throw new Error(result.error || 'Submission failed');
-                }
-                
-            } catch (error) {
-                console.error('Submission error:', error);
-                errorMessage.classList.add('show');
-                submitButton.textContent = 'Claim Your Spot';
-                submitButton.disabled = false;
-                
-                setTimeout(() => {
-                    errorMessage.classList.remove('show');
-                }, 3000);
-            }
-        });
-        
-        // Fetch initial spot count on page load
-        async function fetchSpotCount() {
-            try {
-                const response = await fetch(GOOGLE_SCRIPT_URL);
-                const data = await response.json();
-                
-                // Update spots data from server
-                spotsData.spotsRemaining = data.spots_remaining;
-                spotsData.spotsTaken = data.spots_taken;
-                spotsData.spotsTotal = data.spots_total;
-                spotsData.minimumPlayers = data.minimum_players;
-                spotsData.hasMinimum = data.has_minimum;
-                
-                updateSpotCounter();
-            } catch (error) {
-                console.log('Could not fetch initial spot count, using defaults');
-                updateSpotCounter();
-            }
-        }
-        
-        // Initialize
-        fetchSpotCount();
-        
-        // Optional: Refresh spot count every 30 seconds
-        setInterval(fetchSpotCount, 30000);
-    </script>
+
+    <!-- ⚠ DO NOT EDIT: JavaScript dependencies ⚠ -->
+    <script src="js/utils.js"></script>
+    <script src="js/forms.js"></script>
+    <script src="js/playtest-interactions.js"></script>
 </body>
 </html>
