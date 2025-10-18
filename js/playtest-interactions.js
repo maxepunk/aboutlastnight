@@ -114,6 +114,27 @@ async function fetchAllCapacities() {
             }
         });
 
+        // Handle dates in frontend that don't exist in backend yet (no signups yet)
+        // Initialize them with default capacity (20 spots, 0 taken)
+        const allCapacityElements = document.querySelectorAll('[data-date]');
+        allCapacityElements.forEach(el => {
+            const dateValue = el.getAttribute('data-date');
+            if (!dateCapacities[dateValue]) {
+                // This date hasn't been submitted yet - show default capacity
+                dateCapacities[dateValue] = {
+                    date: dateValue,
+                    displayText: dateValue,
+                    spots_total: 20,
+                    spots_taken: 0,
+                    spots_remaining: 20,
+                    minimum_players: 5,
+                    has_minimum: false,
+                    is_full: false
+                };
+                el.textContent = '20 spots available';
+            }
+        });
+
         // Update spot counter for currently selected date
         const selectedRadio = document.querySelector('input[name="playtestDate"]:checked');
         if (selectedRadio) {
