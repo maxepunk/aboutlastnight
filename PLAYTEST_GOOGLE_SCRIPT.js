@@ -267,7 +267,8 @@ function normalizeDateToISO(dateInput) {
       return String(dateInput); // Fallback if invalid
     }
 
-    // Format as "YYYY-MM-DD HH:MM"
+    // Format as "YYYY-MM-DD HH:MM" using local time (not UTC)
+    // Google Sheets stores dates in spreadsheet timezone, Date object should preserve that
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -276,6 +277,7 @@ function normalizeDateToISO(dateInput) {
 
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   } catch (error) {
+    Logger.log('normalizeDateToISO error: ' + error + ', input: ' + dateInput);
     return String(dateInput);
   }
 }
