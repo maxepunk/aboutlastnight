@@ -1,0 +1,346 @@
+# localStorage Form Recovery API Contract
+# Version: 1.0.0 (New Implementation)
+# Status: DRAFT - To be implemented during refactoring
+
+# This is a CLIENT-SIDE API (not HTTP)
+# Defines the interface for form data recovery using browser localStorage
+
+api-type: client-side-javascript
+version: 1.0.0
+
+interface:
+  name: FormRecovery
+  description: |
+    Client-side API for persisting and recovering form data when submissions fail.
+    Implements resilience against backend downtime and network failures.
+
+  methods:
+    - name: save
+      description: Save form data to localStorage with expiry
+      parameters:
+        - name: formData
+          type: object
+          required: true
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+                format: email
+              fullName:
+                type: string
+                optional: true
+              photoConsent:
+                type: boolean
+                optional: true
+          example:
+            email: user@example.com
+            fullName: John Doe
+            photoConsent: true
+
+      returns:
+        type: boolean
+        description: true if save successful, false if localStorage unavailable/quota exceeded
+
+      behavior: |
+        1. Create data object with value, timestamp, expiry
+        2. JSON.stringify the data object
+        3. Try to save to localStorage[storageKey]
+        4. Return true on success, false on QuotaExceededError or SecurityError
+        5. Log warnings for failures (don't throw)
+
+      side-effects:
+        - localStorage[storageKey] = JSON string
+        - Console warnings on failure
+
+      error-handling: |
+        Catch and handle gracefully:
+        - QuotaExceededError: Storage full (rare - warn and return false)
+        - SecurityError: Private mode or security restriction (return false)
+        - TypeError: Invalid data (warn and return false)
+
+    - name: load
+      description: Retrieve form data from localStorage if not expired
+      parameters: []
+
+      returns:
+        type: object | null
+        schema:
+          type: object
+          properties:
+            value:
+              type: object
+              description: Original form data
+            timestamp:
+              type: number
+              description: Unix timestamp when saved
+            expiry:
+              type: number
+              description: Unix timestamp when data expires
+        example:
+          value:
+            email: user@example.com
+            fullName: John Doe
+          timestamp: 1705677000000
+          expiry: 1706281800000
+
+      returns-null-when:
+        - No data in localStorage
+        - Data is expired (Date.now() > expiry)
+        - JSON parsing fails
+        - localStorage unavailable
+
+      behavior: |
+        1. Try to read localStorage[storageKey]
+        2. Return null if not found
+        3. JSON.parse the stored string
+        4. Check if Date.now() > data.expiry
+        5. If expired, call clear() and return null
+        6. Otherwise return data object
+
+      side-effects:
+        - If expired: calls clear() to remove stale data
+        - Console warnings on parse errors
+
+    - name: clear
+      description: Remove saved form data from localStorage
+      parameters: []
+
+      returns:
+        type: void
+
+      behavior: |
+        1. Try to remove localStorage[storageKey]
+        2. Catch and log any errors (don't throw)
+
+      side-effects:
+        - localStorage[storageKey] deleted
+
+      when-to-call:
+        - After successful form submission
+        - When user dismisses recovery prompt
+        - When data is expired (called by load())
+
+    - name: getAge
+      description: Get age of saved data in minutes
+      parameters: []
+
+      returns:
+        type: number | null
+        description: Minutes since data was saved, or null if no data
+
+      behavior: |
+        1. Call load() to get data
+        2. If null, return null
+        3. Calculate (Date.now() - data.timestamp) / 60000
+        4. Return Math.floor of result
+
+      use-case: |
+        Display in recovery prompt:
+        "We found unsaved data from 5 minutes ago"
+
+  properties:
+    - name: storageKey
+      type: string
+      value: 'aln_form_recovery'
+      description: localStorage key for storing form data
+      immutable: true
+
+    - name: ttl
+      type: number
+      value: 604800000
+      description: Time-to-live in milliseconds (7 days)
+      immutable: true
+
+# Data Schema
+data-schema:
+  storageKey: aln_form_recovery
+
+  stored-value:
+    type: object
+    required:
+      - value
+      - timestamp
+      - expiry
+    properties:
+      value:
+        type: object
+        description: Original form data as submitted by user
+        schema:
+          email: string
+          fullName: string (optional)
+          photoConsent: boolean (optional)
+
+      timestamp:
+        type: number
+        format: unix-timestamp-milliseconds
+        description: When data was saved
+        example: 1705677000000
+
+      expiry:
+        type: number
+        format: unix-timestamp-milliseconds
+        description: When data should expire (timestamp + TTL)
+        example: 1706281800000
+        calculation: timestamp + 604800000
+
+  serialization:
+    format: JSON
+    example: |
+      {
+        "value": {
+          "email": "user@example.com",
+          "fullName": "John Doe",
+          "photoConsent": true
+        },
+        "timestamp": 1705677000000,
+        "expiry": 1706281800000
+      }
+
+# Browser Compatibility
+browser-compatibility:
+  localStorage-support:
+    chrome: "4+"
+    firefox: "3.5+"
+    safari: "4+"
+    edge: "12+"
+    ios-safari: "3.2+"
+    chrome-android: "4+"
+    coverage: 100% of target browsers
+
+  edge-cases:
+    private-mode-safari:
+      behavior: localStorage available but 0 bytes quota
+      error: QuotaExceededError on setItem
+      handling: Catch error, return false from save()
+
+    private-mode-chrome:
+      behavior: localStorage works, data deleted on session end
+      handling: Acceptable - data still recovers during session
+
+    private-mode-firefox:
+      behavior: localStorage works, data deleted on browser close
+      handling: Acceptable - data recovers if browser crashes
+
+    storage-quota:
+      desktop: 5-10 MB per origin
+      mobile: 2-5 MB per origin
+      form-data-size: ~500 bytes (negligible)
+
+# Security Considerations
+security:
+  xss-risk:
+    level: LOW
+    reason: No sensitive data in forms (email/name only)
+    mitigation: Sanitize data when displaying (use textContent not innerHTML)
+
+  data-sensitivity:
+    safe-to-store:
+      - email addresses
+      - names
+      - checkbox preferences
+      - timestamps
+
+    never-store:
+      - passwords
+      - authentication tokens
+      - payment information
+      - API keys
+
+  sanitization-pattern: |
+    // When restoring to input fields (SAFE - browser escapes)
+    document.getElementById('email').value = recoveredData.email;
+
+    // When displaying in DOM (MUST use textContent)
+    element.textContent = recoveredData.email; // SAFE
+    // element.innerHTML = recoveredData.email; // UNSAFE
+
+# Testing Requirements
+testing:
+  unit-tests:
+    - test: save() with valid data → returns true
+    - test: save() with invalid data → returns false
+    - test: load() with valid data → returns object
+    - test: load() with expired data → returns null and clears storage
+    - test: load() with no data → returns null
+    - test: clear() → removes data from localStorage
+    - test: getAge() with data → returns number
+    - test: getAge() with no data → returns null
+
+  integration-tests:
+    - test: save → reload page → load → data matches
+    - test: save → wait 8 days → load → returns null (expired)
+    - test: save → clear → load → returns null
+    - test: QuotaExceededError → save returns false
+    - test: SecurityError (private mode) → save returns false
+
+  browser-tests:
+    - test: Safari private mode → save fails gracefully
+    - test: Chrome incognito → save succeeds, clears on close
+    - test: Mobile browsers → all methods work
+    - test: Multiple tabs → data shared across tabs
+
+# Usage Examples
+usage-examples:
+  save-on-error:
+    code: |
+      async function submitForm(formData) {
+        try {
+          const response = await RetryManager.fetchWithRetry(ENDPOINT_URL, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (response.ok) {
+            FormRecovery.clear(); // Success - clear saved data
+            showSuccess();
+          } else {
+            FormRecovery.save(Object.fromEntries(formData)); // Failure - save for recovery
+            showError();
+          }
+        } catch (error) {
+          FormRecovery.save(Object.fromEntries(formData)); // Network error - save
+          showRetryPrompt();
+        }
+      }
+
+  load-on-page-load:
+    code: |
+      window.addEventListener('DOMContentLoaded', () => {
+        const saved = FormRecovery.load();
+
+        if (saved) {
+          const age = FormRecovery.getAge();
+          showRecoveryPrompt(saved.value, age);
+        }
+      });
+
+      function showRecoveryPrompt(data, ageInMinutes) {
+        const prompt = document.createElement('div');
+        prompt.className = 'recovery-prompt';
+        prompt.innerHTML = `
+          <p>We found unsaved form data from ${ageInMinutes} minutes ago.</p>
+          <button onclick="restoreData()">Restore Data</button>
+          <button onclick="dismissRecovery()">Dismiss</button>
+        `;
+        document.body.prepend(prompt);
+
+        window.restoreData = () => {
+          document.getElementById('email').value = data.email;
+          document.getElementById('fullName').value = data.fullName || '';
+          document.getElementById('photoConsent').checked = data.photoConsent || false;
+          prompt.remove();
+        };
+
+        window.dismissRecovery = () => {
+          FormRecovery.clear();
+          prompt.remove();
+        };
+      }
+
+# Version History
+version-history:
+  - version: 1.0.0
+    date: 2025-01-19
+    changes: Initial API design for form recovery implementation
+    status: DRAFT

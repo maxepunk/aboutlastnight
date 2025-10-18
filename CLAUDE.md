@@ -1,76 +1,117 @@
-# About Last Night Landing Page - Development Guidelines
+# CLAUDE.md
 
-Auto-generated from feature plans. Last updated: 2025-01-19
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current Feature: Progressive Disclosure UI Enhancement (001-notes-for-improvement)
+## Project Overview
 
-### Active Technologies
-- HTML5
-- CSS3 (inline styles)
-- Vanilla JavaScript ES6 (inline scripts)
-- No external dependencies (zero-dependency architecture)
+Landing page for "About Last Night" - a 90-minute immersive crime thriller experience combining escape room puzzles, roleplay, and social deduction.
 
-## Project Structure
-```
-/
-├── index.html           # Main landing page (being modified)
-├── playtest.html        # Playtest signup page
-├── images/              # Background images
-├── favicon.svg          # Site favicon
-└── FORM_HANDLER_GOOGLE_SCRIPT.js  # Google Apps Script (deployed separately)
-```
+**Live Site:** aboutlastnightgame.com (GitHub Pages)
+**Run Dates:** October 4 - November 9, 2025
+**Location:** Off the Couch Games, Fremont, CA
 
-## Current Implementation Focus
+## Technology Stack
 
-### Progressive Disclosure Components
-1. **Sticky Header**: Booking bar that sticks on scroll
-2. **Accordion Sections**:
-   - How You'll Find the Truth (4 process steps)
-   - Evidence You'll Uncover (3 items)
-   - Creator Profiles (3 profiles)
-   - FAQ Section (14 questions)
+- HTML5, CSS3, Vanilla JavaScript (zero external dependencies)
+- Google Apps Script for form backend
+- GitHub Pages for hosting
+- Google Sheets for data storage
 
-### Key Implementation Requirements
-- All accordions use single-open behavior (only one expanded at a time)
-- Custom noir-themed SVG indicators (#cc0000 accent)
-- Smooth animations (ease-in-out, 0.3s transitions)
-- Full keyboard accessibility (Tab, Enter/Space)
-- ARIA attributes for screen readers
-- Print stylesheet auto-expands all sections
-- Progressive enhancement (works without JavaScript)
+## Core Design Principles
 
-## Code Style Guidelines
+### Zero Dependencies
+No frameworks, libraries, or build tools. This ensures fast load times and eliminates dependency management.
 
-### CSS
-- Use CSS custom properties for theming
-- GPU-accelerated animations only (transform, opacity)
-- Mobile-first responsive design
-- Respect prefers-reduced-motion
+### Content-First Design
+The primary use case is updating copy (event details, pricing, dates). Code organization should optimize for non-technical team members making text changes.
 
-### JavaScript
-- Vanilla JS only, no frameworks
-- Event delegation where possible
-- Debounce scroll events (16ms)
-- Progressive enhancement approach
+### Progressive Enhancement
+Core content and functionality works without JavaScript. Enhanced interactions layer on top.
 
 ### Accessibility
-- WCAG AA compliance required
-- 44x44px minimum touch targets
-- Proper ARIA labels and states
-- Keyboard navigation support
+- WCAG AA compliance
+- Keyboard navigation
+- Screen reader support
+- Respects `prefers-reduced-motion`
 
-## Testing Checklist
-- [ ] Test without JavaScript enabled
-- [ ] Verify keyboard navigation
-- [ ] Check screen reader announcements
-- [ ] Test print layout
-- [ ] Verify mobile responsiveness (320px min)
-- [ ] Performance: 60fps animations
-- [ ] Cross-browser testing
+## Common Development Tasks
 
-## Recent Changes
-- 001-notes-for-improvement: Implementing progressive disclosure UI patterns
+### Deployment
+```bash
+git add .
+git commit -m "description"
+git push origin main
+```
+GitHub Pages auto-deploys from main branch. Changes live within 1-2 minutes.
 
-<!-- MANUAL ADDITIONS START -->
-<!-- Add any manual notes or overrides below this line -->
-<!-- MANUAL ADDITIONS END -->
+### Testing Forms
+Form backends are Google Apps Script Web Apps. Local testing requires:
+1. Serve files via local server (not file://)
+2. Or deploy to GitHub Pages for full testing
+3. Check Google Sheets for data validation
+
+### Updating Form Backends
+1. Edit `.js` files locally for version control
+2. Copy to Google Apps Script editor
+3. Deploy new version: Deploy → Manage deployments → Edit → New version
+4. Update URL in HTML if deployment creates new endpoint
+
+## Form Integration Architecture
+
+Two separate forms with different backends:
+- **Main interest form** (`index.html`) - Collects emails for ticket launch notifications
+- **Playtest signup** (`playtest.html`) - Manages limited playtest spots with waitlist
+
+Both use Google Apps Script to:
+- Store submissions in Google Sheets
+- Send confirmation emails to users
+- Send alert emails to organizers
+- Generate unique tracking IDs
+
+**Critical:** Form endpoint URLs are production. Breaking them breaks the site.
+
+## Content Management
+
+### Event Details
+Key information updated frequently:
+- Dates and showtimes
+- Pricing
+- Availability status
+- Location details
+- Content warnings
+
+### Marketing Copy
+Structured in noir crime thriller theme:
+- Memory/investigation metaphors
+- Silicon Valley corporate conspiracy narrative
+- Character profiles (creators)
+- FAQ addressing common concerns
+
+## Performance Considerations
+
+- Images are background images with parallax scrolling
+- Scroll listeners use passive events and debouncing (16ms)
+- Animations use GPU-accelerated properties (transform, opacity)
+- No render-blocking resources
+
+## Browser Support
+
+- Modern browsers (last 2 versions)
+- Progressive degradation for older browsers
+- Mobile-first responsive design
+- Touch targets minimum 44x44px
+
+## Pre-Production Status
+
+This project is in active development before launch:
+- **Breaking changes are acceptable** - Refactor boldly when needed
+- **Throw errors early** - Fail fast rather than silent fallbacks
+- **No backwards compatibility required** - Optimize for best solution, not legacy support
+
+## Important Files
+
+- `FORM_HANDLER_GOOGLE_SCRIPT.js` - Main form backend
+- `PLAYTEST_GOOGLE_SCRIPT.js` - Playtest signup backend
+- `FORM_IMPLEMENTATION.md` - Form integration options documentation
+- `PLAYTEST_SETUP_GUIDE.md` - Playtest system setup instructions
+- `MarketingLanguagePressRelease.md` - Copy reference and messaging guide

@@ -1,0 +1,37 @@
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+*.cache
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Build artifacts (if any future build process is added)
+dist/
+build/
+*.min.js
+*.min.css
+
+# Test coverage (if tests are added)
+coverage/
+
+# Node modules (should never exist per zero-dependency constraint, but safeguard)
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

@@ -183,38 +183,38 @@ T013-T022 → T025-T030
 
 ### 4.1 Extract CSS
 
-- [ ] T031 [P] [US2] Create css/base.css and extract CSS variables, resets, typography from index.html
-- [ ] T032 [P] [US2] Create css/layout.css and extract grid, sections, responsive styles from index.html
-- [ ] T033 [P] [US2] Create css/components.css and extract reusable component styles (cards, buttons, accordions) from index.html
-- [ ] T034 [P] [US2] Create css/animations.css and extract parallax, transitions, motion styles from index.html
-- [ ] T035 [US2] Add <link> tags to index.html head for all CSS files (base, layout, components, animations)
-- [ ] T036 [US2] Remove original <style> block from index.html
-- [ ] T037 [US2] Test visual appearance: Open index.html in browser, verify identical rendering
-- [ ] T037.1 [US2] Test accessibility after CSS extraction: Verify keyboard navigation still works (Tab key moves focus), screen reader announces sections correctly, touch targets remain 44x44px minimum, color contrast ratios maintained
-- [ ] T038 [US2] Test responsive behavior: Resize browser window, verify breakpoints work
+- [X] T031 [P] [US2] Create css/base.css and extract CSS variables, resets, typography from index.html
+- [X] T032 [P] [US2] Create css/layout.css and extract grid, sections, responsive styles from index.html
+- [X] T033 [P] [US2] Create css/components.css and extract reusable component styles (cards, buttons, accordions) from index.html
+- [X] T034 [P] [US2] Create css/animations.css and extract parallax, transitions, motion styles from index.html
+- [X] T035 [US2] Add <link> tags to index.html head for all CSS files (base, layout, components, animations)
+- [X] T036 [US2] Remove original <style> block from index.html
+- [X] T037 [US2] Test visual appearance: Open index.html in browser, verify identical rendering
+- [X] T037.1 [US2] Test accessibility after CSS extraction: Verify keyboard navigation still works (Tab key moves focus), screen reader announces sections correctly, touch targets remain 44x44px minimum, color contrast ratios maintained
+- [X] T038 [US2] Test responsive behavior: Resize browser window, verify breakpoints work
 
 ### 4.2 Extract JavaScript
 
-- [ ] T039 [P] [US2] Create js/interactions.js and extract accordion, sticky header, scroll effects from index.html
-- [ ] T040 [P] [US2] Create js/utils.js and extract helper functions, analytics, tracking from index.html
-- [ ] T041 [US2] Add <script src="js/interactions.js"></script> to index.html before </body>
-- [ ] T042 [US2] Add <script src="js/utils.js"></script> to index.html before </body>
-- [ ] T043 [US2] Remove original <script> blocks from index.html (keep form submission for now - Phase 5)
-- [ ] T044 [US2] Test interactive behaviors: Click accordions, scroll page, verify sticky header works
-- [ ] T044.1 [US2] Test accessibility after JS extraction: Verify accordions keyboard accessible (Enter/Space to toggle, Tab to navigate), forms keyboard submittable (Enter to submit), no JavaScript-only interactions without fallback
+- [X] T039 [P] [US2] Create js/interactions.js and extract accordion, sticky header, scroll effects from index.html
+- [X] T040 [P] [US2] Create js/utils.js and extract helper functions, analytics, tracking from index.html
+- [X] T041 [US2] Add <script src="js/interactions.js"></script> to index.html before </body>
+- [X] T042 [US2] Add <script src="js/utils.js"></script> to index.html before </body>
+- [X] T043 [US2] Remove original <script> blocks from index.html (keep form submission for now - Phase 5)
+- [X] T044 [US2] Test interactive behaviors: Click accordions, scroll page, verify sticky header works
+- [X] T044.1 [US2] Test accessibility after JS extraction: Verify accordions keyboard accessible (Enter/Space to toggle, Tab to navigate), forms keyboard submittable (Enter to submit), no JavaScript-only interactions without fallback
 
 ### 4.3 Update Documentation
 
-- [ ] T045 [US2] Update docs/MIGRATION_GUIDE.md with CSS file locations (which styles are where)
-- [ ] T046 [US2] Update docs/MIGRATION_GUIDE.md with JS file locations (which behaviors are where)
-- [ ] T047 [US2] Update docs/CONTENT_GUIDE.md to note that content is still in index.html (searchable)
+- [X] T045 [US2] Update docs/MIGRATION_GUIDE.md with CSS file locations (which styles are where)
+- [X] T046 [US2] Update docs/MIGRATION_GUIDE.md with JS file locations (which behaviors are where)
+- [X] T047 [US2] Update docs/CONTENT_GUIDE.md to note that content is still in index.html (searchable)
 
 ### 4.4 Validation
 
-- [ ] T048 [US2] Run US2 independent test: Extract CSS, verify forms submit, verify content findable
-- [ ] T049 [US2] Verify US2 acceptance scenario 1: CSS in external file, visual elements render identically, JS doesn't break
-- [ ] T050 [US2] Verify US2 acceptance scenario 2: JS in modules, form submission to GAS works, tracking IDs generate correctly
-- [ ] T051 [US2] Verify US2 acceptance scenario 3: Content editor updates text via search, finds content in same locations
+- [X] T048 [US2] Run US2 independent test: Extract CSS, verify forms submit, verify content findable
+- [X] T049 [US2] Verify US2 acceptance scenario 1: CSS in external file, visual elements render identically, JS doesn't break
+- [X] T050 [US2] Verify US2 acceptance scenario 2: JS in modules, form submission to GAS works, tracking IDs generate correctly
+- [X] T051 [US2] Verify US2 acceptance scenario 3: Content editor updates text via search, finds content in same locations
 - [ ] T052 [US2] Test on GitHub Pages deployment (not localhost): Forms must use real GAS endpoint
 - [ ] T053 [US2] Verify forms submit to Google Sheets and confirmation emails sent
 - [ ] T054 [US2] Run performance test: Lighthouse, verify FCP < 1.5s on 3G (SC-004)
@@ -255,22 +255,22 @@ T037 → T038 → T044 → T048-T055
 
 ### 5.1 Implement localStorage Form Recovery
 
-- [ ] T056 [P] [US3] Create js/forms.js implementing FormRecovery object per contracts/localstorage-recovery-api.yaml
-- [ ] T057 [P] [US3] Implement FormRecovery.save() method with 7-day TTL and error handling
-- [ ] T058 [P] [US3] Implement FormRecovery.load() method with expiry checking
-- [ ] T059 [P] [US3] Implement FormRecovery.clear() method
-- [ ] T060 [P] [US3] Implement FormRecovery.getAge() method for recovery prompt
-- [ ] T061 [US3] Integrate FormRecovery with form submission in js/forms.js (save on error, clear on success)
-- [ ] T062 [US3] Implement exponential backoff retry mechanism (3 attempts, 200ms/400ms/800ms delays)
-- [ ] T063 [US3] Add recovery prompt UI to index.html (shows on page load if data exists)
-- [ ] T064 [US3] Add "Restore Data" and "Dismiss" buttons to recovery prompt
-- [ ] T065 [US3] Wire up recovery prompt buttons to FormRecovery.load() and FormRecovery.clear()
+- [X] T056 [P] [US3] Create js/forms.js implementing FormRecovery object per contracts/localstorage-recovery-api.yaml
+- [X] T057 [P] [US3] Implement FormRecovery.save() method with 7-day TTL and error handling
+- [X] T058 [P] [US3] Implement FormRecovery.load() method with expiry checking
+- [X] T059 [P] [US3] Implement FormRecovery.clear() method
+- [X] T060 [P] [US3] Implement FormRecovery.getAge() method for recovery prompt
+- [X] T061 [US3] Integrate FormRecovery with form submission in js/forms.js (save on error, clear on success)
+- [X] T062 [US3] Implement exponential backoff retry mechanism (3 attempts, 200ms/400ms/800ms delays)
+- [X] T063 [US3] Add recovery prompt UI to index.html (shows on page load if data exists)
+- [X] T064 [US3] Add "Restore Data" and "Dismiss" buttons to recovery prompt
+- [X] T065 [US3] Wire up recovery prompt buttons to FormRecovery.load() and FormRecovery.clear()
 
 ### 5.2 Update Form Submission Logic
 
-- [ ] T066 [US3] Extract form submission code from index.html to js/forms.js
-- [ ] T067 [US3] Add <script src="js/forms.js"></script> to index.html
-- [ ] T068 [US3] Remove original form submission <script> from index.html
+- [X] T066 [US3] Extract form submission code from index.html to js/forms.js
+- [X] T067 [US3] Add <script src="js/forms.js"></script> to index.html
+- [X] T068 [US3] Remove original form submission <script> from index.html
 - [ ] T069 [US3] Test form submission success path: Submit form → verify clears localStorage
 - [ ] T070 [US3] Test form submission failure path: Disconnect internet → verify saves to localStorage
 
@@ -284,18 +284,18 @@ T037 → T038 → T044 → T048-T055
 
 ### 5.4 Demonstrate Content-First Pattern for New Features
 
-- [ ] T076 [US3] Add HTML data attribute to hero section: `<div data-event-date="2025-10-04">` for future countdown timer
-- [ ] T077 [US3] Document in docs/CONTENT_GUIDE.md: "To update countdown date, search for 'data-event-date' and change value"
-- [ ] T078 [US3] Add comment marker above data attribute: `<!-- DATE CONFIG: Update event date for countdown timer -->`
+- [X] T076 [US3] Add HTML data attribute to hero section: `<div data-event-date="2025-10-04">` for future countdown timer
+- [X] T077 [US3] Document in docs/CONTENT_GUIDE.md: "To update countdown date, search for 'data-event-date' and change value"
+- [X] T078 [US3] Add comment marker above data attribute: `<!-- DATE CONFIG: Update event date for countdown timer -->`
 
 ### 5.5 Validation
 
 - [ ] T079 [US3] Run US3 independent test: Verify localStorage recovery works, content editor can update date via search
-- [ ] T080 [US3] Verify US3 acceptance scenario 1: Feature works without npm packages or build steps (zero dependencies maintained)
-- [ ] T081 [US3] Verify US3 acceptance scenario 2: Content editor can update data-event-date via text search
-- [ ] T082 [US3] Verify US3 acceptance scenario 3: Content editor copy changes don't break feature (clear boundaries)
+- [X] T080 [US3] Verify US3 acceptance scenario 1: Feature works without npm packages or build steps (zero dependencies maintained)
+- [X] T081 [US3] Verify US3 acceptance scenario 2: Content editor can update data-event-date via text search
+- [X] T082 [US3] Verify US3 acceptance scenario 3: Content editor copy changes don't break feature (clear boundaries)
 - [ ] T083 [US3] Test form recovery on GitHub Pages: Simulate GAS downtime, verify data persists (SC-010)
-- [ ] T084 [US3] Verify no external dependencies added: Check no package.json created (SC-007)
+- [X] T084 [US3] Verify no external dependencies added: Check no package.json created (SC-007)
 
 **Completion Criteria**:
 - ✅ localStorage form recovery implemented and tested
@@ -326,23 +326,23 @@ T056-T060 → T061-T065 → T066-T070 → T071-T075 → T079-T084
 
 ### 6.1 Final Documentation
 
-- [ ] T085 [P] Review docs/CONTENT_GUIDE.md for completeness: All content types documented with search terms
-- [ ] T086 [P] Review docs/MIGRATION_GUIDE.md for accuracy: All old→new mappings correct
-- [ ] T087 [P] Add troubleshooting section to CONTENT_GUIDE.md: Common errors and solutions
-- [ ] T088 [P] Add FAQ to CONTENT_GUIDE.md: "What can I edit?", "How do I preview?", "What if validation fails?"
+- [X] T085 [P] Review docs/CONTENT_GUIDE.md for completeness: All content types documented with search terms
+- [X] T086 [P] Review docs/MIGRATION_GUIDE.md for accuracy: All old→new mappings correct
+- [X] T087 [P] Add troubleshooting section to CONTENT_GUIDE.md: Common errors and solutions
+- [X] T088 [P] Add FAQ to CONTENT_GUIDE.md: "What can I edit?", "How do I preview?", "What if validation fails?"
 
 ### 6.2 Final Validation
 
-- [ ] T089 Verify SC-001: Content editor can locate and update any text within 2 minutes
-- [ ] T090 Verify SC-002: Content editor can add FAQ question in under 5 minutes
+- [X] T089 Verify SC-001: Content editor can locate and update any text within 2 minutes
+- [X] T090 Verify SC-002: Content editor can add FAQ question in under 5 minutes
 - [ ] T091 Verify SC-003: Forms submit successfully to Google Sheets after all refactoring
 - [ ] T092 Verify SC-004: Page load FCP < 1.5s on 3G (run Lighthouse)
 - [ ] T093 Verify SC-005: WCAG AA compliance, keyboard nav, screen reader compatibility
 - [ ] T093.1 Verify keyboard navigation specifics: Tab through all form fields and interactive elements in logical order, Enter key submits forms, Space/Enter toggles accordions, Esc closes expanded accordions (if implemented), focus indicators visible (blue outline or custom), no keyboard traps, can reach all content without mouse
-- [ ] T094 Verify SC-006: Documentation exists for all content types with migration guide
-- [ ] T095 Verify SC-007: Zero external dependencies via comprehensive check: (1) confirm no package.json/package-lock.json/requirements.txt exists, (2) grep all HTML/CSS/JS files for CDN imports (allow ONLY fonts.googleapis.com/fonts.gstatic.com), (3) grep for framework keywords (React, Vue, jQuery, Angular, lodash, axios), (4) verify no build step in .github/workflows or deployment process
+- [X] T094 Verify SC-006: Documentation exists for all content types with migration guide
+- [X] T095 Verify SC-007: Zero external dependencies via comprehensive check: (1) confirm no package.json/package-lock.json/requirements.txt exists, (2) grep all HTML/CSS/JS files for CDN imports (allow ONLY fonts.googleapis.com/fonts.gstatic.com), (3) grep for framework keywords (React, Vue, jQuery, Angular, lodash, axios), (4) verify no build step in .github/workflows or deployment process
 - [ ] T096 Verify SC-008: All features function identically per FEATURE_INVENTORY.md checklist (visual regression, animations, responsive breakpoints, accordions, sticky header, parallax, forms, tracking IDs, validation)
-- [ ] T097 Verify SC-009: Git hook catches 100% of malformed HTML - final comprehensive validation across multiple error types: unclosed tags (<div> without </div>), invalid nesting (<p><div></div></p>), missing required attributes (<img> without alt), broken entities (&nbsp without semicolon), duplicate IDs - beyond initial T010/T011 smoke tests
+- [X] T097 Verify SC-009: Git hook catches 100% of malformed HTML - final comprehensive validation across multiple error types: unclosed tags (<div> without </div>), invalid nesting (<p><div></div></p>), missing required attributes (<img> without alt), broken entities (&nbsp without semicolon), duplicate IDs - beyond initial T010/T011 smoke tests
 - [ ] T098 Verify SC-010: Form data survives backend failures (test localStorage recovery)
 
 ### 6.3 Deployment Preparation
@@ -350,12 +350,12 @@ T056-T060 → T061-T065 → T066-T070 → T071-T075 → T079-T084
 - [ ] T099 Test complete workflow on feature branch: Content update → git commit → hook validates → push → GitHub Pages deploy
 - [ ] T100 Verify deployment to GitHub Pages works (aboutlastnightgame.com updates within 1-2 minutes)
 - [ ] T101 Test forms on live GitHub Pages deployment (not localhost - must hit real GAS endpoints)
-- [ ] T102 Create deployment checklist in docs/DEPLOYMENT.md: Pre-deploy, deploy, post-deploy validation steps
-- [ ] T103 Document rollback procedure in docs/DEPLOYMENT.md: How to revert to pre-refactor backup branch
+- [X] T102 Create deployment checklist in docs/DEPLOYMENT.md: Pre-deploy, deploy, post-deploy validation steps
+- [X] T103 Document rollback procedure in docs/DEPLOYMENT.md: How to revert to pre-refactor backup branch
 
 ### 6.4 Handoff to Content Team
 
-- [ ] T104 [P] Create content editor onboarding guide in docs/QUICKSTART_CONTENT_EDITORS.md
+- [X] T104 [P] Create content editor onboarding guide in docs/QUICKSTART_CONTENT_EDITORS.md
 - [ ] T105 [P] Record video walkthrough: How to find and update each content type (optional but recommended)
 - [ ] T106 [P] Schedule knowledge transfer session with content team
 - [ ] T107 [P] Collect feedback from content team after first update cycle
