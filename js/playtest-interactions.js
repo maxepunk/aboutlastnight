@@ -17,9 +17,60 @@ let dateCapacities = {};
 // Cache last known good data for graceful degradation
 let lastKnownGoodData = null;
 
+/**
+ * Check if a date string (format "YYYY-MM-DD HH:MM") is in the past
+ * Client-side version of backend isPastPlaytestDate()
+ *
+ * @param {string} dateString - Date in format "YYYY-MM-DD HH:MM"
+ * @returns {boolean} - True if date is in the past
+ */
+function isDateStringPast(dateString) {
+    try {
+        const parts = dateString.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+        if (!parts) return false;
+
+        const [, year, month, day, hour, minute] = parts;
+        const playtestDate = new Date(year, month - 1, day, hour, minute);
+
+        return playtestDate < new Date();
+    } catch (error) {
+        return false; // Safe default
+    }
+}
+
 // ═══════════════════════════════════════════════════════
 // SPOT COUNTER UPDATES
 // ═══════════════════════════════════════════════════════
+
+/**
+ * Find the next available playtest date (not past, with spots remaining)
+ * Skips past dates and full dates, returns first date with availability
+ * If all dates are past or full, returns the earliest non-past date for waitlist
+ *
+ * @returns {string|null} - Date string or null if no dates available
+ */
+function findNextAvailableDate() {
+    const sortedDates = Object.keys(dateCapacities).sort();
+
+    // First pass: find next non-past date with spots remaining
+    for (const dateString of sortedDates) {
+        const dateInfo = dateCapacities[dateString];
+        if (!dateInfo.is_past_date && dateInfo.spots_remaining > 0) {
+            return dateString;
+        }
+    }
+
+    // Second pass: if all available dates are full, return first non-past date (for waitlist)
+    for (const dateString of sortedDates) {
+        const dateInfo = dateCapacities[dateString];
+        if (!dateInfo.is_past_date) {
+            return dateString;
+        }
+    }
+
+    // All dates are in the past
+    return null;
+}
 
 /**
  * Update spot counter display for the currently selected date
@@ -136,11 +187,15 @@ async function fetchAllCapacities() {
 
         // Handle dates in frontend that don't exist in backend yet (no signups yet)
         // Initialize them with default capacity (20 spots, 0 taken)
+        // Need to check if dates are past even if they have no signups yet
         const allCapacityElements = document.querySelectorAll('[data-date]');
         allCapacityElements.forEach(el => {
             const dateValue = el.getAttribute('data-date');
             if (!dateCapacities[dateValue]) {
                 // This date hasn't been submitted yet - show default capacity
+                // Check if date is in the past (parse date string)
+                const isPast = isDateStringPast(dateValue);
+
                 dateCapacities[dateValue] = {
                     date: dateValue,
                     displayText: dateValue,
@@ -149,21 +204,35 @@ async function fetchAllCapacities() {
                     spots_remaining: 20,
                     minimum_players: 5,
                     has_minimum: false,
-                    is_full: false
+                    is_full: false,
+                    is_past_date: isPast
                 };
-                el.textContent = '20 spots available';
+
+                // Update UI for dates with no signups yet
+                const radioInput = document.querySelector(`input[name="playtestDate"][value="${dateValue}"]`);
+                if (isPast && radioInput) {
+                    el.textContent = 'Date passed';
+                    radioInput.disabled = true;
+                    radioInput.closest('.date-option')?.classList.add('disabled');
+                } else {
+                    el.textContent = '20 spots available';
+                }
             }
         });
 
-        // Update spot counter for currently selected date
-        const selectedRadio = document.querySelector('input[name="playtestDate"]:checked');
-        if (selectedRadio) {
-            updateSpotCounter(selectedRadio.value);
+        // Update spot counter to show next available playtest
+        const nextAvailableDate = findNextAvailableDate();
+        if (nextAvailableDate) {
+            updateSpotCounter(nextAvailableDate);
         } else {
-            // Default to first date if none selected
-            const firstDate = data.dates[0];
-            if (firstDate) {
-                updateSpotCounter(firstDate.date);
+            // No dates available (all past)
+            const counter = document.getElementById('spotCounter');
+            const spotsNumber = document.getElementById('spotsNumber');
+            const spotsText = document.getElementById('spotsText');
+            if (counter && spotsNumber && spotsText) {
+                spotsNumber.textContent = '0';
+                spotsText.textContent = 'NO UPCOMING PLAYTESTS';
+                counter.classList.add('full');
             }
         }
 
