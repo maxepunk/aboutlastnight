@@ -70,10 +70,16 @@ function doPost(e) {
     const minimumPlayers = MINIMUM_PLAYERS;
 
     // Filter signups by selected date (column H, index 7)
+    // Simple string comparison - dates are stored as plain text
     const allData = sheet.getDataRange().getValues();
-    const signupsForDate = allData.filter((row, index) =>
-      index > 0 && row[7] === selectedDate  // Skip header row, check column H
-    );
+    const signupsForDate = allData.filter((row, index) => {
+      if (index === 0) return false; // Skip header row
+      const rowDate = row[7];
+      if (!rowDate) return false;
+
+      // Simple string comparison
+      return String(rowDate).trim() === selectedDate.trim();
+    });
 
     const spotsTaken = signupsForDate.length;
     const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
@@ -94,7 +100,7 @@ function doPost(e) {
       status,
       formData.photoConsent || 'No',  // Photo consent
       timestamp,  // Consent timestamp (same as registration)
-      selectedDate  // Selected Date (column H)
+      selectedDate  // Selected Date (column H) - stored as plain text
     ]);
     
     // Send confirmation email to participant
@@ -244,44 +250,6 @@ function doPost(e) {
   }
 }
 
-// Helper function to normalize date to ISO string format
-// Handles Date objects, ISO strings, or any parseable date
-// Returns consistent "YYYY-MM-DD HH:MM" format for API responses
-function normalizeDateToISO(dateInput) {
-  try {
-    let date;
-
-    if (dateInput instanceof Date) {
-      date = dateInput;
-    } else if (typeof dateInput === 'string') {
-      // Check if already in ISO format
-      if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/.test(dateInput)) {
-        return dateInput; // Already in correct format
-      }
-      date = new Date(dateInput);
-    } else {
-      date = new Date(dateInput);
-    }
-
-    if (isNaN(date.getTime())) {
-      return String(dateInput); // Fallback if invalid
-    }
-
-    // Format as "YYYY-MM-DD HH:MM" using local time (not UTC)
-    // Google Sheets stores dates in spreadsheet timezone, Date object should preserve that
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-
-    return `${year}-${month}-${day} ${hours}:${minutes}`;
-  } catch (error) {
-    Logger.log('normalizeDateToISO error: ' + error + ', input: ' + dateInput);
-    return String(dateInput);
-  }
-}
-
 // Helper function to format date for email (T009)
 // Handles both ISO date strings (YYYY-MM-DD HH:MM) and Date objects
 // Returns human-readable format like "September 21 at 4:00 PM"
@@ -333,6 +301,26 @@ function formatDateForEmail(dateInput) {
   }
 }
 
+// Helper function to check if a playtest date is in the past
+// Takes a date string in format "YYYY-MM-DD HH:MM"
+// Returns true if the date/time has already passed
+function isPastPlaytestDate(dateString) {
+  try {
+    // Parse the date string (format: "2025-09-21 16:00")
+    const parts = dateString.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+    if (!parts) return false;
+
+    const [, year, month, day, hour, minute] = parts;
+    const playtestDate = new Date(year, month - 1, day, hour, minute);
+
+    // Compare with current time
+    return playtestDate < new Date();
+  } catch (error) {
+    // If parsing fails, assume not past (safe default)
+    return false;
+  }
+}
+
 // Helper function to get capacity for all dates (T008)
 // Dynamically discovers dates from the sheet data (column H)
 //
@@ -349,46 +337,47 @@ function getAllCapacities() {
   const minimumPlayers = MINIMUM_PLAYERS;
 
   // Discover unique dates from column H (index 7) - skip header row
-  // Normalize dates immediately to avoid issues with Date.toString()
-  const normalizedDatesSet = new Set();
+  // Store as plain text strings
+  const uniqueDates = new Set();
+
   for (let i = 1; i < allData.length; i++) {
     const dateValue = allData[i][7];
     if (dateValue) {
-      // Normalize the date immediately to ISO format (YYYY-MM-DD HH:MM)
-      const normalized = normalizeDateToISO(dateValue);
-      normalizedDatesSet.add(normalized);
+      // Store as trimmed string
+      uniqueDates.add(String(dateValue).trim());
     }
   }
 
-  // Convert Set to sorted array
-  const discoveredDates = Array.from(normalizedDatesSet).sort();
+  // Sort dates alphabetically (ISO format sorts correctly)
+  const sortedDates = Array.from(uniqueDates).sort();
 
-  // Calculate capacity for each discovered date
-  return discoveredDates.map(normalizedDate => {
-    // normalizedDate is already in ISO format
-
-    // Filter signups for this specific date
-    // Compare using normalized values to handle both Date objects and strings
+  // Calculate capacity for each unique date
+  return sortedDates.map(dateString => {
+    // Filter signups for this specific date using simple string comparison
     const signupsForDate = allData.filter((row, index) => {
       if (index === 0) return false; // Skip header
       const rowDate = row[7];
       if (!rowDate) return false;
-      // Normalize both sides for comparison
-      return normalizeDateToISO(rowDate) === normalizedDate;
+
+      return String(rowDate).trim() === dateString;
     });
 
     const spotsTaken = signupsForDate.length;
     const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
 
+    // Check if date is in the past
+    const isPastDate = isPastPlaytestDate(dateString);
+
     return {
-      date: normalizedDate,  // Already in ISO format (YYYY-MM-DD HH:MM)
-      displayText: formatDateForEmail(normalizedDate),  // Use normalized date for formatting
+      date: dateString,  // Plain text string (YYYY-MM-DD HH:MM)
+      displayText: formatDateForEmail(dateString),
       spots_total: spotsTotal,
       spots_taken: spotsTaken,
       spots_remaining: spotsRemaining,
       minimum_players: minimumPlayers,
       has_minimum: spotsTaken >= minimumPlayers,
-      is_full: spotsRemaining === 0
+      is_full: spotsRemaining === 0,
+      is_past_date: isPastDate  // NEW: Indicates if date has already passed
     };
   });
 }
