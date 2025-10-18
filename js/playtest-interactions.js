@@ -17,6 +17,10 @@ let dateCapacities = {};
 // Cache last known good data for graceful degradation
 let lastKnownGoodData = null;
 
+// Track user's manual date selection to preserve it across capacity refreshes
+// null = no selection (show next available), string = user selected a specific date
+let userSelectedDate = null;
+
 /**
  * Check if a date string (format "YYYY-MM-DD HH:MM") is in the past
  * Client-side version of backend isPastPlaytestDate()
@@ -70,6 +74,39 @@ function findNextAvailableDate() {
 
     // All dates are in the past
     return null;
+}
+
+/**
+ * Update event details section with date/time from capacity data
+ * Parses displayText field (e.g., "November 4 at 6:30 PM") to extract date and time
+ *
+ * @param {string} dateString - ISO date string (e.g., "2025-11-04 18:30")
+ */
+function updateEventDetails(dateString) {
+    const dateInfo = dateCapacities[dateString];
+    if (!dateInfo) return;
+
+    const eventDate = document.getElementById('eventDate');
+    const eventTime = document.getElementById('eventTime');
+
+    if (!eventDate || !eventTime) return;
+
+    // Backend provides displayText like "November 4 at 6:30 PM"
+    // Parse it to extract date and time portions
+    const displayText = dateInfo.displayText;
+    const atIndex = displayText.indexOf(' at ');
+
+    if (atIndex !== -1) {
+        const datePart = displayText.substring(0, atIndex); // "November 4"
+        const timePart = displayText.substring(atIndex + 4); // "6:30 PM"
+
+        eventDate.textContent = datePart;
+        eventTime.textContent = timePart;
+    } else {
+        // Fallback: show full display text in date field
+        eventDate.textContent = displayText;
+        eventTime.textContent = 'See Below';
+    }
 }
 
 /**
@@ -220,10 +257,29 @@ async function fetchAllCapacities() {
             }
         });
 
-        // Update spot counter to show next available playtest
-        const nextAvailableDate = findNextAvailableDate();
-        if (nextAvailableDate) {
-            updateSpotCounter(nextAvailableDate);
+        // Update spot counter: respect user selection or show next available
+        let dateToDisplay = null;
+
+        if (userSelectedDate && dateCapacities[userSelectedDate]) {
+            // User has manually selected a date - respect their choice
+            dateToDisplay = userSelectedDate;
+        } else {
+            // No user selection or selection is invalid (e.g., date removed) - show next available
+            dateToDisplay = findNextAvailableDate();
+            userSelectedDate = null; // Clear invalid selection
+        }
+
+        if (dateToDisplay) {
+            updateSpotCounter(dateToDisplay);
+            updateEventDetails(dateToDisplay);
+
+            // On initial page load, auto-select the next available date radio button
+            if (!userSelectedDate) {
+                const radioToSelect = document.querySelector(`input[name="playtestDate"][value="${dateToDisplay}"]`);
+                if (radioToSelect && !radioToSelect.disabled) {
+                    radioToSelect.checked = true;
+                }
+            }
         } else {
             // No dates available (all past)
             const counter = document.getElementById('spotCounter');
@@ -275,13 +331,19 @@ async function fetchAllCapacities() {
 /**
  * Handle date radio button change event
  * Updates spot counter display when user selects a different date
+ * Tracks user's selection to preserve it across automatic capacity refreshes
  */
 function handleDateSelection() {
     const radioButtons = document.querySelectorAll('input[name="playtestDate"]');
 
     radioButtons.forEach(radio => {
         radio.addEventListener('change', (e) => {
+            // Track that user manually selected a date
+            userSelectedDate = e.target.value;
+
+            // Update spot counter AND event details to show selected date's data
             updateSpotCounter(e.target.value);
+            updateEventDetails(e.target.value);
         });
     });
 }
