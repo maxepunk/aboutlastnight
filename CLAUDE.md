@@ -58,7 +58,8 @@ JS (js/*.js)      = All behavior (organized by concern)
 **JavaScript Organization (js/ directory):**
 - `utils.js` (~7.5KB) - Device detection, UTM parameter tracking, hidden field population
 - `forms.js` (~12.8KB) - Form submission, localStorage recovery, retry logic with exponential backoff
-- `interactions.js` (~16.1KB) - Accordions, sticky header, scroll effects, analytics
+- `interactions.js` (~16.1KB) - Accordions, sticky header, scroll effects, analytics (for index.html)
+- `playtest-interactions.js` (~12KB) - Playtest-specific: spot counter, date selection, capacity fetching (for playtest.html)
 
 ### Progressive Enhancement
 - Core content works without JavaScript
@@ -115,7 +116,27 @@ git checkout pre-refactor-backup
 1. Edit `FORM_HANDLER_GOOGLE_SCRIPT.js` or `PLAYTEST_GOOGLE_SCRIPT.js` locally
 2. Copy to Google Apps Script editor
 3. Deploy new version: Deploy → Manage deployments → Edit → New version
-4. **Critical:** Update endpoint URL in `js/forms.js` if deployment creates new endpoint
+4. **Critical:** Update endpoint URL in `js/forms.js` or `js/playtest-interactions.js` if deployment creates new endpoint
+
+### Installing Git Hooks
+Pre-commit hook validates HTML before allowing commits:
+```bash
+# Copy hook from .githooks to .git/hooks
+cp .githooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+# Or configure git to use .githooks directory
+git config core.hooksPath .githooks
+```
+
+Requires `tidy` for HTML validation:
+```bash
+# Ubuntu/Debian/WSL
+sudo apt-get install tidy
+
+# macOS
+brew install tidy-html5
+```
 
 ## Architecture Patterns
 
@@ -158,6 +179,8 @@ git checkout pre-refactor-backup
    - Manages limited playtest spots with waitlist
    - Backend: `PLAYTEST_GOOGLE_SCRIPT.js`
    - Separate Google Apps Script deployment
+   - Frontend: `js/playtest-interactions.js` (spot counter, date selection, capacity fetching)
+   - **Date-agnostic architecture:** Backend dynamically discovers dates from database; content editors add/remove dates by editing HTML radio buttons only (no backend redeployment needed)
 
 **Backend responsibilities** (Google Apps Script):
 - Store submissions in Google Sheets
@@ -166,6 +189,30 @@ git checkout pre-refactor-backup
 - Send alert emails to organizers
 
 **Critical:** Form endpoint URLs are production. Breaking them breaks the live site.
+
+### Playtest Multi-Date System Architecture
+
+The playtest system supports multiple date options with independent capacity tracking:
+
+**Frontend (playtest.html):**
+- Radio buttons define available dates (format: `value="YYYY-MM-DD HH:MM"`)
+- Spot counter displays capacity for currently selected date
+- All date capacities loaded on page load (no fetch-on-select)
+- Automatically disables past dates and auto-selects next available date
+- User selection preserved across automatic 30-second capacity refreshes
+
+**Backend (PLAYTEST_GOOGLE_SCRIPT.js):**
+- **Date-agnostic design:** Accepts any date string from form submission
+- Dynamically discovers dates from Google Sheets data (no hardcoded date list)
+- GET request returns capacity data for all dates found in database
+- Each date tracks capacity independently (20 spots, 5 minimum players)
+- Waitlist positions assigned per-date when capacity reached
+
+**Adding/Removing Playtest Dates:**
+1. Edit radio buttons in `playtest.html` (search for "PLAYTEST DATES" marker)
+2. Duplicate existing radio button block, update date/time/value
+3. No backend redeployment required - backend discovers new dates automatically
+4. Capacity system auto-initializes new dates (20 spots, 0 taken)
 
 ## Pre-Production Status
 
@@ -196,6 +243,13 @@ This project is in active development before launch:
 - `docs/CONTENT_GUIDE.md` - Detailed content location reference and troubleshooting
 - `MarketingLanguagePressRelease.md` - Approved marketing copy and messaging
 
+### Feature Development (SpecKit Workflow)
+This project uses SpecKit for structured feature development:
+- `.specify/` - SpecKit configuration and scripts
+- `specs/<feature-number>-<name>/` - Feature specifications with spec.md, plan.md, tasks.md
+- `.claude/commands/` - Slash commands for SpecKit workflow (`/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`)
+- `.specify/memory/constitution.md` - Project principles enforced during planning
+
 ## What Developers Need to Know
 
 **Working effectively on this project:**
@@ -208,3 +262,22 @@ This project is in active development before launch:
 6. **Documentation is code** - Update guides when file structure changes
 7. **Content editors are users** - Design for their experience, not developer convenience
 8. **Time target:** < 2 minutes for content editor to update any piece of content
+9. **Date management is content-first** - Playtest dates are added/removed in HTML only; backend discovers dates dynamically (no backend code changes needed)
+
+## Critical Architectural Decisions
+
+### Why Comment Markers Instead of Data Files?
+Content editors use Ctrl+F to find text. Extracting content to JSON/data files would require:
+- Understanding file relationships and data binding
+- Running build processes to see changes
+- Technical knowledge to map data → display location
+
+Comment markers preserve "what you see is what you edit" while enabling direct file editing.
+
+### Why Date-Agnostic Backend for Playtests?
+Playtest dates change frequently during scheduling. Hardcoding dates in backend would require:
+- Google Apps Script redeployment for every date change
+- Developer involvement for content updates
+- Potential for frontend/backend date mismatches
+
+Date-agnostic design makes date management a pure content task (edit HTML radio buttons only).
