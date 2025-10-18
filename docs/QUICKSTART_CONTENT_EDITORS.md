@@ -279,6 +279,85 @@ Try this safe practice edit:
 
 ---
 
+## Playtest Page Updates
+
+### Update Playtest Event Details
+
+**When**: Playtest date, time, or location changes
+
+**How**:
+1. Open `playtest.html` in your code editor
+2. Press **Ctrl+F** (or Cmd+F on Mac)
+3. Search for "EVENT DETAILS"
+4. Find the detail values you need to change
+5. Update the text (e.g., "Sept 21" → "Oct 5")
+6. Save the file
+
+**Example**:
+```html
+<!-- Before -->
+<div class="detail-value">Sept 21</div>
+
+<!-- After -->
+<div class="detail-value">Oct 5</div>
+```
+
+**Time**: ~30 seconds
+
+---
+
+### Update Playtest Description
+
+**When**: Event description or game details change
+
+**How**:
+1. Open `playtest.html`
+2. Search for "PLAYTEST DESCRIPTION" or "90-minute"
+3. Find the section marked with `<!-- EDITABLE CONTENT: PLAYTEST DESCRIPTION -->`
+4. Edit the text within `<p class="game-description">` tags
+5. Save
+
+**Example**:
+```html
+<!-- Before -->
+<p class="game-description">
+    <strong>About Last Night</strong> is a 90-minute immersive crime thriller...
+</p>
+
+<!-- After -->
+<p class="game-description">
+    <strong>About Last Night</strong> is a 2-hour immersive crime thriller...
+</p>
+```
+
+**Time**: ~1 minute
+
+---
+
+### Update Surveillance Protocol Consent
+
+**When**: Photo/video consent policy changes
+
+**How**:
+1. Open `playtest.html`
+2. Search for "SURVEILLANCE PROTOCOL"
+3. Find the consent text and list items
+4. Update the text as needed
+5. Save
+
+**Example**:
+```html
+<!-- Before -->
+<li>Evidence photos during gameplay</li>
+
+<!-- After -->
+<li>Photos and video during gameplay</li>
+```
+
+**Time**: ~1 minute
+
+---
+
 ## Next Steps
 
 Now that you've read this guide:
