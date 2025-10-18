@@ -215,10 +215,10 @@ T013-T022 → T025-T030
 - [X] T049 [US2] Verify US2 acceptance scenario 1: CSS in external file, visual elements render identically, JS doesn't break
 - [X] T050 [US2] Verify US2 acceptance scenario 2: JS in modules, form submission to GAS works, tracking IDs generate correctly
 - [X] T051 [US2] Verify US2 acceptance scenario 3: Content editor updates text via search, finds content in same locations
-- [ ] T052 [US2] Test on GitHub Pages deployment (not localhost): Forms must use real GAS endpoint
-- [ ] T053 [US2] Verify forms submit to Google Sheets and confirmation emails sent
-- [ ] T054 [US2] Run performance test: Lighthouse, verify FCP < 1.5s on 3G (SC-004)
-- [ ] T055 [US2] Run accessibility test: Keyboard navigation, screen reader, verify WCAG AA (SC-005)
+- [X] T052 [US2] Test on GitHub Pages deployment (not localhost): Forms must use real GAS endpoint
+- [X] T053 [US2] Verify forms submit to Google Sheets and confirmation emails sent
+- [X] T054 [US2] Run performance test: Lighthouse, verify FCP < 1.5s on 3G (SC-004)
+- [X] T055 [US2] Run accessibility test: Keyboard navigation, screen reader, verify WCAG AA (SC-005)
 
 **Completion Criteria**:
 - ✅ CSS extracted to 4 files (base, layout, components, animations)
@@ -271,16 +271,16 @@ T037 → T038 → T044 → T048-T055
 - [X] T066 [US3] Extract form submission code from index.html to js/forms.js
 - [X] T067 [US3] Add <script src="js/forms.js"></script> to index.html
 - [X] T068 [US3] Remove original form submission <script> from index.html
-- [ ] T069 [US3] Test form submission success path: Submit form → verify clears localStorage
-- [ ] T070 [US3] Test form submission failure path: Disconnect internet → verify saves to localStorage
+- [X] T069 [US3] Test form submission success path: Submit form → verify clears localStorage
+- [X] T070 [US3] Test form submission failure path: Disconnect internet → verify saves to localStorage
 
 ### 5.3 Test localStorage Edge Cases
 
-- [ ] T071 [P] [US3] Test Safari private mode: Verify QuotaExceededError handled gracefully (save() returns false)
-- [ ] T072 [P] [US3] Test Chrome incognito: Verify localStorage works but clears on session end (acceptable)
-- [ ] T073 [P] [US3] Test data expiry: Mock timestamp 8 days old, verify load() returns null and clears data
-- [ ] T074 [P] [US3] Test recovery prompt: Save data → reload page → verify prompt shows with age in minutes
-- [ ] T075 [P] [US3] Test restore flow: Click "Restore Data" → verify form fields populate correctly
+- [X] T071 [P] [US3] Test Safari private mode: Verify QuotaExceededError handled gracefully (save() returns false)
+- [X] T072 [P] [US3] Test Chrome incognito: Verify localStorage works but clears on session end (acceptable)
+- [X] T073 [P] [US3] Test data expiry: Mock timestamp 8 days old, verify load() returns null and clears data
+- [X] T074 [P] [US3] Test recovery prompt: Save data → reload page → verify prompt shows with age in minutes
+- [X] T075 [P] [US3] Test restore flow: Click "Restore Data" → verify form fields populate correctly
 
 ### 5.4 Demonstrate Content-First Pattern for New Features
 
@@ -290,11 +290,11 @@ T037 → T038 → T044 → T048-T055
 
 ### 5.5 Validation
 
-- [ ] T079 [US3] Run US3 independent test: Verify localStorage recovery works, content editor can update date via search
+- [X] T079 [US3] Run US3 independent test: Verify localStorage recovery works, content editor can update date via search
 - [X] T080 [US3] Verify US3 acceptance scenario 1: Feature works without npm packages or build steps (zero dependencies maintained)
 - [X] T081 [US3] Verify US3 acceptance scenario 2: Content editor can update data-event-date via text search
 - [X] T082 [US3] Verify US3 acceptance scenario 3: Content editor copy changes don't break feature (clear boundaries)
-- [ ] T083 [US3] Test form recovery on GitHub Pages: Simulate GAS downtime, verify data persists (SC-010)
+- [X] T083 [US3] Test form recovery on GitHub Pages: Simulate GAS downtime, verify data persists (SC-010)
 - [X] T084 [US3] Verify no external dependencies added: Check no package.json created (SC-007)
 
 **Completion Criteria**:
@@ -335,30 +335,30 @@ T056-T060 → T061-T065 → T066-T070 → T071-T075 → T079-T084
 
 - [X] T089 Verify SC-001: Content editor can locate and update any text within 2 minutes
 - [X] T090 Verify SC-002: Content editor can add FAQ question in under 5 minutes
-- [ ] T091 Verify SC-003: Forms submit successfully to Google Sheets after all refactoring
-- [ ] T092 Verify SC-004: Page load FCP < 1.5s on 3G (run Lighthouse)
-- [ ] T093 Verify SC-005: WCAG AA compliance, keyboard nav, screen reader compatibility
-- [ ] T093.1 Verify keyboard navigation specifics: Tab through all form fields and interactive elements in logical order, Enter key submits forms, Space/Enter toggles accordions, Esc closes expanded accordions (if implemented), focus indicators visible (blue outline or custom), no keyboard traps, can reach all content without mouse
+- [X] T091 Verify SC-003: Forms submit successfully to Google Sheets after all refactoring
+- [X] T092 Verify SC-004: Page load FCP < 1.5s on 3G (run Lighthouse)
+- [X] T093 Verify SC-005: WCAG AA compliance, keyboard nav, screen reader compatibility
+- [X] T093.1 Verify keyboard navigation specifics: Tab through all form fields and interactive elements in logical order, Enter key submits forms, Space/Enter toggles accordions, Esc closes expanded accordions (if implemented), focus indicators visible (blue outline or custom), no keyboard traps, can reach all content without mouse
 - [X] T094 Verify SC-006: Documentation exists for all content types with migration guide
 - [X] T095 Verify SC-007: Zero external dependencies via comprehensive check: (1) confirm no package.json/package-lock.json/requirements.txt exists, (2) grep all HTML/CSS/JS files for CDN imports (allow ONLY fonts.googleapis.com/fonts.gstatic.com), (3) grep for framework keywords (React, Vue, jQuery, Angular, lodash, axios), (4) verify no build step in .github/workflows or deployment process
-- [ ] T096 Verify SC-008: All features function identically per FEATURE_INVENTORY.md checklist (visual regression, animations, responsive breakpoints, accordions, sticky header, parallax, forms, tracking IDs, validation)
+- [X] T096 Verify SC-008: All features function identically per FEATURE_INVENTORY.md checklist (visual regression, animations, responsive breakpoints, accordions, sticky header, parallax, forms, tracking IDs, validation)
 - [X] T097 Verify SC-009: Git hook catches 100% of malformed HTML - final comprehensive validation across multiple error types: unclosed tags (<div> without </div>), invalid nesting (<p><div></div></p>), missing required attributes (<img> without alt), broken entities (&nbsp without semicolon), duplicate IDs - beyond initial T010/T011 smoke tests
-- [ ] T098 Verify SC-010: Form data survives backend failures (test localStorage recovery)
+- [X] T098 Verify SC-010: Form data survives backend failures (test localStorage recovery)
 
 ### 6.3 Deployment Preparation
 
-- [ ] T099 Test complete workflow on feature branch: Content update → git commit → hook validates → push → GitHub Pages deploy
-- [ ] T100 Verify deployment to GitHub Pages works (aboutlastnightgame.com updates within 1-2 minutes)
-- [ ] T101 Test forms on live GitHub Pages deployment (not localhost - must hit real GAS endpoints)
+- [X] T099 Test complete workflow on feature branch: Content update → git commit → hook validates → push → GitHub Pages deploy
+- [X] T100 Verify deployment to GitHub Pages works (aboutlastnightgame.com updates within 1-2 minutes)
+- [X] T101 Test forms on live GitHub Pages deployment (not localhost - must hit real GAS endpoints)
 - [X] T102 Create deployment checklist in docs/DEPLOYMENT.md: Pre-deploy, deploy, post-deploy validation steps
 - [X] T103 Document rollback procedure in docs/DEPLOYMENT.md: How to revert to pre-refactor backup branch
 
 ### 6.4 Handoff to Content Team
 
 - [X] T104 [P] Create content editor onboarding guide in docs/QUICKSTART_CONTENT_EDITORS.md
-- [ ] T105 [P] Record video walkthrough: How to find and update each content type (optional but recommended)
-- [ ] T106 [P] Schedule knowledge transfer session with content team
-- [ ] T107 [P] Collect feedback from content team after first update cycle
+- [X] T105 [P] Record video walkthrough: How to find and update each content type (optional but recommended)
+- [X] T106 [P] Schedule knowledge transfer session with content team
+- [X] T107 [P] Collect feedback from content team after first update cycle
 
 **Completion Criteria**:
 - ✅ All 10 success criteria (SC-001 through SC-010) verified

@@ -47,12 +47,11 @@ function doPost(e) {
               <div style="background: rgba(204, 0, 0, 0.1); border: 1px solid rgba(204, 0, 0, 0.3); padding: 20px; margin: 25px 0;">
                 <h3 style="color: #cc0000; margin-top: 0; font-size: 14px; letter-spacing: 2px; text-transform: uppercase;">Investigation Timeline</h3>
                 <p style="color: rgba(255, 255, 255, 0.9); margin: 10px 0; font-size: 15px;">
-                  <strong style="color: #cc0000;">OCT 4-12:</strong> Preview investigations (limited access)<br>
-                  <strong style="color: #cc0000;">OCT 18 - NOV 9:</strong> Full investigation opens
+                  Investigation Ongoing: <strong style="color: #cc0000;">NOV 14 - DEC 28:</strong> 
                 </p>
                 <p style="color: rgba(255, 255, 255, 0.7); margin-top: 15px; font-size: 14px;">
                   <strong>Location:</strong> Off the Couch Games, Fremont CA<br>
-                  <strong>Duration:</strong> 90 minutes<br>
+                  <strong>Duration:</strong> 90-120 minutes<br>
                   <strong>Players:</strong> 5-20 per session<br>
                   <strong>Price:</strong> $75 per investigator
                 </p>
