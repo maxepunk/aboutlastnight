@@ -91,9 +91,9 @@ This document provides a complete task breakdown for refactoring the About Last 
 
 - [X] T013 [US1] Add distinctive comment markers to hero section in index.html (lines ~100-200)
 - [X] T014 [US1] Add comment markers to pricing/dates section in index.html (lines ~300-400)
-- [ ] T015 [US1] Add comment markers to FAQ section in index.html (lines ~400-600)
-- [ ] T016 [US1] Add comment markers to creator profiles section in index.html (lines ~600-800)
-- [ ] T017 [US1] Add comment markers to footer/contact section in index.html (lines ~800-900)
+- [X] T015 [US1] Add comment markers to FAQ section in index.html (lines ~400-600)
+- [X] T016 [US1] Add comment markers to creator profiles section in index.html (lines ~600-800)
+- [X] T017 [US1] Add comment markers to footer/contact section in index.html (lines ~800-900)
 
 **Comment Marker Patterns** (per entity types from spec.md):
 
@@ -130,23 +130,23 @@ This document provides a complete task breakdown for refactoring the About Last 
 
 ### 3.2 Document Content Locations
 
-- [ ] T018 [US1] Document hero section location in docs/CONTENT_GUIDE.md (tagline, event title)
-- [ ] T019 [US1] Document pricing/dates location in docs/CONTENT_GUIDE.md (ticket price, event dates)
-- [ ] T020 [US1] Document FAQ section location in docs/CONTENT_GUIDE.md (how to add/edit questions)
-- [ ] T021 [US1] Document creator profiles location in docs/CONTENT_GUIDE.md (names, roles, bios)
-- [ ] T022 [US1] Document footer location in docs/CONTENT_GUIDE.md (contact info, social links)
+- [X] T018 [US1] Document hero section location in docs/CONTENT_GUIDE.md (tagline, event title)
+- [X] T019 [US1] Document pricing/dates location in docs/CONTENT_GUIDE.md (ticket price, event dates)
+- [X] T020 [US1] Document FAQ section location in docs/CONTENT_GUIDE.md (how to add/edit questions)
+- [X] T021 [US1] Document creator profiles location in docs/CONTENT_GUIDE.md (names, roles, bios)
+- [X] T022 [US1] Document footer location in docs/CONTENT_GUIDE.md (contact info, social links)
 
 ### 3.3 Create Migration Guide
 
-- [ ] T023 [US1] Create docs/MIGRATION_GUIDE.md with current→new location mappings (created DURING refactor as tasks complete, updated continuously through Phase 3-5, not retroactively) - reference CURRENT_STRUCTURE.md baseline from T004
-- [ ] T024 [US1] Add visual examples to MIGRATION_GUIDE.md showing before/after of finding content
+- [X] T023 [US1] Create docs/MIGRATION_GUIDE.md with current→new location mappings (created DURING refactor as tasks complete, updated continuously through Phase 3-5, not retroactively) - reference CURRENT_STRUCTURE.md baseline from T004
+- [X] T024 [US1] Add visual examples to MIGRATION_GUIDE.md showing before/after of finding content
 
 ### 3.4 Validation
 
-- [ ] T025 [US1] Run US1 independent test: Update tagline via search, preview locally (file:// protocol)
-- [ ] T026 [US1] Verify US1 acceptance scenario 1: Search for "$75" finds exactly one location with clear context
-- [ ] T027 [US1] Verify US1 acceptance scenario 2: Update FAQ text, save, preview shows change without build commands
-- [ ] T028 [US1] Verify US1 acceptance scenario 3: Copy FAQ block, modify text, new question appears with accordion functionality
+- [X] T025 [US1] Run US1 independent test: Update tagline via search, preview locally (file:// protocol)
+- [X] T026 [US1] Verify US1 acceptance scenario 1: Search for "$75" finds exactly one location with clear context
+- [X] T027 [US1] Verify US1 acceptance scenario 2: Update FAQ text, save, preview shows change without build commands
+- [X] T028 [US1] Verify US1 acceptance scenario 3: Copy FAQ block, modify text, new question appears with accordion functionality
 - [ ] T029 [US1] Push changes to feature branch, verify deployment to GitHub Pages works
 - [ ] T030 [US1] Verify forms still submit successfully to Google Sheets after comment markers added
 
