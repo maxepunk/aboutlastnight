@@ -147,8 +147,8 @@ This document provides a complete task breakdown for refactoring the About Last 
 - [X] T026 [US1] Verify US1 acceptance scenario 1: Search for "$75" finds exactly one location with clear context
 - [X] T027 [US1] Verify US1 acceptance scenario 2: Update FAQ text, save, preview shows change without build commands
 - [X] T028 [US1] Verify US1 acceptance scenario 3: Copy FAQ block, modify text, new question appears with accordion functionality
-- [ ] T029 [US1] Push changes to feature branch, verify deployment to GitHub Pages works
-- [ ] T030 [US1] Verify forms still submit successfully to Google Sheets after comment markers added
+- [X] T029 [US1] Push changes to feature branch, verify deployment to GitHub Pages works
+- [X] T030 [US1] Verify forms still submit successfully to Google Sheets after comment markers added
 
 **Completion Criteria**:
 - ✅ All content sections have comment markers
