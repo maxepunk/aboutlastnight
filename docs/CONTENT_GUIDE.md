@@ -306,6 +306,73 @@ git commit -m "Update ticket pricing to $85"
 
 ---
 
+## Playtest Page Content (`playtest.html`)
+
+### Playtest Description
+
+**What**: Event description, game details, playtest expectations
+
+**Search for**: "PLAYTEST DESCRIPTION" or "90"
+
+**Location**: `playtest.html` - look for comment marker `<!-- EDITABLE CONTENT: PLAYTEST DESCRIPTION -->`
+
+**Safe to edit**:
+- Event description paragraphs
+- Game overview text
+- Playtest session notes
+- Duration information (2-2.5 hours text)
+
+**Do NOT edit**:
+- HTML tags (`<section>`, `<p>`, `<strong>`)
+- CSS classes
+
+---
+
+### Event Details (Playtest Page)
+
+**What**: Date, time, duration, player count, location
+
+**Search for**: "EVENT DETAILS" or "2-2.5 HRS"
+
+**Location**: `playtest.html` - look for comment marker `<!-- EDITABLE CONTENT: EVENT DETAILS -->`
+
+**Safe to edit**:
+- Date value ("Sept 21")
+- Time value ("4:00 PM")
+- Duration value ("2-2.5 HRS")
+- Player count ("20 MAX")
+- Location name ("OFF THE COUCH GAMES")
+- Address ("555 Mowry Ave, Fremont, CA 94536")
+
+**Do NOT edit**:
+- HTML structure (`<div>`, `<div class="detail-item">`)
+- CSS classes or styling
+
+**Note**: When multiple playtest dates are available, you may need to update the radio button section instead (see Multi-Date Selection below).
+
+---
+
+### Surveillance Protocol
+
+**What**: Photo consent checkbox text and explanation
+
+**Search for**: "SURVEILLANCE PROTOCOL"
+
+**Location**: `playtest.html` - look for comment marker `<!-- EDITABLE CONTENT: SURVEILLANCE PROTOCOL -->`
+
+**Safe to edit**:
+- Consent heading text
+- Description text ("The investigation will be documented...")
+- List items (evidence photos, promotional materials, etc.)
+- Disclaimer text ("Need to stay in the shadows...")
+
+**Do NOT edit**:
+- Checkbox input element
+- Label association (`for="photoConsent"`)
+- List structure (`<ul>`, `<li>` tags)
+
+---
+
 ## Getting Help
 
 - **Content questions**: Ask the marketing team

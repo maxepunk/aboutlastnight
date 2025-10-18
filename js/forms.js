@@ -262,6 +262,114 @@ async function handleFormSubmit(e) {
 }
 
 // ═══════════════════════════════════════════════════════
+// PLAYTEST FORM SUBMISSION HANDLER
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Handle playtest form submission with date validation
+ * @param {Event} e - Form submit event
+ */
+async function handlePlaytestFormSubmit(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const button = form.querySelector('.submit-button');
+    const originalText = button.textContent;
+    const successMessage = document.getElementById('successMessage');
+    const errorMessage = document.getElementById('errorMessage');
+
+    // Hide messages
+    if (successMessage) successMessage.classList.remove('show');
+    if (errorMessage) errorMessage.classList.remove('show');
+
+    // Validate date selection (CRITICAL - must select a date)
+    const selectedDate = document.querySelector('input[name="playtestDate"]:checked');
+    if (!selectedDate) {
+        if (errorMessage) {
+            errorMessage.textContent = '⚠ Please select a playtest date before submitting';
+            errorMessage.classList.add('show');
+            setTimeout(() => errorMessage.classList.remove('show'), 3000);
+        }
+        return; // Block submission
+    }
+
+    // Collect form data
+    const formData = new FormData(form);
+    const dataObject = {};
+    for (let [key, value] of formData.entries()) {
+        dataObject[key] = value;
+    }
+
+    // Visual feedback
+    button.textContent = 'PROCESSING...';
+    button.disabled = true;
+
+    try {
+        // Submit to playtest Google Apps Script endpoint
+        const PLAYTEST_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypIVyTqnposIYclTgLiYv3xxXkQSRXcTH7hXF3lAC6RbKSDNHOckOrE7VhO1MbGMRbQA/exec';
+
+        const response = await RetryManager.fetchWithRetry(PLAYTEST_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams(formData)
+        });
+
+        const result = await response.json();
+
+        if (result.result === 'success') {
+            FormRecovery.clear(); // Clear any saved data on success
+
+            // Update success message based on status (confirmed vs waitlist)
+            const successMsg = result.status === 'Confirmed'
+                ? `✓ SPOT ${result.spot_number} CONFIRMED • CHECK YOUR EMAIL`
+                : `⏳ WAITLIST POSITION ${result.waitlist_position || (result.spot_number - 20)} • CHECK YOUR EMAIL`;
+
+            if (successMessage) {
+                successMessage.textContent = successMsg;
+                successMessage.classList.add('show');
+            }
+
+            form.reset();
+
+            // Refresh capacity display if function exists
+            if (typeof window.PlaytestInteractions !== 'undefined' && window.PlaytestInteractions.fetchAllCapacities) {
+                window.PlaytestInteractions.fetchAllCapacities();
+            }
+
+            // Reset button after delay
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.disabled = false;
+                if (successMessage) successMessage.classList.remove('show');
+            }, 5000);
+
+        } else {
+            throw new Error(result.error || 'Submission failed');
+        }
+
+    } catch (error) {
+        console.error('Playtest form submission failed:', error);
+
+        // Save form data for recovery
+        FormRecovery.save(dataObject);
+
+        if (errorMessage) {
+            errorMessage.textContent = 'ERROR • DATA SAVED • TRY AGAIN';
+            errorMessage.classList.add('show');
+        }
+
+        button.textContent = originalText;
+        button.disabled = false;
+
+        setTimeout(() => {
+            if (errorMessage) errorMessage.classList.remove('show');
+        }, 3000);
+    }
+}
+
+// ═══════════════════════════════════════════════════════
 // RECOVERY PROMPT UI
 // ═══════════════════════════════════════════════════════
 
@@ -297,23 +405,52 @@ function checkForRecoveryData() {
 
     // Restore button handler
     document.getElementById('restore-btn').addEventListener('click', () => {
-        const form = document.getElementById('interestForm');
-        if (form) {
+        // Try interest form first
+        const interestForm = document.getElementById('interestForm');
+        if (interestForm) {
             // Restore email field
-            const emailField = form.querySelector('input[name="email"]');
+            const emailField = interestForm.querySelector('input[name="email"]');
             if (emailField && savedData.value.email) {
                 emailField.value = savedData.value.email;
             }
 
             // Restore other fields if they exist
             if (savedData.value.fullName) {
-                const nameField = form.querySelector('input[name="fullName"]');
+                const nameField = interestForm.querySelector('input[name="fullName"]');
                 if (nameField) nameField.value = savedData.value.fullName;
             }
 
             if (savedData.value.photoConsent !== undefined) {
-                const consentField = form.querySelector('input[name="photoConsent"]');
+                const consentField = interestForm.querySelector('input[name="photoConsent"]');
                 if (consentField) consentField.checked = savedData.value.photoConsent;
+            }
+        }
+
+        // Try playtest form
+        const playtestForm = document.getElementById('playtestForm');
+        if (playtestForm) {
+            // Restore name field
+            if (savedData.value.name) {
+                const nameField = playtestForm.querySelector('input[name="name"]');
+                if (nameField) nameField.value = savedData.value.name;
+            }
+
+            // Restore email field
+            if (savedData.value.email) {
+                const emailField = playtestForm.querySelector('input[name="email"]');
+                if (emailField) emailField.value = savedData.value.email;
+            }
+
+            // Restore date selection (radio button)
+            if (savedData.value.playtestDate) {
+                const dateRadio = playtestForm.querySelector(`input[name="playtestDate"][value="${savedData.value.playtestDate}"]`);
+                if (dateRadio) dateRadio.checked = true;
+            }
+
+            // Restore photo consent
+            if (savedData.value.photoConsent !== undefined) {
+                const consentField = playtestForm.querySelector('input[name="photoConsent"]');
+                if (consentField) consentField.checked = savedData.value.photoConsent === 'Yes';
             }
         }
 
@@ -335,10 +472,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check for recovery data on page load
     checkForRecoveryData();
 
-    // Attach form submit handler
-    const form = document.getElementById('interestForm');
-    if (form) {
-        form.addEventListener('submit', handleFormSubmit);
+    // Attach form submit handlers
+    const interestForm = document.getElementById('interestForm');
+    if (interestForm) {
+        interestForm.addEventListener('submit', handleFormSubmit);
+    }
+
+    // Attach playtest form handler
+    const playtestForm = document.getElementById('playtestForm');
+    if (playtestForm) {
+        playtestForm.addEventListener('submit', handlePlaytestFormSubmit);
     }
 });
 

@@ -1,6 +1,29 @@
 // Google Apps Script for About Last Night Playtest Signup
 // This script handles form submissions from the playtest signup page
 //
+// ═══════════════════════════════════════════════════════════
+// CONTENT-FIRST ARCHITECTURE (CRITICAL DESIGN DECISION)
+// ═══════════════════════════════════════════════════════════
+// This backend is designed to be DATE-AGNOSTIC.
+//
+// SOURCE OF TRUTH: playtest.html (frontend radio buttons)
+// - Content editors update dates ONLY in playtest.html
+// - This backend accepts ANY date string submitted from the form
+// - No backend redeployment needed when dates change!
+//
+// How it works:
+// 1. Frontend sends date value from radio button (e.g., "2025-09-21 16:00")
+// 2. Backend validates it's non-empty, then stores it
+// 3. Backend discovers unique dates dynamically from sheet data
+// 4. Capacity API returns all dates found in database
+//
+// Benefits:
+// ✓ Content editors never touch backend code
+// ✓ Adding/removing dates = edit HTML only
+// ✓ No Google Apps Script redeployment required
+// ✓ Dates automatically formatted for emails via parsing
+// ═══════════════════════════════════════════════════════════
+//
 // IMPORTANT DEPLOYMENT SETTINGS:
 // 1. Deploy as Web App
 // 2. Execute as: Me (your account)
@@ -9,7 +32,24 @@
 //
 // GOOGLE SHEET SETUP:
 // Make sure your sheet has these column headers:
-// Name | Email | Timestamp | Spot Number | Status | Photo Consent | Consent Timestamp
+// Name | Email | Timestamp | Spot Number | Status | Photo Consent | Consent Timestamp | Selected Date
+
+// ═══════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════
+// Capacity configuration (same for all dates)
+const SPOTS_TOTAL = 20;
+const MINIMUM_PLAYERS = 5;
+
+// NOTE: Playtest dates are NOT hardcoded here!
+// The backend dynamically discovers dates from:
+// 1. Incoming form submissions (playtest.html is the source of truth)
+// 2. Existing data in the Google Sheet
+//
+// TO ADD/MODIFY DATES:
+// 1. Update radio buttons in playtest.html only
+// 2. No backend redeployment needed!
+// ═══════════════════════════════════════════════════════════
 
 function doPost(e) {
   try {
@@ -18,12 +58,24 @@ function doPost(e) {
     
     // Parse form data
     const formData = e.parameter;
-    
-    // Get current row count to determine spot number
-    const currentRows = sheet.getLastRow();
-    const spotsTotal = 20;
-    const minimumPlayers = 5;
-    const spotsTaken = currentRows - 1; // Subtract header row
+
+    // Validate selected date exists (T004 - simplified to just check non-empty)
+    const selectedDate = formData.playtestDate || '';
+    if (!selectedDate || selectedDate.trim() === '') {
+      throw new Error('No playtest date selected');
+    }
+
+    // Get per-date spot count (T005)
+    const spotsTotal = SPOTS_TOTAL;
+    const minimumPlayers = MINIMUM_PLAYERS;
+
+    // Filter signups by selected date (column H, index 7)
+    const allData = sheet.getDataRange().getValues();
+    const signupsForDate = allData.filter((row, index) =>
+      index > 0 && row[7] === selectedDate  // Skip header row, check column H
+    );
+
+    const spotsTaken = signupsForDate.length;
     const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
     
     // Determine status
@@ -33,7 +85,7 @@ function doPost(e) {
     // Create timestamp
     const timestamp = new Date();
     
-    // Append data to sheet (including photo consent)
+    // Append data to sheet (including photo consent and selected date) (T006)
     sheet.appendRow([
       formData.name || '',
       formData.email || '',
@@ -41,14 +93,17 @@ function doPost(e) {
       actualSpotNumber,
       status,
       formData.photoConsent || 'No',  // Photo consent
-      timestamp  // Consent timestamp (same as registration)
+      timestamp,  // Consent timestamp (same as registration)
+      selectedDate  // Selected Date (column H)
     ]);
     
     // Send confirmation email to participant
     if (formData.email) {
-      const subject = status === 'Confirmed' 
-        ? `✓ About Last Night Playtest - Spot ${actualSpotNumber} Confirmed`
-        : `⏳ About Last Night Playtest - Waitlist Position ${actualSpotNumber - spotsTotal}`;
+      const dateDisplay = formatDateForEmail(selectedDate);
+
+      const subject = status === 'Confirmed'
+        ? `✓ About Last Night Playtest - ${dateDisplay} - Spot ${actualSpotNumber} Confirmed`
+        : `⏳ About Last Night Playtest - ${dateDisplay} - Waitlist Position ${actualSpotNumber - spotsTotal}`;
       
       const htmlBody = status === 'Confirmed' 
         ? `
@@ -61,8 +116,7 @@ function doPost(e) {
               <p style="font-size: 16px;">You're confirmed for the About Last Night playtest session!</p>
               
               <div style="background: #fff; border-left: 4px solid #cc0000; padding: 20px; margin: 20px 0;">
-                <p style="margin: 5px 0;"><strong>Date:</strong> Sunday, September 21</p>
-                <p style="margin: 5px 0;"><strong>Time:</strong> 4:00 PM</p>
+                <p style="margin: 5px 0;"><strong>Date & Time:</strong> ${dateDisplay}</p>
                 <p style="margin: 5px 0;"><strong>Duration:</strong> 2-2.5 hrs including playtest feedback session</p>
                 <p style="margin: 5px 0;"><strong>Location:</strong> Off the Couch Games, Fremont</p>
                 <p style="margin: 5px 0;"><strong>Your Spot:</strong> #${actualSpotNumber} of ${spotsTotal}</p>
@@ -118,7 +172,7 @@ function doPost(e) {
               
               <div style="background: #fff; border-left: 4px solid #ff9900; padding: 20px; margin: 20px 0;">
                 <p style="margin: 5px 0;"><strong>Your waitlist position:</strong> #${actualSpotNumber - spotsTotal}</p>
-                <p style="margin: 5px 0;"><strong>Session date:</strong> Sunday, September 21 at 4:00 PM</p>
+                <p style="margin: 5px 0;"><strong>Session date:</strong> ${dateDisplay}</p>
               </div>
               
               <p>If a spot opens up, we'll contact you immediately. Waitlist positions often do become available!</p>
@@ -151,14 +205,14 @@ function doPost(e) {
     
       MailApp.sendEmail({
         to: organizerEmail,
-        subject: `🚨 Playtest Alert: ${actualSpotsRemaining} spots remaining!`,
+        subject: `🚨 Playtest Alert - ${dateDisplay}: ${actualSpotsRemaining} spots remaining!`,
         htmlBody: `
-          <h2>Playtest Signup Update</h2>
-          <p><strong>${formData.name}</strong> just claimed spot #${actualSpotNumber}</p>
+          <h2>Playtest Signup Update - ${dateDisplay}</h2>
+          <p><strong>${formData.name}</strong> just claimed spot #${actualSpotNumber} for ${dateDisplay}</p>
           <p>Email: ${formData.email}</p>
           <p>Photo Consent: ${formData.photoConsent === 'Yes' ? '✅ Yes' : '❌ No'}</p>
           <p style="font-size: 24px; color: ${actualSpotsRemaining <= 3 ? '#cc0000' : '#ff9900'};">
-            <strong>${actualSpotsRemaining} spots remaining</strong>
+            <strong>${actualSpotsRemaining} spots remaining for this date</strong>
           </p>
           <p><a href="https://docs.google.com/spreadsheets/d/1s9dDSSqTKc9wTtVvj-4U4fY_jzIdNCrIiI5E_atSKG4/edit?usp=sharing">View signup sheet</a></p>
         `
@@ -190,32 +244,167 @@ function doPost(e) {
   }
 }
 
-// Function to get current signup status (for checking spots)
+// Helper function to normalize date to ISO string format
+// Handles Date objects, ISO strings, or any parseable date
+// Returns consistent "YYYY-MM-DD HH:MM" format for API responses
+function normalizeDateToISO(dateInput) {
+  try {
+    let date;
+
+    if (dateInput instanceof Date) {
+      date = dateInput;
+    } else if (typeof dateInput === 'string') {
+      // Check if already in ISO format
+      if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/.test(dateInput)) {
+        return dateInput; // Already in correct format
+      }
+      date = new Date(dateInput);
+    } else {
+      date = new Date(dateInput);
+    }
+
+    if (isNaN(date.getTime())) {
+      return String(dateInput); // Fallback if invalid
+    }
+
+    // Format as "YYYY-MM-DD HH:MM"
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  } catch (error) {
+    return String(dateInput);
+  }
+}
+
+// Helper function to format date for email (T009)
+// Handles both ISO date strings (YYYY-MM-DD HH:MM) and Date objects
+// Returns human-readable format like "September 21 at 4:00 PM"
+function formatDateForEmail(dateInput) {
+  try {
+    let date;
+
+    // Check if input is already a Date object (Google Sheets auto-conversion)
+    if (dateInput instanceof Date) {
+      date = dateInput;
+    } else if (typeof dateInput === 'string') {
+      // Parse ISO date string: "2025-09-21 16:00"
+      const parts = dateInput.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+      if (parts) {
+        const [, year, month, day, hour, minute] = parts;
+        date = new Date(year, month - 1, day, hour, minute);
+      } else {
+        // Try parsing as generic date string
+        date = new Date(dateInput);
+        if (isNaN(date.getTime())) {
+          return dateInput.toString(); // Fallback to original if invalid
+        }
+      }
+    } else {
+      // Unexpected type, return as-is
+      return String(dateInput);
+    }
+
+    // Format month name
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December"];
+    const monthName = monthNames[date.getMonth()];
+
+    // Format time (12-hour with AM/PM)
+    let hours = date.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 should be 12
+    const minutes = date.getMinutes();
+    const timeStr = `${hours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+
+    // Get day without leading zero
+    const day = date.getDate();
+
+    return `${monthName} ${day} at ${timeStr}`;
+  } catch (error) {
+    // Fallback to string representation if any parsing error
+    return String(dateInput);
+  }
+}
+
+// Helper function to get capacity for all dates (T008)
+// Dynamically discovers dates from the sheet data (column H)
+//
+// DESIGN: This function discovers dates from existing signup data.
+// - On first page load (empty sheet): Returns empty array, frontend shows static dates
+// - After first signup: Returns actual dates with capacity data
+// - This means the frontend MUST handle empty dates array gracefully
+//
+// SOURCE OF TRUTH: playtest.html radio buttons define available dates
+function getAllCapacities() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const allData = sheet.getDataRange().getValues();
+  const spotsTotal = SPOTS_TOTAL;
+  const minimumPlayers = MINIMUM_PLAYERS;
+
+  // Discover unique dates from column H (index 7) - skip header row
+  const uniqueDates = new Set();
+  for (let i = 1; i < allData.length; i++) {
+    const dateValue = allData[i][7];
+    if (dateValue && dateValue.toString().trim() !== '') {
+      uniqueDates.add(dateValue.toString());
+    }
+  }
+
+  // Convert Set to sorted array
+  const discoveredDates = Array.from(uniqueDates).sort();
+
+  // Calculate capacity for each discovered date
+  return discoveredDates.map(dateValue => {
+    // Normalize the date to ISO format for consistent API response
+    const normalizedDate = normalizeDateToISO(dateValue);
+
+    // Filter signups for this specific date
+    // Compare using normalized values to handle both Date objects and strings
+    const signupsForDate = allData.filter((row, index) => {
+      if (index === 0) return false; // Skip header
+      const rowDate = row[7];
+      if (!rowDate) return false;
+      // Normalize both sides for comparison
+      return normalizeDateToISO(rowDate) === normalizedDate;
+    });
+
+    const spotsTaken = signupsForDate.length;
+    const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
+
+    return {
+      date: normalizedDate,  // Return normalized ISO format
+      displayText: formatDateForEmail(dateValue),
+      spots_total: spotsTotal,
+      spots_taken: spotsTaken,
+      spots_remaining: spotsRemaining,
+      minimum_players: minimumPlayers,
+      has_minimum: spotsTaken >= minimumPlayers,
+      is_full: spotsRemaining === 0
+    };
+  });
+}
+
+// Function to get current signup status (for checking spots) (T007)
 function doGet(e) {
   try {
-    const sheet = SpreadsheetApp.getActiveSheet();
-    const currentRows = sheet.getLastRow();
-    const spotsTotal = 20;
-    const minimumPlayers = 5;
-    const spotsTaken = currentRows - 1; // Subtract header row
-    const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
-    
-    // Return JSON response (CORS is handled automatically by Google Apps Script)
+    const capacities = getAllCapacities();
+
+    // Return JSON response with all dates (CORS is handled automatically by Google Apps Script)
     const output = ContentService
       .createTextOutput(JSON.stringify({
-        'spots_total': spotsTotal,
-        'spots_taken': spotsTaken,
-        'spots_remaining': spotsRemaining,
-        'minimum_players': minimumPlayers,
-        'has_minimum': spotsTaken >= minimumPlayers,
-        'is_full': spotsTaken >= spotsTotal
+        'dates': capacities
       }))
       .setMimeType(ContentService.MimeType.JSON);
-    
+
     // Note: Google Apps Script doesn't support setting custom headers on GET responses
     // CORS will work with the default '*' origin allowed by Google
     return output;
-      
+
   } catch(error) {
     return ContentService
       .createTextOutput(JSON.stringify({

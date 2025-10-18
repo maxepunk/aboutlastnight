@@ -1,0 +1,207 @@
+/**
+ * playtest-interactions.js - Playtest-specific UI behavior for About Last Night
+ *
+ * Contains: Spot counter updates, date selection handling, capacity fetching for multi-date playtest system
+ * Dependencies: None (standalone module)
+ * Architecture: Date-agnostic - backend dynamically discovers dates from database
+ */
+
+// Google Apps Script endpoint for playtest signups
+// This endpoint handles both GET (capacity data) and POST (form submissions)
+const PLAYTEST_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypIVyTqnposIYclTgLiYv3xxXkQSRXcTH7hXF3lAC6RbKSDNHOckOrE7VhO1MbGMRbQA/exec';
+
+// Date capacity storage - populated by fetchAllCapacities()
+// Structure: { "2025-09-21 16:00": { displayText, spots_total, spots_taken, spots_remaining, minimum_players, has_minimum, is_full }, ... }
+let dateCapacities = {};
+
+// Cache last known good data for graceful degradation
+let lastKnownGoodData = null;
+
+// ═══════════════════════════════════════════════════════
+// SPOT COUNTER UPDATES
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Update spot counter display for the currently selected date
+ * Handles different capacity states: below minimum, available, warning-low, warning-critical, full
+ *
+ * @param {string} selectedDate - ISO date string of selected playtest (e.g., "2025-09-21 16:00")
+ */
+function updateSpotCounter(selectedDate) {
+    const data = dateCapacities[selectedDate];
+    if (!data) {
+        console.warn(`No capacity data found for date: ${selectedDate}`);
+        return;
+    }
+
+    const counter = document.getElementById('spotCounter');
+    const spotsNumber = document.getElementById('spotsNumber');
+    const spotsText = document.getElementById('spotsText');
+
+    if (!counter || !spotsNumber || !spotsText) {
+        console.error('Spot counter elements not found in DOM');
+        return;
+    }
+
+    // Remove all state classes
+    counter.classList.remove('warning-low', 'warning-critical', 'full');
+
+    if (!data.has_minimum) {
+        // Show minimum players progress (e.g., "3/5 MINIMUM PLAYERS REQUIRED")
+        spotsNumber.textContent = `${data.spots_taken}/${data.minimum_players}`;
+        spotsText.textContent = 'MINIMUM PLAYERS REQUIRED';
+
+        // Add visual feedback for progress toward minimum
+        if (data.spots_taken >= 3) {
+            counter.classList.add('warning-low');
+        }
+    } else {
+        // Show spots remaining (e.g., "12 SPOTS REMAINING")
+        spotsNumber.textContent = data.spots_remaining;
+        spotsText.textContent = 'SPOTS REMAINING';
+
+        // Apply visual state classes based on capacity
+        if (data.spots_remaining === 0) {
+            counter.classList.add('full');
+            spotsText.textContent = 'PLAYTEST FULL';
+        } else if (data.spots_remaining <= 3) {
+            counter.classList.add('warning-critical');
+        } else if (data.spots_remaining <= 5) {
+            counter.classList.add('warning-low');
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// CAPACITY FETCHING
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Fetch capacity data for all playtest dates from backend
+ * Backend dynamically discovers dates from database (no hardcoded date list)
+ * Updates dateCapacities object and refreshes UI displays
+ *
+ * @returns {Promise<void>}
+ */
+async function fetchAllCapacities() {
+    try {
+        const response = await fetch(PLAYTEST_GOOGLE_SCRIPT_URL);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.dates || !Array.isArray(data.dates)) {
+            console.warn('Invalid capacity data structure:', data);
+            return;
+        }
+
+        // Cache successful response for graceful degradation on future errors
+        lastKnownGoodData = data;
+
+        // Store capacities by date value for O(1) lookup
+        data.dates.forEach(dateInfo => {
+            dateCapacities[dateInfo.date] = dateInfo;
+
+            // Update capacity display next to radio button (if element exists)
+            const capacityElement = document.querySelector(`[data-date="${dateInfo.date}"]`);
+            if (capacityElement) {
+                capacityElement.textContent = dateInfo.spots_remaining > 0
+                    ? `${dateInfo.spots_remaining} spots left`
+                    : 'Full - Waitlist available';
+            }
+        });
+
+        // Update spot counter for currently selected date
+        const selectedRadio = document.querySelector('input[name="playtestDate"]:checked');
+        if (selectedRadio) {
+            updateSpotCounter(selectedRadio.value);
+        } else {
+            // Default to first date if none selected
+            const firstDate = data.dates[0];
+            if (firstDate) {
+                updateSpotCounter(firstDate.date);
+            }
+        }
+
+    } catch (error) {
+        console.error('Failed to fetch capacity data:', error);
+
+        // Attempt to use last known good data (cached from previous successful fetch)
+        if (lastKnownGoodData && lastKnownGoodData.dates) {
+            console.log('Using cached capacity data from previous fetch');
+
+            // Restore from cache
+            lastKnownGoodData.dates.forEach(dateInfo => {
+                dateCapacities[dateInfo.date] = dateInfo;
+
+                const capacityElement = document.querySelector(`[data-date="${dateInfo.date}"]`);
+                if (capacityElement) {
+                    capacityElement.textContent = `${dateInfo.spots_remaining} spots (cached)`;
+                }
+            });
+        } else {
+            // No cached data available - show fallback message
+            console.warn('No cached data available, showing fallback');
+
+            const capacityElements = document.querySelectorAll('.date-capacity');
+            capacityElements.forEach(el => {
+                el.textContent = 'Capacity unavailable';
+                el.style.color = 'rgba(255, 200, 0, 0.8)'; // Yellow warning color
+            });
+        }
+
+        // Graceful degradation - don't block user from continuing to form
+        // Form can still be submitted, backend will handle capacity checks
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// DATE SELECTION HANDLER
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Handle date radio button change event
+ * Updates spot counter display when user selects a different date
+ */
+function handleDateSelection() {
+    const radioButtons = document.querySelectorAll('input[name="playtestDate"]');
+
+    radioButtons.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            updateSpotCounter(e.target.value);
+        });
+    });
+}
+
+// ═══════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Initialize playtest interactions on DOM ready
+ * - Fetch initial capacity data for all dates
+ * - Setup date selection change listeners
+ * - Start 30-second refresh interval for capacity updates
+ */
+document.addEventListener('DOMContentLoaded', () => {
+    // Fetch initial capacity data
+    fetchAllCapacities();
+
+    // Setup date selection listeners
+    handleDateSelection();
+
+    // Refresh capacity every 30 seconds to show live updates
+    setInterval(fetchAllCapacities, 30000);
+});
+
+// Export for potential use by other modules (if needed)
+if (typeof window !== 'undefined') {
+    window.PlaytestInteractions = {
+        updateSpotCounter,
+        fetchAllCapacities,
+        dateCapacities
+    };
+}
