@@ -105,12 +105,32 @@ async function fetchAllCapacities() {
         data.dates.forEach(dateInfo => {
             dateCapacities[dateInfo.date] = dateInfo;
 
-            // Update capacity display next to radio button (if element exists)
+            // Find the radio input and capacity display for this date
+            const radioInput = document.querySelector(`input[name="playtestDate"][value="${dateInfo.date}"]`);
             const capacityElement = document.querySelector(`[data-date="${dateInfo.date}"]`);
-            if (capacityElement) {
-                capacityElement.textContent = dateInfo.spots_remaining > 0
-                    ? `${dateInfo.spots_remaining} spots left`
-                    : 'Full - Waitlist available';
+
+            if (radioInput && capacityElement) {
+                // Update capacity display and handle disabled state
+                let statusText;
+
+                if (dateInfo.is_past_date) {
+                    // Date has passed - disable it
+                    statusText = 'Date passed';
+                    radioInput.disabled = true;
+                    radioInput.closest('.date-option')?.classList.add('disabled');
+                } else if (dateInfo.spots_remaining > 0) {
+                    // Spots available
+                    statusText = `${dateInfo.spots_remaining} spots left`;
+                    radioInput.disabled = false;
+                    radioInput.closest('.date-option')?.classList.remove('disabled');
+                } else {
+                    // Full but not past - waitlist available
+                    statusText = 'Full - Waitlist available';
+                    radioInput.disabled = false;
+                    radioInput.closest('.date-option')?.classList.remove('disabled');
+                }
+
+                capacityElement.textContent = statusText;
             }
         });
 
