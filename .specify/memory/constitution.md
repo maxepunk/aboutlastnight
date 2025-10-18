@@ -1,10 +1,17 @@
-<!-- Sync Impact Report 
-Version change: 0.0.0 → 1.0.0 (Initial ratification with 7 core principles)
-Added sections: All sections newly defined from template
-Templates requiring updates: 
-  ✅ plan-template.md (alignment pending)
-  ✅ spec-template.md (alignment pending)
-  ✅ tasks-template.md (alignment pending)
+<!--
+Sync Impact Report:
+- Version: NEW → 1.0.0
+- Type: MINOR (initial constitution creation)
+- Modified principles: N/A (new document)
+- Added sections: All sections (initial creation)
+- Removed sections: None
+
+Template Status:
+✅ plan-template.md - Constitution Check section ready for validation
+✅ spec-template.md - Requirements alignment verified
+✅ tasks-template.md - Task categorization aligned with principles
+⚠️  No command templates found - skipped validation
+
 Follow-up TODOs: None
 -->
 
@@ -12,58 +19,149 @@ Follow-up TODOs: None
 
 ## Core Principles
 
-### I. Atmospheric Integrity
-Every page element must reinforce the noir crime thriller aesthetic. The dark theme with red accent color (#cc0000) is mandatory. Visual effects (scanlines, glitch animations, police lights) must be subtle and purposeful. Typography must use Bebas Neue for headings and Barlow for body text. This creates the immersive atmosphere essential to the experience.
+### I. Zero Dependencies
 
-### II. Zero-Dependency Architecture
-No external JavaScript frameworks, build tools, or runtime dependencies allowed. Pure HTML, CSS, and vanilla JavaScript only. Google Fonts are the sole permitted external resource. This ensures maximum performance, security, and maintainability while eliminating dependency vulnerabilities.
+**Rule**: The site MUST NOT use external frameworks, libraries, build tools, or package managers.
 
-### III. Google Apps Script Backend
-All form submissions MUST route through Google Apps Script to Google Sheets. Scripts must handle both GET (status checks) and POST (submissions) requests. Email confirmations are mandatory for all submissions. This provides serverless data collection with built-in authentication and zero hosting costs.
+**Rationale**: This is a marketing landing page requiring frequent content updates by non-technical team members. External dependencies add:
+- Deployment complexity
+- Breaking changes requiring technical intervention
+- Update cycles that block content changes
+- Security vulnerabilities requiring patching
 
-### IV. Privacy-First Data Collection
-Photo consent must be explicitly optional with clear opt-in/opt-out mechanisms. Consent choices must be timestamped and stored separately. Surveillance/documentation language must clearly explain usage. Users must have the ability to decline without losing access to the experience.
+**Enforcement**:
+- No `package.json`, `requirements.txt`, or equivalent dependency manifests
+- No framework imports (React, Vue, jQuery, etc.)
+- Vanilla HTML5, CSS3, and ES6+ JavaScript only
+- Google Fonts via CDN is the sole acceptable external resource
 
-### V. Progressive Enhancement
-Core functionality must work without JavaScript enabled. Forms must have proper HTML5 validation. JavaScript adds enhancements (live counters, animations) but is never required. All interactive elements must have keyboard-accessible alternatives.
+### II. Content-First Architecture
 
-### VI. Mobile-Responsive Design
-Every page must be fully functional on mobile devices (320px minimum width). Touch targets must be at least 44x44 pixels. Text must remain readable without horizontal scrolling. Grid layouts must collapse to single column on small screens.
+**Rule**: Code organization MUST optimize for non-technical content updates above all other concerns.
 
-### VII. Accessibility Standards
-Support prefers-reduced-motion to disable animations. All images must have descriptive alt text. ARIA labels required for decorative elements. Contrast ratios must meet WCAG AA standards (4.5:1 for normal text). Focus states must be clearly visible.
+**Rationale**: The primary workflow is updating event details, pricing, dates, and marketing copy. Technical team members are not always available, so content editors must be able to:
+- Find text by searching the file
+- Make changes without understanding code structure
+- Preview changes without running build processes
 
-## Performance Requirements
+**Enforcement**:
+- Text content MUST be in plain HTML, not JavaScript variables or data files
+- File structure changes MUST be justified by making content updates easier
+- Refactoring proposals MUST demonstrate improved content update workflow
 
-- Page load time under 3 seconds on 3G connections
-- Total page weight under 2MB including images
-- Images must be optimized (WebP preferred, JPEG/PNG fallback)
-- CSS animations must use GPU-accelerated properties (transform, opacity)
-- No blocking JavaScript in document head
+### III. Form Reliability (NON-NEGOTIABLE)
 
-## Communication Protocols
+**Rule**: Form submission endpoints MUST remain functional. Breaking forms breaks the business.
 
-### Email Standards
-- Confirmation emails sent immediately upon form submission
-- HTML emails must include plain text fallback
-- Subject lines must clearly indicate action taken
-- Memory IDs or spot numbers must be prominently displayed
-- Include event details, dates, location in every communication
+**Rationale**: Forms are the primary conversion mechanism. Lost submissions = lost revenue. The forms:
+- Collect email signups for ticket launch notifications
+- Manage playtest signups with limited capacity
+- Generate confirmation emails and tracking
 
-### Status Updates
-- Spot counters update on page load and every 30 seconds
-- Visual indicators for capacity states (available, low, critical, full)
-- Waitlist positions clearly communicated
-- Real-time feedback during form submission
+**Enforcement**:
+- Google Apps Script endpoint URLs are production infrastructure
+- Changes to form fields MUST be synchronized with backend scripts
+- Form submission MUST be tested on GitHub Pages before merging
+- Backend script changes MUST be deployed before frontend changes
+
+### IV. Progressive Enhancement
+
+**Rule**: Core content and call-to-action MUST function without JavaScript.
+
+**Rationale**: Users with JavaScript disabled, screen readers, and search engines must access content. The site serves marketing/SEO purposes.
+
+**Enforcement**:
+- Primary content visible without JavaScript execution
+- Forms degrade gracefully (HTML5 validation still works)
+- Navigation functional via standard HTML anchors
+- JavaScript enhances but never gates core functionality
+
+### V. Accessibility Compliance
+
+**Rule**: Site MUST maintain WCAG AA compliance for all interactive elements.
+
+**Rationale**: Legal requirement and brand values. The experience being promoted is inclusive; the marketing must be too.
+
+**Enforcement**:
+- Keyboard navigation for all interactive elements
+- ARIA attributes for dynamic content
+- Minimum 44x44px touch targets
+- Color contrast ratios meet WCAG AA standards
+- `prefers-reduced-motion` respected for animations
+
+### VI. Pre-Production Flexibility
+
+**Rule**: Breaking changes are ACCEPTABLE. Optimize for best solution, not backwards compatibility.
+
+**Rationale**: Site is in active development before October 4 launch. Technical debt should be eliminated now while it's cheap.
+
+**Enforcement**:
+- Refactor boldly when architecture improves content workflow
+- Throw errors early rather than silent fallbacks
+- No legacy browser support unless analytics show usage
+- Performance over backwards compatibility
+
+## Performance Standards
+
+### Load Time Requirements
+
+- **First Contentful Paint**: < 1.5 seconds on 3G
+- **Time to Interactive**: < 3 seconds on 3G
+- **Largest Contentful Paint**: < 2.5 seconds
+
+**Justification**: Mobile-first marketing site. Users on slow connections are target audience (traveling to event).
+
+### Implementation Rules
+
+- Images MUST use appropriate formats (WebP with JPEG fallback)
+- CSS animations MUST use GPU-accelerated properties only (`transform`, `opacity`)
+- Scroll listeners MUST use passive event listeners with debouncing (16ms)
+- No render-blocking resources in critical rendering path
+
+## Deployment & Quality Gates
+
+### Deployment Process
+
+1. **Local changes** committed to feature branch
+2. **Push to GitHub** triggers auto-deployment via GitHub Pages
+3. **Live in 1-2 minutes** on aboutlastnightgame.com
+
+### Pre-Merge Checklist
+
+- [ ] Forms tested on GitHub Pages deployment (not localhost)
+- [ ] Content changes validated by non-technical reviewer
+- [ ] Mobile responsiveness verified (320px minimum width)
+- [ ] Accessibility tested (keyboard navigation, screen reader)
+- [ ] Performance budget maintained (Lighthouse score > 90)
+
+### Form Backend Synchronization
+
+**Critical Sequence**:
+1. Edit `.js` files locally (version control)
+2. Deploy to Google Apps Script (Deploy → New Version)
+3. Update HTML form endpoint URLs if needed
+4. Test on GitHub Pages before announcing
 
 ## Governance
 
-The Constitution supersedes all implementation decisions. Any changes to core principles require:
-1. Documentation of the proposed change and rationale
-2. Impact assessment on existing pages
-3. Migration plan for affected components
-4. Version bump following semantic versioning
+### Amendment Procedure
 
-All code changes must verify compliance with these principles. Complexity beyond these requirements must be explicitly justified. Use this constitution as the primary reference for all architectural decisions.
+1. Propose change with rationale (why current principle fails)
+2. Document impact on existing code and templates
+3. Update dependent templates (plan, spec, tasks)
+4. Increment version per semantic versioning rules
+5. Commit with message: `docs: amend constitution to vX.Y.Z (summary)`
+
+### Versioning Policy
+
+- **MAJOR**: Remove or redefine a core principle (e.g., allow dependencies)
+- **MINOR**: Add new principle or expand existing guidance
+- **PATCH**: Clarify wording, fix typos, refine non-semantic details
+
+### Compliance Review
+
+- All feature work MUST reference constitution compliance in plan.md
+- Violations MUST be justified in "Complexity Tracking" section
+- Constitution supersedes all other practices and prior decisions
 
 **Version**: 1.0.0 | **Ratified**: 2025-01-19 | **Last Amended**: 2025-01-19

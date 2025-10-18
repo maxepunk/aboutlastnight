@@ -139,34 +139,61 @@ Instead of searching by line numbers (which change frequently), search for **com
 
 ---
 
-## File Organization Changes (Planned for Phase 4)
+## File Organization Changes
 
-**Current state** (Phase 3 complete):
-- ✅ Content marked with clear comment boundaries
-- ✅ Documentation created (CONTENT_GUIDE.md)
-- ⏳ CSS still inline (will extract in Phase 4)
-- ⏳ JavaScript still inline (will extract in Phase 4)
+**Phase 3 Complete**: ✅ Comment markers added, content searchable
+**Phase 4 Complete**: ✅ CSS and JavaScript extracted to separate files
 
-**Future state** (After Phase 4):
+**Current file structure** (After Phase 4):
 
 ```
 /aboutlastnightgame/
-├── index.html          (content only, ~800-1000 lines)
+├── index.html          (content only, ~489 lines - down from ~863 lines)
 ├── css/
-│   ├── base.css       (variables, resets, typography)
-│   ├── layout.css     (grid, sections, responsive)
-│   ├── components.css (reusable patterns)
-│   └── animations.css (parallax, transitions)
+│   ├── base.css       (1.9KB - variables, resets, typography)
+│   ├── layout.css     (9.2KB - grid, sections, responsive)
+│   ├── components.css (13KB - reusable patterns)
+│   └── animations.css (3.0KB - parallax, transitions)
 ├── js/
-│   ├── forms.js       (form submission, localStorage)
-│   ├── interactions.js (accordions, sticky header)
-│   └── utils.js       (helpers, analytics)
+│   ├── interactions.js (16KB - accordions, sticky header, scroll effects, parallax)
+│   ├── utils.js       (7.5KB - helpers, analytics, tracking)
+│   └── forms.js       (PENDING - will be created in Phase 5 for localStorage recovery)
 └── docs/
-    ├── CONTENT_GUIDE.md      (this guide)
-    └── MIGRATION_GUIDE.md    (before/after mappings)
+    ├── CONTENT_GUIDE.md      (content editor guide)
+    └── MIGRATION_GUIDE.md    (this file - before/after mappings)
 ```
 
-**For content editors**: Even after CSS/JS extraction, content will remain in `index.html` with the same comment markers. The search-based workflow stays identical.
+**For content editors**: Content remains in `index.html` with the same comment markers. The search-based workflow stays identical.
+
+---
+
+### What's in Each JavaScript File
+
+**js/interactions.js** (Interactive Behaviors)
+- Smooth scrolling for anchor links
+- Parallax effect on hero background
+- Hover effects on evidence items
+- Intelligent animation control (pauses on scroll, reduces on inactivity)
+- Scroll reveal animations for memory blocks and sections
+- Progressive disclosure accordions (FAQs, creator profiles, process steps, evidence items)
+- Sticky header functionality
+
+**js/utils.js** (Helper Functions & Analytics)
+- Device detection (mobile vs desktop)
+- UTM parameter tracking for analytics
+- Referrer tracking
+- Hidden field population for forms
+- Browser feature detection (localStorage, prefers-reduced-motion)
+- Date/time utilities
+- Development logging (console output for non-production)
+
+**Form submission logic** (Still in index.html - will move to js/forms.js in Phase 5)
+- Google Apps Script endpoint communication
+- Form validation and submission
+- Success/error state handling
+- Visual feedback during submission
+
+**For developers**: JavaScript is now organized by purpose. Interactive features in `interactions.js`, analytics/utilities in `utils.js`, form logic pending extraction to `forms.js` in Phase 5.
 
 ---
 
@@ -284,17 +311,18 @@ git push origin revert-refactor
 
 ## Next Migration Phases
 
-**Phase 3 (Current)**: ✅ Comment markers added, content searchable
-**Phase 4 (Next)**: CSS extraction to separate files
-**Phase 5 (Future)**: JavaScript extraction + localStorage form recovery
-**Phase 6 (Final)**: Complete documentation and team training
+**Phase 3**: ✅ Complete - Comment markers added, content searchable
+**Phase 4**: ✅ Complete - CSS and JavaScript extracted to separate files
+**Phase 5 (Next)**: localStorage form recovery + form extraction to js/forms.js
+**Phase 6 (Future)**: Final validation, documentation, and team training
 
 **For content editors**: Your workflow remains identical through all phases. Content stays in `index.html` with comment markers.
 
 ---
 
-**Migration Date**: 2025-01-19
-**Status**: Phase 3 Complete - Comment markers added
+**Migration Date**: 2025-01-19 (Phase 3), 2025-10-17 (Phase 4)
+**Status**: Phase 4 Complete - JavaScript extraction complete
+**Current Line Count**: 489 lines (down from ~863 lines before Phase 4)
 **Branch**: 001-content-first-refactor
 **Rollback Branch**: pre-refactor-backup
 

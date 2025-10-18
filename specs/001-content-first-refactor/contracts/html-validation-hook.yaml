@@ -1,0 +1,290 @@
+# HTML Validation Git Hook Contract
+# Version: 1.0.0 (New Implementation)
+# Status: DRAFT - To be implemented during refactoring
+
+# This defines the interface for the git pre-commit hook that validates HTML
+
+api-type: git-hook
+hook-name: pre-commit
+version: 1.0.0
+
+interface:
+  name: HTML Validation Hook
+  description: |
+    Git pre-commit hook that validates HTML structure before allowing commits.
+    Catches malformed HTML, unclosed tags, and structural errors before deployment.
+
+  trigger:
+    event: pre-commit
+    when: Any .html file is staged for commit
+    location: .git/hooks/pre-commit or .githooks/pre-commit
+
+  executable:
+    path: .git/hooks/pre-commit
+    interpreter: /bin/bash
+    permissions: 755 (executable)
+
+  dependencies:
+    required:
+      - name: git
+        version: any
+        purpose: Detect staged files
+
+      - name: tidy
+        version: 5.0+
+        package: tidy-html5
+        install: sudo apt-get install tidy
+        purpose: HTML validation
+        fallback-behavior: Warn and allow commit if not installed
+
+    optional: []
+
+  input:
+    source: Git staging area
+    method: git diff --cached --name-only --diff-filter=ACM
+    filter: Files matching *.html pattern
+
+  output:
+    success:
+      exit-code: 0
+      stdout: |
+        🔍 Validating HTML files...
+        ✓ index.html
+        ✓ playtest.html
+
+    failure:
+      exit-code: 1
+      stdout: |
+        🔍 Validating HTML files...
+        ❌ ERROR: index.html has validation errors
+        line 42 column 15 - Warning: missing </div>
+        line 103 column 8 - Error: <section> tag not closed
+
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        HTML validation failed with errors.
+
+        Please fix the errors listed above before committing.
+
+        To skip validation (not recommended):
+          git commit --no-verify
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      blocked: true
+      user-action: Fix errors or use --no-verify to bypass
+
+    warning-only:
+      exit-code: 0
+      stdout: |
+        🔍 Validating HTML files...
+        ⚠️  Warning: index.html has validation warnings
+        line 50 - Warning: trimming empty <p>
+
+        HTML validation passed with warnings.
+        Consider fixing warnings for better HTML quality.
+
+      blocked: false
+
+# Validation Rules
+validation:
+  tool: HTML Tidy
+  mode: errors-only
+  config:
+    show-warnings: false
+    show-errors: 6
+    quiet: true
+    doctype: html5
+
+  error-types:
+    block-commit:
+      - Unclosed tags
+      - Malformed HTML structure
+      - Missing required attributes (only if critical)
+      - Invalid nesting
+
+    warn-only:
+      - Empty elements
+      - Proprietary attributes
+      - Missing alt text (warn but allow - will be caught in review)
+      - Accessibility hints
+
+  excluded-files: []
+  excluded-patterns: []
+
+# Implementation Specification
+implementation:
+  script-location: .git/hooks/pre-commit
+
+  algorithm: |
+    1. Get list of staged HTML files:
+       HTML_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.html$')
+
+    2. If no HTML files staged, exit 0 (success)
+
+    3. Check if tidy is installed:
+       if ! command -v tidy &> /dev/null; then
+         echo "WARNING: tidy not installed, skipping validation"
+         exit 0  # Don't block if tool unavailable
+       fi
+
+    4. For each HTML file:
+       a. Run: tidy -q -e --gnu-emacs yes "$file" 2>&1
+       b. Capture exit code:
+          0 = no errors, no warnings
+          1 = warnings only
+          2 = errors found
+
+    5. If any file has exit code 2:
+       a. Print all errors
+       b. Print usage hint (how to skip with --no-verify)
+       c. exit 1 (block commit)
+
+    6. If all files have exit code 0 or 1:
+       a. Print success message
+       b. exit 0 (allow commit)
+
+  error-messages:
+    friendly: true
+    include-line-numbers: true
+    include-column-numbers: true
+    include-context: false
+    color-coding: true (red for errors, yellow for warnings, green for success)
+
+  performance:
+    timeout: 30 seconds per file
+    max-files: unlimited
+    parallel: false (validate sequentially for clear output)
+
+# Configuration
+configuration:
+  .tidyrc:
+    location: Repository root or user home directory
+    optional: true
+    schema:
+      show-warnings: boolean (default false)
+      show-errors: integer (default 6)
+      quiet: boolean (default true)
+      doctype: string (default "html5")
+
+    example: |
+      // .tidyrc
+      show-warnings: no
+      show-errors: 6
+      quiet: yes
+      doctype: html5
+
+# User Experience
+user-experience:
+  for-technical-users:
+    workflow: |
+      1. Edit HTML file
+      2. git add index.html
+      3. git commit -m "Update pricing"
+      4. Hook runs automatically
+      5a. If pass: Commit created normally
+      5b. If fail: See error, fix, retry commit
+
+    bypass: git commit --no-verify (when necessary)
+
+  for-content-editors:
+    workflow: |
+      1. Edit text content in HTML
+      2. Save file in editor
+      3. git add index.html
+      4. git commit -m "Update event dates"
+      5. If validation fails:
+         - Error shows line number
+         - Editor can jump to line number
+         - Fix unclosed tag or malformed HTML
+         - Retry commit
+
+    common-errors:
+      - Unclosed </div> tag → Clear error message with line number
+      - Typo in tag name (<sectoin> instead of <section>) → Caught immediately
+      - Accidentally deleted closing tag → Prevented from reaching production
+
+  documentation:
+    installation-guide: docs/CONTENT_GUIDE.md
+    troubleshooting: docs/CONTENT_GUIDE.md#html-validation-errors
+    bypass-instructions: "Use git commit --no-verify (only when necessary)"
+
+# Testing Requirements
+testing:
+  manual-tests:
+    - test: Commit valid HTML → hook passes, commit succeeds
+    - test: Commit HTML with unclosed tag → hook fails, commit blocked
+    - test: Commit HTML with warnings only → hook passes with warnings
+    - test: Commit non-HTML file → hook skips validation
+    - test: Commit multiple HTML files (1 valid, 1 invalid) → hook fails
+    - test: Run git commit --no-verify → hook skipped, commit succeeds
+    - test: Hook runs without tidy installed → warns but allows commit
+
+  automated-tests:
+    approach: Create test repository with sample HTML files
+    tools: bash test framework (shunit2 or bats)
+    coverage:
+      - Valid HTML scenarios
+      - Invalid HTML scenarios
+      - Edge cases (empty files, binary files named .html)
+
+# Installation
+installation:
+  automatic:
+    method: git config core.hooksPath
+    script: |
+      #!/bin/bash
+      # setup-hooks.sh
+
+      # Create .githooks directory
+      mkdir -p .githooks
+
+      # Create pre-commit hook
+      cat > .githooks/pre-commit << 'EOF'
+      [hook script content]
+      EOF
+
+      # Make executable
+      chmod +x .githooks/pre-commit
+
+      # Configure git to use .githooks
+      git config core.hooksPath .githooks
+
+      echo "✓ HTML validation hook installed"
+
+  manual:
+    method: Copy to .git/hooks
+    script: |
+      # Install tidy
+      sudo apt-get install tidy
+
+      # Copy hook
+      cp .githooks/pre-commit .git/hooks/pre-commit
+
+      # Make executable
+      chmod +x .git/hooks/pre-commit
+
+# Maintenance
+maintenance:
+  updates:
+    when-to-update:
+      - HTML5 standard evolves
+      - Tidy version upgrade changes behavior
+      - Team finds validation too strict/lenient
+
+    how-to-update:
+      - Edit .githooks/pre-commit
+      - Test with sample HTML files
+      - Update version number in script
+      - Commit and push
+      - Team members re-run setup script
+
+  monitoring:
+    - Track bypass frequency (git commit --no-verify usage)
+    - Collect common validation errors
+    - Adjust rules if too many false positives
+
+# Version History
+version-history:
+  - version: 1.0.0
+    date: 2025-01-19
+    changes: Initial hook specification for HTML validation
+    status: DRAFT

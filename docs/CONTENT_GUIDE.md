@@ -133,6 +133,33 @@ This guide helps non-technical content editors find and update text content on t
 
 ---
 
+### Event Configuration (Data Attributes)
+
+**What**: Configuration values for dynamic features like countdown timers
+
+**Search for**: "data-event-date" or "DATE CONFIG"
+
+**Location**: `index.html` - look for comment marker `<!-- DATE CONFIG: Update event date... -->`
+
+**How to update event start date**:
+1. Search for "data-event-date" in index.html
+2. Find the line: `<section class="hero" data-event-date="2025-10-04">`
+3. Change the date value to your new event start date in YYYY-MM-DD format
+4. Example: `data-event-date="2025-11-15"` for November 15, 2025
+
+**Safe to edit**:
+- The date value within the quotes
+- Format must be YYYY-MM-DD (year-month-day with leading zeros)
+
+**Do NOT edit**:
+- The attribute name `data-event-date`
+- The HTML structure around it
+- Remove the quotes
+
+**Note**: This date can be used by future features (like countdown timers) without requiring you to update JavaScript code. You only need to change this one value.
+
+---
+
 ## HTML Validation
 
 ### What Happens When You Commit
@@ -285,6 +312,76 @@ git commit -m "Update ticket pricing to $85"
 - **Technical issues**: Ask a developer
 - **Git help**: See repository README or ask a developer
 - **Form issues**: Contact the backend administrator (forms connect to Google Apps Script)
+
+---
+
+## Frequently Asked Questions (FAQ)
+
+### What can I edit?
+
+You can edit any text content within sections marked with `<!-- EDITABLE CONTENT: ... -->` or `<!-- STRUCTURAL COMPONENT: ... -->` comment markers. This includes:
+
+- Event taglines and descriptions
+- Pricing and dates
+- FAQ questions and answers
+- Creator profiles (names, roles, bios)
+- Footer information and contact details
+- Event configuration values (like `data-event-date`)
+
+**Do NOT edit**:
+- HTML tags (`<div>`, `<section>`, `<p>`, etc.)
+- CSS classes (anything starting with `class=`)
+- JavaScript code
+- IDs (anything starting with `id=`)
+- File paths or URLs in `src=` or `href=` attributes
+
+### How do I preview my changes?
+
+**Quick local preview** (for visual changes):
+1. Save `index.html`
+2. Right-click the file → Open with → Your browser
+3. Check your changes
+4. **Note**: Forms won't work locally
+
+**Full preview on live site** (after deployment):
+1. Commit and push your changes
+2. Wait 1-2 minutes for GitHub Pages to deploy
+3. Visit https://aboutlastnightgame.com
+4. Force refresh (Ctrl+Shift+R or Cmd+Shift+R)
+
+### What if HTML validation fails?
+
+When you try to commit and validation fails:
+
+1. **Read the error message** - It shows the exact line number with the problem
+2. **Go to that line** in index.html
+3. **Common fixes**:
+   - Add missing closing tag (`</div>`, `</p>`, `</section>`)
+   - Fix typo in tag name
+   - Add missing `>`  or `<`
+4. **Try committing again** after fixing
+
+**Example**:
+```
+Error: line 142 - Warning: missing </div>
+```
+→ Go to line 142, find the `<div>` tag, add `</div>` where it belongs
+
+### Can I break the site by editing content?
+
+The HTML validation hook protects you from most errors. As long as you:
+- Only edit text between tags (not the tags themselves)
+- Don't delete comment markers
+- Let the validation run (don't use `--no-verify`)
+
+...you're very unlikely to break anything. If something does go wrong, git keeps all history so changes can be reverted.
+
+### What if I need to update something not listed in this guide?
+
+Ask a developer! They can either:
+- Show you where to find it
+- Add it to this guide for future reference
+- Make the update for you if it requires code changes
 
 ---
 
