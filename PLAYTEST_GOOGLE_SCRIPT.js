@@ -349,21 +349,23 @@ function getAllCapacities() {
   const minimumPlayers = MINIMUM_PLAYERS;
 
   // Discover unique dates from column H (index 7) - skip header row
-  const uniqueDates = new Set();
+  // Normalize dates immediately to avoid issues with Date.toString()
+  const normalizedDatesSet = new Set();
   for (let i = 1; i < allData.length; i++) {
     const dateValue = allData[i][7];
-    if (dateValue && dateValue.toString().trim() !== '') {
-      uniqueDates.add(dateValue.toString());
+    if (dateValue) {
+      // Normalize the date immediately to ISO format (YYYY-MM-DD HH:MM)
+      const normalized = normalizeDateToISO(dateValue);
+      normalizedDatesSet.add(normalized);
     }
   }
 
   // Convert Set to sorted array
-  const discoveredDates = Array.from(uniqueDates).sort();
+  const discoveredDates = Array.from(normalizedDatesSet).sort();
 
   // Calculate capacity for each discovered date
-  return discoveredDates.map(dateValue => {
-    // Normalize the date to ISO format for consistent API response
-    const normalizedDate = normalizeDateToISO(dateValue);
+  return discoveredDates.map(normalizedDate => {
+    // normalizedDate is already in ISO format
 
     // Filter signups for this specific date
     // Compare using normalized values to handle both Date objects and strings
@@ -379,8 +381,8 @@ function getAllCapacities() {
     const spotsRemaining = Math.max(0, spotsTotal - spotsTaken);
 
     return {
-      date: normalizedDate,  // Return normalized ISO format
-      displayText: formatDateForEmail(dateValue),
+      date: normalizedDate,  // Already in ISO format (YYYY-MM-DD HH:MM)
+      displayText: formatDateForEmail(normalizedDate),  // Use normalized date for formatting
       spots_total: spotsTotal,
       spots_taken: spotsTaken,
       spots_remaining: spotsRemaining,
