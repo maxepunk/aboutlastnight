@@ -70,15 +70,28 @@ function doPost(e) {
     const minimumPlayers = MINIMUM_PLAYERS;
 
     // Filter signups by selected date (column H, index 7)
-    // Simple string comparison - dates are stored as plain text
+    // Handle both plain text dates and Date objects (Google Sheets auto-converts)
     const allData = sheet.getDataRange().getValues();
     const signupsForDate = allData.filter((row, index) => {
       if (index === 0) return false; // Skip header row
       const rowDate = row[7];
       if (!rowDate) return false;
 
-      // Simple string comparison
-      return String(rowDate).trim() === selectedDate.trim();
+      // Normalize both values for comparison
+      const rowDateStr = rowDate instanceof Date ? rowDate.toISOString() : String(rowDate).trim();
+      const selectedDateStr = selectedDate.trim();
+
+      // Compare as strings OR compare formatted versions
+      if (rowDateStr === selectedDateStr) return true;
+
+      // If Google Sheets converted to Date, compare the formatted output
+      if (rowDate instanceof Date) {
+        const formatted = formatDateForEmail(rowDate);
+        const selectedFormatted = formatDateForEmail(selectedDate);
+        return formatted === selectedFormatted;
+      }
+
+      return false;
     });
 
     const spotsTaken = signupsForDate.length;
@@ -353,11 +366,24 @@ function getAllCapacities() {
 
   // Calculate capacity for each unique date
   return sortedDates.map(dateString => {
-    // Filter signups for this specific date using simple string comparison
+    // Filter signups for this specific date - handle Date objects and strings
     const signupsForDate = allData.filter((row, index) => {
       if (index === 0) return false; // Skip header
       const rowDate = row[7];
       if (!rowDate) return false;
+
+      // Normalize for comparison
+      const rowDateStr = rowDate instanceof Date ? rowDate.toISOString() : String(rowDate).trim();
+
+      // Compare normalized strings
+      if (rowDateStr === dateString) return true;
+
+      // If Date object, compare formatted versions
+      if (rowDate instanceof Date) {
+        const formatted = formatDateForEmail(rowDate);
+        const dateFormatted = formatDateForEmail(dateString);
+        return formatted === dateFormatted;
+      }
 
       return String(rowDate).trim() === dateString;
     });
