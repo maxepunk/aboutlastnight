@@ -112,10 +112,12 @@ function doPost(e) {
 
     // Force column H (index 8) to be plain text format to prevent auto-conversion
     sheet.getRange(nextRow, 8).setNumberFormat('@');
-    
+
+    // Format date for emails (used by both user and organizer notifications)
+    const dateDisplay = formatDateForEmail(selectedDate);
+
     // Send confirmation email to participant
     if (formData.email) {
-      const dateDisplay = formatDateForEmail(selectedDate);
 
       const subject = status === 'Confirmed'
         ? `✓ About Last Night Playtest - ${dateDisplay} - Spot ${actualSpotNumber} Confirmed`
