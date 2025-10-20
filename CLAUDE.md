@@ -281,3 +281,110 @@ Playtest dates change frequently during scheduling. Hardcoding dates in backend 
 - Potential for frontend/backend date mismatches
 
 Date-agnostic design makes date management a pure content task (edit HTML radio buttons only).
+
+## Google Apps Script Gotchas and Solutions
+
+### POST Request Redirect Behavior
+**Issue:** Google Apps Script Web Apps always return 302 redirects for POST requests. This is NORMAL behavior.
+- Browsers automatically follow redirects → Forms work fine
+- curl requires `-L` flag → Testing requires `curl -L`
+- Content served from `script.googleusercontent.com`, not `script.google.com`
+
+**Don't confuse curl failures with actual bugs** - If data appears in spreadsheet and emails send, the backend is working correctly.
+
+### Google Sheets Auto-Converts Dates
+**Critical Issue:** Google Sheets automatically converts text like "2025-10-26 15:00" to Date objects when stored in cells.
+
+**Problem:**
+- Frontend sends: `"2025-10-26 15:00"` (string)
+- Sheets stores as: `Sun Oct 26 2025 08:00:00 GMT...` (Date object)
+- String comparisons fail when counting signups
+
+**Solution (MUST USE):**
+```javascript
+// In PLAYTEST_GOOGLE_SCRIPT.js doPost()
+const rowData = [[name, email, timestamp, spotNum, status, consent, timestamp, selectedDate]];
+sheet.getRange(nextRow, 1, 1, 8).setValues(rowData);
+sheet.getRange(nextRow, 8).setNumberFormat('@');  // Force column H to plain text
+```
+
+**Key Points:**
+- Always use `setNumberFormat('@')` on date columns after writing
+- Use `setValues()` instead of `appendRow()` to enable post-write formatting
+- Column H (index 8) must store dates as plain text strings for comparison logic
+
+### Variable Scope in Google Apps Script
+**Common Error:** `ReferenceError: [variable] is not defined`
+
+**Cause:** JavaScript `const` and `let` are block-scoped. Variables declared inside `if` blocks are not accessible outside.
+
+**Example of Bug:**
+```javascript
+if (formData.email) {
+  const dateDisplay = formatDateForEmail(selectedDate);  // Scoped to if block
+  // ... send user email
+}
+// dateDisplay NOT available here - organizer email will fail
+```
+
+**Solution:** Declare shared variables before conditional blocks.
+
+### Testing Google Apps Script Locally
+**You cannot test Google Apps Script locally.** The backend must be deployed to test:
+1. Edit `.js` file locally
+2. Copy entire file to Google Apps Script editor
+3. Save in editor
+4. Deploy → Manage deployments → Edit → New version
+5. Test via GitHub Pages deployment (not localhost)
+
+**Testing Checklist:**
+- ✅ Data writes to Google Sheets
+- ✅ User receives confirmation email
+- ✅ Organizer receives notification email
+- ✅ Frontend shows success message (not error)
+- ✅ Spot counter updates immediately
+- ✅ Capacity badges update correctly
+
+## Common Debugging Patterns
+
+### "Error on submit but data in spreadsheet"
+**Diagnosis:** Backend succeeded but threw error after data write
+**Check:**
+1. Variable scope issues (using variables outside their scope)
+2. Email sending failures (malformed addresses, quota exceeded)
+3. Secondary operations failing after primary write
+
+### "Spot counter shows wrong count"
+**Diagnosis:** Date string comparison failing
+**Check:**
+1. Google Sheets column format (must be plain text, not date)
+2. String normalization in comparison logic (`trim()` both sides)
+3. Date format consistency (frontend and backend use same format)
+
+### "Recovery prompt after successful submission"
+**Diagnosis:** localStorage not cleared on success
+**Check:**
+1. `FormRecovery.clear()` called after confirmed success
+2. Success detection happens before localStorage operations
+3. No errors thrown between submission and clear
+
+## Performance Standards
+
+**Lighthouse Targets:**
+- First Contentful Paint: < 1.5s
+- Largest Contentful Paint: < 2.5s
+- Cumulative Layout Shift: < 0.1
+- Time to Interactive: < 3s
+
+**Validation:**
+Run after every significant change:
+```bash
+# In Chrome DevTools
+Lighthouse → Performance audit → Generate report
+```
+
+**Common Performance Pitfalls:**
+- Render-blocking CSS/JS (avoid inline styles for critical content)
+- Layout-thrashing animations (use `transform`/`opacity` only)
+- Non-passive scroll listeners (always use `{passive: true}`)
+- Unoptimized images (use appropriate formats and sizes)
