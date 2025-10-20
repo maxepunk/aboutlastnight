@@ -70,28 +70,15 @@ function doPost(e) {
     const minimumPlayers = MINIMUM_PLAYERS;
 
     // Filter signups by selected date (column H, index 7)
-    // Handle both plain text dates and Date objects (Google Sheets auto-converts)
+    // Simple string comparison - dates are stored as plain text with setNumberFormat('@')
     const allData = sheet.getDataRange().getValues();
     const signupsForDate = allData.filter((row, index) => {
       if (index === 0) return false; // Skip header row
       const rowDate = row[7];
       if (!rowDate) return false;
 
-      // Normalize both values for comparison
-      const rowDateStr = rowDate instanceof Date ? rowDate.toISOString() : String(rowDate).trim();
-      const selectedDateStr = selectedDate.trim();
-
-      // Compare as strings OR compare formatted versions
-      if (rowDateStr === selectedDateStr) return true;
-
-      // If Google Sheets converted to Date, compare the formatted output
-      if (rowDate instanceof Date) {
-        const formatted = formatDateForEmail(rowDate);
-        const selectedFormatted = formatDateForEmail(selectedDate);
-        return formatted === selectedFormatted;
-      }
-
-      return false;
+      // Simple string comparison (both should be plain text)
+      return String(rowDate).trim() === selectedDate.trim();
     });
 
     const spotsTaken = signupsForDate.length;
@@ -103,9 +90,13 @@ function doPost(e) {
     
     // Create timestamp
     const timestamp = new Date();
-    
+
     // Append data to sheet (including photo consent and selected date) (T006)
-    sheet.appendRow([
+    // Use setValues() + setNumberFormat() instead of appendRow() to prevent
+    // Google Sheets from auto-converting date strings to Date objects
+    const lastRow = sheet.getLastRow();
+    const nextRow = lastRow + 1;
+    const rowData = [[
       formData.name || '',
       formData.email || '',
       timestamp,
@@ -113,8 +104,14 @@ function doPost(e) {
       status,
       formData.photoConsent || 'No',  // Photo consent
       timestamp,  // Consent timestamp (same as registration)
-      selectedDate  // Selected Date (column H) - stored as plain text
-    ]);
+      selectedDate  // Selected Date (column H) - must stay as plain text
+    ]];
+
+    // Write the data
+    sheet.getRange(nextRow, 1, 1, 8).setValues(rowData);
+
+    // Force column H (index 8) to be plain text format to prevent auto-conversion
+    sheet.getRange(nextRow, 8).setNumberFormat('@');
     
     // Send confirmation email to participant
     if (formData.email) {
@@ -366,25 +363,13 @@ function getAllCapacities() {
 
   // Calculate capacity for each unique date
   return sortedDates.map(dateString => {
-    // Filter signups for this specific date - handle Date objects and strings
+    // Filter signups for this specific date - simple string comparison
     const signupsForDate = allData.filter((row, index) => {
       if (index === 0) return false; // Skip header
       const rowDate = row[7];
       if (!rowDate) return false;
 
-      // Normalize for comparison
-      const rowDateStr = rowDate instanceof Date ? rowDate.toISOString() : String(rowDate).trim();
-
-      // Compare normalized strings
-      if (rowDateStr === dateString) return true;
-
-      // If Date object, compare formatted versions
-      if (rowDate instanceof Date) {
-        const formatted = formatDateForEmail(rowDate);
-        const dateFormatted = formatDateForEmail(dateString);
-        return formatted === dateFormatted;
-      }
-
+      // Simple string comparison (dates stored as plain text)
       return String(rowDate).trim() === dateString;
     });
 
