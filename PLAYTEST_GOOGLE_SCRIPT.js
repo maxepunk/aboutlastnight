@@ -124,7 +124,7 @@ function doPost(e) {
               <div style="background: #fff; border-left: 4px solid #cc0000; padding: 20px; margin: 20px 0;">
                 <p style="margin: 5px 0;"><strong>Date & Time:</strong> ${dateDisplay}</p>
                 <p style="margin: 5px 0;"><strong>Duration:</strong> 2-2.5 hrs including playtest feedback session</p>
-                <p style="margin: 5px 0;"><strong>Location:</strong> Off the Couch Games, Fremont</p>
+                <p style="margin: 5px 0;"><strong>Location:</strong> Off the Couch Games, 555 Mowry Ave, Fremont, CA 94536</p>
                 <p style="margin: 5px 0;"><strong>Your Spot:</strong> #${actualSpotNumber} of ${spotsTotal}</p>
                 <p style="margin: 5px 0;"><strong>Surveillance Auth:</strong> ${formData.photoConsent === 'Yes' ? '✓ Authorized' : 'Not Authorized'}</p>
               </div>

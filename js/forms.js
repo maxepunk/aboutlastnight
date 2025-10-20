@@ -300,6 +300,19 @@ async function handlePlaytestFormSubmit(e) {
         dataObject[key] = value;
     }
 
+    // Normalize photo consent checkbox: checked = "Yes", unchecked = "No"
+    const photoConsentCheckbox = form.querySelector('input[name="photoConsent"]');
+    if (photoConsentCheckbox?.checked) {
+        dataObject.photoConsent = 'Yes';
+        formData.set('photoConsent', 'Yes');
+    } else {
+        dataObject.photoConsent = 'No';
+        formData.set('photoConsent', 'No');
+    }
+
+    // Save to localStorage BEFORE submission attempt (for recovery on failure)
+    FormRecovery.save(dataObject);
+
     // Visual feedback
     button.textContent = 'PROCESSING...';
     button.disabled = true;
@@ -319,29 +332,56 @@ async function handlePlaytestFormSubmit(e) {
         const result = await response.json();
 
         if (result.result === 'success') {
-            FormRecovery.clear(); // Clear any saved data on success
+            // Clear localStorage on confirmed success
+            FormRecovery.clear();
+
+            // IMMEDIATELY update capacity from POST response (no race condition!)
+            const selectedDateValue = document.querySelector('input[name="playtestDate"]:checked')?.value;
+
+            if (selectedDateValue && window.PlaytestInteractions?.dateCapacities) {
+                // Update in-memory capacity data with fresh data from backend
+                window.PlaytestInteractions.dateCapacities[selectedDateValue] = {
+                    ...window.PlaytestInteractions.dateCapacities[selectedDateValue],
+                    date: selectedDateValue,
+                    spots_taken: result.spots_taken,
+                    spots_remaining: result.spots_remaining,
+                    has_minimum: result.has_minimum,
+                    is_full: result.spots_remaining === 0,
+                    spots_total: result.spots_total,
+                    minimum_players: result.minimum_players
+                };
+
+                // Update spot counter UI immediately
+                window.PlaytestInteractions.updateSpotCounter(selectedDateValue);
+
+                // Update capacity badge for this date
+                const capacityElement = document.querySelector(`[data-date="${selectedDateValue}"]`);
+                if (capacityElement) {
+                    if (result.spots_remaining > 0) {
+                        capacityElement.textContent = `${result.spots_remaining} spots left`;
+                    } else {
+                        capacityElement.textContent = 'Full - Waitlist available';
+                    }
+                }
+            }
 
             // Update success message based on status (confirmed vs waitlist)
             const successMsg = result.status === 'Confirmed'
                 ? `✓ SPOT ${result.spot_number} CONFIRMED • CHECK YOUR EMAIL`
-                : `⏳ WAITLIST POSITION ${result.waitlist_position || (result.spot_number - 20)} • CHECK YOUR EMAIL`;
+                : `⏳ WAITLIST POSITION ${result.spot_number - result.spots_total} • CHECK YOUR EMAIL`;
 
             if (successMessage) {
                 successMessage.textContent = successMsg;
                 successMessage.classList.add('show');
             }
 
+            // Reset form immediately (user can submit again)
             form.reset();
+            button.textContent = originalText;
+            button.disabled = false;
 
-            // Refresh capacity display if function exists
-            if (typeof window.PlaytestInteractions !== 'undefined' && window.PlaytestInteractions.fetchAllCapacities) {
-                window.PlaytestInteractions.fetchAllCapacities();
-            }
-
-            // Reset button after delay
+            // Hide success message after delay
             setTimeout(() => {
-                button.textContent = originalText;
-                button.disabled = false;
                 if (successMessage) successMessage.classList.remove('show');
             }, 5000);
 
@@ -352,11 +392,19 @@ async function handlePlaytestFormSubmit(e) {
     } catch (error) {
         console.error('Playtest form submission failed:', error);
 
-        // Save form data for recovery
-        FormRecovery.save(dataObject);
+        // Determine error type for better user feedback
+        let errorMsg = 'ERROR';
+        if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+            errorMsg = 'NETWORK ERROR';
+        } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+            errorMsg = 'REQUEST TIMEOUT';
+        } else if (error.message.includes('JSON')) {
+            errorMsg = 'SERVER ERROR';
+        }
 
+        // Data is already saved to localStorage (we saved it before submission)
         if (errorMessage) {
-            errorMessage.textContent = 'ERROR • DATA SAVED • TRY AGAIN';
+            errorMessage.textContent = `${errorMsg} • DATA SAVED • TRY AGAIN`;
             errorMessage.classList.add('show');
         }
 
@@ -365,7 +413,7 @@ async function handlePlaytestFormSubmit(e) {
 
         setTimeout(() => {
             if (errorMessage) errorMessage.classList.remove('show');
-        }, 3000);
+        }, 5000);
     }
 }
 
