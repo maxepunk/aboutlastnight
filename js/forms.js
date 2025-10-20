@@ -326,8 +326,16 @@ async function handlePlaytestFormSubmit(e) {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: new URLSearchParams(formData)
+            body: new URLSearchParams(formData),
+            redirect: 'follow' // Explicitly follow Google Apps Script redirects
         });
+
+        // Check for successful response
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server returned error:', response.status, errorText);
+            throw new Error(`Server error: ${response.status}`);
+        }
 
         const result = await response.json();
 
