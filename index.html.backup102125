@@ -357,32 +357,40 @@
 
     <div class="section-divider"></div>
 
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- EDITABLE CONTENT: TICKETING WIDGET                      -->
-    <!-- SAFE TO EDIT: Header text, system notes                 -->
-    <!-- FIND WITH: Search for "TICKETING WIDGET" or "SCHEDULING"-->
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- Investigation Scheduling Terminal -->
+    <!-- Memory Recovery Form -->
     <section id="submit-evidence" class="interest-form">
         <div class="form-container">
-            <div class="corrupted-header">
-                <span class="glitch"><b><u>NEURAI INC. - INVESTIGATION SCHEDULING TERMINAL</u></b></span>
+            <form id="interestForm" class="memory-form">
+                <div class="corrupted-header">
+                    <span class="glitch"><b><u>NEURAI INC.</u></b><br><br>INITIALIZE_RECOVERY_SEQUENCE</span>
+                </div>
+                
+                <input type="email" 
+                       name="email"
+                       class="memory-input" 
+                       placeholder=" MEMORY_RECOVERY_PROTOCOL: {auth: EMAIL}"
+                       required>
+                
+                <!-- Hidden fields for tracking -->
+                <input type="hidden" name="utm_source" id="utm_source">
+                <input type="hidden" name="referrer" id="referrer">
+                <input type="hidden" name="device_type" id="device_type">
+                
+                <button type="submit" class="recover-button">
+                    Initialize Protocol
+                </button>
+                
+                <p class="system-note">
+                    <!-- SYSTEM: Preview access October 4-12<br> -->
+                    Investigation Ongoing • Novermber 14 - December 28
+                </p>
+            </form>
+
+            <div id="form-message" class="recovery-status" style="display: none;">
+                <p class="success-msg">✓ MEMORIES DECRYPTING • CHECK YOUR FREQUENCY FOR ACCESS</p>
             </div>
-
-            <p style="text-align: center; font-size: 1.3rem; color: rgba(204, 0, 0, 0.9); margin-bottom: 1rem; font-weight: 600;">
-                Select your entry point into the investigation.
-            </p>
-
-            <p class="system-note" style="margin-bottom: 3rem;">
-                Time slots are limited • Memory corruption is irreversible • Case sessions fill rapidly
-            </p>
-
-            <!-- Off the Couch Booking Widget -->
-            <div id="otcContainer" style="max-width: 800px; margin: 0 auto;"></div>
-            <script>const q=window.location.search;let f=document.createElement("iframe");f.src="https://offthecouch.io/book/lastnight"+q;let scrollTop=0;f.width="100%";f.allow="payment";f.scrolling="no";f.style.border="none";f.style.display="block";f.style.overflow="hidden";f.style.height="auto";window.addEventListener("message",e=>{if(e.origin==="https://offthecouch.io"&&e.data.action==="updateHeight")f.style.height=e.data.height+"px";if(e.origin==="https://offthecouch.io"&&e.data.action==="scrollToTop"){scrollTop=findPosY(document.getElementById("otcContainer"));window.scrollTo({top:scrollTop-30,behavior:"smooth"})}if(e.origin==="https://offthecouch.io")switch(e.data.eventType){case"page_view":insertGoogleAnalyticsScript(e.data.id);break;case"add_to_cart":window.gtag&&gtag("event","add_to_cart",{currency:e.data.currency,value:e.data.eventValue});break;case"begin_checkout":window.gtag&&gtag("event","begin_checkout",{currency:e.data.currency,value:e.data.eventValue});break;case"purchase":window.gtag&&gtag("event","purchase",{currency:e.data.currency,value:e.data.eventValue});break;case"success":window.gtag&&gtag("event","success",{currency:e.data.currency,value:e.data.eventValue});break;default:}});document.getElementById("otcContainer").appendChild(f);function findPosY(o){let t=0;if(o.offsetParent)for(;o.offsetParent;)t+=o.offsetTop,o=o.offsetParent;else o.y&&(t+=o.y);return t}function insertGoogleAnalyticsScript(i){if(!i)return;window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}if(!window.gtag){const s=document.createElement("script");s.async=!0;s.onload=()=>{window.gtag=gtag;gtag("js",new Date);gtag("config",i)};s.src="https://www.googletagmanager.com/gtag/js?id="+i;document.head.appendChild(s)}gtag("event","page_view")}</script>
         </div>
     </section>
-    <!-- END CONTENT SECTION: TICKETING WIDGET -->
 
     <!-- ═══════════════════════════════════════════════════════ -->
     <!-- EDITABLE CONTENT: FOOTER AND CONTACT INFO               -->
