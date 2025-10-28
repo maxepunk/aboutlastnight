@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Landing page for "About Last Night" - a 90-120 minute immersive crime thriller experience combining escape room puzzles, roleplay, and social deduction.
 
 **Live Site:** aboutlastnightgame.com (GitHub Pages)
-**Run Dates:** November 14 - December 28, 2025
+**Run Dates:** Preview Performances November 9-23, Full Run December 4-28, 2025
 **Location:** Off the Couch Games, Fremont, CA
 
 ## Technology Stack
