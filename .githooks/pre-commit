@@ -58,4 +58,31 @@ if [ $ERRORS -eq 1 ]; then
     exit 1
 fi
 
+# Run quick tests (if installed)
+if [ -d "tests/node_modules" ]; then
+    echo ""
+    echo "🧪 Running quick tests..."
+    cd tests
+    npm run test:quick --silent
+    TEST_EXIT_CODE=$?
+    cd ..
+
+    if [ $TEST_EXIT_CODE -ne 0 ]; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Quick tests failed."
+        echo ""
+        echo "Please fix the test failures before committing."
+        echo ""
+        echo "To skip tests (not recommended):"
+        echo "  git commit --no-verify"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        exit 1
+    fi
+else
+    echo ""
+    echo "⚠️  Tests not installed. Run: cd tests && npm install"
+    echo "   Skipping quick tests for this commit..."
+fi
+
 exit 0
