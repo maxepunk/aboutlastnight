@@ -62,6 +62,16 @@ This guide helps non-technical content editors find and update text content on t
 - HTML structure
 - CSS classes
 
+#### Preview Pricing (November 2025)
+
+The show has three pricing tiers:
+- Preview Week 1 (Nov 9, 14, 16): $35/person
+- Preview Week 2 (Nov 21, 22, 23): $60/person
+- Full Run (Dec 4-28): $75/person
+
+Search for "PRICING AND DATES" to find the booking bar.
+Search for "How much does it cost?" to find FAQ pricing.
+
 ---
 
 ### FAQ Section
