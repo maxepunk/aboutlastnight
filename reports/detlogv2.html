@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Director's Console (G3) | Deep Scan Enabled</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#1a202c', 900: '#0f172a', 950: '#020617' },
+                        neon: { blue: '#3b82f6', purple: '#8b5cf6', pink: '#ec4899', amber: '#f59e0b' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'slide-up': 'slideUp 0.3s ease-out forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(100%)' },
+                            '100%': { transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #020617; color: #e2e8f0; }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-input {
+            background: rgba(2, 6, 23, 0.6);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .step-dot { transition: all 0.3s ease; }
+        .step-active .step-dot { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); transform: scale(1.1); }
+        .step-line { transition: all 0.5s ease; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+        
+        const Icon = ({ name, size = 18, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        };
+
+        // --- CONSTANTS ---
+        const ELEMENTS_DB_ID = "18c2f33d-583f-8020-91bc-d84c7dd94306";
+        const NOTION_VERSION = "2022-06-28";
+        // CAUTION: In production, do not hardcode tokens. This is for local tool usage only.
+        const INTERNAL_NOTION_TOKEN = "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";
+        
+        const MODELS = [
+            { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Fast/Analysis)', type: 'flash' },
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Creative/Report)', type: 'pro' },
+            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Stable)', type: 'pro' }
+        ];
+
+        const DEFAULT_PROMPT = `You are a cynical, seasoned Detective in a near-future noir setting.
+You are writing an official Case Report.
+
+TONE: Professional, analytical, but with a distinct noir flair.
+FORMAT: HTML (body content only, NO <html>, <head>, or <body> tags).
+STRUCTURE:
+- Use <h2> for main section headers (e.g., "Executive Summary", "Evidence Locker")
+- Use <h3> for subsections (e.g., "The Corporate Facade", "The Smoking Gun")
+- Use <div class="evidence-item"> to wrap individual evidence discussions
+- Use <p> for paragraphs
+- Use <ul> and <li> for lists
+- Use <strong> for emphasis on names, titles, key terms
+- Use <p class="note"> for detective's personal observations/conclusions
+
+SECTIONS: Executive Summary, Evidence Locker, Memory Analysis, Suspect Network, Outstanding Questions.
+
+Synthesize the provided evidence and logs into a coherent narrative.`;
+
+        const DEFAULT_VOICE_SAMPLES = `"Another rainy Tuesday in the Sprawl. The coffee's cold, just like the leads."
+"I don't get paid to ask why, I get paid to ask who."
+"The tech looks expensive. More credits than sense."`;
+
+        // DETECTIVE REPORT HTML TEMPLATE
+        const REPORT_TEMPLATE = \`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report {{CASE_NUMBER}} - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: '{{WATERMARK}}';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: '{{STATUS}}';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+        <strong>CASE ID:</strong> {{CASE_NUMBER}}<br>
+        <strong>DATE:</strong> {{DATE}}<br>
+        <strong>LOCATION:</strong> {{LOCATION}}<br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> {{STATUS}}
+    </div>
+
+    {{REPORT_BODY}}
+
+</div>
+
+</body>
+</html>
+\`;
+
+        // --- APP ---
+        const App = () => {
+            // --- STATE ---
+            const [step, setStep] = useState(1);
+            const [loading, setLoading] = useState(false);
+            const [progress, setProgress] = useState({ current: 0, total: 0, status: '' });
+            const [error, setError] = useState('');
+            
+            // Config
+            const [notionToken, setNotionToken] = useState(() => localStorage.getItem('notion_token') || INTERNAL_NOTION_TOKEN);
+            const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_key') || '');
+            const [reportModelId, setReportModelId] = useState(() => localStorage.getItem('report_model_id') || 'gemini-3-pro-preview');
+            const [useProxy, setUseProxy] = useState(true);
+            
+            // Data
+            const [inventory, setInventory] = useState(() => JSON.parse(localStorage.getItem('inventory_cache') || '[]'));
+            const [defaultStaticIds, setDefaultStaticIds] = useState(() => new Set(JSON.parse(localStorage.getItem('default_static_ids') || '[]')));
+            const [sessionIds, setSessionIds] = useState(new Set()); 
+            
+            // Context
+            const [gameLogs, setGameLogs] = useState(() => localStorage.getItem('game_logs') || '');
+            const [voiceSamples, setVoiceSamples] = useState(() => localStorage.getItem('voice_samples') || DEFAULT_VOICE_SAMPLES);
+            const [systemPrompt, setSystemPrompt] = useState(() => localStorage.getItem('system_prompt') || DEFAULT_PROMPT);
+            const [caseMeta, setCaseMeta] = useState(() => JSON.parse(localStorage.getItem('case_meta') || JSON.stringify({
+                number: 'MC-2025-' + String(Math.floor(Math.random() * 1000)).padStart(3, '0'),
+                date: new Date().toISOString().split('T')[0],
+                location: "Marcus Chen's Residence",
+                status: "ACTIVE INVESTIGATION"
+            })));
+            const [report, setReport] = useState(() => localStorage.getItem('generated_report') || '');
+            
+            // UI State
+            const [searchTerm, setSearchTerm] = useState('');
+            const [sessionTab, setSessionTab] = useState('memory'); 
+            const [hideProps, setHideProps] = useState(true); // Filter toggle
+
+            // --- PERSISTENCE ---
+            useEffect(() => { localStorage.setItem('notion_token', notionToken); }, [notionToken]);
+            useEffect(() => { localStorage.setItem('gemini_key', geminiKey); }, [geminiKey]);
+            useEffect(() => { localStorage.setItem('report_model_id', reportModelId); }, [reportModelId]);
+            useEffect(() => { localStorage.setItem('game_logs', gameLogs); }, [gameLogs]);
+            useEffect(() => { localStorage.setItem('voice_samples', voiceSamples); }, [voiceSamples]);
+            useEffect(() => { localStorage.setItem('system_prompt', systemPrompt); }, [systemPrompt]);
+            useEffect(() => { localStorage.setItem('case_meta', JSON.stringify(caseMeta)); }, [caseMeta]);
+            useEffect(() => { localStorage.setItem('generated_report', report); }, [report]);
+            useEffect(() => { 
+                if(inventory.length > 0) localStorage.setItem('inventory_cache', JSON.stringify(inventory)); 
+            }, [inventory]);
+            useEffect(() => { 
+                localStorage.setItem('default_static_ids', JSON.stringify([...defaultStaticIds])); 
+            }, [defaultStaticIds]);
+            useEffect(() => {
+                if (step === 3 && sessionIds.size === 0) setSessionIds(new Set(defaultStaticIds));
+            }, [step, defaultStaticIds]);
+
+            // --- API LOGIC ---
+            
+            const analyzeBatch = async (items) => {
+                // Flash model is best for high throughput simple tasks
+                const model = "gemini-2.0-flash-exp";
+                
+                const prompt = `
+You are a database cleaner for a Detective Game. 
+Analyze these inventory items. Return a JSON Object with a key "results" containing an array of objects.
+For each item:
+1. "id": The exact ID provided.
+2. "is_narrative": Boolean. TRUE if it is a clue, document, key item, or evidence. FALSE if it is a generic prop (bag, costume, tape, battery, generic tech).
+3. "summary": A concise 10-15 word summary of what this object IS and its potential significance. Strip out game mechanic text.
+
+ITEMS TO ANALYZE:
+${JSON.stringify(items.map(i => ({ id: i.id, name: i.name, desc: i.desc, type: i.type })))}
+`;
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                        })
+                    });
+                    const data = await response.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) return [];
+                    return JSON.parse(text).results || [];
+                } catch (e) {
+                    console.error("Analysis failed for batch", e);
+                    return []; // Fail gracefully
+                }
+            };
+
+            const fetchAndAnalyze = async (shouldAnalyze = false) => {
+                setLoading(true);
+                setProgress({ current: 0, total: 0, status: 'Connecting to Database...' });
+                setError('');
+                let allResults = [];
+                
+                try {
+                    // 1. FETCH FROM NOTION
+                    let hasMore = true;
+                    let startCursor = undefined;
+                    const baseUrl = `https://api.notion.com/v1/databases/${ELEMENTS_DB_ID}/query`;
+                    const url = useProxy ? `https://corsproxy.io/?${encodeURIComponent(baseUrl)}` : baseUrl;
+
+                    while (hasMore) {
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${notionToken}`,
+                                'Notion-Version': NOTION_VERSION,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                page_size: 100,
+                                start_cursor: startCursor,
+                                filter: { property: "Status", status: { does_not_equal: "AISLOP" } }
+                            })
+                        });
+                        if (!res.ok) throw new Error(`Notion Error: ${res.status}`);
+                        const data = await res.json();
+                        
+                        const processed = data.results.map(item => ({
+                            id: item.id,
+                            rfid: item.properties['SF_RFID']?.rich_text?.[0]?.plain_text || '',
+                            name: item.properties.Name?.title?.[0]?.plain_text || 'Untitled',
+                            type: item.properties['Basic Type']?.select?.name || 'Unknown',
+                            category: (item.properties['Basic Type']?.select?.name || '').includes('Memory Token') ? 'memory' : 'static',
+                            desc: item.properties['Description/Text']?.rich_text?.map(t => t.plain_text).join('') || '',
+                            threads: item.properties['Narrative Threads']?.multi_select?.map(s => s.name) || [],
+                            // Preserve existing AI data if re-fetching
+                            aiData: inventory.find(old => old.id === item.id)?.aiData || null
+                        })).filter(i => i.name !== 'Untitled');
+
+                        allResults = [...allResults, ...processed];
+                        hasMore = data.has_more;
+                        startCursor = data.next_cursor;
+                        setProgress(p => ({ ...p, status: `Fetched ${allResults.length} items...` }));
+                    }
+
+                    // 2. ANALYZE WITH GEMINI (If requested)
+                    if (shouldAnalyze && geminiKey) {
+                        const BATCH_SIZE = 15;
+                        const itemsToAnalyze = allResults.filter(i => !i.aiData); // Only analyze new/unprocessed
+                        const totalBatches = Math.ceil(itemsToAnalyze.length / BATCH_SIZE);
+                        
+                        setProgress({ current: 0, total: totalBatches, status: 'Initializing Deep Scan...' });
+
+                        // Process in chunks
+                        for (let i = 0; i < itemsToAnalyze.length; i += BATCH_SIZE) {
+                            const batch = itemsToAnalyze.slice(i, i + BATCH_SIZE);
+                            const results = await analyzeBatch(batch);
+                            
+                            // Merge results back into allResults
+                            results.forEach(res => {
+                                const match = allResults.find(r => r.id === res.id);
+                                if (match) match.aiData = { isNarrative: res.is_narrative, summary: res.summary };
+                            });
+                            
+                            setProgress({ 
+                                current: Math.ceil((i + BATCH_SIZE) / BATCH_SIZE), 
+                                total: totalBatches, 
+                                status: `Analyzing batch ${Math.ceil((i + BATCH_SIZE) / BATCH_SIZE)}/${totalBatches}...` 
+                            });
+                        }
+                    }
+
+                    setInventory(allResults);
+                    setTimeout(() => setStep(2), 500);
+                    
+                } catch (err) {
+                    setError(err.message + (useProxy ? "" : " (Check Proxy)"));
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const generateReport = async () => {
+                if (!geminiKey) return setError("API Key required.");
+                setLoading(true);
+                setProgress({ status: `Writing Report with ${reportModelId}...` });
+
+                const selectedItems = inventory.filter(i => sessionIds.has(i.id));
+
+                // Build prompt with AI Summaries if available, fallback to raw desc
+                const evidenceList = selectedItems.map(item => `
+---
+ID: ${item.rfid || item.id}
+NAME: ${item.name}
+TYPE: ${item.type}
+${item.aiData ? `AI SUMMARY: ${item.aiData.summary}` : `DETAILS: ${item.desc}`}
+THREADS: ${item.threads.join(', ')}
+---`).join('\n');
+
+                const finalPrompt = `
+${systemPrompt}
+
+DETECTIVE VOICE / STYLE GUIDE:
+Please emulate the tone, vocabulary, and sentence structure found in these samples:
+"""
+${voiceSamples}
+"""
+
+CASE METADATA:
+ID: ${caseMeta.number} | Date: ${caseMeta.date} | Loc: ${caseMeta.location}
+
+GAME LOGS:
+${gameLogs || "None provided."}
+
+EVIDENCE INVENTORY (${selectedItems.length} Items):
+${evidenceList}
+`;
+
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${reportModelId}:generateContent?key=${geminiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: finalPrompt }] }],
+                            safetySettings: [
+                                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                            ],
+                            generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error?.message || "Gemini Error");
+
+                    setReport(data.candidates?.[0]?.content?.parts?.[0]?.text || "No output.");
+                    setStep(5);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const exportStyledHTML = () => {
+                // Determine watermark and status based on case
+                const watermark = caseMeta.status || 'CLASSIFIED';
+                const status = caseMeta.status || 'ACTIVE INVESTIGATION';
+
+                // Fill template with case metadata and report body
+                const filledTemplate = REPORT_TEMPLATE
+                    .replace(/\{\{CASE_NUMBER\}\}/g, caseMeta.number)
+                    .replace(/\{\{DATE\}\}/g, caseMeta.date)
+                    .replace(/\{\{LOCATION\}\}/g, caseMeta.location)
+                    .replace(/\{\{STATUS\}\}/g, status)
+                    .replace(/\{\{WATERMARK\}\}/g, watermark)
+                    .replace(/\{\{REPORT_BODY\}\}/g, report);
+
+                // Create download
+                const blob = new Blob([filledTemplate], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `case-report-${caseMeta.number.toLowerCase().replace(/[^a-z0-9]/g, '-')}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            // --- RENDERERS ---
+
+            // Helper for Inventory Items
+            const InventoryItem = ({ item, isSelected, onClick }) => {
+                const isNarrative = item.aiData ? item.aiData.isNarrative : true;
+                const summary = item.aiData ? item.aiData.summary : item.desc;
+                
+                return (
+                    <div 
+                        onClick={onClick}
+                        className={`p-3 rounded-lg border cursor-pointer transition-all group select-none relative overflow-hidden
+                            ${isSelected 
+                                ? (item.category === 'memory' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-pink-900/30 border-pink-500/50')
+                                : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/80'}
+                        `}
+                    >
+                        <div className="flex gap-3 relative z-10">
+                            <div className={`mt-1 ${isSelected ? (item.category === 'memory' ? 'text-blue-400' : 'text-pink-400') : 'text-slate-600'}`}>
+                                <Icon name={isSelected ? 'check-square' : 'square'} size={18} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-baseline mb-1">
+                                    <h3 className={`font-bold text-sm truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                                        {item.name}
+                                    </h3>
+                                    {item.rfid && <span className="text-[10px] font-mono bg-black/40 text-slate-500 px-1.5 py-0.5 rounded ml-2">{item.rfid}</span>}
+                                </div>
+                                
+                                {/* AI Summary or Raw Desc */}
+                                <p className={`text-xs leading-relaxed ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                                    {item.aiData && <span className="text-neon-purple mr-1">★</span>}
+                                    {summary ? (summary.length > 120 ? summary.substring(0, 120) + '...' : summary) : <span className="italic opacity-50">No data...</span>}
+                                </p>
+                                
+                                <div className="flex gap-2 mt-2">
+                                    <span className="text-[10px] uppercase tracking-wider opacity-60 border border-slate-700 px-1 rounded">{item.type}</span>
+                                    {!isNarrative && <span className="text-[10px] uppercase tracking-wider text-amber-500/70 border border-amber-900/30 px-1 rounded">PROP</span>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const StepIndicator = () => (
+                <div className="flex items-center justify-between mb-8 px-4">
+                    {[
+                        { id: 1, label: 'Connect', icon: 'link' },
+                        { id: 2, label: 'Defaults', icon: 'settings' },
+                        { id: 3, label: 'Session', icon: 'cpu' },
+                        { id: 4, label: 'Context', icon: 'file-text' },
+                        { id: 5, label: 'Report', icon: 'file-output' }
+                    ].map((s, idx, arr) => (
+                        <React.Fragment key={s.id}>
+                            <div 
+                                onClick={() => s.id < step ? setStep(s.id) : null}
+                                className={`flex flex-col items-center gap-2 cursor-pointer z-10 group ${s.id === step ? 'step-active' : ''}`}
+                            >
+                                <div className={`
+                                    w-10 h-10 rounded-full flex items-center justify-center border-2 step-dot transition-colors
+                                    ${s.id <= step ? 'bg-slate-900 border-blue-500 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-700'}
+                                `}>
+                                    <Icon name={s.icon} size={18} />
+                                </div>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${s.id <= step ? 'text-blue-400' : 'text-slate-700'}`}>
+                                    {s.label}
+                                </span>
+                            </div>
+                            {idx < arr.length - 1 && (
+                                <div className={`h-0.5 flex-1 mx-2 step-line ${s.id < step ? 'bg-blue-900' : 'bg-slate-800'}`} />
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
+            );
+
+            // STEP 1: CONFIG
+            const renderConfig = () => (
+                <div className="glass-panel rounded-xl p-8 max-w-2xl mx-auto animate-fade-in">
+                    <div className="flex items-center gap-4 mb-8 border-b border-slate-700/50 pb-6">
+                        <div className="w-12 h-12 bg-blue-500/10 rounded-xl border border-blue-500/20 flex items-center justify-center">
+                            <Icon name="database" className="text-blue-400" size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white">System Initialization</h2>
+                            <p className="text-sm text-slate-400">Configure AI Core & Database Uplink</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-xs font-bold text-blue-400 uppercase mb-2">Gemini API Key</label>
+                            <div className="relative">
+                                <input 
+                                    type="password" 
+                                    value={geminiKey}
+                                    onChange={e => setGeminiKey(e.target.value)}
+                                    placeholder="AIzaSy..."
+                                    className="w-full glass-input rounded-lg p-3 text-sm focus:border-blue-500 outline-none transition-all text-white placeholder-slate-600"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Report Model</label>
+                                <select 
+                                    value={reportModelId}
+                                    onChange={e => setReportModelId(e.target.value)}
+                                    className="w-full glass-input rounded-lg p-3 text-sm text-slate-300 focus:border-blue-500 outline-none"
+                                >
+                                    {MODELS.filter(m => m.type === 'pro').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Proxy Relay</label>
+                                <div 
+                                    onClick={() => setUseProxy(!useProxy)}
+                                    className={`w-full p-3 rounded-lg border cursor-pointer flex items-center justify-between transition-all ${useProxy ? 'bg-blue-500/10 border-blue-500/30 text-blue-300' : 'glass-input border-slate-700 text-slate-500'}`}
+                                >
+                                    <span className="text-sm">CORS Proxy</span>
+                                    <div className={`w-2 h-2 rounded-full ${useProxy ? 'bg-blue-400 shadow-[0_0_8px_#3b82f6]' : 'bg-slate-700'}`} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button 
+                                onClick={() => fetchAndAnalyze(false)}
+                                disabled={loading}
+                                className="glass-input hover:bg-slate-800 text-slate-300 font-bold py-4 rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
+                            >
+                                Only Fetch Data
+                            </button>
+
+                            <button 
+                                onClick={() => fetchAndAnalyze(true)}
+                                disabled={loading || !geminiKey}
+                                className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-4 rounded-lg shadow-lg shadow-blue-900/20 flex flex-col items-center justify-center gap-1 transition-all hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100"
+                            >
+                                <div className="flex items-center gap-2">
+                                    {loading ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="sparkles" />}
+                                    <span>Fetch & Deep Scan</span>
+                                </div>
+                                <span className="text-[10px] font-normal opacity-80">Uses Flash Model to Summarize & Filter</span>
+                            </button>
+                        </div>
+
+                        {/* Progress Bar */}
+                        {loading && (
+                            <div className="animate-slide-up bg-slate-900/50 rounded-lg p-4 border border-slate-800">
+                                <div className="flex justify-between text-xs mb-2">
+                                    <span className="text-blue-400 animate-pulse">{progress.status}</span>
+                                    <span className="text-slate-500">{progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}</span>
+                                </div>
+                                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-blue-500 transition-all duration-500"
+                                        style={{ width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '100%' }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {inventory.length > 0 && !loading && (
+                            <div className="text-center">
+                                <p className="text-xs text-slate-500">
+                                    {inventory.length} items cached. {inventory.filter(i => i.aiData).length} analyzed.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+
+            // STEP 2 & 3: SELECTION (Generic Component)
+            const SelectionStep = ({ title, sub, category, selectedSet, setHandler, isBase = false, nextStep }) => {
+                // Filter Logic
+                const filteredItems = inventory
+                    .filter(i => {
+                        if (isBase && i.category !== 'static') return false;
+                        if (!isBase && category === 'memory' && i.category !== 'memory') return false;
+                        if (!isBase && category === 'static' && i.category !== 'static') return false;
+                        return true;
+                    })
+                    .filter(i => {
+                        // Text Search
+                        const matchText = i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                        i.rfid.toLowerCase().includes(searchTerm.toLowerCase());
+                        // Prop Filter (Only if AI data exists)
+                        const matchType = hideProps && i.aiData ? i.aiData.isNarrative : true;
+                        return matchText && matchType;
+                    });
+
+                return (
+                    <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
+                        {/* Header */}
+                        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between bg-slate-900/50">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${isBase ? 'bg-pink-500/10 text-pink-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                    <Icon name={isBase ? "settings" : "cpu"} size={20} />
+                                </div>
+                                <div>
+                                    <h2 className="font-bold text-white text-sm">{title}</h2>
+                                    <p className="text-xs text-slate-400">{sub}</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setStep(nextStep)}
+                                className="px-4 py-2 bg-slate-100 text-slate-900 hover:bg-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
+                            >
+                                Next <Icon name="arrow-right" size={14} />
+                            </button>
+                        </div>
+
+                        {/* Controls */}
+                        <div className="p-4 border-b border-slate-700/50 flex flex-col md:flex-row gap-4">
+                            <div className="relative flex-1">
+                                <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Filter by name or RFID..." 
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="w-full glass-input rounded-full pl-9 pr-4 py-2 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                                />
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                                {!isBase && (
+                                    <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-700">
+                                        <button onClick={() => setSessionTab('memory')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'memory' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Memory</button>
+                                        <button onClick={() => setSessionTab('static')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'static' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Static</button>
+                                    </div>
+                                )}
+                                
+                                <button 
+                                    onClick={() => setHideProps(!hideProps)}
+                                    className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${hideProps ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'border-slate-700 text-slate-500'}`}
+                                >
+                                    <Icon name="filter" size={14} />
+                                    {hideProps ? 'Props Hidden' : 'Show All'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* List */}
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-slate-950/30">
+                            {filteredItems.map(item => (
+                                <InventoryItem 
+                                    key={item.id}
+                                    item={item}
+                                    isSelected={selectedSet.has(item.id)}
+                                    onClick={() => {
+                                        const next = new Set(selectedSet);
+                                        next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                                        setHandler(next);
+                                    }}
+                                />
+                            ))}
+                            {filteredItems.length === 0 && (
+                                <div className="p-8 text-center text-slate-600 text-sm">
+                                    No items found. {hideProps && "Try turning off the Prop filter."}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-2 bg-slate-900 border-t border-slate-800 text-center text-xs text-slate-500 font-mono">
+                            {selectedSet.size} items selected
+                        </div>
+                    </div>
+                );
+            };
+
+            // STEP 4: CONTEXT
+            const renderContext = () => (
+                <div className="max-w-5xl mx-auto h-full animate-fade-in flex flex-col gap-6">
+                    
+                    {/* Top Row: Meta & Prompt */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Metadata */}
+                        <div className="glass-panel p-5 rounded-xl">
+                            <h3 className="text-xs font-bold text-blue-400 uppercase mb-4 flex items-center gap-2">
+                                <Icon name="clipboard" size={14} /> Case Metadata
+                            </h3>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-bold uppercase">Case ID</label>
+                                    <input value={caseMeta.number} onChange={e => setCaseMeta({...caseMeta, number: e.target.value})} className="w-full glass-input rounded p-2 text-xs font-mono text-white" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-bold uppercase">Location</label>
+                                    <input value={caseMeta.location} onChange={e => setCaseMeta({...caseMeta, location: e.target.value})} className="w-full glass-input rounded p-2 text-xs font-mono text-white" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-bold uppercase">Status / Watermark</label>
+                                    <input value={caseMeta.status} onChange={e => setCaseMeta({...caseMeta, status: e.target.value})} className="w-full glass-input rounded p-2 text-xs font-mono text-white" placeholder="ACTIVE INVESTIGATION" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Voice Calibration */}
+                        <div className="glass-panel p-5 rounded-xl md:col-span-2 flex flex-col">
+                            <h3 className="text-xs font-bold text-neon-purple uppercase mb-2 flex items-center gap-2">
+                                <Icon name="mic" size={14} /> Detective Voice Calibration
+                            </h3>
+                            <p className="text-[10px] text-slate-400 mb-2">Paste samples of the detective's dialogue here to guide the AI's tone.</p>
+                            <textarea 
+                                value={voiceSamples}
+                                onChange={e => setVoiceSamples(e.target.value)}
+                                className="flex-1 w-full glass-input rounded p-3 text-xs font-mono text-slate-300 focus:border-purple-500 outline-none resize-none leading-relaxed"
+                                placeholder='"I hate the rain."&#10;"Another dead end."'
+                            />
+                        </div>
+                    </div>
+
+                    {/* Bottom Row: Logs & Generate */}
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
+                        <div className="glass-panel p-5 rounded-xl flex flex-col">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Game Logs & Notes</h3>
+                            <textarea 
+                                value={gameLogs}
+                                onChange={e => setGameLogs(e.target.value)}
+                                placeholder="Log player actions, decisions, and key events..."
+                                className="flex-1 w-full glass-input rounded p-3 text-xs font-mono focus:border-blue-500 outline-none resize-none"
+                            />
+                        </div>
+                        
+                        <div className="glass-panel p-5 rounded-xl flex flex-col">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase">System Prompt</h3>
+                                <button onClick={() => setSystemPrompt(DEFAULT_PROMPT)} className="text-[10px] text-blue-400 hover:underline">Reset</button>
+                            </div>
+                            <textarea 
+                                value={systemPrompt}
+                                onChange={e => setSystemPrompt(e.target.value)}
+                                className="flex-1 w-full glass-input rounded p-3 text-xs font-mono focus:border-blue-500 outline-none resize-none"
+                            />
+                            <button 
+                                onClick={generateReport}
+                                disabled={loading}
+                                className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
+                            >
+                                {loading ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="zap" />}
+                                Generate Final Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // STEP 5: REPORT
+            const renderReport = () => (
+                <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
+                    <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-900/80">
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                            <Icon name="file-check" className="text-green-400" /> Mission Report
+                        </h2>
+                        <div className="flex gap-2">
+                            <button onClick={() => setStep(4)} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white border border-slate-700 rounded hover:bg-slate-800">Edit Context</button>
+                            <button onClick={() => navigator.clipboard.writeText(report)} className="px-3 py-1.5 text-xs bg-slate-600 text-white rounded hover:bg-slate-500 flex items-center gap-2">
+                                <Icon name="copy" size={14} /> Copy Text
+                            </button>
+                            <button onClick={exportStyledHTML} className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 flex items-center gap-2 font-bold shadow-lg">
+                                <Icon name="download" size={14} /> Export Styled HTML
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex-1 p-8 overflow-y-auto bg-slate-950">
+                        <div className="prose prose-invert prose-blue max-w-3xl mx-auto font-mono text-sm">
+                            <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: report }}></div>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-[#020617] text-slate-200 p-6 flex flex-col font-sans selection:bg-blue-500/30">
+                    {/* Header */}
+                    <header className="max-w-6xl mx-auto w-full mb-6 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/50">
+                                <Icon name="aperture" className="text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold text-white tracking-tight">ALN <span className="text-blue-400">Director</span></h1>
+                                <div className="flex gap-2 text-[10px] font-mono text-slate-500">
+                                    <span>G3-PRO</span>
+                                    <span>•</span>
+                                    <span>FLASH-ANALYSIS</span>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="flex-1 max-w-6xl mx-auto w-full flex flex-col min-h-0 pb-4">
+                        {error && (
+                            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-center gap-3 animate-fade-in">
+                                <Icon name="alert-triangle" />
+                                {error}
+                            </div>
+                        )}
+
+                        <StepIndicator />
+
+                        <div className="flex-1 min-h-0 relative">
+                            {step === 1 && renderConfig()}
+                            {step === 2 && <SelectionStep 
+                                title="Baseline Environment" 
+                                sub="Select items permanently in the room."
+                                category="static"
+                                isBase={true}
+                                selectedSet={defaultStaticIds} 
+                                setHandler={setDefaultStaticIds}
+                                nextStep={3}
+                            />}
+                            {step === 3 && <SelectionStep 
+                                title="Session Findings" 
+                                sub="Select items found during this run."
+                                category={sessionTab}
+                                isBase={false}
+                                selectedSet={sessionIds} 
+                                setHandler={setSessionIds}
+                                nextStep={4}
+                            />}
+                            {step === 4 && renderContext()}
+                            {step === 5 && renderReport()}
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
