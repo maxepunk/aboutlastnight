@@ -52,20 +52,23 @@
     </script>
 
     <style>
+        /* Import Bebas Neue for headers */
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
         body { background-color: #020617; color: #e2e8f0; }
-        
+
         .glass-panel {
             background: rgba(30, 41, 59, 0.6);
             backdrop-filter: blur(16px);
             border: 1px solid rgba(148, 163, 184, 0.1);
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
         }
-        
+
         .glass-input {
             background: rgba(2, 6, 23, 0.6);
             border: 1px solid rgba(51, 65, 85, 0.5);
         }
-        
+
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
@@ -74,6 +77,102 @@
         .step-dot { transition: all 0.3s ease; }
         .step-active .step-dot { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); transform: scale(1.1); }
         .step-line { transition: all 0.5s ease; }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        /* Editor with line numbers */
+        .editor-container {
+            position: relative;
+            display: flex;
+            font-family: 'Courier Prime', 'Courier New', monospace;
+        }
+
+        .line-numbers {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 1rem 0.75rem;
+            text-align: right;
+            color: rgba(148, 163, 184, 0.4);
+            font-size: 0.75rem;
+            line-height: 1.75;
+            user-select: none;
+            border-right: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        .editor-textarea {
+            flex: 1;
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            line-height: 1.75;
+            tab-size: 2;
+        }
+
+        /* Editor Content Styling for Visual Hierarchy */
+        .editor-content h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.75rem;
+            color: #3b82f6;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid rgba(59, 130, 246, 0.4);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .editor-content h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.3rem;
+            color: #fbbf24;
+            margin-top: 1.75rem;
+            margin-bottom: 0.75rem;
+            letter-spacing: 0.03em;
+        }
+
+        .editor-content .evidence-item {
+            border-left: 4px solid rgba(59, 130, 246, 0.5);
+            background: rgba(30, 41, 59, 0.3);
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            border-radius: 0.25rem;
+        }
+
+        .editor-content .note {
+            background: rgba(251, 191, 36, 0.1);
+            border-left: 4px solid rgba(251, 191, 36, 0.6);
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            font-style: italic;
+            border-radius: 0.25rem;
+        }
+
+        .editor-content p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+        }
+
+        .editor-content ul {
+            margin: 1rem 0 1rem 1.5rem;
+            line-height: 1.75;
+        }
+
+        .editor-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .editor-content strong {
+            color: #e2e8f0;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -85,6 +184,191 @@
         const Icon = ({ name, size = 18, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        };
+
+        // Loading Overlay Component
+        const LoadingOverlay = () => (
+            <div className="loading-overlay">
+                <div className="glass-panel rounded-2xl p-8 flex flex-col items-center gap-4 max-w-md">
+                    <div className="relative">
+                        <div className="w-16 h-16 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Icon name="file-text" className="text-blue-400" size={24} />
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-xl font-bold text-white mb-2">Processing Report</h3>
+                        <p className="text-sm text-slate-400">Analyzing evidence and synthesizing narrative...</p>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // Inventory Item Component
+        const InventoryItem = ({ item, isSelected, onClick }) => {
+            const isNarrative = item.aiData ? item.aiData.isNarrative : true;
+            const summary = item.aiData ? item.aiData.summary : item.desc;
+
+            return (
+                <div
+                    onClick={onClick}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all group select-none relative overflow-hidden
+                        ${isSelected
+                            ? (item.category === 'memory' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-pink-900/30 border-pink-500/50')
+                            : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/80'}
+                    `}
+                >
+                    <div className="flex gap-3 relative z-10">
+                        <div className={`mt-1 ${isSelected ? (item.category === 'memory' ? 'text-blue-400' : 'text-pink-400') : 'text-slate-600'}`}>
+                            <Icon name={isSelected ? 'check-square' : 'square'} size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-baseline mb-1">
+                                <h3 className={`font-bold text-sm truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                                    {item.name}
+                                </h3>
+                                {item.rfid && <span className="text-[10px] font-mono bg-black/40 text-slate-500 px-1.5 py-0.5 rounded ml-2">{item.rfid}</span>}
+                            </div>
+
+                            <p className={`text-xs leading-relaxed ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                                {item.aiData && <span className="text-neon-purple mr-1">★</span>}
+                                {summary ? (summary.length > 120 ? summary.substring(0, 120) + '...' : summary) : <span className="italic opacity-50">No data...</span>}
+                            </p>
+
+                            <div className="flex gap-2 mt-2">
+                                <span className="text-[10px] uppercase tracking-wider opacity-60 border border-slate-700 px-1 rounded">{item.type}</span>
+                                {!isNarrative && <span className="text-[10px] uppercase tracking-wider text-amber-500/70 border border-amber-900/30 px-1 rounded">PROP</span>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Step Indicator Component
+        const StepIndicator = ({ step, setStep }) => (
+            <div className="flex items-center justify-between mb-8 px-4">
+                {[
+                    { id: 1, label: 'Connect', icon: 'link' },
+                    { id: 2, label: 'Defaults', icon: 'settings' },
+                    { id: 3, label: 'Session', icon: 'cpu' },
+                    { id: 4, label: 'Context', icon: 'file-text' },
+                    { id: 5, label: 'Report', icon: 'file-output' }
+                ].map((s, idx, arr) => (
+                    <React.Fragment key={s.id}>
+                        <div
+                            onClick={() => s.id < step ? setStep(s.id) : null}
+                            className={`flex flex-col items-center gap-2 cursor-pointer z-10 group ${s.id === step ? 'step-active' : ''}`}
+                        >
+                            <div className={`
+                                w-10 h-10 rounded-full flex items-center justify-center border-2 step-dot transition-colors
+                                ${s.id <= step ? 'bg-slate-900 border-blue-500 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-700'}
+                            `}>
+                                <Icon name={s.icon} size={18} />
+                            </div>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${s.id <= step ? 'text-blue-400' : 'text-slate-700'}`}>
+                                {s.label}
+                            </span>
+                        </div>
+                        {idx < arr.length - 1 && (
+                            <div className={`h-0.5 flex-1 mx-2 step-line ${s.id < step ? 'bg-blue-900' : 'bg-slate-800'}`} />
+                        )}
+                    </React.Fragment>
+                ))}
+            </div>
+        );
+
+        // Selection Step Component
+        const SelectionStep = ({ title, sub, category, selectedSet, setHandler, isBase, nextStep, inventory, searchTerm, setSearchTerm, hideProps, setHideProps, sessionTab, setSessionTab, setStep }) => {
+            const filteredItems = inventory
+                .filter(i => {
+                    if (isBase && i.category !== 'static') return false;
+                    if (!isBase && category === 'memory' && i.category !== 'memory') return false;
+                    if (!isBase && category === 'static' && i.category !== 'static') return false;
+                    return true;
+                })
+                .filter(i => {
+                    const matchText = i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                    i.rfid.toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchType = hideProps && i.aiData ? i.aiData.isNarrative : true;
+                    return matchText && matchType;
+                });
+
+            return (
+                <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
+                    <div className="p-4 border-b border-slate-700/50 flex items-center justify-between bg-slate-900/50">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${isBase ? 'bg-pink-500/10 text-pink-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                <Icon name={isBase ? "settings" : "cpu"} size={20} />
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-white text-sm">{title}</h2>
+                                <p className="text-xs text-slate-400">{sub}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setStep(nextStep)}
+                            className="px-4 py-2 bg-slate-100 text-slate-900 hover:bg-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
+                        >
+                            Next <Icon name="arrow-right" size={14} />
+                        </button>
+                    </div>
+
+                    <div className="p-4 border-b border-slate-700/50 flex flex-col md:flex-row gap-4">
+                        <div className="relative flex-1">
+                            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Filter by name or RFID..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full glass-input rounded-full pl-9 pr-4 py-2 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            {!isBase && (
+                                <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-700">
+                                    <button onClick={() => setSessionTab('memory')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'memory' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Memory</button>
+                                    <button onClick={() => setSessionTab('static')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'static' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Static</button>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => setHideProps(!hideProps)}
+                                className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${hideProps ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'border-slate-700 text-slate-500'}`}
+                            >
+                                <Icon name="filter" size={14} />
+                                {hideProps ? 'Props Hidden' : 'Show All'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-slate-950/30">
+                        {filteredItems.map(item => (
+                            <InventoryItem
+                                key={item.id}
+                                item={item}
+                                isSelected={selectedSet.has(item.id)}
+                                onClick={() => {
+                                    const next = new Set(selectedSet);
+                                    next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                                    setHandler(next);
+                                }}
+                            />
+                        ))}
+                        {filteredItems.length === 0 && (
+                            <div className="p-8 text-center text-slate-600 text-sm">
+                                No items found. {hideProps && "Try turning off the Prop filter."}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-2 bg-slate-900 border-t border-slate-800 text-center text-xs text-slate-500 font-mono">
+                        {selectedSet.size} items selected
+                    </div>
+                </div>
+            );
         };
 
         // --- CONSTANTS ---
@@ -113,13 +397,48 @@ STRUCTURE:
 - Use <strong> for emphasis on names, titles, key terms
 - Use <p class="note"> for detective's personal observations/conclusions
 
+IMPORTANT: Do NOT reference item IDs, RFIDs, or database identifiers in your report. Reference evidence by descriptive names only (e.g., "the witness statement", "the encrypted data chip", "the memory token containing the party footage").
+
 SECTIONS: Executive Summary, Evidence Locker, Memory Analysis, Suspect Network, Outstanding Questions.
 
 Synthesize the provided evidence and logs into a coherent narrative.`;
 
-        const DEFAULT_VOICE_SAMPLES = `"Another rainy Tuesday in the Sprawl. The coffee's cold, just like the leads."
-"I don't get paid to ask why, I get paid to ask who."
-"The tech looks expensive. More credits than sense."`;
+        const DEFAULT_VOICE_SAMPLES = `""Good morning sleepyheads. I'm DETECTIVE Anondono and you're missing time. That's not a coincidence.
+MARCUS Blackwood is dead. The call went out before dawn, and everyone else who was at this party is missing.
+[Takes a moment to connect with a player or two, checking eyes for dilation, etc.]
+I believe what happened to you is connected to an underground organization called 'The Black Market'—one I've been chasing long enough to know how they work.
+I need your help to find your friends and take down the ringleaders. But first, we establish trust.
+We know MARCUS and the Black Market dealt in memory drugs. You got dosed. So—let's reintroduce ourselves, shall we?
+[Improv: Go around the room with introductions. The 'plant' is 'Blake Manley'.]
+People are missing. What happened wasn't random. And we don't wait around for answers—we dig them up.
+When I arrived, I found something interesting. Coat check over there has the usual debris: bags, purses, coats. But this pile? Right here in the middle of the room? Someone left these out in plain sight and locked them tight. Combination locks, cryptic designs, the whole nine yards.
+These belong to people in MARCUS's inner circle. People who were neck-deep in whatever went down before the party even started. This is where we start. Someone sealed these in a hurry—which means they're hiding something worth finding.
+Let's crack these open together. They're our best shot at tracking your friends.
+[POINT OUT EACH PERSON WHO HAS A THING IN THE PILE]
+That said: you need to recover your own things from coat check, do what feels right. I'm building our case here [gestures to whiteboard]—bring me what you find. The smallest detail can break this whole thing open.
+Let's get to work.""
+"“Wait! Everyone, listen. Before you make your choices, you need to know something. I'm not local PD. I'm investigating something bigger. Corporate crimes, memory extraction, people disappearing. This is part of it. 
+We have a way to save your friends without selling innocent people's memories to the Black Market. My team just worked out a non-destructive process to capture these memories. My team can extract witness accounts from these tokens—enough to identify the Black Market ringleaders AND find your friends.
+The choice is yours. But, while Blake here (IF that is even their real name…) is claiming to HAVE your friends– they don’t even have any proof.  
+I need your help. But you get to choose.
+If you want accountability, bring tokens to me. We will document everything and bring bad actors to justice.
+Or wait and see what happens if you hold onto them—that's your call too.
+"
+""Everyone stop for a moment."
+[Holds up token]
+"This token—it describes the extraction process. And what happens when these tokens 'expire.'"
+[Looks directly at BM]
+"They don't degrade into nothing. The memories RESTORE. Back to their owners. That's what expiration means."
+[To group]
+"Blake's been lying. These tokens aren't a ticking time bomb. If you hold them until the timer runs out, you get your memories BACK.""
+"Buuut then there's all you all, ya weirdos.
+I'm kidding. Kinda. [shaking head] This party….
+Y'all have a weird idea of fun.
+In all seriousness though, listen, you made your choices tonight. The memories you held onto? Those are coming back. What you sold to Blake? Gone forever. What you brought to me? That's evidence. Public record. The start of something bigger.
+Blake's just a bad apple in a big pond, but thanks to you I can now go after the real sharks. And you will get the full story—everything we uncovered tonight. I'm sending each of you a complete case file. What you helped expose today? That's going to bring down some people who thought they were untouchable.
+Thank you for staying. The door was open this whole time—you could've walked. But you didn't. 
+Now go home. Get some real rest. You've earned it. 
+"`;
 
         // DETECTIVE REPORT HTML TEMPLATE
         const REPORT_TEMPLATE = `<!DOCTYPE html>
@@ -393,8 +712,10 @@ Synthesize the provided evidence and logs into a coherent narrative.`;
             
             // UI State
             const [searchTerm, setSearchTerm] = useState('');
-            const [sessionTab, setSessionTab] = useState('memory'); 
+            const [sessionTab, setSessionTab] = useState('memory');
             const [hideProps, setHideProps] = useState(true); // Filter toggle
+            const [isEditingReport, setIsEditingReport] = useState(false); // Report edit mode
+            const [isGenerating, setIsGenerating] = useState(false); // Report generation in progress
 
             // --- PERSISTENCE ---
             useEffect(() => { localStorage.setItem('notion_token', notionToken); }, [notionToken]);
@@ -426,8 +747,8 @@ You are a database cleaner for a Detective Game.
 Analyze these inventory items. Return a JSON Object with a key "results" containing an array of objects.
 For each item:
 1. "id": The exact ID provided.
-2. "is_narrative": Boolean. TRUE if it is a clue, document, key item, or evidence. FALSE if it is a generic prop (bag, costume, tape, battery, generic tech).
-3. "summary": A concise 10-15 word summary of what this object IS and its potential significance. Strip out game mechanic text.
+2. "is_narrative": Boolean. TRUE if it is a clue, document, key item, or evidence containing narrative elements in the Description/Text field. FALSE if it is a generic prop (bag, costume, tape, battery, generic tech with no narrative Description/Text content).
+3. "summary": A concise 10-15 word summary of what this object IS and its potential significance. Strip out game mechanic text. Clearly identify non-narrative elements based on previous boolean and BRIEFLY identify the mechanical purpose of non-narrative elements.
 
 ITEMS TO ANALYZE:
 ${JSON.stringify(items.map(i => ({ id: i.id, name: i.name, desc: i.desc, type: i.type })))}
@@ -539,6 +860,7 @@ ${JSON.stringify(items.map(i => ({ id: i.id, name: i.name, desc: i.desc, type: i
             const generateReport = async () => {
                 if (!geminiKey) return setError("API Key required.");
                 setLoading(true);
+                setIsGenerating(true);
                 setProgress({ status: `Writing Report with ${reportModelId}...` });
 
                 const selectedItems = inventory.filter(i => sessionIds.has(i.id));
@@ -592,11 +914,13 @@ ${evidenceList}
                     if (!response.ok) throw new Error(data.error?.message || "Gemini Error");
 
                     setReport(data.candidates?.[0]?.content?.parts?.[0]?.text || "No output.");
+                    setIsEditingReport(false); // Show preview mode when new report generated
                     setStep(5);
                 } catch (err) {
                     setError(err.message);
                 } finally {
                     setLoading(false);
+                    setIsGenerating(false);
                 }
             };
 
@@ -627,80 +951,6 @@ ${evidenceList}
             };
 
             // --- RENDERERS ---
-
-            // Helper for Inventory Items
-            const InventoryItem = ({ item, isSelected, onClick }) => {
-                const isNarrative = item.aiData ? item.aiData.isNarrative : true;
-                const summary = item.aiData ? item.aiData.summary : item.desc;
-                
-                return (
-                    <div 
-                        onClick={onClick}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all group select-none relative overflow-hidden
-                            ${isSelected 
-                                ? (item.category === 'memory' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-pink-900/30 border-pink-500/50')
-                                : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/80'}
-                        `}
-                    >
-                        <div className="flex gap-3 relative z-10">
-                            <div className={`mt-1 ${isSelected ? (item.category === 'memory' ? 'text-blue-400' : 'text-pink-400') : 'text-slate-600'}`}>
-                                <Icon name={isSelected ? 'check-square' : 'square'} size={18} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-baseline mb-1">
-                                    <h3 className={`font-bold text-sm truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
-                                        {item.name}
-                                    </h3>
-                                    {item.rfid && <span className="text-[10px] font-mono bg-black/40 text-slate-500 px-1.5 py-0.5 rounded ml-2">{item.rfid}</span>}
-                                </div>
-                                
-                                {/* AI Summary or Raw Desc */}
-                                <p className={`text-xs leading-relaxed ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                                    {item.aiData && <span className="text-neon-purple mr-1">★</span>}
-                                    {summary ? (summary.length > 120 ? summary.substring(0, 120) + '...' : summary) : <span className="italic opacity-50">No data...</span>}
-                                </p>
-                                
-                                <div className="flex gap-2 mt-2">
-                                    <span className="text-[10px] uppercase tracking-wider opacity-60 border border-slate-700 px-1 rounded">{item.type}</span>
-                                    {!isNarrative && <span className="text-[10px] uppercase tracking-wider text-amber-500/70 border border-amber-900/30 px-1 rounded">PROP</span>}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            };
-
-            const StepIndicator = () => (
-                <div className="flex items-center justify-between mb-8 px-4">
-                    {[
-                        { id: 1, label: 'Connect', icon: 'link' },
-                        { id: 2, label: 'Defaults', icon: 'settings' },
-                        { id: 3, label: 'Session', icon: 'cpu' },
-                        { id: 4, label: 'Context', icon: 'file-text' },
-                        { id: 5, label: 'Report', icon: 'file-output' }
-                    ].map((s, idx, arr) => (
-                        <React.Fragment key={s.id}>
-                            <div 
-                                onClick={() => s.id < step ? setStep(s.id) : null}
-                                className={`flex flex-col items-center gap-2 cursor-pointer z-10 group ${s.id === step ? 'step-active' : ''}`}
-                            >
-                                <div className={`
-                                    w-10 h-10 rounded-full flex items-center justify-center border-2 step-dot transition-colors
-                                    ${s.id <= step ? 'bg-slate-900 border-blue-500 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-700'}
-                                `}>
-                                    <Icon name={s.icon} size={18} />
-                                </div>
-                                <span className={`text-[10px] font-bold uppercase tracking-wider ${s.id <= step ? 'text-blue-400' : 'text-slate-700'}`}>
-                                    {s.label}
-                                </span>
-                            </div>
-                            {idx < arr.length - 1 && (
-                                <div className={`h-0.5 flex-1 mx-2 step-line ${s.id < step ? 'bg-blue-900' : 'bg-slate-800'}`} />
-                            )}
-                        </React.Fragment>
-                    ))}
-                </div>
-            );
 
             // STEP 1: CONFIG
             const renderConfig = () => (
@@ -816,104 +1066,6 @@ ${evidenceList}
                 </div>
             );
 
-            // STEP 2 & 3: SELECTION (Generic Component)
-            const SelectionStep = ({ title, sub, category, selectedSet, setHandler, isBase = false, nextStep }) => {
-                // Filter Logic
-                const filteredItems = inventory
-                    .filter(i => {
-                        if (isBase && i.category !== 'static') return false;
-                        if (!isBase && category === 'memory' && i.category !== 'memory') return false;
-                        if (!isBase && category === 'static' && i.category !== 'static') return false;
-                        return true;
-                    })
-                    .filter(i => {
-                        // Text Search
-                        const matchText = i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                        i.rfid.toLowerCase().includes(searchTerm.toLowerCase());
-                        // Prop Filter (Only if AI data exists)
-                        const matchType = hideProps && i.aiData ? i.aiData.isNarrative : true;
-                        return matchText && matchType;
-                    });
-
-                return (
-                    <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
-                        {/* Header */}
-                        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between bg-slate-900/50">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${isBase ? 'bg-pink-500/10 text-pink-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                                    <Icon name={isBase ? "settings" : "cpu"} size={20} />
-                                </div>
-                                <div>
-                                    <h2 className="font-bold text-white text-sm">{title}</h2>
-                                    <p className="text-xs text-slate-400">{sub}</p>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => setStep(nextStep)}
-                                className="px-4 py-2 bg-slate-100 text-slate-900 hover:bg-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
-                            >
-                                Next <Icon name="arrow-right" size={14} />
-                            </button>
-                        </div>
-
-                        {/* Controls */}
-                        <div className="p-4 border-b border-slate-700/50 flex flex-col md:flex-row gap-4">
-                            <div className="relative flex-1">
-                                <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                                <input 
-                                    type="text" 
-                                    placeholder="Filter by name or RFID..." 
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    className="w-full glass-input rounded-full pl-9 pr-4 py-2 text-sm text-slate-200 focus:border-blue-500 outline-none"
-                                />
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                                {!isBase && (
-                                    <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-700">
-                                        <button onClick={() => setSessionTab('memory')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'memory' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Memory</button>
-                                        <button onClick={() => setSessionTab('static')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'static' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Static</button>
-                                    </div>
-                                )}
-                                
-                                <button 
-                                    onClick={() => setHideProps(!hideProps)}
-                                    className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${hideProps ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'border-slate-700 text-slate-500'}`}
-                                >
-                                    <Icon name="filter" size={14} />
-                                    {hideProps ? 'Props Hidden' : 'Show All'}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* List */}
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-slate-950/30">
-                            {filteredItems.map(item => (
-                                <InventoryItem 
-                                    key={item.id}
-                                    item={item}
-                                    isSelected={selectedSet.has(item.id)}
-                                    onClick={() => {
-                                        const next = new Set(selectedSet);
-                                        next.has(item.id) ? next.delete(item.id) : next.add(item.id);
-                                        setHandler(next);
-                                    }}
-                                />
-                            ))}
-                            {filteredItems.length === 0 && (
-                                <div className="p-8 text-center text-slate-600 text-sm">
-                                    No items found. {hideProps && "Try turning off the Prop filter."}
-                                </div>
-                            )}
-                        </div>
-                        
-                        <div className="p-2 bg-slate-900 border-t border-slate-800 text-center text-xs text-slate-500 font-mono">
-                            {selectedSet.size} items selected
-                        </div>
-                    </div>
-                );
-            };
 
             // STEP 4: CONTEXT
             const renderContext = () => (
@@ -964,7 +1116,7 @@ ${evidenceList}
                             <textarea 
                                 value={gameLogs}
                                 onChange={e => setGameLogs(e.target.value)}
-                                placeholder="Log player actions, decisions, and key events..."
+                                placeholder="It was discovered that Marcus Blackwood was murdered by the Black Market representative, who went by the moniker "Blake Manley", in order to tie up 'loose ends' after an altercation between the two resulted in the drugged partygoers securing their recently extracted memories behind lock and key to be recovered by someone (Did Marcus do this in a move to double cross the Black Market? Was this an insane scheme by Blake to ensure the tokens were secured while he left to 'deal with' Marcus? The evidence is unclear)"
                                 className="flex-1 w-full glass-input rounded p-3 text-xs font-mono focus:border-blue-500 outline-none resize-none"
                             />
                         </div>
@@ -996,29 +1148,81 @@ ${evidenceList}
             const renderReport = () => (
                 <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
                     <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-900/80">
-                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                            <Icon name="file-check" className="text-green-400" /> Mission Report
-                        </h2>
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Icon name="file-check" className="text-green-400" /> Mission Report
+                            </h2>
+                            {isEditingReport && (
+                                <span className="px-2 py-1 text-[10px] font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">
+                                    Editing Mode
+                                </span>
+                            )}
+                        </div>
                         <div className="flex gap-2">
-                            <button onClick={() => setStep(4)} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white border border-slate-700 rounded hover:bg-slate-800">Edit Context</button>
-                            <button onClick={() => navigator.clipboard.writeText(report)} className="px-3 py-1.5 text-xs bg-slate-600 text-white rounded hover:bg-slate-500 flex items-center gap-2">
-                                <Icon name="copy" size={14} /> Copy Text
+                            <button onClick={() => setStep(4)} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white border border-slate-700 rounded hover:bg-slate-800">
+                                Edit Context
                             </button>
-                            <button onClick={exportStyledHTML} className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 flex items-center gap-2 font-bold shadow-lg">
-                                <Icon name="download" size={14} /> Export Styled HTML
+                            <button
+                                onClick={() => setIsEditingReport(!isEditingReport)}
+                                className={`px-3 py-1.5 text-xs rounded flex items-center gap-2 font-bold transition-all ${
+                                    isEditingReport
+                                        ? 'bg-green-600 text-white hover:bg-green-500'
+                                        : 'bg-amber-600 text-white hover:bg-amber-500'
+                                }`}
+                            >
+                                <Icon name={isEditingReport ? "eye" : "edit-3"} size={14} />
+                                {isEditingReport ? 'Preview' : 'Edit Report'}
+                            </button>
+                            <button
+                                onClick={() => navigator.clipboard.writeText(report)}
+                                className="px-3 py-1.5 text-xs bg-slate-600 text-white rounded hover:bg-slate-500 flex items-center gap-2"
+                            >
+                                <Icon name="copy" size={14} /> Copy
+                            </button>
+                            <button
+                                onClick={exportStyledHTML}
+                                className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 flex items-center gap-2 font-bold shadow-lg"
+                            >
+                                <Icon name="download" size={14} /> Export HTML
                             </button>
                         </div>
                     </div>
-                    <div className="flex-1 p-8 overflow-y-auto bg-slate-950">
-                        <div className="prose prose-invert prose-blue max-w-3xl mx-auto font-mono text-sm">
-                            <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: report }}></div>
-                        </div>
+                    <div className="flex-1 overflow-y-auto p-8 bg-slate-950">
+                        {isEditingReport ? (
+                            <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={e => setReport(e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{ __html: report }}
+                                className="editor-content max-w-4xl mx-auto glass-input rounded-lg p-8 text-sm text-slate-200 focus:border-amber-500 outline-none min-h-full"
+                                style={{ fontFamily: "'Courier Prime', 'Courier New', monospace" }}
+                            />
+                        ) : (
+                            <div className="max-w-4xl mx-auto">
+                                <iframe
+                                    srcDoc={REPORT_TEMPLATE
+                                        .replace(/\{\{CASE_NUMBER\}\}/g, caseMeta.number)
+                                        .replace(/\{\{DATE\}\}/g, caseMeta.date)
+                                        .replace(/\{\{LOCATION\}\}/g, caseMeta.location)
+                                        .replace(/\{\{STATUS\}\}/g, caseMeta.status || 'ACTIVE INVESTIGATION')
+                                        .replace(/\{\{WATERMARK\}\}/g, caseMeta.status || 'CLASSIFIED')
+                                        .replace(/\{\{REPORT_BODY\}\}/g, report)
+                                    }
+                                    className="w-full border-0 rounded-lg"
+                                    style={{ height: '2000px' }}
+                                    title="Report Preview"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             );
 
             return (
                 <div className="min-h-screen bg-[#020617] text-slate-200 p-6 flex flex-col font-sans selection:bg-blue-500/30">
+                    {/* Loading Overlay */}
+                    {isGenerating && <LoadingOverlay />}
+
                     {/* Header */}
                     <header className="max-w-6xl mx-auto w-full mb-6 flex justify-between items-center">
                         <div className="flex items-center gap-3">
@@ -1026,7 +1230,9 @@ ${evidenceList}
                                 <Icon name="aperture" className="text-white" />
                             </div>
                             <div>
-                                <h1 className="text-xl font-bold text-white tracking-tight">ALN <span className="text-blue-400">Director</span></h1>
+                                <h1 className="text-2xl font-bold text-white tracking-wide" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                                    ALN <span className="text-blue-400">DIRECTOR</span>
+                                </h1>
                                 <div className="flex gap-2 text-[10px] font-mono text-slate-500">
                                     <span>G3-PRO</span>
                                     <span>•</span>
@@ -1045,27 +1251,43 @@ ${evidenceList}
                             </div>
                         )}
 
-                        <StepIndicator />
+                        <StepIndicator step={step} setStep={setStep} />
 
                         <div className="flex-1 min-h-0 relative">
                             {step === 1 && renderConfig()}
-                            {step === 2 && <SelectionStep 
-                                title="Baseline Environment" 
+                            {step === 2 && <SelectionStep
+                                title="Baseline Environment"
                                 sub="Select items permanently in the room."
                                 category="static"
                                 isBase={true}
-                                selectedSet={defaultStaticIds} 
+                                selectedSet={defaultStaticIds}
                                 setHandler={setDefaultStaticIds}
                                 nextStep={3}
+                                inventory={inventory}
+                                searchTerm={searchTerm}
+                                setSearchTerm={setSearchTerm}
+                                hideProps={hideProps}
+                                setHideProps={setHideProps}
+                                sessionTab={sessionTab}
+                                setSessionTab={setSessionTab}
+                                setStep={setStep}
                             />}
-                            {step === 3 && <SelectionStep 
-                                title="Session Findings" 
+                            {step === 3 && <SelectionStep
+                                title="Session Findings"
                                 sub="Select items found during this run."
                                 category={sessionTab}
                                 isBase={false}
-                                selectedSet={sessionIds} 
+                                selectedSet={sessionIds}
                                 setHandler={setSessionIds}
                                 nextStep={4}
+                                inventory={inventory}
+                                searchTerm={searchTerm}
+                                setSearchTerm={setSearchTerm}
+                                hideProps={hideProps}
+                                setHideProps={setHideProps}
+                                sessionTab={sessionTab}
+                                setSessionTab={setSessionTab}
+                                setStep={setStep}
                             />}
                             {step === 4 && renderContext()}
                             {step === 5 && renderReport()}
