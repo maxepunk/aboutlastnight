@@ -1,16 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report MC-2025-1121 - About Last Night</title>
 <style>
-    body { font-family: 'Courier New', Courier, monospace; background-color: #1a1a1a; color: #e0e0e0; padding: 20px; max-width: 800px; margin: 0 auto; }
-    h1, h2 { border-bottom: 1px solid #555; padding-bottom: 10px; color: #b3b3b3; text-transform: uppercase; letter-spacing: 2px; }
-    h1 { font-size: 24px; text-align: center; }
-    h2 { font-size: 18px; margin-top: 30px; }
-    .meta { font-size: 12px; color: #888; margin-bottom: 20px; border: 1px solid #444; padding: 10px; background-color: #222; }
-    .evidence-item { margin-bottom: 10px; padding-left: 15px; border-left: 3px solid #444; }
-    .warning { color: #ff6b6b; font-weight: bold; }
-    .note { font-style: italic; color: #aaa; }
-    strong { color: #fff; }
+    /* Import Google Fonts matching main site */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;700;900&display=swap');
+
+    /* Reset and base styles */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: 'Barlow', sans-serif;
+        background-color: #0a0a0a;
+        color: rgba(255, 255, 255, 0.85);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+
+    h1, h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        border-bottom: 1px solid rgba(204, 0, 0, 0.3);
+        padding-bottom: 10px;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 20px;
+    }
+
+    h1 {
+        font-size: 3rem;
+        text-align: center;
+        border-bottom: 2px solid #cc0000;
+        margin-bottom: 30px;
+        text-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
+    }
+
+    h2 {
+        font-size: 2rem;
+        margin-top: 30px;
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.4);
+    }
+
+    .meta {
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 30px;
+        border: 1px solid rgba(204, 0, 0, 0.3);
+        padding: 20px;
+        background-color: rgba(20, 20, 20, 0.9);
+        border-left: 4px solid #cc0000;
+        line-height: 1.8;
+    }
+
+    .evidence-item {
+        margin-bottom: 20px;
+        padding-left: 20px;
+        border-left: 3px solid rgba(204, 0, 0, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        transform: translateX(5px);
+    }
+
+    .warning {
+        color: #cc0000;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+
+    .note {
+        font-style: italic;
+        color: rgba(255, 255, 255, 0.6);
+        background: rgba(20, 20, 20, 0.8);
+        padding: 20px;
+        border-left: 3px solid rgba(204, 0, 0, 0.5);
+        margin-top: 30px;
+    }
+
+    strong {
+        color: #fff;
+        font-weight: 700;
+    }
+
+    p {
+        margin-bottom: 15px;
+    }
+
+    ol, ul {
+        margin-left: 25px;
+        margin-top: 15px;
+    }
+
+    li {
+        margin-bottom: 10px;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    hr {
+        border: none;
+        height: 2px;
+        background: linear-gradient(to right, transparent, rgba(204, 0, 0, 0.8) 20%, rgba(204, 0, 0, 0.8) 80%, transparent);
+        margin: 30px 0;
+        box-shadow: 0 0 10px rgba(204, 0, 0, 0.3);
+    }
+
+    em {
+        color: rgba(255, 200, 100, 0.9);
+        font-style: italic;
+    }
 </style>
 </head>
 <body>
