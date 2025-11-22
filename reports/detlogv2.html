@@ -90,8 +90,8 @@
         // --- CONSTANTS ---
         const ELEMENTS_DB_ID = "18c2f33d-583f-8020-91bc-d84c7dd94306";
         const NOTION_VERSION = "2022-06-28";
-        // CAUTION: In production, do not hardcode tokens. This is for local tool usage only.
-        const INTERNAL_NOTION_TOKEN = "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";
+        // No default token - users must provide their own for security
+        const INTERNAL_NOTION_TOKEN = "";
         
         const MODELS = [
             { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Fast/Analysis)', type: 'flash' },
@@ -719,14 +719,28 @@ ${evidenceList}
                         <div>
                             <label className="block text-xs font-bold text-blue-400 uppercase mb-2">Gemini API Key</label>
                             <div className="relative">
-                                <input 
-                                    type="password" 
+                                <input
+                                    type="password"
                                     value={geminiKey}
                                     onChange={e => setGeminiKey(e.target.value)}
-                                    placeholder="AIzaSy..."
+                                    placeholder="AIzaSy... (get from aistudio.google.com)"
                                     className="w-full glass-input rounded-lg p-3 text-sm focus:border-blue-500 outline-none transition-all text-white placeholder-slate-600"
                                 />
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Notion Integration Token</label>
+                            <div className="relative">
+                                <input
+                                    type="password"
+                                    value={notionToken}
+                                    onChange={e => setNotionToken(e.target.value)}
+                                    placeholder="secret_... (get from notion.so/my-integrations)"
+                                    className="w-full glass-input rounded-lg p-3 text-sm focus:border-slate-500 outline-none transition-all text-white placeholder-slate-600"
+                                />
+                            </div>
+                            <p className="text-[10px] text-slate-600 mt-1">Tokens saved in browser localStorage - enter once per device</p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
