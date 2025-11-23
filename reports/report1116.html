@@ -19,7 +19,7 @@
     body {
         font-family: 'Courier Prime', 'Courier New', monospace;
         background-color: #0a0a0a;
-        color: rgba(240, 240, 235, 0.9); /* Slightly warm white - fluorescent light on paper */
+        color: rgba(240, 240, 235, 0.9);
         padding: 20px;
         max-width: 900px;
         margin: 0 auto;
@@ -43,7 +43,7 @@
 
     /* Watermark Classification Stamp */
     .report-container::before {
-        content: 'CLASSIFIED';
+        content: 'SUSPECT AT LARGE';
         position: absolute;
         top: 50%;
         left: 50%;
@@ -59,7 +59,7 @@
 
     /* Top-corner classification stamp */
     .report-container::after {
-        content: 'CLASSIFIED';
+        content: 'SUSPECT AT LARGE';
         position: absolute;
         top: 15px;
         right: 25px;
@@ -169,15 +169,6 @@
         transform: translateX(6px);
     }
 
-    /* Redacted information - black bars */
-    .redacted {
-        background-color: #000;
-        color: #000;
-        padding: 2px 8px;
-        border-radius: 0;
-        user-select: none;
-    }
-
     /* Detective's notes */
     .note {
         font-style: italic;
@@ -213,16 +204,21 @@
         line-height: 1.7;
     }
 
-    /* Status markers */
-    span[style*="color:#c0392b"],
-    span[style*="ACTIVE MANHUNT"] {
-        color: #cc0000 !important;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.15em;
-        font-family: 'Bebas Neue', sans-serif;
-        font-size: 1.05em;
-        text-shadow: 0 0 10px rgba(204, 0, 0, 0.6);
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
     }
 
     /* Print/photocopy effect - very subtle noise */
@@ -243,99 +239,84 @@
 
     <div class="meta-data">
         <strong>CASE ID:</strong> MC-2025-1116<br>
-        <strong>DATE:</strong> 2027-02-21<br>
-        <strong>LOCATION:</strong> Blackwood Warehouse (Sector 4)<br>
+        <strong>DATE:</strong> 2027-02-22<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (site of the most recent 'Blackwood Rave')<br>
         <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
-        <strong>STATUS:</strong> <span style="color:#c0392b">ACTIVE MANHUNT</span>
+        <strong>STATUS:</strong> SUSPECT AT LARGE
     </div>
 
-    <h2>1. Executive Summary</h2>
-    <p>
-        Marcus Blackwood is dead. The call went out before dawn, but the groundwork was laid years ago. When I arrived on the scene, the body was cold, but the room was still warm with the friction of betrayal.
-    </p>
-    <p>
-        The initial assessment suggested a chaotic domestic dispute or corporate espionage gone wrong. The truth is heavier. Blackwood was liquidated by <strong>Blake</strong>, a cleaner for the underground organization known as "The Black Market." Blackwood, in his infinite arrogance, likely tried to double-cross the hand that fed him his illicit memory drugs.
-    </p>
-    <p>
-        The guests—witnesses, victims, suspects, take your pick—were dosed with amnestics. Missing time. Missing memories. While they were under, their secrets were extracted and locked in boxes scattered around the venue like party favors from hell. 
-    </p>
-    <p>
-        We recovered the hostages from a warehouse near Canyon Road, but the price was high. The witnesses opted to negotiate with the terrorists, handing over the extracted memory tokens to secure the release of the captives. A life for a memory. It’s the kind of math that keeps me up at night. Blake is in the wind.
-    </p>
+    <h2>Executive Summary</h2>
 
-    <h2>2. Evidence Locker</h2>
-    <p>
-        The crime scene was a monument to Blackwood's failures. We didn't just find fingerprints; we found the debris of destroyed lives.
-    </p>
+<p>Marcus Blackwood died at the hands of his own business partner—the Black Market operative using the alias <strong>Blake Manley</strong>. The hostages were recovered through negotiated cooperation with the killer, who subsequently fled when exposed. This group uncovered the human cost of Marcus's empire: stolen genius, broken promises, and a trail of people he used until they had nothing left to give. They chose to save lives over building a case. The memories they recovered tell the story of a man who took everything and gave nothing back.</p>
 
-    <h3>The Corporate facade</h3>
-    <p>
-        The financial trail paints a picture of a sinking ship. We found <strong>Company One-Pagers</strong> for both James and Marcus, detailing a bitter funding war for Victoria's capital. <strong>Cease & Desist letters</strong> and emails between James and Alex confirm that NeurAI was built on stolen ground. Marcus didn't write the code; he stole it from Alex. The <strong>"Stanford Four" photograph</strong> found on site shows the old crew before the money rotted them from the inside out.
-    </p>
+<h2>Evidence Locker</h2>
 
-    <h3>The Domestic Wreckage</h3>
-    <p>
-        Sarah Blackwood wasn't just a grieving widow; she was a woman looking for an exit. We found <strong>texts to her friend Rachel</strong> detailing "changes" in Marcus and a <strong>loyalty card</strong> listing years of grievances. More damning? A note regarding a <strong>prenup loophole</strong>. But Marcus was busy, too. 
-    </p>
+<div class="evidence-item">
+<strong>The Theft That Built An Empire:</strong> Recovered memories from <strong>Alex Reeves</strong> expose the foundational lie of Marcus Blackwood's success. On May 12, 2022, Alex discovered Marcus's revolutionary BizAI algorithm—the product that launched his entire corporate empire—was fundamentally broken. Didn't work. Never had. Alex rebuilt the entire system by sunrise, alone in the office while Marcus slept off whatever he'd been celebrating. Years later, at 11:32PM on the night of his death, another extracted memory shows Alex finally snapping—physically attacking Marcus in the kind of rage that comes from watching someone else get rich off your genius. The assault was bottled fury released, years of stolen work and phantom equity finally demanding payment. Marcus built his kingdom on someone else's code and called it innovation.
+</div>
 
-    <h3>The Smoking Gun (Biological)</h3>
-    <p>
-        Hidden under the panda at the scene: a <strong>Paternity Test</strong>. 99.85% probability. Marcus was the father of Jessicah Kane's unborn child. Nearby, a <strong>voided severance check</strong> for $50,000 addressed to Jessicah with a "confidentiality clause" in the memo line. He tried to buy his own child's silence with a check he didn't even sign.
-    </p>
+<div class="evidence-item">
+<strong>The Women He Discarded:</strong> Memory extractions from <strong>Jessicah Kane</strong> paint a picture of Marcus's cruelty in intimate detail. At 9:20PM, captured in a memory witnessed by <strong>Howie</strong>, Jessicah confronted Marcus about their baby—and he blew her off mid-conversation like she was interrupting something important. Hours later, at 3:36AM in the early morning hours before his death, a different memory shows Jessicah and <strong>Sarah</strong> discovering they'd both been victimized by the same man. What should have been a moment of rivalry became unexpected solidarity—two women finding compassion in shared trauma, piecing together the pattern of a predator who took what he wanted and walked away.
+</div>
 
-    <h3>The Black Market Connection</h3>
-    <p>
-        <strong>Derek's texts </strong> confirm he was the pipeline. Marcus wanted Derek on the payroll as an "in-house chemist"—a fancy title for a drug cook. We found <strong>budget proposals</strong> hiding this line item. This wasn't just a party; it was a distribution hub.
-    </p>
+<div class="evidence-item">
+<strong>Casual Cruelty:</strong> An audio extraction from <strong>Ashe Motoko</strong> captures Marcus at 11:30PM, insulting <strong>Kai</strong> in the middle of his own party—disrespectful, dismissive, the kind of behavior that doesn't even register as cruelty to the person doing it. Just Marcus being Marcus. Another name on the list of people he stepped on without looking down.
+</div>
 
-    <h2>3. Memory Analysis</h2>
-    <p>
-        The physical evidence tells us <em>how</em> things broke. The memory tokens tell us <em>why</em>. These digital engrams were extracted from the guests, likely by Blake or his associates, to be used as leverage.
-    </p>
-    <ul>
-        <li><strong>ALR001 & ALR002 (Alex's Memories):</strong> These tokens confirm the motive for hatred. Alex rebuilt Marcus's broken algorithm from scratch. The second memory depicts Alex physically assaulting Marcus. It’s pure, distilled rage. In a standard investigation, this makes Alex the prime suspect. Here? It just makes him another victim of Marcus's theft.</li>
-        <li><strong>JEK002 & JEK031 (Jessicah's Memories):</strong> Tragic. One token shows Jessicah and Sarah bonding over their victimization. The other shows Marcus blowing off Jessicah regarding the pregnancy. He treated people like disposable code.</li>
-        <li><strong>ASM031 (Ashe's Memory):</strong> A recording of Marcus abusing Kai. It establishes a pattern of behavior. Marcus wasn't just a bad businessman; he was a bad man.</li>
-    </ul>
+<h2>Memory Analysis</h2>
 
-    <h2>4. Suspect Network</h2>
-    <p>
-        Everyone in the room had a motive. That’s why Blake’s plan worked so well. He hid a professional hit inside a room full of amateurs who all wanted the target dead.
-    </p>
-    
-    <div class="evidence-item">
-        <strong>THE DECEASED: Marcus Blackwood.</strong> CEO, fraud, adulterer. Stole Alex's work, cheated on Sarah, impregnated Jessicah, and tried to double-cross a crime syndicate.
-    </div>
+<p>The memory tokens recovered from this scene were extracted using Black Market neural scanning technology—the same tech that left the partygoers with gaps in their timelines and Marcus Blackwood dead on the floor. Extraction is non-destructive when done right, but the Black Market doesn't do things right. They dose, they scan, they lock the memories in encrypted tokens, and they sell the intel to whoever's buying.</p>
 
-    <div class="evidence-item">
-        <strong>THE PERPETRATOR: Blake.</strong> Black Market representative. Ruthless. Efficient. Used the partygoers' own secrets to distract them while he cleaned house. Current location: Unknown.
-    </div>
+<p>This group recovered five critical extractions that break the myth of Marcus Blackwood:</p>
 
-    <div class="evidence-item">
-        <strong>THE RIVAL: James Whitman.</strong> Emails prove he was getting shafted in the deal with Victoria. He hated Marcus for screwing over Alex. He had the motive and the opportunity, but lacked the killer instinct.
-    </div>
+<ul>
+<li><strong>Alex Reeves - May 12, 2022:</strong> The smoking gun. Proof that Marcus's flagship algorithm was stolen genius, not original innovation. Alex did the work; Marcus took the credit and the capital.</li>
+<li><strong>Alex Reeves - 11:32PM incident night:</strong> The physical assault. Years of exploitation boiling over into violence. Motive delivered on a silver platter.</li>
+<li><strong>Jessicah Kane - 9:20PM incident night:</strong> Marcus dismissing the mother of his child like she was background noise. Witnessed by Howie. Pattern of abandonment documented.</li>
+<li><strong>Jessicah Kane - 3:36AM incident night:</strong> Unexpected alliance between Jessicah and Sarah. Two victims finding solidarity instead of blame. The human cost of Marcus's appetites.</li>
+<li><strong>Ashe Motoko - 11:30PM incident night:</strong> Marcus insulting Kai. Casual disrespect captured in audio. Just another person he didn't think mattered.</li>
+</ul>
 
-    <div class="evidence-item">
-        <strong>THE GHOST WRITER: Alex.</strong> The true genius behind NeurAI. The hidden code in the Cease & Desist letter was likely his desperate cry for help. He had the most to gain from Marcus's death—reclaiming his life's work.
-    </div>
+<h2>Suspect Network</h2>
 
-    <div class="evidence-item">
-        <strong>THE DEALER: Derek.</strong> The link to the drugs. Marcus was squeezing him to go corporate. If Derek talked, the Black Market would have stepped in. Which is exactly what happened.
-    </div>
+<p><strong>Blake Manley (alias):</strong> The Black Market operative who killed Marcus Blackwood to tie up loose ends after their partnership collapsed. Took hostages to force cooperation. Lied about memory token expiration to manipulate the negotiation. Fled when exposed. Still at large. Dangerous, organized, and very good at disappearing.</p>
 
-    <h2>5. Outstanding Questions</h2>
-    <p>
-        The hostages are safe, and the immediate threat is neutralized. But we don't close files just because the bodies are buried.
-    </p>
-    <ul>
-        <li><strong>Where is the money?</strong> Texts between "Flip" and his bookie mention a hidden money location. Marcus had shell vehicles and offshore accounts. That cash is still out there.</li>
-        <li><strong>The Memory Tech:</strong> With Marcus dead and the lab exposed, what happens to the "Sparking Genius" methodology? This tech is too dangerous to be left in the wild.</li>
-        <li><strong>Blake's Next Move:</strong> He didn't just kill Marcus; he secured many of the tokens. Even though some were held back by the witnesses, the Black Market has data on everyone in that room. This isn't over. They are watching.</li>
-    </ul>
+<p><strong>Alex Reeves:</strong> The genius behind Marcus's empire. Software engineer who built the algorithm Marcus claimed as his own innovation. Spent years watching someone else get rich off stolen work. Finally attacked Marcus the night of the party—bottled rage, justified fury. Victim turned suspect turned victim again.</p>
 
-    <p class="note">
-        <strong>DETECTIVE'S NOTE:</strong> This investigation was a puzzle, but the real mystery is how these people sleep at night. We dug up the truth, but I have a feeling we only scratched the surface of the Black Market. Stay sharp.
-    </p>
+<p><strong>Jessicah Kane:</strong> Pregnant with Marcus's child. Confronted him at the party and got dismissed mid-sentence. Later found unexpected solidarity with Sarah, another woman Marcus used and discarded. Documented the pattern we should have seen coming.</p>
+
+<p><strong>Sarah:</strong> Another victim in Marcus's wake. Bonded with Jessicah over shared trauma in the early morning hours before dawn. Two women who should have been rivals, choosing compassion instead.</p>
+
+<p><strong>Ashe Motoko:</strong> Witnessed Marcus's disrespect toward Kai at 11:30PM. Another observer of the casual cruelty Marcus treated as normal behavior.</p>
+
+<h2>Outstanding Questions</h2>
+
+<ul>
+<li>Who secured the memory tokens behind combination locks before the murder—Marcus in a double-cross, or Blake in an elaborate setup?</li>
+<li>What exactly triggered the fatal altercation between Marcus and Blake? Business dispute, betrayal, or something more personal?</li>
+<li>How many other victims are out there—people Marcus exploited who never got their memories extracted, never got their stories told?</li>
+<li>What was Blake's endgame? Did he plan the murder, or was it improvisation when things went wrong?</li>
+<li>Where is Blake Manley now, and what name is he using?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>This group made a choice I don't agree with, but I understand it. They had evidence that could crack the Black Market wide open—memory extractions, documented patterns, proof of exploitation—and they traded it away to save lives. <strong>Sofia</strong> spent the entire investigation documenting everyone's stories. <strong>Jamie</strong> collected tokens and held onto them. Together, they pieced together the narrative and shared it with the group before the final negotiation. Then they chose hostages over justice.</p>
+
+<p>I can't fault them for valuing breathing people over a case file. That's the calculus that keeps you human in this work. But now Blake Manley is gone, the Black Market gets another day in business, and the only evidence we have is what I pulled from memory extractions before they walked away.</p>
+
+<p>Marcus Blackwood built his empire on stolen genius and broken promises. He took Alex's code, Jessicah's trust, Sarah's vulnerability—took everything from everyone and called it success. The night he died, he was surrounded by people he'd victimized, and one of them was a killer he'd partnered with to dose and extract his own party guests. Poetic, in a noir kind of way.</p>
+
+<p>The memories tell the story of who Marcus really was. This group chose to save lives instead of building the case. I'll keep working the Black Market angle. Blake Manley is still out there, and people like him don't stop until someone stops them.</p>
+
+<p><strong>Case Status:</strong> Homicide solved (suspect identified, at large). Black Market investigation ongoing. Hostages recovered. Evidence chain compromised by negotiated cooperation. Blake Manley - wanted for murder, memory trafficking, and making me wish I'd gotten here five minutes earlier.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Corporate Crimes Division<br>
+Case MC-2025-1116<br>
+Filed: 2027-02-22</p>
+</div>
 
 </div>
 

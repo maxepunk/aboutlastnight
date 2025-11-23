@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Case Report MC-2025-568 - About Last Night</title>
+<title>Case Report MC-2025-1121 - About Last Night</title>
 <style>
     /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
     @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
@@ -43,7 +43,7 @@
 
     /* Watermark Classification Stamp */
     .report-container::before {
-        content: 'ACTIVE INVESTIGATION';
+        content: 'SUSPECT AT LARGE';
         position: absolute;
         top: 50%;
         left: 50%;
@@ -59,7 +59,7 @@
 
     /* Top-corner classification stamp */
     .report-container::after {
-        content: 'ACTIVE INVESTIGATION';
+        content: 'SUSPECT AT LARGE';
         position: absolute;
         top: 15px;
         right: 25px;
@@ -204,6 +204,23 @@
         line-height: 1.7;
     }
 
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
     /* Print/photocopy effect - very subtle noise */
     @media screen {
         .report-container {
@@ -221,95 +238,127 @@
     <h1>Official Case Report</h1>
 
     <div class="meta-data">
-        <strong>CASE ID:</strong> MC-2025-568<br>
-        <strong>DATE:</strong> 2025-11-22<br>
-        <strong>LOCATION:</strong> Blackwood Warehouse (Venue of the Party)<br>
+        <strong>CASE ID:</strong> MC-2025-1121<br>
+        <strong>DATE:</strong> 2025-11-23<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (scene of the most recent Blackwood Rave)<br>
         <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
-        <strong>STATUS:</strong> ACTIVE INVESTIGATION
+        <strong>STATUS:</strong> SUSPECT AT LARGE
     </div>
 
     <h2>Executive Summary</h2>
-<p><strong>Case ID:</strong> MC-2025-568 | <strong>Status:</strong> OPEN (Homicide/Abduction) | <strong>Clearance:</strong> RESTRICTED</p>
 
-<p>Marcus Blackwood is dead. That’s the headline. The visionary CEO of the hour is currently cooling in the morgue, a victim of the very underground he tried to court. The perpetrator has been identified as the Black Market representative operating under the alias <strong>"Blake Manley."</strong></p>
+<p>Marcus Blackwood died on his back in a warehouse, surrounded by the wreckage of his empire and the people he'd spent a decade screwing over. The call came in before dawn on February 22nd, 2025—one body, one crime scene, and a whole party's worth of witnesses missing their memories of the night before.</p>
 
-<p>What started as a "party" at the Blackwood Warehouse was, in reality, a mass memory extraction event—a harvest. The guests were dosed, their memories stripped and locked into tokens. It appears Blackwood and Manley had a falling out. Maybe Marcus grew a conscience, or maybe he just wanted a bigger cut. Doesn't matter now. The result was a standoff that left the guests holding the keys to their own minds.</p>
+<p>The killer? Goes by "Blake Manley." Black Market operative sent to tie up loose ends after Marcus got sloppy. What Marcus thought was just another rave turned into an extraction operation: drug the guests, pull their memories, lock the tokens up tight. Whether that was Marcus trying to double-cross his partners or Blake playing three-dimensional chess while Marcus bled out, the evidence doesn't say. What it does say is this: someone secured those memory tokens behind combination locks before the night went sideways, and that decision saved lives.</p>
 
-<p>Thanks to the cooperation of the witnesses—and the relentless pressure applied by former journalist <strong>Ashe Motoko</strong>—we located the hostage site near Canyon Road. My team raided the facility. We recovered the hostages alive. But Manley? Gone. Like smoke in a wind tunnel. He left behind a corpse and a lot of questions, but at least the civilians are safe.</p>
+<p>Former SVBJ journalist <strong>Ashe Motoko</strong>—the same one Marcus silenced with an NDA five years ago—rallied the drugged partygoers to recover enough memory evidence to pinpoint the hostage location. Our teams hit the warehouse near Canyon Road and pulled the captives out. The hostages are safe. Blake's associates scattered like roaches when the lights came on. Blake's in the wind.</p>
 
-<p class="note"><strong>Detective's Note:</strong> I told these people they were missing time. They didn't listen at first. But when the adrenaline hit, they stepped up. They didn't just save their memories; they saved lives. Not bad for a group of "sleepyheads."</p>
+<p><strong>Case Status:</strong> Homicide confirmed. Hostages recovered. Primary suspect at large. The Black Market just learned what happens when you underestimate a journalist with a grudge and nothing left to lose.</p>
 
 <h2>Evidence Locker</h2>
-<p>The scene was cluttered with the debris of high-stakes corporate warfare and domestic rot. We found thirty distinct items of interest. The following are the most critical for prosecution.</p>
 
-<h3>The Corporate Facade</h3>
 <div class="evidence-item">
-    <p><strong>Item:</strong> Company One-Pagers &amp; Cease &amp; Desist Letter (NeurAI)</p>
-    <p><strong>Analysis:</strong> Documents recovered from the locked caches of <strong>James</strong> and <strong>Alex</strong> paint a picture of a fractured empire. The <strong>Cease &amp; Desist</strong> letter regarding NeurAI suggests Marcus was aggressively stomping out competition—or theft—from his own former allies. The <strong>James &lt;&gt; Alex emails</strong> confirm a conspiracy to oust Marcus before the body was even cold.</p>
+<p><strong>The Stolen Empire:</strong> <strong>Marcus Blackwood</strong> built NeurAI on code he didn't write. The <em>cease and desist letter from Patchwork Law Firm</em>, dated January 28, 2025, lays it out clean: <strong>Alex Reeves</strong> developed the memory capture technology during their BizAI days—every line of code, every training algorithm. Marcus incorporated NeurAI as sole owner in July 2024 and iced Alex out with a fraction of promised equity. The letter's language about "illumination" wasn't just legal posturing—UV light revealed a hidden message and embedded code. <strong>Victoria Kingsley's</strong> funding strategy, documented in <em>Silicon Valley Business Journal articles</em> and recovered <em>company one-pagers</em>, played both sides: she bankrolled Marcus while simultaneously funding <strong>James Whitman's</strong> AIBioComp. James knew Marcus was a fraud. His <em>email dated February 6th</em> drips with rage over Victoria committing $20 million to "mediocre code" while his profitable company got crickets.</p>
 </div>
 
 <div class="evidence-item">
-    <p><strong>Item:</strong> Taylor's Betrayal Printout - "Ashe Story Burial Email"</p>
-    <p><strong>Analysis:</strong> A smoking gun for media manipulation. <strong>Taylor</strong>, an editor, buried <strong>Ashe Motoko's</strong> exposé on Blackwood’s illegal human experimentation in exchange for exclusive access. Journalism isn't dead; it was just bought and paid for by Blackwood.</p>
-    <p class="note"><strong>Detective's Note:</strong> Everyone has a price. Taylor's was apparently an "exclusive launch." Hope it was worth the obstruction of justice charge.</p>
+<p><strong>The Marital Wreckage:</strong> <strong>Sarah Blackwood's</strong> marriage was roadkill long before the party. <em>Text messages to Rachel Torres</em> document years of emotional abuse—therapy dismissed as "inefficient," career sacrifices "for the family," Christmas ruined. A <em>sticky note dated February 17th</em> shows Sarah finally choosing herself: attending a job interview despite Marcus's stress over Victoria's funding competition. Attorney <strong>Diana Nilsson</strong>—who'd known both since Stanford and slept with Marcus once herself—took Sarah on as a divorce client. Her <em>late-night emails during the party</em> reference gathering infidelity evidence, including a prenatal paternity test showing Marcus fathered <strong>Jessicah Kane's</strong> child with 99.85% probability. The <em>voided $50,000 check</em> Marcus wrote to Jessicah in January, marked "final payment - confidentiality clause," shows he tried buying silence. Didn't work. Jessicah showed up to the party pregnant, pissed, and armed with DNA proof.</p>
 </div>
 
 <div class="evidence-item">
-    <p><strong>Item:</strong> Silicon Valley Business Journal &amp; Investment Summaries</p>
-    <p><strong>Analysis:</strong> <strong>Victoria's</strong> financial trails link Blackwood to shell vehicles in the energy sector. This wasn't just about memory drugs; it was about laundering money through "innovation."</p>
-</div>
-
-<h3>The Domestic Rot</h3>
-<div class="evidence-item">
-    <p><strong>Item:</strong> Paternity Test for Jessicah</p>
-    <p><strong>Analysis:</strong> 99.85% probability. Marcus was the father. This adds a volatile emotional motive to the mix, though it seems unconnected to the Black Market hit.</p>
+<p><strong>The Silenced Journalist:</strong> <strong>Ashe Motoko</strong> tried exposing Marcus in 2020. The <em>draft exposé titled "Blood In The Code"</em> detailed how BizAI's prediction software slid from anonymized analytics into invasive monitoring, bypassing safeguards while Marcus partied with investors. <em>Email correspondence from Taylor Chase to Marcus</em>, dated January 25, 2020, confirms the fix: "Ashe's expose on your 'memory experiments' won't see daylight. Editor thinks it needs 'more substantiation.' She'll be reassigned to lifestyle by Monday." Marcus filed a defamation suit. Recovered memory <em>ASM042</em> captures Ashe's lawyer's advice: "Fight and go bankrupt, or settle and stay silent." The NDA forbade Ashe from ever writing about Marcus or BizAI again. Career destroyed, truth buried, case closed—until this party gave Ashe a second chance with a recorder made of other people's memories.</p>
 </div>
 
 <div class="evidence-item">
-    <p><strong>Item:</strong> Sarah &lt;&gt; Rachel Texts &amp; Diana's Divorce Emails</p>
-    <p><strong>Analysis:</strong> <strong>Sarah Blackwood</strong> knew about the infidelity. <strong>Diana</strong> was the mistress and a divorce attorney, which is a dangerous combination of skillset and proximity. Marcus was fighting a war on the home front while inviting sharks into his living room.</p>
+<p><strong>The Political Machinery:</strong> <strong>Morgan Reed</strong> ran the influence operation connecting Marcus to power. The <em>congressional lobbying letter to Senator Walsh</em>, dated December 8, 2024, positioned Marcus as expert witness on AI ethics—peak irony given what he was running. Heat-activated cipher on the coffee-stained margin revealed numeric code "000 000." Memory extraction <em>DIN021</em> caught Morgan threatening Marcus behind the bar: "Senator Walsh has receipts. YOUR receipts. Cooperate or I tell her everything." <em>Investment summary documents</em> recovered from <strong>Rachel Torres</strong> mapped shell vehicles Marcus used to fund energy projects with documented regulatory violations. The timing wasn't accidental. Marcus knew. Recovered memory <em>VIK001</em> shows Victoria and Morgan discussing "permanent solutions" to the "Marcus criminal liability problem" over coffee on February 15th. Two conspirators, one problem, and evidence Marcus had gotten sloppy.</p>
+</div>
+
+<div class="evidence-item">
+<p><strong>The Memory Trade Infrastructure:</strong> Marcus didn't develop Psychotrophin3B alone. <em>Handwritten NeurAI staffing budgets</em> from Victoria include a line item for "in-house chemist"—that's <strong>Derek Thorn</strong>, the party DJ who'd been cooking memory drugs since Stanford. <em>Text messages dated February 21st at 22:15</em> show Derek panicking: "Just heard Victoria talking to James about going to jail bc of you?? wtf man... I can't afford to have my business go down the drain just cuz you need me for your unicorn." Derek gave Marcus 20 minutes to explain before walking. Recovered memory <em>MAB001</em>—Marcus's own experiment notes—reveals the safety mechanism nobody knew about: when memory tokens expire, they return to their owners. Marcus refused Black Market orders to remove that failsafe. The tokens Blake wanted? They were always going to restore themselves. Marcus kept that secret, and it's the only decent thing he did.</p>
+</div>
+
+<div class="evidence-item">
+<p><strong>The Stanford Four:</strong> Before money ruined everything, there were four friends at Stanford: Marcus, Derek, Diana, and <strong>Sofia Francisco</strong>. A <em>worn photograph from 2009</em> shows them laughing, idealistic, arms around each other. Diana's handwriting on the back: "The Stanford Four - Before money ruined everything." Sofia added later: "I still believe we can find our way back." Memory extraction <em>SOF002</em> captures Sofia filming Derek doing a backflip off speakers at their first glow rave in April 2009, Marcus promising they'd "change the world together." Memory <em>DIN002</em> shows 19-year-old Diana talking campus police out of arresting 300 students at an unpermitted party, Marcus hugging her: "You're our lawyer now." Joke then. Prophecy later. By 2025, Diana was representing Sarah in divorce proceedings against Marcus, Derek was cooking drugs to save his failing event business, and Sofia couldn't watch the old footage anymore. That Marcus doesn't exist.</p>
 </div>
 
 <h2>Memory Analysis</h2>
-<p>The "tokens" recovered from the scene are not just souvenirs; they are witness statements frozen in silica. The tech is impressive, I'll give them that. But the content is damning.</p>
 
-<div class="evidence-item">
-    <p><strong>Token ID:</strong> MAB001 - Black Market EXPIRATION lie</p>
-    <p><strong>Content:</strong> Marcus's personal experiment notes.</p>
-    <p><strong>Significance:</strong> This is the pivot point. <strong>Blake Manley</strong> told the hostages that unrecovered memories would be destroyed—"expired." The evidence proves this was a lie. "Expiration" means the memories restore naturally to the owner. It was a fear tactic to force compliance and sales. Manley wasn't just a killer; he was a con artist.</p>
-</div>
+<p>Psychotrophin3B isn't just a party drug—it's a surgical strike on the hippocampus. Dose someone right and you can pull memories clean out of their heads, encode them onto tokens, and leave the victim with nothing but gaps and vertigo. The Black Market's been dealing in extracted memories for years: corporate espionage, blackmail material, evidence that walks away from crime scenes.</p>
 
-<div class="evidence-item">
-    <p><strong>Token ID:</strong> DIN021 - Diana's Memory</p>
-    <p><strong>Content:</strong> Diana overhearing a man named "Morgan" threatening Marcus regarding Senator Walsh.</p>
-    <p><strong>Significance:</strong> Introduces a new player: <strong>Morgan</strong>. Political blackmail involving a Senator takes this out of local jurisdiction and straight into the federal swamp.</p>
-    <p class="note"><strong>Detective's Note:</strong> Morgan. Walsh. The Black Market. We pulled on a loose thread and the whole sweater is unraveling.</p>
-</div>
+<p>What makes this case different is what Marcus hid in the code. The memory tokens were never supposed to be permanent. If you hold them past expiration—72 hours, give or take—the memories restore to their original owners automatically. Marcus refused Black Market orders to disable that failsafe. They wanted permanent extraction; he built in a restoration protocol. That choice made him a liability. That choice also meant the drugged partygoers could recover their own memories just by waiting Blake out.</p>
 
-<div class="evidence-item">
-    <p><strong>Token ID:</strong> ASM042 - Ashe’s Memory 2</p>
-    <p><strong>Content:</strong> Ashe being legally silenced by Marcus.</p>
-    <p><strong>Significance:</strong> Establishes motive for Ashe's crusade. It wasn't just a story; it was personal retribution for a destroyed career.</p>
-</div>
+<p>We recovered 50 pieces of evidence, including physical documents, digital correspondence, and memory extractions spanning 2009 to 2025. Here are the memories that cracked this case wide open:</p>
 
-<h2>Suspect Network</h2>
 <ul>
-    <li><strong>Marcus Blackwood (DECEASED):</strong> Architect of his own demise. Arrogant, brilliant, and sloppy. He thought he could control the Black Market. He was wrong.</li>
-    <li><strong>"Blake Manley" (FUGITIVE):</strong> The primary antagonist. Charismatic, lethal, and currently in the wind. He executed the hit on Marcus and orchestrated the hostage situation. Caution: Armed and highly dangerous.</li>
-    <li><strong>Ashe Motoko (WITNESS/ASSET):</strong> Instrumental in the resolution. Her investigative work provided the coordinates for the Canyon Road raid. She’s a pain in the ass, but she’s a useful one.</li>
-    <li><strong>Victoria, James, Alex (PERSONS OF INTEREST):</strong> Corporate vultures. They didn't kill Marcus, but they were certainly sharpening their knives. We'll get them on financial crimes if the homicide charges don't stick.</li>
-    <li><strong>Sarah Blackwood (WITNESS):</strong> The grieving widow, though I use "grieving" loosely. Her knowledge of Marcus's affairs makes her a key witness for the financial dissection of the Blackwood estate.</li>
+<li><strong>MAB001:</strong> Marcus's experiment notes revealing memory restoration protocol. The Black Market wanted tokens to destroy memories permanently; Marcus coded them to return to owners on expiration. This is why Blake killed him—he was protecting the targets.</li>
+
+<li><strong>VIK001 (02/15/2027):</strong> Victoria and Morgan discussing "permanent solutions" to Marcus's criminal liability. Coffee meeting, deep concerns, silence when asked "what has to be done?" Conspiracy documented in real-time two days before the party.</li>
+
+<li><strong>RAT031 (12:15 AM):</strong> Rachel telling Sarah she's mapped the shell vehicles Marcus used to launder money into regulatory-violated energy projects. "Blood money, Sarah. When you're ready, we do this the right way." Also: "Going to find Flip. Don't judge me."</li>
+
+<li><strong>ASM042 (03/20/2020):</strong> Ashe's memory of the NDA settlement. "Fight and go bankrupt, or settle and stay silent." Marcus legally erased Ashe's exposé, destroyed the journalist's career as "collateral damage," and walked away calling it victory.</li>
+
+<li><strong>DIN021:</strong> Diana overhearing Morgan threaten Marcus behind the bar: "Senator Walsh has receipts. YOUR receipts. Cooperate or I tell her everything." Marcus's response? "Try it." Neither noticed Diana listening. Both should have.</li>
+
+<li><strong>SOF002 (04/17/2009):</strong> Sofia filming the Stanford Four at their first glow rave. Diana doing backflips, Derek laughing about never working for "the man," Marcus promising they'd change the world together. Sofia's note: "That Marcus doesn't exist." The footage is still on a hard drive somewhere. She can't watch it anymore.</li>
 </ul>
 
-<h2>Outstanding Questions</h2>
-<p>We won the battle at the warehouse, but the war isn't over. The following leads need immediate follow-up:</p>
-<ol>
-    <li><strong>Where is Blake Manley?</strong> He slipped the net at Canyon Road. He has resources and likely a new face by now.</li>
-    <li><strong>Who is Morgan?</strong> The memory token referenced a "Morgan" holding a leash on Marcus. Is this the Black Market leadership? Or a third party?</li>
-    <li><strong>The Senator Walsh Connection:</strong> If a sitting Senator is involved in memory trafficking, this case just went nuclear. I need authorization to dig into Walsh's donor list.</li>
-</ol>
+<h2>Suspect Network</h2>
 
-<p class="note"><strong>Final Thoughts:</strong> The partygoers went home. They got their memories back—the good, the bad, and the ugly. They chose accountability over ignorance. That gives me a little hope. Not much, but enough to keep the lights on in the office for one more night. <br><br>File closed for now. But keep eyes on the shadows.</p>
+<p><strong>Blake Manley (PRIMARY SUSPECT):</strong> Black Market operative. Murdered Marcus Blackwood to eliminate liability after Marcus refused to disable memory restoration protocols. Orchestrated hostage situation as leverage to secure memory tokens. Currently at large. Aliases unknown. Consider armed and extremely dangerous.</p>
+
+<p><strong>Victoria Kingsley:</strong> Venture capitalist who funded both Marcus's NeurAI and James Whitman's AIBioComp in competitive strategy. Recovered memories show her discussing "permanent solutions" to Marcus's criminal exposure with Morgan Reed days before the murder. Knew about IP theft, funded it anyway. <em>Voice memo dated 23:45 on party night</em> reveals panic after Marcus's public fistfight with Alex: "That asshole is too much of a liability. Time to move on." Whether "move on" meant divesting or something darker, we're still sorting out.</p>
+
+<p><strong>Morgan Reed:</strong> Lobbyist running influence operations between Marcus and Senator Walsh. Used shell vehicles to fund energy projects with regulatory violations. Threatened Marcus with exposure if he didn't cooperate with congressional testimony. Discussed conspiracy with Victoria. May have tipped Blake about Marcus becoming unmanageable.</p>
+
+<p><strong>Alex Reeves:</strong> The actual genius behind NeurAI's technology. Marcus stole the code, incorporated the company solo, and iced Alex out with fractional equity. The <em>February 22nd text exchange with Sarah</em> after the party fistfight shows years of unresolved rage: "Why the hell are you still with him? He's such an asshole." Sarah's response: "He's my asshole." History of violence at Marcus's parties. Strong motive, but timeline doesn't fit for the murder.</p>
+
+<p><strong>Ashe Motoko:</strong> Former SVBJ journalist Marcus silenced in 2020 with defamation suit and NDA. Spent five years unable to write about the crimes documented in the suppressed BizAI exposé. Led the charge to recover memory evidence and locate hostages during the party crisis. Relationship with Alex Reeves complicates motives but strengthens resolve. This case gave Ashe what the courts took away: a voice.</p>
+
+<p><strong>Derek Thorn:</strong> Stanford friend turned in-house chemist for NeurAI. Synthesized Psychotrophin3B for memory extraction operations. <em>Text messages 20 minutes before midnight</em> show him threatening to walk unless Marcus explained Victoria and James "talking about going to jail." Derek's event business was failing; Marcus offered employment and dragged him into federal crimes. Fear of prosecution, family obligations, and betrayed friendship create motive—but Derek needed Marcus alive to avoid becoming the fall guy.</p>
+
+<p><strong>Sarah Blackwood:</strong> Marcus's wife, finally ready to leave. Consulted Diana about divorce options, discovered financial secrets through Rachel's investigation, endured years of emotional abuse. The marriage was over before the party started. Motive exists, but Sarah's focus was exit strategy, not murder.</p>
+
+<p><strong>Diana Nilsson:</strong> The Stanford Four's lawyer, literally and figuratively. Took Sarah on as divorce client despite decade-long friendship with Marcus. Recovered memory shows her overhearing Morgan's threats. Has evidence of everyone's crimes and the legal knowledge to weaponize it. The one person in this mess who kept her hands relatively clean while documenting everyone else's dirt.</p>
+
+<h2>Outstanding Questions</h2>
+
+<ul>
+<li>Who secured the memory tokens behind combination locks before Marcus died—was it Marcus trying to double-cross the Black Market, or Blake playing a deeper game to control the extraction while eliminating his partner?</li>
+
+<li>What specific receipts does Senator Walsh have on Marcus, and how deep does the congressional corruption run? Morgan threatened exposure, but we haven't found the primary evidence yet.</li>
+
+<li>Where did Blake's Black Market associates scatter to after the warehouse raid, and what's their next move now that their memory extraction operation is blown?</li>
+
+<li>How many other victims has the Black Market dosed and extracted over the years, and are their memories still locked in tokens somewhere, or were they processed before we shut this down?</li>
+
+<li>Did Victoria and Morgan's "permanent solution" discussion from February 15th result in direct communication with Blake, or did Blake act independently when Marcus became a liability?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>Fifteen years ago, four kids at Stanford threw glow raves and promised to change the world. By 2025, one of them was dead in a warehouse, one was cooking memory drugs to save a failing business, one was filing divorce papers against her own client's murderer, and one couldn't watch the old footage anymore because that version of her friends didn't exist.</p>
+
+<p>Marcus Blackwood died because he tried playing both sides. He stole Alex's code and built NeurAI. He partnered with the Black Market to develop memory extraction technology. He refused to remove the safety protocol that would've made those extractions permanent. He took Victoria's money while screwing over James. He weaponized Morgan's political connections while becoming a criminal liability. He got Jessicah pregnant, tried buying her silence with a voided check, and went home to a wife who was mapping exit strategies with her divorce attorney.</p>
+
+<p>Blake killed him because loose ends don't retire—they get eliminated. Whether Marcus secured those memory tokens as a last-minute double-cross or Blake locked them up as part of the con, we may never know. What we do know is this: Ashe Motoko spent five years silenced by an NDA, and when the opportunity came to expose the truth using other people's memories as evidence, she took it. The hostages are home. The Black Market operation is blown. Blake's in the wind, but we'll find him.</p>
+
+<p>The Stanford Four threw parties because they believed in bringing people together, creating experiences that mattered, building something bigger than themselves. By the end, Marcus was using those parties to dose people and steal their memories for profit. Derek was synthesizing the drugs that made it possible. Diana was documenting the evidence for divorce proceedings. And Sofia was archiving footage she couldn't bear to watch.</p>
+
+<p>This case is about what happens when idealism meets capitalism, when friendship becomes leverage, and when the person running the con forgets that everyone he screwed over kept receipts. Marcus thought he could manage the contradictions—be the visionary and the thief, the partner and the liability, the husband and the father of someone else's kid. He was wrong.</p>
+
+<p>The memory tokens had a restoration protocol Marcus coded in secret. If you held them past expiration, the memories returned to their owners. Blake wanted permanent extraction. Marcus built in resurrection. That's the only decent thing he did, and it got him killed. But it also meant the partygoers could recover what was stolen just by waiting him out. In the end, Marcus's own safety mechanism saved the people Blake tried to rob.</p>
+
+<p>Justice for Marcus Blackwood? I'm not sure he deserves it. But justice for the hostages, for Ashe's silenced exposé, for Alex's stolen code, for Sarah's wasted years, for the Stanford Four's corrupted dream—that I can deliver.</p>
+
+<p><strong>Case Status:</strong> Open homicide investigation. Primary suspect Blake Manley at large. Hostages recovered. Black Market operation disrupted. Memory extraction evidence secured. Congressional corruption leads under investigation. Warrant requests pending for Victoria Kingsley and Morgan Reed.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Memory Crimes Division<br>
+Case MC-2025-1121<br>
+Filed: November 23, 2025</p>
+</div>
 
 </div>
 
