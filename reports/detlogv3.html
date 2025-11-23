@@ -938,6 +938,43 @@ Now go home. Get some real rest. You've earned it. "`;
             const [isEditingReport, setIsEditingReport] = useState(false);
             const [isGenerating, setIsGenerating] = useState(false);
 
+            // Auth State
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [authChecked, setAuthChecked] = useState(false);
+            const [password, setPassword] = useState('');
+            const [authError, setAuthError] = useState('');
+            const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+            // --- CHECK AUTHENTICATION STATUS ---
+            useEffect(() => {
+                // Check if user is already authenticated
+                fetch('/api/auth/check')
+                    .then(res => res.json())
+                    .then(data => {
+                        setIsAuthenticated(data.authenticated);
+                        setAuthChecked(true);
+                    })
+                    .catch(err => {
+                        console.error('Auth check failed:', err);
+                        setAuthChecked(true);
+                    });
+            }, []);
+
+            // --- LOAD CONFIG FROM BACKEND ---
+            useEffect(() => {
+                // Only fetch config if authenticated
+                if (!isAuthenticated) return;
+
+                fetch('/api/config')
+                    .then(res => res.json())
+                    .then(config => {
+                        if (config.notionToken && !notionToken) {
+                            setNotionToken(config.notionToken);
+                        }
+                    })
+                    .catch(err => console.warn('Could not load config from server:', err));
+            }, [isAuthenticated]); // Run when authentication changes
+
             // --- PERSISTENCE ---
             useEffect(() => { localStorage.setItem('notion_token', notionToken); }, [notionToken]);
             useEffect(() => { localStorage.setItem('report_model_id', reportModelId); }, [reportModelId]);
@@ -955,6 +992,46 @@ Now go home. Get some real rest. You've earned it. "`;
             useEffect(() => {
                 if (step === 3 && sessionIds.size === 0) setSessionIds(new Set(defaultStaticIds));
             }, [step, defaultStaticIds]);
+
+            // --- AUTH HANDLERS ---
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setIsLoggingIn(true);
+                setAuthError('');
+
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        setIsAuthenticated(true);
+                        setPassword('');
+                    } else {
+                        setAuthError(data.message || 'Incorrect password');
+                    }
+                } catch (err) {
+                    setAuthError('Connection error. Is the server running?');
+                    console.error('Login error:', err);
+                } finally {
+                    setIsLoggingIn(false);
+                }
+            };
+
+            const handleLogout = async () => {
+                try {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                    setIsAuthenticated(false);
+                    setPassword('');
+                } catch (err) {
+                    console.error('Logout error:', err);
+                }
+            };
 
             // --- API LOGIC ---
 
@@ -1190,37 +1267,117 @@ Now go home. Get some real rest. You've earned it. "`;
 
                     // 2. ANALYZE WITH CLAUDE (If requested)
                     if (shouldAnalyze) {
-                        const BATCH_SIZE = 15;
+                        const BATCH_SIZE = 8;  // Optimized for <40s completion per batch
+                        const CONCURRENCY = 4;  // Process 4 batches in parallel
                         const itemsToAnalyze = allResults.filter(i => !i.aiData);
-                        const totalBatches = Math.ceil(itemsToAnalyze.length / BATCH_SIZE);
 
-                        setProgress({ current: 0, total: totalBatches, status: 'Initializing Deep Scan...' });
-
+                        // Split into batches
+                        const batches = [];
                         for (let i = 0; i < itemsToAnalyze.length; i += BATCH_SIZE) {
-                            const batch = itemsToAnalyze.slice(i, i + BATCH_SIZE);
-                            const results = await analyzeBatch(batch);
-
-                            results.forEach(res => {
-                                const match = allResults.find(r => r.id === res.id);
-                                if (match) {
-                                    match.aiData = {
-                                        isNarrative: res.is_narrative,
-                                        isBackground: res.is_background,
-                                        summary: res.summary,
-                                        inWorldRef: res.in_world_reference,
-                                        grouping: res.grouping,
-                                        tags: res.tags || [],
-                                        sfGroupCluster: res.sf_group_cluster
-                                    };
-                                }
-                            });
-
-                            setProgress({
-                                current: Math.ceil((i + BATCH_SIZE) / BATCH_SIZE),
-                                total: totalBatches,
-                                status: `Analyzing batch ${Math.ceil((i + BATCH_SIZE) / BATCH_SIZE)}/${totalBatches} (${Math.min(i + BATCH_SIZE, itemsToAnalyze.length)}/${itemsToAnalyze.length} items)...`
+                            batches.push({
+                                id: batches.length + 1,
+                                items: itemsToAnalyze.slice(i, i + BATCH_SIZE)
                             });
                         }
+
+                        console.log(`📊 Processing ${itemsToAnalyze.length} items in ${batches.length} batches (${CONCURRENCY} concurrent)`);
+                        setProgress({ current: 0, total: batches.length, status: 'Initializing Deep Scan...' });
+
+                        let completedCount = 0;
+                        let analyzedItems = 0;
+                        const failedBatches = [];
+
+                        // Process batches with controlled concurrency
+                        for (let i = 0; i < batches.length; i += CONCURRENCY) {
+                            const batchGroup = batches.slice(i, i + CONCURRENCY);
+
+                            // Process this group concurrently
+                            const promises = batchGroup.map(batch =>
+                                analyzeBatch(batch.items)
+                                    .then(results => ({ success: true, batchId: batch.id, results, items: batch.items }))
+                                    .catch(error => ({ success: false, batchId: batch.id, error, items: batch.items }))
+                            );
+
+                            const results = await Promise.all(promises);
+
+                            // Process results
+                            results.forEach(result => {
+                                if (result.success) {
+                                    // Apply analysis results to inventory
+                                    result.results.forEach(res => {
+                                        const match = allResults.find(r => r.id === res.id);
+                                        if (match) {
+                                            match.aiData = {
+                                                isNarrative: res.is_narrative,
+                                                isBackground: res.is_background,
+                                                summary: res.summary,
+                                                inWorldRef: res.in_world_reference,
+                                                grouping: res.grouping,
+                                                tags: res.tags || [],
+                                                sfGroupCluster: res.sf_group_cluster
+                                            };
+                                        }
+                                    });
+
+                                    completedCount++;
+                                    analyzedItems += result.items.length;
+                                    console.log(`✅ Batch ${result.batchId}/${batches.length} complete (${result.items.length} items)`);
+                                } else {
+                                    failedBatches.push(result);
+                                    console.warn(`❌ Batch ${result.batchId} failed:`, result.error.message);
+                                }
+
+                                // Update progress after each batch completes
+                                setProgress({
+                                    current: completedCount,
+                                    total: batches.length,
+                                    status: `Analyzed ${analyzedItems}/${itemsToAnalyze.length} items (batch ${completedCount}/${batches.length})`
+                                });
+                            });
+                        }
+
+                        // Retry failed batches (one at a time, sequentially)
+                        if (failedBatches.length > 0) {
+                            console.log(`🔄 Retrying ${failedBatches.length} failed batches...`);
+
+                            for (const failed of failedBatches) {
+                                setProgress(p => ({ ...p, status: `Retrying batch ${failed.batchId}...` }));
+
+                                try {
+                                    const results = await analyzeBatch(failed.items);
+
+                                    results.forEach(res => {
+                                        const match = allResults.find(r => r.id === res.id);
+                                        if (match) {
+                                            match.aiData = {
+                                                isNarrative: res.is_narrative,
+                                                isBackground: res.is_background,
+                                                summary: res.summary,
+                                                inWorldRef: res.in_world_reference,
+                                                grouping: res.grouping,
+                                                tags: res.tags || [],
+                                                sfGroupCluster: res.sf_group_cluster
+                                            };
+                                        }
+                                    });
+
+                                    completedCount++;
+                                    analyzedItems += failed.items.length;
+                                    console.log(`✅ Batch ${failed.batchId} recovered on retry`);
+
+                                    setProgress({
+                                        current: completedCount,
+                                        total: batches.length,
+                                        status: `Recovered batch ${failed.batchId} (${analyzedItems}/${itemsToAnalyze.length} items)`
+                                    });
+                                } catch (error) {
+                                    console.error(`❌ Batch ${failed.batchId} failed after retry:`, error.message);
+                                    setError(`Warning: Batch ${failed.batchId} failed. ${failed.items.length} items skipped.`);
+                                }
+                            }
+                        }
+
+                        console.log(`🎉 Analysis complete: ${analyzedItems}/${itemsToAnalyze.length} items processed successfully`);
                     }
 
                     setInventory(allResults);
@@ -1702,6 +1859,72 @@ Generate the case report.`;
                 </div>
             );
 
+            // Show loading state while checking auth
+            if (!authChecked) {
+                return (
+                    <div className="min-h-screen bg-[#020617] flex items-center justify-center">
+                        <div className="text-slate-400">Loading...</div>
+                    </div>
+                );
+            }
+
+            // Show password prompt if not authenticated
+            if (!isAuthenticated) {
+                return (
+                    <div className="min-h-screen bg-[#020617] text-slate-200 flex items-center justify-center p-6">
+                        <div className="w-full max-w-md">
+                            <div className="glass-panel p-8 rounded-2xl border border-slate-700/50 shadow-2xl">
+                                {/* Logo */}
+                                <div className="flex justify-center mb-8">
+                                    <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/50">
+                                        <Icon name="aperture" className="text-white w-8 h-8" />
+                                    </div>
+                                </div>
+
+                                <h1 className="text-2xl font-bold text-white text-center mb-2">
+                                    ALN <span className="text-blue-400">Director Console</span>
+                                </h1>
+                                <p className="text-sm text-slate-400 text-center mb-8">Enter access code to continue</p>
+
+                                {/* Login Form */}
+                                <form onSubmit={handleLogin}>
+                                    <div className="mb-4">
+                                        <input
+                                            type="password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="Access Code"
+                                            className="w-full glass-input rounded-lg p-4 text-center text-lg focus:border-blue-500 outline-none transition-all text-white placeholder-slate-600"
+                                            autoFocus
+                                            disabled={isLoggingIn}
+                                        />
+                                    </div>
+
+                                    {authError && (
+                                        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm text-center flex items-center justify-center gap-2">
+                                            <Icon name="alert-triangle" className="w-4 h-4" />
+                                            {authError}
+                                        </div>
+                                    )}
+
+                                    <button
+                                        type="submit"
+                                        className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-lg font-semibold transition-all shadow-lg shadow-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        disabled={isLoggingIn || !password}
+                                    >
+                                        {isLoggingIn ? 'Authenticating...' : 'Access Console'}
+                                    </button>
+                                </form>
+
+                                <div className="mt-6 text-center text-xs text-slate-500">
+                                    Powered by Claude Console MAX
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="min-h-screen bg-[#020617] text-slate-200 p-6 flex flex-col font-sans selection:bg-blue-500/30">
                     {/* Loading Overlay */}
@@ -1722,6 +1945,16 @@ Generate the case report.`;
                                 </div>
                             </div>
                         </div>
+
+                        {/* Logout Button */}
+                        <button
+                            onClick={handleLogout}
+                            className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all flex items-center gap-2"
+                            title="Logout"
+                        >
+                            <Icon name="log-out" className="w-4 h-4" />
+                            <span className="hidden sm:inline">Logout</span>
+                        </button>
                     </header>
 
                     {/* Main Content */}

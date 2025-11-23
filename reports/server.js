@@ -3,9 +3,14 @@
  * Uses Claude Code CLI (Console MAX) for AI operations
  */
 
+require('dotenv').config();
+
 const express = require('express');
+const session = require('express-session');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const app = express();
 const PORT = 3000;
@@ -13,6 +18,26 @@ const PORT = 3000;
 // Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
+
+// Session middleware for authentication
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'fallback-secret-change-this',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: false, // Set to true if using HTTPS only
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    }
+}));
+
+// Auth middleware - protects routes
+function requireAuth(req, res, next) {
+    if (req.session && req.session.authenticated) {
+        return next();
+    }
+    res.status(401).json({ error: 'Unauthorized', message: 'Please log in' });
+}
 
 // Helper: Execute Claude CLI command via stdin (bypasses command line length limits)
 async function callClaude(prompt, options = {}) {
@@ -25,41 +50,51 @@ async function callClaude(prompt, options = {}) {
         tools = null
     } = options;
 
-    console.log(`[${new Date().toISOString()}] Calling Claude (${model})...`);
+    // Create isolated working directory for this Claude process
+    // Prevents concurrent processes from fighting over .claude.json
+    const workDir = path.join(
+        os.tmpdir(),
+        `claude-batch-${Date.now()}-${Math.random().toString(36).substring(7)}`
+    );
 
-    let lastError;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            const result = await new Promise((resolve, reject) => {
-                // Build arguments array
-                const args = ['-p']; // -p flag to indicate prompt mode
+    try {
+        fs.mkdirSync(workDir, { recursive: true });
+        console.log(`[${new Date().toISOString()}] Calling Claude (${model}) in ${workDir}`);
 
-                if (outputFormat === 'json') {
-                    args.push('--output-format', 'json');
-                }
+        let lastError;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const result = await new Promise((resolve, reject) => {
+                    // Build arguments array
+                    const args = ['-p']; // -p flag to indicate prompt mode
 
-                if (model) {
-                    args.push('--model', model);
-                }
+                    if (outputFormat === 'json') {
+                        args.push('--output-format', 'json');
+                    }
 
-                if (systemPrompt) {
-                    args.push('--system-prompt', systemPrompt);
-                }
+                    if (model) {
+                        args.push('--model', model);
+                    }
 
-                if (jsonSchema) {
-                    args.push('--json-schema', JSON.stringify(jsonSchema));
-                }
+                    if (systemPrompt) {
+                        args.push('--system-prompt', systemPrompt);
+                    }
 
-                if (tools !== null) {
-                    args.push('--tools', tools);
-                }
+                    if (jsonSchema) {
+                        args.push('--json-schema', JSON.stringify(jsonSchema));
+                    }
 
-                // Spawn Claude process
-                const claude = spawn('claude', args, {
-                    windowsHide: true  // Don't show console window on Windows
-                    // No shell option - claude.exe is found via PATH without it, avoiding command line length limits
-                    // No timeout option - using manual model-specific timeout implementation below
-                });
+                    if (tools !== null) {
+                        args.push('--tools', tools);
+                    }
+
+                    // Spawn Claude process in isolated directory
+                    const claude = spawn('claude', args, {
+                        cwd: workDir,  // KEY: Isolated working directory prevents .claude.json conflicts
+                        windowsHide: true  // Don't show console window on Windows
+                        // No shell option - claude.exe is found via PATH without it, avoiding command line length limits
+                        // No timeout option - using manual model-specific timeout implementation below
+                    });
 
                 let stdout = '';
                 let stderr = '';
@@ -180,27 +215,106 @@ async function callClaude(prompt, options = {}) {
             console.log(`[${new Date().toISOString()}] Claude completed successfully`);
             return result;
 
-        } catch (error) {
-            lastError = error;
-            console.error(`Attempt ${attempt + 1} failed:`, error.message);
+            } catch (error) {
+                lastError = error;
+                console.error(`Attempt ${attempt + 1} failed:`, error.message);
 
-            if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                if (attempt < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                }
             }
         }
-    }
 
-    throw lastError;
+        throw lastError;
+
+    } finally {
+        // Cleanup: Remove isolated temp directory
+        try {
+            fs.rmSync(workDir, { recursive: true, force: true });
+            console.log(`[${new Date().toISOString()}] Cleaned up: ${workDir}`);
+        } catch (cleanupError) {
+            console.warn('Failed to cleanup temp directory:', cleanupError.message);
+        }
+    }
 }
 
+// ===== AUTH ENDPOINTS =====
+
+// Login endpoint - validates password
+app.post('/api/auth/login', (req, res) => {
+    const { password } = req.body;
+    const correctPassword = process.env.ACCESS_PASSWORD;
+
+    if (!correctPassword) {
+        console.warn('WARNING: ACCESS_PASSWORD not set in .env file');
+        return res.status(500).json({
+            success: false,
+            message: 'Server configuration error'
+        });
+    }
+
+    if (password === correctPassword) {
+        req.session.authenticated = true;
+        console.log(`[${new Date().toISOString()}] Successful login from ${req.ip}`);
+        res.json({
+            success: true,
+            message: 'Authentication successful'
+        });
+    } else {
+        console.warn(`[${new Date().toISOString()}] Failed login attempt from ${req.ip}`);
+        res.status(401).json({
+            success: false,
+            message: 'Incorrect password'
+        });
+    }
+});
+
+// Check auth status
+app.get('/api/auth/check', (req, res) => {
+    res.json({
+        authenticated: !!(req.session && req.session.authenticated)
+    });
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('Logout error:', err);
+            return res.status(500).json({
+                success: false,
+                message: 'Logout failed'
+            });
+        }
+        res.json({
+            success: true,
+            message: 'Logged out successfully'
+        });
+    });
+});
+
+// ===== API ENDPOINTS (Protected) =====
+
 // Endpoint 1: Batch Analysis (uses Haiku for speed)
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', requireAuth, async (req, res) => {
     try {
         const { items } = req.body;
 
         if (!items || !Array.isArray(items)) {
             return res.status(400).json({ error: 'Invalid items array' });
         }
+
+        // Enforce batch size limit for reliable completion under Cloudflare timeout
+        const MAX_BATCH_SIZE = 10;
+        if (items.length > MAX_BATCH_SIZE) {
+            return res.status(400).json({
+                error: 'Batch too large',
+                message: `Maximum ${MAX_BATCH_SIZE} items per batch. Received ${items.length} items.`,
+                maxBatchSize: MAX_BATCH_SIZE
+            });
+        }
+
+        console.log(`[${new Date().toISOString()}] Analyzing batch of ${items.length} items`);
 
         const prompt = `IMPORTANT: Return ONLY a JSON object. No conversational text, no explanations, no markdown. Just the raw JSON.
 
@@ -313,6 +427,7 @@ CRITICAL: Return ONLY the JSON object. Do not include any text before or after t
             throw parseError;
         }
 
+        console.log(`[${new Date().toISOString()}] Batch complete: ${parsed.results.length} items analyzed successfully`);
         res.json(parsed);
 
     } catch (error) {
@@ -324,8 +439,168 @@ CRITICAL: Return ONLY the JSON object. Do not include any text before or after t
     }
 });
 
+// TEMPORARY: Test endpoint for measuring single-item analysis timing
+app.post('/api/test-single-item', requireAuth, async (req, res) => {
+    const { item } = req.body;
+
+    if (!item) {
+        return res.status(400).json({ error: 'Item required' });
+    }
+
+    const startTime = Date.now();
+    console.log('\n=== SINGLE ITEM ANALYSIS TEST ===');
+    console.log('Start time:', new Date().toISOString());
+    console.log('Item ID:', item.id);
+    console.log('Item name:', item.name);
+
+    try {
+        // Build prompt for single item (same format as batch analysis)
+        const prompt = `IMPORTANT: Return ONLY a JSON object. No conversational text, no explanations, no markdown. Just the raw JSON.
+
+Analyze these evidence items and return a JSON Object with a key "results" containing an array of objects.
+
+For each item, generate:
+
+1. "id": The exact ID provided
+2. "is_narrative": Boolean - TRUE if discoverable evidence (clues, documents, memories with narrative content), FALSE if generic prop
+3. "is_background": Boolean - TRUE if this is character background information (like character sheets), FALSE if discovered evidence
+4. "summary": Concise 10-15 word summary of content and significance
+5. "in_world_reference": Natural detective phrasing for this evidence using Owner, Timeline, and discovery context
+   - Use Owner name for attribution: "recovered from [Character Name]"
+   - Use Timeline date/location for temporal context: "dated [date]" or "from [location]"
+   - Memory Tokens → "memory extraction from [Character]" or "scanned memory regarding [event]"
+   - Documents → "documents recovered from [Character/Location]" or "correspondence dated [date]"
+   - Props → "physical evidence belonging to [Character]" or "items seized from [Location]"
+   - NEVER use database names, codes, or "Character Sheet" terminology
+   - NEVER reference "Memory Token #X" or item IDs
+   - For character sheets: "[Character Name], a [role from logline]" (NOT "According to character sheet...")
+
+6. "grouping": Object with primary/secondary/tertiary/timeline for UI organization
+   - primary: "character:[Owner.name]" if Owner exists, otherwise "ungrouped"
+   - secondary: "type:[Basic Type]" (e.g., "type:Document", "type:Memory Token - Technical")
+   - tertiary: "thread:[first Narrative Thread]" if exists, otherwise "theme:General"
+   - timeline: "[Timeline.date]" if exists, otherwise empty string
+
+7. "tags": Array of 2-4 descriptive tags for filtering (e.g., ["Legal", "Corporate", "Pre-Incident"])
+   - Based on content, SF_MemoryType, and narrative themes
+   - Use: Legal, Technical, Personal, Corporate, Pre-Incident, Incident-Night, Post-Incident, Physical, Digital, Medical, Financial, etc.
+
+8. "sf_group_cluster": The SF_Group value if it exists in sfFields, otherwise null
+
+ITEMS TO ANALYZE (with enhanced context):
+${JSON.stringify([item], null, 2)}
+
+CONTEXT FIELD GUIDE:
+- narrativeContent: Content for analysis (Description/Text without SF_ fields for Memory Tokens)
+- desc: Full description including SF_ fields
+- sfFields: Parsed SF_MemoryType, SF_ValueRating, SF_Group, SF_Summary (for Memory Tokens only)
+- owner: {name, logline} - Character who owns/possesses this item
+- timeline: {eventName, date, location} - Historical event this evidences
+- associatedChars: Array of character names involved in timeline event
+- threads: Narrative thread tags
+
+SPECIAL HANDLING:
+- Character sheets (name contains "Character Sheet"): Set is_background=true, is_narrative=false
+- Character sheet in_world_reference: "[Character Name], a [profession/role from logline]"
+- Memory tokens: Use SF_MemoryType to enhance type categorization (Technical/Business/Personal)
+- Empty SF_ValueRating: Prioritize narrativeContent analysis over rating hint
+
+CRITICAL: Return ONLY the JSON object. Do not include any text before or after the JSON. Start with { and end with }.`;
+
+        const promptSizeBytes = Buffer.byteLength(prompt, 'utf8');
+        console.log('Prompt size:', prompt.length, 'characters');
+        console.log('Prompt size:', (promptSizeBytes / 1024).toFixed(2), 'KB');
+
+        // Define JSON schema (same as batch analysis)
+        const analysisSchema = {
+            type: "object",
+            properties: {
+                results: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            is_narrative: { type: "boolean" },
+                            is_background: { type: "boolean" },
+                            summary: { type: "string" },
+                            in_world_reference: { type: "string" },
+                            grouping: {
+                                type: "object",
+                                properties: {
+                                    primary: { type: "string" },
+                                    secondary: { type: "string" },
+                                    tertiary: { type: "string" },
+                                    timeline: { type: "string" }
+                                },
+                                required: ["primary", "secondary", "tertiary", "timeline"]
+                            },
+                            tags: {
+                                type: "array",
+                                items: { type: "string" }
+                            },
+                            sf_group_cluster: {
+                                type: ["string", "null"]
+                            }
+                        },
+                        required: ["id", "is_narrative", "is_background", "summary", "in_world_reference", "grouping", "tags", "sf_group_cluster"]
+                    }
+                }
+            },
+            required: ["results"]
+        };
+
+        const result = await callClaude(prompt, {
+            model: 'haiku',
+            outputFormat: 'json',
+            jsonSchema: analysisSchema
+        });
+
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        const responseSizeBytes = Buffer.byteLength(result, 'utf8');
+
+        console.log('End time:', new Date().toISOString());
+        console.log('Duration:', duration.toFixed(2), 'seconds');
+        console.log('Response size:', result.length, 'characters');
+        console.log('Response size:', (responseSizeBytes / 1024).toFixed(2), 'KB');
+
+        const parsed = JSON.parse(result);
+        console.log('Parsed successfully:', parsed.results ? parsed.results.length : 0, 'results');
+        console.log('=== TEST COMPLETE ===\n');
+
+        res.json({
+            success: true,
+            duration: parseFloat(duration.toFixed(2)),
+            promptSize: {
+                characters: prompt.length,
+                kilobytes: parseFloat((promptSizeBytes / 1024).toFixed(2))
+            },
+            responseSize: {
+                characters: result.length,
+                kilobytes: parseFloat((responseSizeBytes / 1024).toFixed(2))
+            },
+            result: parsed
+        });
+
+    } catch (error) {
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+
+        console.error('Test failed after', duration.toFixed(2), 'seconds');
+        console.error('Error:', error.message);
+        console.log('=== TEST FAILED ===\n');
+
+        res.status(500).json({
+            success: false,
+            duration: parseFloat(duration.toFixed(2)),
+            error: error.message
+        });
+    }
+});
+
 // Endpoint 2: Generate Report (uses user-selected model)
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', requireAuth, async (req, res) => {
     try {
         const { systemPrompt, userPrompt, model } = req.body;
 
@@ -422,8 +697,16 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString(),
         endpoints: {
             analyze: '/api/analyze (POST)',
-            generate: '/api/generate (POST)'
+            generate: '/api/generate (POST)',
+            config: '/api/config (GET)'
         }
+    });
+});
+
+// Config endpoint - serves environment variables to frontend (protected)
+app.get('/api/config', requireAuth, (req, res) => {
+    res.json({
+        notionToken: process.env.NOTION_TOKEN || ''
     });
 });
 

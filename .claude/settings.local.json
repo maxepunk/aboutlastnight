@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Skill(example-skills:frontend-design)",
+      "Skill(about-last-night-notion-skill)",
+      "Bash(claude --version:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
