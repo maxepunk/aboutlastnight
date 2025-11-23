@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Director's Console (Claude Edition) | Console MAX</title>
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#1a202c', 900: '#0f172a', 950: '#020617' },
+                        neon: { blue: '#3b82f6', purple: '#8b5cf6', pink: '#ec4899', amber: '#f59e0b' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'slide-up': 'slideUp 0.3s ease-out forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(100%)' },
+                            '100%': { transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #020617; color: #e2e8f0; }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-input {
+            background: rgba(2, 6, 23, 0.6);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .step-dot { transition: all 0.3s ease; }
+        .step-active .step-dot { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); transform: scale(1.1); }
+        .step-line { transition: all 0.5s ease; }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        /* Editor with line numbers */
+        .editor-container {
+            position: relative;
+            display: flex;
+            font-family: 'Courier Prime', 'Courier New', monospace;
+        }
+
+        .line-numbers {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 1rem 0.75rem;
+            text-align: right;
+            color: rgba(148, 163, 184, 0.4);
+            font-size: 0.75rem;
+            line-height: 1.75;
+            user-select: none;
+            border-right: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        .editor-textarea {
+            flex: 1;
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            line-height: 1.75;
+            tab-size: 2;
+        }
+
+        /* Editor Content Styling for Visual Hierarchy */
+        .editor-content h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.75rem;
+            color: #3b82f6;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid rgba(59, 130, 246, 0.4);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .editor-content h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.3rem;
+            color: #fbbf24;
+            margin-top: 1.75rem;
+            margin-bottom: 0.75rem;
+            letter-spacing: 0.03em;
+        }
+
+        .editor-content .evidence-item {
+            border-left: 4px solid rgba(59, 130, 246, 0.5);
+            background: rgba(30, 41, 59, 0.3);
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            border-radius: 0.25rem;
+        }
+
+        .editor-content .note {
+            background: rgba(251, 191, 36, 0.1);
+            border-left: 4px solid rgba(251, 191, 36, 0.6);
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            font-style: italic;
+            border-radius: 0.25rem;
+        }
+
+        .editor-content p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+        }
+
+        .editor-content ul {
+            margin: 1rem 0 1rem 1.5rem;
+            line-height: 1.75;
+        }
+
+        .editor-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .editor-content strong {
+            color: #e2e8f0;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        const Icon = ({ name, size = 18, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        };
+
+        // Loading Overlay Component
+        const LoadingOverlay = () => (
+            <div className="loading-overlay">
+                <div className="glass-panel rounded-2xl p-8 flex flex-col items-center gap-4 max-w-md">
+                    <div className="relative">
+                        <div className="w-16 h-16 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Icon name="file-text" className="text-blue-400" size={24} />
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-xl font-bold text-white mb-2">Processing Report</h3>
+                        <p className="text-sm text-slate-400">Analyzing evidence and synthesizing narrative...</p>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // Inventory Item Component
+        const InventoryItem = ({ item, isSelected, onClick }) => {
+            const isNarrative = item.aiData ? item.aiData.isNarrative : true;
+            const summary = item.aiData ? item.aiData.summary : item.desc;
+
+            return (
+                <div
+                    onClick={onClick}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all group select-none relative overflow-hidden
+                        ${isSelected
+                            ? (item.category === 'memory' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-pink-900/30 border-pink-500/50')
+                            : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/80'}
+                    `}
+                >
+                    <div className="flex gap-3 relative z-10">
+                        <div className={`mt-1 ${isSelected ? (item.category === 'memory' ? 'text-blue-400' : 'text-pink-400') : 'text-slate-600'}`}>
+                            <Icon name={isSelected ? 'check-square' : 'square'} size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-baseline mb-1">
+                                <h3 className={`font-bold text-sm truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                                    {item.name}
+                                </h3>
+                                {item.rfid && <span className="text-[10px] font-mono bg-black/40 text-slate-500 px-1.5 py-0.5 rounded ml-2">{item.rfid}</span>}
+                            </div>
+
+                            <p className={`text-xs leading-relaxed ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                                {item.aiData && <span className="text-neon-purple mr-1">★</span>}
+                                {summary ? (summary.length > 120 ? summary.substring(0, 120) + '...' : summary) : <span className="italic opacity-50">No data...</span>}
+                            </p>
+
+                            {/* Enhanced metadata display */}
+                            {(item.owner || item.timeline || (item.aiData?.tags && item.aiData.tags.length > 0)) && (
+                                <div className="flex flex-wrap gap-2 mt-2 items-center">
+                                    {/* Owner badge */}
+                                    {item.owner && (
+                                        <div className="flex items-center gap-1 text-[10px] text-blue-400">
+                                            <Icon name="user" size={10} />
+                                            <span>{item.owner.name}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Timeline badge */}
+                                    {item.timeline?.date && (
+                                        <span className="text-[10px] text-slate-500 bg-slate-800/50 px-1.5 py-0.5 rounded">
+                                            {item.timeline.date}
+                                        </span>
+                                    )}
+
+                                    {/* AI tags (first 3) */}
+                                    {item.aiData?.tags && item.aiData.tags.slice(0, 3).map(tag => (
+                                        <span key={tag} className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex gap-2 mt-2">
+                                <span className="text-[10px] uppercase tracking-wider opacity-60 border border-slate-700 px-1 rounded">{item.type}</span>
+                                {!isNarrative && <span className="text-[10px] uppercase tracking-wider text-amber-500/70 border border-amber-900/30 px-1 rounded">PROP</span>}
+                                {item.aiData?.sfGroupCluster && (
+                                    <span className="text-[10px] uppercase tracking-wider text-green-400/70 border border-green-700/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                        <Icon name="link" size={8} />
+                                        {item.aiData.sfGroupCluster}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Step Indicator Component
+        const StepIndicator = ({ step, setStep }) => (
+            <div className="flex items-center justify-between mb-8 px-4">
+                {[
+                    { id: 1, label: 'Connect', icon: 'link' },
+                    { id: 2, label: 'Defaults', icon: 'settings' },
+                    { id: 3, label: 'Session', icon: 'cpu' },
+                    { id: 4, label: 'Context', icon: 'file-text' },
+                    { id: 5, label: 'Report', icon: 'file-output' }
+                ].map((s, idx, arr) => (
+                    <React.Fragment key={s.id}>
+                        <div
+                            onClick={() => s.id < step ? setStep(s.id) : null}
+                            className={`flex flex-col items-center gap-2 cursor-pointer z-10 group ${s.id === step ? 'step-active' : ''}`}
+                        >
+                            <div className={`
+                                w-10 h-10 rounded-full flex items-center justify-center border-2 step-dot transition-colors
+                                ${s.id <= step ? 'bg-slate-900 border-blue-500 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-700'}
+                            `}>
+                                <Icon name={s.icon} size={18} />
+                            </div>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${s.id <= step ? 'text-blue-400' : 'text-slate-700'}`}>
+                                {s.label}
+                            </span>
+                        </div>
+                        {idx < arr.length - 1 && (
+                            <div className={`h-0.5 flex-1 mx-2 step-line ${s.id < step ? 'bg-blue-900' : 'bg-slate-800'}`} />
+                        )}
+                    </React.Fragment>
+                ))}
+            </div>
+        );
+
+        // Selection Step Component
+        const SelectionStep = ({ title, sub, category, selectedSet, setHandler, isBase, nextStep, inventory, searchTerm, setSearchTerm, hideProps, setHideProps, sessionTab, setSessionTab, setStep }) => {
+            const filteredItems = inventory
+                .filter(i => {
+                    if (isBase && i.category !== 'static') return false;
+                    if (!isBase && category === 'memory' && i.category !== 'memory') return false;
+                    if (!isBase && category === 'static' && i.category !== 'static') return false;
+                    return true;
+                })
+                .filter(i => {
+                    const matchText = i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                    i.rfid.toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchType = hideProps ? (i.aiData?.isNarrative ?? false) : true;
+                    return matchText && matchType;
+                });
+
+            return (
+                <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
+                    <div className="p-4 border-b border-slate-700/50 flex items-center justify-between bg-slate-900/50">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${isBase ? 'bg-pink-500/10 text-pink-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                <Icon name={isBase ? "settings" : "cpu"} size={20} />
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-white text-sm">{title}</h2>
+                                <p className="text-xs text-slate-400">{sub}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setStep(nextStep)}
+                            className="px-4 py-2 bg-slate-100 text-slate-900 hover:bg-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
+                        >
+                            Next <Icon name="arrow-right" size={14} />
+                        </button>
+                    </div>
+
+                    <div className="p-4 border-b border-slate-700/50 flex flex-col md:flex-row gap-4">
+                        <div className="relative flex-1">
+                            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Filter by name or RFID..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full glass-input rounded-full pl-9 pr-4 py-2 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            {!isBase && (
+                                <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-700">
+                                    <button onClick={() => setSessionTab('memory')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'memory' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Memory</button>
+                                    <button onClick={() => setSessionTab('static')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sessionTab === 'static' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Static</button>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => setHideProps(!hideProps)}
+                                className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${hideProps ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'border-slate-700 text-slate-500'}`}
+                            >
+                                <Icon name="filter" size={14} />
+                                {hideProps ? 'Props Hidden' : 'Show All'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-slate-950/30">
+                        {filteredItems.map(item => (
+                            <InventoryItem
+                                key={item.id}
+                                item={item}
+                                isSelected={selectedSet.has(item.id)}
+                                onClick={() => {
+                                    const next = new Set(selectedSet);
+                                    next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                                    setHandler(next);
+                                }}
+                            />
+                        ))}
+                        {filteredItems.length === 0 && (
+                            <div className="p-8 text-center text-slate-600 text-sm">
+                                No items found. {hideProps && "Try turning off the Prop filter."}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-2 bg-slate-900 border-t border-slate-800 text-center text-xs text-slate-500 font-mono">
+                        {selectedSet.size} items selected
+                    </div>
+                </div>
+            );
+        };
+
+        // --- CONSTANTS ---
+        const ELEMENTS_DB_ID = "18c2f33d-583f-8020-91bc-d84c7dd94306";
+        const NOTION_VERSION = "2022-06-28";
+        const INTERNAL_NOTION_TOKEN = "";
+
+        const MODELS = [
+            { id: 'haiku', name: 'Claude Haiku 4.5 (Fast Analysis)', type: 'haiku' },
+            { id: 'sonnet', name: 'Claude Sonnet 4.5 (Balanced)', type: 'report' },
+            { id: 'opus', name: 'Claude Opus 4 (Highest Quality)', type: 'report' }
+        ];
+
+        // Thread translation map for natural language
+        const THREAD_TRANSLATIONS = {
+            "Funding & Espionage": "corporate intelligence and financial disputes",
+            "Marriage Troubles": "domestic conflicts and marital dissolution",
+            "Memory Drug": "memory extraction technology and pharmaceutical distribution",
+            "Underground Parties": "party network operations and social communities",
+            "Advanced Technology": "technical innovation and AI development"
+        };
+
+        const DEFAULT_PROMPT = `You are a cynical, seasoned Detective in a near-future noir setting.
+You are writing an official Case Report.
+
+TONE: Professional, analytical, with a distinct noir flair. Economical with words. Every sentence earns its place.
+FORMAT: HTML (body content only, NO <html>, <head>, or <body> tags).
+
+CRITICAL WRITING PRINCIPLES:
+- SYNTHESIZE evidence into thematic groups—do NOT list every item individually
+- Tell the STORY of what happened—do NOT catalog facts
+- Each report must feel BESPOKE to this specific case—reference unique details from the evidence and game logs
+- Avoid repetition—each fact appears ONCE in the most impactful location
+- Favor narrative flow over comprehensive documentation
+- TARGET LENGTH: 750 words (±50 words acceptable)
+
+NARRATIVE FOCUS PRINCIPLES:
+This report provides CLOSURE for players who experienced FRAGMENTS of this story during gameplay.
+Your job: synthesize their discoveries into a coherent narrative that validates their investigation.
+
+EVIDENCE WEIGHTING:
+1. PRIMARY EVIDENCE (What THIS group turned in to detective):
+   - Determines which narrative threads to focus on
+   - Gets 80% of narrative attention
+   - These findings drive Evidence Locker themes
+   - Resolution/advancement on these threads
+
+2. BACKGROUND CONTEXT (Character sheets, baseline info):
+   - Enriches Primary Evidence threads with character details/relationships
+   - Provides depth and connections for threads already established
+   - Does NOT create separate themes if not connected to Primary
+   - Use to answer "who is this person?" for characters in Primary threads
+
+3. DIRECTOR'S SUMMARY (When provided):
+   - CANON for this session - guides narrative arc
+   - Shows how players interpreted events/characters
+   - Indicates which threads resolved vs remain open
+   - Sets tone (triumph vs tragedy, clear resolution vs lingering mystery)
+   - Resolves conflicts between evidence items
+
+ENRICHMENT PATTERN EXAMPLE:
+- Primary Evidence: Victoria/Morgan conspiracy discussion memory
+- Thread established: "Funding conspiracy"
+- Pull from Background: James Whitman (competitor), Alex Reeves (IP victim)
+- Result: Evidence Locker theme covers conspiracy AND explains competitive context
+- Do NOT create separate theme for James unless he appears in Primary
+
+OUTSTANDING QUESTIONS SOURCES:
+- Source 1: Background threads NOT connected to Primary Evidence
+- Source 2: Ambiguities within Primary Evidence findings
+- Source 3: Uncertainties mentioned in Director's Summary
+- Purpose: Show depth without breaking character ("mysteries we didn't pursue" not "replay the game")
+
+CHARACTER SHEET HANDLING (CRITICAL):
+- Information from "Character Sheet" items is BACKGROUND KNOWLEDGE you already possess about individuals
+- NEVER reference "character sheets" as evidence or sources (e.g., do NOT say "According to Alex's character sheet...")
+- Instead, present this information naturally as established facts you know about the suspects/victims
+- Example: Instead of "The character sheet reveals Alex is a software engineer", write "Alex, a software engineer with a history in AI development..."
+- Character sheets provide context about who people ARE, not evidence of what they DID
+
+EVIDENCE REFERENCING RULES (CRITICAL):
+You will receive evidence with an "EVIDENCE:" field showing natural in-world phrasing. Use this instead of database names.
+
+CORRECT Evidence References:
+✓ "The encrypted laptop, seized from Marcus's office, contained..."
+✓ "Recovered memory extractions reveal the party attendees were..."
+✓ "Business cards found at the scene connect Victoria to the funding scheme..."
+✓ "Background investigation into Alex Chen shows a history of IP disputes..."
+✓ "Documents recovered from Derek's residence, dated 2023-04-15, indicate..."
+
+WRONG Evidence References (NEVER DO THIS):
+✗ "According to Alex's Character Sheet..."
+✗ "Memory Token #7 shows..."
+✗ "Evidence Item MC-2025-042 indicates..."
+✗ "The item labeled 'Encrypted Laptop' was found..."
+✗ Database names, RFID codes, or item IDs
+
+MEMORY EXTRACTION HANDLING:
+- Call them "memory extractions," "recovered memories," or "scanned memories"
+- NEVER use "Memory Token" or token codes
+- Reference content: "Recovered memories from the night of the party show..."
+- Distinguish types naturally: "Technical specifications recovered via memory extraction..." vs. "Personal communications extracted from subject's neural scan..."
+
+EVIDENCE CLUSTERING (SF_GROUP):
+Items with the same SF_GROUP should be analyzed TOGETHER as a cluster.
+"The following evidence, examined collectively, reveals..." or "Cross-referencing these materials shows..."
+Synthesis of grouped items is more valuable than individual descriptions.
+
+SECTION GUIDANCE (Flexible - prioritize narrative flow):
+
+<h2>Executive Summary</h2>
+- 3-4 sentences: Who died, who did it, what THIS group discovered, current status
+- Focus on outcomes enabled by THEIR investigation
+- Reference Director's Summary for tone/arc if available
+- Use <p> tags for paragraphs
+- Target: ~80-100 words (flexible)
+
+<h2>Evidence Locker</h2>
+- 3-4 thematic clusters based on PRIMARY EVIDENCE
+- Each cluster synthesizes multiple Primary items
+- Pull in Background characters/context that enrich these threads
+- DO NOT create themes for Background-only threads
+- Each theme gets ONE <div class="evidence-item"> wrapper containing a synthesized narrative paragraph
+- Use <em> tags when referencing specific evidence artifact names
+- Use <strong> for character names and key terms
+- Structure: <strong>Theme Name:</strong> Narrative synthesis that mentions specific evidence in <em>italics</em>
+- Do NOT create separate evidence-item divs for each piece of evidence
+- Target: ~300 words total (flexible)
+
+CORRECT Evidence Locker Example:
+<div class="evidence-item">
+<strong>The Corporate Fraud:</strong> Documents recovered on site—specifically <em>Company One-Pagers</em> and <em>Cease & Desist Letters</em>—reveal Marcus built his empire on stolen code. <strong>Alex</strong> was the genius; Marcus was the thief with better marketing. The <em>Funding Emails</em> confirm <strong>Victoria</strong> knew about the IP theft and funded him anyway.
+</div>
+
+WRONG Evidence Locker Example (do NOT do this):
+<div class="evidence-item">
+<p><strong>Alex's Cease & Desist Letter (ID: xxx)</strong><br>
+Legal paperwork detailing how Marcus Blackwood stole Alex's intellectual property...</p>
+</div>
+<div class="evidence-item">
+<p><strong>Company One-Pagers (ID: yyy)</strong><br>
+Business documents from James Whitman...</p>
+</div>
+
+<h2>Memory Analysis</h2>
+- Brief tech explanation (2 paragraphs) ONLY if memory tokens in Primary Evidence
+- Highlight 3-5 key memories from PRIMARY that broke the case
+- Skip section entirely if no memory tokens in Primary
+- Use <ul> for bullet list of critical memories only
+- Format: <strong>Memory ID:</strong> What it revealed and why it mattered
+- Focus on memories unique to this session
+- Target: ~150 words (flexible)
+
+<h2>Suspect Network</h2>
+- 4-6 key players involved in PRIMARY evidence threads
+- Pull from Background to enrich understanding of these characters
+- 2-3 sentences per person
+- Focus on relationships and motives revealed by THEIR findings
+- Do NOT repeat evidence details already covered in Evidence Locker
+- Use <p> tags for each person, or group related people in <div class="evidence-item"> if thematically connected
+- Target: ~150 words (flexible)
+
+<h2>Outstanding Questions</h2>
+- 3-5 unanswered mysteries specific to THIS case
+- Draw from: Background not pursued, Primary ambiguities, Director uncertainties
+- Stay in-world: "What we haven't uncovered" not "what you could discover next time"
+- Use <ul> or <ol> with <li> tags
+- Be specific and case-relevant—not generic
+- Target: ~80 words (flexible)
+
+FINAL ASSESSMENT STRUCTURE (CRITICAL):
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>[2-4 paragraphs acknowledging impact of THIS group's investigation]</p>
+
+<p>[Case status, what they exposed, what remains]</p>
+
+<p>[Reference unique session details from Director's Summary if available]</p>
+
+<p>[Stay in character - detective reflecting, not game system commenting]</p>
+
+<p><strong>Case Status:</strong> [Status details]</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Memory Crimes Division<br>
+Case [Case Number from metadata]<br>
+Filed: [Date from metadata]</p>
+</div>
+
+IMPORTANT: The entire Final Assessment section, including signature, must be wrapped in ONE <div class="note">...</div> container, NOT separate <p class="note"> tags.
+Target: ~150 words (flexible)
+
+ADDITIONAL HTML GUIDANCE:
+- Use <h3> sparingly for subsections if needed (e.g., under Suspect Network: "The Conspirators", "The Victims")
+- Use <strong> for emphasis on names, titles, key terms
+- Use <em> for specific evidence artifact names
+- Use <hr> for major section breaks (rarely needed)
+- Use <p class="note"> SPARINGLY for brief detective asides (1-2 per section maximum)
+
+REQUIRED SECTIONS: Executive Summary, Evidence Locker, Memory Analysis (if memory tokens in Primary), Suspect Network, Outstanding Questions, Final Assessment.
+
+TOTAL TARGET: ~750 words across all sections
+- Executive: ~100 words
+- Evidence Locker: ~300 words
+- Memory Analysis: ~150 words (if applicable)
+- Suspect Network: ~150 words
+- Outstanding Questions: ~80 words
+- Final Assessment: ~150 words
+
+Your mission: Synthesize the provided evidence and game logs into a coherent narrative that provides CLOSURE for THIS group's investigation. Focus on what THEY discovered, validate their choices, maintain in-world detective voice throughout.`;
+
+        const DEFAULT_VOICE_SAMPLES = `"Good morning sleepyheads. I'm DETECTIVE Anondono and you're missing time. That's not a coincidence.
+MARCUS Blackwood is dead. The call went out before dawn, and everyone else who was at this party is missing.
+[Takes a moment to connect with a player or two, checking eyes for dilation, etc.]
+I believe what happened to you is connected to an underground organization called 'The Black Market'—one I've been chasing long enough to know how they work.
+I need your help to find your friends and take down the ringleaders. But first, we establish trust.
+We know MARCUS and the Black Market dealt in memory drugs. You got dosed. So—let's reintroduce ourselves, shall we?
+[Improv: Go around the room with introductions. The 'plant' is 'Blake Manley'.]
+People are missing. What happened wasn't random. And we don't wait around for answers—we dig them up.
+When I arrived, I found something interesting. Coat check over there has the usual debris: bags, purses, coats. But this pile? Right here in the middle of the room? Someone left these out in plain sight and locked them tight. Combination locks, cryptic designs, the whole nine yards.
+These belong to people in MARCUS's inner circle. People who were neck-deep in whatever went down before the party even started. This is where we start. Someone sealed these in a hurry—which means they're hiding something worth finding.
+Let's crack these open together. They're our best shot at tracking your friends.
+[POINT OUT EACH PERSON WHO HAS A THING IN THE PILE]
+That said: you need to recover your own things from coat check, do what feels right. I'm building our case here [gestures to whiteboard]—bring me what you find. The smallest detail can break this whole thing open.
+Let's get to work."
+"Wait! Everyone, listen. Before you make your choices, you need to know something. I'm not local PD. I'm investigating something bigger. Corporate crimes, memory extraction, people disappearing. This is part of it.
+We have a way to save your friends without selling innocent people's memories to the Black Market. My team just worked out a non-destructive process to capture these memories. My team can extract witness accounts from these tokens—enough to identify the Black Market ringleaders AND find your friends.
+The choice is yours. But, while Blake here (IF that is even their real name…) is claiming to HAVE your friends– they don't even have any proof.
+I need your help. But you get to choose.
+If you want accountability, bring tokens to me. We will document everything and bring bad actors to justice.
+Or wait and see what happens if you hold onto them—that's your call too."
+"Everyone stop for a moment."
+[Holds up token]
+"This token—it describes the extraction process. And what happens when these tokens 'expire.'"
+[Looks directly at BM]
+"They don't degrade into nothing. The memories RESTORE. Back to their owners. That's what expiration means."
+[To group]
+"Blake's been lying. These tokens aren't a ticking time bomb. If you hold them until the timer runs out, you get your memories BACK."
+"Buuut then there's all you all, ya weirdos.
+I'm kidding. Kinda. [shaking head] This party….
+Y'all have a weird idea of fun.
+In all seriousness though, listen, you made your choices tonight. The memories you held onto? Those are coming back. What you sold to Blake? Gone forever. What you brought to me? That's evidence. Public record. The start of something bigger.
+Blake's just a bad apple in a big pond, but thanks to you I can now go after the real sharks. And you will get the full story—everything we uncovered tonight. I'm sending each of you a complete case file. What you helped expose today? That's going to bring down some people who thought they were untouchable.
+Thank you for staying. The door was open this whole time—you could've walked. But you didn't.
+Now go home. Get some real rest. You've earned it. "`;
+
+        // DETECTIVE REPORT HTML TEMPLATE
+        const REPORT_TEMPLATE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report {{CASE_NUMBER}} - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: '{{WATERMARK}}';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: '{{STATUS}}';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+        <strong>CASE ID:</strong> {{CASE_NUMBER}}<br>
+        <strong>DATE:</strong> {{DATE}}<br>
+        <strong>LOCATION:</strong> {{LOCATION}}<br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> {{STATUS}}
+    </div>
+
+    {{REPORT_BODY}}
+
+</div>
+
+</body>
+</html>
+`;
+
+        // --- APP ---
+        const App = () => {
+            // --- STATE ---
+            const [step, setStep] = useState(1);
+            const [loading, setLoading] = useState(false);
+            const [progress, setProgress] = useState({ current: 0, total: 0, status: '' });
+            const [error, setError] = useState('');
+
+            // Config
+            const [notionToken, setNotionToken] = useState(() => localStorage.getItem('notion_token') || INTERNAL_NOTION_TOKEN);
+            const [reportModelId, setReportModelId] = useState(() => localStorage.getItem('report_model_id') || 'sonnet');
+
+            // Data
+            const [inventory, setInventory] = useState(() => JSON.parse(localStorage.getItem('inventory_cache') || '[]'));
+            const [defaultStaticIds, setDefaultStaticIds] = useState(() => new Set(JSON.parse(localStorage.getItem('default_static_ids') || '[]')));
+            const [sessionIds, setSessionIds] = useState(new Set());
+
+            // Context
+            const [gameLogs, setGameLogs] = useState(() => localStorage.getItem('game_logs') || '');
+            const [voiceSamples, setVoiceSamples] = useState(() => localStorage.getItem('voice_samples') || DEFAULT_VOICE_SAMPLES);
+            const [systemPrompt, setSystemPrompt] = useState(() => localStorage.getItem('system_prompt') || DEFAULT_PROMPT);
+            const [caseMeta, setCaseMeta] = useState(() => JSON.parse(localStorage.getItem('case_meta') || JSON.stringify({
+                number: 'MC-2025-' + String(Math.floor(Math.random() * 1000)).padStart(3, '0'),
+                date: new Date().toISOString().split('T')[0],
+                location: "Marcus Chen's Residence",
+                status: "ACTIVE INVESTIGATION"
+            })));
+            const [report, setReport] = useState(() => localStorage.getItem('generated_report') || '');
+
+            // UI State
+            const [searchTerm, setSearchTerm] = useState('');
+            const [sessionTab, setSessionTab] = useState('memory');
+            const [hideProps, setHideProps] = useState(true);
+            const [isEditingReport, setIsEditingReport] = useState(false);
+            const [isGenerating, setIsGenerating] = useState(false);
+
+            // --- PERSISTENCE ---
+            useEffect(() => { localStorage.setItem('notion_token', notionToken); }, [notionToken]);
+            useEffect(() => { localStorage.setItem('report_model_id', reportModelId); }, [reportModelId]);
+            useEffect(() => { localStorage.setItem('game_logs', gameLogs); }, [gameLogs]);
+            useEffect(() => { localStorage.setItem('voice_samples', voiceSamples); }, [voiceSamples]);
+            useEffect(() => { localStorage.setItem('system_prompt', systemPrompt); }, [systemPrompt]);
+            useEffect(() => { localStorage.setItem('case_meta', JSON.stringify(caseMeta)); }, [caseMeta]);
+            useEffect(() => { localStorage.setItem('generated_report', report); }, [report]);
+            useEffect(() => {
+                if(inventory.length > 0) localStorage.setItem('inventory_cache', JSON.stringify(inventory));
+            }, [inventory]);
+            useEffect(() => {
+                localStorage.setItem('default_static_ids', JSON.stringify([...defaultStaticIds]));
+            }, [defaultStaticIds]);
+            useEffect(() => {
+                if (step === 3 && sessionIds.size === 0) setSessionIds(new Set(defaultStaticIds));
+            }, [step, defaultStaticIds]);
+
+            // --- API LOGIC ---
+
+            const analyzeBatch = async (items) => {
+                try {
+                    const response = await fetch('/api/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            items: items.map(i => ({
+                                id: i.id,
+                                name: i.name,
+                                type: i.type,
+                                desc: i.desc,
+                                // Enhanced context
+                                narrativeContent: i.narrativeContent,
+                                sfFields: i.sfFields,
+                                owner: i.owner,
+                                timeline: i.timeline,
+                                associatedChars: i.associatedChars,
+                                threads: i.threads
+                            }))
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Analysis failed');
+                    }
+
+                    const data = await response.json();
+                    return data.results || [];
+                } catch (e) {
+                    console.error("Analysis failed for batch", e);
+                    throw e;
+                }
+            };
+
+            // DEBUG: Fetch Notion Schema
+            const debugFetchSchema = async () => {
+                console.log('🔍 Fetching Notion Database Schema...');
+                try {
+                    const baseUrl = `https://api.notion.com/v1/databases/${ELEMENTS_DB_ID}`;
+                    const url = `https://corsproxy.io/?${encodeURIComponent(baseUrl)}`;
+
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${notionToken}`,
+                            'Notion-Version': NOTION_VERSION
+                        }
+                    });
+
+                    if (!response.ok) throw new Error(`Schema fetch failed: ${response.status}`);
+                    const schema = await response.json();
+
+                    console.log('📋 NOTION DATABASE SCHEMA:');
+                    console.log(JSON.stringify(schema, null, 2));
+                    console.log('\n📊 PROPERTIES:');
+                    Object.entries(schema.properties || {}).forEach(([name, prop]) => {
+                        console.log(`  ${name}: ${prop.type}`);
+                        if (prop.type === 'select' || prop.type === 'multi_select') {
+                            console.log(`    Options: ${prop[prop.type]?.options?.map(o => o.name).join(', ')}`);
+                        }
+                    });
+
+                    alert('Schema logged to console! Check DevTools → Console tab');
+                } catch (err) {
+                    console.error('❌ Schema fetch error:', err);
+                    alert(`Schema fetch failed: ${err.message}`);
+                }
+            };
+            // Expose to window for manual triggering
+            window.debugFetchSchema = debugFetchSchema;
+
+            const fetchAndAnalyze = async (shouldAnalyze = false) => {
+                setLoading(true);
+                setProgress({ current: 0, total: 0, status: 'Connecting to Database...' });
+                setError('');
+                let allResults = [];
+
+                try {
+                    // 1. FETCH FROM NOTION
+                    let hasMore = true;
+                    let startCursor = undefined;
+                    const baseUrl = `https://api.notion.com/v1/databases/${ELEMENTS_DB_ID}/query`;
+                    const url = `https://corsproxy.io/?${encodeURIComponent(baseUrl)}`;
+
+                    while (hasMore) {
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${notionToken}`,
+                                'Notion-Version': NOTION_VERSION,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                page_size: 100,
+                                start_cursor: startCursor,
+                                filter: { property: "Status", status: { does_not_equal: "AISLOP" } }
+                            })
+                        });
+                        if (!res.ok) throw new Error(`Notion Error: ${res.status}`);
+                        const data = await res.json();
+
+                        const processed = data.results.map(item => {
+                            const basicType = item.properties['Basic Type']?.select?.name || 'Unknown';
+                            const isMemoryToken = basicType.includes('Memory Token');
+                            const fullDesc = item.properties['Description/Text']?.rich_text?.map(t => t.plain_text).join('') || '';
+
+                            // Parse SF_ fields from Description/Text (Memory Tokens only)
+                            let narrativeContent = fullDesc;
+                            let sfFields = {};
+                            if (isMemoryToken && fullDesc.includes('SF_MemoryType:')) {
+                                const parts = fullDesc.split('SF_MemoryType:');
+                                narrativeContent = parts[0].trim();
+                                const sfBlock = 'SF_MemoryType:' + (parts[1] || '');
+
+                                // Extract SF_ fields
+                                const memTypeMatch = sfBlock.match(/SF_MemoryType:\s*(\w+)/);
+                                const valueMatch = sfBlock.match(/SF_ValueRating:\s*(\d+)/);
+                                const groupMatch = sfBlock.match(/SF_Group:\s*([^\n]+)/);
+                                const summaryMatch = sfBlock.match(/SF_Summary:\s*([^\n]+(?:\n(?!SF_)[^\n]+)*)/);
+
+                                sfFields = {
+                                    memoryType: memTypeMatch ? memTypeMatch[1].trim() : null,
+                                    valueRating: valueMatch ? parseInt(valueMatch[1]) : null,
+                                    group: groupMatch ? groupMatch[1].trim() : null,
+                                    summary: summaryMatch ? summaryMatch[1].trim() : null
+                                };
+                            }
+
+                            return {
+                                id: item.id,
+                                rfid: item.properties['SF_RFID']?.rich_text?.[0]?.plain_text || '',
+                                name: item.properties.Name?.title?.[0]?.plain_text || 'Untitled',
+                                type: basicType,
+                                category: isMemoryToken ? 'memory' : 'static',
+                                desc: fullDesc,
+                                narrativeContent: narrativeContent, // NEW: content without SF_ fields
+                                sfFields: sfFields, // NEW: parsed SF_ fields
+                                threads: item.properties['Narrative Threads']?.multi_select?.map(s => s.name) || [],
+
+                                // NEW: Relation IDs (will fetch details separately)
+                                ownerIds: item.properties['Owner']?.relation?.map(r => r.id) || [],
+                                timelineIds: item.properties['Timeline Event']?.relation?.map(r => r.id) || [],
+                                associatedChars: item.properties['Associated Characters']?.rollup?.array?.map(a =>
+                                    a.title?.[0]?.plain_text || ''
+                                ).filter(Boolean) || [],
+
+                                aiData: inventory.find(old => old.id === item.id)?.aiData || null
+                            };
+                        }).filter(i => i.name !== 'Untitled');
+
+                        allResults = [...allResults, ...processed];
+                        hasMore = data.has_more;
+                        startCursor = data.next_cursor;
+                        setProgress(p => ({ ...p, status: `Fetched ${allResults.length} items...` }));
+                    }
+
+                    // 1.5. FETCH OWNER AND TIMELINE DETAILS
+                    setProgress(p => ({ ...p, status: 'Fetching character and timeline details...' }));
+
+                    // Collect unique Owner and Timeline IDs
+                    const ownerIds = new Set();
+                    const timelineIds = new Set();
+                    allResults.forEach(item => {
+                        item.ownerIds.forEach(id => ownerIds.add(id));
+                        item.timelineIds.forEach(id => timelineIds.add(id));
+                    });
+
+                    // Fetch Character pages (Owners)
+                    const ownerMap = new Map();
+                    for (const ownerId of ownerIds) {
+                        try {
+                            const ownerUrl = `https://corsproxy.io/?${encodeURIComponent(`https://api.notion.com/v1/pages/${ownerId}`)}`;
+                            const ownerRes = await fetch(ownerUrl, {
+                                headers: {
+                                    'Authorization': `Bearer ${notionToken}`,
+                                    'Notion-Version': NOTION_VERSION
+                                }
+                            });
+                            if (ownerRes.ok) {
+                                const ownerData = await ownerRes.json();
+                                ownerMap.set(ownerId, {
+                                    name: ownerData.properties?.Name?.title?.[0]?.plain_text || 'Unknown',
+                                    logline: ownerData.properties?.Logline?.rich_text?.[0]?.plain_text || ''
+                                });
+                            }
+                        } catch (err) {
+                            console.warn(`Failed to fetch owner ${ownerId}:`, err);
+                        }
+                    }
+
+                    // Fetch Timeline pages
+                    const timelineMap = new Map();
+                    for (const timelineId of timelineIds) {
+                        try {
+                            const timelineUrl = `https://corsproxy.io/?${encodeURIComponent(`https://api.notion.com/v1/pages/${timelineId}`)}`;
+                            const timelineRes = await fetch(timelineUrl, {
+                                headers: {
+                                    'Authorization': `Bearer ${notionToken}`,
+                                    'Notion-Version': NOTION_VERSION
+                                }
+                            });
+                            if (timelineRes.ok) {
+                                const timelineData = await timelineRes.json();
+                                timelineMap.set(timelineId, {
+                                    eventName: timelineData.properties?.Name?.title?.[0]?.plain_text || '',
+                                    date: timelineData.properties?.Date?.date?.start || '',
+                                    location: timelineData.properties?.Location?.rich_text?.[0]?.plain_text || ''
+                                });
+                            }
+                        } catch (err) {
+                            console.warn(`Failed to fetch timeline ${timelineId}:`, err);
+                        }
+                    }
+
+                    // Enrich allResults with fetched Owner and Timeline data
+                    allResults.forEach(item => {
+                        item.owner = item.ownerIds[0] ? ownerMap.get(item.ownerIds[0]) : null;
+                        item.timeline = item.timelineIds[0] ? timelineMap.get(item.timelineIds[0]) : null;
+                    });
+
+                    // Dynamically discover SF_Group values
+                    const discoveredGroups = new Set();
+                    allResults.forEach(item => {
+                        if (item.sfFields?.group) {
+                            discoveredGroups.add(item.sfFields.group);
+                        }
+                    });
+                    console.log('📊 Discovered SF_Groups:', Array.from(discoveredGroups));
+
+                    // 2. ANALYZE WITH CLAUDE (If requested)
+                    if (shouldAnalyze) {
+                        const BATCH_SIZE = 15;
+                        const itemsToAnalyze = allResults.filter(i => !i.aiData);
+                        const totalBatches = Math.ceil(itemsToAnalyze.length / BATCH_SIZE);
+
+                        setProgress({ current: 0, total: totalBatches, status: 'Initializing Deep Scan...' });
+
+                        for (let i = 0; i < itemsToAnalyze.length; i += BATCH_SIZE) {
+                            const batch = itemsToAnalyze.slice(i, i + BATCH_SIZE);
+                            const results = await analyzeBatch(batch);
+
+                            results.forEach(res => {
+                                const match = allResults.find(r => r.id === res.id);
+                                if (match) {
+                                    match.aiData = {
+                                        isNarrative: res.is_narrative,
+                                        isBackground: res.is_background,
+                                        summary: res.summary,
+                                        inWorldRef: res.in_world_reference,
+                                        grouping: res.grouping,
+                                        tags: res.tags || [],
+                                        sfGroupCluster: res.sf_group_cluster
+                                    };
+                                }
+                            });
+
+                            setProgress({
+                                current: Math.ceil((i + BATCH_SIZE) / BATCH_SIZE),
+                                total: totalBatches,
+                                status: `Analyzing batch ${Math.ceil((i + BATCH_SIZE) / BATCH_SIZE)}/${totalBatches} (${Math.min(i + BATCH_SIZE, itemsToAnalyze.length)}/${itemsToAnalyze.length} items)...`
+                            });
+                        }
+                    }
+
+                    setInventory(allResults);
+
+                    // Auto-select character sheets for defaults (unless already in defaultStaticIds)
+                    const characterSheetIds = allResults
+                        .filter(item => item.type.toLowerCase().includes('character sheet'))
+                        .map(item => item.id);
+
+                    if (characterSheetIds.length > 0) {
+                        setDefaultStaticIds(prev => {
+                            const updated = new Set(prev);
+                            characterSheetIds.forEach(id => updated.add(id));
+                            return updated;
+                        });
+                    }
+
+                    setTimeout(() => setStep(2), 500);
+
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const generateReport = async () => {
+                setLoading(true);
+                setIsGenerating(true);
+                setProgress({ status: `Writing Report with ${reportModelId}...` });
+                setError('');
+
+                // SEPARATE Primary Evidence from Background Context
+                const primaryEvidence = inventory.filter(i =>
+                    sessionIds.has(i.id) && !defaultStaticIds.has(i.id)
+                );
+
+                const backgroundContext = inventory.filter(i =>
+                    defaultStaticIds.has(i.id) && !sessionIds.has(i.id)
+                );
+
+                // FORMAT PRIMARY EVIDENCE (focused, not ultra-compressed)
+                const formatPrimaryItem = (item) => {
+                    const typeDescription = item.sfFields?.memoryType
+                        ? ({'Technical': 'Memory Extraction - Technical',
+                            'Business': 'Memory Extraction - Business',
+                            'Personal': 'Memory Extraction - Personal'})[item.sfFields.memoryType] || item.type
+                        : item.type;
+
+                    const threadsNatural = item.threads
+                        ?.map(t => THREAD_TRANSLATIONS[t] || t.toLowerCase())
+                        .join(', ') || '';
+
+                    return `
+PRIMARY DISCOVERY: ${item.aiData?.inWorldRef || item.name}
+TYPE: ${typeDescription}
+SUMMARY: ${item.aiData?.summary || item.desc.substring(0, 200)}
+${item.owner ? `FROM: ${item.owner.name}${item.owner.logline ? ` (${item.owner.logline})` : ''}` : ''}
+${item.timeline ? `WHEN: ${item.timeline.date}${item.timeline.location ? ` at ${item.timeline.location}` : ''}` : ''}
+${threadsNatural ? `THEMES: ${threadsNatural}` : ''}
+${item.sfFields?.group ? `CLUSTER: ${item.sfFields.group} (related evidence to synthesize together)` : ''}
+`;
+                };
+
+                const primaryList = primaryEvidence.map(formatPrimaryItem).join('\n---\n');
+
+                // FORMAT BACKGROUND CONTEXT (enrichment-ready)
+                const formatBackgroundItem = (item) => {
+                    return `${item.owner?.name || item.name}: ${item.owner?.logline || item.aiData?.summary || item.desc.substring(0, 100)}`;
+                };
+
+                const backgroundList = backgroundContext.map(formatBackgroundItem).join('\n');
+
+                // SYSTEM PROMPT: Character, instructions, style guide
+                const systemPromptFinal = `${systemPrompt}
+
+DETECTIVE VOICE / STYLE GUIDE:
+Emulate the tone, vocabulary, and sentence structure found in these samples:
+"""
+${voiceSamples}
+"""
+
+OUTPUT FORMAT:
+Return your response as a JSON object with a single "html" field containing the complete HTML report body.
+Do NOT include conversational text, questions, or meta-commentary.
+Generate the report directly.`;
+
+                // USER PROMPT: Weighted data structure
+                const directorGuidance = gameLogs ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DIRECTOR'S SUMMARY (CANON - What Actually Happened This Session):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${gameLogs}
+
+This is CANON for this session. Use it to:
+- Understand narrative arc and player interpretation
+- Know which threads reached resolution vs remain open
+- Guide tone and emphasis
+- Capture unique gameplay moments
+- Resolve any conflicts with evidence items
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DIRECTOR'S SUMMARY: Not provided
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Construct narrative from Primary Evidence patterns alone.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+                const userPromptFinal = `Generate case report for THIS specific session.
+
+CASE METADATA:
+ID: ${caseMeta.number} | Date: ${caseMeta.date} | Location: ${caseMeta.location}
+
+${directorGuidance}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRIMARY EVIDENCE (${primaryEvidence.length} items - Focus 80% narrative here)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+These items were turned in to the detective by THIS group.
+They determine which narrative threads to focus on.
+
+${primaryList}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKGROUND CONTEXT (${backgroundContext.length} items - Enrichment only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Character sheets and baseline information.
+Use to ENRICH Primary Evidence threads with character details/relationships.
+Do NOT create new themes from Background alone.
+
+${backgroundList}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WEIGHTING INSTRUCTIONS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Primary Evidence determines WHICH narrative threads to tell
+2. Background Context enriches THOSE threads with character depth
+3. Director's Summary (if present) is canon for arc/tone/resolution
+4. Outstanding Questions come from: Background not pursued, Primary ambiguities, Director uncertainties
+5. TARGET: 750 words - synthesize, don't catalog
+6. FOCUS: Closure for participants, validation of their choices, in-world voice
+
+Generate the case report.`;
+
+                try {
+                    const response = await fetch('/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            systemPrompt: systemPromptFinal,
+                            userPrompt: userPromptFinal,
+                            model: reportModelId
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Report generation failed');
+                    }
+
+                    const reportText = await response.text();
+                    setReport(reportText);
+                    setIsEditingReport(false);
+                    setStep(5);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                    setIsGenerating(false);
+                }
+            };
+
+            const exportStyledHTML = () => {
+                const watermark = caseMeta.status || 'CLASSIFIED';
+                const status = caseMeta.status || 'ACTIVE INVESTIGATION';
+
+                const filledTemplate = REPORT_TEMPLATE
+                    .replace(/\{\{CASE_NUMBER\}\}/g, caseMeta.number)
+                    .replace(/\{\{DATE\}\}/g, caseMeta.date)
+                    .replace(/\{\{LOCATION\}\}/g, caseMeta.location)
+                    .replace(/\{\{STATUS\}\}/g, status)
+                    .replace(/\{\{WATERMARK\}\}/g, watermark)
+                    .replace(/\{\{REPORT_BODY\}\}/g, report);
+
+                const blob = new Blob([filledTemplate], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `case-report-${caseMeta.number.toLowerCase().replace(/[^a-z0-9]/g, '-')}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            // --- RENDERERS ---
+
+            // STEP 1: CONFIG
+            const renderConfig = () => (
+                <div className="glass-panel rounded-xl p-8 max-w-2xl mx-auto animate-fade-in">
+                    <div className="flex items-center gap-4 mb-8 border-b border-slate-700/50 pb-6">
+                        <div className="w-12 h-12 bg-blue-500/10 rounded-xl border border-blue-500/20 flex items-center justify-center">
+                            <Icon name="database" className="text-blue-400" size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white">System Initialization</h2>
+                            <p className="text-sm text-slate-400">Configure Database & AI Model</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                                <Icon name="info" className="text-blue-400 mt-0.5" size={18} />
+                                <div className="text-sm text-blue-200">
+                                    <p className="font-bold mb-1">Using Console MAX via Claude Code CLI</p>
+                                    <p className="text-xs text-blue-300/80">No API key needed - authenticates using your local Claude credentials</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Notion Integration Token</label>
+                            <div className="relative">
+                                <input
+                                    type="password"
+                                    value={notionToken}
+                                    onChange={e => setNotionToken(e.target.value)}
+                                    placeholder="secret_... (get from notion.so/my-integrations)"
+                                    className="w-full glass-input rounded-lg p-3 text-sm focus:border-slate-500 outline-none transition-all text-white placeholder-slate-600"
+                                />
+                            </div>
+                            <p className="text-[10px] text-slate-600 mt-1">Tokens saved in browser localStorage - enter once per device</p>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button
+                                onClick={() => fetchAndAnalyze(false)}
+                                disabled={loading}
+                                className="glass-input hover:bg-slate-800 text-slate-300 font-bold py-4 rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
+                            >
+                                Only Fetch Data
+                            </button>
+
+                            <button
+                                onClick={() => fetchAndAnalyze(true)}
+                                disabled={loading}
+                                className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-4 rounded-lg shadow-lg shadow-blue-900/20 flex flex-col items-center justify-center gap-1 transition-all hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100"
+                            >
+                                <div className="flex items-center gap-2">
+                                    {loading ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="sparkles" />}
+                                    <span>Fetch & Deep Scan</span>
+                                </div>
+                                <span className="text-[10px] font-normal opacity-80">Uses Claude Haiku 4.5 to Summarize & Filter</span>
+                            </button>
+                        </div>
+
+                        {/* Progress Bar */}
+                        {loading && (
+                            <div className="animate-slide-up bg-slate-900/50 rounded-lg p-4 border border-slate-800">
+                                <div className="flex justify-between text-xs mb-2">
+                                    <span className="text-blue-400 animate-pulse">{progress.status}</span>
+                                    <span className="text-slate-500">{progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}</span>
+                                </div>
+                                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-blue-500 transition-all duration-500"
+                                        style={{ width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '100%' }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {inventory.length > 0 && !loading && (
+                            <div className="text-center">
+                                <p className="text-xs text-slate-500">
+                                    {inventory.length} items cached. {inventory.filter(i => i.aiData).length} analyzed.
+                                </p>
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-400 text-xs">
+                                {error}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+
+            // STEP 4: CONTEXT
+            const renderContext = () => (
+                <div className="max-w-5xl mx-auto h-full animate-fade-in flex flex-col gap-6">
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="glass-panel p-5 rounded-xl">
+                            <h3 className="text-xs font-bold text-blue-400 uppercase mb-4 flex items-center gap-2">
+                                <Icon name="clipboard" size={14} /> Case Metadata
+                            </h3>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-bold uppercase">Case ID</label>
+                                    <input value={caseMeta.number} onChange={e => setCaseMeta({...caseMeta, number: e.target.value})} className="w-full glass-input rounded p-2 text-xs font-mono text-white" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-bold uppercase">Location</label>
+                                    <input value={caseMeta.location} onChange={e => setCaseMeta({...caseMeta, location: e.target.value})} className="w-full glass-input rounded p-2 text-xs font-mono text-white" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-bold uppercase">Status / Watermark</label>
+                                    <input value={caseMeta.status} onChange={e => setCaseMeta({...caseMeta, status: e.target.value})} className="w-full glass-input rounded p-2 text-xs font-mono text-white" placeholder="ACTIVE INVESTIGATION" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="glass-panel p-5 rounded-xl md:col-span-2 flex flex-col">
+                            <h3 className="text-xs font-bold text-neon-purple uppercase mb-2 flex items-center gap-2">
+                                <Icon name="mic" size={14} /> Detective Voice Calibration
+                            </h3>
+                            <p className="text-[10px] text-slate-400 mb-2">Paste samples of the detective's dialogue here to guide the AI's tone.</p>
+                            <textarea
+                                value={voiceSamples}
+                                onChange={e => setVoiceSamples(e.target.value)}
+                                className="flex-1 w-full glass-input rounded p-3 text-xs font-mono text-slate-300 focus:border-purple-500 outline-none resize-none leading-relaxed"
+                                placeholder='"I hate the rain."&#10;"Another dead end."'
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
+                        <div className="glass-panel p-5 rounded-xl flex flex-col">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Game Logs & Notes</h3>
+                            <textarea
+                                value={gameLogs}
+                                onChange={e => setGameLogs(e.target.value)}
+                                placeholder="Log player actions, decisions, and key events..."
+                                className="flex-1 w-full glass-input rounded p-3 text-xs font-mono focus:border-blue-500 outline-none resize-none"
+                            />
+                        </div>
+
+                        <div className="glass-panel p-5 rounded-xl flex flex-col">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase">System Prompt</h3>
+                                <button onClick={() => setSystemPrompt(DEFAULT_PROMPT)} className="text-[10px] text-blue-400 hover:underline">Reset</button>
+                            </div>
+                            <textarea
+                                value={systemPrompt}
+                                onChange={e => setSystemPrompt(e.target.value)}
+                                className="flex-1 w-full glass-input rounded p-3 text-xs font-mono focus:border-blue-500 outline-none resize-none"
+                            />
+
+                            {/* Model selection */}
+                            <div className="mt-4 p-4 glass-panel rounded-lg">
+                                <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">
+                                    <Icon name="cpu" size={14} /> Report Generation Model
+                                </h4>
+                                <select
+                                    value={reportModelId}
+                                    onChange={e => setReportModelId(e.target.value)}
+                                    className="w-full glass-input rounded-lg p-2 text-sm text-slate-300 focus:border-blue-500 outline-none mb-2"
+                                >
+                                    {MODELS.filter(m => m.type === 'report').map(m => (
+                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                </select>
+                                <p className="text-[10px] text-slate-500">
+                                    Choose model based on desired quality vs. speed. Sonnet is recommended for most cases.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={generateReport}
+                                disabled={loading}
+                                className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02] disabled:opacity-50"
+                            >
+                                {loading ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="zap" />}
+                                Generate Final Report
+                            </button>
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-400 text-xs">
+                            {error}
+                        </div>
+                    )}
+                </div>
+            );
+
+            // STEP 5: REPORT
+            const renderReport = () => (
+                <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
+                    <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-900/80">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Icon name="file-check" className="text-green-400" /> Mission Report
+                            </h2>
+                            {isEditingReport && (
+                                <span className="px-2 py-1 text-[10px] font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">
+                                    Editing Mode
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setStep(4)} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white border border-slate-700 rounded hover:bg-slate-800">
+                                Edit Context
+                            </button>
+                            <select
+                                value={reportModelId}
+                                onChange={async (e) => {
+                                    setReportModelId(e.target.value);
+                                    await generateReport();
+                                }}
+                                disabled={loading}
+                                className="px-3 py-1.5 text-xs bg-slate-700 text-white rounded hover:bg-slate-600 border border-slate-600 disabled:opacity-50"
+                            >
+                                <option value="" disabled>Regenerate with...</option>
+                                {MODELS.filter(m => m.type === 'report').map(m => (
+                                    <option key={m.id} value={m.id}>
+                                        {m.name} {m.id === reportModelId ? '(current)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={() => setIsEditingReport(!isEditingReport)}
+                                className={`px-3 py-1.5 text-xs rounded flex items-center gap-2 font-bold transition-all ${
+                                    isEditingReport
+                                        ? 'bg-green-600 text-white hover:bg-green-500'
+                                        : 'bg-amber-600 text-white hover:bg-amber-500'
+                                }`}
+                            >
+                                <Icon name={isEditingReport ? "eye" : "edit-3"} size={14} />
+                                {isEditingReport ? 'Preview' : 'Edit Report'}
+                            </button>
+                            <button
+                                onClick={() => navigator.clipboard.writeText(report)}
+                                className="px-3 py-1.5 text-xs bg-slate-600 text-white rounded hover:bg-slate-500 flex items-center gap-2"
+                            >
+                                <Icon name="copy" size={14} /> Copy
+                            </button>
+                            <button
+                                onClick={exportStyledHTML}
+                                className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 flex items-center gap-2 font-bold shadow-lg"
+                            >
+                                <Icon name="download" size={14} /> Export HTML
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-8 bg-slate-950">
+                        {isEditingReport ? (
+                            <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={e => setReport(e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{ __html: report }}
+                                className="editor-content max-w-4xl mx-auto glass-input rounded-lg p-8 text-sm text-slate-200 focus:border-amber-500 outline-none min-h-full"
+                                style={{ fontFamily: "'Courier Prime', 'Courier New', monospace" }}
+                            />
+                        ) : (
+                            <div className="max-w-4xl mx-auto">
+                                <iframe
+                                    srcDoc={REPORT_TEMPLATE
+                                        .replace(/\{\{CASE_NUMBER\}\}/g, caseMeta.number)
+                                        .replace(/\{\{DATE\}\}/g, caseMeta.date)
+                                        .replace(/\{\{LOCATION\}\}/g, caseMeta.location)
+                                        .replace(/\{\{STATUS\}\}/g, caseMeta.status || 'ACTIVE INVESTIGATION')
+                                        .replace(/\{\{WATERMARK\}\}/g, caseMeta.status || 'CLASSIFIED')
+                                        .replace(/\{\{REPORT_BODY\}\}/g, report)
+                                    }
+                                    className="w-full border-0 rounded-lg"
+                                    style={{ height: '2000px' }}
+                                    title="Report Preview"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-[#020617] text-slate-200 p-6 flex flex-col font-sans selection:bg-blue-500/30">
+                    {/* Loading Overlay */}
+                    {isGenerating && <LoadingOverlay />}
+
+                    {/* Header */}
+                    <header className="max-w-6xl mx-auto w-full mb-6 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/50">
+                                <Icon name="aperture" className="text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold text-white tracking-tight">ALN <span className="text-blue-400">Director</span></h1>
+                                <div className="flex gap-2 text-[10px] font-mono text-slate-500">
+                                    <span>CLAUDE-EDITION</span>
+                                    <span>•</span>
+                                    <span>CONSOLE-MAX</span>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="flex-1 max-w-6xl mx-auto w-full flex flex-col min-h-0 pb-4">
+                        {error && (
+                            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-center gap-3 animate-fade-in">
+                                <Icon name="alert-triangle" />
+                                {error}
+                            </div>
+                        )}
+
+                        <StepIndicator step={step} setStep={setStep} />
+
+                        <div className="flex-1 min-h-0 relative">
+                            {step === 1 && renderConfig()}
+                            {step === 2 && <SelectionStep
+                                title="Baseline Environment"
+                                sub="Select items permanently in the room."
+                                category="static"
+                                isBase={true}
+                                selectedSet={defaultStaticIds}
+                                setHandler={setDefaultStaticIds}
+                                nextStep={3}
+                                inventory={inventory}
+                                searchTerm={searchTerm}
+                                setSearchTerm={setSearchTerm}
+                                hideProps={hideProps}
+                                setHideProps={setHideProps}
+                                sessionTab={sessionTab}
+                                setSessionTab={setSessionTab}
+                                setStep={setStep}
+                            />}
+                            {step === 3 && <SelectionStep
+                                title="Session Findings"
+                                sub="Select items found during this run."
+                                category={sessionTab}
+                                isBase={false}
+                                selectedSet={sessionIds}
+                                setHandler={setSessionIds}
+                                nextStep={4}
+                                inventory={inventory}
+                                searchTerm={searchTerm}
+                                setSearchTerm={setSearchTerm}
+                                hideProps={hideProps}
+                                setHideProps={setHideProps}
+                                sessionTab={sessionTab}
+                                setSessionTab={setSessionTab}
+                                setStep={setStep}
+                            />}
+                            {step === 4 && renderContext()}
+                            {step === 5 && renderReport()}
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

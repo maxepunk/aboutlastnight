@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report MC-2025-1116 - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: 'SUSPECT AT LARGE';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: 'SUSPECT AT LARGE';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+        <strong>CASE ID:</strong> MC-2025-1116<br>
+        <strong>DATE:</strong> 2027-02-22<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (site of the most recent 'Blackwood Rave')<br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> SUSPECT AT LARGE
+    </div>
+
+    <h2>Executive Summary</h2>
+
+<p>Marcus Blackwood died at the hands of a Black Market operative using the alias "Blake Manley"—a cleanup job disguised as opportunity. The group recovered five memory extractions documenting the hours before Blackwood's death: a pattern of cruelty, exploitation, and one spectacular act of violence. They chose cooperation over justice, trading evidence for hostage release. Blake fled when his lies collapsed. The memories told the story. The case remains open.</p>
+
+<h2>Evidence Locker</h2>
+
+<div class="evidence-item">
+<strong>The Algorithm That Never Was:</strong> <em>Memory extraction from May 12, 2022</em>&nbsp;captures the moment <strong>Alex Reeves</strong> discovered Marcus Blackwood's celebrated BizAI algorithm—the foundation of his entire empire—was fundamentally broken. Not flawed. Not buggy. <em>Nonfunctional</em>. Alex rebuilt it by sunrise, handed Marcus a working product, and received equity promises that dissolved like smoke. Years later, at 11:32PM on the night of the party, <em>recovered memories show Alex's physical assault on Marcus</em>—fists connecting with jaw, years of stolen credit and broken promises finally erupting into bottled fury released. The genius who built the throne watching someone else sit on it. That kind of rage doesn't evaporate. It compounds.
+</div>
+
+<div class="evidence-item">
+<strong>The Women Marcus Used:</strong> Two memory extractions from <strong>Jessicah Kane</strong> paint parallel portraits of dismissal. At 9:20PM, <em>Jessicah confronts Marcus about their baby</em> with <strong>Howie</strong> standing witness—Marcus blows her off mid-sentence, priorities elsewhere, paternity an inconvenience. Hours later at 3:36AM, <em>Jessicah and Sarah discover shared victimization</em>, two women realizing they're footnotes in the same exploitation narrative. What emerged wasn't competition. It was solidarity. Unexpected compassion between people Marcus treated as disposable. The memory captures something he never anticipated: his victims comparing notes.
+</div>
+
+<div class="evidence-item">
+<strong>Witnesses to Character:</strong> <em>Memory extraction from Ashe Motoko at 11:30PM</em> documents Marcus insulting <strong>Kai</strong> at the party—casual cruelty, the kind that reveals character when nobody important is watching. Ashe remembered it. Preserved it. Marcus spent his final hours burning bridges with people who had every reason to let him fall. The question isn't who wanted him dead. It's who didn't.
+</div>
+
+<h2>Memory Analysis</h2>
+
+<p>Five memory tokens recovered from the locked collection Marcus—or Blake—secured before the murder. Neural extraction technology preserved the hours leading to Blackwood's death with crystalline fidelity. Each memory a fragment. Together, a mosaic of motive.</p>
+
+<ul>
+<li><strong>May 12, 2020 - Alex Reeves:</strong> The original sin. Discovery that Marcus's algorithm never worked. Foundation of empire built on someone else's all-nighter.</li>
+<li><strong>11:30PM - Ashe Motoko:</strong> Marcus disrespecting Kai. Pattern of behavior, casual cruelty as personality trait.</li>
+<li><strong>11:32PM - Alex Reeves:</strong> Physical assault. The technical genius finally swinging back. Rage with a years-long fuse.</li>
+<li><strong>9:20PM - Jessicah Kane:</strong> Paternity dismissed, Howie watching. Marcus prioritizing everything except responsibility.</li>
+<li><strong>3:36AM - Jessicah Kane:</strong> Survivors finding each other. The moment Marcus's victims stopped being isolated.</li>
+</ul>
+
+<p>The group held these memories instead of turning them over. Their choice. Their consequences.</p>
+
+<h2>Suspect Network</h2>
+
+<p><strong>Blake Manley (alias):</strong> Black Market operative who executed Marcus Blackwood and orchestrated the memory extraction scheme. Lied about token expiration to manipulate the group. Fled when Detective Anondono exposed the deception. Currently at large. Real identity unknown.</p>
+
+<p><strong>Alex Reeves:</strong> The technical architect behind Marcus's success, compensated with broken promises and vanishing equity. Built the algorithm that made Marcus famous. Physically assaulted Marcus hours before the murder. Motive measured in years of stolen credit.</p>
+
+<p><strong>Jessicah Kane:</strong> Mother of Marcus's child, dismissed and discarded. Confronted him at 9:20PM, received indifference. Found unexpected solidarity with Sarah at 3:36AM—two women realizing they were chapters in the same story.</p>
+
+<p><strong>Sofia and Jamie:</strong> The documentarians. Spent the investigation piecing together everyone's memories, reconstructing the narrative from fragments. Chose not to hand evidence to authorities. Information brokers who kept their cards.</p>
+
+<h2>Outstanding Questions</h2>
+
+<ul>
+<li>Who secured the memory tokens behind locks before the murder—Marcus in a double-cross, or Blake in an elaborate setup?</li>
+<li>What happened to Sarah after 3:36AM? Her conversation with Jessicah ends mid-revelation.</li>
+<li>Did Alex's assault on Marcus at 11:32PM escalate beyond recovered memories show, or was that the extent of physical confrontation?</li>
+<li>Why did the Black Market want Marcus dead <em>now</em>? What changed to make him a liability instead of a partner?</li>
+<li>What's Blake Manley's real name, and where does someone with that skillset disappear to?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>This group chose the pragmatic path over the righteous one. They recovered memories documenting Marcus Blackwood's pattern of exploitation—technical theft from Alex, paternal dismissal of Jessicah, casual cruelty toward Kai—and traded them for hostage release instead of prosecution evidence. Sofia and Jamie reconstructed the narrative, shared it with the group, then kept it from us. Information as currency. Can't say I blame them.</p>
+
+<p>Blake Manley remains at large. The Black Market continues operating. Marcus Blackwood is still dead, and everyone who wanted him gone got their wish through someone else's hands. The memories tell us <em>why</em> people had motive. They don't tell us who pulled the trigger—because Blake did, and he's gone.</p>
+
+<p>Five memory tokens preserved the final hours of a man who built an empire on someone else's work, dismissed the people he used, and died when his usefulness to darker forces expired. The group held those memories instead of handing them over. That choice will follow them longer than the expiration timers on those tokens.</p>
+
+<p><strong>Case Status:</strong> Perpetrator identified (Blake Manley, alias), fugitive at large. Evidence withheld by witnesses who chose negotiation over cooperation. Hostages recovered. Black Market operations continue. File remains open pending Blake's apprehension and recovery of withheld evidence.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Memory Crimes Division<br>
+Case MC-2025-1116<br>
+Filed: 2027-02-22</p>
+</div>
+
+</div>
+
+</body>
+</html>

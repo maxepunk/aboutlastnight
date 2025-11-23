@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report MC-2025-1121 - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: 'ACTIVE INVESTIGATION';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: 'ACTIVE INVESTIGATION';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+    <strong>CASE ID:</strong> MC-2025-1121<br>
+    <strong>DATE:</strong> 2027-02-22<br>
+    <strong>LOCATION:</strong> Abandoned Warehouse (site of the most recent 'Blackwood Rave')<br>
+    <strong>STATUS:</strong> ACTIVE MANHUNT<br>
+    <strong>REPORTING OFFICER:</strong> DET. ANONDONO
+    </div>
+
+    <h2>Executive Summary</h2>
+
+<p>Marcus Blackwood didn't just die at his own party—he was executed. The killer? Blake Manley, Black Market operative, tying up loose ends after a drug deal gone sideways. Thanks to the investigative charge led by former <em>Silicon Valley Business Journal</em> reporter <strong>Ashe Motoko</strong>, this group cracked open a conspiracy that freed hostages from a Canyon Road warehouse and exposed a network of corporate fraud, political bribery, and memory trafficking that reaches into Senator Walsh's office. Blake's associates scattered before we could collar them, but the evidence you recovered gives us everything we need to hunt them down.</p>
+
+<h2>Evidence Locker</h2>
+
+<div class="evidence-item">
+<strong>The Shell Game:</strong> Memory extractions from <strong>Rachel Torres</strong> document the mechanics of Marcus's empire—liability shields, shell vehicle schemes, laundering dirty money through Morgan's energy clients. Rachel's voice memo, recovered from February 22nd, plays like a prosecutor's opening statement. She knew Marcus wasn't just cutting corners; he was building an architecture of fraud designed to collapse without taking him down with it. The recordings detail transactions routed through phantom companies, each one insulating Marcus from criminal liability while his partners—Morgan, Victoria, Diana—got their hands dirty. Rachel saw it all, documented it all, and Marcus made sure she forgot it all.
+</div>
+
+<div class="evidence-item">
+<strong>The Permanent Solution:</strong> A memory extraction from <strong>Victoria Kingsley</strong> captures a February 15th coffee meeting where she and <strong>Morgan</strong> discuss Marcus's "erratic behavior" and the need for a "permanent solution" to his criminal liability. The phrasing is clinical. Corporate. The kind of language venture capitalists use when they're planning to liquidate an asset. Whether they pulled the trigger themselves or simply created the conditions for Blake to do it remains unclear, but the intent was there—documented, extracted, undeniable. Marcus had become a liability, and his former friends were preparing to cut him loose.
+</div>
+
+<div class="evidence-item">
+<strong>Political Leverage:</strong> Recovered memories from <strong>Diana Nilsson</strong> reveal the stick behind Marcus's compliance: <strong>Senator Walsh's receipts</strong>. Diana overheard Morgan threaten Marcus at 1:58 AM—cooperate or Walsh's bribery trail goes public. The extraction also captures Diana's origin story: a 2012 Stanford campus negotiation where she first flexed her legal skills on Marcus's behalf. She's been the group's lawyer and enabler since the beginning, the one who made sure the Stanford Four never faced consequences. Until now.
+</div>
+
+<div class="evidence-item">
+<strong>The Silenced Journalist:</strong> Memory extractions from <strong>Ashe Motoko</strong> document a March 2022 legal settlement—an NDA that buried her exposé on Marcus's criminal conduct and corruption. The SVBJ piece never ran. The evidence never surfaced. Marcus paid for silence, and Ashe took the deal. Tonight she broke it. Her leadership in recovering the memory evidence didn't just free hostages; it reclaimed the story Marcus stole from her. Redemption, one extraction at a time.
+</div>
+
+<div class="evidence-item">
+<strong>The Memory Fail-Safe:</strong> A memory extraction from <strong>Marcus Blackwood</strong> himself reveals the technology's built-in safety feature: expired tokens automatically restore memories to their owners. Blake lied about the ticking clock. The extractions weren't degrading—they were returning home. Marcus documented this in his own notes, possibly as insurance, possibly as one last middle finger to the Black Market. Either way, it's proof that the hostages were leverage, not necessity. Blake didn't need those memories to restore anyone. He just needed the threat.
+</div>
+
+<div class="evidence-item">
+<strong>Before the Fall:</strong> <strong>Sofia Francisco's</strong> footage from a Stanford glow rave on April 17, 20011, captures the Stanford Four before money corrupted them—idealistic kids with LED lights and terrible dance moves. It's the kind of evidence that doesn't solve cases but explains them. Somewhere between that rave and Rachel's voice memos, they stopped being friends and started being accomplices.
+</div>
+
+<h2>Memory Analysis</h2>
+
+<p>The memory extraction tech at this party wasn't recreational—it was tactical. Someone dosed the guests, pulled their memories, and locked the tokens behind combination puzzles. Whether that was Marcus attempting a double-cross or Blake orchestrating a hostage scheme while he "dealt with" Marcus remains one of this case's central ambiguities.</p>
+
+<p>The extractions you recovered weren't random party snapshots. They were insurance policies, blackmail material, evidence vaults. Here's what broke the case:</p>
+
+<ul>
+<li><strong>Rachel Torres (Feb 22, 00:15):</strong> Voice memo detailing shell companies and liability shields—the blueprint of Marcus's fraud infrastructure.</li>
+<li><strong>Victoria Kingsley (Feb 15):</strong> Coffee meeting discussing Marcus's "permanent solution"—premeditated intent to eliminate a problem.</li>
+<li><strong>Diana Nilsson (1:58 AM):</strong> Morgan's threat involving Senator Walsh's bribery receipts—political corruption as leverage.</li>
+<li><strong>Ashe Motoko (March 20, 2022):</strong> The NDA that silenced her exposé—Marcus buying his way out of accountability.</li>
+<li><strong>Marcus Blackwood (date unclear):</strong> Safety protocol documentation proving expired tokens restore automatically—Blake's lie exposed.</li>
+</ul>
+
+<h2>Suspect Network</h2>
+
+<p><strong>Blake Manley (Black Market Operative):</strong> The killer. Executed Marcus to tie up loose ends, then spun a hostage narrative to extract maximum value from the memory tokens before disappearing. Blake's associates fled the Canyon Road warehouse before our teams arrived, but we're tracking them.</p>
+
+<p><strong>Victoria Kingsley &amp; Morgan (The Conspirators):</strong> Discussed Marcus's "permanent solution" weeks before his death. Whether they contracted Blake directly or simply created conditions for his execution remains under investigation. Morgan wielded Senator Walsh's bribery receipts like a blade.</p>
+
+<p><strong>Diana Nilsson (The Enabler):</strong> Group lawyer since 2012. Facilitated Marcus's schemes, heard Morgan's threats, never reported anything. Her memories show a pattern: legal advocacy as accomplice behavior.</p>
+
+<p><strong>Rachel Torres:</strong> Documented Marcus's fraud architecture in meticulous detail. Her voice memos are prosecution gold—if she survives long enough to testify.</p>
+
+<p><strong>Ashe Motoko (The Redeemed):</strong> Former SVBJ journalist silenced by Marcus's 2022 NDA. Led tonight's investigation and broke her silence when it mattered most. The exposé she couldn't publish then became the evidence that freed hostages tonight.</p>
+
+<p><strong>Sofia Francisco:</strong> Documentarian of the Stanford Four's origin story. Her footage provides context, not culpability—a reminder that corruption is learned, not inherent.</p>
+
+<h2>Outstanding Questions</h2>
+
+<ul>
+<li>Did Marcus lock the memory tokens himself as a double-cross, or did Blake orchestrate the puzzle scheme while committing murder?</li>
+<li>Were Victoria and Morgan directly involved in contracting Blake, or did they simply create conditions that made Marcus's execution inevitable?</li>
+<li>What specific bribes did Senator Walsh accept, and how deep does the political corruption extend beyond Marcus's operation?</li>
+<li>Where did Blake's Black Market associates flee after abandoning the Canyon Road warehouse?</li>
+<li>How many other victims did Marcus silence with NDAs like the one that buried Ashe's exposé?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>This group didn't just solve a murder—they dismantled a conspiracy. Ashe Motoko's leadership turned a room full of drugged partygoers into investigators who recovered enough evidence to free hostages and expose corruption reaching into a senator's office. You chose exposure over silence, evidence over extortion, and that choice saved lives.</p>
+
+<p>Marcus Blackwood built his empire on stolen ideas, shell companies, and strategic amnesia. He paid people to forget what they knew. Blake Manley killed him when he became more liability than asset. Victoria and Morgan discussed his "permanent solution" over coffee. Diana enabled it all with legal cover. And Ashe—silenced once by an NDA—led the charge that brought it into the light.</p>
+
+<p>The Canyon Road hostages are safe. Blake and his associates are in the wind, but the evidence you recovered gives us leverage. Senator Walsh's receipts are now our receipts. The shell companies Rachel documented are targets for federal investigation. The memory extraction technology Marcus weaponized is now documented, regulated, seized.</p>
+
+<p>Blake's still out there. So are his associates. But thanks to you, they're running without cover, without hostages, without the one thing the Black Market needs to operate: darkness.</p>
+
+<p><strong>Case Status:</strong> Primary suspect identified (Blake Manley - at large). Hostages recovered. Co-conspirators under investigation. Federal warrants pending for Victoria Kingsley, Morgan Reed, Diana Nilsson. Memory extraction evidence secured and catalogued. Black Market operation disrupted but not eliminated.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Corporate Crimes Division<br>
+Case MC-2025-1121<br>
+Filed: 2027-02-21</p>
+</div>
+
+</div>
+
+</body>
+</html>
