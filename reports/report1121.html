@@ -27,7 +27,7 @@
         font-size: 15px;
     }
 
-    /* Report container - file document style */
+    /* Report container - like a file folder */
     .report-container {
         border: 2px solid rgba(60, 60, 60, 0.8);
         border-top: 8px solid rgba(80, 80, 80, 0.9);
@@ -41,23 +41,23 @@
         position: relative;
     }
 
-    /* Watermark stamp */
+    /* Watermark Classification Stamp */
     .report-container::before {
         content: 'ACTIVE MANHUNT';
         position: absolute;
         top: 50%;
         left: 50%;
-        transform: translate(-50%, -50%) rotate(-22deg);
+        transform: translate(-50%, -50%) rotate(-25deg);
         font-family: 'Bebas Neue', sans-serif;
-        font-size: 6rem;
-        color: rgba(204, 0, 0, 0.09);
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
         font-weight: 700;
-        letter-spacing: 0.25em;
+        letter-spacing: 0.3em;
         pointer-events: none;
         z-index: 0;
     }
 
-    /* Top stamp */
+    /* Top-corner classification stamp */
     .report-container::after {
         content: 'ACTIVE MANHUNT';
         position: absolute;
@@ -67,63 +67,75 @@
         color: #cc0000;
         font-weight: 700;
         letter-spacing: 0.25em;
-        opacity: 0.5;
-        font-size: 0.75rem;
+        opacity: 0.4;
+        font-size: 0.85rem;
         border: 2px solid #cc0000;
         padding: 4px 12px;
-        transform: rotate(-2deg);
+        transform: rotate(3deg);
         z-index: 10;
     }
 
-    /* Content above watermark */
-    body > * {
+    /* All content above watermark */
+    .report-container > * {
         position: relative;
         z-index: 1;
     }
 
-    /* Official headers - Bebas Neue stamps */
-    h1, h2 {
-        font-family: 'Bebas Neue', sans-serif;
-        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
-        padding-bottom: 10px;
-        color: #cc0000;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        margin-bottom: 25px;
-        text-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
-    }
-
+    /* Official Case Header - Bebas Neue stamp style */
     h1 {
-        font-size: 2.8rem;
+        font-family: 'Bebas Neue', sans-serif;
         text-align: center;
         border-bottom: 3px double #cc0000;
         margin-bottom: 35px;
-        padding-bottom: 15px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
         letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
     }
 
+    /* Section headers - Official stamps */
     h2 {
+        font-family: 'Bebas Neue', sans-serif;
         font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
         margin-top: 35px;
         margin-bottom: 18px;
         padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
     }
 
-    /* Form metadata box */
-    .meta {
-        font-size: 0.95rem;
-        color: rgba(240, 240, 235, 0.85);
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
         margin-bottom: 35px;
         border: 1px solid rgba(100, 100, 100, 0.4);
-        padding: 22px 25px;
-        background-color: rgba(30, 30, 28, 0.95);
         border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
         line-height: 2;
         font-family: 'Courier Prime', monospace;
         box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
     }
 
-    .meta strong {
+    .meta-data strong {
         font-family: 'Courier Prime', monospace;
         font-weight: 700;
         color: rgba(255, 255, 255, 0.6);
@@ -132,7 +144,15 @@
         letter-spacing: 0.05em;
     }
 
-    /* Evidence items */
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
     .evidence-item {
         margin-bottom: 22px;
         padding-left: 22px;
@@ -149,17 +169,6 @@
         transform: translateX(6px);
     }
 
-    /* Status warnings */
-    .warning {
-        color: #cc0000;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 0.15em;
-        font-family: 'Bebas Neue', sans-serif;
-        font-size: 1.05em;
-        text-shadow: 0 0 10px rgba(204, 0, 0, 0.6);
-    }
-
     /* Detective's notes */
     .note {
         font-style: italic;
@@ -174,24 +183,17 @@
         box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
     }
 
-    /* Bold text */
+    /* Bold emphasis in typed text */
     strong {
         color: rgba(255, 255, 255, 0.95);
         font-weight: 700;
         font-family: 'Courier Prime', monospace;
     }
 
-    /* Body paragraphs */
-    p {
-        margin-bottom: 16px;
-        font-family: 'Courier Prime', 'Courier New', monospace;
-        color: rgba(235, 235, 230, 0.92);
-        line-height: 1.75;
-    }
-
-    /* Lists */
-    ol, ul {
-        margin-left: 28px;
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
         margin-top: 15px;
         margin-bottom: 15px;
     }
@@ -202,23 +204,24 @@
         line-height: 1.7;
     }
 
-    /* Section dividers */
+    /* Section breaks */
     hr {
         border: none;
-        height: 2px;
-        background: linear-gradient(to right, transparent, rgba(204, 0, 0, 0.7) 20%, rgba(204, 0, 0, 0.7) 80%, transparent);
-        margin: 35px 0;
-        box-shadow: 0 0 15px rgba(204, 0, 0, 0.3);
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
     }
 
-    /* Evidence labels in italic */
-    em {
-        color: rgba(255, 200, 100, 0.9);
-        font-style: italic;
-        font-family: 'Courier Prime', monospace;
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
     }
 
-    /* Print/photocopy texture */
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
     @media screen {
         .report-container {
             background-image:
@@ -232,100 +235,83 @@
 
 <div class="report-container">
 
-<h1>Case Report: "About Last Night"</h1>
+    <h1>Official Case Report</h1>
 
-<div class="meta">
-    <strong>CASE ID:</strong> MC-2025-1121<br>
-    <strong>DATE:</strong> 2027-02-21<br>
-    <strong>LOCATION:</strong> Blackwood Warehouse (Sector 4)<br>
-    <strong>STATUS:</strong> ACTIVE MANHUNT<br>
-    <strong>REPORTING OFFICER:</strong> DET. ANONDONO
-</div>
+    <div class="meta-data">
+        <strong>CASE ID:</strong> MC-2025-1121<br>
+        <strong>DATE:</strong> 2025-11-23<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (site of the most recent 'Blackwood Rave')<br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> ACTIVE MANHUNT
+    </div>
 
-<h2>// EXECUTIVE SUMMARY</h2>
-<p>
-    Marcus Blackwood is dead. That’s the headline, but it’s the least interesting part of the story. The CEO of NeurAI hosted a party to celebrate the future, but the only thing being served was a cocktail of memory-suppressants and corporate betrayal.
-</p>
-<p>
-    The perpetrator has been identified as "Blake Manley"—a cleaner for the underground syndicate known as <strong>The Black Market</strong>. Manley didn't just crash the party; he orchestrated a mass extraction event. The guests lost time. Marcus lost his life.
-</p>
-<p>
-    It appears Marcus attempted a double-cross. He locked his associates' extracted memories in around the venue—collateral, perhaps? Or a fail-safe? And why puzzles? Did he think he was oh-so-clever? Regardless. it didn't save him. Manley executed Blackwood to tie up loose ends and attempted to hold some of the guests hostage in exchange for the memories he was looking to recover. Thanks to the intervention of the "sleepyheads", especially the investigative work of journalist <strong>Ashe Motoko</strong>, the location of the hostages was pinpointed near Canyon Road.
-</p>
-<p>
-    We recovered the hostages. We recovered the memories. But Blake Manley is in the wind.
-</p>
+    <h2>Executive Summary</h2>
 
-<h2>// EVIDENCE LOCKER: PHYSICAL ASSETS</h2>
-<p>The warehouse was littered with the debris of broken lives and white-collar crimes. We didn't just find drugs; we found the motive.</p>
+<p>Marcus Blackwood is dead—murdered by his Black Market contact "Blake Manley" after their memory extraction scheme went sideways at last night's warehouse rave. What started as a lucrative partnership ended in blood when Marcus tried to secure the extracted memories behind locks, either double-crossing his partners or executing Blake's contingency plan. Thanks to journalist Ashe Motoko's persistence and the evidence this group recovered, we located and freed the hostages Blake's crew held near Canyon Road. Blake and his associates vanished before we arrived, but the memories you secured exposed a conspiracy reaching from Stanford dorms to Senate offices.</p>
+
+<h2>Evidence Locker</h2>
 
 <div class="evidence-item">
-    <strong>The Corporate Shell Game:</strong>
-    Documents recovered on site—specifically <em>Company One-Pagers</em> and <em>Funding Emails</em>—paint a clear picture. Marcus was bleeding money. Emails between <strong>James Whitman</strong> and <strong>Victoria</strong> confirm that funding for NeurAI was contingent on technology that Marcus didn't actually possess.
+<strong>The Stanford Four's Fall:</strong> <em>Sofia Francisco's nostalgic rave footage from 2011</em> captures when Marcus, Victoria, Morgan, and Diana were idealistic Stanford students throwing underground parties. By 2012, <em>Diana's negotiation memory</em> shows her already working as Marcus's legal shield, establishing the pattern that would define their toxic symbiosis for fifteen years. What began as friendship became mutual corruption—each protecting the others' crimes while sinking deeper themselves.
 </div>
 
 <div class="evidence-item">
-    <strong>The Fraud:</strong>
-    A <em>Cease & Desist letter</em> and <em>Alex’s Character Sheet</em> reveal the ugly truth: Marcus didn't write the code. <strong>Alex</strong> did. Marcus was the face, Alex was the brain, and James was the wallet getting squeezed.
+<strong>Political Corruption Network:</strong> <em>Diana's bar conversation memory from 1:58 AM</em> caught Morgan threatening Marcus with Senator Walsh's bribery receipts—leverage accumulated over years of illegal campaign financing. The <em>Rachel Torres voice memo from February 22</em> documents Marcus's shell vehicle schemes funneling dirty money through Morgan's energy clients, creating liability shields that protected everyone while implicating them all. This wasn't just fraud; it was systemic corruption binding criminals to politicians through mutual blackmail.
 </div>
 
 <div class="evidence-item">
-    <strong>The "Chemist":</strong>
-    We found texts between Marcus and a known associate, <strong>Derek</strong>. Marcus wasn't just buying party favors; he was putting a drug dealer on the payroll as an "in-house chemist." The budget proposals confirm it. This is how they synthesized the memory agents used on the guests.
+<strong>The Silenced Truth:</strong> <em>Ashe Motoko's legal coercion memory from March 2022</em>&nbsp;reveals how Marcus weaponized the legal system against journalists. The NDA that killed Ashe's exposé wasn't just about protecting Marcus—it buried evidence of the entire network's crimes. When <em>Victoria and Morgan's coffee meeting on February 15</em> discussed a "permanent solution" to Marcus's erratic behavior, they weren't just planning murder; they were protecting an empire built on silenced witnesses and buried stories. Marcus's own <em>memory extraction safety notes</em> contained the irony—expired memories return to their owners. The very technology he weaponized would have exposed him if Blake hadn't acted first.
 </div>
 
-<div class="evidence-item">
-    <strong>The Cover-Up:</strong>
-    <strong>Taylor Chase</strong> sent an email confirming the burial of an exposé written by Ashe Motoko. They've ALWAYS known the memory experiments were dangerous, and they silenced the press to keep their valuation up.
-</div>
+<h2>Memory Analysis</h2>
 
-<div class="evidence-item">
-    <strong>Domestic Decay:</strong>
-    It wasn't just business. <em>Divorce emails from Diana</em>, a <em>Paternity Test</em> for <strong>Jessicah Kane</strong> (99.85% positive), and receipt of expensive jewelry for <strong>Sarah</strong> tell the story of a man whose personal life was as fraudulent as his business.
-</div>
-
-<h2>// MEMORY ANALYSIS: THE TOKENS</h2>
-<p>
-    Blake Manley lied. He told the victims the tokens were ticking time bombs. He wanted them desperate. We proved that the tokens were merely vessels—waiting to restore the data to the host. Once we cracked the locks, the memories sang like canaries.
-</p>
+<p>The memory extraction technology Marcus pioneered for profit became the weapon that exposed his empire. Our technical analysis confirms what his own notes revealed: extracted memories aren't destroyed when tokens expire—they restore to their original owners. Blake lied about this critical detail, using fear to manipulate victims while Marcus saw it as a failsafe.</p>
 
 <ul>
-    <li><strong>ALR001 (Alex's Memory):</strong> Visual confirmation that Alex rebuilt Marcus’s broken algorithm from scratch. Marcus was incompetent; Alex was the genius.</li>
-    <li><strong>DIN021 (Diana's Memory):</strong> Audio of <strong>Morgan Reed</strong> threatening Marcus with proof of bribes. The walls were closing in from the legal department.</li>
-    <li><strong>RAT031 (Rachel's Voice Memo):</strong> A drunken confession implicating Marcus in criminal dealings involving shell vehicles. This connects Blackwood directly to money laundering.</li>
-    <li><strong>ASM042 (Ashe's Memory):</strong> A suppressed memory of Ashe being forced to settle and kill her story. This was the smoking gun for the motive behind the hostility toward the journalist.</li>
-    <li><strong>MAB001 (The Expiration Lie):</strong> Marcus’s own notes confirming that "expiration" simply meant the memory returned to the owner. Blake used this ignorance to control the room.</li>
+<li><strong>Rachel's Voice Memo (00:15):</strong> Only audio token recovered—detailed Marcus's money laundering through Morgan's green energy shell companies</li>
+<li><strong>Diana's Bar Memory (1:58 AM):</strong> Captured Morgan's blackmail threat using Senator Walsh's corruption evidence</li>
+<li><strong>Victoria/Morgan Meeting (Feb 15):</strong> Documented conspiracy to eliminate Marcus as a liability</li>
+<li><strong>Ashe's NDA Memory (2022):</strong> Proved systematic silencing of journalists investigating the network</li>
+<li><strong>Sofia's 2011 Footage:</strong> Baseline comparison showing the group before criminal evolution</li>
 </ul>
 
-<h2>// SUSPECT NETWORK & ASSOCIATES</h2>
+<h2>Suspect Network</h2>
 
-<p><strong>MARCUS BLACKWOOD (DECEASED):</strong> Founder. Fraud. Father (to more children than he admitted). He built a house of cards on stolen code and hush money. He invited the Black Market in, and they collected his debt in blood.</p>
+<p><strong>Blake Manley:</strong> Black Market operative who murdered Marcus to tie up loose ends. Currently at large after abandoning the Canyon Road warehouse before our raid. His knowledge of memory extraction technology suggests deeper connections than a simple dealer.</p>
 
-<p><strong>"BLAKE MANLEY" (AT LARGE):</strong> Black Market enforcer. Charismatic, dangerous, and pragmatic. He realized Marcus was a liability. When the extraction plan went sideways, he cut his losses (and Marcus's throat) and vanished.</p>
+<p><strong>Victoria Kingsley &amp; Morgan Reed:</strong> The remaining Stanford Four members who conspired to eliminate Marcus. Victoria provided venture capital laundering while Morgan funneled political bribes through energy companies. Both remain under investigation.</p>
 
-<p><strong>ASHE MOTOKO (WITNESS/ASSET):</strong> Former SVBJ journalist. Initially silenced, now vindicated. Her research was instrumental in locating the hostages. She is currently under protective surveillance.</p>
+<p><strong>Diana Nilsson:</strong> Marcus's legal architect since Stanford, built the liability shields protecting the entire network. Her bar conversation memory proves she knew about the political corruption but continued enabling it.</p>
 
-<p><strong> THE OLD PARTNERS (James, Alex, Victoria):</strong> Former friends turned bitter rivals. They all had motives to kill Marcus, but the evidence suggests they were pawns in Blake's game this time. They’ve been cleared of the homicide, but the SEC will have a field day with the fraud evidence we uncovered.</p>
+<p><strong>Senator Walsh:</strong> Recipient of Marcus's bribes, now leverage in Morgan's hands. The receipts mentioned in Diana's memory could topple multiple political careers.</p>
 
-<p><strong>DEREK & JESSICAH:</strong> The drug connection and the mistress. Both were leveraged by Marcus. Jessicah was paid off with a $50,000 check (voided) to keep the pregnancy quiet.</p>
+<p><strong>Ashe Motoko:</strong> Former SVBJ journalist whose silenced investigation catalyzed tonight's evidence recovery. Their leadership in exposing the truth finally broke the conspiracy open.</p>
 
-<h2>// OUTSTANDING QUESTIONS</h2>
-<p>
-    We won the battle, but the war is just starting.
-</p>
-<ol>
-    <li><strong>Where is Blake Manley?</strong> He left the warehouse before our tac-teams breached. He has the resources of the Black Market behind him. He will resurface.</li>
-    <li><strong>The Data Leak:</strong> Marcus’s shell companies were funneling money somewhere. Was it just to the Black Market, or is there a third party involved in the memory tech development?</li>
-    <li><strong>The "Unicorn":</strong> Texts between Derek and Marcus mention a "unicorn." Is this a person, a new drug variant, or simply yet another Silicon Valley tech bro dream of building a billion dollar company?</li>
-</ol>
+<h2>Outstanding Questions</h2>
 
-<hr>
-<p class="note">
-    <strong>DETECTIVE'S NOTE:</strong>
-    To the civilians who stepped up: You did good. You didn't let Blake sell your pasts to the highest bidder. Go home, hug your loved ones, and maybe write down your passwords. In this town, your memory is the only currency that matters—and everyone is trying to pick your pocket.
-    <br><br>
-    Case Status: <strong>OPEN (MANHUNT IN PROGRESS)</strong>
-</p>
+<ul>
+<li>Did Marcus lock the memories to double-cross Blake, or was it Blake's plan to secure them during the murder?</li>
+<li>Where are Blake's Black Market associates who abandoned the Canyon Road warehouse?</li>
+<li>How deep does Senator Walsh's involvement run beyond the bribery receipts?</li>
+<li>Will the returned memories from expired tokens provide additional evidence against the network?</li>
+<li>Who else in Silicon Valley received Marcus's "liability shield" protection services?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>Your investigation tonight accomplished what years of journalism and law enforcement couldn't: you broke the Stanford Four. The memories you secured to locate those hostages also exposed a criminal network that reached from campus parties to Senate floors. Ashe Motoko's determination to expose the truth, combined with the evidence you recovered, gave us what we needed to free the captives and begin dismantling this conspiracy.</p>
+
+<p>Marcus is dead, but his legacy of corruption survives in every shell company, every silenced journalist, every political receipt hidden in Morgan's leverage files. Blake Manley vanished into the underground he emerged from, but the memories you preserved will help us track him. The hostages are safe—traumatized but alive—because you chose justice over Blake's threats.</p>
+
+<p>We've frozen assets, issued warrants, and begun the long work of untangling fifteen years of financial crimes. Some mysteries remain: whether Marcus's final act was betrayal or desperation, where Blake's network operates now, how many other "liability shields" protect criminals we haven't identified yet. But tonight, you gave those silenced voices back their power.</p>
+
+<p><strong>Case Status:</strong> Active Investigation - Primary suspects at large, financial crimes prosecution pending, political corruption investigation expanded to federal level. Higher ups saw it fit to start a new division to investigate this new category of crime, and so, now I'm stuck with a new job and even more day to day responsibilities around here.&nbsp; &nbsp;</p>
+
+<p><strong>— Detective Anondono</strong><br>Chief, Memory Crimes Division<br>
+Case MC-2025-1121<br>
+Filed: 2027-02-22</p>
+</div>
 
 </div>
 
