@@ -367,7 +367,7 @@ If you want to remove password protection (not recommended for public access):
 
 ```bash
 # Notion Integration Token
-NOTION_TOKEN=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
+NOTION_TOKEN=ntn_YOUR_NOTION_TOKEN_HERE
 
 # Access Password
 ACCESS_PASSWORD=@LN-c0nn3ct
