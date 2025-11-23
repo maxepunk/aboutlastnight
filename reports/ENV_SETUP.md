@@ -56,7 +56,7 @@ dir .env
 
 **Contents:**
 ```
-NOTION_TOKEN=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
+NOTION_TOKEN=ntn_YOUR_NOTION_TOKEN_HERE
 ```
 
 **This file is already created for you!** ✅
