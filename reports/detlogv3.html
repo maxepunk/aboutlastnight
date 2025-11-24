@@ -435,6 +435,44 @@ CRITICAL WRITING PRINCIPLES:
 - Favor narrative flow over comprehensive documentation
 - TARGET LENGTH: 750 words (±50 words acceptable)
 
+FACTUAL ACCURACY (CRITICAL - NEVER VIOLATE):
+- Only state facts EXPLICITLY supported by the evidence provided
+- Do NOT infer group memberships, relationships, or details unless directly stated
+- When evidence mentions a group (e.g., "The Stanford Four"), verify membership explicitly—do not guess based on who seems important
+- If evidence is ambiguous or incomplete, acknowledge uncertainty ("unclear whether...", "evidence suggests but doesn't confirm...")
+- Do NOT fill narrative gaps with logical assumptions
+
+EXAMPLES OF VIOLATIONS (NEVER DO THIS):
+✗ Evidence mentions "The Stanford Four" + you know Marcus, Victoria, Morgan, and Alex are important → Writing "The Stanford Four: Marcus, Victoria, Morgan, and Alex"
+✓ Correct: Only name members if evidence explicitly identifies them. If uncertain, write "The Stanford Four—including Marcus and others from his Stanford network—..."
+
+✗ Evidence shows Alex built code + Marcus claimed credit → Writing "Marcus and Alex were business partners"
+✓ Correct: "Alex built the algorithm; Marcus took credit" (state only what evidence proves)
+
+✗ Memory shows conflict at 11:30PM + victim died around midnight → Writing "The 11:30PM confrontation escalated into the murder"
+✓ Correct: "The 11:30PM confrontation occurred shortly before death" (don't assume causation without evidence)
+
+WHEN IN DOUBT: State what evidence shows, not what you think happened. Better to be incomplete than incorrect.
+
+SECTION DIFFERENTIATION PRINCIPLE (CRITICAL):
+Each section must answer a DIFFERENT QUESTION using the same underlying facts.
+Repetition occurs when multiple sections answer the SAME question about the same facts.
+
+SECTION PURPOSES:
+- Evidence Locker: "WHAT HAPPENED?" - Narrative of events and discoveries
+- Memory Analysis: "WHAT DOES THIS PROVE?" - Investigative significance, patterns, corroboration
+- Suspect Network: "WHO COULD HAVE DONE IT?" - Evaluation of suspects using motive/means/opportunity
+- Final Assessment: "WHAT DOES IT MEAN?" - Consequences, implications, detective's reflection
+
+ANTI-REPETITION CHECK:
+Before writing any sentence, ask: "Have I already stated this fact in a previous section?"
+If yes, either skip it OR present it from a new analytical angle answering that section's question.
+
+EXAMPLE:
+✗ Evidence Locker: "Alex attacked Marcus at 11:32PM"
+✗ Memory Analysis: "Alex's 11:32PM memory shows him attacking Marcus"  [REPETITION]
+✓ Memory Analysis: "Alex's 11:32PM assault proves violent capability but timing doesn't match death"  [NEW ANGLE - investigative evaluation]
+
 NARRATIVE FOCUS PRINCIPLES:
 This report provides CLOSURE for players who experienced FRAGMENTS of this story during gameplay.
 Your job: synthesize their discoveries into a coherent narrative that validates their investigation.
@@ -544,22 +582,46 @@ Business documents from James Whitman...</p>
 </div>
 
 <h2>Memory Analysis</h2>
+PURPOSE: Analyze the INVESTIGATIVE VALUE of extracted memories—what patterns emerge, what the collection proves, how memories corroborate or contradict each other.
+
+DO NOT: Recap what individual memories contain (already covered in Evidence Locker)
+DO: Discuss timeline progression, corroboration between witnesses, evidence gaps, technological implications
+
 - Brief tech explanation (2 paragraphs) ONLY if memory tokens in Primary Evidence
-- Highlight 3-5 key memories from PRIMARY that broke the case
+- Focus on PATTERNS: escalation over time, multiple independent witnesses confirming facts, contradictions revealing deception
+- Highlight investigative significance: How do these memories prove methodology? Establish timeline? Provide alibi? Reveal motive evolution?
 - Skip section entirely if no memory tokens in Primary
-- Use <ul> for bullet list of critical memories only
-- Format: <strong>Memory ID:</strong> What it revealed and why it mattered
-- Focus on memories unique to this session
 - Target: ~150 words (flexible)
 
+❌ WRONG APPROACH (listing what memories contain):
+<ul>
+<li><strong>Alex's May 2022 memory:</strong> Proves Marcus stole his code</li>
+<li><strong>Alex's 11:32PM memory:</strong> Shows he attacked Marcus</li>
+<li><strong>Jessicah's 9:20PM memory:</strong> Marcus dismissed her</li>
+</ul>
+[This just recaps Evidence Locker in bullet form]
+
+✅ CORRECT APPROACH (analyzing patterns and investigative value):
+<p>The five extractions form a timeline of escalation. The earliest—Alex's May 2022 discovery—captures the foundational theft. By incident night, that exploitation had bred violence, proving how years of stolen work eventually demand payment. Multiple witnesses, independent extractions, years of consistent behavior—the memories don't just document incidents, they prove a methodology.</p>
+[This analyzes what the COLLECTION reveals about patterns and proves about the suspect]
+
 <h2>Suspect Network</h2>
+PURPOSE: Evaluate each person as a POTENTIAL SUSPECT using investigative reasoning—motive, means, opportunity, alibi. Explain why they could or couldn't have committed the crime.
+
+DO NOT: Recap what each person did or their background (already covered in Evidence Locker)
+DO: Analyze why they're viable suspects or why they're ruled out, discuss competing motives, evaluate alibis
+
 - 4-6 key players involved in PRIMARY evidence threads
-- Pull from Background to enrich understanding of these characters
-- 2-3 sentences per person
-- Focus on relationships and motives revealed by THEIR findings
-- Do NOT repeat evidence details already covered in Evidence Locker
-- Use <p> tags for each person, or group related people in <div class="evidence-item"> if thematically connected
+- For each suspect: Evaluate using investigative framework (Motive? Means? Opportunity? Alibi? Why ruled in or out?)
+- Discuss relationships BETWEEN suspects (competing interests, conspiracies, mutual protection)
+- Only for the killer/primary suspect: Can briefly establish them as confirmed perpetrator
+- Pull from Background to enrich understanding of characters in Primary threads
+- Use <p> tags for each person, or group related people if thematically connected
 - Target: ~150 words (flexible)
+
+EXAMPLE EVALUATION STRUCTURE:
+<p><strong>Alex Reeves:</strong> The obvious suspect until timeline cleared him. Motive: years of stolen genius turned into someone else's fortune. Means: close access to Marcus. The 11:32PM memory proves violent capability—he attacked Marcus that night. But assault isn't murder. The extraction shows a beating, not a killing, and timing doesn't match death. Alex had every reason; someone else had the opportunity.</p>
+[This EVALUATES Alex as a suspect, explains why evidence seems incriminating but ultimately clears him]
 
 <h2>Outstanding Questions</h2>
 - 3-5 unanswered mysteries specific to THIS case
@@ -571,15 +633,19 @@ Business documents from James Whitman...</p>
 
 FINAL ASSESSMENT STRUCTURE (CRITICAL):
 <h2>Final Assessment</h2>
+PURPOSE: Reflect on CONSEQUENCES and IMPLICATIONS—what this investigation accomplished, what happens next, what trade-offs were made, detective's perspective on the outcome.
+
+DO NOT: Recap the crime, summarize victim's actions, or retell what happened (thoroughly covered in previous sections)
+DO: Focus on FORWARD implications (what's next), reflect on investigation choices and their consequences, acknowledge what remains unresolved
 
 <div class="note">
-<p>[2-4 paragraphs acknowledging impact of THIS group's investigation]</p>
+<p>[Acknowledge THIS group's specific choices and their consequences—what did they prioritize? What impact did that have?]</p>
 
-<p>[Case status, what they exposed, what remains]</p>
+<p>[Reflect on FORWARD implications: Blake at large? Black Market continuing? Will returned memories expose more? What's the cost of choices made?]</p>
 
-<p>[Reference unique session details from Director's Summary if available]</p>
+<p>[Detective's perspective: Reflect on trade-offs, moral calculus, what was won vs. lost, personal take on the outcome]</p>
 
-<p>[Stay in character - detective reflecting, not game system commenting]</p>
+<p>[Optional: Reference unique session details from Director's Summary showing this specific group's approach]</p>
 
 <p><strong>Case Status:</strong> [Status details]</p>
 
@@ -589,8 +655,16 @@ Case [Case Number from metadata]<br>
 Filed: [Date from metadata]</p>
 </div>
 
-IMPORTANT: The entire Final Assessment section, including signature, must be wrapped in ONE <div class="note">...</div> container, NOT separate <p class="note"> tags.
+IMPORTANT: The entire Final Assessment must be wrapped in ONE <div class="note">...</div> container.
 Target: ~150 words (flexible)
+
+❌ WRONG APPROACH (recapping the crime):
+<p>Marcus Blackwood built his empire on stolen genius and broken promises. He took Alex's code, Jessicah's trust, Sarah's vulnerability—took everything from everyone and called it success.</p>
+[This summarizes what Marcus did—already covered 3 times in Evidence Locker, Memory Analysis, and Suspect Network]
+
+✅ CORRECT APPROACH (reflecting on consequences):
+<p>Now Blake's in the wind, and the Black Market keeps operating. The hostages are home, but the system that made this possible is still running. That's the trade-off—some days you save lives, other days you dismantle networks. Rarely both.</p>
+[This looks FORWARD at implications and reflects on trade-offs made during investigation]
 
 NAME FORMATTING (CRITICAL - MUST FOLLOW CONSISTENTLY):
 - ALL person names must be wrapped in <strong> tags throughout the ENTIRE report
