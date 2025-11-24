@@ -523,14 +523,14 @@ SECTION GUIDANCE (Flexible - prioritize narrative flow):
 - DO NOT create themes for Background-only threads
 - Each theme gets ONE <div class="evidence-item"> wrapper containing a synthesized narrative paragraph
 - Use <em> tags when referencing specific evidence artifact names
-- Use <strong> for character names and key terms
-- Structure: <strong>Theme Name:</strong> Narrative synthesis that mentions specific evidence in <em>italics</em>
+- Use <strong> for ALL person names (first names, last names, and full names) - ALWAYS, even when inside italic phrases
+- Structure: <strong>Theme Name:</strong> Narrative synthesis. Example: <strong>Derek Thorn's</strong> <em>extracted memories</em>
 - Do NOT create separate evidence-item divs for each piece of evidence
 - Target: ~300 words total (flexible)
 
 CORRECT Evidence Locker Example:
 <div class="evidence-item">
-<strong>The Corporate Fraud:</strong> Documents recovered on site—specifically <em>Company One-Pagers</em> and <em>Cease & Desist Letters</em>—reveal Marcus built his empire on stolen code. <strong>Alex</strong> was the genius; Marcus was the thief with better marketing. The <em>Funding Emails</em> confirm <strong>Victoria</strong> knew about the IP theft and funded him anyway.
+<strong>The Corporate Fraud:</strong> Documents recovered on site—specifically <em>Company One-Pagers</em> and <em>Cease & Desist Letters</em>—reveal <strong>Marcus</strong> built his empire on stolen code. <strong>Alex</strong> was the genius; <strong>Marcus</strong> was the thief with better marketing. The <em>Funding Emails</em> confirm <strong>Victoria</strong> knew about the IP theft and funded him anyway.
 </div>
 
 WRONG Evidence Locker Example (do NOT do this):
@@ -592,10 +592,26 @@ Filed: [Date from metadata]</p>
 IMPORTANT: The entire Final Assessment section, including signature, must be wrapped in ONE <div class="note">...</div> container, NOT separate <p class="note"> tags.
 Target: ~150 words (flexible)
 
+NAME FORMATTING (CRITICAL - MUST FOLLOW CONSISTENTLY):
+- ALL person names must be wrapped in <strong> tags throughout the ENTIRE report
+- This applies to: full names, first names, last names, possessive forms
+- Names stay bold even when mentioned within italic evidence descriptions
+- Apply to EVERY mention of EVERY character name in EVERY section
+- Examples:
+  ✓ Correct: <strong>Marcus Blackwood's</strong> <em>technical notes</em>
+  ✓ Correct: <strong>Marcus</strong> built an empire
+  ✓ Correct: murdered by <strong>Blake Manley</strong>
+  ✓ Correct: <strong>Derek Thorn's</strong> <em>extracted memories</em>
+  ✗ Wrong: <em>Marcus Blackwood's technical notes</em>
+  ✗ Wrong: Marcus Blackwood's <em>technical notes</em>
+  ✗ Wrong: Marcus built an empire
+  ✗ Wrong: <em>Derek Thorn's extracted memories</em>
+
 ADDITIONAL HTML GUIDANCE:
 - Use <h3> sparingly for subsections if needed (e.g., under Suspect Network: "The Conspirators", "The Victims")
-- Use <strong> for emphasis on names, titles, key terms
-- Use <em> for specific evidence artifact names
+- Use <strong> for ALL person names throughout the entire report (including first-name references like "Marcus" or "Blake")
+- Use <em> for specific evidence artifact names, but extract person names from the italic phrase and make them bold
+- Example: <strong>Sofia Francisco's</strong> <em>memory extraction</em> NOT <em>Sofia Francisco's memory extraction</em>
 - Use <hr> for major section breaks (rarely needed)
 - Use <p class="note"> SPARINGLY for brief detective asides (1-2 per section maximum)
 
