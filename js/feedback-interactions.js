@@ -117,11 +117,19 @@ async function handleFormSubmit(event) {
     const data = {
         sessionDate: sessionDate,
         sessionDateFull: rawDate, // Also store full date for clarity in spreadsheet
-        memorableMoment: formData.get('memorableMoment') || '',
-        npsScore: formData.get('npsScore') || '',
-        improvement: formData.get('improvement') || '',
+        // Scale questions (1-10)
+        understoodGameplay: formData.get('understoodGameplay') || '',
+        puzzleQuality: formData.get('puzzleQuality') || '',
+        characterInterest: formData.get('characterInterest') || '',
+        storySatisfaction: formData.get('storySatisfaction') || '',
+        // Open-ended questions
+        whatWorked: formData.get('whatWorked') || '',
+        improvements: formData.get('improvements') || '',
+        // Contact info
         email: formData.get('email') || '',
-        emailConsent: formData.get('emailConsent') === 'on' ? 'true' : 'false',
+        mailingListConsent: formData.get('mailingListConsent') === 'on' ? 'true' : 'false',
+        followUpConsent: formData.get('followUpConsent') === 'on' ? 'true' : 'false',
+        // Metadata
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
         referrer: document.referrer || ''
