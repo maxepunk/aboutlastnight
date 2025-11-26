@@ -1,0 +1,478 @@
+/* ═══════════════════════════════════════════════════════ */
+/* FEEDBACK-SPECIFIC STYLES                                */
+/* Post-show feedback form styling                         */
+/* Follows patterns from playtest.css                      */
+/* ═══════════════════════════════════════════════════════ */
+
+/* Subtle scanline - matches playtest */
+@keyframes scanline {
+    0% {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    5% {
+        opacity: 0.3;
+    }
+    95% {
+        opacity: 0.3;
+    }
+    100% {
+        transform: translateY(100vh);
+        opacity: 0;
+    }
+}
+
+.scanline {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to bottom,
+        transparent,
+        rgba(204, 0, 0, 0.2) 20%,
+        rgba(204, 0, 0, 0.25) 50%,
+        rgba(204, 0, 0, 0.2) 80%,
+        transparent);
+    animation: scanline 45s ease-in-out infinite;
+    animation-delay: 10s;
+    pointer-events: none;
+    z-index: 100;
+    mix-blend-mode: screen;
+}
+
+/* Main container */
+.container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Background with Noirroom image */
+.background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+        linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.9)),
+        url('../images/Noirroom.png') center/cover;
+    z-index: -1;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    color: #fff;
+    text-shadow:
+        0 0 30px rgba(255, 0, 0, 0.8),
+        0 0 60px rgba(255, 0, 0, 0.5);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.02em;
+}
+
+.subtitle {
+    font-size: 1.3rem;
+    color: rgba(255, 100, 100, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    margin-bottom: 1rem;
+}
+
+/* Intro section */
+.intro-section {
+    text-align: center;
+    margin-bottom: 2.5rem;
+}
+
+.intro-text {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.75rem;
+}
+
+.intro-text.secondary {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
+}
+
+/* Form */
+.feedback-form {
+    background: rgba(10, 10, 10, 0.9);
+    border: 1px solid rgba(204, 0, 0, 0.3);
+    padding: 2rem;
+    position: relative;
+}
+
+.feedback-form::before {
+    content: 'DEBRIEF';
+    position: absolute;
+    top: -12px;
+    left: 20px;
+    background: #0a0a0a;
+    padding: 0 1rem;
+    color: #cc0000;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    font-size: 0.9rem;
+}
+
+.form-group {
+    margin-bottom: 2rem;
+}
+
+.form-group:last-of-type {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
+/* Text inputs and textareas */
+.form-input,
+.form-textarea,
+.form-select {
+    width: 100%;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(204, 0, 0, 0.3);
+    color: #fff;
+    font-size: 1rem;
+    font-family: 'Barlow', sans-serif;
+    transition: all 0.3s;
+}
+
+.form-input:focus,
+.form-textarea:focus,
+.form-select:focus {
+    outline: none;
+    border-color: #cc0000;
+    background: rgba(30, 0, 0, 0.9);
+    box-shadow: 0 0 20px rgba(204, 0, 0, 0.2);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.6;
+}
+
+.form-textarea::placeholder,
+.form-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+    font-style: italic;
+}
+
+/* Date picker */
+.date-picker {
+    cursor: pointer;
+}
+
+/* Style the date picker icon (webkit browsers) */
+.date-picker::-webkit-calendar-picker-indicator {
+    filter: invert(20%) sepia(100%) saturate(5000%) hue-rotate(0deg);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.date-picker::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+/* NPS Scale */
+.nps-scale {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.nps-options {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.25rem;
+}
+
+.nps-option {
+    flex: 1;
+    text-align: center;
+}
+
+.nps-option input[type="radio"] {
+    display: none;
+}
+
+.nps-option span {
+    display: block;
+    padding: 0.75rem 0;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(204, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.6);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nps-option:hover span {
+    border-color: rgba(204, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.nps-option input[type="radio"]:checked + span {
+    background: #cc0000;
+    border-color: #cc0000;
+    color: #fff;
+}
+
+.nps-option:focus-within span {
+    outline: 2px solid rgba(204, 0, 0, 0.5);
+    outline-offset: 2px;
+}
+
+.nps-label-left,
+.nps-label-right {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.nps-label-left {
+    align-self: flex-start;
+}
+
+.nps-label-right {
+    align-self: flex-end;
+}
+
+/* Email section */
+.email-section {
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(204, 0, 0, 0.2);
+}
+
+.consent-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.consent-checkbox input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid rgba(204, 0, 0, 0.5);
+    border-radius: 3px;
+    position: relative;
+    transition: all 0.3s;
+    cursor: pointer;
+    margin-top: 2px;
+}
+
+.consent-checkbox input[type="checkbox"]:checked {
+    background: #cc0000;
+    border-color: #cc0000;
+}
+
+.consent-checkbox input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.consent-checkbox input[type="checkbox"]:hover {
+    border-color: #cc0000;
+    box-shadow: 0 0 10px rgba(204, 0, 0, 0.3);
+}
+
+.consent-checkbox input[type="checkbox"]:focus {
+    outline: 2px solid rgba(204, 0, 0, 0.5);
+    outline-offset: 2px;
+}
+
+.consent-checkbox label {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    line-height: 1.5;
+    margin-bottom: 0;
+}
+
+/* Submit button */
+.submit-button {
+    width: 100%;
+    padding: 1.2rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    background: transparent;
+    border: 2px solid #cc0000;
+    color: #fff;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+    font-family: 'Barlow', sans-serif;
+}
+
+.submit-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: #cc0000;
+    transition: left 0.3s;
+    z-index: -1;
+}
+
+.submit-button:hover::before {
+    left: 0;
+}
+
+.submit-button:disabled {
+    border-color: #666;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.submit-button:disabled::before {
+    display: none;
+}
+
+/* Messages */
+.message {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    text-align: center;
+    display: none;
+}
+
+.message.success {
+    background: rgba(0, 100, 0, 0.15);
+    border: 1px solid rgba(100, 200, 100, 0.3);
+}
+
+.message.error {
+    background: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    color: #ff6666;
+}
+
+.message.show {
+    display: block;
+}
+
+.success-title {
+    font-size: 1.2rem;
+    color: rgba(150, 255, 150, 0.95);
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.success-text {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 0.75rem;
+    line-height: 1.6;
+}
+
+.success-signature {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 1rem;
+    font-style: italic;
+}
+
+/* Footer */
+.footer {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(204, 0, 0, 0.2);
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 2rem 1rem;
+    }
+
+    h1 {
+        font-size: 2.5rem;
+    }
+
+    .feedback-form {
+        padding: 1.5rem;
+    }
+
+    .nps-options {
+        flex-wrap: wrap;
+    }
+
+    .nps-option {
+        flex: 0 0 calc(20% - 0.2rem);
+        min-width: 40px;
+    }
+
+    .nps-option span {
+        padding: 0.6rem 0;
+        font-size: 1rem;
+    }
+
+    .nps-label-left,
+    .nps-label-right {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .nps-option {
+        flex: 0 0 calc(20% - 0.2rem);
+    }
+
+    .nps-option span {
+        padding: 0.5rem 0;
+        font-size: 0.9rem;
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .scanline {
+        display: none;
+    }
+}

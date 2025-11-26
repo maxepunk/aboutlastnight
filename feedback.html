@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- ⚠ DO NOT EDIT: Document metadata and configuration ⚠ -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Last Night - Feedback</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=Barlow:wght@300;400;600;700&amp;display=swap" rel="stylesheet">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.svg">
+
+    <!-- ⚠ DO NOT EDIT: External stylesheets required for site functionality ⚠ -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/feedback.css">
+</head>
+<body>
+    <!-- ⚠ DO NOT EDIT: Background and visual effects ⚠ -->
+    <div class="background"></div>
+
+    <!-- Scanning effect -->
+    <div class="scanline" aria-hidden="true"></div>
+
+    <!-- Main container -->
+    <div class="container">
+        <!-- ⚠ DO NOT EDIT: Header structure ⚠ -->
+        <header class="header">
+            <h1>About Last Night</h1>
+            <p class="subtitle">How was your night?</p>
+        </header>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- EDITABLE CONTENT: INTRO TEXT                            -->
+        <!-- SAFE TO EDIT: Welcome message, instructions             -->
+        <!-- FIND WITH: Search for "INTRO TEXT" or "few minutes"     -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <section class="intro-section">
+            <p class="intro-text">
+                Thanks again for playing. If you have a few minutes, we'd love to hear what stuck with you — and what we could do better.
+            </p>
+            <p class="intro-text secondary">
+                Everything here is optional. Share as much or as little as you'd like.
+            </p>
+        </section>
+        <!-- END CONTENT SECTION: INTRO TEXT -->
+
+        <!-- Feedback form -->
+        <form id="feedbackForm" class="feedback-form">
+
+            <!-- ⚠ DO NOT EDIT: Session date picker ⚠ -->
+            <!-- Date is pre-selected via ?date=MMDD URL parameter -->
+            <div class="form-group">
+                <label for="sessionDate">Which session did you attend?</label>
+                <input
+                    type="date"
+                    id="sessionDate"
+                    name="sessionDate"
+                    class="form-input date-picker"
+                >
+            </div>
+
+            <!-- ⚠ DO NOT EDIT: Form fields structure required for submission ⚠ -->
+
+            <!-- Question 1: Memorable moment -->
+            <div class="form-group">
+                <label for="memorableMoment">What was the most memorable moment for you?</label>
+                <textarea
+                    id="memorableMoment"
+                    name="memorableMoment"
+                    class="form-textarea"
+                    placeholder="A scene, a choice, a conversation..."
+                    rows="4"
+                ></textarea>
+            </div>
+
+            <!-- Question 2: NPS -->
+            <div class="form-group">
+                <label>How likely are you to recommend About Last Night to a friend?</label>
+                <div class="nps-scale">
+                    <span class="nps-label-left">Not likely</span>
+                    <div class="nps-options">
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="1">
+                            <span>1</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="2">
+                            <span>2</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="3">
+                            <span>3</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="4">
+                            <span>4</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="5">
+                            <span>5</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="6">
+                            <span>6</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="7">
+                            <span>7</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="8">
+                            <span>8</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="9">
+                            <span>9</span>
+                        </label>
+                        <label class="nps-option">
+                            <input type="radio" name="npsScore" value="10">
+                            <span>10</span>
+                        </label>
+                    </div>
+                    <span class="nps-label-right">Absolutely</span>
+                </div>
+            </div>
+
+            <!-- Question 3: Improvement -->
+            <div class="form-group">
+                <label for="improvement">What's one thing that would make the experience better?</label>
+                <textarea
+                    id="improvement"
+                    name="improvement"
+                    class="form-textarea"
+                    placeholder="Anything — big or small"
+                    rows="4"
+                ></textarea>
+            </div>
+
+            <!-- Email opt-in section -->
+            <div class="form-group email-section">
+                <label for="email">Your email</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    class="form-input"
+                    placeholder="name@example.com"
+                >
+                <div class="consent-checkbox">
+                    <input type="checkbox" id="emailConsent" name="emailConsent">
+                    <label for="emailConsent">Yes, I'd like to hear about future shows and experiences</label>
+                </div>
+            </div>
+
+            <!-- ⚠ DO NOT EDIT: Submit button and message elements ⚠ -->
+            <button type="submit" class="submit-button" id="submitButton">
+                Send it
+            </button>
+
+            <div id="successMessage" class="message success">
+                <p class="success-title">Thanks for sharing.</p>
+                <p class="success-text">It means a lot — this kind of feedback is how we make the experience better.</p>
+                <p class="success-text">Hope to see you again sometime.</p>
+                <p class="success-signature">— Max & Shuai</p>
+            </div>
+
+            <div id="errorMessage" class="message error">
+                Something went wrong. Please try again or email us directly.
+            </div>
+        </form>
+
+        <!-- ⚠ DO NOT EDIT: Footer structure ⚠ -->
+        <footer class="footer">
+            <p>Off the Couch Games • Fremont, California</p>
+            <p style="margin-top: 0.5rem;">A Patchwork Adventures × StoryPunk Production</p>
+        </footer>
+    </div>
+
+    <!-- ⚠ DO NOT EDIT: JavaScript dependencies ⚠ -->
+    <script src="js/utils.js"></script>
+    <script src="js/feedback-interactions.js"></script>
+</body>
+</html>
