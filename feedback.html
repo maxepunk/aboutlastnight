@@ -55,7 +55,7 @@
             <!-- ⚠ DO NOT EDIT: Session date picker ⚠ -->
             <!-- Date is pre-selected via ?date=MMDD URL parameter -->
             <div class="form-group">
-                <label for="sessionDate">Which session did you attend?</label>
+                <label for="sessionDate">What session did you attend?</label>
                 <input
                     type="date"
                     id="sessionDate"
@@ -64,86 +64,255 @@
                 >
             </div>
 
-            <!-- ⚠ DO NOT EDIT: Form fields structure required for submission ⚠ -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- EDITABLE CONTENT: SCALE QUESTIONS                       -->
+            <!-- SAFE TO EDIT: Question text, scale labels               -->
+            <!-- FIND WITH: Search for "SCALE QUESTIONS" or "Disagree"   -->
+            <!-- ═══════════════════════════════════════════════════════ -->
 
-            <!-- Question 1: Memorable moment -->
+            <!-- Scale Question 1: Understanding gameplay -->
+            <div class="form-group scale-question">
+                <label>I felt like I knew how to play the game and understood the choices I was asked to make.</label>
+                <div class="scale-container">
+                    <span class="scale-label-left">Disagree</span>
+                    <div class="scale-options">
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="1">
+                            <span>1</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="2">
+                            <span>2</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="3">
+                            <span>3</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="4">
+                            <span>4</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="5">
+                            <span>5</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="6">
+                            <span>6</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="7">
+                            <span>7</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="8">
+                            <span>8</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="9">
+                            <span>9</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="understoodGameplay" value="10">
+                            <span>10</span>
+                        </label>
+                    </div>
+                    <span class="scale-label-right">Agree</span>
+                </div>
+            </div>
+
+            <!-- Scale Question 2: Puzzles -->
+            <div class="form-group scale-question">
+                <label>The puzzles were interesting and provided a good challenge without being too difficult.</label>
+                <div class="scale-container">
+                    <span class="scale-label-left">Disagree</span>
+                    <div class="scale-options">
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="1">
+                            <span>1</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="2">
+                            <span>2</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="3">
+                            <span>3</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="4">
+                            <span>4</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="5">
+                            <span>5</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="6">
+                            <span>6</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="7">
+                            <span>7</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="8">
+                            <span>8</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="9">
+                            <span>9</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="puzzleQuality" value="10">
+                            <span>10</span>
+                        </label>
+                    </div>
+                    <span class="scale-label-right">Agree</span>
+                </div>
+            </div>
+
+            <!-- Scale Question 3: Character -->
+            <div class="form-group scale-question">
+                <label>I found my character interesting and playing them gave me things to do in the game.</label>
+                <div class="scale-container">
+                    <span class="scale-label-left">Disagree</span>
+                    <div class="scale-options">
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="1">
+                            <span>1</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="2">
+                            <span>2</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="3">
+                            <span>3</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="4">
+                            <span>4</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="5">
+                            <span>5</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="6">
+                            <span>6</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="7">
+                            <span>7</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="8">
+                            <span>8</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="9">
+                            <span>9</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="characterInterest" value="10">
+                            <span>10</span>
+                        </label>
+                    </div>
+                    <span class="scale-label-right">Agree</span>
+                </div>
+            </div>
+
+            <!-- Scale Question 4: Story satisfaction -->
+            <div class="form-group scale-question">
+                <label>I felt satisfied by the story I got by the end of the game.</label>
+                <div class="scale-container">
+                    <span class="scale-label-left">Disagree</span>
+                    <div class="scale-options">
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="1">
+                            <span>1</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="2">
+                            <span>2</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="3">
+                            <span>3</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="4">
+                            <span>4</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="5">
+                            <span>5</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="6">
+                            <span>6</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="7">
+                            <span>7</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="8">
+                            <span>8</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="9">
+                            <span>9</span>
+                        </label>
+                        <label class="scale-option">
+                            <input type="radio" name="storySatisfaction" value="10">
+                            <span>10</span>
+                        </label>
+                    </div>
+                    <span class="scale-label-right">Agree</span>
+                </div>
+            </div>
+            <!-- END CONTENT SECTION: SCALE QUESTIONS -->
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- EDITABLE CONTENT: OPEN-ENDED QUESTIONS                  -->
+            <!-- SAFE TO EDIT: Question text, placeholder text           -->
+            <!-- FIND WITH: Search for "OPEN-ENDED" or "What worked"     -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+
+            <!-- Open-ended Question 1: What worked -->
             <div class="form-group">
-                <label for="memorableMoment">What was the most memorable moment for you?</label>
+                <label for="whatWorked">What worked for you?</label>
                 <textarea
-                    id="memorableMoment"
-                    name="memorableMoment"
+                    id="whatWorked"
+                    name="whatWorked"
                     class="form-textarea"
-                    placeholder="A scene, a choice, a conversation..."
+                    placeholder="Moments, mechanics, characters..."
                     rows="4"
                 ></textarea>
             </div>
 
-            <!-- Question 2: NPS -->
+            <!-- Open-ended Question 2: Improvements -->
             <div class="form-group">
-                <label>How likely are you to recommend About Last Night to a friend?</label>
-                <div class="nps-scale">
-                    <span class="nps-label-left">Not likely</span>
-                    <div class="nps-options">
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="1">
-                            <span>1</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="2">
-                            <span>2</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="3">
-                            <span>3</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="4">
-                            <span>4</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="5">
-                            <span>5</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="6">
-                            <span>6</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="7">
-                            <span>7</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="8">
-                            <span>8</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="9">
-                            <span>9</span>
-                        </label>
-                        <label class="nps-option">
-                            <input type="radio" name="npsScore" value="10">
-                            <span>10</span>
-                        </label>
-                    </div>
-                    <span class="nps-label-right">Absolutely</span>
-                </div>
-            </div>
-
-            <!-- Question 3: Improvement -->
-            <div class="form-group">
-                <label for="improvement">What's one thing that would make the experience better?</label>
+                <label for="improvements">What could we improve?</label>
                 <textarea
-                    id="improvement"
-                    name="improvement"
+                    id="improvements"
+                    name="improvements"
                     class="form-textarea"
                     placeholder="Anything — big or small"
                     rows="4"
                 ></textarea>
             </div>
+            <!-- END CONTENT SECTION: OPEN-ENDED QUESTIONS -->
 
-            <!-- Email opt-in section -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- EDITABLE CONTENT: CONTACT INFO                          -->
+            <!-- SAFE TO EDIT: Labels, checkbox text                     -->
+            <!-- FIND WITH: Search for "CONTACT INFO" or "email"         -->
+            <!-- ═══════════════════════════════════════════════════════ -->
             <div class="form-group email-section">
-                <label for="email">Your email</label>
+                <label for="email">Your email (optional)</label>
                 <input
                     type="email"
                     id="email"
@@ -152,10 +321,15 @@
                     placeholder="name@example.com"
                 >
                 <div class="consent-checkbox">
-                    <input type="checkbox" id="emailConsent" name="emailConsent">
-                    <label for="emailConsent">Yes, I'd like to hear about future shows and experiences</label>
+                    <input type="checkbox" id="mailingListConsent" name="mailingListConsent">
+                    <label for="mailingListConsent">I'd like to hear about future shows and experiences</label>
+                </div>
+                <div class="consent-checkbox">
+                    <input type="checkbox" id="followUpConsent" name="followUpConsent">
+                    <label for="followUpConsent">You can contact me with follow-up questions</label>
                 </div>
             </div>
+            <!-- END CONTENT SECTION: CONTACT INFO -->
 
             <!-- ⚠ DO NOT EDIT: Submit button and message elements ⚠ -->
             <button type="submit" class="submit-button" id="submitButton">
@@ -173,6 +347,20 @@
                 Something went wrong. Please try again or email us directly.
             </div>
         </form>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- EDITABLE CONTENT: DISCOUNT CODE INFO                    -->
+        <!-- SAFE TO EDIT: Email address, discount description       -->
+        <!-- FIND WITH: Search for "DISCOUNT" or "thank you code"    -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <section class="discount-section">
+            <p class="discount-text">
+                Want a thank-you discount for your next visit? Email us at
+                <a href="mailto:about.last.night.game@gmail.com">about.last.night.game@gmail.com</a>
+                to receive a code for helping us improve the game.
+            </p>
+        </section>
+        <!-- END CONTENT SECTION: DISCOUNT CODE INFO -->
 
         <!-- ⚠ DO NOT EDIT: Footer structure ⚠ -->
         <footer class="footer">
