@@ -60,6 +60,7 @@ JS (js/*.js)      = All behavior (organized by concern)
 - `forms.js` (~12.8KB) - Form submission, localStorage recovery, retry logic with exponential backoff
 - `interactions.js` (~16.1KB) - Accordions, sticky header, scroll effects, analytics (for index.html)
 - `playtest-interactions.js` (~12KB) - Playtest-specific: spot counter, date selection, capacity fetching (for playtest.html)
+- `feedback-interactions.js` (~3KB) - Feedback form: URL parameter parsing, form submission (for feedback.html)
 
 ### Progressive Enhancement
 - Core content works without JavaScript
@@ -113,10 +114,13 @@ git checkout pre-refactor-backup
 ```
 
 ### Updating Form Backends
-1. Edit `FORM_HANDLER_GOOGLE_SCRIPT.js` or `PLAYTEST_GOOGLE_SCRIPT.js` locally
+1. Edit `FORM_HANDLER_GOOGLE_SCRIPT.js`, `PLAYTEST_GOOGLE_SCRIPT.js`, or `FEEDBACK_GOOGLE_SCRIPT.js` locally
 2. Copy to Google Apps Script editor
 3. Deploy new version: Deploy → Manage deployments → Edit → New version
-4. **Critical:** Update endpoint URL in `js/forms.js` or `js/playtest-interactions.js` if deployment creates new endpoint
+4. **Critical:** Update endpoint URL in corresponding JS file if deployment creates new endpoint:
+   - Main form: `js/forms.js`
+   - Playtest: `js/playtest-interactions.js`
+   - Feedback: `js/feedback-interactions.js`
 
 ### Installing Git Hooks
 Pre-commit hook validates HTML before allowing commits:
@@ -167,7 +171,7 @@ brew install tidy-html5
 
 ## Form Integration Architecture
 
-**Two separate forms with different backends:**
+**Three separate forms with different backends:**
 
 1. **Main Interest Form** (`index.html`)
    - Collects email for ticket launch notifications
@@ -181,6 +185,14 @@ brew install tidy-html5
    - Separate Google Apps Script deployment
    - Frontend: `js/playtest-interactions.js` (spot counter, date selection, capacity fetching)
    - **Date-agnostic architecture:** Backend dynamically discovers dates from database; content editors add/remove dates by editing HTML radio buttons only (no backend redeployment needed)
+
+3. **Post-Show Feedback** (`feedback.html`)
+   - Collects feedback after attendees experience the show
+   - Backend: `FEEDBACK_GOOGLE_SCRIPT.js`
+   - Frontend: `js/feedback-interactions.js` (URL param handling, form submission)
+   - **URL parameter integration:** `?date=MMDD` pre-selects session date (e.g., `?date=1123`)
+   - Links from post-show email with session-specific date parameter
+   - Optional email capture for future updates mailing list
 
 **Backend responsibilities** (Google Apps Script):
 - Store submissions in Google Sheets
@@ -226,10 +238,12 @@ This project is in active development before launch:
 ### Core Code Files
 - `index.html` - Main landing page (all content)
 - `playtest.html` - Playtest signup form
-- `css/` - Modular stylesheets (base, layout, components, animations)
-- `js/` - Modular JavaScript (utils, forms, interactions)
+- `feedback.html` - Post-show feedback form
+- `css/` - Modular stylesheets (base, layout, components, animations, playtest, feedback)
+- `js/` - Modular JavaScript (utils, forms, interactions, playtest-interactions, feedback-interactions)
 - `FORM_HANDLER_GOOGLE_SCRIPT.js` - Main form backend
 - `PLAYTEST_GOOGLE_SCRIPT.js` - Playtest form backend
+- `FEEDBACK_GOOGLE_SCRIPT.js` - Feedback form backend
 
 ### Documentation for Developers
 - `docs/DEPLOYMENT.md` - Full deployment and rollback procedures
@@ -237,6 +251,7 @@ This project is in active development before launch:
 - `docs/COMMENT_MARKERS_TEST.md` - Test coverage for content markers
 - `FORM_IMPLEMENTATION.md` - Form integration architecture and alternatives
 - `PLAYTEST_SETUP_GUIDE.md` - Playtest system setup instructions
+- `FEEDBACK_SETUP_GUIDE.md` - Feedback form setup instructions
 
 ### Documentation for Content Editors
 - `docs/QUICKSTART_CONTENT_EDITORS.md` - 5-minute onboarding for non-technical users
