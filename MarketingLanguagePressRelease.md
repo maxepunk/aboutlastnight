@@ -11,7 +11,7 @@ About last night… You remember that there was a rave in Fremont. A rave thrown
 
 And you remember who you are…. well… you remember your own name, maybe a couple facts about yourself, but everything else is a bit fuzzy and out of reach. 
 
-And now, a detective is telling you that Marcus is dead and asking you all these questions.
+And now, an investigator is telling you that Marcus is dead and asking you all these questions.
 
 Thankfully, there’s puzzles. Solve the puzzles to find your lost memories to figure out who you are. Solve the puzzles to uncover the events of last night. Solve the puzzles to figure out just how much your memories are worth…
 Set in a near-future Silicon Valley, this 90-minute immersive experience combines escape room puzzles, social deduction, and strategic trading mechanics. Players embody party-goers, who wake up in a warehouse after a party with fragmented memories and a missing host.
@@ -45,7 +45,7 @@ Created by MIT- and Stanford-trained neurobiologist Shuai Chen, whose Order of t
 "We wanted to explore what happens when the most intimate parts of ourselves become commodities," said [Chen or Koknar with full title]. "In an era where tech companies already trade in our personal data, we're asking participants to literally negotiate the value of their memories."
 The experience draws inspiration from Jubensha, Chinese murder mystery games emphasizing heavy roleplay, while incorporating distinctly Silicon Valley themes of venture capital, artificial intelligence, and the commodification of human experience. Each participant receives a unique character with connections to others - some as allies, others as rivals - forcing difficult choices about trust, loyalty, and the price of truth.
 [NEED: Quote from Off the Couch Games owner Nick about why this project/partnership]
-Preview performances run October 4-12 with discounted tickets, followed by the main run October 18-November 9. Tickets are $75 per person with a five-person minimum; groups can book privately for an additional fee.
+The experience runs December 4-28, 2025. Tickets are $75 per person with a five-person minimum; groups can book privately for an additional fee.
 About the Creators: Patchwork Adventures, led by Chen, previously created The Order of the Golden Scribe, winner of the 2023 Golden Lock Award and No Proscenium's Best Immersive Experience. The Patchwork team has hosted over 1000 puzzle games and Shuai played on Team USA for the World Escape Room Championships. StoryPunk founder Koknar received the 2022 CALI Catalyst Award for advancing equity in California arts. Their combined works have been featured on CNN, ABC, New York Times, and the San Francisco Chronicle.
 For tickets and information: [Website]
 ---
