@@ -222,16 +222,18 @@ h1 {
     gap: 0.25rem;
 }
 
-.scale-option {
+.scale-options .scale-option {
     flex: 1;
     text-align: center;
+    display: block;
+    margin-bottom: 0;
 }
 
-.scale-option input[type="radio"] {
+.scale-options .scale-option input[type="radio"] {
     display: none;
 }
 
-.scale-option span {
+.scale-options .scale-option span {
     display: block;
     padding: 0.75rem 0;
     background: rgba(0, 0, 0, 0.7);
@@ -243,18 +245,18 @@ h1 {
     transition: all 0.2s;
 }
 
-.scale-option:hover span {
+.scale-options .scale-option:hover span {
     border-color: rgba(204, 0, 0, 0.5);
     color: rgba(255, 255, 255, 0.9);
 }
 
-.scale-option input[type="radio"]:checked + span {
+.scale-options .scale-option input[type="radio"]:checked + span {
     background: #cc0000;
     border-color: #cc0000;
     color: #fff;
 }
 
-.scale-option:focus-within span {
+.scale-options .scale-option:focus-within span {
     outline: 2px solid rgba(204, 0, 0, 0.5);
     outline-offset: 2px;
 }
@@ -479,12 +481,12 @@ h1 {
         flex-wrap: wrap;
     }
 
-    .scale-option {
+    .scale-options .scale-option {
         flex: 0 0 calc(20% - 0.2rem);
         min-width: 40px;
     }
 
-    .scale-option span {
+    .scale-options .scale-option span {
         padding: 0.6rem 0;
         font-size: 1rem;
     }
@@ -496,11 +498,11 @@ h1 {
 }
 
 @media (max-width: 480px) {
-    .scale-option {
+    .scale-options .scale-option {
         flex: 0 0 calc(20% - 0.2rem);
     }
 
-    .scale-option span {
+    .scale-options .scale-option span {
         padding: 0.5rem 0;
         font-size: 0.9rem;
     }
