@@ -153,13 +153,56 @@ async function callClaude(prompt, options = {}) {
 
                         if (outputFormat === 'json') {
                             try {
-                                // Claude CLI --output-format json returns wrapper object
+                                // Claude CLI --output-format json returns streaming JSON array
                                 const wrapper = JSON.parse(finalResult);
 
-                                // When using --json-schema, Claude returns validated data in structured_output
-                                if (wrapper.structured_output) {
+                                // New format: Array of message objects
+                                if (Array.isArray(wrapper)) {
+                                    // Find the result message with structured_output or text content
+                                    const resultMsg = wrapper.find(msg =>
+                                        msg.type === 'result' && msg.subtype === 'success'
+                                    );
+
+                                    if (resultMsg) {
+                                        // Check for structured_output first (from --json-schema)
+                                        if (resultMsg.structured_output) {
+                                            console.log('Extracting from result.structured_output');
+                                            finalResult = JSON.stringify(resultMsg.structured_output);
+                                        } else if (resultMsg.result) {
+                                            // Fall back to result field
+                                            let actualResult = resultMsg.result;
+                                            // Extract JSON from markdown code fences
+                                            const jsonMatch = actualResult.match(/```json\s*\n([\s\S]*?)\n```/);
+                                            if (jsonMatch) {
+                                                actualResult = jsonMatch[1];
+                                            } else {
+                                                actualResult = actualResult.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+                                            }
+                                            finalResult = actualResult.trim();
+                                        }
+                                    } else {
+                                        // Try finding assistant message with text
+                                        const assistantMsg = wrapper.find(msg =>
+                                            msg.type === 'assistant' && msg.message
+                                        );
+                                        if (assistantMsg && assistantMsg.message && assistantMsg.message.content) {
+                                            const textContent = assistantMsg.message.content.find(c => c.type === 'text');
+                                            if (textContent) {
+                                                let actualResult = textContent.text;
+                                                const jsonMatch = actualResult.match(/```json\s*\n([\s\S]*?)\n```/);
+                                                if (jsonMatch) {
+                                                    actualResult = jsonMatch[1];
+                                                } else {
+                                                    actualResult = actualResult.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+                                                }
+                                                finalResult = actualResult.trim();
+                                            }
+                                        }
+                                    }
+                                }
+                                // Legacy single object format
+                                else if (wrapper.structured_output) {
                                     console.log('Extracting from structured_output (JSON schema validation)');
-                                    // Return the validated structured output as JSON string
                                     finalResult = JSON.stringify(wrapper.structured_output);
                                 } else {
                                     // Legacy path: Extract from result field (for non-schema requests)
