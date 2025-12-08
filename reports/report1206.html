@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report MC-2025-1206 - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: 'SUSPECT APPREHENDED';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: 'SUSPECT APPREHENDED';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+        <strong>CASE ID:</strong> MC-2025-1206<br>
+        <strong>DATE:</strong> 2027-02-22<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (Venue of most recent 'Blackwood Rave')<br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> SUSPECT APPREHENDED
+    </div>
+
+    <h2>Executive Summary</h2>
+
+<p><strong>Marcus Blackwood</strong> is dead. Killed at his own party by the partner he'd been robbing for years. <strong>Alex Reeves</strong>, co-founder turned ghost, finally snapped after a decade of watching Marcus parade around in stolen glory. This investigation team recovered eighteen memory extractions that painted the complete picture: corporate theft, fraudulent AI technology, and a desperate man's last attempt to extract his way out of accountability. Alex is in custody. The hostages are safe. But the puppet master behind the memory extraction scheme? Still in the shadows.</p>
+
+<h2>Evidence Locker</h2>
+
+<div class="evidence-item">
+<strong>The Stolen Empire:</strong> Memory extractions tell the same ugly story from multiple angles. <em>Derek Thorne's recovered memory</em> from June 2024 shows him discovering Marcus had stolen Alex's algorithm and claimed it as his own. <em>Alex Reeves's extraction</em> from 2022 confirms the original BizAI system was fundamentally broken until Alex rebuilt it from scratch—work Marcus happily took credit for. <em>Leila Bishara's memory</em> reveals Marcus lifted her proprietary indexing code from Oracle Ledger. The man built NeurAI on a foundation of other people's brilliance. <em>Sofia Francisco's January 2027 extraction</em> delivers the death blow: Marcus's "breakthrough AI" was fraudulent, requiring manual fixes for 87% of inputs. The emperor had no clothes, just better marketing.
+</div>
+
+<div class="evidence-item">
+<strong>The Breaking Point:</strong> <em>Victoria Kingsley's memory extraction</em> captures a strategic discussion about Marcus's mounting criminal liability—the board knew the walls were closing in. <em>Jamie 'Volt' Woods's extraction</em> reveals Victoria offering Marcus's job to Alex at the very party that would become his grave. Whether that was the final straw or just gasoline on an already-burning fire, <em>Alex Reeves's 11:32 PM memory</em> shows the violent assault—years of rage over stolen equity and uncredited work finally finding its target. Marcus went down hard.
+</div>
+
+<div class="evidence-item">
+<strong>The Extraction Scheme:</strong> <em>Marcus Blackwood's own memory</em> from 3:52 AM captures him executing a chaotic token-locking protocol on drugged partygoers. The man was harvesting memories from his own guests—corporate secrets, personal vulnerabilities, leverage. <em>Leila Bishara's September 2026 extraction</em> shows Marcus pressuring her for algorithm access while she was compromised. <em>Sofia Francisco's memory</em> of the $840 million AI training deal proves how valuable these extracted secrets could be. The party wasn't celebration—it was a heist.
+</div>
+
+<div class="evidence-item">
+<strong>The Casualties:</strong> Not everyone at that warehouse was a player in Marcus's games. <em>Sarah Blackwood's extraction</em> reveals she resigned from Facebook in 2020 to support her husband's startup—a sacrifice made for a con artist. <em>Kai Andersen's memories</em> show them being exploited for unpaid installation work, then publicly humiliated by Marcus. <em>Ashe Motoko's extraction</em> corroborates witnessing that cruelty firsthand. <em>Howie Sullivan's 2:15 AM reflection</em> captures a man watching Silicon Valley's corruption patterns play out yet again in real-time as idealism died on that dance floor.
+</div>
+
+<h2>Memory Analysis</h2>
+
+<p>Eighteen memory extractions formed the backbone of this investigation. The technology that Marcus weaponized against his guests became our primary evidence chain—poetic justice, if you believe in that sort of thing. Cross-referencing timestamps allowed us to reconstruct the night's timeline from multiple perspectives.</p>
+
+<p>Critical memories that broke the case:</p>
+
+<ul>
+<li><strong>Alex Reeves, 11:32 PM:</strong> The assault itself—means, motive, opportunity captured in neural high-definition.</li>
+<li><strong>Marcus Blackwood, 3:52 AM:</strong> Proof of the extraction scheme, showing Marcus actively drugging and harvesting from guests.</li>
+<li><strong>Jamie Woods, party night:</strong> Victoria offering Alex the CEO position—establishing the boardroom conspiracy.</li>
+<li><strong>Derek Thorne, June 2024:</strong> First-hand witness to the original IP theft that started this whole tragedy.</li>
+<li><strong>Sofia Francisco, January 2027:</strong> Documentation that NeurAI's core technology was fraudulent.</li>
+</ul>
+
+<h2>Suspect Network</h2>
+
+<p><strong>Alex Reeves</strong> — The ghost partner. Built the algorithm Marcus claimed as his own, watched his equity evaporate, his work credited to a thief. Currently in custody, awaiting formal charges. The assault is documented; whether murder sticks depends on forensics we haven't received.</p>
+
+<p><strong>Victoria Kingsley</strong> — Board power broker. Knew about Marcus's liabilities, was already negotiating succession. Her fingerprints are on the conspiracy, but she's lawyered up and untouchable—for now.</p>
+
+<p><strong>Sarah Blackwood</strong> — The wife who gave up everything for a man who was never what he claimed. Victim or accomplice? The memory of her sacrifice suggests the former.</p>
+
+<p><strong>Derek Thorne</strong> — Witnessed the original theft. His extraction proves he knew Marcus was dirty years ago. Why he stayed silent is a question for another day.</p>
+
+<h2>Outstanding Questions</h2>
+
+<ul>
+<li>Who orchestrated the mass memory extraction scheme? Marcus executed it, but the infrastructure suggests larger organization.</li>
+<li>Where is Marcus Blackwood's body? Blake arrived to find it missing—bodies don't walk themselves out.</li>
+<li>What role did the "Black Market" play in the extraction technology's deployment?</li>
+<li>Why did the heroic partygoers immediately leave the country after the hostage rescue?</li>
+<li>What did Victoria Kingsley gain from Marcus's removal beyond corporate succession?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>This investigation succeeded because five people woke up in an abandoned warehouse and chose to dig rather than run. Sarah Blackwood, Derek Thorn, Ashe Motoko, Victoria Kingsley, and James Whitman pieced together a decade of corporate betrayal from fragments of stolen memories while I led the raid on Old Canyon Road.</p>
+
+<p>Alex Reeves had means, motive, and opportunity. The extractions prove it. But Alex was also a victim—a man systematically robbed by someone who called him partner. That doesn't excuse murder. It does explain it.</p>
+
+<p>The bigger fish? Still swimming. Someone built the extraction infrastructure Marcus used. Someone taught him how to harvest memories from drugged partygoers. That someone is still out there, and they're watching us close this case like it's a loose end tied up neat.</p>
+
+<p>It isn't. Not by a long shot.</p>
+
+<p><strong>Case Status:</strong> Primary suspect apprehended. Murder case pending forensics. Memory extraction conspiracy remains OPEN.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Memory Crimes Division<br>
+Case MC-2025-1206<br>
+Filed: 2027-02-22</p>
+</div>
+
+</div>
+
+</body>
+</html>
