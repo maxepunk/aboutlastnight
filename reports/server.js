@@ -13,7 +13,7 @@ const fs = require('fs');
 const os = require('os');
 
 const app = express();
-const PORT = 3000;
+const PORT = 3001;
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
