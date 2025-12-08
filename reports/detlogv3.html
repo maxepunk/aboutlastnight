@@ -322,7 +322,8 @@
                                     i.rfid.toLowerCase().includes(searchTerm.toLowerCase());
                     const matchType = hideProps ? (i.aiData?.isNarrative ?? false) : true;
                     return matchText && matchType;
-                });
+                })
+                .sort((a, b) => a.name.localeCompare(b.name));
 
             return (
                 <div className="h-full flex flex-col glass-panel rounded-xl overflow-hidden animate-fade-in">
