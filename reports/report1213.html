@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report MC-2025-1213 - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: 'ACTIVE MANHUNT';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: 'ACTIVE MANHUNT';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+        <strong>CASE ID:</strong> MC-2025-1213<br>
+        <strong>DATE:</strong> 2027-02-22<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (Venue of last night's 'Blackwood Rave') <br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> ACTIVE MANHUNT
+    </div>
+
+    <h2>Executive Summary</h2>
+<p><strong>Marcus Blackwood</strong> is dead. Murdered by <strong>Blake Manley</strong>, a Black Market operative who infiltrated my investigation and slipped through our fingers. The partygoers, drugged disoriented and missing hours of their lives, proved reluctant witnesses.&nbsp;</p><p>Many sold memories to <strong>Blake</strong> for offshore cash rather than hand them to law enforcement. But in the final moments before token expiration, enough evidence reached my desk to expose the rot at NeurAI's core: stolen algorithms, political bribery, and a scheme to harvest memories from unwitting guests. The hostages are home. <strong>Blake's</strong> in the wind. The Black Market continues.</p>
+
+<h2>Evidence Locker</h2>
+
+<div class="evidence-item">
+<strong>The Intellectual Property Graveyard:</strong> <strong>Marcus Blackwood</strong> didn't build an empire, he stole one. <strong>Alex Reeves's</strong> <em>recovered memory from May 2022</em> captures the moment of discovery: <strong>Marcus's</strong> algorithm was broken, so <strong>Alex</strong> rebuilt it from scratch for Y Combinator. <strong>Derek Thorn's</strong> <em>June 2022 extraction</em> corroborates the theft—he witnessed <strong>Marcus</strong> claim credit for <strong>Alex's</strong> code. Years later, <strong>Leila Bishara's</strong> <em>January 2027 memory</em> reveals the pattern continued: her algorithms appeared verbatim in NeurAI's proprietary systems. <strong>Marcus</strong> was a serial predator in a tailored suit, and his victims are now my witnesses.
+</div>
+
+<div class="evidence-item">
+<strong>The Political Corruption Web:</strong> Three independent extractions paint a picture of bribery at the highest levels. <strong>Jamie "Volt" Woods's</strong> <em>2:02AM memory</em> captures a cash envelope exchanged between <strong>Marcus</strong> and a political operative. <strong>Diana Nilsson's</strong> <em>1:58AM extraction</em> documents <strong>Morgan Reed</strong> threatening <strong>Marcus</strong> with "Senate receipts"—leverage over bribery evidence. <strong>Morgan's</strong> own <em>November 2026 memory</em> reveals an anonymous NeurAI employee fed her damning evidence of <strong>Marcus's</strong> illegal experiments. Someone inside was building a case. Someone outside was taking payments.
+</div>
+
+<div class="evidence-item">
+<strong>The Memory Theft Operation:</strong> This wasn't a party—it was a harvest. <strong>Oliver Sterling's</strong> <em>August 2026 extraction</em> shows <strong>Marcus</strong> blackmailing him into developing Psychotrophin-3B ingestion methods. <strong>Derek Thorn's</strong> <em>April 2022 memory</em> captures his first introduction to <strong>Oliver</strong> and the compound that would eventually dose every guest. <strong>Flip's</strong> <em>extracted memory</em> captures <strong>Marcus</strong> discussing "untested dangerous memory extract ingestion" with a stranger. <strong>Jamie Woods's</strong> <em>February 2027 extraction</em> documents a death threat: failure to follow protocol meant lethal consequences. The Black Market had <strong>Marcus</strong> on a leash—until someone decided he'd served his purpose.
+</div>
+
+<div class="evidence-item">
+<strong>The Stanford Origins:</strong> <strong>Sofia Francisco's</strong> <em>April 2009 extraction</em> captures what this all used to be: the Stanford Four at th 'glow rave', idealism intact, ambition still uncorrupted. <strong>Sofia</strong>, <strong>Marcus</strong>, <strong>Diana</strong>, and <strong>Derek,&nbsp;</strong>friends before they were accomplices. <strong>Victoria Kingsley's</strong> <em>8:03PM memory</em> shows how far they fell: planning to replace <strong>Marcus</strong> with <strong>Alex</strong> as CEO to mitigate "legal and investment risks." <strong>Howie Sullivan's</strong> <em>2:15AM observation</em> says it best—another cycle of tech idealism corrupted by corporate greed.
+</div>
+
+<h2>Memory Analysis</h2>
+<p>Twenty extractions spanning 2009 to the night of the murder establish a methodology of exploitation. The earliest captures innocence; the latest captures violence. <strong>Alex's</strong> <em>11:32PM memory</em> proves he physically assaulted <strong>Marcus</strong>—but assault isn't murder, and the timing doesn't match death. Three independent witnesses corroborate political bribery without coordination. Multiple victims—<strong>Alex</strong>, <strong>Leila</strong>, <strong>Oliver</strong>—confirm the same pattern of intellectual property theft across years.</p>
+
+<p>The extractions reveal escalation: <strong>Marcus</strong> moved from stealing code to stealing memories, from bribing politicians to blackmailing researchers. <strong>Tori Zhang's</strong> <em>September 2026 memory</em> shows him commissioning the "Synesthesia Engine" for party deployment; <strong>Skyler Iyer's</strong> <em>1:30AM extraction</em> captures him probing for CyberLife's neural protocols. He was still hunting proprietary technology hours before someone ended his career permanently.</p>
+
+<h2>Suspect Network</h2>
+<p><strong>Blake Manley:</strong> The suspect. Black Market operative who infiltrated my investigation, negotiated hostage releases, and escaped with purchased memories. Motive: operational cleanup. Means: Black Market resources. Opportunity: unfettered access during the chaos. Now at large.</p>
+
+<p><strong>Alex Reeves:</strong> Years of stolen genius. The <em>11:32PM memory</em> proves violent capability—he beat <strong>Marcus</strong> that night. But the timeline clears him; assault isn't murder, and witnesses place the death later. Pending lawsuit suggests he wanted <strong>Marcus</strong> alive for legal vindication.</p>
+
+<p><strong>Victoria Kingsley</strong> and <strong>Morgan Reed:</strong> The investors planning a quiet coup. <strong>Victoria's</strong> extractions show her plotting <strong>Marcus's</strong> removal as CEO, while <strong>Morgan</strong> held bribery evidence as leverage. They wanted him neutralized, not dead—a corpse complicates quarterly reports.</p>
+
+<p><strong>Derek Thorn:</strong> Stanford friend turned party co-organizer. Knew about the memory theft operation from the beginning. His silence made him complicit; unclear whether his loyalty survived <strong>Marcus's</strong> betrayals.</p>
+
+<p><strong>Taylor Chase:</strong> Tech journalist known for puff pieces on 'promising' new startups. While there appears to have been some ties between <strong>Taylor</strong> and <strong>Marcus</strong>, all leads go dead as if somebody carefully removed any and all evidence which might implicate him from our investigation. Further surveillence may be required. </p>
+
+<p><strong> Ashe Motoko:</strong> An investigative journalist whose prior run-ins with Marcus appear to have been catastophic for their career. Their phone was stolen from the site of the party by the Black Market. Their sources must be valuable to the Black Market. We will be calling <strong>Ashe</strong> in for an interview. </p>
+
+<h2>Outstanding Questions</h2>
+<ul>
+<li>Who comprises "Echo Incorporated"—the organization conducting the most Black Market trades?</li>
+<li>What specific purpose did <strong>Howie's</strong> lecture memory serve for the Black Market?</li>
+<li><strong>Sarah Blackwood's</strong> potential Black Market connections—why wasn't she supposed to be drugged?</li>
+<li>Identity of the anonymous NeurAI employee feeding evidence to <strong>Morgan Reed</strong></li>
+<li>The loan shark threatening <strong>Flip's</strong> kidneys—Black Market connected?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+<div class="note">
+<p>These partygoers made their choices. Many sold memories to <strong>Blake</strong> for offshore cash;<strong>James Whitman</strong> trying to save hostages, <strong>Kai Anderson</strong> nursing a broken heart and empty pockets. The evidence that reached me came in the final moments, when expiration loomed and conscience won.</p>
+
+<p>The hostages are home. That's what we bought with the memories we lost. <strong>Blake's</strong> running free, the Black Market keeps operating, and Echo Inc., whoever they are, just got paid. Some days you save lives; other days you dismantle networks. Rarely both.</p>
+
+<p>But the twenty extractions in my possession tell a story of systematic exploitation that extends far beyond one dead tech mogul. <strong>Marcus Blackwood</strong> stole from everyone he touched: algorithms, memories, trust. Someone decided he'd taken enough. The Black Market used him, then discarded him. There's a lesson in that, if you're paying attention.</p>
+
+<p><strong>Case Status:</strong> Homicide resolved. Primary suspect <strong>Blake Manley</strong> at large. Black Market investigation ongoing. Echo Incorporated surveillance authorized.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Corporate Crimes Division<br>
+Case MC-2025-1213<br>
+Filed: 2027-02-22</p>
+</div>
+
+</div>
+
+</body>
+</html>
