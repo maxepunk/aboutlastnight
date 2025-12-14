@@ -24,7 +24,7 @@
 // ═══════════════════════════════════════════════════════════
 
 // Organizer notification email (receives alerts for new feedback)
-const ORGANIZER_EMAIL = 'max@maxepunk.com';
+const ORGANIZER_EMAIL = 'max@maxepunk.com, hello@gr8ergoodgames.com, about.last.night.game@gmail.com';
 
 // Set to true to receive email notifications for each feedback submission
 const SEND_NOTIFICATIONS = true;
