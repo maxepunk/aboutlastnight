@@ -13,7 +13,7 @@
 //
 // GOOGLE SHEET SETUP:
 // Add these column headers in row 1:
-// Timestamp | Session Date | Session Date Full | Understood Gameplay | Puzzle Quality | Character Interest | Story Satisfaction | What Worked | Improvements | Email | Mailing List | Follow Up OK | User Agent | Referrer
+// Timestamp | Session Date | Session Date Full | Understood Gameplay | Puzzle Quality | Character Interest | Story Satisfaction | What Worked | Improvements | Describe to Friend | Email | Mailing List | Follow Up OK | User Agent | Referrer
 //
 // Session Date = MMDD format (e.g., "1123") - matches report naming scheme
 // Session Date Full = YYYY-MM-DD format (e.g., "2025-11-23") - human readable
@@ -57,6 +57,7 @@ function doPost(e) {
     // Open-ended questions
     const whatWorked = formData.whatWorked || '';
     const improvements = formData.improvements || '';
+    const describeToFriend = formData.describeToFriend || '';
 
     // Contact info
     const email = formData.email || '';
@@ -68,7 +69,7 @@ function doPost(e) {
     const referrer = formData.referrer || '';
 
     // Append data to sheet
-    // Columns: Timestamp | Session Date | Session Date Full | Understood Gameplay | Puzzle Quality | Character Interest | Story Satisfaction | What Worked | Improvements | Email | Mailing List | Follow Up OK | User Agent | Referrer
+    // Columns: Timestamp | Session Date | Session Date Full | Understood Gameplay | Puzzle Quality | Character Interest | Story Satisfaction | What Worked | Improvements | Describe to Friend | Email | Mailing List | Follow Up OK | User Agent | Referrer
     sheet.appendRow([
       timestamp,
       sessionDate,
@@ -79,6 +80,7 @@ function doPost(e) {
       storySatisfaction,
       whatWorked,
       improvements,
+      describeToFriend,
       email,
       mailingListConsent,
       followUpConsent,
@@ -97,6 +99,7 @@ function doPost(e) {
         storySatisfaction,
         whatWorked,
         improvements,
+        describeToFriend,
         email,
         mailingListConsent,
         followUpConsent
@@ -139,6 +142,7 @@ function sendOrganizerNotification(data) {
     storySatisfaction,
     whatWorked,
     improvements,
+    describeToFriend,
     email,
     mailingListConsent,
     followUpConsent
@@ -213,6 +217,13 @@ function sendOrganizerNotification(data) {
         <div style="margin-bottom: 20px;">
           <h3 style="color: #cc0000; margin-bottom: 10px;">What Could Improve:</h3>
           <div style="background: #fff; padding: 15px; border-radius: 4px; white-space: pre-wrap;">${escapeHtml(improvements)}</div>
+        </div>
+        ` : ''}
+
+        ${describeToFriend ? `
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #cc0000; margin-bottom: 10px;">How They'd Describe It to a Friend:</h3>
+          <div style="background: #fff; padding: 15px; border-radius: 4px; white-space: pre-wrap;">${escapeHtml(describeToFriend)}</div>
         </div>
         ` : ''}
 
@@ -295,6 +306,7 @@ function testFeedbackSubmission() {
       storySatisfaction: '8',
       whatWorked: 'The character interactions were amazing. Loved the tension in the final act.',
       improvements: 'Maybe a bit more time for the puzzle solving phase.',
+      describeToFriend: 'It\'s like an escape room meets a murder mystery dinner, but way more immersive.',
       email: 'test@example.com',
       mailingListConsent: 'true',
       followUpConsent: 'true',
