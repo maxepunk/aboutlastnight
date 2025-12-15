@@ -125,6 +125,7 @@ async function handleFormSubmit(event) {
         // Open-ended questions
         whatWorked: formData.get('whatWorked') || '',
         improvements: formData.get('improvements') || '',
+        describeToFriend: formData.get('describeToFriend') || '',
         // Contact info
         email: formData.get('email') || '',
         mailingListConsent: formData.get('mailingListConsent') === 'on' ? 'true' : 'false',

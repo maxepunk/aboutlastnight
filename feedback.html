@@ -55,7 +55,7 @@
             <!-- ⚠ DO NOT EDIT: Session date picker ⚠ -->
             <!-- Date is pre-selected via ?date=MMDD URL parameter -->
             <div class="form-group">
-                <label for="sessionDate">What session did you attend?</label>
+                <label for="sessionDate">What session did you attend? <span class="required-indicator">*</span></label>
                 <input
                     type="date"
                     id="sessionDate"
@@ -73,7 +73,7 @@
 
             <!-- Scale Question 1: Understanding gameplay -->
             <div class="form-group scale-question">
-                <label>I felt like I knew how to play the game and understood the choices I was asked to make.</label>
+                <label>I felt like I knew how to play the game and understood the choices I was asked to make. <span class="required-indicator">*</span></label>
                 <div class="scale-container">
                     <span class="scale-label-left">Disagree</span>
                     <div class="scale-options">
@@ -124,7 +124,7 @@
 
             <!-- Scale Question 2: Puzzles -->
             <div class="form-group scale-question">
-                <label>The puzzles were interesting and provided a good challenge without being too difficult.</label>
+                <label>The puzzles were interesting and provided a good challenge without being too difficult. <span class="required-indicator">*</span></label>
                 <div class="scale-container">
                     <span class="scale-label-left">Disagree</span>
                     <div class="scale-options">
@@ -175,7 +175,7 @@
 
             <!-- Scale Question 3: Character -->
             <div class="form-group scale-question">
-                <label>I found my character interesting and playing them gave me things to do in the game.</label>
+                <label>I found my character interesting and playing them gave me things to do in the game. <span class="required-indicator">*</span></label>
                 <div class="scale-container">
                     <span class="scale-label-left">Disagree</span>
                     <div class="scale-options">
@@ -226,7 +226,7 @@
 
             <!-- Scale Question 4: Story satisfaction -->
             <div class="form-group scale-question">
-                <label>I felt satisfied by the story I got by the end of the game.</label>
+                <label>I felt satisfied by the story I got by the end of the game. <span class="required-indicator">*</span></label>
                 <div class="scale-container">
                     <span class="scale-label-left">Disagree</span>
                     <div class="scale-options">
@@ -284,7 +284,7 @@
 
             <!-- Open-ended Question 1: What worked -->
             <div class="form-group">
-                <label for="whatWorked">What worked for you?</label>
+                <label for="whatWorked">What worked for you? <span class="optional-indicator">(optional)</span></label>
                 <textarea
                     id="whatWorked"
                     name="whatWorked"
@@ -296,12 +296,24 @@
 
             <!-- Open-ended Question 2: Improvements -->
             <div class="form-group">
-                <label for="improvements">What could we improve?</label>
+                <label for="improvements">What could we improve? <span class="optional-indicator">(optional)</span></label>
                 <textarea
                     id="improvements"
                     name="improvements"
                     class="form-textarea"
                     placeholder="Anything — big or small"
+                    rows="4"
+                ></textarea>
+            </div>
+
+            <!-- Open-ended Question 3: Describe to a friend -->
+            <div class="form-group">
+                <label for="describeToFriend">How would you describe this experience to a friend? <span class="optional-indicator">(optional)</span></label>
+                <textarea
+                    id="describeToFriend"
+                    name="describeToFriend"
+                    class="form-textarea"
+                    placeholder="In your own words..."
                     rows="4"
                 ></textarea>
             </div>
@@ -313,7 +325,7 @@
             <!-- FIND WITH: Search for "CONTACT INFO" or "email"         -->
             <!-- ═══════════════════════════════════════════════════════ -->
             <div class="form-group email-section">
-                <label for="email">Your email (optional)</label>
+                <label for="email">Your email <span class="optional-indicator">(optional)</span></label>
                 <input
                     type="email"
                     id="email"
