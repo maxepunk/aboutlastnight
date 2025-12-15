@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report MC-2025-1214 - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: 'INVESTIGATION ONGOING';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: 'INVESTIGATION ONGOING';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+        <strong>CASE ID:</strong> MC-2025-1214<br>
+        <strong>DATE:</strong> 2027-02-22<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (Venue of most recent 'Blackwood Rave')<br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> INVESTIGATION ONGOING
+    </div>
+
+    <h2>Executive Summary</h2>
+
+<p><strong>Marcus Blackwood</strong> is dead. The party's over, and the vultures picked the bones clean before I could stop them.</p>
+
+<p>This group arrived dosed and disoriented—standard Black Market calling card. What started as promising collaboration with <strong>James Whitman</strong> quickly deteriorated when <strong>Blake Manley</strong>, our resident Black Market operative, turned the room against the investigation. Someone operating under the alias "Elizabeth" began funneling evidence to Blake, and in the final moments before memory token expiration, a massive data transfer hit Black Market servers. Funds routed to a previously unknown account registered to the deceased himself.</p>
+
+<p>The hostages are free. The murderer walks. Case remains open.</p>
+
+<h2>Evidence Locker</h2>
+
+<div class="evidence-item">
+<strong>The Secret Room:</strong> <em>Memory extraction from <b>James Whitman</b></em> captured at 4:36 AM shows <b>Marcus</b> entering an adjacent party space moments before <b>James</b> lost consciousness. Whatever <b>Marcus</b> was doing in that hidden room, someone didn't want witnesses. <b>James</b> was the only one in this group who played it straight with me. It's ironic that his memory is the clearest piece we recovered. That secret room holds answers. We just don't have them yet.
+</div>
+
+<div class="evidence-item">
+<strong>The Algorithm Scheme:</strong> Cross-referencing <em><b>James</b>'s extraction</em> with <em><b>Leila Bishara</b>'s recovered memory</em> reveals a pattern of corporate manipulation. Leila's scan shows Marcus, clearly compromised, requesting access to proprietary algorithms. The man was building something, or stealing something. And he needed resources beyond his reach. Two memories, same thread: <b>Marcus Blackwood</b> was neck-deep in corporate espionage, and he wasn't working alone.
+</div>
+
+<div class="evidence-item">
+<strong>The Drug Pipeline:</strong> <em><b>Marcus</b>'s own memory extraction</em> dated July 2026 exposes his involvement in commercializing <b>Derek</b>'s experimental compound for profit. This wasn't recreational chemistry. This was industrial-scale pharmaceutical distribution through underground channels. The <em>memory scan from <b>Flip</b></em> corroborates this: Marcus was overheard at 5:30 PM discussing "untested dangerous memory extract ingestion" with an unknown stranger. Dangerous extraction protocols. Untested substances. Human guinea pigs at his own party. Marcus wasn't just hosting raves, he was running clinical trials without the paperwork. However, there's a hole in this picture. <b>Derek</b>&nbsp;may have been refining the compound for consumption, but he does not have the background to synthesize key ingredients, further investigation into his source is required.</div>
+
+<div class="evidence-item">
+<strong>The Mysterious Stranger:</strong> That <b>unknown associate</b> in <b>Flip</b>'s memory keeps surfacing. Someone <b>Marcus</b> trusted enough to discuss dangerous protocols with. Someone present before the killing. <em><b>Kai Andersen</b>'s extraction</em>—showing repetitive folding activity at an indeterminate time—suggests either drugged dissociation or nervous habit. Either way, the party was already compromised before the main event started. <b>The stranger</b> remains unidentified. <b>Blake Manley</b> had access, motive, and opportunity. But <b>Blake</b>'s in the wind, and the memories that could've confirmed it are now <b>Black Market</b> property.
+</div>
+
+<h2>Memory Analysis</h2>
+
+<p>Memory extraction technology remains our most reliable witness—when we can keep it out of criminal hands. The tokens recovered tonight operated on standard Black Market protocols: time-limited, encrypted, and designed to restore to original owners upon expiration. <b>Blake</b> lied about degradation. The memories would have returned. Instead, they were sold.</p>
+
+<p>Key extractions that advanced the investigation:</p>
+
+<ul>
+<li><strong>James Whitman, 4:36 AM:</strong> Final visual confirmation of Marcus entering the secret room—our clearest timeline marker before the murder.</li>
+<li><strong>Leila Bishara:</strong> Algorithm access request reveals corporate theft angle previously unconfirmed.</li>
+<li><strong>Marcus Blackwood, July 2026:</strong> Direct evidence of drug commercialization intent—the victim implicating himself.</li>
+<li><strong>Flip, 5:30 PM:</strong> The stranger conversation—our best lead on the triggerman's identity.</li>
+<li><strong>Kai Andersen:</strong> Behavioral evidence of party-wide drugging before main events commenced.</li>
+</ul>
+
+<h2>Suspect Network</h2>
+
+<p><strong>Blake Manley:</strong> Black Market operative who infiltrated this investigation on a "recovery mission." Admitted presence at the scene. Most likely candidate for pulling the trigger. Now in possession of evidence that could have convicted them.</p>
+
+<p><strong>James Whitman:</strong> The only honest player in a room full of liars. His early collaboration provided our most useful evidence before Blake poisoned the well. His memory places Marcus at the secret room.</p>
+
+<p><strong>Sarah Blackwood:</strong> The widow seeking freedom from a narcissist husband. Motive in abundance. Evidence against her: absent.</p>
+
+<p><strong>Victoria:</strong> Corporate connections, funding exposure, everything to lose from last night's fallout. She's hiding something. Everyone with money usually is.</p>
+
+<p><strong>"Elizabeth":</strong> Unknown operative using secure banking to leak evidence to Blake. Could be anyone in the room. Could be someone we haven't identified. The account remains active.</p>
+
+<h2>Outstanding Questions</h2>
+
+<ul>
+<li>We discovered the the secret room Marcus entered at 4:36 AM, but all the extraction gear had been removed. Who else had access?</li>
+<li>Who is the "mysterious stranger" discussing dangerous protocols with Marcus hours before his death?</li>
+<li>What identity hides behind the "Elizabeth" account that compromised this investigation?</li>
+<li>Did the memories sold to the Black Market contain direct evidence of the murder itself?</li>
+<li>What role did Derek's experimental drug play in the events leading to Marcus's death?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>I've worked enough memory crime scenes to know when a case goes sideways. This one didn't just go sideways—it went to the highest bidder.</p>
+
+<p>James Whitman gave me something to work with. The rest of you made your choices. The memories you sold? Gone forever. The evidence you held back? Processed by the Black Market with no hope of recovery. And somewhere in that data transfer, the proof we needed to nail Blake Manley for murder probably exists on servers I can't touch.</p>
+
+<p>The hostages are home. That's something. But Marcus Blackwood's killer walks free, funded by the very memories that could have convicted them. The account registered to a dead man suggests Marcus was playing both sides until someone decided the game was over.</p>
+
+<p>This investigation continues. The Black Market thinks they won tonight. They're wrong. They just gave me a bigger target.</p>
+
+<p><strong>Case Status:</strong> Open. Suspect identified. Evidence compromised. Pursuit ongoing.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Corporate Crimes Division<br>
+Case MC-2025-1214<br>
+Filed: 2027-02-22</p>
+</div>
+
+</div>
+
+</body>
+</html>
