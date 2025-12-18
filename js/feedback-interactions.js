@@ -128,8 +128,7 @@ async function handleFormSubmit(event) {
         describeToFriend: formData.get('describeToFriend') || '',
         // Contact info
         email: formData.get('email') || '',
-        mailingListConsent: formData.get('mailingListConsent') === 'on' ? 'true' : 'false',
-        followUpConsent: formData.get('followUpConsent') === 'on' ? 'true' : 'false',
+        discoverSource: formData.get('discoverSource') || '',
         // Metadata
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
