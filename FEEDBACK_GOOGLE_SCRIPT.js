@@ -61,15 +61,14 @@ function doPost(e) {
 
     // Contact info
     const email = formData.email || '';
-    const mailingListConsent = formData.mailingListConsent === 'true' ? 'Yes' : 'No';
-    const followUpConsent = formData.followUpConsent === 'true' ? 'Yes' : 'No';
+    const discoverSource = formData.discoverSource || '';
 
     // Metadata
     const userAgent = formData.userAgent || '';
     const referrer = formData.referrer || '';
 
     // Append data to sheet
-    // Columns: Timestamp | Session Date | Session Date Full | Understood Gameplay | Puzzle Quality | Character Interest | Story Satisfaction | What Worked | Improvements | Describe to Friend | Email | Mailing List | Follow Up OK | User Agent | Referrer
+    // Columns: Timestamp | Session Date | Session Date Full | Understood Gameplay | Puzzle Quality | Character Interest | Story Satisfaction | What Worked | Improvements | Describe to Friend | Email | Mailing List (deprecated) | Follow Up OK (deprecated) | User Agent | Referrer | Discover Source
     sheet.appendRow([
       timestamp,
       sessionDate,
@@ -82,10 +81,11 @@ function doPost(e) {
       improvements,
       describeToFriend,
       email,
-      mailingListConsent,
-      followUpConsent,
+      '',  // deprecated: mailingListConsent
+      '',  // deprecated: followUpConsent
       userAgent,
-      referrer
+      referrer,
+      discoverSource
     ]);
 
     // Send notification to organizers (optional)
@@ -101,8 +101,7 @@ function doPost(e) {
         improvements,
         describeToFriend,
         email,
-        mailingListConsent,
-        followUpConsent
+        discoverSource
       });
     }
 
@@ -144,8 +143,7 @@ function sendOrganizerNotification(data) {
     improvements,
     describeToFriend,
     email,
-    mailingListConsent,
-    followUpConsent
+    discoverSource
   } = data;
 
   // Format session date for display
@@ -228,12 +226,15 @@ function sendOrganizerNotification(data) {
         ` : ''}
 
         ${email ? `
-        <div style="background: #fff; border-left: 4px solid ${followUpConsent === 'Yes' ? '#00aa00' : '#999'}; padding: 15px; margin-top: 20px;">
+        <div style="background: #fff; border-left: 4px solid #00aa00; padding: 15px; margin-top: 20px;">
           <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
-          <p style="margin: 5px 0;"><strong>Mailing list:</strong> ${mailingListConsent}</p>
-          <p style="margin: 5px 0;"><strong>OK to follow up:</strong> ${followUpConsent}</p>
+          ${discoverSource ? `<p style="margin: 5px 0;"><strong>Found us via:</strong> ${escapeHtml(discoverSource)}</p>` : ''}
         </div>
-        ` : '<p style="color: #666; font-style: italic;">No email provided</p>'}
+        ` : (discoverSource ? `
+        <div style="background: #fff; border-left: 4px solid #999; padding: 15px; margin-top: 20px;">
+          <p style="margin: 5px 0;"><strong>Found us via:</strong> ${escapeHtml(discoverSource)}</p>
+        </div>
+        ` : '<p style="color: #666; font-style: italic;">No contact info provided</p>')}
 
       </div>
     </div>
@@ -308,8 +309,7 @@ function testFeedbackSubmission() {
       improvements: 'Maybe a bit more time for the puzzle solving phase.',
       describeToFriend: 'It\'s like an escape room meets a murder mystery dinner, but way more immersive.',
       email: 'test@example.com',
-      mailingListConsent: 'true',
-      followUpConsent: 'true',
+      discoverSource: 'Friend recommended it',
       userAgent: 'Test Script',
       referrer: ''
     }
