@@ -34,7 +34,7 @@ npm install  # First time only
 npm start
 ```
 
-Server runs at `http://localhost:3000`
+Server runs at `http://localhost:3001`
 
 ### Starting with Remote Access (Cloudflare Tunnel)
 
@@ -105,10 +105,10 @@ detlogv3.html     - React frontend (single-page app)
 
 **Key Parameters:**
 ```javascript
-// server.js line 308
+// server.js line 351
 const MAX_BATCH_SIZE = 10;
 
-// detlogv3.html line 1268
+// detlogv3.html lines 1361-1362
 const BATCH_SIZE = 8;
 const CONCURRENCY = 4;
 ```
@@ -146,8 +146,8 @@ claude --version  # Verify installation
 claude /login     # Re-authenticate if needed
 ```
 
-### Port 3000 in use
-Edit `server.js` line 16: `const PORT = 3001;`
+### Port 3001 in use
+Edit `server.js` line 16: `const PORT = 3002;`
 
 ### Timeout during analysis
 1. Reduce batch size: `BATCH_SIZE = 5` in detlogv3.html
@@ -155,7 +155,7 @@ Edit `server.js` line 16: `const PORT = 3001;`
 
 ### Token not loading
 ```bash
-curl http://localhost:3000/api/config  # Should return Notion token
+curl http://localhost:3001/api/config  # Should return Notion token
 # Check .env has NOTION_TOKEN set
 # Restart server after .env changes
 ```
@@ -164,13 +164,30 @@ curl http://localhost:3000/api/config  # Should return Notion token
 
 | Parameter | Location | Current | Effect |
 |-----------|----------|---------|--------|
-| Batch size | detlogv3.html:1268 | 8 | Items per API call |
-| Concurrency | detlogv3.html:1268 | 4 | Parallel batches |
-| Server batch limit | server.js:308 | 10 | Max items/request |
+| Batch size | detlogv3.html:1361 | 8 | Items per API call |
+| Concurrency | detlogv3.html:1362 | 4 | Parallel batches |
+| Server batch limit | server.js:351 | 10 | Max items/request |
 
 **Trade-offs:**
 - Larger batch = faster total time, higher timeout risk
 - More concurrency = faster total time, higher server load
+
+## Emailer Subdirectory
+
+The `emailer/` directory contains a Python-based follow-up email system:
+
+```bash
+# Send follow-up emails to attendees
+python emailer/send_followup_emails_smart.py --date MMDD --test
+python emailer/send_followup_emails_smart.py --date 1218 --send  # Actually send
+```
+
+**Key files:**
+- `send_followup_emails_smart.py` - Email sender script (requires Gmail app password)
+- `about_last_night_followup_template.html` - HTML email template
+- `recipients_MMDD_MMDD.csv` - Recipient lists per show date
+
+See `emailer/SETUP_GUIDE.md` for Gmail configuration.
 
 ## Related Documentation
 
