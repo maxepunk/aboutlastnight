@@ -1,0 +1,50 @@
+[
+  {
+    "type": "system",
+    "subtype": "init",
+    "session_id": "test-session-123",
+    "tools": [],
+    "model": "claude-sonnet-4-20250514",
+    "mcp_servers": []
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "id": "msg_01ABC123",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"status\":\"success\",\"data\":{\"name\":\"test\",\"value\":42}}"
+        }
+      ],
+      "model": "claude-sonnet-4-20250514",
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 150,
+        "output_tokens": 25,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      }
+    },
+    "session_id": "test-session-123"
+  },
+  {
+    "type": "result",
+    "subtype": "success",
+    "session_id": "test-session-123",
+    "is_error": false,
+    "result": "Processed successfully",
+    "structured_output": {
+      "status": "success",
+      "data": {
+        "name": "test",
+        "value": 42
+      }
+    },
+    "duration_ms": 1234,
+    "duration_api_ms": 1100
+  }
+]

@@ -1,0 +1,21 @@
+[
+  {
+    "type": "system",
+    "subtype": "init",
+    "session_id": "test-session-789"
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "id": "msg_03GHI789",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"arcs\": [\"Financial Trail\", \"Marriage Troubles\"], \"recommended\": \"Financial Trail\"}"
+        }
+      ]
+    }
+  }
+]

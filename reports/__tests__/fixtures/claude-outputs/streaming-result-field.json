@@ -1,0 +1,27 @@
+[
+  {
+    "type": "system",
+    "subtype": "init",
+    "session_id": "test-session-456"
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "id": "msg_02DEF456",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "```json\n{\"tokens\": [{\"id\": \"tok1\", \"value\": \"memory\"}], \"count\": 1}\n```"
+        }
+      ]
+    }
+  },
+  {
+    "type": "result",
+    "subtype": "success",
+    "result": "```json\n{\"tokens\": [{\"id\": \"tok1\", \"value\": \"memory\"}], \"count\": 1}\n```",
+    "duration_ms": 890
+  }
+]

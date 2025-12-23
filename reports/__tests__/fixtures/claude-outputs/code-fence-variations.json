@@ -1,0 +1,7 @@
+{
+  "withNewlines": "```json\n{\"key\": \"value with\\nnewlines\"}\n```",
+  "withoutNewlineAfterFence": "```json{\"key\": \"compact\"}```",
+  "multipleCodeBlocks": "Here's the JSON:\n```json\n{\"first\": true}\n```\nAnd another:\n```json\n{\"second\": true}\n```",
+  "noCodeFence": "{\"raw\": \"json without fences\"}",
+  "trailingWhitespace": "```json\n{\"key\": \"value\"}\n```   \n\n"
+}
