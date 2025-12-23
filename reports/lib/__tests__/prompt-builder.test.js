@@ -258,20 +258,20 @@ describe('PromptBuilder', () => {
       expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('articleGeneration');
     });
 
-    it('should include character-voice in system prompt', async () => {
-      const { systemPrompt } = await builder.buildArticlePrompt(
+    it('should include character-voice in user prompt (VOICE_CHECKPOINT)', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline, mockEvidenceBundle, mockTemplate
       );
 
-      expect(systemPrompt).toContain('Be NovaGlade');
+      expect(userPrompt).toContain('Be NovaGlade');
     });
 
-    it('should include writing-principles in system prompt', async () => {
-      const { systemPrompt } = await builder.buildArticlePrompt(
+    it('should include writing-principles in user prompt (VOICE_CHECKPOINT)', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline, mockEvidenceBundle, mockTemplate
       );
 
-      expect(systemPrompt).toContain('Show dont tell');
+      expect(userPrompt).toContain('Show dont tell');
     });
 
     it('should include approved outline in user prompt', async () => {
