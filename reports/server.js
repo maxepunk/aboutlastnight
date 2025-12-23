@@ -12,8 +12,47 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+// Journalist pipeline modules
+const { createNotionClient } = require('./lib/notion-client');
+const { createSessionManager } = require('./lib/session-manager');
+const { createThemeLoader } = require('./lib/theme-loader');
+const { createPromptBuilder } = require('./lib/prompt-builder');
+
 const app = express();
 const PORT = 3001;
+
+// Initialize journalist pipeline components
+const sessionManager = createSessionManager();
+let notionClient = null;  // Lazy-initialized when NOTION_TOKEN is available
+let themeLoader = null;   // Lazy-initialized on first use
+let promptBuilder = null; // Lazy-initialized on first use
+
+// Helper to get or create NotionClient
+function getNotionClient() {
+    if (!notionClient && process.env.NOTION_TOKEN) {
+        notionClient = createNotionClient();
+    }
+    if (!notionClient) {
+        throw new Error('NOTION_TOKEN not configured');
+    }
+    return notionClient;
+}
+
+// Helper to get or create ThemeLoader
+function getThemeLoader() {
+    if (!themeLoader) {
+        themeLoader = createThemeLoader();
+    }
+    return themeLoader;
+}
+
+// Helper to get or create PromptBuilder
+function getPromptBuilder() {
+    if (!promptBuilder) {
+        promptBuilder = createPromptBuilder();
+    }
+    return promptBuilder;
+}
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
@@ -730,6 +769,229 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     }
 });
 
+// ===== JOURNALIST PIPELINE ENDPOINTS (Protected) =====
+
+/**
+ * GET /api/journalist/sessions
+ * List all available sessions
+ */
+app.get('/api/journalist/sessions', requireAuth, async (req, res) => {
+    try {
+        const sessionIds = await sessionManager.listSessions();
+
+        // Get state summary for each session
+        const sessions = await Promise.all(
+            sessionIds.map(async (id) => {
+                const state = await sessionManager.getSessionState(id);
+                return {
+                    id,
+                    phase: state?.phase || '0',
+                    hasArticle: state?.hasArticle || false,
+                    lastModified: state?.files?.output?.length > 0 ? 'has output' : 'in progress'
+                };
+            })
+        );
+
+        res.json({ sessions });
+    } catch (error) {
+        console.error('Error listing sessions:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/journalist/sessions/:id
+ * Get full state for a specific session
+ */
+app.get('/api/journalist/sessions/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const state = await sessionManager.getSessionState(id);
+
+        if (!state) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        res.json(state);
+    } catch (error) {
+        console.error('Error getting session:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/journalist/run
+ * Phase router - executes the specified phase of the journalist pipeline
+ *
+ * Body: { phase: "1.1" | "1.2" | "1.3" | "1.4" | ... , sessionId: string, data?: object }
+ */
+app.post('/api/journalist/run', requireAuth, async (req, res) => {
+    try {
+        const { phase, sessionId, data } = req.body;
+
+        if (!phase || !sessionId) {
+            return res.status(400).json({ error: 'phase and sessionId are required' });
+        }
+
+        console.log(`[${new Date().toISOString()}] Journalist phase ${phase} for session ${sessionId}`);
+
+        // Route to appropriate phase handler
+        let result;
+        switch (phase) {
+            case '1.1':
+                // Initialize session with config
+                result = await runPhase1_1(sessionId, data);
+                break;
+
+            case '1.2':
+                // Save director notes
+                result = await runPhase1_2(sessionId, data);
+                break;
+
+            case '1.3':
+                // Fetch memory tokens from Notion
+                result = await runPhase1_3(sessionId, data);
+                break;
+
+            case '1.4':
+                // Save selected paper evidence (checkpoint)
+                result = await runPhase1_4(sessionId, data);
+                break;
+
+            default:
+                return res.status(400).json({
+                    error: `Phase ${phase} not yet implemented`,
+                    implemented: ['1.1', '1.2', '1.3', '1.4']
+                });
+        }
+
+        res.json(result);
+
+    } catch (error) {
+        console.error(`Journalist phase error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ===== PHASE HANDLERS =====
+
+/**
+ * Phase 1.1: Initialize session with configuration
+ * Creates session directory and saves initial config
+ */
+async function runPhase1_1(sessionId, data) {
+    const { roster, accusation, photosPath } = data || {};
+
+    if (!roster || !accusation) {
+        throw new Error('roster and accusation are required for phase 1.1');
+    }
+
+    // Create session structure
+    await sessionManager.createSession(sessionId);
+
+    // Save session config
+    const config = {
+        sessionId,
+        roster,
+        accusation,
+        photosPath: photosPath || `sessionphotos/${sessionId}`,
+        createdAt: new Date().toISOString()
+    };
+
+    await sessionManager.saveFile(sessionId, 'inputs/session-config.json', config);
+
+    return {
+        success: true,
+        phase: '1.1',
+        message: 'Session initialized',
+        config
+    };
+}
+
+/**
+ * Phase 1.2: Save director notes
+ * Stores observations and whiteboard data
+ */
+async function runPhase1_2(sessionId, data) {
+    const { observations, whiteboard } = data || {};
+
+    if (!observations) {
+        throw new Error('observations are required for phase 1.2');
+    }
+
+    const directorNotes = {
+        observations,
+        whiteboard: whiteboard || {},
+        savedAt: new Date().toISOString()
+    };
+
+    await sessionManager.saveFile(sessionId, 'inputs/director-notes.json', directorNotes);
+
+    return {
+        success: true,
+        phase: '1.2',
+        message: 'Director notes saved',
+        directorNotes
+    };
+}
+
+/**
+ * Phase 1.3: Fetch memory tokens from Notion
+ * Retrieves tokens, optionally filtered by IDs
+ */
+async function runPhase1_3(sessionId, data) {
+    const { tokenIds } = data || {};
+
+    const client = getNotionClient();
+
+    console.log(`[${new Date().toISOString()}] Fetching tokens from Notion...`);
+    const result = await client.fetchMemoryTokens(tokenIds);
+
+    // Save to session
+    await sessionManager.saveFile(sessionId, 'fetched/tokens.json', result);
+
+    return {
+        success: true,
+        phase: '1.3',
+        message: `Fetched ${result.totalCount} tokens`,
+        totalCount: result.totalCount,
+        fetchedAt: result.fetchedAt
+    };
+}
+
+/**
+ * Phase 1.4: Save selected paper evidence (checkpoint)
+ * Saves user-selected evidence with version tracking
+ */
+async function runPhase1_4(sessionId, data) {
+    const { selectedEvidence, action = 'created', changes = null } = data || {};
+
+    if (!selectedEvidence) {
+        throw new Error('selectedEvidence is required for phase 1.4');
+    }
+
+    // Save with version tracking (this is a checkpoint phase)
+    const version = await sessionManager.saveWithVersion(
+        sessionId,
+        '1.4',
+        'inputs/selected-paper-evidence.json',
+        {
+            evidence: selectedEvidence,
+            selectedAt: new Date().toISOString()
+        },
+        action,
+        changes
+    );
+
+    return {
+        success: true,
+        phase: '1.4',
+        message: 'Paper evidence selection saved',
+        version,
+        evidenceCount: selectedEvidence.length
+    };
+}
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     // Simple health check - just verify server is running
@@ -741,7 +1003,12 @@ app.get('/api/health', (req, res) => {
         endpoints: {
             analyze: '/api/analyze (POST)',
             generate: '/api/generate (POST)',
-            config: '/api/config (GET)'
+            config: '/api/config (GET)',
+            journalist: {
+                sessions: '/api/journalist/sessions (GET)',
+                sessionState: '/api/journalist/sessions/:id (GET)',
+                run: '/api/journalist/run (POST)'
+            }
         }
     });
 });
