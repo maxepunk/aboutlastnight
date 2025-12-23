@@ -858,10 +858,50 @@ app.post('/api/journalist/run', requireAuth, async (req, res) => {
                 result = await runPhase1_4(sessionId, data);
                 break;
 
+            case '1.5':
+                // Download visual assets
+                result = await runPhase1_5(sessionId, data);
+                break;
+
+            case '1.6':
+                // Image analysis (parallel via Claude)
+                result = await runPhase1_6(sessionId, data);
+                break;
+
+            case '1.7':
+                // Character identification (checkpoint)
+                result = await runPhase1_7(sessionId, data);
+                break;
+
+            case '1.8':
+                // Build evidence bundle (checkpoint)
+                result = await runPhase1_8(sessionId, data);
+                break;
+
+            case '2':
+                // Arc analysis (checkpoint)
+                result = await runPhase2(sessionId, data);
+                break;
+
+            case '3':
+                // Outline generation (checkpoint)
+                result = await runPhase3(sessionId, data);
+                break;
+
+            case '4':
+                // Article generation
+                result = await runPhase4(sessionId, data);
+                break;
+
+            case '5':
+                // Validation
+                result = await runPhase5(sessionId, data);
+                break;
+
             default:
                 return res.status(400).json({
                     error: `Phase ${phase} not yet implemented`,
-                    implemented: ['1.1', '1.2', '1.3', '1.4']
+                    implemented: ['1.1', '1.2', '1.3', '1.4', '1.5', '1.6', '1.7', '1.8', '2', '3', '4', '5']
                 });
         }
 
@@ -989,6 +1029,642 @@ async function runPhase1_4(sessionId, data) {
         message: 'Paper evidence selection saved',
         version,
         evidenceCount: selectedEvidence.length
+    };
+}
+
+/**
+ * Phase 1.5: Download visual assets
+ * Downloads attachments from selected paper evidence and copies session photos
+ */
+async function runPhase1_5(sessionId, data) {
+    const { photosPath } = data || {};
+
+    const client = getNotionClient();
+
+    // Load selected evidence
+    const selectedEvidence = await sessionManager.readFile(sessionId, 'inputs/selected-paper-evidence.json');
+    const sessionConfig = await sessionManager.readFile(sessionId, 'inputs/session-config.json');
+
+    const assetsDir = path.join(sessionManager.getSessionPath(sessionId), 'assets');
+    const notionDir = path.join(assetsDir, 'notion');
+    const photosDir = path.join(assetsDir, 'photos');
+
+    // Ensure directories exist
+    await fs.promises.mkdir(notionDir, { recursive: true });
+    await fs.promises.mkdir(photosDir, { recursive: true });
+
+    // Download Notion attachments
+    console.log(`[${new Date().toISOString()}] Downloading Notion attachments...`);
+    const downloadedFiles = [];
+
+    for (const item of selectedEvidence.evidence || []) {
+        if (item.files && item.files.length > 0) {
+            for (const file of item.files) {
+                try {
+                    const localPath = await client.downloadFile(file.url, notionDir, file.name);
+                    downloadedFiles.push({ name: file.name, localPath, source: 'notion' });
+                } catch (err) {
+                    console.error(`Failed to download ${file.name}:`, err.message);
+                }
+            }
+        }
+    }
+
+    // Copy session photos
+    const sourcePhotosPath = photosPath || sessionConfig.photosPath || `sessionphotos/${sessionId}`;
+    const fullSourcePath = path.resolve(path.join(__dirname, '..', sourcePhotosPath));
+
+    console.log(`[${new Date().toISOString()}] Copying session photos from ${fullSourcePath}...`);
+
+    try {
+        const photoFiles = await fs.promises.readdir(fullSourcePath);
+        for (const photo of photoFiles) {
+            if (/\.(jpg|jpeg|png|gif|webp)$/i.test(photo)) {
+                const src = path.join(fullSourcePath, photo);
+                const dest = path.join(photosDir, photo);
+                await fs.promises.copyFile(src, dest);
+                downloadedFiles.push({ name: photo, localPath: dest, source: 'photos' });
+            }
+        }
+    } catch (err) {
+        console.error(`Failed to copy photos from ${fullSourcePath}:`, err.message);
+    }
+
+    // Save download manifest
+    await sessionManager.saveFile(sessionId, 'fetched/assets-manifest.json', {
+        downloadedAt: new Date().toISOString(),
+        files: downloadedFiles
+    });
+
+    return {
+        success: true,
+        phase: '1.5',
+        message: `Downloaded ${downloadedFiles.length} assets`,
+        notionFiles: downloadedFiles.filter(f => f.source === 'notion').length,
+        photoFiles: downloadedFiles.filter(f => f.source === 'photos').length
+    };
+}
+
+/**
+ * Phase 1.6: Image analysis (parallel via Claude)
+ * Analyzes each image for content, people, and context
+ */
+async function runPhase1_6(sessionId, data) {
+    const assetsDir = path.join(sessionManager.getSessionPath(sessionId), 'assets');
+    const photosDir = path.join(assetsDir, 'photos');
+
+    // Get list of photos
+    let photos = [];
+    try {
+        const files = await fs.promises.readdir(photosDir);
+        photos = files.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+    } catch (err) {
+        throw new Error(`No photos found in ${photosDir}: ${err.message}`);
+    }
+
+    if (photos.length === 0) {
+        throw new Error('No photos to analyze. Run phase 1.5 first.');
+    }
+
+    console.log(`[${new Date().toISOString()}] Analyzing ${photos.length} images...`);
+
+    const analyses = [];
+
+    // Analyze photos in parallel (batches of 3)
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < photos.length; i += BATCH_SIZE) {
+        const batch = photos.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async (photo) => {
+            const photoPath = path.join(photosDir, photo);
+            const prompt = `Analyze this photo from a social deduction game session. Describe:
+1. What is happening in the scene?
+2. How many people are visible and what are they doing?
+3. What is the setting/location?
+4. Any notable objects, papers, or evidence visible?
+5. The emotional tone or energy of the moment.
+
+Be specific and observational. This will be used to identify characters and place the photo in a narrative article.`;
+
+            try {
+                const result = await callClaude(prompt, {
+                    model: 'sonnet',
+                    outputFormat: 'json',
+                    jsonSchema: {
+                        type: 'object',
+                        properties: {
+                            scene: { type: 'string' },
+                            peopleCount: { type: 'number' },
+                            actions: { type: 'array', items: { type: 'string' } },
+                            setting: { type: 'string' },
+                            visibleEvidence: { type: 'array', items: { type: 'string' } },
+                            emotionalTone: { type: 'string' },
+                            suggestedCaption: { type: 'string' }
+                        },
+                        required: ['scene', 'peopleCount', 'setting', 'emotionalTone']
+                    },
+                    systemPrompt: 'You are analyzing photos from a murder mystery social deduction game. Be descriptive and observational.'
+                });
+
+                return {
+                    filename: photo,
+                    path: photoPath,
+                    analysis: typeof result === 'string' ? JSON.parse(result) : result,
+                    analyzedAt: new Date().toISOString()
+                };
+            } catch (err) {
+                console.error(`Failed to analyze ${photo}:`, err.message);
+                return {
+                    filename: photo,
+                    path: photoPath,
+                    analysis: null,
+                    error: err.message
+                };
+            }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        analyses.push(...batchResults);
+    }
+
+    // Save combined analysis
+    await sessionManager.saveFile(sessionId, 'analysis/image-analyses-combined.json', {
+        analyzedAt: new Date().toISOString(),
+        totalPhotos: photos.length,
+        analyses
+    });
+
+    return {
+        success: true,
+        phase: '1.6',
+        message: `Analyzed ${analyses.length} images`,
+        successCount: analyses.filter(a => a.analysis !== null).length,
+        errorCount: analyses.filter(a => a.analysis === null).length
+    };
+}
+
+/**
+ * Phase 1.7: Character identification (checkpoint)
+ * User identifies characters in each photo
+ */
+async function runPhase1_7(sessionId, data) {
+    const { characterIds, action = 'created', changes = null } = data || {};
+
+    if (!characterIds) {
+        throw new Error('characterIds is required for phase 1.7');
+    }
+
+    // Load existing analysis for reference
+    const imageAnalysis = await sessionManager.readFile(sessionId, 'analysis/image-analyses-combined.json');
+
+    // Merge character IDs with analysis
+    const enrichedAnalysis = {
+        ...imageAnalysis,
+        characterIdsAt: new Date().toISOString(),
+        analyses: imageAnalysis.analyses.map(analysis => {
+            const charIds = characterIds.find(c => c.filename === analysis.filename);
+            return {
+                ...analysis,
+                identifiedCharacters: charIds?.characters || [],
+                location: charIds?.location || analysis.analysis?.setting || 'Unknown'
+            };
+        })
+    };
+
+    // Save enriched analysis with version tracking
+    const version = await sessionManager.saveWithVersion(
+        sessionId,
+        '1.7',
+        'analysis/image-analyses-combined.json',
+        enrichedAnalysis,
+        action,
+        changes
+    );
+
+    // Also save standalone character IDs
+    await sessionManager.saveFile(sessionId, 'inputs/character-ids.json', {
+        savedAt: new Date().toISOString(),
+        characterIds
+    });
+
+    return {
+        success: true,
+        phase: '1.7',
+        message: 'Character identifications saved',
+        version,
+        photosWithIds: characterIds.length
+    };
+}
+
+/**
+ * Phase 1.8: Build evidence bundle (checkpoint)
+ * Curates evidence using Claude, user can review/edit
+ */
+async function runPhase1_8(sessionId, data) {
+    const { editedBundle, action = 'created', changes = null } = data || {};
+
+    // If user is editing an existing bundle
+    if (editedBundle) {
+        const version = await sessionManager.saveWithVersion(
+            sessionId,
+            '1.8',
+            'analysis/evidence-bundle.json',
+            editedBundle,
+            action,
+            changes
+        );
+
+        return {
+            success: true,
+            phase: '1.8',
+            message: 'Evidence bundle updated',
+            version,
+            isEdit: true
+        };
+    }
+
+    // Load all inputs for bundle curation
+    const sessionConfig = await sessionManager.readFile(sessionId, 'inputs/session-config.json');
+    const directorNotes = await sessionManager.readFile(sessionId, 'inputs/director-notes.json');
+    const tokens = await sessionManager.readFile(sessionId, 'fetched/tokens.json');
+    const selectedEvidence = await sessionManager.readFile(sessionId, 'inputs/selected-paper-evidence.json');
+    const imageAnalysis = await sessionManager.readFile(sessionId, 'analysis/image-analyses-combined.json');
+
+    // Get prompt builder
+    const builder = getPromptBuilder();
+
+    // Build curator prompt
+    const prompt = `You are curating an evidence bundle for a NovaNews investigative article.
+
+ROSTER: ${sessionConfig.roster.join(', ')}
+ACCUSATION: ${sessionConfig.accusation}
+
+DIRECTOR OBSERVATIONS (PRIMARY WEIGHT):
+${JSON.stringify(directorNotes.observations, null, 2)}
+
+WHITEBOARD:
+${JSON.stringify(directorNotes.whiteboard, null, 2)}
+
+MEMORY TOKENS (${tokens.totalCount} total):
+${JSON.stringify(tokens.tokens?.slice(0, 20), null, 2)}
+${tokens.totalCount > 20 ? `... and ${tokens.totalCount - 20} more` : ''}
+
+SELECTED PAPER EVIDENCE:
+${JSON.stringify(selectedEvidence.evidence, null, 2)}
+
+IMAGE ANALYSES:
+${JSON.stringify(imageAnalysis.analyses?.map(a => ({
+    filename: a.filename,
+    scene: a.analysis?.scene,
+    characters: a.identifiedCharacters
+})), null, 2)}
+
+Curate this evidence into a structured bundle with:
+1. EXPOSED evidence (full content visible to reporter)
+2. BURIED evidence (transaction data only - amounts, accounts, not whose memories)
+3. Key narrative threads connecting evidence
+4. Recommended photo placements`;
+
+    console.log(`[${new Date().toISOString()}] Curating evidence bundle...`);
+
+    const result = await callClaude(prompt, {
+        model: 'sonnet',
+        outputFormat: 'json',
+        jsonSchema: {
+            type: 'object',
+            properties: {
+                exposed: {
+                    type: 'object',
+                    properties: {
+                        tokens: { type: 'array', items: { type: 'object' } },
+                        documents: { type: 'array', items: { type: 'object' } },
+                        photos: { type: 'array', items: { type: 'object' } }
+                    }
+                },
+                buried: {
+                    type: 'object',
+                    properties: {
+                        transactions: { type: 'array', items: { type: 'object' } },
+                        accounts: { type: 'array', items: { type: 'object' } }
+                    }
+                },
+                narrativeThreads: { type: 'array', items: { type: 'string' } },
+                photoRecommendations: { type: 'array', items: { type: 'object' } }
+            },
+            required: ['exposed', 'buried', 'narrativeThreads']
+        },
+        systemPrompt: 'You are a NovaNews evidence curator applying the three-layer evidence model.'
+    });
+
+    const bundle = typeof result === 'string' ? JSON.parse(result) : result;
+    bundle.curatedAt = new Date().toISOString();
+
+    // Save with version tracking
+    const version = await sessionManager.saveWithVersion(
+        sessionId,
+        '1.8',
+        'analysis/evidence-bundle.json',
+        bundle,
+        'created'
+    );
+
+    return {
+        success: true,
+        phase: '1.8',
+        message: 'Evidence bundle curated',
+        version,
+        exposedCount: (bundle.exposed?.tokens?.length || 0) + (bundle.exposed?.documents?.length || 0),
+        buriedCount: bundle.buried?.transactions?.length || 0,
+        threadCount: bundle.narrativeThreads?.length || 0
+    };
+}
+
+/**
+ * Phase 2: Arc analysis (checkpoint)
+ * Analyzes narrative arcs using Opus, user selects arcs + hero image
+ */
+async function runPhase2(sessionId, data) {
+    const { selectedArcs, heroImage, action = 'created', changes = null } = data || {};
+
+    // If user is selecting arcs
+    if (selectedArcs) {
+        const arcSelection = {
+            selectedArcs,
+            heroImage,
+            selectedAt: new Date().toISOString()
+        };
+
+        const version = await sessionManager.saveWithVersion(
+            sessionId,
+            '2',
+            'summaries/arc-summary.json',
+            arcSelection,
+            action,
+            changes
+        );
+
+        return {
+            success: true,
+            phase: '2',
+            message: 'Arc selections saved',
+            version,
+            arcCount: selectedArcs.length
+        };
+    }
+
+    // Generate arc analysis
+    const sessionConfig = await sessionManager.readFile(sessionId, 'inputs/session-config.json');
+    const directorNotes = await sessionManager.readFile(sessionId, 'inputs/director-notes.json');
+    const evidenceBundle = await sessionManager.readFile(sessionId, 'analysis/evidence-bundle.json');
+
+    const builder = getPromptBuilder();
+    const { systemPrompt, userPrompt } = await builder.buildArcAnalysisPrompt({
+        roster: sessionConfig.roster,
+        accusation: sessionConfig.accusation,
+        directorNotes,
+        evidenceBundle
+    });
+
+    console.log(`[${new Date().toISOString()}] Analyzing narrative arcs with Opus...`);
+
+    const result = await callClaude(userPrompt, {
+        model: 'opus',
+        outputFormat: 'json',
+        systemPrompt,
+        jsonSchema: {
+            type: 'object',
+            properties: {
+                narrativeArcs: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            name: { type: 'string' },
+                            hook: { type: 'string' },
+                            playerEmphasis: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+                            supportingEvidence: { type: 'array', items: { type: 'string' } },
+                            characters: { type: 'array', items: { type: 'string' } }
+                        }
+                    }
+                },
+                characterPlacementOpportunities: { type: 'array', items: { type: 'object' } },
+                rosterCoverage: { type: 'object' }
+            },
+            required: ['narrativeArcs', 'rosterCoverage']
+        }
+    });
+
+    const arcAnalysis = typeof result === 'string' ? JSON.parse(result) : result;
+    arcAnalysis.analyzedAt = new Date().toISOString();
+
+    // Save analysis
+    await sessionManager.saveFile(sessionId, 'analysis/arc-analysis.json', arcAnalysis);
+
+    return {
+        success: true,
+        phase: '2',
+        message: `Identified ${arcAnalysis.narrativeArcs?.length || 0} narrative arcs`,
+        arcCount: arcAnalysis.narrativeArcs?.length || 0,
+        arcAnalysis
+    };
+}
+
+/**
+ * Phase 3: Outline generation (checkpoint)
+ * Generates article outline, user can approve/edit
+ */
+async function runPhase3(sessionId, data) {
+    const { editedOutline, action = 'created', changes = null } = data || {};
+
+    // If user is editing outline
+    if (editedOutline) {
+        const version = await sessionManager.saveWithVersion(
+            sessionId,
+            '3',
+            'analysis/article-outline.json',
+            editedOutline,
+            action,
+            changes
+        );
+
+        return {
+            success: true,
+            phase: '3',
+            message: 'Outline updated',
+            version,
+            isEdit: true
+        };
+    }
+
+    // Generate outline
+    const arcAnalysis = await sessionManager.readFile(sessionId, 'analysis/arc-analysis.json');
+    const arcSummary = await sessionManager.readFile(sessionId, 'summaries/arc-summary.json');
+    const evidenceBundle = await sessionManager.readFile(sessionId, 'analysis/evidence-bundle.json');
+
+    const builder = getPromptBuilder();
+    const { systemPrompt, userPrompt } = await builder.buildOutlinePrompt(
+        arcAnalysis,
+        arcSummary.selectedArcs,
+        arcSummary.heroImage,
+        evidenceBundle
+    );
+
+    console.log(`[${new Date().toISOString()}] Generating article outline with Sonnet...`);
+
+    const result = await callClaude(userPrompt, {
+        model: 'sonnet',
+        outputFormat: 'json',
+        systemPrompt,
+        jsonSchema: {
+            type: 'object',
+            properties: {
+                lede: { type: 'object' },
+                theStory: { type: 'object' },
+                followTheMoney: { type: 'object' },
+                thePlayers: { type: 'object' },
+                whatsMissing: { type: 'object' }
+            },
+            required: ['lede', 'theStory', 'followTheMoney', 'thePlayers', 'whatsMissing']
+        }
+    });
+
+    const outline = typeof result === 'string' ? JSON.parse(result) : result;
+    outline.generatedAt = new Date().toISOString();
+
+    // Save with version tracking
+    const version = await sessionManager.saveWithVersion(
+        sessionId,
+        '3',
+        'analysis/article-outline.json',
+        outline,
+        'created'
+    );
+
+    return {
+        success: true,
+        phase: '3',
+        message: 'Outline generated',
+        version,
+        outline
+    };
+}
+
+/**
+ * Phase 4: Article generation
+ * Generates full article HTML using Opus
+ */
+async function runPhase4(sessionId, data) {
+    const outline = await sessionManager.readFile(sessionId, 'analysis/article-outline.json');
+    const evidenceBundle = await sessionManager.readFile(sessionId, 'analysis/evidence-bundle.json');
+    const sessionConfig = await sessionManager.readFile(sessionId, 'inputs/session-config.json');
+
+    const builder = getPromptBuilder();
+    const loader = getThemeLoader();
+    const template = await loader.loadTemplate();
+
+    const { systemPrompt, userPrompt } = await builder.buildArticlePrompt(
+        outline,
+        evidenceBundle,
+        template
+    );
+
+    console.log(`[${new Date().toISOString()}] Generating article with Opus...`);
+
+    const result = await callClaude(userPrompt, {
+        model: 'opus',
+        outputFormat: 'text',
+        systemPrompt
+    });
+
+    // Extract HTML from result (may be wrapped in markdown code blocks)
+    let articleHtml = result;
+    const htmlMatch = result.match(/```html\n?([\s\S]*?)```/);
+    if (htmlMatch) {
+        articleHtml = htmlMatch[1];
+    }
+
+    // Save article
+    await sessionManager.saveFile(sessionId, 'output/article.html', articleHtml, false);
+
+    // Save metadata
+    await sessionManager.saveFile(sessionId, 'output/article-metadata.json', {
+        generatedAt: new Date().toISOString(),
+        roster: sessionConfig.roster,
+        accusation: sessionConfig.accusation,
+        model: 'opus'
+    });
+
+    return {
+        success: true,
+        phase: '4',
+        message: 'Article generated',
+        articleLength: articleHtml.length
+    };
+}
+
+/**
+ * Phase 5: Validation
+ * Checks article for anti-patterns and quality issues
+ */
+async function runPhase5(sessionId, data) {
+    const articleHtml = await sessionManager.readFile(sessionId, 'output/article.html', false);
+    const sessionConfig = await sessionManager.readFile(sessionId, 'inputs/session-config.json');
+
+    const builder = getPromptBuilder();
+    const { systemPrompt, userPrompt } = await builder.buildValidationPrompt(
+        articleHtml,
+        sessionConfig.roster
+    );
+
+    console.log(`[${new Date().toISOString()}] Validating article...`);
+
+    const result = await callClaude(userPrompt, {
+        model: 'sonnet',
+        outputFormat: 'json',
+        systemPrompt,
+        jsonSchema: {
+            type: 'object',
+            properties: {
+                passed: { type: 'boolean' },
+                issues: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            type: { type: 'string' },
+                            severity: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+                            description: { type: 'string' },
+                            location: { type: 'string' },
+                            suggestion: { type: 'string' }
+                        }
+                    }
+                },
+                voice_score: { type: 'number' },
+                roster_coverage: {
+                    type: 'object',
+                    properties: {
+                        mentioned: { type: 'array', items: { type: 'string' } },
+                        missing: { type: 'array', items: { type: 'string' } }
+                    }
+                }
+            },
+            required: ['passed', 'issues', 'voice_score', 'roster_coverage']
+        }
+    });
+
+    const validation = typeof result === 'string' ? JSON.parse(result) : result;
+    validation.validatedAt = new Date().toISOString();
+
+    // Save validation results
+    await sessionManager.saveFile(sessionId, 'output/validation-results.json', validation);
+
+    return {
+        success: true,
+        phase: '5',
+        message: validation.passed ? 'Article passed validation' : 'Article has issues',
+        passed: validation.passed,
+        issueCount: validation.issues?.length || 0,
+        voiceScore: validation.voice_score,
+        rosterCoverage: validation.roster_coverage
     };
 }
 
