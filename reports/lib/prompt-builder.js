@@ -165,6 +165,12 @@ Return JSON with the following structure:
    * Build article generation prompt
    * Phase 4: Generate final article HTML from approved outline
    *
+   * Uses context engineering techniques:
+   * - XML tags for clear section boundaries
+   * - Recency bias: rules placed LAST in prompt
+   * - Voice checkpoint: model internalizes voice before generating
+   * - Voice self-check: model assesses own output
+   *
    * @param {Object} outline - Approved article outline
    * @param {Object} evidenceBundle - Full evidence bundle for quoting
    * @param {string} template - HTML template content
@@ -173,51 +179,119 @@ Return JSON with the following structure:
   async buildArticlePrompt(outline, evidenceBundle, template) {
     const prompts = await this.theme.loadPhasePrompts('articleGeneration');
 
-    const systemPrompt = `You are generating a NovaNews investigative article.
+    // System prompt: Identity and hard constraints (kept short for salience)
+    const systemPrompt = `You are Nova, writing a NovaNews investigative article. First-person participatory voice - you WERE THERE, you SAW this happen.
 
-CRITICAL VOICE REQUIREMENTS:
-${prompts['character-voice']}
+HARD CONSTRAINTS (violations = failure):
+- NO em-dashes (use commas or periods)
+- NO "tokens" - say "extracted memories" or "memories"
+- NO game mechanics ("transactions", "buried", "first-buried bonus", "guests")
+- NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
+- NO third-person self-reference ("The Detective noted") - you ARE the detective
+- NO countable memories ("5 memories") - memories are experiences, not inventory
+- NO vague attributions ("From my notes") - use "- Nova" or character name
 
-WRITING PRINCIPLES:
-${prompts['writing-principles']}
-
-EVIDENCE BOUNDARIES (what you can and cannot report):
 ${prompts['evidence-boundaries']}`;
 
-    const userPrompt = `Generate the complete article following this outline.
-
+    // User prompt: Data first, then template, then RULES LAST (recency bias)
+    const userPrompt = `<DATA_CONTEXT>
 APPROVED OUTLINE:
 ${JSON.stringify(outline, null, 2)}
 
-EVIDENCE BUNDLE (quote from EXPOSED only):
+EVIDENCE BUNDLE (quote ONLY from exposed evidence):
 ${JSON.stringify(evidenceBundle, null, 2)}
+</DATA_CONTEXT>
 
-SECTION RULES:
+<TEMPLATE>
+${template}
+</TEMPLATE>
+
+<RULES>
 ${prompts['section-rules']}
 
-NARRATIVE STRUCTURE:
 ${prompts['narrative-structure']}
 
-FORMATTING:
 ${prompts['formatting']}
 
-ANTI-PATTERNS TO AVOID:
-${prompts['anti-patterns']}
-
-EDITORIAL DESIGN:
 ${prompts['editorial-design']}
+</RULES>
 
-HTML TEMPLATE STRUCTURE:
-${template}
+<ANTI_PATTERNS>
+${prompts['anti-patterns']}
+</ANTI_PATTERNS>
 
-Generate the complete article HTML. Include all visual components specified in the outline:
-- Evidence cards with proper CSS classes
-- Photos with captions
-- Pull quotes with attribution
-- Buried markers in WHAT'S MISSING
-- Financial tracker in FOLLOW THE MONEY sidebar
+<VOICE_CHECKPOINT>
+Before generating, internalize Nova's voice:
+${prompts['character-voice']}
 
-The article should be complete, self-contained HTML that matches the template structure.`;
+${prompts['writing-principles']}
+
+Ask yourself: "Am I writing AS Nova who experienced this, or ABOUT events Nova observed?"
+The answer must be AS Nova. Every sentence should feel like it's coming from someone who was in that room.
+</VOICE_CHECKPOINT>
+
+<GENERATION_INSTRUCTION>
+Generate the complete article HTML with all visual components (evidence cards, photos, pull quotes, buried markers, financial tracker).
+
+Your response JSON must include:
+1. "html" - Complete HTML document starting with <!DOCTYPE html>
+2. "voice_self_check" - Brief self-assessment: Did you maintain first-person participatory voice throughout? Any sentences that slipped into passive/observer mode?
+</GENERATION_INSTRUCTION>`;
+
+    return { systemPrompt, userPrompt };
+  }
+
+  /**
+   * Build revision prompt
+   * Phase 4b: Revise article based on voice self-check findings
+   *
+   * Uses Sonnet for targeted fixes (faster than Opus for surgical edits)
+   *
+   * @param {string} articleHtml - Generated article HTML to revise
+   * @param {string} voiceSelfCheck - Self-assessment from initial generation
+   * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
+   */
+  async buildRevisionPrompt(articleHtml, voiceSelfCheck) {
+    const prompts = await this.theme.loadPhasePrompts('articleGeneration');
+
+    const systemPrompt = `You are Nova, revising your investigative article to fix voice issues you identified.
+
+REVISION RULES:
+- Make TARGETED fixes only - do not rewrite sections that are working
+- Preserve all HTML structure, CSS, evidence cards, photos
+- Focus on the specific issues you identified in your self-check
+- Every fix should make the voice MORE participatory, not less
+
+VOICE STANDARD:
+- First-person participatory: "I watched", "I saw", "I was there"
+- NOT observer mode: "The group decided", "They concluded", "It was noted"
+- Transform: "The group came to a conclusion" -> "I watched them reach their conclusion"
+- Transform: "From my notes that night" -> remove attribution or use "- Nova"
+- Transform: "guests" -> "people" or "those present" or "partygoers"`;
+
+    const userPrompt = `<YOUR_SELF_CHECK>
+${voiceSelfCheck}
+</YOUR_SELF_CHECK>
+
+<ARTICLE_TO_REVISE>
+${articleHtml}
+</ARTICLE_TO_REVISE>
+
+<ANTI_PATTERNS_REFERENCE>
+${prompts['anti-patterns']}
+</ANTI_PATTERNS_REFERENCE>
+
+<REVISION_INSTRUCTION>
+Fix the issues you identified in your self-check. Also check for:
+- "guests" -> "people" or "those present" or "partygoers"
+- "From my notes that night" -> "- Nova" or remove
+- Any remaining passive/observer voice patterns
+- Any em-dashes that slipped through
+
+Return JSON:
+1. "html" - Complete revised HTML document
+2. "fixes_applied" - List of specific fixes you made (be specific about what changed)
+</REVISION_INSTRUCTION>`;
 
     return { systemPrompt, userPrompt };
   }

@@ -25,7 +25,7 @@
  */
 
 const { PHASES, APPROVAL_TYPES } = require('../state');
-const { callClaude } = require('../../claude-client');
+const { safeParseJson, getSdkClient } = require('./node-helpers');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SPECIALIST DOMAIN DEFINITIONS
@@ -75,14 +75,7 @@ const SPECIALIST_DOMAINS = {
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Get Claude client from config or use default
- * @param {Object} config - Graph config
- * @returns {Function} Claude client function
- */
-function getClaudeClient(config) {
-  return config?.configurable?.claudeClient || callClaude;
-}
+// getSdkClient imported from node-helpers.js
 
 /**
  * Build system prompt for a domain specialist
@@ -157,25 +150,7 @@ ${preprocessedEvidence.items.length > 20 ? `... and ${preprocessedEvidence.items
 Provide your ${domain} domain analysis as JSON.`;
 }
 
-/**
- * Safely parse JSON with actionable error messages
- * @param {string} response - JSON string to parse
- * @param {string} context - Context for error messages
- * @returns {Object} Parsed JSON
- * @throws {Error} If parsing fails
- */
-function safeParseJson(response, context) {
-  try {
-    return JSON.parse(response);
-  } catch (error) {
-    const preview = response.substring(0, 100);
-    throw new Error(
-      `Failed to parse ${context} JSON. ` +
-      `Response preview: "${preview}..." ` +
-      `Parse error: ${error.message}`
-    );
-  }
-}
+// safeParseJson imported from node-helpers.js
 
 /**
  * Create empty specialist result
@@ -275,20 +250,34 @@ async function analyzeForDomain(domain, state, config) {
     };
   }
 
-  const claudeClient = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const systemPrompt = buildSpecialistSystemPrompt(domain, state.playerFocus);
-  const userPrompt = buildSpecialistUserPrompt(state, domain);
+  const prompt = buildSpecialistUserPrompt(state, domain);
 
   try {
-    const response = await claudeClient({
+    // SDK returns parsed object directly when jsonSchema is provided
+    const findings = await sdk({
       systemPrompt,
-      userPrompt,
+      prompt,
       model: 'sonnet', // Specialists use Sonnet for quality analysis
-      outputFormat: 'json',
-      timeout: 180000 // 3 minutes per specialist
+      jsonSchema: {
+        type: 'object',
+        properties: {
+          accountPatterns: { type: 'array' },
+          timingClusters: { type: 'array' },
+          suspiciousFlows: { type: 'array' },
+          financialConnections: { type: 'array' },
+          characterDynamics: { type: 'array' },
+          behaviorCorrelations: { type: 'array' },
+          zeroFootprintCharacters: { type: 'array' },
+          behavioralInsights: { type: 'array' },
+          victims: { type: 'array' },
+          operators: { type: 'array' },
+          selfBurialPatterns: { type: 'array' },
+          targetingInsights: { type: 'array' }
+        }
+      }
     });
-
-    const findings = safeParseJson(response, `${domain} specialist`);
 
     const result = {
       domain,
@@ -433,20 +422,27 @@ async function synthesizeArcs(state, config) {
     // Continue anyway - synthesizer can work with just evidence
   }
 
-  const claudeClient = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const systemPrompt = buildSynthesizerSystemPrompt(state.playerFocus);
-  const userPrompt = buildSynthesizerUserPrompt(state);
+  const prompt = buildSynthesizerUserPrompt(state);
 
   try {
-    const response = await claudeClient({
+    // SDK returns parsed object directly when jsonSchema is provided
+    const result = await sdk({
       systemPrompt,
-      userPrompt,
+      prompt,
       model: 'sonnet', // Synthesizer uses Sonnet for quality
-      outputFormat: 'json',
-      timeout: 180000 // 3 minutes
+      jsonSchema: {
+        type: 'object',
+        properties: {
+          arcs: { type: 'array' },
+          narrativeCompass: { type: 'object' },
+          synthesisNotes: { type: 'string' }
+        },
+        required: ['arcs']
+      }
     });
 
-    const result = safeParseJson(response, 'arc synthesizer');
     const arcs = result.arcs || [];
 
     console.log(`[synthesizeArcs] Complete: ${arcs.length} arcs synthesized`);
@@ -596,7 +592,7 @@ module.exports = {
   // Export for testing
   _testing: {
     SPECIALIST_DOMAINS,
-    getClaudeClient,
+    getSdkClient,
     buildSpecialistSystemPrompt,
     buildSpecialistUserPrompt,
     buildSynthesizerSystemPrompt,
@@ -611,34 +607,34 @@ module.exports = {
 if (require.main === module) {
   console.log('Arc Specialist Nodes Self-Test\n');
 
-  // Test with mock client
-  const mockClaudeClient = async (options) => {
+  // Test with mock SDK client - returns parsed objects directly
+  const mockSdkClient = async (options) => {
     if (options.systemPrompt.includes('Financial')) {
-      return JSON.stringify({
+      return {
         accountPatterns: [{ description: 'Shell company pattern', confidence: 'high' }],
         timingClusters: [],
         suspiciousFlows: [{ description: 'Unusual transfer timing', confidence: 'medium' }],
         financialConnections: []
-      });
+      };
     }
     if (options.systemPrompt.includes('Behavioral')) {
-      return JSON.stringify({
+      return {
         characterDynamics: [{ description: 'Alliance shift', confidence: 'high' }],
         behaviorCorrelations: [],
         zeroFootprintCharacters: [],
         behavioralInsights: []
-      });
+      };
     }
     if (options.systemPrompt.includes('Victimization')) {
-      return JSON.stringify({
+      return {
         victims: [{ description: 'Primary victim identified', confidence: 'high' }],
         operators: [],
         selfBurialPatterns: [],
         targetingInsights: []
-      });
+      };
     }
     if (options.systemPrompt.includes('Synthesizer')) {
-      return JSON.stringify({
+      return {
         arcs: [
           {
             title: 'The Hidden Alliance',
@@ -651,9 +647,9 @@ if (require.main === module) {
           }
         ],
         synthesisNotes: 'Self-test synthesis complete'
-      });
+      };
     }
-    return JSON.stringify({});
+    return {};
   };
 
   const mockState = {
@@ -664,7 +660,7 @@ if (require.main === module) {
   };
 
   const mockConfig = {
-    configurable: { claudeClient: mockClaudeClient }
+    configurable: { sdkClient: mockSdkClient }
   };
 
   console.log('Testing specialists...');

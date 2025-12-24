@@ -42,13 +42,13 @@ describe('evidence-preprocessor', () => {
   });
 
   describe('createEvidencePreprocessor', () => {
-    it('throws error when callClaude is not provided', () => {
-      expect(() => createEvidencePreprocessor()).toThrow('callClaude function is required');
+    it('throws error when sdkClient is not provided', () => {
+      expect(() => createEvidencePreprocessor()).toThrow('sdkClient function is required');
     });
 
     it('returns object with process method', () => {
-      const mockClaude = jest.fn();
-      const preprocessor = createEvidencePreprocessor({ callClaude: mockClaude });
+      const mockSdk = jest.fn();
+      const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
       expect(typeof preprocessor.process).toBe('function');
     });
@@ -316,8 +316,8 @@ describe('evidence-preprocessor', () => {
 
   describe('process integration', () => {
     it('returns empty result when no evidence provided', async () => {
-      const mockClaude = jest.fn();
-      const preprocessor = createEvidencePreprocessor({ callClaude: mockClaude });
+      const mockSdk = jest.fn();
+      const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
       const result = await preprocessor.process({
         memoryTokens: [],
@@ -327,20 +327,20 @@ describe('evidence-preprocessor', () => {
 
       expect(result.items).toEqual([]);
       expect(result.stats.totalItems).toBe(0);
-      expect(mockClaude).not.toHaveBeenCalled();
+      expect(mockSdk).not.toHaveBeenCalled();
     });
 
-    it('calls Claude with correct model', async () => {
-      const mockClaude = jest.fn().mockResolvedValue(JSON.stringify({
+    it('calls SDK with correct model', async () => {
+      const mockSdk = jest.fn().mockResolvedValue({
         items: [{
           id: 't1',
           sourceType: 'memory-token',
           summary: 'Test',
           significance: 'critical'
         }]
-      }));
+      });
 
-      const preprocessor = createEvidencePreprocessor({ callClaude: mockClaude });
+      const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
       await preprocessor.process({
         memoryTokens: [{ id: 't1', type: 'Video' }],
@@ -348,14 +348,14 @@ describe('evidence-preprocessor', () => {
         sessionId: 'test'
       });
 
-      expect(mockClaude).toHaveBeenCalledWith(
+      expect(mockSdk).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'haiku' })
       );
     });
 
     it('includes playerFocus in prompt', async () => {
-      const mockClaude = jest.fn().mockResolvedValue(JSON.stringify({ items: [] }));
-      const preprocessor = createEvidencePreprocessor({ callClaude: mockClaude });
+      const mockSdk = jest.fn().mockResolvedValue({ items: [] });
+      const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
       await preprocessor.process({
         memoryTokens: [{ id: 't1' }],
@@ -364,16 +364,16 @@ describe('evidence-preprocessor', () => {
         sessionId: 'test'
       });
 
-      expect(mockClaude).toHaveBeenCalledWith(
+      expect(mockSdk).toHaveBeenCalledWith(
         expect.objectContaining({
           systemPrompt: expect.stringContaining('Money trail investigation')
         })
       );
     });
 
-    it('handles Claude errors gracefully with fallback items', async () => {
-      const mockClaude = jest.fn().mockRejectedValue(new Error('API timeout'));
-      const preprocessor = createEvidencePreprocessor({ callClaude: mockClaude });
+    it('handles SDK errors gracefully with fallback items', async () => {
+      const mockSdk = jest.fn().mockRejectedValue(new Error('API timeout'));
+      const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
       const result = await preprocessor.process({
         memoryTokens: [{ id: 't1', name: 'Test Token' }],
@@ -388,15 +388,15 @@ describe('evidence-preprocessor', () => {
     });
 
     it('calculates significance counts correctly', async () => {
-      const mockClaude = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockSdk = jest.fn().mockResolvedValue({
         items: [
           { id: 't1', sourceType: 'memory-token', summary: 'A', significance: 'critical' },
           { id: 't2', sourceType: 'memory-token', summary: 'B', significance: 'supporting' },
           { id: 'e1', sourceType: 'paper-evidence', summary: 'C', significance: 'contextual' }
         ]
-      }));
+      });
 
-      const preprocessor = createEvidencePreprocessor({ callClaude: mockClaude });
+      const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
       const result = await preprocessor.process({
         memoryTokens: [{ id: 't1' }, { id: 't2' }],

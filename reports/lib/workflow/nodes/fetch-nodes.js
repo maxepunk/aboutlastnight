@@ -171,6 +171,54 @@ async function fetchPaperEvidence(state, config) {
 }
 
 /**
+ * Fetch session photos from filesystem
+ *
+ * Loads photo paths from the session's inputs directory.
+ * Photos are analyzed in the next phase (analyzePhotos) using Haiku vision.
+ *
+ * @param {Object} state - Current state with sessionId
+ * @param {Object} config - Graph config with optional configurable.dataDir
+ * @returns {Object} Partial state update with sessionPhotos, currentPhase
+ */
+async function fetchSessionPhotos(state, config) {
+  // Skip if already fetched (resume case or pre-populated)
+  if (state.sessionPhotos && state.sessionPhotos.length > 0) {
+    return {
+      currentPhase: PHASES.ANALYZE_PHOTOS
+    };
+  }
+
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const photosDir = path.join(dataDir, state.sessionId, 'inputs', 'photos');
+
+  try {
+    // Check if photos directory exists
+    await fs.access(photosDir);
+
+    // List all image files in the directory
+    const files = await fs.readdir(photosDir);
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const photos = files
+      .filter(file => imageExtensions.includes(path.extname(file).toLowerCase()))
+      .map(file => path.join(photosDir, file));
+
+    console.log(`[fetchSessionPhotos] Found ${photos.length} photos in ${photosDir}`);
+
+    return {
+      sessionPhotos: photos,
+      currentPhase: PHASES.ANALYZE_PHOTOS
+    };
+  } catch (error) {
+    // Photos directory doesn't exist or is inaccessible - that's okay
+    console.log(`[fetchSessionPhotos] No photos directory found at ${photosDir}`);
+    return {
+      sessionPhotos: [],
+      currentPhase: PHASES.ANALYZE_PHOTOS
+    };
+  }
+}
+
+/**
  * Create a mock NotionClient for testing
  *
  * Returns an object with the same interface as NotionClient
@@ -234,6 +282,7 @@ module.exports = {
   loadDirectorNotes,
   fetchMemoryTokens,
   fetchPaperEvidence,
+  fetchSessionPhotos,
 
   // Testing utilities
   createMockNotionClient,

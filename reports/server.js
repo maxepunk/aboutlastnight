@@ -18,6 +18,15 @@ const { createSessionManager } = require('./lib/session-manager');
 const { createThemeLoader } = require('./lib/theme-loader');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 
+// LangGraph workflow modules
+const { MemorySaver } = require('@langchain/langgraph');
+const { createReportGraphWithCheckpointer } = require('./lib/workflow/graph');
+const { PHASES, APPROVAL_TYPES } = require('./lib/workflow/state');
+
+// Shared checkpointer instance - must persist across API calls for resume to work
+const sharedCheckpointer = new MemorySaver();
+const { isClaudeAvailable } = require('./lib/sdk-client');
+
 const app = express();
 const PORT = 3001;
 
@@ -682,89 +691,138 @@ CRITICAL: Return ONLY the JSON object. Do not include any text before or after t
 });
 
 // Endpoint 2: Generate Report (uses user-selected model)
+/**
+ * POST /api/generate
+ * Unified report generation endpoint using LangGraph workflow
+ *
+ * Request body:
+ *   sessionId: string - Session identifier
+ *   theme: 'journalist' | 'detective' - Report theme
+ *   approvals?: object - Approval decisions for checkpoints
+ *     evidenceBundle?: boolean - Approve evidence bundle
+ *     selectedArcs?: string[] - Selected narrative arc IDs
+ *     outline?: boolean - Approve outline
+ *
+ * Response (on checkpoint):
+ *   sessionId, currentPhase, awaitingApproval, approvalType
+ *   Plus relevant data for the approval UI (evidenceBundle, narrativeArcs, or outline)
+ *
+ * Response (on completion):
+ *   sessionId, currentPhase: 'complete', assembledHtml, validationResults
+ *
+ * Response (on error):
+ *   sessionId, currentPhase: 'error', errors[]
+ */
 app.post('/api/generate', requireAuth, async (req, res) => {
+    const { sessionId, theme, approvals } = req.body;
+
+    // Validate required fields
+    if (!sessionId) {
+        return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    if (!theme) {
+        return res.status(400).json({ error: 'theme is required' });
+    }
+
+    if (!['journalist', 'detective'].includes(theme)) {
+        return res.status(400).json({
+            error: `Invalid theme: ${theme}. Use 'journalist' or 'detective'.`
+        });
+    }
+
+    console.log(`[${new Date().toISOString()}] /api/generate: sessionId=${sessionId}, theme=${theme}, approvals=${JSON.stringify(approvals || {})}`);
+
     try {
-        const { systemPrompt, userPrompt, model } = req.body;
+        // Use shared checkpointer to persist state across API calls
+        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
 
-        if (!systemPrompt || !userPrompt) {
-            return res.status(400).json({ error: 'Both systemPrompt and userPrompt required' });
-        }
-
-        if (!['sonnet', 'opus'].includes(model)) {
-            return res.status(400).json({ error: 'Invalid model. Use sonnet or opus.' });
-        }
-
-        // Define JSON schema to enforce structured output
-        const reportSchema = {
-            type: "object",
-            properties: {
-                html: {
-                    type: "string",
-                    description: "Complete HTML case report body content (no wrapper tags)"
-                }
-            },
-            required: ["html"]
+        // Build config for graph execution
+        const config = {
+            configurable: {
+                sessionId,
+                theme,
+                thread_id: sessionId  // For checkpointer to track session
+            }
         };
 
-        const result = await callClaude(userPrompt, {
-            model,
-            outputFormat: 'json',
-            systemPrompt,
-            jsonSchema: reportSchema,
-            tools: '' // Disable all tools for report generation
-        });
+        // Build initial state from approvals
+        let initialState = {};
+        if (approvals) {
+            // Evidence bundle approval: clear awaitingApproval flag
+            if (approvals.evidenceBundle === true) {
+                initialState.awaitingApproval = false;
+            }
 
-        // Debug: Log result structure
-        console.log('Report generation result type:', typeof result);
-        console.log('Report generation result (first 300 chars):', result.substring(0, 300));
+            // Arc selection: set selectedArcs and clear approval flag
+            if (approvals.selectedArcs && Array.isArray(approvals.selectedArcs)) {
+                if (approvals.selectedArcs.length === 0) {
+                    return res.status(400).json({
+                        error: 'selectedArcs cannot be empty. At least one arc must be selected.'
+                    });
+                }
+                initialState.selectedArcs = approvals.selectedArcs;
+                initialState.awaitingApproval = false;
+            }
 
-        // Parse JSON and extract HTML
-        let parsed;
-        try {
-            parsed = JSON.parse(result);
-            console.log('Successfully parsed JSON. Keys:', Object.keys(parsed));
-            console.log('Parsed object structure:', JSON.stringify(parsed, null, 2).substring(0, 500));
-        } catch (parseError) {
-            console.error('JSON parse error:', parseError.message);
-            console.error('Raw result:', result.substring(0, 500));
-            throw parseError;
+            // Outline approval: clear awaitingApproval flag
+            if (approvals.outline === true) {
+                initialState.awaitingApproval = false;
+            }
         }
 
-        // Extract HTML from response
-        const htmlContent = parsed.html || parsed;
+        // Run graph until it pauses at checkpoint or completes
+        console.log(`[${new Date().toISOString()}] Invoking graph with initialState:`, JSON.stringify(initialState));
+        const result = await graph.invoke(initialState, config);
+        console.log(`[${new Date().toISOString()}] Graph completed. Phase: ${result.currentPhase}, awaitingApproval: ${result.awaitingApproval}`);
 
-        console.log('Extracted htmlContent type:', typeof htmlContent);
-        console.log('Extracted htmlContent (first 200 chars):',
-            typeof htmlContent === 'string' ? htmlContent.substring(0, 200) : JSON.stringify(htmlContent).substring(0, 200));
+        // Build response based on current state
+        const response = {
+            sessionId,
+            currentPhase: result.currentPhase,
+            awaitingApproval: result.awaitingApproval || false,
+            approvalType: result.approvalType || null
+        };
 
-        // VALIDATION: Ensure response is valid HTML content (single comprehensive check)
-        if (typeof htmlContent !== 'string') {
-            console.error('Unexpected response format. Parsed:', JSON.stringify(parsed, null, 2).substring(0, 1000));
-            throw new Error('Response did not contain HTML string');
+        // Include data for approval UI based on approval type
+        if (result.awaitingApproval) {
+            switch (result.approvalType) {
+                case APPROVAL_TYPES.EVIDENCE_BUNDLE:
+                    response.evidenceBundle = result.evidenceBundle;
+                    break;
+                case APPROVAL_TYPES.ARC_SELECTION:
+                    response.narrativeArcs = result.narrativeArcs;
+                    break;
+                case APPROVAL_TYPES.OUTLINE:
+                    response.outline = result.outline;
+                    break;
+            }
         }
 
-        if (!htmlContent || htmlContent.trim().length === 0) {
-            console.error('Generated report is empty');
-            throw new Error('Generated report is empty');
+        // Include final outputs on completion
+        if (result.currentPhase === PHASES.COMPLETE) {
+            response.assembledHtml = result.assembledHtml;
+            response.validationResults = result.validationResults;
         }
 
-        // Detect conversational wrapper text (indicates schema validation failure)
-        const conversationalPhrases = ['I\'ve generated', 'I have generated', 'Would you like', 'I need to', 'Let me', 'Here is'];
-        const firstLine = htmlContent.substring(0, 150).toLowerCase();
-        if (conversationalPhrases.some(phrase => firstLine.includes(phrase.toLowerCase()))) {
-            console.error('❌ Conversational text detected instead of HTML report:');
-            console.error('   First 200 chars:', htmlContent.substring(0, 200));
-            throw new Error('Response contains conversational wrapper instead of HTML report. Schema validation may have failed.');
+        // Include errors if present
+        if (result.currentPhase === PHASES.ERROR) {
+            // Always include errors array when in ERROR phase
+            response.errors = result.errors || [];
+        } else if (result.errors && result.errors.length > 0) {
+            // Also include errors if present but not in ERROR phase (e.g., warnings)
+            response.errors = result.errors;
         }
 
-        console.log('✅ Validation passed. HTML length:', htmlContent.length);
-        res.send(htmlContent);
+        res.json(response);
 
     } catch (error) {
-        console.error('Generation error:', error);
+        console.error(`[${new Date().toISOString()}] /api/generate error:`, error);
         res.status(500).json({
+            sessionId,
+            currentPhase: PHASES.ERROR,
             error: error.message,
-            details: 'Failed to generate report. Check server logs.'
+            details: 'Report generation failed. Check server logs.'
         });
     }
 });
@@ -1550,7 +1608,14 @@ async function runPhase3(sessionId, data) {
 
 /**
  * Phase 4: Article generation
- * Generates full article HTML using Opus
+ * Generates full article HTML using Opus with context engineering
+ *
+ * Context engineering techniques applied:
+ * - XML tags for clear prompt boundaries
+ * - Recency bias: rules placed last in prompt
+ * - Voice checkpoint: model internalizes voice before generating
+ * - Voice self-check: model assesses own output
+ * - Revision loop: targeted fixes with Sonnet if voice issues detected
  */
 async function runPhase4(sessionId, data) {
     const outline = await sessionManager.readFile(sessionId, 'analysis/article-outline.json');
@@ -1567,37 +1632,153 @@ async function runPhase4(sessionId, data) {
         template
     );
 
-    console.log(`[${new Date().toISOString()}] Generating article with Opus...`);
+    console.log(`[${new Date().toISOString()}] Generating article with Opus (JSON output + voice self-check)...`);
 
+    // Use structured JSON output to guarantee HTML format
+    // Enable Read tools for context access, but no Write - forces structured JSON return
     const result = await callClaude(userPrompt, {
         model: 'opus',
-        outputFormat: 'text',
-        systemPrompt
+        outputFormat: 'json',
+        systemPrompt,
+        tools: 'Read,Grep,Glob', // Read-only tools - can access files but must return via JSON
+        jsonSchema: {
+            type: 'object',
+            properties: {
+                html: {
+                    type: 'string',
+                    description: 'Complete HTML document. Must start with <!DOCTYPE html> and include all sections, styling, and content.'
+                },
+                voice_self_check: {
+                    type: 'string',
+                    description: 'Self-assessment of voice consistency. Note any sentences that may have slipped into passive/observer mode.'
+                }
+            },
+            required: ['html', 'voice_self_check']
+        }
     });
 
-    // Extract HTML from result (may be wrapped in markdown code blocks)
-    let articleHtml = result;
-    const htmlMatch = result.match(/```html\n?([\s\S]*?)```/);
-    if (htmlMatch) {
-        articleHtml = htmlMatch[1];
+    // Parse JSON response with error handling
+    let parsed;
+    try {
+        parsed = JSON.parse(result);
+    } catch (parseError) {
+        console.error(`[${new Date().toISOString()}] Failed to parse Opus response as JSON:`, parseError.message);
+        console.error(`[${new Date().toISOString()}] Raw response (first 500 chars):`, result.substring(0, 500));
+        throw new Error('Article generation failed: Invalid JSON response from Opus');
     }
+
+    let articleHtml = parsed.html || '';
+    const voiceSelfCheck = parsed.voice_self_check || 'No self-assessment provided';
+
+    // Log voice self-check for debugging
+    console.log(`[${new Date().toISOString()}] Voice self-check: ${voiceSelfCheck.substring(0, 200)}${voiceSelfCheck.length > 200 ? '...' : ''}`);
+
+    // Validate article HTML is not empty
+    if (!articleHtml || articleHtml.trim().length < 100) {
+        throw new Error(`Article generation failed: HTML is empty or too short (${articleHtml.length} chars)`);
+    }
+
+    console.log(`[${new Date().toISOString()}] Initial article: ${articleHtml.length} chars`);
+
+    // Check if revision needed based on self-check content
+    // These indicators suggest the model identified voice issues worth fixing
+    const VOICE_ISSUE_INDICATORS = [
+        'could be', 'slightly', 'observer', 'passive', 'slipped',
+        'might need', 'somewhat', 'a few', 'some sentences', 'issue',
+        'problem', 'fix', 'improve', 'not quite'
+    ];
+
+    const selfCheckLower = voiceSelfCheck.toLowerCase();
+    const needsRevision = VOICE_ISSUE_INDICATORS.some(
+        indicator => selfCheckLower.includes(indicator)
+    );
+
+    let revisionApplied = false;
+    let fixesApplied = [];
+
+    if (needsRevision) {
+        console.log(`[${new Date().toISOString()}] Voice issues detected in self-check, running revision with Sonnet...`);
+
+        try {
+            const { systemPrompt: revSys, userPrompt: revUser } =
+                await builder.buildRevisionPrompt(articleHtml, voiceSelfCheck);
+
+            const revisedResult = await callClaude(revUser, {
+                model: 'sonnet',  // Faster model for targeted fixes
+                outputFormat: 'json',
+                systemPrompt: revSys,
+                tools: '',  // No tools for revision - just fix and return
+                jsonSchema: {
+                    type: 'object',
+                    properties: {
+                        html: {
+                            type: 'string',
+                            description: 'Complete revised HTML document'
+                        },
+                        fixes_applied: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'List of specific fixes made'
+                        }
+                    },
+                    required: ['html', 'fixes_applied']
+                }
+            });
+
+            // Parse with error handling (critical: revision parse can fail)
+            let revisedParsed;
+            try {
+                revisedParsed = JSON.parse(revisedResult);
+            } catch (parseError) {
+                console.error(`[${new Date().toISOString()}] Failed to parse revision response:`, parseError.message);
+                console.log(`[${new Date().toISOString()}] Keeping original article`);
+                revisedParsed = null;
+            }
+
+            // Null-safe check for valid revised HTML
+            if (revisedParsed && revisedParsed.html && revisedParsed.html.trim().length > 100) {
+                articleHtml = revisedParsed.html;
+                fixesApplied = revisedParsed.fixes_applied || [];
+                revisionApplied = true;
+                console.log(`[${new Date().toISOString()}] Revision applied: ${fixesApplied.length} fixes`);
+                fixesApplied.forEach((fix, i) => {
+                    console.log(`[${new Date().toISOString()}]   ${i + 1}. ${fix}`);
+                });
+            } else if (revisedParsed) {
+                console.log(`[${new Date().toISOString()}] Revision returned empty/short HTML, keeping original`);
+            }
+        } catch (revisionError) {
+            console.error(`[${new Date().toISOString()}] Revision failed, keeping original article:`, revisionError.message);
+            // Don't throw - we still have the original article
+        }
+    } else {
+        console.log(`[${new Date().toISOString()}] Voice self-check passed, no revision needed`);
+    }
+
+    console.log(`[${new Date().toISOString()}] Final article: ${articleHtml.length} chars`);
 
     // Save article
     await sessionManager.saveFile(sessionId, 'output/article.html', articleHtml, false);
 
-    // Save metadata
+    // Save metadata with voice tracking
     await sessionManager.saveFile(sessionId, 'output/article-metadata.json', {
         generatedAt: new Date().toISOString(),
         roster: sessionConfig.roster,
         accusation: sessionConfig.accusation,
-        model: 'opus'
+        model: 'opus',
+        voiceSelfCheck: voiceSelfCheck,
+        revisionApplied: revisionApplied,
+        fixesApplied: fixesApplied
     });
 
     return {
         success: true,
         phase: '4',
-        message: 'Article generated',
-        articleLength: articleHtml.length
+        message: revisionApplied ? `Article generated and revised (${fixesApplied.length} fixes)` : 'Article generated',
+        articleLength: articleHtml.length,
+        voiceSelfCheck: voiceSelfCheck,
+        revisionApplied: revisionApplied,
+        fixesApplied: fixesApplied
     };
 }
 
@@ -1701,9 +1882,31 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'detlogv3.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`
+// Start server with Claude CLI health check
+(async () => {
+    console.log('Checking Claude CLI availability...');
+    const claudeAvailable = await isClaudeAvailable();
+
+    if (!claudeAvailable) {
+        console.error(`
+╔═══════════════════════════════════════════════════════════╗
+║  ERROR: Claude CLI not available                          ║
+║                                                           ║
+║  The Claude CLI is required for report generation.        ║
+║  Please ensure:                                           ║
+║    1. Claude CLI is installed: npm install -g @anthropic-ai/claude-code ║
+║    2. Claude is authenticated: claude /login              ║
+║                                                           ║
+║  Server startup aborted.                                  ║
+╚═══════════════════════════════════════════════════════════╝
+        `);
+        process.exit(1);
+    }
+
+    console.log('Claude CLI available ✓');
+
+    app.listen(PORT, () => {
+        console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
 ║         ALN Director Console - Server Running            ║
@@ -1717,9 +1920,10 @@ app.listen(PORT, () => {
 ║  Using Console MAX via Claude Code CLI                    ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
-    `);
-    console.log('Press Ctrl+C to stop\n');
-});
+        `);
+        console.log('Press Ctrl+C to stop\n');
+    });
+})();
 
 // Graceful shutdown
 process.on('SIGINT', () => {

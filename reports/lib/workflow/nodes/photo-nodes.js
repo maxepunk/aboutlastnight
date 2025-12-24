@@ -23,7 +23,7 @@
  */
 
 const { PHASES, APPROVAL_TYPES } = require('../state');
-const { callClaude } = require('../../claude-client');
+const { safeParseJson, getSdkClient } = require('./node-helpers');
 
 /**
  * Photo analysis output schema for Claude
@@ -80,14 +80,7 @@ const PHOTO_ANALYSIS_SCHEMA = {
   }
 };
 
-/**
- * Get Claude client from config or use default
- * @param {Object} config - Graph config
- * @returns {Function} Claude client function
- */
-function getClaudeClient(config) {
-  return config?.configurable?.claudeClient || callClaude;
-}
+// getSdkClient imported from node-helpers.js
 
 /**
  * Build system prompt for photo analysis
@@ -148,7 +141,7 @@ function createEmptyPhotoAnalysisResult(sessionId) {
  * skip processing (resume from checkpoint case).
  *
  * @param {Object} state - Current state with sessionPhotos, playerFocus
- * @param {Object} config - Graph config with optional configurable.claudeClient
+ * @param {Object} config - Graph config with optional configurable.sdkClient
  * @returns {Object} Partial state update with photoAnalyses, currentPhase
  */
 async function analyzePhotos(state, config) {
@@ -174,7 +167,7 @@ async function analyzePhotos(state, config) {
 
   console.log(`[analyzePhotos] Analyzing ${photos.length} photos`);
 
-  const claudeClient = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const systemPrompt = buildPhotoAnalysisSystemPrompt(state.playerFocus);
 
   try {
@@ -188,11 +181,13 @@ async function analyzePhotos(state, config) {
 
       console.log(`[analyzePhotos] Processing: ${photoFilename}`);
 
-      const userPrompt = `Analyze this photograph: ${photoFilename}
+      const userPrompt = `First, use the Read tool to view the photograph at: ${photoPath}
+
+Then analyze what you see in the photograph.
 
 Photo context: This is from a session of "About Last Night" - a crime thriller investigation game.
 
-Please provide your analysis in JSON format matching this structure:
+After viewing the image, provide your analysis in JSON format matching this structure:
 {
   "filename": "${photoFilename}",
   "visualContent": "...",
@@ -206,15 +201,15 @@ Please provide your analysis in JSON format matching this structure:
 Remember: Use physical descriptions for people, NOT names.`;
 
       try {
-        const response = await claudeClient({
+        // Photo analysis requires Read tool to view images
+        // SDK handles tool execution internally
+        const analysis = await sdk({
           systemPrompt,
-          userPrompt,
+          prompt: userPrompt,
           model: 'haiku',
-          outputFormat: 'json',
-          timeout: 60000 // 1 minute per photo
+          jsonSchema: PHOTO_ANALYSIS_SCHEMA,
+          allowedTools: ['Read']  // Required for image viewing
         });
-
-        const analysis = safeParseJson(response, photoFilename);
         analysis.filename = photoFilename; // Ensure filename is set
         analyses.push(analysis);
 
@@ -271,25 +266,7 @@ Remember: Use physical descriptions for people, NOT names.`;
   }
 }
 
-/**
- * Safely parse JSON with actionable error messages
- * @param {string} response - JSON string to parse
- * @param {string} context - Context for error messages (e.g., filename)
- * @returns {Object} Parsed JSON
- * @throws {Error} If parsing fails
- */
-function safeParseJson(response, context = 'photo') {
-  try {
-    return JSON.parse(response);
-  } catch (error) {
-    const preview = response.substring(0, 100);
-    throw new Error(
-      `Failed to parse photo analysis JSON for ${context}. ` +
-      `Response preview: "${preview}..." ` +
-      `Parse error: ${error.message}`
-    );
-  }
-}
+// safeParseJson imported from node-helpers.js
 
 /**
  * Create mock photo analyzer for testing
@@ -340,7 +317,7 @@ module.exports = {
 
   // Export for testing
   _testing: {
-    getClaudeClient,
+    getSdkClient,
     buildPhotoAnalysisSystemPrompt,
     createEmptyPhotoAnalysisResult,
     safeParseJson,
@@ -352,9 +329,9 @@ module.exports = {
 if (require.main === module) {
   console.log('Photo Nodes Self-Test\n');
 
-  // Test with mock client
-  const mockClaudeClient = async (options) => {
-    return JSON.stringify({
+  // Test with mock SDK client - returns parsed objects directly
+  const mockSdkClient = async (options) => {
+    return {
       filename: 'test.jpg',
       visualContent: 'A group of people gathered around a table',
       narrativeMoment: 'The accusation moment',
@@ -365,7 +342,7 @@ if (require.main === module) {
       ],
       emotionalTone: 'confrontational',
       storyRelevance: 'critical'
-    });
+    };
   };
 
   const mockState = {
@@ -378,7 +355,7 @@ if (require.main === module) {
 
   const mockConfig = {
     configurable: {
-      claudeClient: mockClaudeClient
+      sdkClient: mockSdkClient
     }
   };
 

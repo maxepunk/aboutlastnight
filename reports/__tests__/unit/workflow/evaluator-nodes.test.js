@@ -15,7 +15,7 @@ const {
   createMockEvaluator,
   _testing: {
     QUALITY_CRITERIA,
-    getClaudeClient,
+    getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,
     safeParseJson,
@@ -51,7 +51,7 @@ describe('evaluator-nodes', () => {
 
     it('exports _testing with helper functions', () => {
       expect(QUALITY_CRITERIA).toBeDefined();
-      expect(typeof getClaudeClient).toBe('function');
+      expect(typeof getSdkClient).toBe('function');
       expect(typeof buildEvaluationSystemPrompt).toBe('function');
       expect(typeof buildEvaluationUserPrompt).toBe('function');
       expect(typeof safeParseJson).toBe('function');
@@ -105,20 +105,20 @@ describe('evaluator-nodes', () => {
     });
   });
 
-  describe('getClaudeClient', () => {
+  describe('getSdkClient', () => {
     it('returns injected client from config', () => {
       const mockClient = jest.fn();
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
-      expect(getClaudeClient(config)).toBe(mockClient);
+      expect(getSdkClient(config)).toBe(mockClient);
     });
 
     it('returns default when not injected', () => {
-      expect(typeof getClaudeClient(null)).toBe('function');
+      expect(typeof getSdkClient(null)).toBe('function');
     });
 
     it('returns default for empty config', () => {
-      expect(typeof getClaudeClient({})).toBe('function');
+      expect(typeof getSdkClient({})).toBe('function');
     });
   });
 
@@ -270,12 +270,12 @@ describe('evaluator-nodes', () => {
 
     it('throws actionable error for invalid JSON', () => {
       expect(() => safeParseJson('not json', 'arcs evaluation'))
-        .toThrow(/Failed to parse arcs evaluation JSON/);
+        .toThrow(/Failed to parse arcs evaluation:/);
     });
 
     it('includes response preview in error', () => {
       expect(() => safeParseJson('this is not json', 'test'))
-        .toThrow(/Response preview: "this is not/);
+        .toThrow(/Response preview: this is not json/);
     });
   });
 
@@ -370,7 +370,7 @@ describe('evaluator-nodes', () => {
     it('accepts custom model option', () => {
       const mockClient = jest.fn().mockResolvedValue('{"ready":true,"overallScore":0.8}');
       const evaluator = createEvaluator('arcs', { model: 'sonnet' });
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       evaluator({ narrativeArcs: [] }, config);
 
@@ -389,50 +389,54 @@ describe('evaluator-nodes', () => {
     });
 
     it('returns ready state when score >= 0.7', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.85,
         criteriaScores: {},
         issues: [],
         confidence: 'high'
-      }));
+      });
 
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
       const result = await evaluateArcs(createMockState(), config);
 
-      expect(result.awaitingApproval).toBe(true);
-      expect(result.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
+      // Evaluator no longer sets awaitingApproval/approvalType - that's checkpoint's job
+      expect(result.awaitingApproval).toBeUndefined();
+      expect(result.approvalType).toBeUndefined();
       expect(result.currentPhase).toBe(PHASES.ARC_EVALUATION);
+      // Verify evaluationHistory records the ready state
+      expect(result.evaluationHistory.ready).toBe(true);
     });
 
     it('returns revision needed when score < 0.7', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         criteriaScores: {},
         issues: ['Issue 1'],
         revisionGuidance: 'Fix issue 1',
         confidence: 'medium'
-      }));
+      });
 
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
       const result = await evaluateArcs(createMockState(), config);
 
       expect(result.awaitingApproval).toBeUndefined();
-      expect(result.arcRevisionCount).toBe(1);
+      // Note: revision count increment moved to graph.js incrementArcRevision node
+      expect(result.arcRevisionCount).toBeUndefined();
       expect(result.validationResults.passed).toBe(false);
       expect(result.validationResults.feedback).toBe('Fix issue 1');
     });
 
     it('adds entry to evaluationHistory', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.9,
         issues: [],
         confidence: 'high'
-      }));
+      });
 
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
       const result = await evaluateArcs(createMockState(), config);
 
       expect(result.evaluationHistory).toBeDefined();
@@ -442,29 +446,30 @@ describe('evaluator-nodes', () => {
     });
 
     it('escalates to human when at revision cap', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: ['Still has issues'],
         confidence: 'medium'
-      }));
+      });
 
       const state = {
         ...createMockState(),
         arcRevisionCount: REVISION_CAPS.ARCS // At cap
       };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs(state, config);
 
-      expect(result.awaitingApproval).toBe(true);
+      // Evaluator no longer sets awaitingApproval - checkpoint handles it
+      expect(result.awaitingApproval).toBeUndefined();
       expect(result.evaluationHistory.escalatedToHuman).toBe(true);
       expect(result.evaluationHistory.escalationReason).toContain('revision cap');
     });
 
     it('handles Claude client error', async () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('API timeout'));
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs(createMockState(), config);
 
@@ -475,7 +480,7 @@ describe('evaluator-nodes', () => {
 
     it('uses haiku model by default', async () => {
       const mockClient = jest.fn().mockResolvedValue('{"ready":true,"overallScore":0.8}');
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       await evaluateArcs(createMockState(), config);
 
@@ -494,54 +499,59 @@ describe('evaluator-nodes', () => {
     });
 
     it('returns ready state when score >= 0.7', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.8,
         criteriaScores: {},
         issues: [],
         confidence: 'high'
-      }));
+      });
 
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
       const result = await evaluateOutline(createMockState(), config);
 
-      expect(result.awaitingApproval).toBe(true);
-      expect(result.approvalType).toBe(APPROVAL_TYPES.OUTLINE);
+      // Evaluator no longer sets awaitingApproval/approvalType - that's checkpoint's job
+      expect(result.awaitingApproval).toBeUndefined();
+      expect(result.approvalType).toBeUndefined();
       expect(result.currentPhase).toBe(PHASES.OUTLINE_EVALUATION);
+      expect(result.evaluationHistory.ready).toBe(true);
     });
 
-    it('increments outlineRevisionCount when not ready', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+    it('returns revision needed when not ready (count increment in graph.js)', async () => {
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.6,
         issues: ['Need more detail'],
         revisionGuidance: 'Add more detail',
         confidence: 'medium'
-      }));
+      });
 
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
       const result = await evaluateOutline(createMockState(), config);
 
-      expect(result.outlineRevisionCount).toBe(1);
+      // Note: revision count increment moved to graph.js incrementOutlineRevision node
+      expect(result.outlineRevisionCount).toBeUndefined();
+      expect(result.validationResults.passed).toBe(false);
     });
 
     it('escalates at revision cap (3)', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: ['Still has issues'],
         confidence: 'low'
-      }));
+      });
 
       const state = {
         ...createMockState(),
         outlineRevisionCount: REVISION_CAPS.OUTLINE // At cap (3)
       };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateOutline(state, config);
 
-      expect(result.awaitingApproval).toBe(true);
+      // Evaluator no longer sets awaitingApproval - checkpoint handles it
+      expect(result.awaitingApproval).toBeUndefined();
       expect(result.evaluationHistory.escalatedToHuman).toBe(true);
     });
   });
@@ -557,54 +567,59 @@ describe('evaluator-nodes', () => {
     });
 
     it('returns ready state when score >= 0.7', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.75,
         criteriaScores: {},
         issues: [],
         confidence: 'medium'
-      }));
+      });
 
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
       const result = await evaluateArticle(createMockState(), config);
 
-      expect(result.awaitingApproval).toBe(true);
-      expect(result.approvalType).toBe(APPROVAL_TYPES.ARTICLE);
+      // Evaluator no longer sets awaitingApproval/approvalType - that's checkpoint's job
+      expect(result.awaitingApproval).toBeUndefined();
+      expect(result.approvalType).toBeUndefined();
       expect(result.currentPhase).toBe(PHASES.ARTICLE_EVALUATION);
+      expect(result.evaluationHistory.ready).toBe(true);
     });
 
-    it('increments articleRevisionCount when not ready', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+    it('returns revision needed when not ready (count increment in graph.js)', async () => {
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.55,
         issues: ['Voice inconsistent'],
         revisionGuidance: 'Improve voice consistency',
         confidence: 'medium'
-      }));
+      });
 
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
       const result = await evaluateArticle(createMockState(), config);
 
-      expect(result.articleRevisionCount).toBe(1);
+      // Note: revision count increment moved to graph.js incrementArticleRevision node
+      expect(result.articleRevisionCount).toBeUndefined();
+      expect(result.validationResults.passed).toBe(false);
     });
 
     it('escalates at revision cap (3)', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: ['Anti-patterns present'],
         confidence: 'low'
-      }));
+      });
 
       const state = {
         ...createMockState(),
         articleRevisionCount: REVISION_CAPS.ARTICLE // At cap (3)
       };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArticle(state, config);
 
-      expect(result.awaitingApproval).toBe(true);
+      // Evaluator no longer sets awaitingApproval - checkpoint handles it
+      expect(result.awaitingApproval).toBeUndefined();
       expect(result.evaluationHistory.escalatedToHuman).toBe(true);
     });
   });
@@ -676,57 +691,62 @@ describe('evaluator-nodes', () => {
 
   describe('revision cap behavior', () => {
     it('arcs has cap of 2', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: ['Issue'],
         confidence: 'low'
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
-      // At revision 1, should allow another revision
+      // At revision 1, should allow another revision (increment happens in graph.js)
       const result1 = await evaluateArcs({ narrativeArcs: [], arcRevisionCount: 1 }, config);
-      expect(result1.arcRevisionCount).toBe(2);
+      expect(result1.arcRevisionCount).toBeUndefined(); // Increment moved to graph.js
       expect(result1.awaitingApproval).toBeUndefined();
+      expect(result1.validationResults.passed).toBe(false);
 
       // At revision 2 (the cap), should escalate
       const result2 = await evaluateArcs({ narrativeArcs: [], arcRevisionCount: 2 }, config);
-      expect(result2.awaitingApproval).toBe(true);
+      // Evaluator no longer sets awaitingApproval - checkpoint handles it
+      expect(result2.awaitingApproval).toBeUndefined();
       expect(result2.evaluationHistory.escalatedToHuman).toBe(true);
     });
 
     it('outline has cap of 3', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: ['Issue'],
         confidence: 'low'
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
-      // At revision 2, should allow another revision
+      // At revision 2, should allow another revision (increment happens in graph.js)
       const result1 = await evaluateOutline({ outline: {}, outlineRevisionCount: 2 }, config);
-      expect(result1.outlineRevisionCount).toBe(3);
+      expect(result1.outlineRevisionCount).toBeUndefined(); // Increment moved to graph.js
       expect(result1.awaitingApproval).toBeUndefined();
+      expect(result1.validationResults.passed).toBe(false);
 
       // At revision 3 (the cap), should escalate
       const result2 = await evaluateOutline({ outline: {}, outlineRevisionCount: 3 }, config);
-      expect(result2.awaitingApproval).toBe(true);
+      // Evaluator no longer sets awaitingApproval - checkpoint handles it
+      expect(result2.awaitingApproval).toBeUndefined();
       expect(result2.evaluationHistory.escalatedToHuman).toBe(true);
     });
 
     it('article has cap of 3', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: ['Issue'],
         confidence: 'low'
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       // At revision 3 (the cap), should escalate
       const result = await evaluateArticle({ contentBundle: {}, articleRevisionCount: 3 }, config);
-      expect(result.awaitingApproval).toBe(true);
+      // Evaluator no longer sets awaitingApproval - checkpoint handles it
+      expect(result.awaitingApproval).toBeUndefined();
       expect(result.evaluationHistory.escalatedToHuman).toBe(true);
     });
   });
@@ -734,7 +754,7 @@ describe('evaluator-nodes', () => {
   describe('evaluation history tracking', () => {
     it('includes timestamp', async () => {
       const mockClient = jest.fn().mockResolvedValue('{"ready":true,"overallScore":0.8}');
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const before = new Date().toISOString();
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
@@ -746,12 +766,12 @@ describe('evaluator-nodes', () => {
     });
 
     it('includes confidence level', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.85,
         confidence: 'high'
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -759,12 +779,12 @@ describe('evaluator-nodes', () => {
     });
 
     it('defaults confidence to medium', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.8
         // No confidence field
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -772,12 +792,12 @@ describe('evaluator-nodes', () => {
     });
 
     it('includes issues when present', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.6,
         issues: ['Issue 1', 'Issue 2']
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -785,12 +805,12 @@ describe('evaluator-nodes', () => {
     });
 
     it('defaults issues to empty array', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.9
         // No issues field
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -800,12 +820,12 @@ describe('evaluator-nodes', () => {
 
   describe('validationResults for revision', () => {
     it('includes passed=false when not ready', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: ['Issue']
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -813,13 +833,13 @@ describe('evaluator-nodes', () => {
     });
 
     it('includes revision feedback', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         issues: [],
         revisionGuidance: 'Fix the coherence issues by...'
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -827,15 +847,15 @@ describe('evaluator-nodes', () => {
     });
 
     it('includes criteria scores when available', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         criteriaScores: {
           coherence: { score: 0.3, notes: 'Poor' }
         },
         issues: []
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -843,12 +863,12 @@ describe('evaluator-nodes', () => {
     });
 
     it('does not include validationResults when ready', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.9,
         issues: []
-      }));
-      const config = { configurable: { claudeClient: mockClient } };
+      });
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -859,7 +879,7 @@ describe('evaluator-nodes', () => {
   describe('error handling', () => {
     it('adds error to errors array', async () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('Network error'));
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -871,7 +891,7 @@ describe('evaluator-nodes', () => {
 
     it('includes error in evaluation history', async () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('Parse error'));
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
@@ -881,7 +901,7 @@ describe('evaluator-nodes', () => {
 
     it('sets currentPhase to ERROR', async () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('Timeout'));
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArticle({ contentBundle: {} }, config);
 
@@ -890,7 +910,7 @@ describe('evaluator-nodes', () => {
 
     it('preserves revision count on error', async () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('API error'));
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [], arcRevisionCount: 1 }, config);
 

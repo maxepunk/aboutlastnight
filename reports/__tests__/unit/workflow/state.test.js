@@ -55,18 +55,20 @@ describe('ReportStateAnnotation', () => {
       expect(replaceReducer('old', 'new')).toBe('new');
     });
 
-    it('preserves old value when new is null', () => {
-      expect(replaceReducer('old', null)).toBe('old');
+    it('allows explicit null to clear value (for state clearing)', () => {
+      // Changed in Commit 8.6: null now clears value for increment* functions
+      expect(replaceReducer('old', null)).toBe(null);
     });
 
     it('preserves old value when new is undefined', () => {
       expect(replaceReducer('old', undefined)).toBe('old');
     });
 
-    it('allows replacing with falsy values except null/undefined', () => {
+    it('allows replacing with falsy values', () => {
       expect(replaceReducer('old', 0)).toBe(0);
       expect(replaceReducer('old', '')).toBe('');
       expect(replaceReducer('old', false)).toBe(false);
+      expect(replaceReducer('old', null)).toBe(null); // null also replaces
     });
 
     it('allows replacing null with a value', () => {
@@ -485,8 +487,12 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 24 phases (Commit 8.6)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(24);
+    it('defines exactly 25 phases (Commit 8.6 + GENERATION_SUPERVISOR)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(25);
+    });
+
+    it('includes GENERATION_SUPERVISOR phase', () => {
+      expect(PHASES.GENERATION_SUPERVISOR).toBe('2.0');
     });
 
     it('all phase values are strings', () => {
