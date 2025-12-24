@@ -75,6 +75,13 @@ async function initializeSession(state, config) {
  * @returns {Object} Partial state update with directorNotes, sessionConfig, playerFocus, currentPhase
  */
 async function loadDirectorNotes(state, config) {
+  // Skip if already loaded (resume case or pre-populated)
+  if (state.directorNotes && Object.keys(state.directorNotes).length > 0) {
+    return {
+      currentPhase: PHASES.FETCH_TOKENS
+    };
+  }
+
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
   const sessionPath = path.join(dataDir, state.sessionId, 'inputs');
 
@@ -110,6 +117,13 @@ async function loadDirectorNotes(state, config) {
  * @returns {Object} Partial state update with memoryTokens, currentPhase
  */
 async function fetchMemoryTokens(state, config) {
+  // Skip if already fetched (resume case or pre-populated)
+  if (state.memoryTokens && state.memoryTokens.length > 0) {
+    return {
+      currentPhase: PHASES.FETCH_EVIDENCE
+    };
+  }
+
   const client = getNotionClient(config);
 
   // Get token IDs to fetch from director notes
@@ -135,6 +149,13 @@ async function fetchMemoryTokens(state, config) {
  * @returns {Object} Partial state update with paperEvidence, currentPhase
  */
 async function fetchPaperEvidence(state, config) {
+  // Skip if already fetched (resume case or pre-populated)
+  if (state.paperEvidence && state.paperEvidence.length > 0) {
+    return {
+      currentPhase: PHASES.FETCH_PHOTOS
+    };
+  }
+
   const client = getNotionClient(config);
 
   // Whether to include file attachments (defaults to true for full evidence)
@@ -219,6 +240,7 @@ module.exports = {
 
   // Constants for testing
   _testing: {
-    DEFAULT_DATA_DIR
+    DEFAULT_DATA_DIR,
+    getNotionClient
   }
 };

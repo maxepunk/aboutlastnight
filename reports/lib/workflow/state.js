@@ -134,6 +134,12 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => []
   }),
 
+  /** Cached arc analysis for outline generation (internal) */
+  _arcAnalysisCache: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
   // ═══════════════════════════════════════════════════════
   // GENERATION OUTPUTS
   // ═══════════════════════════════════════════════════════
@@ -223,6 +229,7 @@ function getDefaultState() {
     evidenceBundle: null,
     narrativeArcs: [],
     selectedArcs: [],
+    _arcAnalysisCache: null,
     outline: null,
     contentBundle: null,
     assembledHtml: null,

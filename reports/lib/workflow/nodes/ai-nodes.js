@@ -106,6 +106,13 @@ function getSchemaValidator(config) {
  * @returns {Object} Partial state update with evidenceBundle, currentPhase, approval flags
  */
 async function curateEvidenceBundle(state, config) {
+  // Skip if already curated and approval cleared (resume case)
+  if (state.evidenceBundle && !state.awaitingApproval) {
+    return {
+      currentPhase: PHASES.CURATE_EVIDENCE
+    };
+  }
+
   const claude = getClaudeClient(config);
 
   // Build curation prompt
@@ -165,6 +172,13 @@ Return JSON with structure:
  * @returns {Object} Partial state update with narrativeArcs, currentPhase, approval flags
  */
 async function analyzeNarrativeArcs(state, config) {
+  // Skip if already analyzed and approval cleared (resume case)
+  if (state.narrativeArcs && state.narrativeArcs.length > 0 && !state.awaitingApproval) {
+    return {
+      currentPhase: PHASES.ANALYZE_ARCS
+    };
+  }
+
   const claude = getClaudeClient(config);
   const promptBuilder = getPromptBuilder(config);
 
@@ -208,6 +222,13 @@ async function analyzeNarrativeArcs(state, config) {
  * @returns {Object} Partial state update with outline, currentPhase, approval flags
  */
 async function generateOutline(state, config) {
+  // Skip if already outlined and approval cleared (resume case)
+  if (state.outline && !state.awaitingApproval) {
+    return {
+      currentPhase: PHASES.GENERATE_OUTLINE
+    };
+  }
+
   const claude = getClaudeClient(config);
   const promptBuilder = getPromptBuilder(config);
 
@@ -257,6 +278,13 @@ async function generateOutline(state, config) {
  * @returns {Object} Partial state update with contentBundle, currentPhase
  */
 async function generateContentBundle(state, config) {
+  // Skip if content bundle already exists (resume case or pre-populated)
+  if (state.contentBundle) {
+    return {
+      currentPhase: PHASES.GENERATE_CONTENT
+    };
+  }
+
   const claude = getClaudeClient(config);
   const promptBuilder = getPromptBuilder(config);
 
@@ -380,11 +408,12 @@ async function validateArticle(state, config) {
   const currentRevisions = state.voiceRevisionCount || 0;
   const maxRevisions = 2;
 
+  // Calculate new revision count first to align phase with routing logic
+  const newRevisionCount = currentRevisions + (passed ? 0 : 1);
+
   let nextPhase;
-  if (passed) {
-    nextPhase = PHASES.COMPLETE;
-  } else if (currentRevisions >= maxRevisions) {
-    // Accept with warnings after max revisions
+  if (passed || newRevisionCount >= maxRevisions) {
+    // Complete if passed OR max revisions reached (including this one)
     nextPhase = PHASES.COMPLETE;
   } else {
     nextPhase = PHASES.REVISE_CONTENT;
@@ -393,7 +422,7 @@ async function validateArticle(state, config) {
   return {
     validationResults,
     currentPhase: nextPhase,
-    voiceRevisionCount: currentRevisions + (passed ? 0 : 1)
+    voiceRevisionCount: newRevisionCount
   };
 }
 
