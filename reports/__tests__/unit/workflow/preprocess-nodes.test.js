@@ -254,6 +254,30 @@ describe('preprocess-nodes', () => {
         expect(result.errors[0].phase).toBe(PHASES.PREPROCESS_EVIDENCE);
         expect(result.errors[0].timestamp).toBeDefined();
       });
+
+      it('sets preprocessedEvidence to empty result on error (not null)', async () => {
+        // This ensures retry logic can distinguish "not attempted" (null) from "failed" (empty)
+        const failingPreprocessor = {
+          process: jest.fn().mockRejectedValue(new Error('API timeout'))
+        };
+
+        const state = {
+          memoryTokens: [{ id: 't1' }],
+          paperEvidence: [],
+          sessionId: 'error-test',
+          playerFocus: { primaryInvestigation: 'Test investigation' }
+        };
+        const config = { configurable: { preprocessor: failingPreprocessor } };
+
+        const result = await preprocessEvidence(state, config);
+
+        // Should have empty result, NOT null/undefined
+        expect(result.preprocessedEvidence).toBeDefined();
+        expect(result.preprocessedEvidence.items).toEqual([]);
+        expect(result.preprocessedEvidence.sessionId).toBe('error-test');
+        expect(result.preprocessedEvidence.stats.totalItems).toBe(0);
+        expect(result.preprocessedEvidence.playerFocus.primaryInvestigation).toBe('Test investigation');
+      });
     });
 
     describe('state updates', () => {
