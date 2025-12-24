@@ -1,0 +1,36 @@
+{{!--
+  Financial Tracker
+
+  Black Market shell account visualization.
+  Shows visual bars for each account with crimson-to-amber gradient.
+  REQUIRED component in FOLLOW THE MONEY section.
+
+  Context (from financialTracker):
+    entries: [{ date?, description, amount, category? }]
+    totalExposed: string (e.g., "$127,000")
+    inline: boolean (true for mobile inline version)
+--}}
+<div class="sidebar-box financial-tracker{{#if inline}} financial-tracker--inline{{/if}}">
+  <div class="sidebar-box__title">Black Market Transactions</div>
+
+  <div class="financial-tracker__accounts">
+    {{#each entries}}
+    <div class="account-row">
+      <span class="account-row__name">{{description}}</span>
+      <span class="account-row__amount">{{amount}}</span>
+      <div class="account-row__bar-container">
+        {{!-- Bar width calculated as percentage of max --}}
+        <div class="account-row__bar" style="width: {{@root.barWidth}}%"></div>
+      </div>
+    </div>
+    {{/each}}
+  </div>
+
+  {{#if totalExposed}}
+  <div class="financial-tracker__divider"></div>
+  <div class="financial-tracker__total">
+    <span class="financial-tracker__total-label">Total Buried</span>
+    <span class="financial-tracker__total-amount">{{totalExposed}}</span>
+  </div>
+  {{/if}}
+</div>

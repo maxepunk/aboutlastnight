@@ -1,0 +1,20 @@
+{{!--
+  Pull Quote
+
+  Featured quote with large decorative quotation mark.
+  Positioned in sidebar or inline based on placement.
+
+  Context:
+    text: string (the quote content)
+    attribution: string? (who said it)
+    placement: "left" | "right" | "center"
+--}}
+<div class="pull-quote {{pullQuotePlacement placement}}">
+  <blockquote class="pull-quote__text">
+    <span class="pull-quote__mark" aria-hidden="true">"</span>
+    {{text}}
+  </blockquote>
+  {{#if attribution}}
+  <cite class="pull-quote__attribution">— {{attribution}}</cite>
+  {{/if}}
+</div>
