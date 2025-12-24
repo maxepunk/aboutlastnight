@@ -4,8 +4,8 @@
  * These nodes handle the template assembly phase of the pipeline:
  * - assembleHtml: Assemble HTML from ContentBundle + Templates
  *
- * Currently a stub implementation. Full Handlebars template assembly
- * will be implemented in Commit 7 (Template System).
+ * Uses Handlebars-based TemplateAssembler for proper template rendering.
+ * Templates are located in reports/templates/{theme}/.
  *
  * All nodes follow the LangGraph pattern:
  * - Accept (state, config) parameters
@@ -17,16 +17,39 @@
  */
 
 const { PHASES } = require('../state');
+const { createTemplateAssembler } = require('../../template-assembler');
 
 /**
- * Get TemplateAssembler from config or use stub
- * Supports dependency injection for testing and future real implementation
+ * Get TemplateAssembler from config or create default
+ * Supports dependency injection for testing
+ *
+ * Priority:
+ * 1. config.configurable.templateAssembler (injected)
+ * 2. createTemplateAssembler with theme from config
+ * 3. createStubAssembler (fallback for testing without templates)
  *
  * @param {Object} config - Graph config with optional configurable.templateAssembler
+ * @param {string} theme - Theme name from state (journalist, detective)
  * @returns {Object} TemplateAssembler instance
  */
-function getTemplateAssembler(config) {
-  return config?.configurable?.templateAssembler || createStubAssembler();
+function getTemplateAssembler(config, theme = 'journalist') {
+  // Use injected assembler if provided
+  if (config?.configurable?.templateAssembler) {
+    return config.configurable.templateAssembler;
+  }
+
+  // Use stub if explicitly requested (for tests that don't have templates)
+  if (config?.configurable?.useStubAssembler) {
+    return createStubAssembler();
+  }
+
+  // Create real assembler with theme
+  const assemblerTheme = config?.configurable?.theme || theme;
+  return createTemplateAssembler(assemblerTheme, {
+    cssPaths: config?.configurable?.cssPaths,
+    jsPaths: config?.configurable?.jsPaths,
+    validateSchema: config?.configurable?.validateSchema
+  });
 }
 
 /**
@@ -76,17 +99,15 @@ function createStubAssembler() {
  * Assemble HTML from ContentBundle using templates
  *
  * Takes validated ContentBundle and applies theme-specific templates
- * to produce final HTML output.
+ * to produce final HTML output using Handlebars templates.
  *
- * Current implementation is a stub that wraps ContentBundle in basic HTML.
- * Full Handlebars template assembly will be implemented in Commit 7.
- *
- * @param {Object} state - Current state with contentBundle
+ * @param {Object} state - Current state with contentBundle, theme
  * @param {Object} config - Graph config with optional configurable.templateAssembler
  * @returns {Object} Partial state update with assembledHtml, currentPhase
  */
 async function assembleHtml(state, config) {
-  const assembler = getTemplateAssembler(config);
+  const theme = state.theme || config?.configurable?.theme || 'journalist';
+  const assembler = getTemplateAssembler(config, theme);
 
   const html = await assembler.assemble(state.contentBundle);
 
@@ -119,6 +140,9 @@ module.exports = {
 
   // Testing utilities
   createMockTemplateAssembler,
+
+  // Re-export for convenience
+  createTemplateAssembler,
 
   // Internal functions for testing
   _testing: {

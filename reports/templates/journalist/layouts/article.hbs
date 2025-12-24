@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {{!-- Open Graph metadata for the noir cyberpunk investigative piece --}}
+  <meta name="description" content="{{headline.deck}}">
+  <meta name="author" content="{{byline.author}}">
+  <meta property="og:title" content="{{headline.main}}">
+  <meta property="og:description" content="{{headline.deck}}">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="NovaNews">
+
+  <title>{{headline.main}} | NovaNews</title>
+
+  {{!-- Fonts: Zilla Slab (headlines), Source Serif Pro (body), JetBrains Mono (meta) --}}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+
+  {{!-- NovaNews Stylesheets --}}
+  {{#each css.files}}
+  <link rel="stylesheet" href="{{href}}">
+  {{/each}}
+</head>
+<body>
+  {{!-- Reading Progress Bar (Mobile) - crimson to amber gradient --}}
+  <div class="nn-progress" aria-hidden="true">
+    <div class="nn-progress__bar"></div>
+  </div>
+
+  {{!-- Navigation --}}
+  {{> navigation}}
+
+  {{!-- Main Container: Two-column grid (article + sidebar) --}}
+  <div class="nn-container">
+
+    {{!-- Article Column --}}
+    <article class="nn-article" role="main">
+
+      {{!-- Article Header with headline, kicker, byline, article ID --}}
+      {{> header headline=headline byline=byline metadata=metadata}}
+
+      {{!-- Render each section from ContentBundle --}}
+      {{#each sections}}
+      <section class="nn-section {{sectionClass type}}" id="{{id}}">
+        {{#if heading}}
+        <h2 class="nn-section__title">{{heading}}</h2>
+        {{/if}}
+
+        {{!-- Render content blocks (paragraphs, quotes, evidence-references, lists) --}}
+        {{#each content}}
+        {{renderContentBlock this}}
+        {{/each}}
+      </section>
+      {{/each}}
+
+      {{!-- Mobile Financial Tracker (inline after FOLLOW THE MONEY section) --}}
+      {{#if hasFinancialTracker}}
+      {{> sidebar/financial-tracker financialTracker inline=true}}
+      {{/if}}
+
+    </article>
+
+    {{!-- Sidebar Column (sticky on desktop, hidden components on mobile) --}}
+    <aside class="nn-sidebar" role="complementary">
+
+      {{!-- Financial Tracker (Desktop) - Black Market Ledger --}}
+      {{#if hasFinancialTracker}}
+      {{> sidebar/financial-tracker financialTracker}}
+      {{/if}}
+
+      {{!-- Evidence Cards Summary --}}
+      {{#if hasEvidenceCards}}
+      <section class="sidebar-box evidence-summary">
+        <div class="sidebar-box__title">Key Evidence</div>
+        {{#each evidenceCards}}
+        {{> sidebar/evidence-card this}}
+        {{/each}}
+      </section>
+      {{/if}}
+
+      {{!-- Section Navigation --}}
+      {{#if sectionNav}}
+      <nav class="sidebar-box section-nav" aria-label="Article sections">
+        <div class="sidebar-box__title">Sections</div>
+        <ul class="section-nav__list">
+          {{#each sectionNav}}
+          <li><a href="{{href}}" class="section-nav__link">{{label}}</a></li>
+          {{/each}}
+        </ul>
+      </nav>
+      {{/if}}
+
+      {{!-- Reading Progress (Desktop) --}}
+      <div class="sidebar-box reading-progress">
+        <div class="sidebar-box__title">Reading Progress</div>
+        <div class="reading-progress__bar-container">
+          <div class="reading-progress__bar"></div>
+        </div>
+        <div class="reading-progress__text">0% complete</div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  {{!-- Footer --}}
+  <footer class="nn-footer">
+    <div class="nn-footer__inner">
+      <div class="nn-footer__brand">Nova<span>News</span></div>
+      <ul class="nn-footer__links">
+        <li><a href="/about" class="nn-footer__link">About</a></li>
+        <li><a href="/contact" class="nn-footer__link">Contact</a></li>
+        <li><a href="/privacy" class="nn-footer__link">Privacy</a></li>
+        <li><a href="/subscribe" class="nn-footer__link">Subscribe</a></li>
+      </ul>
+      <p class="nn-footer__copyright">&copy; 2027 NovaNews. Independent tech accountability journalism.</p>
+    </div>
+  </footer>
+
+  {{!-- Scripts --}}
+  {{#each js.files}}
+  <script src="{{src}}"></script>
+  {{/each}}
+</body>
+</html>

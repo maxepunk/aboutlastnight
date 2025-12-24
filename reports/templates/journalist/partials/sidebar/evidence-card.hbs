@@ -1,0 +1,21 @@
+{{!--
+  Evidence Card (Sidebar Summary)
+
+  Compact evidence card for sidebar display.
+  Shows headline and significance with crimson accent.
+
+  Context:
+    tokenId: string
+    headline: string
+    summary: string?
+    significance: "critical" | "supporting" | "contextual"
+--}}
+<div class="evidence-card-mini {{significanceClass significance}}" data-token-id="{{tokenId}}">
+  <div class="evidence-card-mini__header">
+    <span class="evidence-card-mini__badge">{{significance}}</span>
+  </div>
+  <div class="evidence-card-mini__headline">{{headline}}</div>
+  {{#if summary}}
+  <div class="evidence-card-mini__summary">{{summary}}</div>
+  {{/if}}
+</div>

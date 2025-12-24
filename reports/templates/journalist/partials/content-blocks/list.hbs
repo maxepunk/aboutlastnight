@@ -1,0 +1,23 @@
+{{!--
+  List Content Block
+
+  Ordered or unordered list for enumerated points.
+
+  Context:
+    type: "list"
+    ordered: boolean (true = ol, false = ul)
+    items: string[] (list items)
+--}}
+{{#if ordered}}
+<ol class="content-list content-list--ordered">
+  {{#each items}}
+  <li>{{this}}</li>
+  {{/each}}
+</ol>
+{{else}}
+<ul class="content-list">
+  {{#each items}}
+  <li>{{this}}</li>
+  {{/each}}
+</ul>
+{{/if}}
