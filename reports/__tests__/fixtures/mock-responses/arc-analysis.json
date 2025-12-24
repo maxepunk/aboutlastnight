@@ -1,0 +1,44 @@
+{
+  "narrativeArcs": [
+    {
+      "name": "The Money Trail",
+      "playerEmphasis": "HIGH",
+      "directorObservationSupport": "Players spent significant time tracing financial documents, connecting Blake's offshore accounts to Charlie's audit reports",
+      "evidenceTokens": ["blk001", "chr001", "page-ev-001"],
+      "charactersFeatured": ["Blake", "Charlie"],
+      "summary": "Following the $2.3M from Blackwood Corp through shell companies to offshore accounts"
+    },
+    {
+      "name": "The Audit Cover-up",
+      "playerEmphasis": "MEDIUM",
+      "directorObservationSupport": "Elena's discovery of Charlie's altered reports created key dramatic moment",
+      "evidenceTokens": ["chr001", "page-ev-003"],
+      "charactersFeatured": ["Charlie", "Elena"],
+      "summary": "Charlie's manipulation of audit records to hide irregular transactions"
+    },
+    {
+      "name": "The Legal Shield",
+      "playerEmphasis": "LOW",
+      "directorObservationSupport": "Diana's role was mentioned but not deeply investigated by players",
+      "evidenceTokens": ["page-ev-002"],
+      "charactersFeatured": ["Diana"],
+      "summary": "Diana's potential involvement in backdating legal documents"
+    }
+  ],
+  "characterPlacementOpportunities": {
+    "Blake": "Central figure - can feature in money trail and conclusion as the accused",
+    "Charlie": "Key accomplice - feature in audit cover-up and money trail connection",
+    "Diana": "Supporting role - legal expertise provided cover for scheme",
+    "Elena": "Investigator role - her discovery of evidence can be highlighted",
+    "Alex": "Minor mention - financial advisor context, not directly implicated"
+  },
+  "rosterCoverage": {
+    "featured": ["Blake", "Charlie"],
+    "mentioned": ["Diana", "Elena"],
+    "needsPlacement": ["Alex"]
+  },
+  "heroImageSuggestion": {
+    "filename": "evidence-board.png",
+    "reasoning": "Shows the connections between players and evidence that drove the investigation"
+  }
+}

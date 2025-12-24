@@ -1,0 +1,85 @@
+{
+  "lede": {
+    "hook": "The fluorescent lights of Blackwood Corp cast long shadows as I traced the final thread of a $2.3 million mystery.",
+    "keyTension": "Blake's trusted position made the betrayal all the more devastating"
+  },
+  "theStory": {
+    "arcs": [
+      {
+        "name": "The Money Trail",
+        "paragraphCount": 4,
+        "evidenceCards": [
+          {"tokenId": "blk001", "placement": "after para 2"},
+          {"tokenId": "page-ev-001", "placement": "after para 3"}
+        ],
+        "photoPlacement": {"filename": "evidence-board.png", "afterParagraph": 1}
+      },
+      {
+        "name": "The Audit Cover-up",
+        "paragraphCount": 3,
+        "evidenceCards": [
+          {"tokenId": "chr001", "placement": "after para 1"}
+        ],
+        "photoPlacement": null
+      }
+    ]
+  },
+  "followTheMoney": {
+    "shellAccounts": [
+      {
+        "name": "Phoenix Consulting Group",
+        "total": 85000,
+        "inference": "Shell company with no legitimate operations"
+      },
+      {
+        "name": "Apex Scientific Equipment",
+        "total": 220000,
+        "inference": "Vendor doesn't exist - fabricated invoices"
+      },
+      {
+        "name": "Blackwood Holdings LLC (Cayman)",
+        "total": 2300000,
+        "inference": "Final destination of diverted funds"
+      }
+    ],
+    "photoPlacement": {"filename": "financial-docs.png"}
+  },
+  "thePlayers": {
+    "exposed": ["Blake", "Charlie"],
+    "buried": ["Diana"],
+    "pullQuotes": [
+      {
+        "source": "page-ev-003",
+        "text": "We need to clean this up before the quarterly review."
+      },
+      {
+        "source": "observation",
+        "text": "Blake left the room immediately after the accusation."
+      }
+    ]
+  },
+  "whatsMissing": {
+    "buriedMarkers": [
+      {
+        "account": "Meridian Partners LLC",
+        "amount": 150000,
+        "inference": "Connection to Diana's consulting agreement remains unclear"
+      },
+      {
+        "account": "University Alumni Fund",
+        "amount": 50000,
+        "inference": "Blake and Charlie's shared history may have funded initial scheme"
+      }
+    ]
+  },
+  "closing": {
+    "systemicAngle": "Corporate oversight failures enabled this scheme to persist for months",
+    "accusationHandling": "Present Blake and Charlie as primary suspects while noting Diana's potential accessory role"
+  },
+  "visualComponentCount": {
+    "evidenceCards": 4,
+    "photos": 2,
+    "pullQuotes": 2,
+    "buriedMarkers": 2
+  }
+}
