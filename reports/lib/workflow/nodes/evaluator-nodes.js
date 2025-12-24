@@ -29,7 +29,7 @@
  */
 
 const { PHASES, APPROVAL_TYPES, REVISION_CAPS } = require('../state');
-const { callClaude } = require('../../claude-client');
+const { safeParseJson, getSdkClient, formatIssuesForMessage } = require('./node-helpers');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -112,14 +112,7 @@ const QUALITY_CRITERIA = {
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Get Claude client from config or use default
- * @param {Object} config - Graph config
- * @returns {Function} Claude client function
- */
-function getClaudeClient(config) {
-  return config?.configurable?.claudeClient || callClaude;
-}
+// getSdkClient imported from node-helpers.js
 
 /**
  * Build system prompt for evaluation
@@ -215,24 +208,7 @@ Is this article ready for human review?`;
   }
 }
 
-/**
- * Safely parse JSON with actionable error messages
- * @param {string} response - JSON string to parse
- * @param {string} context - Context for error messages
- * @returns {Object} Parsed JSON
- */
-function safeParseJson(response, context) {
-  try {
-    return JSON.parse(response);
-  } catch (error) {
-    const preview = response.substring(0, 100);
-    throw new Error(
-      `Failed to parse ${context} JSON. ` +
-      `Response preview: "${preview}..." ` +
-      `Parse error: ${error.message}`
-    );
-  }
-}
+// safeParseJson imported from node-helpers.js
 
 /**
  * Get revision count field name for phase
@@ -323,22 +299,66 @@ function createEvaluator(phase, options = {}) {
     const approvalType = getApprovalType(phase);
     const currentRevisions = state[revisionCountField] || 0;
 
+    // Skip logic 1: If user has already approved this phase (downstream data exists)
+    // For arcs: selectedArcs means user approved arc selection
+    // For outline: contentBundle means user approved outline and article was generated
+    // For article: assembledHtml means user approved article
+    const hasUserApproved = (
+      (phase === 'arcs' && state.selectedArcs && state.selectedArcs.length > 0) ||
+      (phase === 'outline' && state.contentBundle) ||
+      (phase === 'article' && state.assembledHtml)
+    );
+    if (hasUserApproved) {
+      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - user already approved (downstream data exists)`);
+      // Add synthetic evaluation history entry so router knows this phase passed
+      return {
+        evaluationHistory: {
+          phase,
+          timestamp: new Date().toISOString(),
+          ready: true, // Mark as ready so router proceeds to next phase
+          skippedReason: 'user-already-approved',
+          confidence: 'high'
+        },
+        currentPhase: phaseConstant,
+        awaitingApproval: false // Ensure we don't pause
+      };
+    }
+
+    // Skip logic 2: If this phase was already evaluated with ready=true, skip
+    const existingEvals = state.evaluationHistory || [];
+    const phaseEval = existingEvals.find(e => e.phase === phase && e.ready === true);
+    if (phaseEval) {
+      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - already evaluated with ready=true`);
+      return {
+        currentPhase: phaseConstant
+      };
+    }
+
     console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Starting evaluation (revision ${currentRevisions}/${revisionCap})`);
 
-    const claudeClient = getClaudeClient(config);
+    const sdk = getSdkClient(config);
     const systemPrompt = buildEvaluationSystemPrompt(phase, criteria);
-    const userPrompt = buildEvaluationUserPrompt(phase, state);
+    const prompt = buildEvaluationUserPrompt(phase, state);
 
     try {
-      const response = await claudeClient({
+      // SDK returns parsed object directly when jsonSchema is provided
+      const evaluation = await sdk({
         systemPrompt,
-        userPrompt,
+        prompt,
         model,
-        outputFormat: 'json',
-        timeout: 60000 // 1 minute for evaluation
+        jsonSchema: {
+          type: 'object',
+          properties: {
+            ready: { type: 'boolean' },
+            overallScore: { type: 'number' },
+            criteriaScores: { type: 'object' },
+            issues: { type: 'array' },
+            revisionGuidance: { type: 'string' },
+            confidence: { type: 'string' }
+          },
+          required: ['ready', 'overallScore']
+        }
       });
-
-      const evaluation = safeParseJson(response, `${phase} evaluation`);
 
       // Create evaluation history entry
       const historyEntry = {
@@ -355,11 +375,11 @@ function createEvaluator(phase, options = {}) {
       if (evaluation.ready) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Ready for human review (score: ${evaluation.overallScore})`);
 
+        // Note: Don't set awaitingApproval here - that's the checkpoint's responsibility
+        // The router will send us to the checkpoint based on evaluationHistory
         return {
           evaluationHistory: historyEntry,
-          currentPhase: phaseConstant,
-          awaitingApproval: true,
-          approvalType
+          currentPhase: phaseConstant
         };
       }
 
@@ -367,24 +387,26 @@ function createEvaluator(phase, options = {}) {
       if (currentRevisions >= revisionCap) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] At revision cap - escalating to human (score: ${evaluation.overallScore})`);
 
+        // Use shared helper for safe issue formatting
+        const issuesText = formatIssuesForMessage(evaluation.issues);
+
+        // Note: Don't set awaitingApproval here - the checkpoint will handle it
         return {
           evaluationHistory: {
             ...historyEntry,
             escalatedToHuman: true,
-            escalationReason: `Reached revision cap (${revisionCap}) with issues: ${evaluation.issues.join(', ')}`
+            escalationReason: `Reached revision cap (${revisionCap}) with issues: ${issuesText}`
           },
-          currentPhase: phaseConstant,
-          awaitingApproval: true,
-          approvalType
+          currentPhase: phaseConstant
         };
       }
 
-      // Need revision
+      // Need revision - increment happens in dedicated increment nodes (graph.js)
       console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Needs revision (score: ${evaluation.overallScore})`);
 
       return {
         evaluationHistory: historyEntry,
-        [revisionCountField]: currentRevisions + 1,
+        // Note: revision count incremented by incrementXxxRevision nodes in graph.js
         currentPhase: phaseConstant,
         // Return revision guidance in validationResults for revision nodes
         validationResults: {
@@ -531,7 +553,7 @@ module.exports = {
   // Export for testing
   _testing: {
     QUALITY_CRITERIA,
-    getClaudeClient,
+    getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,
     safeParseJson,
@@ -546,11 +568,11 @@ module.exports = {
 if (require.main === module) {
   console.log('Evaluator Nodes Self-Test\n');
 
-  // Test with mock client
-  const mockClaudeClient = async (options) => {
+  // Test with mock SDK client - returns parsed objects directly
+  const mockSdkClient = async (options) => {
     // Return different scores based on phase
     if (options.systemPrompt.includes('ARCS')) {
-      return JSON.stringify({
+      return {
         ready: true,
         overallScore: 0.85,
         criteriaScores: {
@@ -560,28 +582,28 @@ if (require.main === module) {
         issues: [],
         revisionGuidance: null,
         confidence: 'high'
-      });
+      };
     }
 
     if (options.systemPrompt.includes('OUTLINE')) {
-      return JSON.stringify({
+      return {
         ready: false,
         overallScore: 0.6,
         criteriaScores: {},
         issues: ['Section 3 needs more detail'],
         revisionGuidance: 'Expand section 3 with evidence references',
         confidence: 'medium'
-      });
+      };
     }
 
-    return JSON.stringify({
+    return {
       ready: true,
       overallScore: 0.75,
       criteriaScores: {},
       issues: [],
       revisionGuidance: null,
       confidence: 'medium'
-    });
+    };
   };
 
   const mockState = {
@@ -594,7 +616,7 @@ if (require.main === module) {
   };
 
   const mockConfig = {
-    configurable: { claudeClient: mockClaudeClient }
+    configurable: { sdkClient: mockSdkClient }
   };
 
   console.log('Testing evaluateArcs...');

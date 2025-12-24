@@ -16,7 +16,7 @@ const {
   createMockSynthesizer,
   _testing: {
     SPECIALIST_DOMAINS,
-    getClaudeClient,
+    getSdkClient,
     buildSpecialistSystemPrompt,
     buildSpecialistUserPrompt,
     buildSynthesizerSystemPrompt,
@@ -56,7 +56,7 @@ describe('arc-specialist-nodes', () => {
 
     it('exports _testing with helper functions', () => {
       expect(SPECIALIST_DOMAINS).toBeDefined();
-      expect(typeof getClaudeClient).toBe('function');
+      expect(typeof getSdkClient).toBe('function');
       expect(typeof buildSpecialistSystemPrompt).toBe('function');
       expect(typeof safeParseJson).toBe('function');
     });
@@ -89,16 +89,16 @@ describe('arc-specialist-nodes', () => {
     });
   });
 
-  describe('getClaudeClient', () => {
+  describe('getSdkClient', () => {
     it('returns injected client from config', () => {
       const mockClient = jest.fn();
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
-      expect(getClaudeClient(config)).toBe(mockClient);
+      expect(getSdkClient(config)).toBe(mockClient);
     });
 
     it('returns default when not injected', () => {
-      expect(typeof getClaudeClient(null)).toBe('function');
+      expect(typeof getSdkClient(null)).toBe('function');
     });
   });
 
@@ -220,7 +220,7 @@ describe('arc-specialist-nodes', () => {
 
     it('throws actionable error for invalid JSON', () => {
       expect(() => safeParseJson('not json', 'financial specialist'))
-        .toThrow(/Failed to parse financial specialist JSON/);
+        .toThrow(/Failed to parse financial specialist:/);
     });
   });
 
@@ -244,18 +244,18 @@ describe('arc-specialist-nodes', () => {
 
   describe('analyzeFinancialPatterns', () => {
     it('returns specialistAnalyses.financial', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         accountPatterns: [{ description: 'Pattern 1' }],
         timingClusters: [],
         suspiciousFlows: [],
         financialConnections: []
-      }));
+      });
 
       const state = {
         evidenceBundle: { exposed: [] },
         sessionId: 'test'
       };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await analyzeFinancialPatterns(state, config);
 
@@ -264,9 +264,9 @@ describe('arc-specialist-nodes', () => {
     });
 
     it('sets currentPhase to ARC_SPECIALISTS', async () => {
-      const mockClient = jest.fn().mockResolvedValue('{}');
+      const mockClient = jest.fn().mockResolvedValue({});
       const state = { evidenceBundle: {} };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await analyzeFinancialPatterns(state, config);
 
@@ -287,15 +287,15 @@ describe('arc-specialist-nodes', () => {
 
   describe('analyzeBehavioralPatterns', () => {
     it('returns specialistAnalyses.behavioral', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         characterDynamics: [],
         behaviorCorrelations: [],
         zeroFootprintCharacters: [],
         behavioralInsights: []
-      }));
+      });
 
       const state = { evidenceBundle: {}, sessionId: 'test' };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await analyzeBehavioralPatterns(state, config);
 
@@ -305,15 +305,15 @@ describe('arc-specialist-nodes', () => {
 
   describe('analyzeVictimizationPatterns', () => {
     it('returns specialistAnalyses.victimization', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         victims: [],
         operators: [],
         selfBurialPatterns: [],
         targetingInsights: []
-      }));
+      });
 
       const state = { evidenceBundle: {}, sessionId: 'test' };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await analyzeVictimizationPatterns(state, config);
 
@@ -325,7 +325,7 @@ describe('arc-specialist-nodes', () => {
     it('handles Claude client error gracefully', async () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('API timeout'));
       const state = { evidenceBundle: {}, sessionId: 'test' };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await analyzeForDomain('financial', state, config);
 
@@ -343,9 +343,9 @@ describe('arc-specialist-nodes', () => {
     });
 
     it('uses sonnet model for quality', async () => {
-      const mockClient = jest.fn().mockResolvedValue('{}');
+      const mockClient = jest.fn().mockResolvedValue({});
       const state = { evidenceBundle: {} };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       await analyzeForDomain('financial', state, config);
 
@@ -357,12 +357,12 @@ describe('arc-specialist-nodes', () => {
 
   describe('synthesizeArcs', () => {
     it('returns narrativeArcs array', async () => {
-      const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+      const mockClient = jest.fn().mockResolvedValue({
         arcs: [
           { title: 'Arc 1', summary: 'Summary 1' }
         ],
         synthesisNotes: 'Test notes'
-      }));
+      });
 
       const state = {
         specialistAnalyses: {
@@ -372,7 +372,7 @@ describe('arc-specialist-nodes', () => {
         },
         sessionId: 'test'
       };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await synthesizeArcs(state, config);
 
@@ -381,9 +381,9 @@ describe('arc-specialist-nodes', () => {
     });
 
     it('sets currentPhase to ARC_SYNTHESIS', async () => {
-      const mockClient = jest.fn().mockResolvedValue('{"arcs":[]}');
+      const mockClient = jest.fn().mockResolvedValue({ arcs: [] });
       const state = { specialistAnalyses: {} };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await synthesizeArcs(state, config);
 
@@ -391,9 +391,9 @@ describe('arc-specialist-nodes', () => {
     });
 
     it('sets awaitingApproval and approvalType', async () => {
-      const mockClient = jest.fn().mockResolvedValue('{"arcs":[{"title":"Test"}]}');
+      const mockClient = jest.fn().mockResolvedValue({ arcs: [{ title: 'Test' }] });
       const state = { specialistAnalyses: {} };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await synthesizeArcs(state, config);
 
@@ -413,11 +413,11 @@ describe('arc-specialist-nodes', () => {
     });
 
     it('populates _arcAnalysisCache', async () => {
-      const mockClient = jest.fn().mockResolvedValue('{"arcs":[{"title":"Arc"}], "synthesisNotes":"Notes"}');
+      const mockClient = jest.fn().mockResolvedValue({ arcs: [{ title: 'Arc' }], synthesisNotes: 'Notes' });
       const state = {
         specialistAnalyses: { financial: {} }
       };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await synthesizeArcs(state, config);
 
@@ -429,7 +429,7 @@ describe('arc-specialist-nodes', () => {
     it('handles synthesis error with ERROR phase', async () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('Synthesis failed'));
       const state = { specialistAnalyses: {} };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       const result = await synthesizeArcs(state, config);
 
@@ -512,9 +512,9 @@ describe('arc-specialist-nodes', () => {
 
   describe('parallel execution pattern', () => {
     it('all three specialists can run concurrently', async () => {
-      const mockClient = jest.fn().mockResolvedValue('{}');
+      const mockClient = jest.fn().mockResolvedValue({});
       const state = { evidenceBundle: {}, sessionId: 'test' };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       // Simulate parallel execution
       const [financial, behavioral, victimization] = await Promise.all([
@@ -531,13 +531,13 @@ describe('arc-specialist-nodes', () => {
     it('merged specialist results work with synthesizer', async () => {
       // Simulate scatter-gather pattern
       const mockClient = jest.fn()
-        .mockResolvedValueOnce('{"accountPatterns":[]}') // financial
-        .mockResolvedValueOnce('{"characterDynamics":[]}') // behavioral
-        .mockResolvedValueOnce('{"victims":[]}') // victimization
-        .mockResolvedValueOnce('{"arcs":[{"title":"Unified Arc"}]}'); // synthesizer
+        .mockResolvedValueOnce({ accountPatterns: [] }) // financial
+        .mockResolvedValueOnce({ characterDynamics: [] }) // behavioral
+        .mockResolvedValueOnce({ victims: [] }) // victimization
+        .mockResolvedValueOnce({ arcs: [{ title: 'Unified Arc' }] }); // synthesizer
 
       const state = { evidenceBundle: {}, sessionId: 'test' };
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
       // Scatter: Run specialists
       const [financial, behavioral, victimization] = await Promise.all([

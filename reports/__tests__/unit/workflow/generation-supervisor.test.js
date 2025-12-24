@@ -13,7 +13,7 @@ const {
   createMockSupervisor,
   _testing: {
     NARRATIVE_COMPASS_SCHEMA,
-    getClaudeClient,
+    getSdkClient,
     buildNarrativeCompass,
     needsCompassBuild,
     determineNextPhase,
@@ -76,15 +76,15 @@ describe('generation-supervisor', () => {
     });
   });
 
-  describe('getClaudeClient', () => {
+  describe('getSdkClient', () => {
     it('returns injected client from config', () => {
       const mockClient = jest.fn();
-      const config = { configurable: { claudeClient: mockClient } };
-      expect(getClaudeClient(config)).toBe(mockClient);
+      const config = { configurable: { sdkClient: mockClient } };
+      expect(getSdkClient(config)).toBe(mockClient);
     });
 
     it('returns default when not injected', () => {
-      expect(typeof getClaudeClient(null)).toBe('function');
+      expect(typeof getSdkClient(null)).toBe('function');
     });
   });
 

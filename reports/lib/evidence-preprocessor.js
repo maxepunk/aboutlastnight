@@ -12,7 +12,8 @@
  *
  * Usage:
  *   const { createEvidencePreprocessor } = require('./evidence-preprocessor');
- *   const preprocessor = createEvidencePreprocessor({ callClaude });
+ *   const { sdkQuery } = require('./sdk-client');
+ *   const preprocessor = createEvidencePreprocessor({ sdkClient: sdkQuery });
  *   const result = await preprocessor.process({
  *     memoryTokens: [...],
  *     paperEvidence: [...],
@@ -114,14 +115,14 @@ function normalizePlayerFocus(playerFocus = {}) {
  * Create an evidence preprocessor instance
  *
  * @param {Object} options - Configuration options
- * @param {Function} options.callClaude - Claude client function (for dependency injection)
+ * @param {Function} options.sdkClient - SDK client function (for dependency injection)
  * @returns {Object} - Preprocessor instance with process() method
  */
 function createEvidencePreprocessor(options = {}) {
-  const { callClaude: claudeClient } = options;
+  const { sdkClient } = options;
 
-  if (!claudeClient) {
-    throw new Error('callClaude function is required');
+  if (!sdkClient) {
+    throw new Error('sdkClient function is required');
   }
 
   /**
@@ -178,7 +179,7 @@ function createEvidencePreprocessor(options = {}) {
     // Process batches with controlled concurrency
     const results = await processWithConcurrency(batches, CONCURRENCY, async (batch, batchIndex) => {
       console.log(`[EvidencePreprocessor] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} items)`);
-      return processBatch(batch, playerFocus, claudeClient, batchIndex);
+      return processBatch(batch, playerFocus, sdkClient, batchIndex);
     });
 
     // Flatten results and handle errors
@@ -240,11 +241,11 @@ function createEvidencePreprocessor(options = {}) {
  *
  * @param {Array} batch - Items to process
  * @param {Object} playerFocus - Player focus context
- * @param {Function} callClaude - Claude client function
+ * @param {Function} sdkClient - SDK client function
  * @param {number} batchIndex - Batch index for logging
  * @returns {Promise<Object>} - { success: boolean, items: Array, error?: string }
  */
-async function processBatch(batch, playerFocus, callClaude, batchIndex) {
+async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
   try {
     // Build user prompt with batch items
     const batchData = batch.map(item => ({
@@ -269,17 +270,14 @@ async function processBatch(batch, playerFocus, callClaude, batchIndex) {
 
     const userPrompt = `Process these ${batch.length} evidence items:\n\n${JSON.stringify(batchData, null, 2)}`;
 
-    const response = await callClaude({
+    // SDK returns parsed object directly when jsonSchema is provided
+    const parsed = await sdkClient({
       prompt: userPrompt,
       systemPrompt,
       model: 'haiku',
-      outputFormat: 'json',
-      jsonSchema: BATCH_RESPONSE_SCHEMA,
-      maxRetries: 1 // Fewer retries per batch for faster overall processing
+      jsonSchema: BATCH_RESPONSE_SCHEMA
     });
 
-    // Parse response
-    const parsed = JSON.parse(response);
     const items = parsed.items || [];
 
     // Merge with preserved context (owner logline, timeline context, SF fields)

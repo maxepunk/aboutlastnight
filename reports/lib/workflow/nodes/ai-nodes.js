@@ -24,52 +24,11 @@
  */
 
 const { PHASES, APPROVAL_TYPES } = require('../state');
-const { callClaude } = require('../../claude-client');
 const { SchemaValidator } = require('../../schema-validator');
 const { createPromptBuilder } = require('../../prompt-builder');
-
-/**
- * Safely parse JSON response with actionable error messages
- *
- * When Claude returns invalid JSON, we need:
- * 1. The context (which node failed)
- * 2. The actual error from JSON.parse
- * 3. A preview of the response for debugging
- *
- * This is critical because LLM responses can be unpredictable,
- * and silent failures or generic errors make debugging impossible.
- *
- * @param {string} response - Raw response from Claude
- * @param {string} context - Description of what we're parsing (e.g., "evidence bundle")
- * @returns {Object} Parsed JSON object
- * @throws {Error} With actionable message including context and response preview
- */
-function safeParseJson(response, context) {
-  try {
-    return JSON.parse(response);
-  } catch (error) {
-    // Truncate response for logging (avoid huge error messages)
-    const preview = response.length > 500
-      ? response.substring(0, 500) + '... [truncated]'
-      : response;
-
-    throw new Error(
-      `Failed to parse ${context}: ${error.message}\n` +
-      `Response preview: ${preview}`
-    );
-  }
-}
-
-/**
- * Get Claude client from config or use default
- * Supports dependency injection for testing
- *
- * @param {Object} config - Graph config with optional configurable.claudeClient
- * @returns {Function} Claude client function
- */
-function getClaudeClient(config) {
-  return config?.configurable?.claudeClient || callClaude;
-}
+const { safeParseJson, getSdkClient } = require('./node-helpers');
+// Import consolidated mock from test mocks (avoids duplication)
+const { createMockSdkClient, createMockClaudeClient } = require('../../../__tests__/mocks/sdk-client.mock');
 
 /**
  * Get PromptBuilder from config or create default
@@ -94,14 +53,18 @@ function getSchemaValidator(config) {
 }
 
 /**
- * Curate evidence bundle from raw tokens and paper evidence
+ * Curate evidence bundle from PREPROCESSED evidence summaries
  *
- * Uses Claude to organize evidence into three layers:
- * - exposed: Evidence players actively discovered
- * - buried: Evidence that requires inference
- * - context: Timeline and metadata
+ * Uses Claude to ORGANIZE (not summarize) preprocessed evidence into three layers:
+ * - exposed: Evidence players actively discovered (critical/supporting, narrativeRelevance: true)
+ * - buried: Evidence that requires inference (supporting/contextual)
+ * - context: Timeline and metadata (background/contextual)
  *
- * @param {Object} state - Current state with memoryTokens, paperEvidence, playerFocus
+ * COMMIT 8.5 UPDATE: Now uses state.preprocessedEvidence instead of raw tokens.
+ * The preprocessing phase (1.7) batch-summarizes evidence using Haiku.
+ * This allows processing 100+ items without timeout.
+ *
+ * @param {Object} state - Current state with preprocessedEvidence, playerFocus
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update with evidenceBundle, currentPhase, approval flags
  */
@@ -113,45 +76,93 @@ async function curateEvidenceBundle(state, config) {
     };
   }
 
-  const claude = getClaudeClient(config);
+  const sdk = getSdkClient(config);
 
-  // Build curation prompt
-  const systemPrompt = `You are curating evidence for a NovaNews investigative article.
+  // Use preprocessed evidence (Commit 8.5)
+  const preprocessed = state.preprocessedEvidence || {
+    items: [],
+    playerFocus: state.playerFocus || {}
+  };
 
-Organize the evidence into three layers:
-1. EXPOSED: Evidence that players actively discovered and investigated
-2. BURIED: Evidence that requires inference or wasn't fully explored
-3. CONTEXT: Timeline, relationships, and metadata
+  // If no preprocessed items, create empty evidence bundle
+  if (!preprocessed.items || preprocessed.items.length === 0) {
+    console.log('[curateEvidenceBundle] No preprocessed evidence - creating empty bundle');
+    return {
+      evidenceBundle: {
+        exposed: { tokens: [], paperEvidence: [] },
+        buried: { transactions: [], relationships: [] },
+        context: {
+          timeline: {},
+          playerFocus: state.playerFocus || {},
+          sessionMetadata: { sessionId: state.sessionId }
+        },
+        curatorNotes: {
+          layerRationale: 'No evidence to curate',
+          characterCoverage: {}
+        }
+      },
+      currentPhase: PHASES.CURATE_EVIDENCE,
+      awaitingApproval: true,
+      approvalType: APPROVAL_TYPES.EVIDENCE_BUNDLE
+    };
+  }
 
-Weight evidence based on player focus - what they emphasized matters most.`;
+  // Build curation prompt using preprocessed summaries
+  const systemPrompt = `You are curating PREPROCESSED evidence for a NovaNews investigative article.
 
-  const userPrompt = `Curate this evidence based on player focus.
+The evidence has already been summarized and classified. Your job is to ORGANIZE it into three layers:
+1. EXPOSED: Evidence players actively discovered (significance: critical/supporting with narrativeRelevance: true)
+2. BURIED: Evidence that requires inference or wasn't explored (significance: supporting/contextual)
+3. CONTEXT: Timeline, relationships, and metadata (significance: background/contextual)
+
+Weight evidence based on player focus - what they emphasized matters most.
+Use the existing summaries, significance levels, and tags to make organization decisions.
+DO NOT re-summarize - use the provided summaries directly.`;
+
+  const userPrompt = `Organize this preprocessed evidence based on player focus.
 
 PLAYER FOCUS:
-${JSON.stringify(state.playerFocus || {}, null, 2)}
+${JSON.stringify(preprocessed.playerFocus || state.playerFocus || {}, null, 2)}
 
-MEMORY TOKENS:
-${JSON.stringify(state.memoryTokens || [], null, 2)}
-
-PAPER EVIDENCE:
-${JSON.stringify(state.paperEvidence || [], null, 2)}
+PREPROCESSED EVIDENCE (${preprocessed.items.length} items):
+${JSON.stringify(preprocessed.items, null, 2)}
 
 Return JSON with structure:
 {
-  "exposed": { "tokens": [...], "paperEvidence": [...] },
-  "buried": { "transactions": [...], "relationships": [...] },
-  "context": { "timeline": {...}, "playerFocus": {...}, "sessionMetadata": {...} },
-  "curatorNotes": { "layerRationale": "...", "characterCoverage": {...} }
+  "exposed": {
+    "tokens": [{ "id": "...", "summary": "...", "significance": "...", ... }],
+    "paperEvidence": [{ "id": "...", "summary": "...", "significance": "...", ... }]
+  },
+  "buried": {
+    "transactions": [{ "id": "...", "summary": "...", ... }],
+    "relationships": [{ "id": "...", "summary": "...", ... }]
+  },
+  "context": {
+    "timeline": { ... },
+    "playerFocus": { ... },
+    "sessionMetadata": { ... }
+  },
+  "curatorNotes": {
+    "layerRationale": "explanation of curation decisions",
+    "characterCoverage": { "characterName": "coverage level", ... }
+  }
 }`;
 
-  const response = await claude({
+  const evidenceBundle = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'haiku',
-    outputFormat: 'json'
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        exposed: { type: 'object' },
+        buried: { type: 'object' },
+        context: { type: 'object' },
+        curatorNotes: { type: 'object' }
+      },
+      required: ['exposed', 'buried', 'context']
+    }
   });
-
-  const evidenceBundle = safeParseJson(response, 'evidence bundle from curateEvidenceBundle');
 
   return {
     evidenceBundle,
@@ -179,7 +190,7 @@ async function analyzeNarrativeArcs(state, config) {
     };
   }
 
-  const claude = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const promptBuilder = getPromptBuilder(config);
 
   // Build session data for prompt builder
@@ -192,14 +203,21 @@ async function analyzeNarrativeArcs(state, config) {
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArcAnalysisPrompt(sessionData);
 
-  const response = await claude({
+  const arcAnalysis = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'sonnet',
-    outputFormat: 'json'
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        narrativeArcs: { type: 'array' },
+        characterPlacementOpportunities: { type: 'object' },
+        rosterCoverage: { type: 'object' },
+        heroImageSuggestion: {}
+      },
+      required: ['narrativeArcs']
+    }
   });
-
-  const arcAnalysis = safeParseJson(response, 'arc analysis from analyzeNarrativeArcs');
 
   return {
     narrativeArcs: arcAnalysis.narrativeArcs || [],
@@ -229,7 +247,7 @@ async function generateOutline(state, config) {
     };
   }
 
-  const claude = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const promptBuilder = getPromptBuilder(config);
 
   // Get arc analysis from cache or reconstruct from narrativeArcs
@@ -250,14 +268,24 @@ async function generateOutline(state, config) {
     state.evidenceBundle || {}
   );
 
-  const response = await claude({
+  const outline = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'sonnet',
-    outputFormat: 'json'
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        lede: { type: 'object' },
+        theStory: { type: 'object' },
+        followTheMoney: { type: 'object' },
+        thePlayers: { type: 'object' },
+        whatsMissing: { type: 'object' },
+        closing: { type: 'object' },
+        visualComponentCount: { type: 'object' }
+      },
+      required: ['lede', 'theStory']
+    }
   });
-
-  const outline = safeParseJson(response, 'outline from generateOutline');
 
   return {
     outline,
@@ -285,7 +313,7 @@ async function generateContentBundle(state, config) {
     };
   }
 
-  const claude = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const promptBuilder = getPromptBuilder(config);
 
   // Load template for context (optional - article generation can proceed without it)
@@ -304,15 +332,13 @@ async function generateContentBundle(state, config) {
   const contentBundleSchema = config?.configurable?.contentBundleSchema ||
     require('../../schemas/content-bundle.schema.json');
 
-  const response = await claude({
+  // SDK returns parsed object directly when jsonSchema is provided
+  const generatedContent = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'opus',
-    outputFormat: 'json',
     jsonSchema: contentBundleSchema
   });
-
-  const generatedContent = safeParseJson(response, 'content bundle from generateContentBundle');
 
   // Extract ContentBundle from response (may include voice_self_check)
   // State values take precedence over generated values for metadata
@@ -379,7 +405,7 @@ async function validateContentBundle(state, config) {
  * @returns {Object} Partial state update with validationResults, currentPhase, voiceRevisionCount
  */
 async function validateArticle(state, config) {
-  const claude = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const promptBuilder = getPromptBuilder(config);
 
   // Get roster for coverage check
@@ -394,14 +420,24 @@ async function validateArticle(state, config) {
     roster
   );
 
-  const response = await claude({
+  const validationResults = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'haiku',
-    outputFormat: 'json'
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        passed: { type: 'boolean' },
+        issues: { type: 'array' },
+        voice_score: { type: 'number' },
+        voice_notes: { type: 'string' },
+        roster_coverage: { type: 'object' },
+        systemic_critique_present: { type: 'boolean' },
+        blake_handled_correctly: { type: 'boolean' }
+      },
+      required: ['passed', 'issues']
+    }
   });
-
-  const validationResults = safeParseJson(response, 'validation results from validateArticle');
 
   // Determine next phase based on validation
   const passed = validationResults.passed;
@@ -437,7 +473,7 @@ async function validateArticle(state, config) {
  * @returns {Object} Partial state update with contentBundle, currentPhase
  */
 async function reviseContentBundle(state, config) {
-  const claude = getClaudeClient(config);
+  const sdk = getSdkClient(config);
   const promptBuilder = getPromptBuilder(config);
 
   // Build revision prompt from validation feedback
@@ -453,14 +489,19 @@ async function reviseContentBundle(state, config) {
     voiceSelfCheck
   );
 
-  const response = await claude({
+  const revised = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'sonnet',
-    outputFormat: 'json'
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        contentBundle: { type: 'object' },
+        html: { type: 'string' },
+        fixes_applied: { type: 'array' }
+      }
+    }
   });
-
-  const revised = safeParseJson(response, 'revised content from reviseContentBundle');
 
   // Update contentBundle or assembledHtml based on response
   const updatedBundle = revised.contentBundle || state.contentBundle;
@@ -485,85 +526,9 @@ async function reviseContentBundle(state, config) {
 // TESTING UTILITIES
 // ═══════════════════════════════════════════════════════
 
-/**
- * Create a mock Claude client for testing
- *
- * Returns a function that mimics callClaude behavior but returns
- * fixture data based on prompt content or schema.
- *
- * Mock data structure should match actual Claude response format.
- *
- * @param {Object} fixtures - Mock response data
- * @param {Object} fixtures.evidenceBundle - Response for evidence curation
- * @param {Object} fixtures.arcAnalysis - Response for arc analysis
- * @param {Object} fixtures.outline - Response for outline generation
- * @param {Object} fixtures.contentBundle - Response for content generation
- * @param {Object} fixtures.validationResults - Response for validation
- * @param {Object} fixtures.revision - Response for revision
- * @returns {Function} Mock client with getCalls() and getLastCall() methods
- */
-function createMockClaudeClient(fixtures = {}) {
-  const callLog = [];
-
-  async function mockCallClaude(options) {
-    callLog.push({
-      ...options,
-      timestamp: new Date().toISOString()
-    });
-
-    const { prompt, systemPrompt, jsonSchema } = options;
-    const promptLower = (prompt || '').toLowerCase();
-    const systemLower = (systemPrompt || '').toLowerCase();
-
-    // Match based on prompt content or schema
-    // Order matters: more specific matches first, schema matches take priority
-
-    // Content bundle generation - schema match is most reliable
-    if (
-      jsonSchema?.$id === 'content-bundle' ||
-      (promptLower.includes('generate article') && !promptLower.includes('generate outline')) ||
-      systemLower.includes('article generation')
-    ) {
-      return JSON.stringify(fixtures.contentBundle || getDefaultContentBundle());
-    }
-
-    if (promptLower.includes('curate') || systemLower.includes('curating evidence')) {
-      return JSON.stringify(fixtures.evidenceBundle || getDefaultEvidenceBundle());
-    }
-
-    if (promptLower.includes('narrative arc') || systemLower.includes('analyzing narrative')) {
-      return JSON.stringify(fixtures.arcAnalysis || getDefaultArcAnalysis());
-    }
-
-    // Outline generation - check for "generate outline" or just "outline" in prompt
-    if (
-      promptLower.includes('generate outline') ||
-      systemLower.includes('creating an article outline') ||
-      (promptLower.includes('outline') && !promptLower.includes('from outline'))
-    ) {
-      return JSON.stringify(fixtures.outline || getDefaultOutline());
-    }
-
-    if (promptLower.includes('validate') || systemLower.includes('validating')) {
-      return JSON.stringify(fixtures.validationResults || getDefaultValidationResults());
-    }
-
-    if (promptLower.includes('revise') || systemLower.includes('revising')) {
-      return JSON.stringify(fixtures.revision || getDefaultRevision());
-    }
-
-    // Fallback: return empty object
-    console.warn('[MockClaudeClient] No fixture matched prompt:', promptLower.substring(0, 50));
-    return JSON.stringify({});
-  }
-
-  // Attach call tracking methods
-  mockCallClaude.getCalls = () => [...callLog];
-  mockCallClaude.getLastCall = () => callLog[callLog.length - 1] || null;
-  mockCallClaude.clearCalls = () => { callLog.length = 0; };
-
-  return mockCallClaude;
-}
+// createMockSdkClient and createMockClaudeClient are imported from
+// __tests__/mocks/sdk-client.mock.js at the top of this file.
+// This consolidation removes ~150 lines of duplicate mock logic.
 
 /**
  * Create a mock PromptBuilder for testing
@@ -704,13 +669,14 @@ module.exports = {
   reviseContentBundle,
 
   // Testing utilities
-  createMockClaudeClient,
+  createMockSdkClient,
+  createMockClaudeClient,  // Backward compatibility alias
   createMockPromptBuilder,
 
   // Internal functions for testing
   _testing: {
     safeParseJson,
-    getClaudeClient,
+    getSdkClient,
     getPromptBuilder,
     getSchemaValidator,
     getDefaultEvidenceBundle,

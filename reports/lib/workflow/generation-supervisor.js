@@ -19,7 +19,7 @@
  */
 
 const { PHASES, APPROVAL_TYPES, REVISION_CAPS } = require('./state');
-const { callClaude } = require('../claude-client');
+const { sdkQuery } = require('../sdk-client');
 
 /**
  * Narrative compass structure - the "north star" for all phases
@@ -85,10 +85,10 @@ const NARRATIVE_COMPASS_SCHEMA = {
 };
 
 /**
- * Get Claude client from config or use default
+ * Get SDK client from config or use default
  */
-function getClaudeClient(config) {
-  return config?.configurable?.claudeClient || callClaude;
+function getSdkClient(config) {
+  return config?.configurable?.sdkClient || sdkQuery;
 }
 
 /**
@@ -560,7 +560,7 @@ module.exports = {
   // Testing exports
   _testing: {
     NARRATIVE_COMPASS_SCHEMA,
-    getClaudeClient,
+    getSdkClient,
     buildNarrativeCompass,
     needsCompassBuild,
     determineNextPhase,

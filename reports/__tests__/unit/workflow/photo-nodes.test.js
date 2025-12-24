@@ -11,7 +11,7 @@ const {
   analyzePhotos,
   createMockPhotoAnalyzer,
   _testing: {
-    getClaudeClient,
+    getSdkClient,
     buildPhotoAnalysisSystemPrompt,
     createEmptyPhotoAnalysisResult,
     safeParseJson,
@@ -32,7 +32,7 @@ describe('photo-nodes', () => {
 
     it('exports _testing with helper functions', () => {
       expect(_testing).toBeDefined();
-      expect(typeof getClaudeClient).toBe('function');
+      expect(typeof getSdkClient).toBe('function');
       expect(typeof buildPhotoAnalysisSystemPrompt).toBe('function');
       expect(typeof createEmptyPhotoAnalysisResult).toBe('function');
       expect(typeof safeParseJson).toBe('function');
@@ -45,26 +45,26 @@ describe('photo-nodes', () => {
     });
   });
 
-  describe('getClaudeClient', () => {
+  describe('getSdkClient', () => {
     it('returns injected client from config', () => {
       const mockClient = jest.fn();
-      const config = { configurable: { claudeClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient } };
 
-      const result = getClaudeClient(config);
+      const result = getSdkClient(config);
 
       expect(result).toBe(mockClient);
     });
 
-    it('returns default callClaude when not injected', () => {
+    it('returns default sdkQuery when not injected', () => {
       const config = { configurable: {} };
 
-      const result = getClaudeClient(config);
+      const result = getSdkClient(config);
 
       expect(typeof result).toBe('function');
     });
 
     it('handles null config', () => {
-      const result = getClaudeClient(null);
+      const result = getSdkClient(null);
 
       expect(typeof result).toBe('function');
     });
@@ -158,7 +158,7 @@ describe('photo-nodes', () => {
       const invalidJson = 'not valid json';
 
       expect(() => safeParseJson(invalidJson, 'test.jpg'))
-        .toThrow(/Failed to parse photo analysis JSON/);
+        .toThrow(/Failed to parse test\.jpg:/);
     });
 
     it('includes context in error message', () => {
@@ -220,7 +220,7 @@ describe('photo-nodes', () => {
 
     describe('processing', () => {
       it('analyzes photos with mock client', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'test.jpg',
           visualContent: 'People gathered',
           narrativeMoment: 'The accusation',
@@ -228,14 +228,14 @@ describe('photo-nodes', () => {
           characterDescriptions: [],
           emotionalTone: 'tense',
           storyRelevance: 'critical'
-        }));
+        });
 
         const state = {
           sessionPhotos: ['photo1.jpg', 'photo2.jpg'],
           sessionId: 'test-session',
           playerFocus: { primaryInvestigation: 'Test investigation' }
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -245,17 +245,17 @@ describe('photo-nodes', () => {
       });
 
       it('includes sessionId in result', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'test.jpg',
           visualContent: 'Content',
           narrativeMoment: 'Moment'
-        }));
+        });
 
         const state = {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'my-session-123'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -263,17 +263,17 @@ describe('photo-nodes', () => {
       });
 
       it('extracts filename from path', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'photo.jpg',
           visualContent: 'Content',
           narrativeMoment: 'Moment'
-        }));
+        });
 
         const state = {
           sessionPhotos: ['/path/to/photo.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -281,17 +281,17 @@ describe('photo-nodes', () => {
       });
 
       it('handles photo objects with path property', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'photo.jpg',
           visualContent: 'Content',
           narrativeMoment: 'Moment'
-        }));
+        });
 
         const state = {
           sessionPhotos: [{ path: '/path/to/photo.jpg', metadata: {} }],
           sessionId: 'test'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -299,17 +299,17 @@ describe('photo-nodes', () => {
       });
 
       it('calls Claude with haiku model', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'test.jpg',
           visualContent: 'Content',
           narrativeMoment: 'Moment'
-        }));
+        });
 
         const state = {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         await analyzePhotos(state, config);
 
@@ -319,18 +319,18 @@ describe('photo-nodes', () => {
       });
 
       it('includes player focus in prompt', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'test.jpg',
           visualContent: 'Content',
           narrativeMoment: 'Moment'
-        }));
+        });
 
         const state = {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test',
           playerFocus: { primaryInvestigation: 'Who is the Valet?' }
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         await analyzePhotos(state, config);
 
@@ -348,11 +348,11 @@ describe('photo-nodes', () => {
         const mockClient = jest.fn().mockImplementation(() => {
           callCount++;
           if (callCount === 1) {
-            return Promise.resolve(JSON.stringify({
+            return Promise.resolve({
               filename: 'good.jpg',
               visualContent: 'Good content',
               narrativeMoment: 'Good moment'
-            }));
+            });
           }
           return Promise.reject(new Error('API timeout'));
         });
@@ -361,7 +361,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['good.jpg', 'bad.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -384,7 +384,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -402,7 +402,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -413,18 +413,18 @@ describe('photo-nodes', () => {
 
     describe('state updates', () => {
       it('returns partial state update', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'test.jpg',
           visualContent: 'Content',
           narrativeMoment: 'Moment'
-        }));
+        });
 
         const state = {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test',
           existingField: 'should-not-be-in-result'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -434,17 +434,17 @@ describe('photo-nodes', () => {
       });
 
       it('includes processing time in stats', async () => {
-        const mockClient = jest.fn().mockResolvedValue(JSON.stringify({
+        const mockClient = jest.fn().mockResolvedValue({
           filename: 'test.jpg',
           visualContent: 'Content',
           narrativeMoment: 'Moment'
-        }));
+        });
 
         const state = {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { claudeClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient } };
 
         const result = await analyzePhotos(state, config);
 
@@ -531,7 +531,7 @@ describe('photo-nodes', () => {
 
 // Reference _testing to avoid unused variable warning
 const _testing = {
-  getClaudeClient,
+  getSdkClient,
   buildPhotoAnalysisSystemPrompt,
   createEmptyPhotoAnalysisResult,
   safeParseJson,

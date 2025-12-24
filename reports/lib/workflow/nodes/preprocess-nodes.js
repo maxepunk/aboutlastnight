@@ -26,7 +26,7 @@ const {
   createMockPreprocessor,
   _testing: { createEmptyResult }
 } = require('../../evidence-preprocessor');
-const { callClaude } = require('../../claude-client');
+const { sdkQuery } = require('../../sdk-client');
 
 /**
  * Get EvidencePreprocessor from config or create default instance
@@ -45,9 +45,9 @@ function getPreprocessor(config) {
     return createMockPreprocessor(config.configurable.mockPreprocessorData || {});
   }
 
-  // Create real preprocessor with Claude client
-  const claudeClient = config?.configurable?.claudeClient || callClaude;
-  return createEvidencePreprocessor({ callClaude: claudeClient });
+  // Create real preprocessor with SDK client
+  const sdk = config?.configurable?.sdkClient || sdkQuery;
+  return createEvidencePreprocessor({ sdkClient: sdk });
 }
 
 /**

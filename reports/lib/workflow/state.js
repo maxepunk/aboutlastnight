@@ -32,9 +32,10 @@ const { Annotation } = require('@langchain/langgraph');
  * Default reducer: replaces old value with new value
  * @param {*} oldValue - Previous state value
  * @param {*} newValue - New state value
- * @returns {*} New value if defined, otherwise old value
+ * @returns {*} New value if provided, otherwise old value
+ * Note: Uses !== undefined (not ??) to allow explicit null clearing
  */
-const replaceReducer = (oldValue, newValue) => newValue ?? oldValue;
+const replaceReducer = (oldValue, newValue) => newValue !== undefined ? newValue : oldValue;
 
 /**
  * Append reducer: appends new items to existing array
@@ -420,6 +421,7 @@ const PHASES = {
   CURATE_EVIDENCE: '1.8',
 
   // Arc analysis sub-phases (Commit 8.6)
+  GENERATION_SUPERVISOR: '2.0',     // Supervisor orchestrates arc→outline→article (Commit 8.6)
   ARC_SPECIALISTS: '2.1',           // Parallel domain specialists (financial, behavioral, victimization)
   ARC_SYNTHESIS: '2.2',             // Synthesizer combines specialist outputs
   ARC_EVALUATION: '2.3',            // Evaluator checks arcs

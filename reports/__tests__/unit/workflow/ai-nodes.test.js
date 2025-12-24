@@ -2,7 +2,10 @@
  * AI Nodes Unit Tests
  *
  * Tests AI processing nodes for the report generation workflow.
- * Uses mock Claude client and prompt builder for deterministic testing.
+ * Uses mock SDK client and prompt builder for deterministic testing.
+ *
+ * Updated for SDK pattern (Commit 8.7): Mock returns objects directly,
+ * not JSON strings. Config uses `sdkClient` instead of `claudeClient`.
  *
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
@@ -15,7 +18,8 @@ const {
   validateContentBundle,
   validateArticle,
   reviseContentBundle,
-  createMockClaudeClient,
+  createMockSdkClient,
+  createMockClaudeClient,  // Backward compat alias
   createMockPromptBuilder,
   _testing
 } = require('../../../lib/workflow/nodes/ai-nodes');
@@ -28,6 +32,7 @@ const mockOutline = require('../../fixtures/mock-responses/outline.json');
 const mockContentBundle = require('../../fixtures/content-bundles/valid-journalist.json');
 const mockValidationPassed = require('../../fixtures/mock-responses/validation-results.json');
 const mockValidationFailed = require('../../fixtures/mock-responses/validation-results-failed.json');
+const mockPreprocessedEvidence = require('../../fixtures/mock-responses/preprocessed-evidence.json');
 
 describe('ai-nodes', () => {
   describe('module exports', () => {
@@ -59,8 +64,13 @@ describe('ai-nodes', () => {
       expect(typeof reviseContentBundle).toBe('function');
     });
 
-    it('exports createMockClaudeClient factory', () => {
+    it('exports createMockSdkClient factory', () => {
+      expect(typeof createMockSdkClient).toBe('function');
+    });
+
+    it('exports createMockClaudeClient as backward compat alias', () => {
       expect(typeof createMockClaudeClient).toBe('function');
+      expect(createMockClaudeClient).toBe(createMockSdkClient);
     });
 
     it('exports createMockPromptBuilder factory', () => {
@@ -69,62 +79,64 @@ describe('ai-nodes', () => {
 
     it('exports _testing with internal functions', () => {
       expect(_testing).toBeDefined();
-      expect(typeof _testing.getClaudeClient).toBe('function');
+      expect(typeof _testing.getSdkClient).toBe('function');
       expect(typeof _testing.getPromptBuilder).toBe('function');
       expect(typeof _testing.getSchemaValidator).toBe('function');
     });
   });
 
-  describe('createMockClaudeClient', () => {
+  describe('createMockSdkClient', () => {
     it('creates client with async call function', async () => {
-      const client = createMockClaudeClient({});
+      const client = createMockSdkClient({});
       expect(typeof client).toBe('function');
 
       const result = await client({ prompt: 'test' });
-      expect(typeof result).toBe('string');
+      // SDK pattern returns objects directly
+      expect(typeof result).toBe('object');
     });
 
     it('returns evidenceBundle fixture when prompt contains "curate"', async () => {
-      const client = createMockClaudeClient({ evidenceBundle: mockEvidenceBundle });
+      const client = createMockSdkClient({ evidenceBundle: mockEvidenceBundle });
       const result = await client({ prompt: 'curate this evidence', systemPrompt: '' });
 
-      expect(JSON.parse(result)).toEqual(mockEvidenceBundle);
+      // SDK pattern returns objects directly (no JSON.parse needed)
+      expect(result).toEqual(mockEvidenceBundle);
     });
 
     it('returns arcAnalysis fixture when prompt contains "narrative arc"', async () => {
-      const client = createMockClaudeClient({ arcAnalysis: mockArcAnalysis });
+      const client = createMockSdkClient({ arcAnalysis: mockArcAnalysis });
       const result = await client({ prompt: 'analyze narrative arcs', systemPrompt: '' });
 
-      expect(JSON.parse(result)).toEqual(mockArcAnalysis);
+      expect(result).toEqual(mockArcAnalysis);
     });
 
     it('returns outline fixture when prompt contains "outline"', async () => {
-      const client = createMockClaudeClient({ outline: mockOutline });
+      const client = createMockSdkClient({ outline: mockOutline });
       const result = await client({ prompt: 'generate outline', systemPrompt: '' });
 
-      expect(JSON.parse(result)).toEqual(mockOutline);
+      expect(result).toEqual(mockOutline);
     });
 
     it('returns contentBundle fixture when schema matches', async () => {
-      const client = createMockClaudeClient({ contentBundle: mockContentBundle });
+      const client = createMockSdkClient({ contentBundle: mockContentBundle });
       const result = await client({
         prompt: 'generate content',
         systemPrompt: 'You are Nova writing',
         jsonSchema: { $id: 'content-bundle' }
       });
 
-      expect(JSON.parse(result)).toEqual(mockContentBundle);
+      expect(result).toEqual(mockContentBundle);
     });
 
     it('returns validationResults fixture when prompt contains "validate"', async () => {
-      const client = createMockClaudeClient({ validationResults: mockValidationPassed });
+      const client = createMockSdkClient({ validationResults: mockValidationPassed });
       const result = await client({ prompt: 'validate this article', systemPrompt: '' });
 
-      expect(JSON.parse(result)).toEqual(mockValidationPassed);
+      expect(result).toEqual(mockValidationPassed);
     });
 
     it('tracks all calls via getCalls()', async () => {
-      const client = createMockClaudeClient({});
+      const client = createMockSdkClient({});
 
       await client({ prompt: 'first call', model: 'haiku' });
       await client({ prompt: 'second call', model: 'sonnet' });
@@ -136,7 +148,7 @@ describe('ai-nodes', () => {
     });
 
     it('returns last call via getLastCall()', async () => {
-      const client = createMockClaudeClient({});
+      const client = createMockSdkClient({});
 
       await client({ prompt: 'first' });
       await client({ prompt: 'second' });
@@ -146,7 +158,7 @@ describe('ai-nodes', () => {
     });
 
     it('clears call log via clearCalls()', async () => {
-      const client = createMockClaudeClient({});
+      const client = createMockSdkClient({});
 
       await client({ prompt: 'test' });
       expect(client.getCalls()).toHaveLength(1);
@@ -156,7 +168,7 @@ describe('ai-nodes', () => {
     });
 
     it('returns null for getLastCall() when no calls made', () => {
-      const client = createMockClaudeClient({});
+      const client = createMockSdkClient({});
       expect(client.getLastCall()).toBeNull();
     });
   });
@@ -193,8 +205,8 @@ describe('ai-nodes', () => {
   });
 
   describe('curateEvidenceBundle', () => {
-    const mockClient = createMockClaudeClient({ evidenceBundle: mockEvidenceBundle });
-    const config = { configurable: { claudeClient: mockClient } };
+    const mockClient = createMockSdkClient({ evidenceBundle: mockEvidenceBundle });
+    const config = { configurable: { sdkClient: mockClient } };
 
     it('returns evidenceBundle in state update', async () => {
       const state = {
@@ -229,9 +241,11 @@ describe('ai-nodes', () => {
       expect(result.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_BUNDLE);
     });
 
-    it('calls Claude with haiku model', async () => {
+    it('calls SDK with haiku model', async () => {
       mockClient.clearCalls();
-      await curateEvidenceBundle({}, config);
+      // Provide preprocessedEvidence so SDK is called
+      const state = { preprocessedEvidence: mockPreprocessedEvidence };
+      await curateEvidenceBundle(state, config);
 
       const lastCall = mockClient.getLastCall();
       expect(lastCall.model).toBe('haiku');
@@ -239,21 +253,23 @@ describe('ai-nodes', () => {
 
     it('includes playerFocus in prompt', async () => {
       mockClient.clearCalls();
-      const state = { playerFocus: { primaryInvestigation: 'Money trail' } };
+      // playerFocus comes from preprocessedEvidence, not state
+      const state = { preprocessedEvidence: mockPreprocessedEvidence };
 
       await curateEvidenceBundle(state, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.prompt).toContain('Money trail');
+      // Check for playerFocus from the mockPreprocessedEvidence fixture
+      expect(lastCall.prompt).toContain('Victoria + Morgan collusion');
     });
   });
 
   describe('analyzeNarrativeArcs', () => {
-    const mockClient = createMockClaudeClient({ arcAnalysis: mockArcAnalysis });
+    const mockClient = createMockSdkClient({ arcAnalysis: mockArcAnalysis });
     const mockBuilder = createMockPromptBuilder();
     const config = {
       configurable: {
-        claudeClient: mockClient,
+        sdkClient: mockClient,
         promptBuilder: mockBuilder
       }
     };
@@ -283,7 +299,7 @@ describe('ai-nodes', () => {
       expect(result.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
     });
 
-    it('calls Claude with sonnet model', async () => {
+    it('calls SDK with sonnet model', async () => {
       mockClient.clearCalls();
       await analyzeNarrativeArcs({}, config);
 
@@ -306,11 +322,11 @@ describe('ai-nodes', () => {
   });
 
   describe('generateOutline', () => {
-    const mockClient = createMockClaudeClient({ outline: mockOutline });
+    const mockClient = createMockSdkClient({ outline: mockOutline });
     const mockBuilder = createMockPromptBuilder();
     const config = {
       configurable: {
-        claudeClient: mockClient,
+        sdkClient: mockClient,
         promptBuilder: mockBuilder
       }
     };
@@ -341,7 +357,7 @@ describe('ai-nodes', () => {
       expect(result.approvalType).toBe(APPROVAL_TYPES.OUTLINE);
     });
 
-    it('calls Claude with sonnet model', async () => {
+    it('calls SDK with sonnet model', async () => {
       mockClient.clearCalls();
       await generateOutline({}, config);
 
@@ -362,11 +378,11 @@ describe('ai-nodes', () => {
   });
 
   describe('generateContentBundle', () => {
-    const mockClient = createMockClaudeClient({ contentBundle: mockContentBundle });
+    const mockClient = createMockSdkClient({ contentBundle: mockContentBundle });
     const mockBuilder = createMockPromptBuilder();
     const config = {
       configurable: {
-        claudeClient: mockClient,
+        sdkClient: mockClient,
         promptBuilder: mockBuilder
       }
     };
@@ -398,7 +414,7 @@ describe('ai-nodes', () => {
       expect(result.awaitingApproval).toBeUndefined();
     });
 
-    it('calls Claude with opus model', async () => {
+    it('calls SDK with opus model', async () => {
       mockClient.clearCalls();
       await generateContentBundle({}, config);
 
@@ -406,12 +422,12 @@ describe('ai-nodes', () => {
       expect(lastCall.model).toBe('opus');
     });
 
-    it('calls Claude with json output format', async () => {
+    it('calls SDK with jsonSchema for structured output', async () => {
       mockClient.clearCalls();
       await generateContentBundle({}, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.outputFormat).toBe('json');
+      expect(lastCall.jsonSchema).toBeDefined();
     });
 
     it('adds metadata with sessionId and theme', async () => {
@@ -474,11 +490,11 @@ describe('ai-nodes', () => {
   });
 
   describe('validateArticle', () => {
-    const mockClient = createMockClaudeClient({ validationResults: mockValidationPassed });
+    const mockClient = createMockSdkClient({ validationResults: mockValidationPassed });
     const mockBuilder = createMockPromptBuilder();
     const config = {
       configurable: {
-        claudeClient: mockClient,
+        sdkClient: mockClient,
         promptBuilder: mockBuilder
       }
     };
@@ -498,10 +514,10 @@ describe('ai-nodes', () => {
     });
 
     it('sets currentPhase to REVISE_CONTENT when validation fails', async () => {
-      const failingClient = createMockClaudeClient({ validationResults: mockValidationFailed });
+      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
       const failConfig = {
         configurable: {
-          claudeClient: failingClient,
+          sdkClient: failingClient,
           promptBuilder: mockBuilder
         }
       };
@@ -512,10 +528,10 @@ describe('ai-nodes', () => {
     });
 
     it('increments voiceRevisionCount when validation fails', async () => {
-      const failingClient = createMockClaudeClient({ validationResults: mockValidationFailed });
+      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
       const failConfig = {
         configurable: {
-          claudeClient: failingClient,
+          sdkClient: failingClient,
           promptBuilder: mockBuilder
         }
       };
@@ -526,10 +542,10 @@ describe('ai-nodes', () => {
     });
 
     it('completes after max revisions even if validation fails', async () => {
-      const failingClient = createMockClaudeClient({ validationResults: mockValidationFailed });
+      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
       const failConfig = {
         configurable: {
-          claudeClient: failingClient,
+          sdkClient: failingClient,
           promptBuilder: mockBuilder
         }
       };
@@ -539,7 +555,7 @@ describe('ai-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.COMPLETE);
     });
 
-    it('calls Claude with haiku model', async () => {
+    it('calls SDK with haiku model', async () => {
       mockClient.clearCalls();
       await validateArticle({}, config);
 
@@ -564,11 +580,11 @@ describe('ai-nodes', () => {
       contentBundle: mockContentBundle,
       fixes_applied: ['Fixed em-dash', 'Fixed passive voice']
     };
-    const mockClient = createMockClaudeClient({ revision: mockRevision });
+    const mockClient = createMockSdkClient({ revision: mockRevision });
     const mockBuilder = createMockPromptBuilder();
     const config = {
       configurable: {
-        claudeClient: mockClient,
+        sdkClient: mockClient,
         promptBuilder: mockBuilder
       }
     };
@@ -606,7 +622,7 @@ describe('ai-nodes', () => {
       expect(result.contentBundle._revisionHistory).toHaveLength(2);
     });
 
-    it('calls Claude with sonnet model', async () => {
+    it('calls SDK with sonnet model', async () => {
       mockClient.clearCalls();
       await reviseContentBundle({}, config);
 
@@ -628,11 +644,13 @@ describe('ai-nodes', () => {
   });
 
   describe('dependency injection', () => {
-    it('uses injected claudeClient from config', async () => {
-      const customClient = jest.fn().mockResolvedValue(JSON.stringify({}));
-      const config = { configurable: { claudeClient: customClient } };
+    it('uses injected sdkClient from config', async () => {
+      const customClient = jest.fn().mockResolvedValue({});
+      const config = { configurable: { sdkClient: customClient } };
+      // Provide preprocessedEvidence so SDK is called
+      const state = { preprocessedEvidence: mockPreprocessedEvidence };
 
-      await curateEvidenceBundle({}, config);
+      await curateEvidenceBundle(state, config);
 
       expect(customClient).toHaveBeenCalled();
     });
@@ -646,7 +664,7 @@ describe('ai-nodes', () => {
 
       const config = {
         configurable: {
-          claudeClient: createMockClaudeClient({}),
+          sdkClient: createMockSdkClient({}),
           promptBuilder: customBuilder
         }
       };
@@ -669,11 +687,11 @@ describe('ai-nodes', () => {
   });
 
   describe('edge cases', () => {
-    const mockClient = createMockClaudeClient({});
+    const mockClient = createMockSdkClient({});
     const mockBuilder = createMockPromptBuilder();
     const config = {
       configurable: {
-        claudeClient: mockClient,
+        sdkClient: mockClient,
         promptBuilder: mockBuilder
       }
     };
@@ -705,10 +723,10 @@ describe('ai-nodes', () => {
     });
 
     it('handles zero voiceRevisionCount', async () => {
-      const failingClient = createMockClaudeClient({ validationResults: mockValidationFailed });
+      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
       const failConfig = {
         configurable: {
-          claudeClient: failingClient,
+          sdkClient: failingClient,
           promptBuilder: mockBuilder
         }
       };
@@ -719,7 +737,9 @@ describe('ai-nodes', () => {
     });
   });
 
-  describe('safeParseJson', () => {
+  describe('safeParseJson (legacy utility)', () => {
+    // safeParseJson is still available for edge cases but SDK pattern
+    // returns objects directly so it's less commonly needed
     it('parses valid JSON successfully', () => {
       const { safeParseJson } = _testing;
       const result = safeParseJson('{"key": "value"}', 'test context');
@@ -751,93 +771,80 @@ describe('ai-nodes', () => {
     });
   });
 
-  describe('error handling: invalid JSON responses', () => {
-    // Create a mock client that returns invalid JSON
-    function createInvalidJsonClient() {
-      return async () => 'This is not valid JSON at all!';
+  describe('error handling: SDK errors', () => {
+    // SDK pattern throws errors directly instead of returning invalid JSON
+    function createErrorClient(errorMessage) {
+      return async () => {
+        throw new Error(errorMessage);
+      };
     }
 
-    it('curateEvidenceBundle throws actionable error on invalid JSON', async () => {
-      const config = { configurable: { claudeClient: createInvalidJsonClient() } };
+    it('curateEvidenceBundle propagates SDK errors', async () => {
+      const config = { configurable: { sdkClient: createErrorClient('SDK connection failed') } };
+      const state = { preprocessedEvidence: mockPreprocessedEvidence };
 
-      await expect(curateEvidenceBundle({}, config))
-        .rejects.toThrow(/Failed to parse evidence bundle from curateEvidenceBundle/);
+      await expect(curateEvidenceBundle(state, config))
+        .rejects.toThrow(/SDK connection failed/);
     });
 
-    it('analyzeNarrativeArcs throws actionable error on invalid JSON', async () => {
+    it('analyzeNarrativeArcs propagates SDK errors', async () => {
       const config = {
         configurable: {
-          claudeClient: createInvalidJsonClient(),
+          sdkClient: createErrorClient('Model overloaded'),
           promptBuilder: createMockPromptBuilder()
         }
       };
 
       await expect(analyzeNarrativeArcs({}, config))
-        .rejects.toThrow(/Failed to parse arc analysis from analyzeNarrativeArcs/);
+        .rejects.toThrow(/Model overloaded/);
     });
 
-    it('generateOutline throws actionable error on invalid JSON', async () => {
+    it('generateOutline propagates SDK errors', async () => {
       const config = {
         configurable: {
-          claudeClient: createInvalidJsonClient(),
+          sdkClient: createErrorClient('Rate limit exceeded'),
           promptBuilder: createMockPromptBuilder()
         }
       };
 
       await expect(generateOutline({}, config))
-        .rejects.toThrow(/Failed to parse outline from generateOutline/);
+        .rejects.toThrow(/Rate limit exceeded/);
     });
 
-    it('generateContentBundle throws actionable error on invalid JSON', async () => {
+    it('generateContentBundle propagates SDK errors', async () => {
       const config = {
         configurable: {
-          claudeClient: createInvalidJsonClient(),
+          sdkClient: createErrorClient('Context length exceeded'),
           promptBuilder: createMockPromptBuilder()
         }
       };
 
       await expect(generateContentBundle({}, config))
-        .rejects.toThrow(/Failed to parse content bundle from generateContentBundle/);
+        .rejects.toThrow(/Context length exceeded/);
     });
 
-    it('validateArticle throws actionable error on invalid JSON', async () => {
+    it('validateArticle propagates SDK errors', async () => {
       const config = {
         configurable: {
-          claudeClient: createInvalidJsonClient(),
+          sdkClient: createErrorClient('Authentication failed'),
           promptBuilder: createMockPromptBuilder()
         }
       };
 
       await expect(validateArticle({ contentBundle: {} }, config))
-        .rejects.toThrow(/Failed to parse validation results from validateArticle/);
+        .rejects.toThrow(/Authentication failed/);
     });
 
-    it('reviseContentBundle throws actionable error on invalid JSON', async () => {
+    it('reviseContentBundle propagates SDK errors', async () => {
       const config = {
         configurable: {
-          claudeClient: createInvalidJsonClient(),
+          sdkClient: createErrorClient('Timeout'),
           promptBuilder: createMockPromptBuilder()
         }
       };
 
       await expect(reviseContentBundle({}, config))
-        .rejects.toThrow(/Failed to parse revised content from reviseContentBundle/);
-    });
-
-    it('error messages include response preview for debugging', async () => {
-      const badResponse = 'Claude returned: Error processing request';
-      const config = {
-        configurable: {
-          claudeClient: async () => badResponse
-        }
-      };
-
-      try {
-        await curateEvidenceBundle({}, config);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        expect(error.message).toContain('Claude returned: Error processing request');
-      }
+        .rejects.toThrow(/Timeout/);
     });
   });
 
@@ -849,11 +856,11 @@ describe('ai-nodes', () => {
       contentBundle: mockContentBundle,
       validationResults: mockValidationPassed
     };
-    const mockClient = createMockClaudeClient(fixtures);
+    const mockClient = createMockSdkClient(fixtures);
     const mockBuilder = createMockPromptBuilder();
     const config = {
       configurable: {
-        claudeClient: mockClient,
+        sdkClient: mockClient,
         promptBuilder: mockBuilder
       }
     };
@@ -900,10 +907,10 @@ describe('ai-nodes', () => {
 
     it('can chain validateArticle -> reviseContentBundle on failure', async () => {
       const failingFixtures = { ...fixtures, validationResults: mockValidationFailed };
-      const failClient = createMockClaudeClient(failingFixtures);
+      const failClient = createMockSdkClient(failingFixtures);
       const failConfig = {
         configurable: {
-          claudeClient: failClient,
+          sdkClient: failClient,
           promptBuilder: mockBuilder
         }
       };
