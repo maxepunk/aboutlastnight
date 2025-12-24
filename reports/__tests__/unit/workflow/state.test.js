@@ -10,6 +10,7 @@ const {
   getDefaultState,
   PHASES,
   APPROVAL_TYPES,
+  REVISION_CAPS,
   _testing
 } = require('../../../lib/workflow/state');
 
@@ -33,10 +34,17 @@ describe('ReportStateAnnotation', () => {
       expect(typeof APPROVAL_TYPES).toBe('object');
     });
 
+    it('exports REVISION_CAPS constant (Commit 8.6)', () => {
+      expect(REVISION_CAPS).toBeDefined();
+      expect(typeof REVISION_CAPS).toBe('object');
+    });
+
     it('exports _testing with reducer functions', () => {
       expect(_testing).toBeDefined();
       expect(typeof _testing.replaceReducer).toBe('function');
       expect(typeof _testing.appendReducer).toBe('function');
+      expect(typeof _testing.mergeReducer).toBe('function');
+      expect(typeof _testing.appendSingleReducer).toBe('function');
     });
   });
 
@@ -125,6 +133,95 @@ describe('ReportStateAnnotation', () => {
     });
   });
 
+  describe('mergeReducer (Commit 8.6)', () => {
+    const { mergeReducer } = _testing;
+
+    it('merges new properties into existing object', () => {
+      expect(mergeReducer({ a: 1 }, { b: 2 })).toEqual({ a: 1, b: 2 });
+    });
+
+    it('overwrites existing properties with new values', () => {
+      expect(mergeReducer({ a: 1 }, { a: 2 })).toEqual({ a: 2 });
+    });
+
+    it('handles null old value', () => {
+      expect(mergeReducer(null, { a: 1 })).toEqual({ a: 1 });
+    });
+
+    it('handles undefined old value', () => {
+      expect(mergeReducer(undefined, { a: 1 })).toEqual({ a: 1 });
+    });
+
+    it('handles null new value', () => {
+      expect(mergeReducer({ a: 1 }, null)).toEqual({ a: 1 });
+    });
+
+    it('handles undefined new value', () => {
+      expect(mergeReducer({ a: 1 }, undefined)).toEqual({ a: 1 });
+    });
+
+    it('handles both null', () => {
+      expect(mergeReducer(null, null)).toEqual({});
+    });
+
+    it('returns new object instance (immutable)', () => {
+      const oldObj = { a: 1 };
+      const newObj = { b: 2 };
+      const result = mergeReducer(oldObj, newObj);
+      expect(result).not.toBe(oldObj);
+      expect(result).not.toBe(newObj);
+    });
+  });
+
+  describe('appendSingleReducer (Commit 8.6)', () => {
+    const { appendSingleReducer } = _testing;
+
+    it('appends single item to existing array', () => {
+      expect(appendSingleReducer([1, 2], 3)).toEqual([1, 2, 3]);
+    });
+
+    it('handles null old value', () => {
+      expect(appendSingleReducer(null, 1)).toEqual([1]);
+    });
+
+    it('handles undefined old value', () => {
+      expect(appendSingleReducer(undefined, 1)).toEqual([1]);
+    });
+
+    it('returns unchanged array when new value is null', () => {
+      expect(appendSingleReducer([1, 2], null)).toEqual([1, 2]);
+    });
+
+    it('returns unchanged array when new value is undefined', () => {
+      expect(appendSingleReducer([1, 2], undefined)).toEqual([1, 2]);
+    });
+
+    it('handles empty array with null new value', () => {
+      expect(appendSingleReducer([], null)).toEqual([]);
+    });
+
+    it('handles null old value with null new value', () => {
+      expect(appendSingleReducer(null, null)).toEqual([]);
+    });
+
+    it('returns new array instance (immutable)', () => {
+      const oldArr = [1, 2];
+      const result = appendSingleReducer(oldArr, 3);
+      expect(result).not.toBe(oldArr);
+    });
+
+    it('appends object correctly', () => {
+      const result = appendSingleReducer(
+        [{ phase: 'arcs', ready: true }],
+        { phase: 'outline', ready: false }
+      );
+      expect(result).toEqual([
+        { phase: 'arcs', ready: true },
+        { phase: 'outline', ready: false }
+      ]);
+    });
+  });
+
   describe('getDefaultState', () => {
     let defaultState;
 
@@ -137,28 +234,52 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 22 state fields', () => {
+    it('includes all 30 state fields (Commit 8.6)', () => {
       const expectedFields = [
+        // Session
         'sessionId',
         'theme',
+        // Input data
         'sessionConfig',
         'directorNotes',
         'playerFocus',
+        // Fetched data
         'memoryTokens',
         'paperEvidence',
         'sessionPhotos',
-        'preprocessedEvidence',  // Added in Commit 8.5
+        // Photo analysis (Commit 8.6)
+        'photoAnalyses',
+        'characterIdMappings',
+        // Preprocessed data (Commit 8.5)
+        'preprocessedEvidence',
+        // Curated data
         'evidenceBundle',
+        // Arc specialists (Commit 8.6)
+        'specialistAnalyses',
+        // Analysis results
         'narrativeArcs',
         'selectedArcs',
         '_arcAnalysisCache',
+        // Evaluation (Commit 8.6)
+        'evaluationHistory',
+        // Generation outputs
         'outline',
         'contentBundle',
+        // Supervisor (Commit 8.6)
+        'supervisorNarrativeCompass',
+        // Final outputs
         'assembledHtml',
         'validationResults',
+        // Control flow
         'currentPhase',
-        'voiceRevisionCount',
+        'voiceRevisionCount',  // @deprecated
+        // Revision counters (Commit 8.6)
+        'arcRevisionCount',
+        'outlineRevisionCount',
+        'articleRevisionCount',
+        // Error handling
         'errors',
+        // Human approval
         'awaitingApproval',
         'approvalType'
       ];
@@ -201,6 +322,48 @@ describe('ReportStateAnnotation', () => {
 
       it('sessionPhotos defaults to empty array', () => {
         expect(defaultState.sessionPhotos).toEqual([]);
+      });
+    });
+
+    describe('photo analysis defaults (Commit 8.6)', () => {
+      it('photoAnalyses defaults to null', () => {
+        expect(defaultState.photoAnalyses).toBeNull();
+      });
+
+      it('characterIdMappings defaults to null', () => {
+        expect(defaultState.characterIdMappings).toBeNull();
+      });
+    });
+
+    describe('specialist analysis defaults (Commit 8.6)', () => {
+      it('specialistAnalyses defaults to empty object', () => {
+        expect(defaultState.specialistAnalyses).toEqual({});
+      });
+    });
+
+    describe('evaluation defaults (Commit 8.6)', () => {
+      it('evaluationHistory defaults to empty array', () => {
+        expect(defaultState.evaluationHistory).toEqual([]);
+      });
+    });
+
+    describe('supervisor defaults (Commit 8.6)', () => {
+      it('supervisorNarrativeCompass defaults to null', () => {
+        expect(defaultState.supervisorNarrativeCompass).toBeNull();
+      });
+    });
+
+    describe('revision counter defaults (Commit 8.6)', () => {
+      it('arcRevisionCount defaults to 0', () => {
+        expect(defaultState.arcRevisionCount).toBe(0);
+      });
+
+      it('outlineRevisionCount defaults to 0', () => {
+        expect(defaultState.outlineRevisionCount).toBe(0);
+      });
+
+      it('articleRevisionCount defaults to 0', () => {
+        expect(defaultState.articleRevisionCount).toBe(0);
       });
     });
 
@@ -290,15 +453,26 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.CURATE_EVIDENCE).toBe('1.8');
     });
 
-    it('defines analysis phase', () => {
+    it('defines photo analysis phase (1.65)', () => {
+      expect(PHASES.ANALYZE_PHOTOS).toBe('1.65');
+    });
+
+    it('defines analysis phases (2.x)', () => {
       expect(PHASES.ANALYZE_ARCS).toBe('2');
+      expect(PHASES.ARC_SPECIALISTS).toBe('2.1');
+      expect(PHASES.ARC_SYNTHESIS).toBe('2.2');
+      expect(PHASES.ARC_EVALUATION).toBe('2.3');
     });
 
     it('defines generation phases (3-4.x)', () => {
       expect(PHASES.GENERATE_OUTLINE).toBe('3');
+      expect(PHASES.OUTLINE_GENERATION).toBe('3.1');
+      expect(PHASES.OUTLINE_EVALUATION).toBe('3.2');
       expect(PHASES.GENERATE_CONTENT).toBe('4');
-      expect(PHASES.VALIDATE_SCHEMA).toBe('4.1');
-      expect(PHASES.REVISE_CONTENT).toBe('4.2');
+      expect(PHASES.ARTICLE_GENERATION).toBe('4.1');
+      expect(PHASES.ARTICLE_EVALUATION).toBe('4.2');
+      expect(PHASES.VALIDATE_SCHEMA).toBe('4.3');
+      expect(PHASES.REVISE_CONTENT).toBe('4.4');
     });
 
     it('defines assembly phases (5.x)', () => {
@@ -311,8 +485,8 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 16 phases', () => {
-      expect(Object.keys(PHASES)).toHaveLength(16);
+    it('defines exactly 24 phases (Commit 8.6)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(24);
     });
 
     it('all phase values are strings', () => {
@@ -341,8 +515,20 @@ describe('ReportStateAnnotation', () => {
       expect(APPROVAL_TYPES.OUTLINE).toBe('outline');
     });
 
-    it('defines exactly 3 approval types', () => {
-      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(3);
+    it('defines EVIDENCE_AND_PHOTOS type (Commit 8.6)', () => {
+      expect(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS).toBe('evidence-and-photos');
+    });
+
+    it('defines CHARACTER_IDS type (Commit 8.6)', () => {
+      expect(APPROVAL_TYPES.CHARACTER_IDS).toBe('character-ids');
+    });
+
+    it('defines ARTICLE type (Commit 8.6)', () => {
+      expect(APPROVAL_TYPES.ARTICLE).toBe('article');
+    });
+
+    it('defines exactly 6 approval types (Commit 8.6)', () => {
+      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(6);
     });
 
     it('all approval type values are strings', () => {
@@ -355,6 +541,32 @@ describe('ReportStateAnnotation', () => {
       const values = Object.values(APPROVAL_TYPES);
       const uniqueValues = new Set(values);
       expect(uniqueValues.size).toBe(values.length);
+    });
+  });
+
+  describe('REVISION_CAPS constant (Commit 8.6)', () => {
+    it('defines ARCS cap as 2 (foundational - escalate early)', () => {
+      expect(REVISION_CAPS.ARCS).toBe(2);
+    });
+
+    it('defines OUTLINE cap as 3 (more surface area to fix)', () => {
+      expect(REVISION_CAPS.OUTLINE).toBe(3);
+    });
+
+    it('defines ARTICLE cap as 3 (most content to polish)', () => {
+      expect(REVISION_CAPS.ARTICLE).toBe(3);
+    });
+
+    it('defines exactly 3 revision caps', () => {
+      expect(Object.keys(REVISION_CAPS)).toHaveLength(3);
+    });
+
+    it('all revision cap values are positive integers', () => {
+      Object.values(REVISION_CAPS).forEach(cap => {
+        expect(typeof cap).toBe('number');
+        expect(Number.isInteger(cap)).toBe(true);
+        expect(cap).toBeGreaterThan(0);
+      });
     });
   });
 
