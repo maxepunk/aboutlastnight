@@ -137,7 +137,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 21 state fields', () => {
+    it('includes all 22 state fields', () => {
       const expectedFields = [
         'sessionId',
         'theme',
@@ -147,6 +147,7 @@ describe('ReportStateAnnotation', () => {
         'memoryTokens',
         'paperEvidence',
         'sessionPhotos',
+        'preprocessedEvidence',  // Added in Commit 8.5
         'evidenceBundle',
         'narrativeArcs',
         'selectedArcs',
@@ -310,8 +311,8 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 15 phases', () => {
-      expect(Object.keys(PHASES)).toHaveLength(15);
+    it('defines exactly 16 phases', () => {
+      expect(Object.keys(PHASES)).toHaveLength(16);
     });
 
     it('all phase values are strings', () => {

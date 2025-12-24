@@ -4,13 +4,14 @@
  * Assembles the complete LangGraph StateGraph for report generation.
  * Connects all nodes with edges, conditional routing, and checkpointing.
  *
- * Graph Flow:
+ * Graph Flow (13 nodes):
  * 1. initializeSession → loadDirectorNotes → fetchMemoryTokens → fetchPaperEvidence
- * 2. curateEvidenceBundle → [approval checkpoint] → analyzeNarrativeArcs
- * 3. analyzeNarrativeArcs → [approval checkpoint] → generateOutline
- * 4. generateOutline → [approval checkpoint] → generateContentBundle
- * 5. validateContentBundle → [error or continue] → assembleHtml → validateArticle
- * 6. validateArticle → [complete or revise] → reviseContentBundle → loop back to validateContentBundle
+ * 2. preprocessEvidence (Commit 8.5: batch summarization) → curateEvidenceBundle
+ * 3. curateEvidenceBundle → [approval checkpoint] → analyzeNarrativeArcs
+ * 4. analyzeNarrativeArcs → [approval checkpoint] → generateOutline
+ * 5. generateOutline → [approval checkpoint] → generateContentBundle
+ * 6. validateContentBundle → [error or continue] → assembleHtml → validateArticle
+ * 7. validateArticle → [complete or revise] → reviseContentBundle → loop back to validateContentBundle
  *
  * Checkpointing:
  * - MemorySaver for testing (in-memory)
@@ -82,6 +83,9 @@ function createGraphBuilder() {
   builder.addNode('fetchMemoryTokens', nodes.fetchMemoryTokens);
   builder.addNode('fetchPaperEvidence', nodes.fetchPaperEvidence);
 
+  // Preprocessing nodes (Commit 8.5)
+  builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
+
   // AI processing nodes
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
   builder.addNode('analyzeNarrativeArcs', nodes.analyzeNarrativeArcs);
@@ -103,7 +107,10 @@ function createGraphBuilder() {
   builder.addEdge('initializeSession', 'loadDirectorNotes');
   builder.addEdge('loadDirectorNotes', 'fetchMemoryTokens');
   builder.addEdge('fetchMemoryTokens', 'fetchPaperEvidence');
-  builder.addEdge('fetchPaperEvidence', 'curateEvidenceBundle');
+
+  // Phase 1.7: Evidence Preprocessing (Commit 8.5)
+  builder.addEdge('fetchPaperEvidence', 'preprocessEvidence');
+  builder.addEdge('preprocessEvidence', 'curateEvidenceBundle');
 
   // Phase 1.8: Evidence Curation → Approval Checkpoint
   builder.addConditionalEdges('curateEvidenceBundle', routeApproval, {

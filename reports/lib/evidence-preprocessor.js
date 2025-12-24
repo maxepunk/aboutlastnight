@@ -1,0 +1,537 @@
+/**
+ * EvidencePreprocessor - Batch processing for evidence summarization
+ *
+ * Addresses the scalability gap discovered during Commit 8 validation:
+ * Single Claude calls with 100+ tokens would timeout. This module batch-processes
+ * evidence items with Haiku for fast summarization before theme-specific curation.
+ *
+ * Design Decisions (per ARCHITECTURE_DECISIONS.md 8.5.1-8.5.5):
+ * - Universal preprocessing schema (theme-agnostic intermediate format)
+ * - Batch parameters from detective pattern (8 items × 4 concurrent)
+ * - Rich relation context always included (owner.logline, timeline.*)
+ *
+ * Usage:
+ *   const { createEvidencePreprocessor } = require('./evidence-preprocessor');
+ *   const preprocessor = createEvidencePreprocessor({ callClaude });
+ *   const result = await preprocessor.process({
+ *     memoryTokens: [...],
+ *     paperEvidence: [...],
+ *     playerFocus: { primaryInvestigation: '...' },
+ *     sessionId: '20251221'
+ *   });
+ */
+
+// Batch configuration - proven in detective flow (150+ items in ~3 minutes)
+const BATCH_SIZE = 8;
+const CONCURRENCY = 4;
+
+// Preprocessing prompt template
+const SYSTEM_PROMPT = `You are an evidence analyst preprocessing raw investigation data for narrative curation.
+
+For each evidence item, provide:
+1. A concise summary (max 150 chars) of what this evidence reveals
+2. Significance level: critical (directly proves/disproves key claims), supporting (corroborates other evidence), contextual (provides background), background (minor relevance)
+3. Character references mentioned or connected
+4. Timeline period (if identifiable)
+5. Whether this advances the main investigation narrative (true/false)
+6. Categorical tags (e.g., "financial", "relationship", "timeline", "communication")
+7. Suggested grouping cluster with related evidence
+
+Consider the player focus when assessing significance:
+{{playerFocus}}
+
+Return a JSON array with one object per evidence item.`;
+
+const ITEM_SCHEMA = {
+  type: 'object',
+  required: ['id', 'sourceType', 'summary', 'significance'],
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string' },
+    sourceType: { type: 'string', enum: ['memory-token', 'paper-evidence'] },
+    originalType: { type: 'string' },
+    summary: { type: 'string', maxLength: 150 },
+    significance: { type: 'string', enum: ['critical', 'supporting', 'contextual', 'background'] },
+    characterRefs: { type: 'array', items: { type: 'string' } },
+    ownerLogline: { type: 'string' },
+    timelineRef: { type: 'string' },
+    timelineContext: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        year: { type: 'string' },
+        period: { type: 'string' }
+      }
+    },
+    narrativeRelevance: { type: 'boolean' },
+    tags: { type: 'array', items: { type: 'string' } },
+    groupCluster: { type: 'string' },
+    sfFields: { type: 'object', additionalProperties: true }
+  }
+};
+
+const BATCH_RESPONSE_SCHEMA = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  $id: 'preprocessor-batch-response',
+  type: 'object',
+  required: ['items'],
+  properties: {
+    items: {
+      type: 'array',
+      items: ITEM_SCHEMA
+    }
+  }
+};
+
+/**
+ * Normalize playerFocus to consistent structure
+ * Extracts the three core fields with null/empty defaults
+ *
+ * @param {Object} playerFocus - Raw playerFocus object
+ * @returns {Object} Normalized playerFocus with primaryInvestigation, emotionalHook, openQuestions
+ */
+function normalizePlayerFocus(playerFocus = {}) {
+  return {
+    primaryInvestigation: playerFocus.primaryInvestigation || null,
+    emotionalHook: playerFocus.emotionalHook || null,
+    openQuestions: playerFocus.openQuestions || []
+  };
+}
+
+/**
+ * Create an evidence preprocessor instance
+ *
+ * @param {Object} options - Configuration options
+ * @param {Function} options.callClaude - Claude client function (for dependency injection)
+ * @returns {Object} - Preprocessor instance with process() method
+ */
+function createEvidencePreprocessor(options = {}) {
+  const { callClaude: claudeClient } = options;
+
+  if (!claudeClient) {
+    throw new Error('callClaude function is required');
+  }
+
+  /**
+   * Process raw evidence into preprocessed format
+   *
+   * @param {Object} input - Processing input
+   * @param {Array} input.memoryTokens - Raw memory tokens from Notion
+   * @param {Array} input.paperEvidence - Raw paper evidence from Notion
+   * @param {Object} input.playerFocus - Player focus from director notes
+   * @param {string} input.sessionId - Session identifier
+   * @returns {Promise<Object>} - Preprocessed evidence in universal schema
+   */
+  async function process(input) {
+    const {
+      memoryTokens = [],
+      paperEvidence = [],
+      playerFocus = {},
+      sessionId = 'unknown'
+    } = input;
+
+    const startTime = Date.now();
+
+    // Normalize all items into common format for batching
+    const allItems = [
+      ...memoryTokens.map(token => ({
+        id: token.id,
+        sourceType: 'memory-token',
+        originalType: token.type || 'Memory Token',
+        rawData: token,
+        ownerLogline: token.owner?.logline || null,
+        timelineContext: token.timeline || null,
+        sfFields: token.sfFields || {}
+      })),
+      ...paperEvidence.map(evidence => ({
+        id: evidence.id,
+        sourceType: 'paper-evidence',
+        originalType: evidence.type || 'Paper Evidence',
+        rawData: evidence,
+        ownerLogline: null,
+        timelineContext: evidence.timeline || null,
+        sfFields: evidence.sfFields || {}
+      }))
+    ];
+
+    if (allItems.length === 0) {
+      return createEmptyResult(sessionId, playerFocus, startTime);
+    }
+
+    // Split into batches
+    const batches = createBatches(allItems, BATCH_SIZE);
+
+    console.log(`[EvidencePreprocessor] Processing ${allItems.length} items in ${batches.length} batches (${BATCH_SIZE} per batch, ${CONCURRENCY} concurrent)`);
+
+    // Process batches with controlled concurrency
+    const results = await processWithConcurrency(batches, CONCURRENCY, async (batch, batchIndex) => {
+      console.log(`[EvidencePreprocessor] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} items)`);
+      return processBatch(batch, playerFocus, claudeClient, batchIndex);
+    });
+
+    // Flatten results and handle errors
+    const processedItems = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const result of results) {
+      if (result.success) {
+        processedItems.push(...result.items);
+        successCount++;
+      } else {
+        errorCount++;
+        console.error(`[EvidencePreprocessor] Batch failed: ${result.error}`);
+        // Add fallback items with minimal data
+        processedItems.push(...result.fallbackItems || []);
+      }
+    }
+
+    const processingTimeMs = Date.now() - startTime;
+
+    console.log(`[EvidencePreprocessor] Complete: ${processedItems.length} items processed in ${processingTimeMs}ms (${successCount} batches succeeded, ${errorCount} failed)`);
+
+    // Calculate significance counts
+    const significanceCounts = {
+      critical: 0,
+      supporting: 0,
+      contextual: 0,
+      background: 0
+    };
+
+    for (const item of processedItems) {
+      if (item.significance in significanceCounts) {
+        significanceCounts[item.significance]++;
+      }
+    }
+
+    return {
+      items: processedItems,
+      preprocessedAt: new Date().toISOString(),
+      sessionId,
+      playerFocus: normalizePlayerFocus(playerFocus),
+      stats: {
+        totalItems: processedItems.length,
+        memoryTokenCount: memoryTokens.length,
+        paperEvidenceCount: paperEvidence.length,
+        batchesProcessed: batches.length,
+        processingTimeMs,
+        significanceCounts
+      }
+    };
+  }
+
+  return { process };
+}
+
+/**
+ * Process a single batch of evidence items
+ *
+ * @param {Array} batch - Items to process
+ * @param {Object} playerFocus - Player focus context
+ * @param {Function} callClaude - Claude client function
+ * @param {number} batchIndex - Batch index for logging
+ * @returns {Promise<Object>} - { success: boolean, items: Array, error?: string }
+ */
+async function processBatch(batch, playerFocus, callClaude, batchIndex) {
+  try {
+    // Build user prompt with batch items
+    const batchData = batch.map(item => ({
+      id: item.id,
+      sourceType: item.sourceType,
+      originalType: item.originalType,
+      ownerLogline: item.ownerLogline,
+      timelineContext: item.timelineContext,
+      sfFields: item.sfFields,
+      // Include key raw data fields
+      name: item.rawData.name || item.rawData.title,
+      description: item.rawData.description || item.rawData.text,
+      content: item.rawData.content,
+      tags: item.rawData.tags || []
+    }));
+
+    const playerFocusStr = playerFocus.primaryInvestigation
+      ? `Primary Investigation: ${playerFocus.primaryInvestigation}\nEmotional Hook: ${playerFocus.emotionalHook || 'Not specified'}`
+      : 'No specific player focus provided.';
+
+    const systemPrompt = SYSTEM_PROMPT.replace('{{playerFocus}}', playerFocusStr);
+
+    const userPrompt = `Process these ${batch.length} evidence items:\n\n${JSON.stringify(batchData, null, 2)}`;
+
+    const response = await callClaude({
+      prompt: userPrompt,
+      systemPrompt,
+      model: 'haiku',
+      outputFormat: 'json',
+      jsonSchema: BATCH_RESPONSE_SCHEMA,
+      maxRetries: 1 // Fewer retries per batch for faster overall processing
+    });
+
+    // Parse response
+    const parsed = JSON.parse(response);
+    const items = parsed.items || [];
+
+    // Merge with preserved context (owner logline, timeline context, SF fields)
+    const mergedItems = items.map(item => {
+      const original = batch.find(b => b.id === item.id);
+      if (original) {
+        return {
+          ...item,
+          ownerLogline: item.ownerLogline || original.ownerLogline,
+          timelineContext: item.timelineContext || original.timelineContext,
+          sfFields: item.sfFields || original.sfFields
+        };
+      }
+      return item;
+    });
+
+    return {
+      success: true,
+      items: mergedItems
+    };
+
+  } catch (error) {
+    console.error(`[EvidencePreprocessor] Batch ${batchIndex} error: ${error.message}`);
+
+    // Create fallback items with minimal classification
+    const fallbackItems = batch.map(item => ({
+      id: item.id,
+      sourceType: item.sourceType,
+      originalType: item.originalType,
+      summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
+      significance: 'contextual',
+      characterRefs: [],
+      ownerLogline: item.ownerLogline,
+      timelineRef: null,
+      timelineContext: item.timelineContext,
+      narrativeRelevance: false,
+      tags: [],
+      groupCluster: null,
+      sfFields: item.sfFields
+    }));
+
+    return {
+      success: false,
+      error: error.message,
+      fallbackItems
+    };
+  }
+}
+
+/**
+ * Split array into batches of specified size
+ *
+ * @param {Array} items - Items to batch
+ * @param {number} batchSize - Maximum items per batch
+ * @returns {Array<Array>} - Array of batches
+ */
+function createBatches(items, batchSize) {
+  const batches = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    batches.push(items.slice(i, i + batchSize));
+  }
+  return batches;
+}
+
+/**
+ * Process items with controlled concurrency
+ *
+ * @param {Array} items - Items to process
+ * @param {number} concurrency - Maximum concurrent operations
+ * @param {Function} processor - Async function to process each item
+ * @returns {Promise<Array>} - Results in original order
+ */
+async function processWithConcurrency(items, concurrency, processor) {
+  const results = new Array(items.length);
+  let currentIndex = 0;
+
+  async function processNext() {
+    while (currentIndex < items.length) {
+      const index = currentIndex++;
+      results[index] = await processor(items[index], index);
+    }
+  }
+
+  // Start concurrent workers
+  const workers = [];
+  for (let i = 0; i < Math.min(concurrency, items.length); i++) {
+    workers.push(processNext());
+  }
+
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Create empty result for sessions with no evidence
+ */
+function createEmptyResult(sessionId, playerFocus, startTime) {
+  return {
+    items: [],
+    preprocessedAt: new Date().toISOString(),
+    sessionId,
+    playerFocus: normalizePlayerFocus(playerFocus),
+    stats: {
+      totalItems: 0,
+      memoryTokenCount: 0,
+      paperEvidenceCount: 0,
+      batchesProcessed: 0,
+      processingTimeMs: Date.now() - startTime,
+      significanceCounts: {
+        critical: 0,
+        supporting: 0,
+        contextual: 0,
+        background: 0
+      }
+    }
+  };
+}
+
+/**
+ * Create a mock preprocessor for testing
+ *
+ * @param {Object} mockData - Optional mock data to return
+ * @returns {Object} - Mock preprocessor instance
+ */
+function createMockPreprocessor(mockData = {}) {
+  const callLog = [];
+
+  async function process(input) {
+    callLog.push({ ...input, timestamp: new Date().toISOString() });
+
+    const {
+      memoryTokens = [],
+      paperEvidence = [],
+      playerFocus = {},
+      sessionId = 'mock-session'
+    } = input;
+
+    // Generate mock preprocessed items
+    const items = [
+      ...memoryTokens.map((token, i) => ({
+        id: token.id || `mock-token-${i}`,
+        sourceType: 'memory-token',
+        originalType: token.type || 'Memory Token',
+        summary: mockData.summaryPrefix
+          ? `${mockData.summaryPrefix} - Token ${i + 1}`
+          : `Mock summary for token ${i + 1}`,
+        significance: i === 0 ? 'critical' : 'supporting',
+        characterRefs: token.characterRefs || [],
+        ownerLogline: token.owner?.logline || null,
+        timelineRef: null,
+        timelineContext: token.timeline || null,
+        narrativeRelevance: i < 3,
+        tags: ['mock'],
+        groupCluster: 'mock-cluster',
+        sfFields: token.sfFields || {}
+      })),
+      ...paperEvidence.map((evidence, i) => ({
+        id: evidence.id || `mock-evidence-${i}`,
+        sourceType: 'paper-evidence',
+        originalType: evidence.type || 'Paper Evidence',
+        summary: mockData.summaryPrefix
+          ? `${mockData.summaryPrefix} - Evidence ${i + 1}`
+          : `Mock summary for evidence ${i + 1}`,
+        significance: 'contextual',
+        characterRefs: [],
+        ownerLogline: null,
+        timelineRef: null,
+        timelineContext: evidence.timeline || null,
+        narrativeRelevance: false,
+        tags: ['mock'],
+        groupCluster: 'mock-cluster',
+        sfFields: evidence.sfFields || {}
+      }))
+    ];
+
+    return {
+      items: mockData.items || items,
+      preprocessedAt: new Date().toISOString(),
+      sessionId,
+      playerFocus: normalizePlayerFocus(playerFocus),
+      stats: {
+        totalItems: items.length,
+        memoryTokenCount: memoryTokens.length,
+        paperEvidenceCount: paperEvidence.length,
+        batchesProcessed: Math.ceil(items.length / BATCH_SIZE),
+        processingTimeMs: mockData.processingTimeMs || 100,
+        significanceCounts: {
+          critical: 1,
+          supporting: memoryTokens.length - 1,
+          contextual: paperEvidence.length,
+          background: 0
+        }
+      }
+    };
+  }
+
+  return {
+    process,
+    getCalls: () => [...callLog],
+    getLastCall: () => callLog[callLog.length - 1] || null,
+    clearCalls: () => { callLog.length = 0; }
+  };
+}
+
+module.exports = {
+  createEvidencePreprocessor,
+  createMockPreprocessor,
+
+  // Export constants for testing and documentation
+  BATCH_SIZE,
+  CONCURRENCY,
+
+  // Export internal functions for testing
+  _testing: {
+    createBatches,
+    processWithConcurrency,
+    processBatch,
+    createEmptyResult,
+    normalizePlayerFocus,
+    BATCH_RESPONSE_SCHEMA
+  }
+};
+
+// Self-test when run directly
+if (require.main === module) {
+  console.log('EvidencePreprocessor Self-Test\n');
+
+  // Test batch creation
+  console.log('Testing createBatches...');
+  const items = Array.from({ length: 25 }, (_, i) => ({ id: i }));
+  const batches = createBatches(items, 8);
+  console.log(`Created ${batches.length} batches from ${items.length} items`);
+  console.log(`Batch sizes: ${batches.map(b => b.length).join(', ')}`);
+  console.assert(batches.length === 4, 'Expected 4 batches');
+  console.assert(batches[0].length === 8, 'First batch should have 8 items');
+  console.assert(batches[3].length === 1, 'Last batch should have 1 item');
+  console.log('createBatches: PASS\n');
+
+  // Test concurrency processing
+  console.log('Testing processWithConcurrency...');
+  const testItems = [1, 2, 3, 4, 5, 6];
+  const processOrder = [];
+  processWithConcurrency(testItems, 2, async (item, index) => {
+    processOrder.push({ item, index, time: Date.now() });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    return item * 2;
+  }).then(results => {
+    console.log(`Processed ${results.length} items: ${results.join(', ')}`);
+    console.log(`Process order: ${processOrder.map(p => p.item).join(', ')}`);
+    console.log('processWithConcurrency: PASS\n');
+  });
+
+  // Test mock preprocessor
+  console.log('Testing createMockPreprocessor...');
+  const mockPreprocessor = createMockPreprocessor({ summaryPrefix: 'Test' });
+  mockPreprocessor.process({
+    memoryTokens: [{ id: '1' }, { id: '2' }],
+    paperEvidence: [{ id: '3' }],
+    playerFocus: { primaryInvestigation: 'Test investigation' },
+    sessionId: 'test-session'
+  }).then(result => {
+    console.log(`Mock processed ${result.items.length} items`);
+    console.log(`First summary: ${result.items[0].summary}`);
+    console.log(`Stats: ${JSON.stringify(result.stats)}`);
+    console.log('createMockPreprocessor: PASS\n');
+  });
+}
