@@ -1,0 +1,96 @@
+{
+  "exposed": {
+    "tokens": [
+      {
+        "tokenId": "blk001",
+        "name": "Blake's Offshore Account Statement",
+        "fullDescription": "Bank statement from Cayman Islands showing $2.3M deposit on October 15th. Account holder listed as 'Blackwood Holdings LLC'. Routing numbers trace to shell company in Delaware.",
+        "significance": "critical",
+        "playerInteraction": "Players discovered this after tracing Blake's financial trail through Charlie's audit reports"
+      },
+      {
+        "tokenId": "chr001",
+        "name": "Charlie's Audit Report",
+        "fullDescription": "Internal audit document showing irregular entries from October. Charlie's notes indicate he was asked to 'adjust' the numbers.",
+        "significance": "critical",
+        "playerInteraction": "Elena photographed this document, exposing Charlie's involvement"
+      }
+    ],
+    "paperEvidence": [
+      {
+        "notionId": "page-ev-001",
+        "name": "Offshore Account Statement",
+        "description": "Bank statement from Cayman Islands showing $2.3M deposit on October 15th.",
+        "quotableContent": "Transfer authorized by B.M., countersigned C.D."
+      },
+      {
+        "notionId": "page-ev-003",
+        "name": "Internal Email Thread",
+        "description": "Printed email chain between Blake and Charlie discussing 'the arrangement' and 'cleaning up the trail'.",
+        "quotableContent": "We need to clean this up before the quarterly review. - B"
+      }
+    ]
+  },
+  "buried": {
+    "transactions": [
+      {
+        "account": "Phoenix Consulting Group",
+        "amount": 85000,
+        "inference": "Shell company with no real operations - funds likely redirected to personal accounts",
+        "buriedBy": "Charlie"
+      },
+      {
+        "account": "Apex Scientific Equipment",
+        "amount": 220000,
+        "inference": "Equipment vendor doesn't exist - invoice fabricated",
+        "buriedBy": "Blake"
+      }
+    ],
+    "relationships": [
+      {
+        "connection": "Blake and Charlie attended same university",
+        "inference": "Long-standing relationship enabled trust for the scheme",
+        "confidence": "high"
+      }
+    ]
+  },
+  "context": {
+    "timeline": {
+      "start": "October 1, 2024",
+      "keyDates": [
+        {
+          "date": "October 14",
+          "event": "Blake accessed secure file room at 2:15 AM"
+        },
+        {
+          "date": "October 15",
+          "event": "$2.3M transferred to offshore account"
+        },
+        {
+          "date": "October 22",
+          "event": "Charlie's audit report filed"
+        }
+      ]
+    },
+    "playerFocus": {
+      "primaryInvestigation": "Financial fraud trail",
+      "emotionalHook": "Blake's betrayal of trust",
+      "openQuestions": ["Where did the money go?", "Who else knew?"]
+    },
+    "sessionMetadata": {
+      "sessionId": "test-session",
+      "accusation": {
+        "accused": ["Blake", "Charlie"],
+        "reasoning": "Group traced the money trail through their connected accounts"
+      }
+    }
+  },
+  "curatorNotes": {
+    "layerRationale": "Evidence categorized by player discovery pattern - exposed items were actively investigated, buried items require inference",
+    "characterCoverage": {
+      "featured": ["Blake", "Charlie"],
+      "mentioned": ["Diana", "Elena"],
+      "needsPlacement": ["Alex"]
+    }
+  }
+}

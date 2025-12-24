@@ -1,0 +1,32 @@
+{
+  "passed": false,
+  "issues": [
+    {
+      "type": "em_dash",
+      "line": 45,
+      "text": "Blake — the CFO — had access",
+      "fix": "Blake, the CFO, had access"
+    },
+    {
+      "type": "passive_voice",
+      "line": 72,
+      "text": "The group decided to confront",
+      "fix": "I watched them decide to confront"
+    },
+    {
+      "type": "game_mechanics",
+      "line": 103,
+      "text": "guests at the party",
+      "fix": "people present that night"
+    }
+  ],
+  "voice_score": 2,
+  "voice_notes": "Multiple lapses into passive/observer mode. Several em-dashes that violate style guide. Game mechanics language detected.",
+  "roster_coverage": {
+    "featured": ["Blake", "Charlie"],
+    "mentioned": ["Diana"],
+    "missing": ["Alex", "Elena"]
+  },
+  "systemic_critique_present": false,
+  "blake_handled_correctly": true
+}
