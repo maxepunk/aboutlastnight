@@ -116,8 +116,14 @@ async function preprocessEvidence(state, config) {
   } catch (error) {
     console.error('[preprocessEvidence] Error:', error.message);
 
-    // Return error state rather than throwing
+    // Return error state with empty preprocessedEvidence to signal "attempted but failed"
+    // This prevents retry ambiguity: null = not attempted, empty = attempted + failed
     return {
+      preprocessedEvidence: createEmptyResult(
+        state.sessionId,
+        state.playerFocus || {},
+        Date.now()
+      ),
       errors: [{
         phase: PHASES.PREPROCESS_EVIDENCE,
         type: 'preprocessing-failed',

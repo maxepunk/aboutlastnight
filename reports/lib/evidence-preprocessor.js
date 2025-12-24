@@ -70,6 +70,18 @@ const ITEM_SCHEMA = {
   }
 };
 
+/**
+ * Schema for Claude's batch response.
+ *
+ * IMPORTANT: This schema defines what Claude returns, NOT the final output.
+ * After Claude responds, context fields (ownerLogline, timelineContext, sfFields)
+ * are merged from the original input data in processBatch(). This ensures:
+ * 1. Claude doesn't need to copy/preserve large context objects
+ * 2. Original rich context is always preserved in final output
+ * 3. Claude focuses on analysis (summary, significance, characterRefs, etc.)
+ *
+ * See processBatch() merge logic at ~line 275 for implementation.
+ */
 const BATCH_RESPONSE_SCHEMA = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   $id: 'preprocessor-batch-response',
