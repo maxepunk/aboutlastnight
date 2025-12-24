@@ -594,3 +594,200 @@ const template = await promptBuilder.theme.loadTemplate().catch(err => {
 | Revision history | Article output transparency (Commit 7) |
 | Safe JSON parsing | Actionable errors for debugging (Commits 6, 8) |
 | Template load warning | Debugging visibility without crashing (Commit 7) |
+
+---
+
+## Commit 6: Graph Assembly + Integration Tests (graph.js, template-nodes.js, nodes/index.js)
+
+### Decision 6.1: Barrel Export Pattern for Nodes
+**Plan:** Direct imports from multiple node files
+**Implemented:** Single `nodes/index.js` barrel export
+
+```javascript
+// nodes/index.js
+const fetchNodes = require('./fetch-nodes');
+const aiNodes = require('./ai-nodes');
+const templateNodes = require('./template-nodes');
+
+module.exports = {
+  // All node functions
+  ...fetchNodes,
+  ...aiNodes,
+  ...templateNodes,
+
+  // Mock namespace for testing
+  mocks: {
+    createMockNotionClient: fetchNodes.createMockNotionClient,
+    createMockClaudeClient: aiNodes.createMockClaudeClient,
+    createMockPromptBuilder: aiNodes.createMockPromptBuilder
+  }
+};
+```
+
+**Rationale:**
+1. Single import point for graph.js - cleaner code
+2. Mock factories grouped in `mocks` namespace
+3. DRY - avoids repeating imports in tests
+4. Forward-compatible - new node files automatically included
+
+**Impact on Plan:** Graph and tests import from one location.
+
+---
+
+### Decision 6.2: Named Routing Functions for Conditional Edges
+**Plan:** Inline arrow functions in graph
+**Implemented:** Named, exported, documented routing functions
+
+```javascript
+function routeApproval(state) {
+  return state.awaitingApproval ? 'wait' : 'continue';
+}
+
+function routeValidation(state) {
+  const hasErrors = state.errors && state.errors.length > 0;
+  return hasErrors ? 'error' : 'continue';
+}
+
+function routeVoiceValidation(state) {
+  const passed = state.validationResults?.passed;
+  const maxRevisions = 2;
+  const atMaxRevisions = (state.voiceRevisionCount || 0) >= maxRevisions;
+  if (passed || atMaxRevisions) return 'complete';
+  return 'revise';
+}
+```
+
+**Rationale:**
+1. Testable - routing logic can be unit tested directly
+2. Readable - graph assembly is clear about decision points
+3. Documented - JSDoc explains routing semantics
+
+**Impact on Plan:** Integration tests verify routing in isolation before full graph tests.
+
+---
+
+### Decision 6.3: Skip Logic for Resume and Testing
+**Plan:** Not mentioned
+**Implemented:** Nodes check if data already exists to skip processing
+
+```javascript
+// In curateEvidenceBundle:
+if (state.evidenceBundle && !state.awaitingApproval) {
+  return { currentPhase: PHASES.CURATE_EVIDENCE };
+}
+
+// In fetchMemoryTokens:
+if (state.memoryTokens && state.memoryTokens.length > 0) {
+  return { currentPhase: PHASES.FETCH_EVIDENCE };
+}
+```
+
+**Rationale:**
+1. Resume from checkpoint - graph can restart from any phase
+2. Testing - pre-populate state to test specific nodes
+3. Efficiency - don't re-fetch/re-process existing data
+4. Approval pattern - awaitingApproval=false signals approval granted
+
+**Impact on Plan:** Checkpointing and resume work correctly. Tests can isolate nodes.
+
+---
+
+### Decision 6.4: _arcAnalysisCache State Field
+**Plan:** Not mentioned (discovered via code review)
+**Implemented:** Hidden state field for inter-node data sharing
+
+```javascript
+// In state.js:
+_arcAnalysisCache: Annotation({
+  reducer: replaceReducer,
+  default: () => null
+}),
+
+// In analyzeNarrativeArcs:
+return {
+  narrativeArcs: arcAnalysis.narrativeArcs,
+  _arcAnalysisCache: arcAnalysis,  // Full analysis preserved
+  // ...
+};
+
+// In generateOutline:
+const arcAnalysis = state._arcAnalysisCache || {
+  narrativeArcs: state.narrativeArcs || [],
+  // reconstruct minimal structure
+};
+```
+
+**Rationale:**
+1. `narrativeArcs` is user-facing (for arc selection UI)
+2. `_arcAnalysisCache` preserves full analysis context
+3. Outline generation needs full context (characterPlacementOpportunities, rosterCoverage)
+4. Underscore prefix signals "internal, not for display"
+
+**Impact on Plan:** State has 21 fields (not 20). Tests updated accordingly.
+
+---
+
+### Decision 6.5: Stub assembleHtml Node
+**Plan:** Full template assembly
+**Implemented:** Stub that returns minimal HTML (Commit 7 will complete)
+
+```javascript
+async function assembleHtml(state, config) {
+  const assembler = getTemplateAssembler(config);
+  const html = await assembler.assemble(state.contentBundle);
+  return {
+    assembledHtml: html,
+    currentPhase: PHASES.ASSEMBLE_HTML
+  };
+}
+```
+
+**Rationale:**
+1. Graph needs all nodes to compile
+2. Integration tests need full pipeline
+3. Stub allows testing graph flow before templates exist
+4. Mock assembler returns minimal valid HTML
+
+**Impact on Plan:** Commit 7 replaces stub with real Handlebars implementation.
+
+---
+
+### Decision 6.6: Integration Test Fixture Pattern
+**Plan:** Inline test data
+**Implemented:** Fixtures directory with realistic test data
+
+```
+__tests__/
+├── fixtures/
+│   ├── sessions/
+│   │   └── test-session/
+│   │       └── inputs/
+│   │           ├── director-notes.json
+│   │           └── session-config.json
+│   └── content-bundles/
+│       ├── valid-journalist.json
+│       └── invalid-missing-sections.json
+├── integration/
+│   └── workflow.test.js
+```
+
+**Rationale:**
+1. Realistic data catches edge cases
+2. Fixtures reused across tests
+3. Easy to update when schema changes
+4. Matches production file structure
+
+**Impact on Plan:** Future commits add fixtures as needed.
+
+---
+
+## Summary of Commit 6 Impacts
+
+| Decision | Impact on Future Commits |
+|----------|-------------------------|
+| Barrel export | All imports from single nodes/index.js |
+| Named routing | Routing logic testable in isolation |
+| Skip logic | Checkpointing and resume work (Commit 8 API) |
+| _arcAnalysisCache | State has 21 fields, tests updated |
+| Stub assembleHtml | Commit 7 completes implementation |
+| Fixture pattern | Realistic test data structure |

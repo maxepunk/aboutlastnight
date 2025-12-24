@@ -137,7 +137,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 20 state fields', () => {
+    it('includes all 21 state fields', () => {
       const expectedFields = [
         'sessionId',
         'theme',
@@ -150,6 +150,7 @@ describe('ReportStateAnnotation', () => {
         'evidenceBundle',
         'narrativeArcs',
         'selectedArcs',
+        '_arcAnalysisCache',
         'outline',
         'contentBundle',
         'assembledHtml',
@@ -213,6 +214,10 @@ describe('ReportStateAnnotation', () => {
 
       it('selectedArcs defaults to empty array', () => {
         expect(defaultState.selectedArcs).toEqual([]);
+      });
+
+      it('_arcAnalysisCache defaults to null', () => {
+        expect(defaultState._arcAnalysisCache).toBeNull();
       });
     });
 
@@ -386,7 +391,7 @@ describe('ReportStateAnnotation', () => {
     });
 
     it('generation fields are produced by AI', () => {
-      const generationFields = ['evidenceBundle', 'narrativeArcs', 'selectedArcs', 'outline', 'contentBundle'];
+      const generationFields = ['evidenceBundle', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', 'outline', 'contentBundle'];
       const defaultState = getDefaultState();
 
       generationFields.forEach(field => {
