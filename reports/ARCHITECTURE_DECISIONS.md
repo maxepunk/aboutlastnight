@@ -791,3 +791,835 @@ __tests__/
 | _arcAnalysisCache | State has 21 fields, tests updated |
 | Stub assembleHtml | Commit 7 completes implementation |
 | Fixture pattern | Realistic test data structure |
+
+---
+
+## Commit 7: Template System (template-helpers.js, template-assembler.js, templates/)
+
+### Decision 7.1: DRY Utilities for Template Helpers
+**Plan:** Individual helper functions with inline logic
+**Implemented:** Extracted shared utilities and constant maps
+
+```javascript
+// Internal utilities
+function parseDate(dateInput) { /* shared date parsing */ }
+function mapToClass(value, mappings, defaultClass) { /* generic CSS class mapper */ }
+function compilePartial(handlebars, partial) { /* template compilation */ }
+
+// Constant maps (replaces inline objects)
+const SIGNIFICANCE_CLASSES = { critical: '...', supporting: '...', contextual: '...' };
+const SECTION_CLASSES = { narrative: '...', 'evidence-highlight': '...', /* ... */ };
+const PLACEMENT_CLASSES = { left: '...', right: '...', center: '...' };
+const CONTENT_BLOCK_PARTIALS = { paragraph: '...', quote: '...', /* ... */ };
+```
+
+**Rationale:**
+1. DRY - Date parsing used in 3 functions (formatDate, formatDatetime, articleId)
+2. DRY - CSS class mapping pattern repeated in 4 functions
+3. Testable - Utilities exported via `_testing` namespace
+4. Maintainable - Class mappings centralized for easy updates
+
+**Impact on Plan:** None. Purely internal refactoring.
+
+---
+
+### Decision 7.2: Lazy Initialization for TemplateAssembler
+**Plan:** Initialize on construction
+**Implemented:** Initialize on first `assemble()` call
+
+```javascript
+async assemble(contentBundle, options = {}) {
+  await this.initialize();  // Lazy init - loads templates on first call
+  // ... validation and rendering
+}
+
+async initialize() {
+  if (this.initialized) return;  // Idempotent
+  // Load main template, register partials and helpers
+  this.initialized = true;
+}
+```
+
+**Rationale:**
+1. Fast construction - No async work at instantiation
+2. Idempotent - Safe to call initialize() multiple times
+3. Testable - Can create assembler without filesystem access
+4. Fail-fast - Template errors surface at assemble time, not import time
+
+**Impact on Plan:** Nodes can create assembler synchronously, lazy load on use.
+
+---
+
+### Decision 7.3: CSS/JS Paths as Theme Configuration
+**Plan:** Hardcoded CSS references
+**Implemented:** Theme-configurable CSS and JS paths
+
+```javascript
+const DEFAULT_CSS_PATHS = {
+  journalist: {
+    basePath: '/assets/css/journalist',
+    files: ['variables.css', 'base.css', 'layout.css', 'sidebar.css', 'typography.css']
+  }
+};
+
+const DEFAULT_JS_PATHS = {
+  journalist: {
+    basePath: '/assets/js',
+    files: ['scroll-effects.js']
+  }
+};
+```
+
+**Rationale:**
+1. Theme-agnostic - Each theme defines its own assets
+2. Configurable - Can override via constructor options
+3. Testable - Paths exported via `_testing` for verification
+
+**Impact on Plan:** Detective theme (Commit 9) will add its own CSS/JS paths.
+
+---
+
+### Decision 7.4: Handlebars Helper Signature for Format Arguments
+**Plan:** Not specified
+**Implemented:** Correct signature for optional arguments
+
+```javascript
+// WRONG (original):
+handlebars.registerHelper('formatDate', function(dateInput, options) {
+  const format = typeof options === 'string' ? options : 'long';  // Never works
+});
+
+// CORRECT (implemented):
+handlebars.registerHelper('formatDate', function(dateInput, format, options) {
+  // When called as {{formatDate date}}: format = options object
+  // When called as {{formatDate date "short"}}: format = "short"
+  const actualFormat = typeof format === 'string' ? format : 'long';
+  return formatDate(dateInput, actualFormat);
+});
+```
+
+**Rationale:** Handlebars always passes the options hash as the LAST argument. Any explicit arguments come before it. `{{formatDate date "short"}}` passes `(date, "short", options)`.
+
+**Impact on Plan:** Template calls with format arguments now work correctly.
+
+---
+
+### Decision 7.5: Diegetic Date in Templates
+**Plan:** Dynamic dates everywhere
+**Implemented:** Intentional hardcoded "February 22, 2027" in header
+
+```handlebars
+<time class="nn-article__date" datetime="{{formatDatetime metadata.generatedAt}}">
+  February 22, 2027
+</time>
+```
+
+**Rationale:** This is the diegetic game date for NovaNews fiction. The `datetime` attribute uses the real generation date (for machine parsing), but the displayed text is the in-game date when the investigation was "published."
+
+**Impact on Plan:** Not a bug - intentional design decision per game fiction.
+
+---
+
+### Decision 7.6: Recursive Partial Registration
+**Plan:** Flat partials directory
+**Implemented:** Recursive registration with path-based names
+
+```javascript
+async registerPartialsRecursively(dir, prefix = '') {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await this.registerPartialsRecursively(
+        path.join(dir, entry.name),
+        `${prefix}${entry.name}/`
+      );
+    } else if (entry.name.endsWith('.hbs')) {
+      const name = `${prefix}${entry.name.replace('.hbs', '')}`;
+      // Register as 'content-blocks/paragraph', 'sidebar/evidence-card', etc.
+    }
+  }
+}
+```
+
+**Rationale:**
+1. Organization - Partials grouped by type (content-blocks/, sidebar/)
+2. Namespacing - No name collisions between similar partials
+3. Discoverability - Directory structure mirrors usage
+4. Scalable - Add new categories without code changes
+
+**Impact on Plan:** Partial references use path-style names: `{{> sidebar/evidence-card}}`.
+
+---
+
+### Decision 7.7: Computed Context Flags for Templates
+**Plan:** Templates check array lengths inline
+**Implemented:** Pre-computed boolean flags in buildContext()
+
+```javascript
+buildContext(contentBundle) {
+  return {
+    ...contentBundle,
+    // Computed flags for conditional rendering
+    hasFinancialTracker: contentBundle.financialTracker?.entries?.length > 0,
+    hasPullQuotes: contentBundle.pullQuotes?.length > 0,
+    hasEvidenceCards: contentBundle.evidenceCards?.length > 0,
+    // Navigation built from sections
+    sectionNav: contentBundle.sections?.map(s => ({
+      id: s.id,
+      label: s.heading || s.id,
+      href: `#${s.id}`
+    }))
+  };
+}
+```
+
+**Rationale:**
+1. Clean templates - `{{#if hasPullQuotes}}` vs `{{#if pullQuotes.length}}`
+2. Single source - Logic centralized in assembler
+3. Testable - Context building can be unit tested
+
+**Impact on Plan:** Templates use boolean flags, not array length checks.
+
+---
+
+## Summary of Commit 7 Impacts
+
+| Decision | Impact on Future Commits |
+|----------|-------------------------|
+| DRY utilities | Reuse parseDate, mapToClass in future helpers |
+| Lazy init | Fast assembler construction for API endpoint (Commit 8) |
+| Theme CSS/JS paths | Detective theme adds its own paths (Commit 9) |
+| Correct helper signature | All format-style helpers work correctly |
+| Diegetic date | Not a bug - intentional game fiction |
+| Recursive partials | Add new partial categories freely |
+| Computed context flags | Templates stay clean and readable |
+
+---
+
+## Commit 8: API Endpoint + Integration Tests
+
+### Decision 8.1: Mock Graph Factories for API Testing
+**Plan:** Full graph tests in api.test.js
+**Implemented:** Mock graph factories that simulate specific scenarios
+
+```javascript
+function createMockCompletedGraph() {
+  return {
+    invoke: async () => ({
+      currentPhase: PHASES.COMPLETE,
+      awaitingApproval: false,
+      assembledHtml: '<html>...</html>',
+      validationResults: { passed: true }
+    })
+  };
+}
+
+function createMockEvidenceApprovalGraph() { /* ... */ }
+function createMockArcSelectionGraph() { /* ... */ }
+function createMockOutlineApprovalGraph() { /* ... */ }
+function createMockErrorGraph(errors) { /* ... */ }
+function createMockThrowingGraph(message) { /* ... */ }
+```
+
+**Rationale:**
+1. API tests focus on endpoint logic (validation, response structure)
+2. Full graph testing is in workflow.test.js (separation of concerns)
+3. Mock factories capture each approval checkpoint scenario
+4. Error handling tested without triggering real failures
+
+**Impact on Plan:** Clear separation between API tests and workflow tests.
+
+---
+
+### Decision 8.2: Handler Logic as Testable Function
+**Plan:** Test via HTTP requests
+**Implemented:** Extract handler logic as `handleGenerateRequest(req, graph)`
+
+```javascript
+// In api.test.js - function mirrors server.js handler
+async function handleGenerateRequest(req, graph) {
+  const { sessionId, theme, approvals } = req.body;
+  // Validation logic
+  // Graph invocation
+  // Response building
+  return { status: 200, json: response };
+}
+```
+
+**Rationale:**
+1. Unit test handler logic without HTTP server
+2. Faster test execution (no network overhead)
+3. Clear contract between handler and graph
+4. Manual HTTP testing supplements these tests
+
+**Impact on Plan:** Tests run faster and more reliably.
+
+---
+
+### Decision 8.3: Empty selectedArcs Validation
+**Plan:** Not specified
+**Implemented:** Explicit validation rejecting empty arc arrays
+
+```javascript
+if (approvals.selectedArcs && Array.isArray(approvals.selectedArcs)) {
+  if (approvals.selectedArcs.length === 0) {
+    return {
+      status: 400,
+      json: { error: 'selectedArcs cannot be empty. At least one arc must be selected.' }
+    };
+  }
+  initialState.selectedArcs = approvals.selectedArcs;
+}
+```
+
+**Rationale:** An empty selectedArcs array would cause outline generation to fail. Fail fast with clear error message.
+
+**Impact on Plan:** Frontend must select at least one arc before proceeding.
+
+---
+
+## Summary of Commit 8 Impacts
+
+| Decision | Impact on Future Commits |
+|----------|-------------------------|
+| Mock graph factories | Reuse pattern for future API tests |
+| Handler as function | Other endpoints can use same pattern |
+| selectedArcs validation | Frontend enforces at least one selection |
+
+---
+
+## Commit 8.5: Evidence Preprocessing Layer (ADDENDUM)
+
+This commit addresses a gap discovered during Commit 8 manual validation: `curateEvidenceBundle` timed out when processing a real session with 100+ tokens. The original plan assumed all evidence could be processed in a single Claude call, but this doesn't scale.
+
+### Decision 8.5.1: Universal Preprocessing Schema
+**Plan:** Not originally specified (gap discovered during manual validation)
+**Implemented:** Theme-agnostic preprocessing output
+
+```json
+{
+  "$id": "preprocessed-evidence",
+  "type": "object",
+  "required": ["items", "preprocessedAt"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "required": ["id", "sourceType", "summary", "significance"],
+        "properties": {
+          "id": { "type": "string" },
+          "sourceType": { "enum": ["memory-token", "paper-evidence"] },
+          "summary": { "type": "string", "maxLength": 150 },
+          "significance": { "enum": ["critical", "supporting", "contextual", "background"] },
+          "characterRefs": { "type": "array", "items": { "type": "string" } },
+          "timelineRef": { "type": "string" },
+          "narrativeRelevance": { "type": "boolean" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "groupCluster": { "type": "string" }
+        }
+      }
+    },
+    "preprocessedAt": { "type": "string", "format": "date-time" },
+    "stats": { /* totalItems, batchesProcessed, processingTimeMs */ }
+  }
+}
+```
+
+**Rationale:**
+1. All themes work with the same underlying Notion data
+2. Preprocessing is about summarization, not organization
+3. Theme-specific logic belongs in curation, not preprocessing
+4. One schema = one batch processing implementation = DRY
+
+**Impact on Plan:** New schema file `preprocessed-evidence.schema.json`. All themes produce identical intermediate format.
+
+---
+
+### Decision 8.5.2: Filter Configuration in Skill Directory
+**Plan:** Hardcoded filters in notion-client.js
+**Implemented:** Theme-specific config at `.claude/skills/{theme}-report/config.json`
+
+```javascript
+// notion-client.js loads config
+const themeConfig = require(path.join(skillPath, 'config.json'));
+const filters = themeConfig.notionFilters;
+```
+
+```json
+{
+  "notionFilters": {
+    "memoryTokens": {
+      "types": ["Memory Token Video", "Memory Token Image", "Memory Token Audio"]
+    },
+    "paperEvidence": {
+      "types": ["Prop", "Physical", "Clue", "Document"],
+      "narrativeThreads": ["Funding & Espionage", "Marriage Troubles", "Memory Drug", "Underground Parties"]
+    }
+  },
+  "relationResolution": {
+    "includeOwnerLogline": true,
+    "includeTimeline": true
+  }
+}
+```
+
+**Rationale:**
+1. Open/Closed principle - add themes without modifying NotionClient
+2. Theme maintainers control their own filters
+3. Same location as prompts (skill directory = theme boundary)
+4. Testable - mock config for unit tests
+
+**Impact on Plan:** NotionClient accepts `skillPath` in config, loads filters dynamically.
+
+---
+
+### Decision 8.5.3: Rich Relation Resolution Always Enabled
+**Plan:** Minimal resolution (names only)
+**Implemented:** Always fetch owner.logline and timeline.*
+
+**Rationale:**
+1. Preprocessing accuracy improves with rich context
+2. Detective already uses this data; journalist can benefit too
+3. Small performance cost vs. significant quality improvement
+4. Future themes won't need to request additional resolution
+
+**Impact on Plan:** NotionClient resolves all relations by default. ~10% more API calls, but preprocessing is more accurate.
+
+---
+
+### Decision 8.5.4: Batch Parameters from Detective Pattern
+**Plan:** Not specified
+**Implemented:** 8 items per batch, 4 concurrent batches
+
+```javascript
+const BATCH_SIZE = 8;
+const CONCURRENCY = 4;
+```
+
+**Rationale:**
+1. Proven in detective flow (150+ items in ~3 minutes)
+2. Stays under Cloudflare 100-second timeout
+3. Balances throughput vs. rate limiting
+4. Each batch completes in ~40 seconds
+
+**Impact on Plan:** evidence-preprocessor.js uses these constants. Tests verify batch behavior.
+
+---
+
+### Decision 8.5.5: Preprocessing Node Inserted Before Curation
+**Plan:** `fetchSessionPhotos` → `curateEvidenceBundle`
+**Implemented:** `fetchSessionPhotos` → `preprocessEvidence` → `curateEvidenceBundle`
+
+**Rationale:**
+1. Preprocessing creates the summarized input curation needs
+2. Skip logic works: if preprocessedEvidence exists, skip preprocessing
+3. Resume from checkpoint works correctly
+4. Curation node simplified (no summarization, just organization)
+
+**Impact on Plan:** Graph has 13 nodes (was 12). PHASES updated with new phase.
+
+---
+
+## Summary of Commit 8.5 Impacts
+
+| Decision | Impact on Future Commits |
+|----------|-------------------------|
+| Universal preprocessing schema | All themes use same intermediate format |
+| Filter config in skill directory | Themes control their own Notion filters |
+| Rich relations always | More context for all themes |
+| Batch parameters | Proven performance characteristics |
+| Preprocessing node | Graph has additional phase |
+
+---
+
+## Updated State Field Count
+
+After Commit 8.5, state has **22 fields** (was 21):
+
+| Field | Added In | Purpose |
+|-------|----------|---------|
+| sessionId | Commit 3 | Session identifier |
+| theme | Commit 3 | Theme name |
+| sessionConfig | Commit 3 | Session configuration |
+| directorNotes | Commit 3 | Director notes JSON |
+| playerFocus | Commit 3 | Layer 3 drive from whiteboard |
+| memoryTokens | Commit 3 | Fetched tokens |
+| paperEvidence | Commit 3 | Fetched evidence |
+| sessionPhotos | Commit 3 | Session photos |
+| **preprocessedEvidence** | **Commit 8.5** | **Batch-summarized evidence** |
+| evidenceBundle | Commit 3 | Curated evidence bundle |
+| narrativeArcs | Commit 3 | Analyzed arcs |
+| selectedArcs | Commit 3 | User-selected arcs |
+| outline | Commit 3 | Generated outline |
+| contentBundle | Commit 3 | Structured content |
+| assembledHtml | Commit 3 | Final HTML |
+| validationResults | Commit 3 | Validation output |
+| currentPhase | Commit 3 | Current pipeline phase |
+| voiceRevisionCount | Commit 3 | Revision counter |
+| errors | Commit 3 | Error accumulator |
+| awaitingApproval | Commit 3 | Approval checkpoint flag |
+| approvalType | Commit 3 | Current approval type |
+| _arcAnalysisCache | Commit 6 | Inter-node data sharing |
+
+---
+
+## Updated PHASES Constant
+
+After Commit 8.5:
+
+```javascript
+const PHASES = {
+  INIT: 'init',
+  LOAD_DIRECTOR_NOTES: '1.1',
+  FETCH_TOKENS: '1.2',
+  FETCH_EVIDENCE: '1.3',
+  ANALYZE_IMAGES: '1.5',
+  FETCH_PHOTOS: '1.6',
+  PREPROCESS_EVIDENCE: '1.7',    // NEW in Commit 8.5
+  CURATE_EVIDENCE: '1.8',
+  ANALYZE_ARCS: '2',
+  GENERATE_OUTLINE: '3',
+  GENERATE_CONTENT: '4',
+  VALIDATE_CONTENT: '4.1',
+  REVISE_CONTENT: '4.2',
+  ASSEMBLE_HTML: '5',
+  VALIDATE_ARTICLE: '5.1',
+  COMPLETE: 'complete',
+  ERROR: 'error'
+};
+```
+
+---
+
+## Commit 8.6: Cohesive Generative Workflow (ADDENDUM)
+
+This commit addresses gaps discovered during Commit 8.5 validation:
+1. Arc analysis still timed out with ~20KB evidenceBundle in single Sonnet call
+2. Arc → Outline → Article phases were isolated rather than cohesive
+3. Photo analysis needed integration with arc analysis
+4. Quality gates needed per-phase evaluation
+
+### Research Foundation
+
+Patterns applied from established best practices:
+
+| Pattern | Source | Application |
+|---------|--------|-------------|
+| Subagents for investigation | [Anthropic Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices) | Arc specialists during analysis phase |
+| Scatter-gather parallelism | [LangGraph Guide](https://latenode.com/blog/langgraph-multi-agent-orchestration-complete-framework-guide-architecture-analysis-2025) | 3 parallel arc specialists → synthesizer |
+| Supervisor with Command routing | [LangGraph Multi-Agent](https://blog.langchain.com/langgraph-multi-agent-workflows/) | Generation supervisor orchestrates phases |
+| Evaluator-optimizer loops | [Anthropic Cookbook](https://github.com/anthropics/anthropic-cookbook) | Per-phase evaluation with revision caps |
+| Human-in-the-loop via interrupt() | [LangGraph HITL](https://langchain-ai.github.io/langgraph/) | Checkpoints after evaluator approval |
+
+---
+
+### Decision 8.6.1: Supervisor Pattern over Subgraph
+**Plan:** Considered subgraph for encapsulation
+**Implemented:** Supervisor pattern with synthesis twist
+
+**Subgraph approach:**
+```
+generationSubgraph (single node that expands internally)
+  - Internal state, checkpoints, edges
+  - Parent sees it as ONE node
+  - State passes in at entry, out at exit
+```
+
+**Supervisor approach (chosen):**
+```
+generationSupervisor (orchestrates specialists)
+  - Uses Command to route between specialists
+  - Maintains "narrative compass" across phases
+  - Can dynamically re-route based on feedback
+```
+
+**Rationale:**
+1. Supervisor actively enforces cohesion (not just structural constraints)
+2. Can catch "drift" between phases and request correction
+3. Maintains narrative compass across all phases
+4. More flexible routing based on quality feedback
+5. Better matches the goal of "one cohesive in-world experience"
+
+**Impact on Plan:** New `generation-supervisor.js` file. Supervisor is a node in parent graph, not a subgraph. Supervisor maintains `narrativeCompass` state field.
+
+---
+
+### Decision 8.6.2: Three Domain Arc Specialists (Hierarchical Synthesis)
+**Plan:** Single Opus call for arc analysis
+**Implemented:** 3 parallel Haiku/Sonnet specialists + 1 synthesizer
+
+The arc analyzer spec (`.claude/agents/journalist-arc-analyzer.md`) defines 6 cross-reference analyses in Step 3.5:
+1. Behavioral → Transaction Correlation
+2. Account Naming Pattern Analysis
+3. Victimization Analysis
+4. Zero-Footprint Analysis
+5. Timing Clusters
+6. Self-Burial vs Other-Burial
+
+**Grouping into 3 domain specialists:**
+
+| Specialist | Domain | Cross-References Covered |
+|------------|--------|--------------------------|
+| `analyzeFinancialPatterns` | Money | Account naming, timing clusters, transaction amounts |
+| `analyzeBehavioralPatterns` | People | Director observations, behavioral→transaction correlation, zero-footprint |
+| `analyzeVictimizationPatterns` | Targeting | Victimization, self-burial, whose memories went where |
+
+Then: `synthesizeArcs` combines with whiteboard/player focus to build final arcs.
+
+**Execution pattern (scatter-gather):**
+```
+curateEvidenceBundle
+      │
+      ├──→ arcFinancialSpecialist ──┐
+      ├──→ arcBehavioralSpecialist ─┼──→ arcSynthesizer
+      └──→ arcVictimizationSpecialist ┘
+```
+
+**Rationale:**
+1. Parallel execution cuts wall-clock time by ~3x
+2. Each specialist has focused context (no 20KB payload)
+3. Domains are coherent and non-overlapping
+4. Synthesizer applies player focus to combine insights
+5. Matches the spec's conceptual groupings
+
+**Impact on Plan:** 4 Claude calls instead of 1, but parallel and faster. New `arc-specialist-nodes.js` file. New state field `specialistAnalyses` with merge reducer.
+
+---
+
+### Decision 8.6.3: Early Photo Analysis (Fetch Phase)
+**Plan:** Photos analyzed parallel with arcs
+**Implemented:** Photos analyzed during fetch phase, before preprocessing
+
+**Original flow:**
+```
+fetchSessionPhotos → preprocessEvidence → curateEvidenceBundle → [arcs parallel with photos]
+```
+
+**Implemented flow:**
+```
+fetchSessionPhotos → analyzePhotos → preprocessEvidence → curateEvidenceBundle → arcs
+```
+
+**User input for character identification:**
+```
+[checkpoint: evidence+photos approval]
+      ↓
+[checkpoint: user provides character-ids.json]
+      ↓
+arcSpecialists (receive photo context + character IDs)
+```
+
+**Rationale:**
+1. Photo context enriches arc analysis (photos inform narrative moments)
+2. User provides character IDs before arc analysis begins (no generic descriptions)
+3. Single checkpoint for evidence+photos approval (fewer interruptions)
+4. Arc specialists receive complete picture
+
+**Impact on Plan:** New `analyzePhotos` node between `fetchSessionPhotos` and `preprocessEvidence`. New state fields `photoAnalyses` and `characterIdMappings`. New approval type `CHARACTER_IDS`.
+
+---
+
+### Decision 8.6.4: Per-Phase Evaluators with DRY Factory
+**Plan:** Single end-validation only
+**Implemented:** 3 evaluators (arcs, outline, article) with shared factory
+
+**Factory pattern:**
+```javascript
+function createEvaluator(phaseName, qualityCriteria, model = 'haiku') {
+  return async function(state, config) {
+    // Build evaluation prompt from qualityCriteria
+    // Call Claude to evaluate
+    // Return { ready, issues, revisionGuidance, confidence }
+  };
+}
+
+const evaluateArcs = createEvaluator('arcs', {
+  coherence: 'Do arcs tell a consistent story?',
+  evidenceGrounding: 'Are arcs supported by evidence?',
+  narrativePotential: 'Do arcs have emotional resonance?',
+  rosterCoverage: 'Does every roster member have placement?',
+  playerFocusAlignment: 'Do arcs reflect what players focused on?'
+});
+```
+
+**Evaluator behavior:**
+```
+Phase generates output
+      ↓
+Evaluator checks quality criteria
+      ↓
+ready=true?  ──YES──→ Checkpoint (human reviews)
+    │
+    NO
+    ↓
+revisionCount < cap?
+    │
+  YES ↓           NO ↓
+Revise with       Checkpoint with
+guidance          issues visible
+    │                 │
+    └─────────────────┘
+            ↓
+Return to supervisor
+```
+
+**Key semantics:**
+- `ready=true` means content is READY FOR HUMAN approval (not skip human)
+- Human ALWAYS approves at checkpoint
+- Auto-revisions happen only when evaluator finds fixable issues
+- Revision caps prevent infinite loops
+
+**Rationale:**
+1. Catches gaps early before they propagate
+2. Each phase has different quality criteria
+3. DRY: `createEvaluator` factory avoids duplication
+4. Revision caps prevent infinite loops
+5. Human always has final approval
+
+**Impact on Plan:** New `evaluator-nodes.js` file with factory pattern. New state field `evaluationHistory` for debugging.
+
+---
+
+### Decision 8.6.5: Phase-Specific Revision Caps with Human Escalation
+**Plan:** Max 2 revisions across all phases
+**Implemented:** Phase-specific caps (arcs: 2, outline: 3, article: 3)
+
+```javascript
+const REVISION_CAPS = {
+  arcs: 2,      // Foundational - if 2 revisions don't fix it, human intervenes
+  outline: 3,   // More surface area to fix
+  article: 3    // Most content to polish
+};
+```
+
+**Escalation behavior:**
+- Under cap: auto-revise with evaluator guidance
+- At cap: escalate to human checkpoint with issues visible
+- Human can provide additional guidance or approve as-is
+
+**Rationale:**
+1. Arcs are foundational - if 2 revisions don't fix it, human needs to intervene
+2. Outline/article have more surface area to fix, warrant 3 attempts
+3. Human always sees final output regardless of revision count
+4. Evaluator determines "ready for human" not "skip human"
+
+**Impact on Plan:** Per-phase revision counters in state (`arcRevisionCount`, `outlineRevisionCount`, `articleRevisionCount`).
+
+---
+
+### Decision 8.6.6: Supervisor Narrative Compass
+**Plan:** Not specified
+**Implemented:** Running synthesis that ensures cohesion across phases
+
+```json
+{
+  "coreThemes": ["Betrayal", "Corporate greed", "Hidden alliances"],
+  "emotionalHook": "The moment trust shattered",
+  "keyMoments": [
+    { "moment": "Taylor/Diana partnership dissolved", "source": "director observation" },
+    { "moment": "Kai's frantic final minutes", "source": "director observation" }
+  ],
+  "playerFocusAnchors": ["Victoria+Morgan collusion", "Derek's absence"],
+  "coherenceNotes": [
+    "Outline must connect Taylor's early Valet activity to final accusation",
+    "Article must deliver emotional payoff hinted in arc analysis"
+  ]
+}
+```
+
+**Supervisor behavior:**
+1. After arcs synthesized: Extract core themes, emotional hook, key moments
+2. After arc selection: Note which arcs user chose (player focus anchors)
+3. After outline: Add coherence notes about what article must deliver
+4. After article: Verify emotional payoff was achieved
+
+**Rationale:**
+1. Maintains narrative vision across all phases
+2. Catches "drift" when phases don't connect
+3. Provides coherence guidance to generators
+4. Enables quality feedback that spans phases
+
+**Impact on Plan:** New state field `supervisorNarrativeCompass`. Supervisor updates compass after each phase.
+
+---
+
+## Summary of Commit 8.6 Impacts
+
+| Decision | Impact on Future Commits |
+|----------|-------------------------|
+| Supervisor pattern | Central orchestration for generation phases |
+| Domain arc specialists | Parallel analysis with focused context |
+| Early photo analysis | Photo context available to arc analysis |
+| DRY evaluator factory | Consistent quality gates across phases |
+| Phase-specific revision caps | Different tolerance for different phases |
+| Narrative compass | Cross-phase coherence enforcement |
+
+---
+
+## Updated State Field Count
+
+After Commit 8.6, state has **30 fields** (was 22):
+
+| Field | Added In | Purpose |
+|-------|----------|---------|
+| ... (previous 22 fields) | ... | ... |
+| **photoAnalyses** | **Commit 8.6** | **Photo analysis results** |
+| **characterIdMappings** | **Commit 8.6** | **User-provided character identifications** |
+| **specialistAnalyses** | **Commit 8.6** | **Arc specialist outputs (merge reducer)** |
+| **evaluationHistory** | **Commit 8.6** | **Evaluation results for debugging** |
+| **arcRevisionCount** | **Commit 8.6** | **Arc phase revision counter** |
+| **outlineRevisionCount** | **Commit 8.6** | **Outline phase revision counter** |
+| **articleRevisionCount** | **Commit 8.6** | **Article phase revision counter** |
+| **supervisorNarrativeCompass** | **Commit 8.6** | **Cross-phase coherence state** |
+
+---
+
+## Updated PHASES Constant
+
+After Commit 8.6:
+
+```javascript
+const PHASES = {
+  INIT: 'init',
+  LOAD_DIRECTOR_NOTES: '1.1',
+  FETCH_TOKENS: '1.2',
+  FETCH_EVIDENCE: '1.3',
+  ANALYZE_IMAGES: '1.5',
+  FETCH_PHOTOS: '1.6',
+  ANALYZE_PHOTOS: '1.65',          // NEW in Commit 8.6
+  PREPROCESS_EVIDENCE: '1.7',
+  CURATE_EVIDENCE: '1.8',
+  ARC_SPECIALISTS: '2.1',          // NEW in Commit 8.6
+  ARC_SYNTHESIS: '2.2',            // NEW in Commit 8.6
+  ARC_EVALUATION: '2.3',           // NEW in Commit 8.6
+  ANALYZE_ARCS: '2',
+  OUTLINE_GENERATION: '3.1',       // NEW in Commit 8.6
+  OUTLINE_EVALUATION: '3.2',       // NEW in Commit 8.6
+  GENERATE_OUTLINE: '3',
+  ARTICLE_GENERATION: '4.1',       // NEW in Commit 8.6
+  ARTICLE_EVALUATION: '4.2',       // NEW in Commit 8.6
+  GENERATE_CONTENT: '4',
+  VALIDATE_CONTENT: '4.3',
+  REVISE_CONTENT: '4.4',
+  ASSEMBLE_HTML: '5',
+  VALIDATE_ARTICLE: '5.1',
+  COMPLETE: 'complete',
+  ERROR: 'error'
+};
+```
+
+---
+
+## Updated APPROVAL_TYPES Constant
+
+After Commit 8.6:
+
+```javascript
+const APPROVAL_TYPES = {
+  EVIDENCE_BUNDLE: 'evidence-bundle',
+  EVIDENCE_AND_PHOTOS: 'evidence-and-photos',  // NEW in Commit 8.6
+  CHARACTER_IDS: 'character-ids',               // NEW in Commit 8.6
+  ARC_SELECTION: 'arc-selection',
+  OUTLINE: 'outline',
+  ARTICLE: 'article'                            // NEW in Commit 8.6
+};
