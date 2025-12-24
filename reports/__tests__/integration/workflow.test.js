@@ -30,6 +30,7 @@ const mockOutline = require('../fixtures/mock-responses/outline.json');
 const mockContentBundle = require('../fixtures/content-bundles/valid-journalist.json');
 const mockValidationPassed = require('../fixtures/mock-responses/validation-results.json');
 const mockValidationFailed = require('../fixtures/mock-responses/validation-results-failed.json');
+const mockPreprocessedEvidence = require('../fixtures/mock-responses/preprocessed-evidence.json');
 
 describe('workflow integration', () => {
   describe('routing functions', () => {
@@ -133,6 +134,7 @@ describe('workflow integration', () => {
           promptBuilder,
           templateAssembler,
           notionClient,
+          useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
         }
       };
@@ -220,6 +222,7 @@ describe('workflow integration', () => {
           templateAssembler,
           notionClient,
           schemaValidator,
+          useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
         }
       };
@@ -236,6 +239,7 @@ describe('workflow integration', () => {
           accusation: { accused: ['Blake'] }
         },
         // Pre-populate with data as if approvals were given
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['The Money Trail'],
@@ -258,6 +262,7 @@ describe('workflow integration', () => {
       const config = createAutoApproveConfig('test-session');
 
       const preApprovedState = {
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['Test Arc'],
@@ -323,6 +328,7 @@ describe('workflow integration', () => {
             paperEvidence: []
           }),
           schemaValidator: { validate: () => ({ valid: true, errors: null }) },
+          useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
         }
       };
@@ -336,6 +342,7 @@ describe('workflow integration', () => {
       const preApprovedState = {
         sessionId: 'test-session',
         theme: 'journalist',
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['Test Arc'],
@@ -359,6 +366,7 @@ describe('workflow integration', () => {
       const preApprovedState = {
         sessionId: 'test-session',
         theme: 'journalist',
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['Test Arc'],
@@ -384,6 +392,7 @@ describe('workflow integration', () => {
       const preApprovedState = {
         sessionId: 'test-session',
         theme: 'journalist',
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['Test Arc'],
@@ -428,11 +437,13 @@ describe('workflow integration', () => {
             paperEvidence: []
           }),
           schemaValidator: failingSchemaValidator,
+          useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
         }
       };
 
       const preApprovedState = {
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['Test Arc'],
@@ -471,11 +482,13 @@ describe('workflow integration', () => {
             paperEvidence: []
           }),
           schemaValidator: { validate: () => ({ valid: true, errors: null }) },
+          useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
         }
       };
 
       const preApprovedState = {
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['Test Arc'],
@@ -511,11 +524,13 @@ describe('workflow integration', () => {
             paperEvidence: []
           }),
           schemaValidator: { validate: () => ({ valid: true, errors: null }) },
+          useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
         }
       };
 
       const preApprovedState = {
+        preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         evidenceBundle: mockEvidenceBundle,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['Test Arc'],

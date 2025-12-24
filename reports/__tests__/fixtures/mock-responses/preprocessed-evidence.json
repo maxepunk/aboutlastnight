@@ -1,0 +1,114 @@
+{
+  "items": [
+    {
+      "id": "token-001",
+      "sourceType": "memory-token",
+      "originalType": "Memory Token Video",
+      "summary": "Victoria and Morgan discussing 'permanent solution' to Marcus's legal problems",
+      "significance": "critical",
+      "characterRefs": ["Victoria K.", "Morgan"],
+      "ownerLogline": "Victoria's corporate dealings exposed",
+      "timelineRef": "2026",
+      "timelineContext": {
+        "name": "The Party",
+        "year": "2026",
+        "period": "Night of Investigation"
+      },
+      "narrativeRelevance": true,
+      "tags": ["legal", "conspiracy", "corporate"],
+      "groupCluster": "Victoria-Morgan collusion",
+      "sfFields": {}
+    },
+    {
+      "id": "token-002",
+      "sourceType": "memory-token",
+      "originalType": "Memory Token Audio",
+      "summary": "Marcus begging for memory protocol research funding",
+      "significance": "critical",
+      "characterRefs": ["Marcus Blackwood", "Flip"],
+      "ownerLogline": "Marcus's desperation revealed",
+      "timelineRef": "2024",
+      "timelineContext": {
+        "name": "Pre-Party Events",
+        "year": "2024",
+        "period": "Lead-up"
+      },
+      "narrativeRelevance": true,
+      "tags": ["memory", "research", "funding"],
+      "groupCluster": "Memory protocol",
+      "sfFields": {}
+    },
+    {
+      "id": "token-003",
+      "sourceType": "memory-token",
+      "originalType": "Memory Token Image",
+      "summary": "ChaseT account transaction records showing suspicious timing",
+      "significance": "supporting",
+      "characterRefs": ["Taylor Chase"],
+      "ownerLogline": null,
+      "timelineRef": "2026",
+      "timelineContext": null,
+      "narrativeRelevance": true,
+      "tags": ["financial", "transactions", "shell accounts"],
+      "groupCluster": "Financial trail",
+      "sfFields": {}
+    },
+    {
+      "id": "evidence-001",
+      "sourceType": "paper-evidence",
+      "originalType": "Document",
+      "summary": "NeurAI contract showing stolen research from Leila",
+      "significance": "supporting",
+      "characterRefs": ["Marcus Blackwood", "Leila B."],
+      "ownerLogline": null,
+      "timelineRef": "2010",
+      "timelineContext": {
+        "name": "BizAI Founding",
+        "year": "2010",
+        "period": "Origin"
+      },
+      "narrativeRelevance": true,
+      "tags": ["corporate", "theft", "research"],
+      "groupCluster": "Stolen research",
+      "sfFields": {}
+    },
+    {
+      "id": "evidence-002",
+      "sourceType": "paper-evidence",
+      "originalType": "Prop",
+      "summary": "Jessicah's pregnancy test confirming affair with Marcus",
+      "significance": "contextual",
+      "characterRefs": ["Jessicah K.", "Marcus Blackwood"],
+      "ownerLogline": null,
+      "timelineRef": "2026",
+      "timelineContext": null,
+      "narrativeRelevance": false,
+      "tags": ["relationship", "personal", "affair"],
+      "groupCluster": "Personal drama",
+      "sfFields": {}
+    }
+  ],
+  "preprocessedAt": "2024-12-23T12:00:00.000Z",
+  "sessionId": "20251221",
+  "playerFocus": {
+    "primaryInvestigation": "Victoria + Morgan collusion on 'permanent solution' to Marcus's criminal liability",
+    "emotionalHook": "The memory protocol conspiracy - Marcus ensured memories would be wiped",
+    "openQuestions": [
+      "Why was Derek so heavily emphasized as a suspect?",
+      "Did Jessicah and Sarah work together?"
+    ]
+  },
+  "stats": {
+    "totalItems": 5,
+    "memoryTokenCount": 3,
+    "paperEvidenceCount": 2,
+    "batchesProcessed": 1,
+    "processingTimeMs": 1234,
+    "significanceCounts": {
+      "critical": 2,
+      "supporting": 2,
+      "contextual": 1,
+      "background": 0
+    }
+  }
+}

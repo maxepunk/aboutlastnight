@@ -9,12 +9,13 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields:
+ * State Fields (22 total):
  *   - Session: sessionId, theme
  *   - Input Data: sessionConfig, directorNotes, playerFocus
  *   - Fetched Data: memoryTokens, paperEvidence, sessionPhotos
+ *   - Preprocessed Data: preprocessedEvidence (Commit 8.5)
  *   - Curated Data: evidenceBundle
- *   - Analysis: narrativeArcs, selectedArcs
+ *   - Analysis: narrativeArcs, selectedArcs, _arcAnalysisCache
  *   - Generation: outline, contentBundle
  *   - Output: assembledHtml, validationResults
  *   - Control: currentPhase, voiceRevisionCount, errors, awaitingApproval, approvalType
@@ -106,6 +107,20 @@ const ReportStateAnnotation = Annotation.Root({
   sessionPhotos: Annotation({
     reducer: replaceReducer,
     default: () => []
+  }),
+
+  // ═══════════════════════════════════════════════════════
+  // PREPROCESSED DATA (Commit 8.5)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Batch-summarized evidence in universal schema format
+   * Created by preprocessEvidence node before curation
+   * @see preprocessed-evidence.schema.json
+   */
+  preprocessedEvidence: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   }),
 
   // ═══════════════════════════════════════════════════════
@@ -226,6 +241,7 @@ function getDefaultState() {
     memoryTokens: [],
     paperEvidence: [],
     sessionPhotos: [],
+    preprocessedEvidence: null,  // Commit 8.5: batch-summarized evidence
     evidenceBundle: null,
     narrativeArcs: [],
     selectedArcs: [],
@@ -244,6 +260,9 @@ function getDefaultState() {
 
 /**
  * Phase constants for workflow control
+ * Phases 1.x = Data acquisition and preprocessing
+ * Phases 2-3 = Analysis and outlining
+ * Phases 4-5 = Generation and assembly
  */
 const PHASES = {
   INIT: 'init',
@@ -251,6 +270,7 @@ const PHASES = {
   FETCH_TOKENS: '1.2',
   FETCH_EVIDENCE: '1.3',
   FETCH_PHOTOS: '1.4',
+  PREPROCESS_EVIDENCE: '1.7',  // Commit 8.5: batch summarization before curation
   CURATE_EVIDENCE: '1.8',
   ANALYZE_ARCS: '2',
   GENERATE_OUTLINE: '3',
@@ -290,9 +310,10 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length);
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 22 (Commit 8.5)
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
+  console.log('Default preprocessedEvidence:', defaultState.preprocessedEvidence); // Should be null
 
   // Test reducers
   const { replaceReducer, appendReducer } = module.exports._testing;
@@ -304,7 +325,8 @@ if (require.main === module) {
   console.log('appendReducer(null, [1]):', appendReducer(null, [1])); // Should be [1]
 
   // Test phases
-  console.log('\nPhase constants:', Object.keys(PHASES).length, 'phases defined');
+  console.log('\nPhase constants:', Object.keys(PHASES).length, 'phases defined'); // Should be 16
+  console.log('PREPROCESS_EVIDENCE phase:', PHASES.PREPROCESS_EVIDENCE); // Should be '1.7'
 
   console.log('\nSelf-test complete.');
 }

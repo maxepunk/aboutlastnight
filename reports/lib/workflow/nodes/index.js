@@ -6,6 +6,7 @@
  *
  * Node Categories:
  * - Fetch Nodes: Data fetching from files/APIs (initializeSession, loadDirectorNotes, etc.)
+ * - Preprocess Nodes: Batch evidence preprocessing (preprocessEvidence) - Commit 8.5
  * - AI Nodes: Claude-powered processing (curateEvidenceBundle, analyzeNarrativeArcs, etc.)
  * - Template Nodes: HTML assembly (assembleHtml)
  *
@@ -13,6 +14,7 @@
  */
 
 const fetchNodes = require('./fetch-nodes');
+const preprocessNodes = require('./preprocess-nodes');
 const aiNodes = require('./ai-nodes');
 const templateNodes = require('./template-nodes');
 
@@ -23,6 +25,9 @@ module.exports = {
   loadDirectorNotes: fetchNodes.loadDirectorNotes,
   fetchMemoryTokens: fetchNodes.fetchMemoryTokens,
   fetchPaperEvidence: fetchNodes.fetchPaperEvidence,
+
+  // Preprocess nodes (from preprocess-nodes.js) - Commit 8.5
+  preprocessEvidence: preprocessNodes.preprocessEvidence,
 
   // AI nodes (from ai-nodes.js)
   curateEvidenceBundle: aiNodes.curateEvidenceBundle,
@@ -39,6 +44,7 @@ module.exports = {
   // Testing utilities (namespaced to avoid conflicts)
   _testing: {
     fetch: fetchNodes._testing,
+    preprocess: preprocessNodes._testing,
     ai: aiNodes._testing,
     template: templateNodes._testing
   },
@@ -46,6 +52,7 @@ module.exports = {
   // Mock factories (for integration tests)
   mocks: {
     createMockNotionClient: fetchNodes.createMockNotionClient,
+    createMockPreprocessor: preprocessNodes.createMockPreprocessor,
     createMockClaudeClient: aiNodes.createMockClaudeClient,
     createMockPromptBuilder: aiNodes.createMockPromptBuilder,
     createMockTemplateAssembler: templateNodes.createMockTemplateAssembler
