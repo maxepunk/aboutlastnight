@@ -19,6 +19,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { PHASES } = require('../state');
 const { createNotionClient } = require('../../notion-client');
+const { synthesizePlayerFocus } = require('./node-helpers');
 
 /**
  * Default data directory for session files
@@ -69,6 +70,7 @@ async function initializeSession(state, config) {
  * - session-config.json: Roster, session metadata
  *
  * Extracts playerFocus from director notes for downstream arc analysis.
+ * If playerFocus is missing (legacy files), synthesizes it from available data.
  *
  * @param {Object} state - Current state with sessionId
  * @param {Object} config - Graph config with optional configurable.dataDir
@@ -77,10 +79,13 @@ async function initializeSession(state, config) {
 async function loadDirectorNotes(state, config) {
   // Skip if already loaded (resume case or pre-populated)
   if (state.directorNotes && Object.keys(state.directorNotes).length > 0) {
+    console.log('[loadDirectorNotes] Skipping - directorNotes already loaded');
     return {
       currentPhase: PHASES.FETCH_TOKENS
     };
   }
+
+  console.log('[loadDirectorNotes] Loading from files...');
 
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
   const sessionPath = path.join(dataDir, state.sessionId, 'inputs');
@@ -96,7 +101,13 @@ async function loadDirectorNotes(state, config) {
   const sessionConfig = JSON.parse(configContent);
 
   // Extract player focus (Layer 3 drives narrative per plan)
-  const playerFocus = directorNotes.playerFocus || {};
+  // If missing, synthesize from available data (backwards compatibility)
+  let playerFocus = directorNotes.playerFocus;
+
+  if (!playerFocus || Object.keys(playerFocus).length === 0) {
+    console.log('[loadDirectorNotes] Synthesizing playerFocus from existing data');
+    playerFocus = synthesizePlayerFocus(sessionConfig, directorNotes);
+  }
 
   return {
     directorNotes,
@@ -112,8 +123,18 @@ async function loadDirectorNotes(state, config) {
  * Uses NotionClient to fetch tokens specified in directorNotes.scannedTokens.
  * If no scanned tokens are specified, fetches all available tokens.
  *
- * @param {Object} state - Current state with directorNotes
- * @param {Object} config - Graph config (unused, client uses env vars)
+ * EVIDENCE BOUNDARY ENFORCEMENT (Commit 8.9.x):
+ * Each token is tagged with `disposition: 'exposed' | 'buried'` based on
+ * whether it was submitted to the Detective (exposed) or sold to Black Market (buried).
+ * This disposition is used by downstream nodes to enforce evidence boundaries:
+ * - EXPOSED tokens: full data accessible including owner
+ * - BURIED tokens: owner field exists but is NOT ACCESSIBLE for reporting
+ *
+ * The disposition is determined from orchestrator-parsed.json which contains
+ * the exposedTokens and buriedTokens lists from session report parsing.
+ *
+ * @param {Object} state - Current state with directorNotes, _parsedInput
+ * @param {Object} config - Graph config with optional configurable.dataDir
  * @returns {Object} Partial state update with memoryTokens, currentPhase
  */
 async function fetchMemoryTokens(state, config) {
@@ -131,9 +152,49 @@ async function fetchMemoryTokens(state, config) {
 
   // Fetch tokens from Notion
   const result = await client.fetchMemoryTokens(tokenIds);
+  const tokens = result.tokens || [];
+
+  // ─────────────────────────────────────────────────────
+  // EVIDENCE BOUNDARY: Tag each token with disposition
+  // ─────────────────────────────────────────────────────
+
+  // Get exposed/buried token lists from parsed input
+  // These come from orchestrator-parsed.json created by parseRawInput
+  const orchestratorParsed = state._parsedInput?.orchestratorParsed || {};
+  const exposedTokenIds = new Set(
+    (orchestratorParsed.exposedTokens || []).map(id => id.toLowerCase())
+  );
+  const buriedTokenIds = new Set(
+    (orchestratorParsed.buriedTokens || []).map(t =>
+      (typeof t === 'string' ? t : t.tokenId).toLowerCase()
+    )
+  );
+
+  // Tag each token with its disposition
+  const taggedTokens = tokens.map(token => {
+    const tokenIdLower = (token.tokenId || token.id || '').toLowerCase();
+
+    let disposition = 'unknown';
+    if (exposedTokenIds.has(tokenIdLower)) {
+      disposition = 'exposed';
+    } else if (buriedTokenIds.has(tokenIdLower)) {
+      disposition = 'buried';
+    }
+
+    return {
+      ...token,
+      disposition
+    };
+  });
+
+  const exposedCount = taggedTokens.filter(t => t.disposition === 'exposed').length;
+  const buriedCount = taggedTokens.filter(t => t.disposition === 'buried').length;
+  const unknownCount = taggedTokens.filter(t => t.disposition === 'unknown').length;
+
+  console.log(`[fetchMemoryTokens] Tagged ${taggedTokens.length} tokens: ${exposedCount} exposed, ${buriedCount} buried, ${unknownCount} unknown`);
 
   return {
-    memoryTokens: result.tokens || [],
+    memoryTokens: taggedTokens,
     currentPhase: PHASES.FETCH_EVIDENCE
   };
 }
@@ -188,8 +249,10 @@ async function fetchSessionPhotos(state, config) {
     };
   }
 
+  // Use custom photosPath from sessionConfig if provided, otherwise use default
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
-  const photosDir = path.join(dataDir, state.sessionId, 'inputs', 'photos');
+  const photosDir = state.sessionConfig?.photosPath
+    || path.join(dataDir, state.sessionId, 'inputs', 'photos');
 
   try {
     // Check if photos directory exists

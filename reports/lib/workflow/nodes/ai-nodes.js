@@ -110,16 +110,47 @@ async function curateEvidenceBundle(state, config) {
   // Build curation prompt using preprocessed summaries
   const systemPrompt = `You are curating PREPROCESSED evidence for a NovaNews investigative article.
 
-The evidence has already been summarized and classified. Your job is to ORGANIZE it into three layers:
-1. EXPOSED: Evidence players actively discovered (significance: critical/supporting with narrativeRelevance: true)
-2. BURIED: Evidence that requires inference or wasn't explored (significance: supporting/contextual)
-3. CONTEXT: Timeline, relationships, and metadata (significance: background/contextual)
+═══════════════════════════════════════════════════════════════════
+CRITICAL: EVIDENCE BOUNDARY RULES (MUST FOLLOW)
+═══════════════════════════════════════════════════════════════════
 
-Weight evidence based on player focus - what they emphasized matters most.
-Use the existing summaries, significance levels, and tags to make organization decisions.
-DO NOT re-summarize - use the provided summaries directly.`;
+Each evidence item has a "disposition" field that determines which layer it belongs to:
 
-  const userPrompt = `Organize this preprocessed evidence based on player focus.
+disposition: 'exposed' → EXPOSED LAYER
+- These were submitted to the Detective/Reporter (public record)
+- You CAN include: content, owner (whose POV), characterRefs, narrativeTimeline
+- You CANNOT include: who brought it (operator) - reporter protects sources
+
+disposition: 'buried' → BURIED LAYER
+- These were sold to Black Market (private, promised discretion)
+- You CAN include: transaction time, shell account, dollar amount
+- You CANNOT include: owner, content, narrative timeline, characterRefs
+- Operator can be INFERRED from session timing + director observations
+
+TIMELINE DISTINCTION:
+- NARRATIVE TIMELINE = when events in memory occurred (Feb 2025, 2009, etc.)
+- SESSION TIMELINE = when tokens were sold during game night (11:21 PM, etc.)
+For buried items, only SESSION TIMELINE (transaction time) is accessible.
+
+WRONG (buried token in output):
+  { "id": "ALR002", "summary": "Alex's memory shows...", "characterRefs": ["Alex"] }
+  WHY WRONG: Cannot reference owner or content for buried tokens
+
+CORRECT (buried token in output):
+  { "id": "ALR002", "summary": "Transaction of $75K to Gorlan at 11:21 PM" }
+  WHY CORRECT: Only transaction data, no owner/content attribution
+
+═══════════════════════════════════════════════════════════════════
+
+Your job is to ORGANIZE evidence into three layers based on disposition:
+1. EXPOSED: Items with disposition='exposed' - full content accessible
+2. BURIED: Items with disposition='buried' - transaction data only
+3. CONTEXT: Timeline synthesis, metadata, player focus summary
+
+Weight evidence based on player focus. DO NOT re-summarize exposed items.
+For buried items, REPLACE any content/owner summaries with transaction-only data.`;
+
+  const userPrompt = `Organize this preprocessed evidence based on disposition and player focus.
 
 PLAYER FOCUS:
 ${JSON.stringify(preprocessed.playerFocus || state.playerFocus || {}, null, 2)}
@@ -127,31 +158,41 @@ ${JSON.stringify(preprocessed.playerFocus || state.playerFocus || {}, null, 2)}
 PREPROCESSED EVIDENCE (${preprocessed.items.length} items):
 ${JSON.stringify(preprocessed.items, null, 2)}
 
+IMPORTANT: Check each item's "disposition" field to determine placement:
+- disposition: 'exposed' → exposed layer (full data)
+- disposition: 'buried' → buried layer (transaction data ONLY - strip owner/content)
+- disposition: 'unknown' → use significance to place appropriately
+
 Return JSON with structure:
 {
   "exposed": {
-    "tokens": [{ "id": "...", "summary": "...", "significance": "...", ... }],
+    "tokens": [{ "id": "...", "summary": "...", "significance": "...", "characterRefs": [...], ... }],
     "paperEvidence": [{ "id": "...", "summary": "...", "significance": "...", ... }]
   },
   "buried": {
-    "transactions": [{ "id": "...", "summary": "...", ... }],
-    "relationships": [{ "id": "...", "summary": "...", ... }]
+    "transactions": [{ "id": "...", "sessionTransactionTime": "...", "shellAccount": "...", "amount": ..., "summary": "Transaction only - no content" }],
+    "relationships": []
   },
   "context": {
-    "timeline": { ... },
+    "narrativeTimeline": { "yearOrPeriod": "event description (from exposed only)" },
+    "sessionTimeline": { "time": "transaction description (from buried)" },
     "playerFocus": { ... },
     "sessionMetadata": { ... }
   },
   "curatorNotes": {
     "layerRationale": "explanation of curation decisions",
-    "characterCoverage": { "characterName": "coverage level", ... }
+    "characterCoverage": { "characterName": "coverage level", ... },
+    "boundaryViolationCheck": "confirm no buried content/owner leaked to output"
   }
 }`;
 
+  // Use longer timeout for large evidence sets (101 items takes ~3-4 minutes)
   const evidenceBundle = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'haiku',
+    timeoutMs: 5 * 60 * 1000, // 5 minutes for large evidence sets
+    label: `Curating ${preprocessed.items.length} evidence items`,
     jsonSchema: {
       type: 'object',
       properties: {

@@ -98,10 +98,92 @@ function formatIssuesForMessage(issues) {
     .join(', ');
 }
 
+/**
+ * Synthesize playerFocus from session config and director notes
+ *
+ * SINGLE SOURCE OF TRUTH for playerFocus structure.
+ * Used by:
+ * - input-nodes.js (parseRawInput) when processing raw input
+ * - fetch-nodes.js (loadDirectorNotes) for backwards compatibility with legacy files
+ *
+ * PlayerFocus drives arc analysis via the playerFocusAlignment criterion (15%).
+ *
+ * @param {Object} sessionConfig - Session configuration with roster, accusation
+ * @param {Object} directorNotes - Director notes with observations, whiteboard
+ * @returns {Object} PlayerFocus object with investigation context
+ */
+function synthesizePlayerFocus(sessionConfig, directorNotes) {
+  const whiteboard = directorNotes?.whiteboard || {};
+  const observations = directorNotes?.observations || {};
+
+  // Extract suspects from whiteboard if available
+  const suspectsGroup = whiteboard.groups?.find(g =>
+    g.label?.toLowerCase().includes('suspect')
+  );
+  const whiteboardSuspects = suspectsGroup?.members || [];
+
+  // Extract connections as context
+  const whiteboardConnections = (whiteboard.connections || []).map(c =>
+    `${c.from} → ${c.to}${c.label ? ` (${c.label})` : ''}`
+  );
+
+  // Primary suspects from accusation
+  const primarySuspects = sessionConfig?.accusation?.accused || [];
+
+  // Secondary suspects from whiteboard not in primary
+  const secondarySuspects = whiteboardSuspects.filter(s =>
+    !primarySuspects.some(p => p.toLowerCase() === s.toLowerCase())
+  );
+
+  return {
+    // What the article is about
+    primaryInvestigation: sessionConfig?.accusation?.charge || 'Who killed Marcus Blackwood?',
+
+    // Who was accused (primary) vs explored (secondary)
+    primarySuspects,
+    secondarySuspects,
+    allSuspects: [...primarySuspects, ...secondarySuspects],
+
+    // The formal accusation details
+    accusation: {
+      accused: sessionConfig?.accusation?.accused || [],
+      charge: sessionConfig?.accusation?.charge || '',
+      reasoning: sessionConfig?.accusation?.notes || ''
+    },
+
+    // Director observations (what ACTUALLY happened - highest weight for narrative)
+    directorObservations: {
+      behaviorPatterns: observations.behaviorPatterns || [],
+      suspiciousCorrelations: observations.suspiciousCorrelations || [],
+      notableMoments: observations.notableMoments || []
+    },
+
+    // Whiteboard context (what players explored during investigation)
+    whiteboardContext: {
+      namesFound: whiteboard.names || [],
+      suspectsExplored: whiteboardSuspects,
+      connections: whiteboardConnections,
+      notes: whiteboard.notes || [],
+      structureType: whiteboard.structureType || 'unknown',
+      ambiguities: whiteboard.ambiguities || []
+    },
+
+    // Emotional hook - synthesized from accusation reasoning
+    emotionalHook: sessionConfig?.accusation?.notes || '',
+
+    // Open questions - things to explore in article
+    openQuestions: [
+      ...(whiteboard.notes || []),
+      ...whiteboardConnections
+    ]
+  };
+}
+
 module.exports = {
   safeParseJson,
   getSdkClient,
   createTimestampedResult,
   validateRequiredFields,
-  formatIssuesForMessage
+  formatIssuesForMessage,
+  synthesizePlayerFocus
 };

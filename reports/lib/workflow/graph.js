@@ -62,7 +62,8 @@ const nodes = require('./nodes');
  */
 function routeEntryPoint(state) {
   const hasRawInput = state.rawSessionInput !== null && state.rawSessionInput !== undefined;
-  const hasSessionConfig = state.sessionConfig !== null && state.sessionConfig !== undefined;
+  // sessionConfig defaults to {} so check if it has actual content
+  const hasSessionConfig = state.sessionConfig && Object.keys(state.sessionConfig).length > 0;
 
   // If raw input provided but not yet parsed → parse it
   if (hasRawInput && !hasSessionConfig) {
@@ -267,9 +268,21 @@ async function setPaperEvidenceCheckpoint(state) {
  * Skips if no photos to identify (empty photoAnalyses)
  */
 async function setCharacterIdCheckpoint(state) {
-  // Skip if character IDs already provided (resume after approval)
-  if (state.characterIdMappings && Object.keys(state.characterIdMappings).length > 0) {
-    console.log('[setCharacterIdCheckpoint] Skipping - characterIdMappings already exists');
+  // Skip if character IDs already provided (empty object means user skipped mappings)
+  // Check for explicit existence (null/undefined = not yet provided, {} = user skipped)
+  if (state.characterIdMappings !== undefined && state.characterIdMappings !== null) {
+    const mappingCount = Object.keys(state.characterIdMappings).length;
+    console.log(`[setCharacterIdCheckpoint] Skipping - characterIdMappings provided (${mappingCount} mappings)`);
+    return {
+      awaitingApproval: false,
+      currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
+    };
+  }
+
+  // Skip if natural language input provided (Commit 8.9.x)
+  // parseCharacterIds node will convert to structured format
+  if (state.characterIdsRaw) {
+    console.log(`[setCharacterIdCheckpoint] Skipping - characterIdsRaw provided (${state.characterIdsRaw.length} chars)`);
     return {
       awaitingApproval: false,
       currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
@@ -485,6 +498,7 @@ function createGraphBuilder() {
 
   builder.addNode('analyzePhotos', nodes.analyzePhotos);
   builder.addNode('setCharacterIdCheckpoint', setCharacterIdCheckpoint);  // Commit 8.9.5
+  builder.addNode('parseCharacterIds', nodes.parseCharacterIds);          // Commit 8.9.x: parse natural language
   builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses);  // Commit 8.9.5
   builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
@@ -574,8 +588,11 @@ function createGraphBuilder() {
   builder.addEdge('analyzePhotos', 'setCharacterIdCheckpoint');
   builder.addConditionalEdges('setCharacterIdCheckpoint', routeCharacterIdCheckpoint, {
     wait: END,
-    continue: 'finalizePhotoAnalyses'
+    continue: 'parseCharacterIds'  // Parse natural language input (Commit 8.9.x)
   });
+
+  // Parse natural language character IDs into structured format (Commit 8.9.x)
+  builder.addEdge('parseCharacterIds', 'finalizePhotoAnalyses');
 
   // Photo finalization enriches analyses with character IDs (Commit 8.9.5)
   builder.addEdge('finalizePhotoAnalyses', 'preprocessEvidence');

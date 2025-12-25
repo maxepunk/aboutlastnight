@@ -140,13 +140,24 @@ EVALUATION RULES:
 4. If score < 0.7, provide specific revision guidance
 5. Be honest but constructive - flag real issues, not nitpicks
 
+CRITICAL: Your feedback MUST be actionable. Include:
+- SPECIFIC names (characters missing from roster coverage)
+- SPECIFIC evidence (which evidence items should be referenced)
+- CONCRETE fixes (not "improve grounding" but "Arc 2 should reference the Victoria Voice Memo")
+
 OUTPUT FORMAT (JSON):
 {
   "ready": boolean,
   "overallScore": number (0-1),
-  "criteriaScores": { "criterionName": { "score": number, "notes": string } },
-  "issues": [ "specific issue 1", "specific issue 2" ],
-  "revisionGuidance": "specific instructions if not ready",
+  "criteriaScores": {
+    "criterionName": {
+      "score": number,
+      "notes": "specific explanation with names/evidence",
+      "fix": "concrete action to improve this criterion"
+    }
+  },
+  "issues": [ "Character X is missing from all arcs", "Arc 2 claims Y but no evidence supports this" ],
+  "revisionGuidance": "Step 1: Add X to Arc 1 as [role]. Step 2: Reference [specific evidence] in Arc 2.",
   "confidence": "high" | "medium" | "low"
 }
 
@@ -162,19 +173,53 @@ Remember: You determine READINESS for human review, not approval. Human always m
 function buildEvaluationUserPrompt(phase, state) {
   switch (phase) {
     case 'arcs':
+      // Provide roster for rosterCoverage evaluation
+      const roster = state.sessionConfig?.roster || [];
+      // Provide evidence titles/summaries for evidenceGrounding evaluation
+      // evidenceBundle has nested structure: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } }
+      const exposedData = state.evidenceBundle?.exposed || {};
+      const buriedData = state.evidenceBundle?.buried || {};
+      // Flatten exposed items (tokens + paperEvidence)
+      const exposedTokens = Array.isArray(exposedData.tokens) ? exposedData.tokens : [];
+      const exposedPaper = Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence : [];
+      const exposedEvidence = [...exposedTokens, ...exposedPaper]
+        .map(e => ({ title: e.title || e.name || e.tokenId, summary: e.summary || e.description?.substring?.(0, 100) }));
+      // Flatten buried items (transactions + relationships)
+      const buriedTx = Array.isArray(buriedData.transactions) ? buriedData.transactions : [];
+      const buriedRel = Array.isArray(buriedData.relationships) ? buriedData.relationships : [];
+      const buriedEvidence = [...buriedTx, ...buriedRel]
+        .map(e => ({ title: e.title || e.name || e.tokenId, summary: e.summary || e.description?.substring?.(0, 100) }));
+      // Extract key playerFocus elements for evaluation
+      const playerFocusForEval = {
+        primaryInvestigation: state.playerFocus?.primaryInvestigation,
+        primarySuspects: state.playerFocus?.primarySuspects || [],
+        accusation: state.playerFocus?.accusation,
+        directorObservations: state.playerFocus?.directorObservations
+      };
+
       return `Evaluate these narrative arcs:
 
 ARCS:
 ${JSON.stringify(state.narrativeArcs || [], null, 2)}
 
-PLAYER FOCUS:
-${JSON.stringify(state.playerFocus || {}, null, 2)}
+ROSTER (every character MUST have placement in at least one arc):
+${JSON.stringify(roster, null, 2)}
 
-EVIDENCE BUNDLE SUMMARY:
-${JSON.stringify({
-  exposed: (state.evidenceBundle?.exposed || []).length,
-  buried: (state.evidenceBundle?.buried || []).length
-}, null, 2)}
+PLAYER FOCUS (arcs should reflect what players investigated):
+${JSON.stringify(playerFocusForEval, null, 2)}
+
+AVAILABLE EVIDENCE (arcs should reference these):
+Exposed (${exposedEvidence.length}): ${JSON.stringify(exposedEvidence.slice(0, 10), null, 2)}
+Buried (${buriedEvidence.length}): ${JSON.stringify(buriedEvidence.slice(0, 10), null, 2)}
+
+EVALUATION CHECKLIST:
+1. ROSTER COVERAGE: Check characterPlacements in each arc - every roster member needs a role
+2. EVIDENCE GROUNDING: keyEvidence should reference actual evidence titles shown above
+3. PLAYER FOCUS ALIGNMENT: Does primaryInvestigation drive the main arc?
+4. COHERENCE: Do arcs tell a consistent story without contradictions?
+5. NARRATIVE POTENTIAL: Do arcs have emotional hooks that would engage readers?
+
+Be SPECIFIC in issues - name missing characters, cite ungrounded evidence claims.
 
 Are these arcs ready for human review?`;
 
@@ -336,6 +381,33 @@ function createEvaluator(phase, options = {}) {
 
     console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Starting evaluation (revision ${currentRevisions}/${revisionCap})`);
 
+    // Debug: Log evaluation context
+    if (phase === 'arcs') {
+      const pf = state.playerFocus || {};
+      const roster = state.sessionConfig?.roster || [];
+      const arcs = state.narrativeArcs || [];
+      // Flatten evidence bundle for counting
+      const exposedData = state.evidenceBundle?.exposed || {};
+      const buriedData = state.evidenceBundle?.buried || {};
+      const exposedCount = (Array.isArray(exposedData.tokens) ? exposedData.tokens.length : 0) +
+                           (Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence.length : 0);
+      const buriedCount = (Array.isArray(buriedData.transactions) ? buriedData.transactions.length : 0) +
+                          (Array.isArray(buriedData.relationships) ? buriedData.relationships.length : 0);
+      console.log(`[evaluateArcs] Evaluation context check:`);
+      console.log(`  - playerFocus.primaryInvestigation: "${pf.primaryInvestigation || 'MISSING'}"`);
+      console.log(`  - playerFocus.primarySuspects: ${JSON.stringify(pf.primarySuspects || [])}`);
+      console.log(`  - roster: ${JSON.stringify(roster)}`);
+      console.log(`  - arcs count: ${arcs.length}`);
+      console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
+
+      // Check if roster members are in arc characterPlacements
+      const allPlacements = arcs.flatMap(a => Object.keys(a.characterPlacements || {}));
+      const missingFromArcs = roster.filter(r => !allPlacements.some(p => p.toLowerCase().includes(r.toLowerCase())));
+      if (missingFromArcs.length > 0) {
+        console.log(`  - MISSING from arcs: ${JSON.stringify(missingFromArcs)}`);
+      }
+    }
+
     const sdk = getSdkClient(config);
     const systemPrompt = buildEvaluationSystemPrompt(phase, criteria);
     const prompt = buildEvaluationUserPrompt(phase, state);
@@ -370,6 +442,18 @@ function createEvaluator(phase, options = {}) {
         confidence: evaluation.confidence || 'medium',
         revisionNumber: currentRevisions
       };
+
+      // Debug: Log evaluation result details
+      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Evaluation result:`);
+      console.log(`  - ready: ${evaluation.ready}, score: ${evaluation.overallScore}`);
+      if (evaluation.criteriaScores) {
+        Object.entries(evaluation.criteriaScores).forEach(([key, val]) => {
+          console.log(`  - ${key}: ${val.score} (${val.notes || 'no notes'})`);
+        });
+      }
+      if (evaluation.issues && evaluation.issues.length > 0) {
+        console.log(`  - issues: ${JSON.stringify(evaluation.issues)}`);
+      }
 
       // Determine next action based on evaluation result
       if (evaluation.ready) {

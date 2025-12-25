@@ -29,14 +29,65 @@ const CONCURRENCY = 4;
 // Preprocessing prompt template
 const SYSTEM_PROMPT = `You are an evidence analyst preprocessing raw investigation data for narrative curation.
 
+═══════════════════════════════════════════════════════════════════
+CRITICAL: EVIDENCE BOUNDARY RULES (MUST FOLLOW)
+═══════════════════════════════════════════════════════════════════
+
+TERMINOLOGY:
+- OWNER = Whose POV the memory was captured from (e.g., "Alex's memory of...")
+- OPERATOR = Who found/unlocked the token and chose to expose or bury it
+
+Each memory token has a "disposition" field: 'exposed', 'buried', or 'unknown'.
+
+FOR EXPOSED TOKENS (disposition: 'exposed'):
+- You CAN reference the OWNER (whose POV the memory shows)
+- You CAN summarize what the memory CONTENT reveals
+- You CANNOT know who the OPERATOR was (reporter protects sources)
+- These are PUBLIC RECORD (submitted to the Detective/Reporter)
+
+FOR BURIED TOKENS (disposition: 'buried'):
+- You CANNOT reference the OWNER (whose POV) - this is private
+- You CANNOT summarize the memory CONTENT - this is private
+- You CANNOT reference the NARRATIVE TIMELINE (when events in memory occurred)
+- You CAN note: SESSION TRANSACTION timing (when sold), shell account, amount
+- The OPERATOR can potentially be INFERRED by cross-referencing session timing
+  with director observations (e.g., "saw Taylor at Valet at 8:15 PM,
+  transaction hit ChaseT at 8:16 PM")
+- These are PRIVATE (sold to Black Market with promise of discretion)
+
+TIMELINE DISTINCTION:
+- NARRATIVE TIMELINE = when events in the memory occurred (before game session)
+  e.g., "Feb 2025", "2023", "2009 at Stanford"
+- SESSION TIMELINE = when tokens were exposed/buried during game night
+  e.g., "11:21 PM", "10:30 PM"
+For buried tokens, you can only reference SESSION TIMELINE (transaction time).
+
+EXAMPLE - WRONG (buried token):
+  Token: ALR002, disposition: buried, owner: Alex
+  Summary: "Alex's memory shows him depositing $75,000"
+  WHY WRONG: Cannot know whose memory this is or what it contains
+
+EXAMPLE - CORRECT (buried token):
+  Token: ALR002, disposition: buried
+  Summary: "Transaction of $75,000 to Gorlan account at 11:21 PM"
+  WHY CORRECT: Only observable transaction data, no owner/content
+
+EXAMPLE - CORRECT (exposed token):
+  Token: VIK001, disposition: exposed, owner: Victoria
+  Summary: "Victoria's memory: discusses 'permanent solutions' with Morgan"
+  WHY CORRECT: Owner and content are public record for exposed tokens
+
+═══════════════════════════════════════════════════════════════════
+
 For each evidence item, provide:
-1. A concise summary (max 150 chars) of what this evidence reveals
-2. Significance level: critical (directly proves/disproves key claims), supporting (corroborates other evidence), contextual (provides background), background (minor relevance)
-3. Character references mentioned or connected
-4. Timeline period (if identifiable)
-5. Whether this advances the main investigation narrative (true/false)
-6. Categorical tags (e.g., "financial", "relationship", "timeline", "communication")
-7. Suggested grouping cluster with related evidence
+1. A concise summary (max 150 chars) - RESPECTING DISPOSITION BOUNDARIES
+2. Significance level: critical, supporting, contextual, background
+3. Character references - characters IN THE CONTENT (exposed only); empty for buried
+4. Narrative timeline reference (exposed only) - when did events in this memory occur?
+5. Session transaction time (buried only) - when was this sold during game night?
+6. Whether this advances the main investigation narrative (true/false)
+7. Categorical tags (e.g., "financial", "relationship", "timeline", "communication")
+8. Suggested grouping cluster with related evidence
 
 Consider the player focus when assessing significance:
 {{playerFocus}}
@@ -51,12 +102,14 @@ const ITEM_SCHEMA = {
     id: { type: 'string' },
     sourceType: { type: 'string', enum: ['memory-token', 'paper-evidence'] },
     originalType: { type: 'string' },
+    disposition: { type: 'string', enum: ['exposed', 'buried', 'unknown'] },
     summary: { type: 'string', maxLength: 150 },
     significance: { type: 'string', enum: ['critical', 'supporting', 'contextual', 'background'] },
     characterRefs: { type: 'array', items: { type: 'string' } },
     ownerLogline: { type: 'string' },
-    timelineRef: { type: 'string' },
-    timelineContext: {
+    // NARRATIVE TIMELINE: when events in the memory occurred (exposed tokens only)
+    narrativeTimelineRef: { type: 'string' },
+    narrativeTimelineContext: {
       type: 'object',
       properties: {
         name: { type: 'string' },
@@ -64,6 +117,8 @@ const ITEM_SCHEMA = {
         period: { type: 'string' }
       }
     },
+    // SESSION TIMELINE: when token was sold during game night (buried tokens only)
+    sessionTransactionTime: { type: 'string' },
     narrativeRelevance: { type: 'boolean' },
     tags: { type: 'array', items: { type: 'string' } },
     groupCluster: { type: 'string' },
@@ -151,6 +206,7 @@ function createEvidencePreprocessor(options = {}) {
         id: token.id,
         sourceType: 'memory-token',
         originalType: token.type || 'Memory Token',
+        disposition: token.disposition || 'unknown', // exposed | buried | unknown
         rawData: token,
         ownerLogline: token.owner?.logline || null,
         timelineContext: token.timeline || null,
@@ -252,6 +308,7 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
       id: item.id,
       sourceType: item.sourceType,
       originalType: item.originalType,
+      disposition: item.disposition || 'unknown', // CRITICAL for evidence boundary enforcement
       ownerLogline: item.ownerLogline,
       timelineContext: item.timelineContext,
       sfFields: item.sfFields,
@@ -280,14 +337,15 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
 
     const items = parsed.items || [];
 
-    // Merge with preserved context (owner logline, timeline context, SF fields)
+    // Merge with preserved context (disposition, owner logline, timeline context, SF fields)
     const mergedItems = items.map(item => {
       const original = batch.find(b => b.id === item.id);
       if (original) {
         return {
           ...item,
+          disposition: item.disposition || original.disposition, // CRITICAL: preserve disposition
           ownerLogline: item.ownerLogline || original.ownerLogline,
-          timelineContext: item.timelineContext || original.timelineContext,
+          narrativeTimelineContext: item.narrativeTimelineContext || original.timelineContext,
           sfFields: item.sfFields || original.sfFields
         };
       }
@@ -307,12 +365,14 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
       id: item.id,
       sourceType: item.sourceType,
       originalType: item.originalType,
+      disposition: item.disposition || 'unknown', // Preserve disposition
       summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
       significance: 'contextual',
       characterRefs: [],
       ownerLogline: item.ownerLogline,
-      timelineRef: null,
-      timelineContext: item.timelineContext,
+      narrativeTimelineRef: null,
+      narrativeTimelineContext: item.timelineContext,
+      sessionTransactionTime: null,
       narrativeRelevance: false,
       tags: [],
       groupCluster: null,

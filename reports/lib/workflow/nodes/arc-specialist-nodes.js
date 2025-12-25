@@ -61,19 +61,37 @@ function buildOrchestratorPrompt(state) {
   const sessionConfig = state.sessionConfig || {};
   const directorNotes = state.directorNotes || {};
 
+  // Flatten evidence bundle structure
+  // Curator returns: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } }
+  const exposedData = evidenceBundle.exposed || {};
+  const buriedData = evidenceBundle.buried || {};
+  const exposedItems = [
+    ...(Array.isArray(exposedData.tokens) ? exposedData.tokens : []),
+    ...(Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence : [])
+  ];
+  const buriedItems = [
+    ...(Array.isArray(buriedData.transactions) ? buriedData.transactions : []),
+    ...(Array.isArray(buriedData.relationships) ? buriedData.relationships : [])
+  ];
+
   // Build context about what players focused on (Layer 3 drives)
-  const whiteboardContext = playerFocus.whiteboard
+  // NOTE: synthesizePlayerFocus produces "whiteboardContext" and "accusation" keys
+  const wbCtx = playerFocus.whiteboardContext || {};
+  const whiteboardContext = (wbCtx.suspectsExplored?.length > 0 || wbCtx.connections?.length > 0)
     ? `\n\nWHITEBOARD (Player Conclusions):
-Title: ${playerFocus.whiteboard.title || 'Unknown'}
-Suspects: ${JSON.stringify(playerFocus.whiteboard.suspects || [])}
-Evidence Connections: ${JSON.stringify(playerFocus.whiteboard.evidenceConnections || [])}
-Facts Established: ${JSON.stringify(playerFocus.whiteboard.factsEstablished || [])}`
+Suspects Explored: ${JSON.stringify(wbCtx.suspectsExplored || [])}
+Connections Found: ${JSON.stringify(wbCtx.connections || [])}
+Notes: ${JSON.stringify(wbCtx.notes || [])}
+Names Identified: ${JSON.stringify(wbCtx.namesFound || [])}`
     : '';
 
-  const accusationContext = playerFocus.accusationContext
+  // NOTE: synthesizePlayerFocus uses "accusation" not "accusationContext"
+  const accusation = playerFocus.accusation || {};
+  const accusationContext = (accusation.accused?.length > 0 || accusation.charge)
     ? `\n\nFINAL ACCUSATION:
-Accused: ${JSON.stringify(playerFocus.accusationContext.accused || [])}
-Charge: ${playerFocus.accusationContext.charge || 'Unknown'}`
+Accused: ${JSON.stringify(accusation.accused || [])}
+Charge: ${accusation.charge || 'Unknown'}
+Reasoning: ${accusation.reasoning || 'Not provided'}`
     : '';
 
   const rosterContext = sessionConfig.roster
@@ -107,14 +125,16 @@ ${observationsContext}
 EVIDENCE BUNDLE (Three-Layer Model)
 ═══════════════════════════════════════════════════════════════════════════
 
-EXPOSED EVIDENCE (Layer 1 - Freely available):
-${JSON.stringify(evidenceBundle.exposed || [], null, 2)}
+EXPOSED EVIDENCE (Layer 1 - ${exposedItems.length} items freely available):
+${JSON.stringify(exposedItems.slice(0, 15), null, 2)}
+${exposedItems.length > 15 ? `... and ${exposedItems.length - 15} more exposed items` : ''}
 
-BURIED EVIDENCE (Layer 2 - Required investigation):
-${JSON.stringify(evidenceBundle.buried || [], null, 2)}
+BURIED EVIDENCE (Layer 2 - ${buriedItems.length} items required investigation):
+${JSON.stringify(buriedItems.slice(0, 10), null, 2)}
+${buriedItems.length > 10 ? `... and ${buriedItems.length - 10} more buried items` : ''}
 
-CONTEXT (Additional supporting evidence):
-${JSON.stringify(evidenceBundle.context || [], null, 2)}
+CONTEXT (Curator notes and investigation gaps):
+${JSON.stringify(evidenceBundle.context || {}, null, 2)}
 
 ═══════════════════════════════════════════════════════════════════════════
 PHOTO ANALYSES (Visual evidence from session)
@@ -146,7 +166,51 @@ Remember:
 - Layer 3 (player focus/whiteboard) DRIVES narrative priority
 - Every roster member must have a placement
 - Cross-reference specialist findings for stronger arcs
-- Specialists will load character-voice.md, evidence-boundaries.md, anti-patterns.md`;
+- Specialists will load character-voice.md, evidence-boundaries.md, anti-patterns.md
+${buildRevisionContext(state)}`;
+}
+
+/**
+ * Build revision context from evaluator feedback
+ * @param {Object} state - State with validationResults and revision count
+ * @returns {string} Revision guidance section or empty string
+ */
+function buildRevisionContext(state) {
+  const revisionCount = state.arcRevisionCount || 0;
+  const validationResults = state.validationResults;
+
+  if (revisionCount === 0 || !validationResults) {
+    return '';  // First attempt, no feedback yet
+  }
+
+  const issues = validationResults.issues || [];
+  const feedback = validationResults.feedback || '';
+  const criteriaScores = validationResults.criteriaScores || {};
+
+  const issuesText = issues.length > 0
+    ? issues.map((issue, i) => `  ${i + 1}. ${issue}`).join('\n')
+    : '  None specified';
+
+  const scoresText = Object.entries(criteriaScores)
+    .map(([key, val]) => `  - ${key}: ${val.score} (${val.notes || 'no notes'})`)
+    .join('\n');
+
+  return `
+
+═══════════════════════════════════════════════════════════════════════════
+REVISION ${revisionCount}: Address these issues from the previous attempt
+═══════════════════════════════════════════════════════════════════════════
+
+EVALUATOR FEEDBACK:
+${feedback || 'No specific feedback provided'}
+
+ISSUES TO FIX:
+${issuesText}
+
+CRITERIA SCORES:
+${scoresText || '  Not available'}
+
+Focus on addressing the specific issues above. Do not just regenerate - IMPROVE.`;
 }
 
 /**
@@ -193,6 +257,25 @@ function createEmptyAnalysisResult(sessionId) {
  */
 async function analyzeArcsWithSubagents(state, config) {
   console.log('[analyzeArcsWithSubagents] Starting orchestrated arc analysis');
+
+  // Debug: Log key input data to verify prompt assembly
+  const pf = state.playerFocus || {};
+  const wbCtx = pf.whiteboardContext || {};
+  const acc = pf.accusation || {};
+  // Flatten evidence bundle for counting
+  const exposedData = state.evidenceBundle?.exposed || {};
+  const buriedData = state.evidenceBundle?.buried || {};
+  const exposedCount = (Array.isArray(exposedData.tokens) ? exposedData.tokens.length : 0) +
+                       (Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence.length : 0);
+  const buriedCount = (Array.isArray(buriedData.transactions) ? buriedData.transactions.length : 0) +
+                      (Array.isArray(buriedData.relationships) ? buriedData.relationships.length : 0);
+  console.log(`[analyzeArcsWithSubagents] Input data check:`);
+  console.log(`  - primaryInvestigation: ${pf.primaryInvestigation || 'MISSING'}`);
+  console.log(`  - accusation.accused: ${JSON.stringify(acc.accused || [])}`);
+  console.log(`  - whiteboardContext.suspectsExplored: ${JSON.stringify(wbCtx.suspectsExplored || [])}`);
+  console.log(`  - directorObservations.behaviorPatterns: ${(pf.directorObservations?.behaviorPatterns || []).length} items`);
+  console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
+  console.log(`  - roster: ${JSON.stringify(state.sessionConfig?.roster || [])}`);
 
   // Skip if arcs already exist (resume case)
   if (state.narrativeArcs && state.narrativeArcs.length > 0) {

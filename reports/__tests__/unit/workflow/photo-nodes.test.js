@@ -19,6 +19,10 @@ const {
   }
 } = require('../../../lib/workflow/nodes/photo-nodes');
 const { PHASES } = require('../../../lib/workflow/state');
+const { createMockImagePromptBuilder } = require('../../../lib/image-prompt-builder');
+
+// Create a shared mock ImagePromptBuilder for tests
+const mockImagePromptBuilder = createMockImagePromptBuilder();
 
 describe('photo-nodes', () => {
   describe('module exports', () => {
@@ -48,7 +52,7 @@ describe('photo-nodes', () => {
   describe('getSdkClient', () => {
     it('returns injected client from config', () => {
       const mockClient = jest.fn();
-      const config = { configurable: { sdkClient: mockClient } };
+      const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
       const result = getSdkClient(config);
 
@@ -235,7 +239,7 @@ describe('photo-nodes', () => {
           sessionId: 'test-session',
           playerFocus: { primaryInvestigation: 'Test investigation' }
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -255,7 +259,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'my-session-123'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -273,7 +277,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['/path/to/photo.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -291,7 +295,7 @@ describe('photo-nodes', () => {
           sessionPhotos: [{ path: '/path/to/photo.jpg', metadata: {} }],
           sessionId: 'test'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -309,7 +313,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         await analyzePhotos(state, config);
 
@@ -330,13 +334,14 @@ describe('photo-nodes', () => {
           sessionId: 'test',
           playerFocus: { primaryInvestigation: 'Who is the Valet?' }
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         await analyzePhotos(state, config);
 
+        // Player focus is now in userPrompt via ImagePromptBuilder
         expect(mockClient).toHaveBeenCalledWith(
           expect.objectContaining({
-            systemPrompt: expect.stringContaining('Who is the Valet?')
+            prompt: expect.stringContaining('Who is the Valet?')
           })
         );
       });
@@ -361,7 +366,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['good.jpg', 'bad.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -384,7 +389,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -402,7 +407,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -424,7 +429,7 @@ describe('photo-nodes', () => {
           sessionId: 'test',
           existingField: 'should-not-be-in-result'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 
@@ -444,7 +449,7 @@ describe('photo-nodes', () => {
           sessionPhotos: ['photo1.jpg'],
           sessionId: 'test'
         };
-        const config = { configurable: { sdkClient: mockClient } };
+        const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
         const result = await analyzePhotos(state, config);
 

@@ -186,7 +186,7 @@ describe('ThemeLoader', () => {
 
     it('should include valid phase names in error message', async () => {
       await expect(loader.loadPhasePrompts('bad'))
-        .rejects.toThrow('Valid phases: arcAnalysis, outlineGeneration, articleGeneration, validation');
+        .rejects.toThrow('Valid phases: imageAnalysis, arcAnalysis, outlineGeneration, articleGeneration, validation');
     });
   });
 
@@ -394,7 +394,8 @@ describe('ThemeLoader', () => {
     it('should export ALL_PROMPTS', () => {
       expect(ALL_PROMPTS).toBeDefined();
       expect(Array.isArray(ALL_PROMPTS)).toBe(true);
-      expect(ALL_PROMPTS.length).toBe(8);
+      // 8 original + 3 image analysis (whiteboard-analysis, photo-analysis, photo-enrichment)
+      expect(ALL_PROMPTS.length).toBe(11);
     });
   });
 });

@@ -32,13 +32,25 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { PHASES, APPROVAL_TYPES } = require('../state');
-const { getSdkClient } = require('./node-helpers');
+const { getSdkClient, synthesizePlayerFocus } = require('./node-helpers');
+const { createImagePromptBuilder } = require('../../image-prompt-builder');
 
 /**
  * Default data directory for session files
  * Can be overridden via config.configurable.dataDir
  */
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', '..', 'data');
+
+/**
+ * Get ImagePromptBuilder from config or create default instance
+ * Supports dependency injection for testing
+ *
+ * @param {Object} config - Graph config with optional configurable.imagePromptBuilder
+ * @returns {ImagePromptBuilder} ImagePromptBuilder instance
+ */
+function getImagePromptBuilder(config) {
+  return config?.configurable?.imagePromptBuilder || createImagePromptBuilder();
+}
 
 // ═══════════════════════════════════════════════════════
 // JSON SCHEMAS FOR STRUCTURED OUTPUT
@@ -197,31 +209,49 @@ const DIRECTOR_NOTES_SCHEMA = {
  */
 const WHITEBOARD_SCHEMA = {
   type: 'object',
-  required: ['suspects', 'keyPhrases'],
+  required: ['names'],
   properties: {
-    suspects: {
+    names: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Characters identified as suspects on the whiteboard'
+      description: 'All character names found on whiteboard (roster-corrected via OCR disambiguation)'
     },
-    keyPhrases: {
+    connections: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', description: 'Source element' },
+          to: { type: 'string', description: 'Target element' },
+          label: { type: 'string', description: 'Connection label or type' }
+        }
+      },
+      description: 'Lines or arrows connecting elements on the whiteboard'
+    },
+    groups: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', description: 'Group label (e.g., SUSPECTS, FACTS)' },
+          members: { type: 'array', items: { type: 'string' }, description: 'Items in this group' }
+        }
+      },
+      description: 'Boxed or circled clusters with a label'
+    },
+    notes: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Key phrases, evidence connections, or conclusions written on whiteboard'
+      description: 'Text content not directly associated with connections or groups'
     },
-    evidenceConnections: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Evidence connections players drew on whiteboard'
-    },
-    factsEstablished: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Facts or conclusions players wrote as established'
-    },
-    rawText: {
+    structureType: {
       type: 'string',
-      description: 'Full text visible on the whiteboard'
+      description: 'Overall organization observed (e.g., "accusation web", "timeline", "free-form notes")'
+    },
+    ambiguities: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Unclear elements that may need verification'
     }
   }
 };
@@ -454,34 +484,18 @@ Return structured JSON matching the schema.`;
   if (rawInput.whiteboardPhotoPath) {
     console.log('[parseRawInput] Step 4: Analyzing whiteboard photo');
 
-    const whiteboardPrompt = `First, use the Read tool to view the whiteboard photograph at:
-${rawInput.whiteboardPhotoPath}
-
-This is the investigation whiteboard from "About Last Night" - a crime thriller game.
-During the final 10 minutes, players gathered around this whiteboard to share their conclusions about who killed Marcus and why.
-
-The whiteboard contains:
-- Suspects the players identified
-- Evidence connections they drew
-- Key phrases or conclusions they wrote
-- Their collective theory about what happened
-
-After viewing the image, extract all text and organize it into these categories:
-1. suspects: Character names written as suspects
-2. keyPhrases: Important phrases, accusations, or key words
-3. evidenceConnections: Any connections drawn between evidence/events
-4. factsEstablished: Things players wrote as "facts" or confirmed conclusions
-5. rawText: Full transcription of all visible text
-
-Return structured JSON matching the schema.`;
+    // Use ImagePromptBuilder for roster-aware OCR disambiguation
+    const imagePromptBuilder = getImagePromptBuilder(config);
+    const { systemPrompt: whiteboardSystemPrompt, userPrompt: whiteboardUserPrompt } =
+      await imagePromptBuilder.buildWhiteboardPrompt({
+        roster: sessionConfig.roster || [],
+        whiteboardPhotoPath: rawInput.whiteboardPhotoPath
+      });
 
     try {
       whiteboardData = await sdk({
-        prompt: whiteboardPrompt,
-        systemPrompt: `You are analyzing a photograph of a whiteboard from a crime investigation game.
-Your job is to extract all text visible on the whiteboard and categorize it.
-Read the handwritten and typed text carefully.
-Some text may be emphasized (underlined, circled, in boxes) - note this in keyPhrases.`,
+        prompt: whiteboardUserPrompt,
+        systemPrompt: whiteboardSystemPrompt,
         model: 'sonnet', // Use sonnet for complex image analysis
         jsonSchema: WHITEBOARD_SCHEMA,
         allowedTools: ['Read'] // Required for image viewing
@@ -499,21 +513,10 @@ Some text may be emphasized (underlined, circled, in boxes) - note this in keyPh
   // ─────────────────────────────────────────────────────
   // Step 5: Build playerFocus (Layer 3 drives narrative)
   // ─────────────────────────────────────────────────────
+  // Uses shared synthesizePlayerFocus from node-helpers.js (DRY)
+  // See node-helpers.js for priority hierarchy documentation
 
-  const playerFocus = {
-    primaryInvestigation: sessionConfig.accusation?.charge || 'Who killed Marcus Blackwood?',
-    suspects: whiteboardData.suspects?.length > 0
-      ? whiteboardData.suspects
-      : sessionConfig.accusation?.accused || [],
-    accusationContext: {
-      accused: sessionConfig.accusation?.accused || [],
-      charge: sessionConfig.accusation?.charge || '',
-      reasoning: sessionConfig.accusation?.notes || ''
-    },
-    whiteboard: whiteboardData,
-    emotionalHook: sessionConfig.accusation?.notes || '',
-    openQuestions: whiteboardData.evidenceConnections || []
-  };
+  const playerFocus = synthesizePlayerFocus(sessionConfig, directorNotes);
 
   // ─────────────────────────────────────────────────────
   // Step 6: Save files to data directory
@@ -525,6 +528,10 @@ Some text may be emphasized (underlined, circled, in boxes) - note this in keyPh
   console.log(`[parseRawInput] Saving files to ${inputsDir}`);
   await ensureDir(inputsDir);
 
+  // Include playerFocus in director notes for file-based resume
+  // loadDirectorNotes extracts directorNotes.playerFocus when loading from files
+  directorNotes.playerFocus = playerFocus;
+
   try {
     // Save session config
     await fs.writeFile(
@@ -533,7 +540,7 @@ Some text may be emphasized (underlined, circled, in boxes) - note this in keyPh
       'utf-8'
     );
 
-    // Save director notes (includes whiteboard data)
+    // Save director notes (includes whiteboard data AND playerFocus)
     await fs.writeFile(
       path.join(inputsDir, 'director-notes.json'),
       JSON.stringify(directorNotes, null, 2),
@@ -704,11 +711,18 @@ function createMockInputParser(mockResponses = {}) {
 
     if (jsonSchema === WHITEBOARD_SCHEMA) {
       return mockResponses.whiteboard || {
-        suspects: ['Victoria', 'Morgan', 'Derek'],
-        keyPhrases: ['collusion', 'memory drug', 'motive'],
-        evidenceConnections: ['Victoria hired Morgan'],
-        factsEstablished: ['Marcus was killed'],
-        rawText: 'Test whiteboard text'
+        names: ['Victoria', 'Morgan', 'Derek', 'Marcus', 'James'],
+        connections: [
+          { from: 'Victoria', to: 'Morgan', label: 'colluded with' },
+          { from: 'Marcus', to: 'Victoria', label: 'was married to' }
+        ],
+        groups: [
+          { label: 'SUSPECTS', members: ['Victoria', 'Morgan', 'Derek'] },
+          { label: 'FACTS', members: ['Marcus was killed', 'Memory drug was used'] }
+        ],
+        notes: ['Victoria hired Morgan', 'Past bad blood between Marcus and Victoria'],
+        structureType: 'accusation web with suspects circled',
+        ambiguities: ['Unclear handwriting near top right corner']
       };
     }
 
