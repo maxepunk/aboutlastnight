@@ -22,8 +22,23 @@
  * See ARCHITECTURE_DECISIONS.md 8.6.3 for design rationale.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { PHASES, APPROVAL_TYPES } = require('../state');
 const { safeParseJson, getSdkClient } = require('./node-helpers');
+const { createSemaphore, MODEL_TIMEOUTS } = require('../../sdk-client');
+const { preprocessImages, formatFileSize } = require('../../image-preprocessor');
+
+/**
+ * Photo processing configuration
+ */
+const PHOTO_CONFIG = {
+  // Concurrency limit: max parallel SDK calls (each spawns a CLI process)
+  MAX_CONCURRENT: 3,
+
+  // Timeout for each photo analysis (2 min for haiku + overhead for preprocessing)
+  ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000  // 3 minutes
+};
 
 /**
  * Photo analysis output schema for Claude
@@ -115,9 +130,10 @@ For each photo, identify:
 /**
  * Create empty photo analysis result
  * @param {string} sessionId - Session identifier
+ * @param {Object} [additionalStats] - Additional stats to merge
  * @returns {Object} Empty analysis result
  */
-function createEmptyPhotoAnalysisResult(sessionId) {
+function createEmptyPhotoAnalysisResult(sessionId, additionalStats = {}) {
   return {
     analyses: [],
     analyzedAt: new Date().toISOString(),
@@ -125,63 +141,40 @@ function createEmptyPhotoAnalysisResult(sessionId) {
     stats: {
       totalPhotos: 0,
       analyzedPhotos: 0,
-      processingTimeMs: 0
+      failedPhotos: 0,
+      processingTimeMs: 0,
+      ...additionalStats
     }
   };
 }
 
 /**
- * Analyze session photos using Haiku vision
- *
- * Processes photos early in pipeline to provide rich visual context
- * for arc analysis. Produces generic character descriptions that
- * the user maps to names at the character-ids checkpoint.
- *
- * Skip logic: If state.photoAnalyses exists and is non-null,
- * skip processing (resume from checkpoint case).
- *
- * @param {Object} state - Current state with sessionPhotos, playerFocus
- * @param {Object} config - Graph config with optional configurable.sdkClient
- * @returns {Object} Partial state update with photoAnalyses, currentPhase
+ * Create placeholder analysis for failed photo
+ * @param {string} filename - Photo filename
+ * @param {string} errorMessage - Error that occurred
+ * @returns {Object} Placeholder analysis object
  */
-async function analyzePhotos(state, config) {
-  const startTime = Date.now();
+function createFailedPhotoAnalysis(filename, errorMessage) {
+  return {
+    filename,
+    visualContent: 'Analysis failed - see error log',
+    narrativeMoment: 'Unable to analyze',
+    suggestedCaption: '',
+    characterDescriptions: [],
+    emotionalTone: 'neutral',
+    storyRelevance: 'contextual',
+    _error: errorMessage
+  };
+}
 
-  // Skip if already analyzed (resume case)
-  if (state.photoAnalyses) {
-    console.log('[analyzePhotos] Skipping - photoAnalyses already exists');
-    return {
-      currentPhase: PHASES.ANALYZE_PHOTOS
-    };
-  }
-
-  // Skip if no photos to analyze
-  const photos = state.sessionPhotos || [];
-  if (photos.length === 0) {
-    console.log('[analyzePhotos] Skipping - no session photos');
-    return {
-      photoAnalyses: createEmptyPhotoAnalysisResult(state.sessionId),
-      currentPhase: PHASES.ANALYZE_PHOTOS
-    };
-  }
-
-  console.log(`[analyzePhotos] Analyzing ${photos.length} photos`);
-
-  const sdk = getSdkClient(config);
-  const systemPrompt = buildPhotoAnalysisSystemPrompt(state.playerFocus);
-
-  try {
-    // Process photos - for now, sequentially with Haiku vision
-    // Future optimization: batch process similar to evidence preprocessing
-    const analyses = [];
-
-    for (const photo of photos) {
-      const photoPath = typeof photo === 'string' ? photo : photo.path || photo.filename;
-      const photoFilename = photoPath.split('/').pop().split('\\').pop();
-
-      console.log(`[analyzePhotos] Processing: ${photoFilename}`);
-
-      const userPrompt = `First, use the Read tool to view the photograph at: ${photoPath}
+/**
+ * Build user prompt for photo analysis
+ * @param {string} photoPath - Path to the photo file
+ * @param {string} photoFilename - Original filename for output
+ * @returns {string} User prompt for Claude
+ */
+function buildPhotoAnalysisUserPrompt(photoPath, photoFilename) {
+  return `First, use the Read tool to view the photograph at: ${photoPath}
 
 Then analyze what you see in the photograph.
 
@@ -199,36 +192,152 @@ After viewing the image, provide your analysis in JSON format matching this stru
 }
 
 Remember: Use physical descriptions for people, NOT names.`;
+}
 
-      try {
-        // Photo analysis requires Read tool to view images
-        // SDK handles tool execution internally
-        const analysis = await sdk({
-          systemPrompt,
-          prompt: userPrompt,
-          model: 'haiku',
-          jsonSchema: PHOTO_ANALYSIS_SCHEMA,
-          allowedTools: ['Read']  // Required for image viewing
-        });
-        analysis.filename = photoFilename; // Ensure filename is set
-        analyses.push(analysis);
-
-      } catch (photoError) {
-        console.error(`[analyzePhotos] Error analyzing ${photoFilename}:`, photoError.message);
-        // Add placeholder analysis for failed photos
-        analyses.push({
-          filename: photoFilename,
-          visualContent: 'Analysis failed - see error log',
-          narrativeMoment: 'Unable to analyze',
-          suggestedCaption: '',
-          characterDescriptions: [],
-          emotionalTone: 'neutral',
-          storyRelevance: 'contextual',
-          _error: photoError.message
-        });
-      }
+/**
+ * Create progress logger for SDK operations
+ * @param {string} context - Context prefix for log messages
+ * @returns {Function} Progress callback for sdkQuery
+ */
+function createProgressLogger(context) {
+  return (progress) => {
+    const { type, label, elapsed, toolName } = progress;
+    if (type === 'tool_call') {
+      console.log(`[${context}] ${label}: ${elapsed}s - calling ${toolName}`);
+    } else if (type === 'system' && progress.subtype === 'init') {
+      console.log(`[${context}] ${label}: ${elapsed}s - session started`);
     }
+  };
+}
 
+/**
+ * Analyze a single photo with the SDK
+ *
+ * Extracted for testability and single-responsibility.
+ *
+ * @param {Object} params - Analysis parameters
+ * @param {Function} params.sdk - SDK query function
+ * @param {string} params.systemPrompt - System prompt for analysis
+ * @param {string} params.processedPath - Path to preprocessed image
+ * @param {string} params.originalFilename - Original filename (for output)
+ * @param {number} params.timeoutMs - Timeout in milliseconds
+ * @param {Function} params.onProgress - Progress callback
+ * @returns {Promise<Object>} Analysis result or error placeholder
+ */
+async function analyzeSinglePhoto({
+  sdk,
+  systemPrompt,
+  processedPath,
+  originalFilename,
+  timeoutMs,
+  onProgress
+}) {
+  const userPrompt = buildPhotoAnalysisUserPrompt(processedPath, originalFilename);
+
+  try {
+    const analysis = await sdk({
+      systemPrompt,
+      prompt: userPrompt,
+      model: 'haiku',
+      jsonSchema: PHOTO_ANALYSIS_SCHEMA,
+      allowedTools: ['Read'],
+      timeoutMs,
+      onProgress,
+      label: originalFilename
+    });
+
+    // Ensure filename is set (use original, not processed)
+    analysis.filename = originalFilename;
+    console.log(`[analyzePhotos] Completed: ${originalFilename}`);
+    return analysis;
+
+  } catch (error) {
+    console.error(`[analyzePhotos] Error analyzing ${originalFilename}:`, error.message);
+    return createFailedPhotoAnalysis(originalFilename, error.message);
+  }
+}
+
+/**
+ * Analyze session photos using Haiku vision
+ *
+ * Processes photos early in pipeline to provide rich visual context
+ * for arc analysis. Produces generic character descriptions that
+ * the user maps to names at the character-ids checkpoint.
+ *
+ * Architecture (Commit 8.9):
+ * 1. Preprocess large images (resize/compress via sharp) to avoid SDK timeouts
+ * 2. Use semaphore to limit concurrent SDK calls (each spawns CLI process)
+ * 3. Use AbortController timeout for each analysis
+ * 4. Stream progress for visibility
+ *
+ * Skip logic: If state.photoAnalyses exists and is non-null,
+ * skip processing (resume from checkpoint case).
+ *
+ * @param {Object} state - Current state with sessionPhotos, playerFocus
+ * @param {Object} config - Graph config with optional configurable.sdkClient
+ * @returns {Object} Partial state update with photoAnalyses, currentPhase
+ */
+async function analyzePhotos(state, config) {
+  const startTime = Date.now();
+
+  // Skip if already analyzed (resume case)
+  if (state.photoAnalyses) {
+    console.log('[analyzePhotos] Skipping - photoAnalyses already exists');
+    return { currentPhase: PHASES.ANALYZE_PHOTOS };
+  }
+
+  // Skip if no photos to analyze
+  const photos = state.sessionPhotos || [];
+  if (photos.length === 0) {
+    console.log('[analyzePhotos] Skipping - no session photos');
+    return {
+      photoAnalyses: createEmptyPhotoAnalysisResult(state.sessionId),
+      currentPhase: PHASES.ANALYZE_PHOTOS
+    };
+  }
+
+  // Extract paths from photo objects
+  const photoPaths = photos.map(photo =>
+    typeof photo === 'string' ? photo : photo.path || photo.filename
+  );
+
+  console.log(`[analyzePhotos] Processing ${photos.length} photos`);
+
+  try {
+    // Step 1: Preprocess images (resize/compress large files)
+    console.log('[analyzePhotos] Step 1/2: Preprocessing images...');
+    const preprocessResults = await preprocessImages(photoPaths, {
+      concurrency: PHOTO_CONFIG.MAX_CONCURRENT
+    });
+
+    const preprocessStats = {
+      preprocessed: preprocessResults.filter(r => r.wasProcessed).length,
+      originalSizeBytes: preprocessResults.reduce((sum, r) => sum + r.originalSize, 0),
+      processedSizeBytes: preprocessResults.reduce((sum, r) => sum + r.processedSize, 0)
+    };
+
+    // Step 2: Analyze with SDK (limited concurrency + timeout + progress)
+    console.log(`[analyzePhotos] Step 2/2: Analyzing with SDK (max ${PHOTO_CONFIG.MAX_CONCURRENT} concurrent)...`);
+
+    const sdk = getSdkClient(config);
+    const systemPrompt = buildPhotoAnalysisSystemPrompt(state.playerFocus);
+    const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
+    const onProgress = createProgressLogger('analyzePhotos');
+
+    const analysisPromises = preprocessResults.map((preprocessResult, index) => {
+      const originalFilename = path.basename(photoPaths[index]);
+
+      return semaphore(() => analyzeSinglePhoto({
+        sdk,
+        systemPrompt,
+        processedPath: preprocessResult.path,
+        originalFilename,
+        timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS,
+        onProgress
+      }));
+    });
+
+    const analyses = await Promise.all(analysisPromises);
     const processingTimeMs = Date.now() - startTime;
 
     const photoAnalyses = {
@@ -239,11 +348,12 @@ Remember: Use physical descriptions for people, NOT names.`;
         totalPhotos: photos.length,
         analyzedPhotos: analyses.filter(a => !a._error).length,
         failedPhotos: analyses.filter(a => a._error).length,
-        processingTimeMs
+        processingTimeMs,
+        ...preprocessStats
       }
     };
 
-    console.log(`[analyzePhotos] Complete: ${photoAnalyses.stats.analyzedPhotos}/${photos.length} photos analyzed in ${processingTimeMs}ms`);
+    console.log(`[analyzePhotos] Complete: ${photoAnalyses.stats.analyzedPhotos}/${photos.length} in ${(processingTimeMs / 1000).toFixed(1)}s`);
 
     return {
       photoAnalyses,
@@ -565,9 +675,14 @@ module.exports = {
   _testing: {
     getSdkClient,
     buildPhotoAnalysisSystemPrompt,
+    buildPhotoAnalysisUserPrompt,
     createEmptyPhotoAnalysisResult,
+    createFailedPhotoAnalysis,
+    createProgressLogger,
+    analyzeSinglePhoto,
     safeParseJson,
     PHOTO_ANALYSIS_SCHEMA,
+    PHOTO_CONFIG,
     // Commit 8.9.5: Photo enrichment exports
     buildEnrichmentPrompt,
     ENRICHED_PHOTO_SCHEMA

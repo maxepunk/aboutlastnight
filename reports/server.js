@@ -302,6 +302,11 @@ app.post('/api/generate', requireAuth, async (req, res) => {
             if (approvals.outline === true) {
                 initialState.awaitingApproval = false;
             }
+
+            // Article approval: clear awaitingApproval flag (Commit 8.9.7)
+            if (approvals.article === true) {
+                initialState.awaitingApproval = false;
+            }
         }
 
         // Run graph until it pauses at checkpoint or completes
@@ -347,6 +352,11 @@ app.post('/api/generate', requireAuth, async (req, res) => {
                     break;
                 case APPROVAL_TYPES.OUTLINE:
                     response.outline = result.outline;
+                    break;
+                case APPROVAL_TYPES.ARTICLE:
+                    // Return content bundle for article preview (Commit 8.9.7)
+                    response.contentBundle = result.contentBundle;
+                    response.articleHtml = result.assembledHtml;  // May be available for preview
                     break;
             }
         }
