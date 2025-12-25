@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
- * E2E Walkthrough Script (Commit 8.9.7)
+ * E2E Walkthrough Script (Commit 8.9.8)
  *
  * Interactive walkthrough of the complete report generation pipeline.
- * Tests the full HTTP flow via /api/generate endpoint.
+ * Uses REST endpoints for granular state access and control.
  *
  * Usage:
  *   node scripts/e2e-walkthrough.js                    # Interactive mode with raw input
  *   node scripts/e2e-walkthrough.js --session 1221    # Load from existing session files
+ *   node scripts/e2e-walkthrough.js --fresh           # Clear cached checkpoints first
+ *   node scripts/e2e-walkthrough.js --input file.json # Load raw input from JSON file
  *   node scripts/e2e-walkthrough.js --auto            # Auto-approve all checkpoints
+ *   node scripts/e2e-walkthrough.js --verbose         # Show full request/response
  *   node scripts/e2e-walkthrough.js --help            # Show help
  *
  * Checkpoints (7 total):
@@ -42,8 +45,18 @@ let sessionCookie = null;
 const args = process.argv.slice(2);
 const AUTO_MODE = args.includes('--auto');
 const HELP_MODE = args.includes('--help') || args.includes('-h');
-const sessionIndex = args.indexOf('--session');
-const SESSION_ID = sessionIndex !== -1 ? args[sessionIndex + 1] : null;
+const FRESH_MODE = args.includes('--fresh');
+
+// Get argument values
+function getArgValue(flag) {
+  const index = args.indexOf(flag);
+  return index !== -1 && index + 1 < args.length ? args[index + 1] : null;
+}
+
+const SESSION_ID = getArgValue('--session');
+const INPUT_FILE = getArgValue('--input');
+const OVERRIDE_FILE = getArgValue('--override');
+const ROLLBACK_TO = getArgValue('--rollback');
 
 // Colors for terminal output
 const colors = {
@@ -110,9 +123,20 @@ async function apiCall(endpoint, body, method = 'POST') {
     headers['Cookie'] = sessionCookie;
   }
 
+  // Verbose logging - request
+  if (VERBOSE) {
+    console.log(color('\n─── REQUEST ───', 'dim'));
+    console.log(color(`${method} ${url}`, 'cyan'));
+    if (body) {
+      console.log(color('Body:', 'dim'));
+      console.log(JSON.stringify(body, null, 2));
+    }
+  }
+
   // Create AbortController for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const startTime = Date.now();
 
   try {
     const response = await fetch(url, {
@@ -123,15 +147,30 @@ async function apiCall(endpoint, body, method = 'POST') {
     });
 
     clearTimeout(timeoutId);
+    const durationMs = Date.now() - startTime;
 
     // Store session cookie from login response
+    // Handle both single string and comma-separated multiple cookies
     const setCookie = response.headers.get('set-cookie');
     if (setCookie) {
-      sessionCookie = setCookie.split(';')[0];  // Extract just the session cookie
+      const cookies = setCookie.split(',').map(c => c.trim());
+      const sessionCookieValue = cookies[0]?.split(';')[0];
+      if (sessionCookieValue && sessionCookieValue.includes('=')) {
+        sessionCookie = sessionCookieValue;
+      }
     }
 
     const data = await response.json();
-    return { status: response.status, data };
+
+    // Verbose logging - response
+    if (VERBOSE) {
+      console.log(color('\n─── RESPONSE ───', 'dim'));
+      console.log(color(`Status: ${response.status} (${durationMs}ms)`, response.status === 200 ? 'green' : 'red'));
+      console.log(color('Body:', 'dim'));
+      console.log(JSON.stringify(data, null, 2));
+    }
+
+    return { status: response.status, data, durationMs };
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
@@ -139,6 +178,11 @@ async function apiCall(endpoint, body, method = 'POST') {
     }
     return { status: 500, error: error.message };
   }
+}
+
+// GET helper for read-only endpoints
+async function apiGet(endpoint) {
+  return apiCall(endpoint, null, 'GET');
 }
 
 // Login to the API
@@ -189,9 +233,18 @@ ${color('USAGE:', 'cyan')}
   node scripts/e2e-walkthrough.js [options]
 
 ${color('OPTIONS:', 'cyan')}
-  --session <id>   Load input from existing data/{id}/inputs/ files
-  --auto           Auto-approve all checkpoints (for CI/testing)
-  --help, -h       Show this help message
+  --session <id>     Load input from existing data/{id}/inputs/ files
+  --fresh            Clear cached checkpoints before starting
+  --input <file>     Load rawSessionInput from JSON file
+  --override <file>  Load stateOverrides from JSON file (e.g., playerFocus)
+  --rollback <type>  Rollback to checkpoint before running
+  --auto             Auto-approve all checkpoints (for CI/testing)
+  --verbose, -v      Show full request/response JSON
+  --help, -h         Show this help message
+
+${color('ROLLBACK VALUES:', 'cyan')}
+  input-review, paper-evidence-selection, character-ids,
+  evidence-bundle, arc-selection, outline, article
 
 ${color('EXAMPLES:', 'cyan')}
   # Interactive mode - gather input from prompts
@@ -200,18 +253,25 @@ ${color('EXAMPLES:', 'cyan')}
   # Load from existing session
   node scripts/e2e-walkthrough.js --session 1221
 
+  # Fresh start with input file
+  node scripts/e2e-walkthrough.js --fresh --input session-1225.json
+
+  # Rollback and retry with modified focus
+  node scripts/e2e-walkthrough.js --session 1221 --rollback arc-selection --override focus.json
+
   # Auto-approve everything (CI mode)
-  node scripts/e2e-walkthrough.js --session 1221 --auto
+  node scripts/e2e-walkthrough.js --session 1221 --auto --verbose
 
 ${color('CHECKPOINTS:', 'cyan')}
   At each checkpoint you can:
   - [A]pprove - Continue with current data
-  - [E]dit - Modify the data before continuing
-  - [Q]uit - Exit the walkthrough
+  - [F]ull    - View full JSON response
+  - [E]dit    - Modify the data before continuing
+  - [Q]uit    - Exit the walkthrough
 
 ${color('NOTES:', 'cyan')}
   - Server must be running at ${API_BASE}
-  - In interactive mode, you'll be prompted for raw session input
+  - Uses REST endpoints: /api/session/:id/start, /api/session/:id/approve
   - Final HTML is saved to reports/outputs/
 `);
 }
@@ -268,6 +328,58 @@ async function loadSessionInput(sessionId) {
     // When loading from files, we don't send rawSessionInput - just sessionId
     // The pipeline will load from files automatically
     return { sessionId, fromFiles: true };
+  } catch (error) {
+    console.error(color(`  ✗ Failed to load: ${error.message}`, 'red'));
+    throw error;
+  }
+}
+
+// Load raw input from JSON file (--input flag)
+function loadInputFile(filePath) {
+  console.log(color(`Loading input from ${filePath}...`, 'dim'));
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(content);
+
+    // Validate required fields
+    const required = ['roster', 'accusation', 'sessionReport', 'directorNotes'];
+    const missing = required.filter(f => !data.rawSessionInput?.[f] && !data[f]);
+
+    if (missing.length > 0) {
+      throw new Error(`Missing required fields: ${missing.join(', ')}`);
+    }
+
+    // Normalize structure
+    const rawSessionInput = data.rawSessionInput || {
+      roster: data.roster,
+      accusation: data.accusation,
+      sessionReport: data.sessionReport,
+      directorNotes: data.directorNotes,
+      photosPath: data.photosPath,
+      whiteboardPhotoPath: data.whiteboardPhotoPath
+    };
+
+    console.log(color(`  ✓ Loaded raw session input`, 'green'));
+    return {
+      sessionId: data.sessionId,
+      rawSessionInput
+    };
+  } catch (error) {
+    console.error(color(`  ✗ Failed to load: ${error.message}`, 'red'));
+    throw error;
+  }
+}
+
+// Load state overrides from JSON file (--override flag)
+function loadOverrideFile(filePath) {
+  console.log(color(`Loading overrides from ${filePath}...`, 'dim'));
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(content);
+    console.log(color(`  ✓ Loaded state overrides: ${Object.keys(data).join(', ')}`, 'green'));
+    return data;
   } catch (error) {
     console.error(color(`  ✗ Failed to load: ${error.message}`, 'red'));
     throw error;
@@ -360,7 +472,7 @@ async function handleCharacterIds(response) {
   checkpointHeader('CHARACTER_IDS', response.currentPhase);
 
   const photos = response.sessionPhotos || [];
-  const analyses = response.photoAnalyses?.analyses || [];
+  const analyses = response.photoAnalyses || [];  // Direct array, not nested
   const roster = response.sessionConfig?.roster || [];
 
   console.log(color(`Photos to identify (${photos.length}):`, 'bright'));
@@ -468,18 +580,19 @@ async function handleArcSelection(response) {
   }
 
   if (choice.toLowerCase() === 'e') {
-    const indices = await prompt('Enter arc numbers to include (comma-separated): ');
-    const selected = indices.split(',')
-      .map(s => parseInt(s.trim()) - 1)
-      .filter(i => i >= 0 && i < arcs.length)
-      .map(i => arcs[i].id || arcs[i].title);
+    // Use loop instead of recursion for retry safety
+    while (true) {
+      const indices = await prompt('Enter arc numbers to include (comma-separated): ');
+      const selected = indices.split(',')
+        .map(s => parseInt(s.trim()) - 1)
+        .filter(i => i >= 0 && i < arcs.length)
+        .map(i => arcs[i].id || arcs[i].title);
 
-    if (selected.length === 0) {
-      console.log(color('Must select at least one arc', 'red'));
-      return handleArcSelection(response); // Retry
+      if (selected.length > 0) {
+        return { selectedArcs: selected };
+      }
+      console.log(color('Must select at least one arc. Please try again.', 'red'));
     }
-
-    return { selectedArcs: selected };
   }
 
   return { selectedArcs: arcs.map(a => a.id || a.title) };
@@ -585,8 +698,11 @@ async function runWalkthrough() {
   header('E2E Walkthrough');
 
   console.log(`Mode: ${AUTO_MODE ? color('AUTO', 'yellow') : color('INTERACTIVE', 'green')}`);
+  console.log(`Fresh: ${FRESH_MODE ? color('YES', 'yellow') : 'NO'}`);
   console.log(`Server: ${API_BASE}`);
-  console.log(`Theme: ${DEFAULT_THEME}\n`);
+  console.log(`Theme: ${DEFAULT_THEME}`);
+  if (VERBOSE) console.log(color('Verbose mode enabled', 'dim'));
+  console.log('');
 
   // Authenticate first
   console.log(color('Authenticating...', 'dim'));
@@ -595,83 +711,146 @@ async function runWalkthrough() {
     throw new Error('Authentication failed');
   }
 
-  // Gather or load input
-  let inputData;
-  if (SESSION_ID) {
-    console.log(color(`Loading session: ${SESSION_ID}`, 'cyan'));
-    inputData = await loadSessionInput(SESSION_ID);
-  } else {
-    inputData = await gatherRawInput();
+  // Load state overrides if specified
+  let stateOverrides = null;
+  if (OVERRIDE_FILE) {
+    try {
+      stateOverrides = loadOverrideFile(OVERRIDE_FILE);
+    } catch (error) {
+      console.error(color(`Failed to load override file: ${error.message}`, 'red'));
+      return;
+    }
   }
 
-  const sessionId = inputData.sessionId || SESSION_ID;
+  // Gather or load input
+  let inputData;
+  let sessionId;
+
+  try {
+    if (INPUT_FILE) {
+      // Load from --input file
+      inputData = loadInputFile(INPUT_FILE);
+      sessionId = inputData.sessionId || SESSION_ID;
+    } else if (SESSION_ID) {
+      // Load from existing session files
+      console.log(color(`Loading session: ${SESSION_ID}`, 'cyan'));
+      inputData = await loadSessionInput(SESSION_ID);
+      sessionId = SESSION_ID;
+    } else {
+      // Interactive input gathering
+      inputData = await gatherRawInput();
+      sessionId = inputData.sessionId;
+    }
+  } catch (error) {
+    console.error(color(`Failed to load input: ${error.message}`, 'red'));
+    return;
+  }
+
+  // Warn if overrides won't be applied (only work with --rollback or resume mode)
+  if (stateOverrides && !ROLLBACK_TO && inputData.rawSessionInput && !inputData.fromFiles) {
+    console.log(color('WARNING: --override only applies with --rollback or when resuming existing session', 'yellow'));
+  }
+
   console.log(color(`\nSession ID: ${sessionId}`, 'bright'));
 
-  // Build initial request
-  let requestBody = {
-    sessionId,
-    theme: DEFAULT_THEME
-  };
-
-  // Add raw input if gathered
-  if (inputData.rawSessionInput) {
-    requestBody.rawSessionInput = inputData.rawSessionInput;
+  // Handle rollback first if specified
+  if (ROLLBACK_TO) {
+    console.log(color(`\nRolling back to: ${ROLLBACK_TO}`, 'yellow'));
+    const rollbackBody = { rollbackTo: ROLLBACK_TO };
+    if (stateOverrides) {
+      rollbackBody.stateOverrides = stateOverrides;
+    }
+    const { status, data, error } = await apiCall(`/api/session/${sessionId}/rollback`, rollbackBody);
+    if (status !== 200) {
+      console.error(color(`Rollback failed: ${data?.error || error}`, 'red'));
+      return;
+    }
+    console.log(color(`  ✓ Rolled back. Phase: ${data.currentPhase}`, 'green'));
+    console.log(color(`  Cleared: ${data.fieldsCleared?.length || 0} fields`, 'dim'));
   }
 
   // Main loop
   let iteration = 0;
   const maxIterations = 20; // Safety limit
+  let currentData = null;
 
-  while (iteration < maxIterations) {
-    iteration++;
+  // Initial request - use /start for fresh with raw input, /generate for resume
+  const useStartEndpoint = inputData.rawSessionInput && (FRESH_MODE || !inputData.fromFiles);
+  if (useStartEndpoint) {
+    // Use /start endpoint for fresh sessions with raw input
+    console.log(color(`\n─── Starting Session ───`, 'dim'));
+    const startBody = {
+      theme: DEFAULT_THEME,
+      rawSessionInput: inputData.rawSessionInput
+    };
+    const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/start`, startBody);
 
-    console.log(color(`\n─── API Call #${iteration} ───`, 'dim'));
-    console.log(color(`POST ${API_BASE}/api/generate`, 'dim'));
-
-    const startTime = Date.now();
-    const { status, data, error } = await apiCall('/api/generate', requestBody);
-    const duration = Date.now() - startTime;
-
-    console.log(color(`Response: ${status} (${duration}ms)`, status === 200 ? 'green' : 'red'));
-
-    if (error) {
-      console.error(color(`Error: ${error}`, 'red'));
-      break;
+    if (!VERBOSE) {
+      console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
     }
 
     if (status !== 200) {
-      console.error(color(`API Error: ${data.error || JSON.stringify(data)}`, 'red'));
-      break;
+      console.error(color(`Start failed: ${data?.error || error}`, 'red'));
+      return;
+    }
+    currentData = data;
+  } else {
+    // Use /generate for resume or file-based sessions
+    console.log(color(`\n─── Resuming Session ───`, 'dim'));
+    const requestBody = {
+      sessionId,
+      theme: DEFAULT_THEME,
+      mode: FRESH_MODE ? 'fresh' : 'resume'
+    };
+    if (stateOverrides) {
+      requestBody.stateOverrides = stateOverrides;
+    }
+    const { status, data, error, durationMs } = await apiCall('/api/generate', requestBody);
+
+    if (!VERBOSE) {
+      console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
     }
 
+    if (status !== 200) {
+      console.error(color(`Resume failed: ${data?.error || error}`, 'red'));
+      return;
+    }
+    currentData = data;
+  }
+
+  // Main checkpoint loop
+  while (iteration < maxIterations) {
+    iteration++;
+
     // Display current phase
-    console.log(`Phase: ${color(data.currentPhase, 'cyan')}`);
-    console.log(`Awaiting Approval: ${data.awaitingApproval}`);
-    if (data.approvalType) {
-      console.log(`Approval Type: ${color(data.approvalType, 'yellow')}`);
+    console.log(color(`\n─── Checkpoint #${iteration} ───`, 'dim'));
+    console.log(`Phase: ${color(currentData.currentPhase, 'cyan')}`);
+    console.log(`Awaiting Approval: ${currentData.awaitingApproval}`);
+    if (currentData.approvalType) {
+      console.log(`Approval Type: ${color(currentData.approvalType, 'yellow')}`);
     }
 
     // Check for completion
-    if (data.currentPhase === 'complete') {
+    if (currentData.currentPhase === 'complete') {
       header('Pipeline Complete!');
 
-      if (data.assembledHtml) {
+      if (currentData.assembledHtml) {
         // Save HTML to file
         const outputDir = path.join(__dirname, '..', 'outputs');
         if (!fs.existsSync(outputDir)) {
           fs.mkdirSync(outputDir, { recursive: true });
         }
         const outputPath = path.join(outputDir, `report-${sessionId}-${Date.now()}.html`);
-        fs.writeFileSync(outputPath, data.assembledHtml);
+        fs.writeFileSync(outputPath, currentData.assembledHtml);
         console.log(color(`HTML saved to: ${outputPath}`, 'green'));
-        console.log(`Length: ${data.assembledHtml.length} characters`);
+        console.log(`Length: ${currentData.assembledHtml.length} characters`);
       }
 
-      if (data.validationResults) {
+      if (currentData.validationResults) {
         console.log(color('\nValidation Results:', 'bright'));
-        console.log(`  Passed: ${data.validationResults.passed ? color('YES', 'green') : color('NO', 'red')}`);
-        if (data.validationResults.issues) {
-          console.log(`  Issues: ${data.validationResults.issues.length}`);
+        console.log(`  Passed: ${currentData.validationResults.passed ? color('YES', 'green') : color('NO', 'red')}`);
+        if (currentData.validationResults.issues) {
+          console.log(`  Issues: ${currentData.validationResults.issues.length}`);
         }
       }
 
@@ -679,29 +858,41 @@ async function runWalkthrough() {
     }
 
     // Check for error phase
-    if (data.currentPhase === 'error') {
+    if (currentData.currentPhase === 'error') {
       header('Pipeline Error');
       console.log(color('Errors:', 'red'));
-      (data.errors || []).forEach(err => {
+      (currentData.errors || []).forEach(err => {
         console.log(`  - [${err.type}] ${err.message}`);
       });
       break;
     }
 
     // Handle checkpoint
-    if (data.awaitingApproval && data.approvalType) {
-      const handler = checkpointHandlers[data.approvalType];
+    if (currentData.awaitingApproval && currentData.approvalType) {
+      const handler = checkpointHandlers[currentData.approvalType];
 
       if (handler) {
         try {
-          const approvals = await handler(data);
+          const approvals = await handler(currentData);
 
-          // Build next request with approvals
-          requestBody = {
-            sessionId,
-            theme: DEFAULT_THEME,
+          // Use /approve endpoint for cleaner flow
+          console.log(color(`\n─── Approving... ───`, 'dim'));
+          const { status, data, error, durationMs } = await apiCall(
+            `/api/session/${sessionId}/approve`,
             approvals
-          };
+          );
+
+          if (!VERBOSE) {
+            console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
+          }
+
+          if (status !== 200) {
+            console.error(color(`Approval failed: ${data?.error || error}`, 'red'));
+            break;
+          }
+
+          currentData = data;
+
         } catch (err) {
           if (err.message === 'User quit') {
             console.log(color('\nWalkthrough cancelled by user.', 'yellow'));
@@ -710,13 +901,13 @@ async function runWalkthrough() {
           throw err;
         }
       } else {
-        console.log(color(`Unknown approval type: ${data.approvalType}`, 'red'));
+        console.log(color(`Unknown approval type: ${currentData.approvalType}`, 'red'));
         break;
       }
     } else {
       // No checkpoint, something unexpected
       console.log(color('Unexpected state - not awaiting approval but not complete', 'yellow'));
-      prettyPrint(data);
+      prettyPrint(currentData);
       break;
     }
   }
@@ -738,7 +929,7 @@ async function main() {
 
   console.log('\n' + color('═'.repeat(60), 'magenta'));
   console.log(color('  ALN Director Console - E2E Walkthrough', 'bright'));
-  console.log(color('  Commit 8.9.7', 'dim'));
+  console.log(color('  Commit 8.9.8', 'dim'));
   console.log(color('═'.repeat(60), 'magenta'));
 
   createReadline();
