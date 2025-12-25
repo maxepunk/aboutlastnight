@@ -190,16 +190,19 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   // ═══════════════════════════════════════════════════════
-  // ARC SPECIALIST OUTPUTS (Commit 8.6)
+  // ARC SPECIALIST OUTPUTS (Commit 8.8: Orchestrated Subagents)
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Parallel arc specialist outputs (scatter-gather pattern)
+   * Arc specialist outputs from orchestrated subagent analysis
    * Structure: { financial: {...}, behavioral: {...}, victimization: {...} }
-   * Each specialist contributes domain-specific insights
+   *
+   * Commit 8.8 change: Uses replaceReducer instead of mergeReducer
+   * because the orchestrator returns the complete object in one call
+   * (subagents run in parallel via SDK, not sequential graph nodes)
    */
   specialistAnalyses: Annotation({
-    reducer: mergeReducer,
+    reducer: replaceReducer,
     default: () => ({})
   }),
 

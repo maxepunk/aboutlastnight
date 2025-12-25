@@ -1,459 +1,260 @@
 /**
- * Arc Specialist Nodes - Parallel domain analysis for report generation workflow
+ * Arc Specialist Nodes - Orchestrated subagent analysis for report generation
  *
- * Handles the arc analysis sub-phases (2.1-2.2) of the pipeline:
- * - analyzeFinancialPatterns: Money flows, account naming, timing clusters
- * - analyzeBehavioralPatterns: Character dynamics, observations, relationships
- * - analyzeVictimizationPatterns: Who targeted whom, self-burial patterns
- * - synthesizeArcs: Combine specialist outputs with player focus
+ * Commit 8.8: Replaces sequential 4-node pattern with single orchestrated node.
  *
- * Added in Commit 8.6 to address arc analysis timeout with large evidence bundles.
- * Instead of one monolithic Opus call, we use 3 parallel domain specialists
- * (Haiku/Sonnet) followed by a synthesizer.
+ * Previous pattern (Commit 8.6):
+ * - 3 sequential specialist nodes (financial, behavioral, victimization)
+ * - 1 synthesizer node to combine results
+ * - Used mergeReducer for accumulating partial results
  *
- * Scatter-Gather Pattern:
- * 1. SCATTER: Three specialists run in parallel, each focused on one domain
- * 2. GATHER: Synthesizer combines all specialist outputs into unified arcs
+ * New pattern (Commit 8.8):
+ * - 1 orchestrator node with access to 3 specialist subagents
+ * - Orchestrator has rich context (game rules, voice, objectives)
+ * - Orchestrator coordinates specialists intentionally
+ * - Orchestrator synthesizes results cohesively
+ * - Uses replaceReducer (returns complete object)
  *
- * All nodes follow the LangGraph pattern:
- * - Accept (state, config) parameters
- * - Return partial state updates (using mergeReducer for specialistAnalyses)
- * - Use PHASES constants for currentPhase values
- * - Support skip logic for resume
+ * Benefits:
+ * - Orchestrator maintains narrative coherence
+ * - Better alignment with player focus (Layer 3 drives)
+ * - Parallel execution via SDK subagent Task tool
+ * - Single node simplifies graph structure
  *
- * See ARCHITECTURE_DECISIONS.md 8.6.2 for design rationale.
+ * See ARCHITECTURE_DECISIONS.md 8.8 for design rationale.
  */
 
 const { PHASES, APPROVAL_TYPES } = require('../state');
-const { safeParseJson, getSdkClient } = require('./node-helpers');
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SPECIALIST DOMAIN DEFINITIONS
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Domain definitions for each specialist
- * Each domain has specific focus areas and output structure
- */
-const SPECIALIST_DOMAINS = {
-  financial: {
-    name: 'Financial Patterns Specialist',
-    focus: [
-      'Transaction patterns and timing',
-      'Account naming conventions and aliases',
-      'Money flow connections between characters',
-      'Suspicious financial timing clusters',
-      'Evidence of financial coordination'
-    ],
-    outputFields: ['accountPatterns', 'timingClusters', 'suspiciousFlows', 'financialConnections']
-  },
-  behavioral: {
-    name: 'Behavioral Patterns Specialist',
-    focus: [
-      'Character dynamics and relationships',
-      'Director observations about behavior',
-      'Behavioral → transaction correlations',
-      'Zero-footprint character analysis',
-      'Suspicious behavioral patterns'
-    ],
-    outputFields: ['characterDynamics', 'behaviorCorrelations', 'zeroFootprintCharacters', 'behavioralInsights']
-  },
-  victimization: {
-    name: 'Victimization Patterns Specialist',
-    focus: [
-      'Who targeted whom (memory burial)',
-      'Operator identification patterns',
-      'Self-burial patterns (memory drug on self)',
-      'Victim identification and protection',
-      'Targeting relationships and motives'
-    ],
-    outputFields: ['victims', 'operators', 'selfBurialPatterns', 'targetingInsights']
-  }
-};
+// Note: getSdkClient not used - orchestrator requires direct SDK access for subagents
+const {
+  ARC_SPECIALIST_SUBAGENTS,
+  ORCHESTRATOR_SYSTEM_PROMPT,
+  ORCHESTRATOR_OUTPUT_SCHEMA
+} = require('../../sdk-client/subagents');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// getSdkClient imported from node-helpers.js
-
 /**
- * Build system prompt for a domain specialist
- * @param {string} domain - Domain name (financial, behavioral, victimization)
- * @param {Object} playerFocus - Player focus data
- * @returns {string} System prompt
+ * Build orchestrator prompt with all evidence and context
+ * @param {Object} state - Current state with evidence, player focus, etc.
+ * @returns {string} User prompt for orchestrator
  */
-function buildSpecialistSystemPrompt(domain, playerFocus) {
-  const domainDef = SPECIALIST_DOMAINS[domain];
-  if (!domainDef) {
-    throw new Error(`Unknown specialist domain: ${domain}`);
-  }
-
-  const focusContext = playerFocus?.primaryInvestigation
-    ? `The players were investigating: "${playerFocus.primaryInvestigation}".`
-    : 'Analyze from a general investigative perspective.';
-
-  const focusAreas = domainDef.focus.map((f, i) => `${i + 1}. ${f}`).join('\n');
-
-  return `You are the ${domainDef.name} for an investigative article about "About Last Night" - a crime thriller game.
-
-Your task is to analyze the evidence and identify patterns specific to your domain.
-
-DOMAIN FOCUS AREAS:
-${focusAreas}
-
-CONTEXT:
-${focusContext}
-
-IMPORTANT RULES:
-1. Focus ONLY on your domain - other specialists cover other areas
-2. Be specific about which evidence supports each finding
-3. Note confidence levels for each pattern identified
-4. Flag any connections to other domains for the synthesizer
-5. Use character names from the evidence (names are resolved at this phase)
-
-OUTPUT FORMAT:
-Provide your analysis as JSON with these fields:
-${domainDef.outputFields.map(f => `- ${f}`).join('\n')}
-
-Each finding should include:
-- description: What you found
-- evidence: Which items support this
-- confidence: high/medium/low
-- relevanceToPlayers: How this connects to player focus`;
-}
-
-/**
- * Build user prompt with evidence for specialist
- * @param {Object} state - Current state with evidence
- * @param {string} domain - Domain name
- * @returns {string} User prompt with evidence
- */
-function buildSpecialistUserPrompt(state, domain) {
+function buildOrchestratorPrompt(state) {
   const evidenceBundle = state.evidenceBundle || {};
   const photoAnalyses = state.photoAnalyses || { analyses: [] };
   const preprocessedEvidence = state.preprocessedEvidence || { items: [] };
+  const playerFocus = state.playerFocus || {};
+  const sessionConfig = state.sessionConfig || {};
+  const directorNotes = state.directorNotes || {};
 
-  return `Analyze the following evidence for ${domain} patterns:
-
-EVIDENCE BUNDLE:
-${JSON.stringify(evidenceBundle, null, 2)}
-
-PHOTO ANALYSES:
-${JSON.stringify(photoAnalyses.analyses, null, 2)}
-
-PREPROCESSED EVIDENCE SUMMARIES:
-${JSON.stringify(preprocessedEvidence.items.slice(0, 20), null, 2)}
-
-${preprocessedEvidence.items.length > 20 ? `... and ${preprocessedEvidence.items.length - 20} more items` : ''}
-
-Provide your ${domain} domain analysis as JSON.`;
-}
-
-// safeParseJson imported from node-helpers.js
-
-/**
- * Create empty specialist result
- * @param {string} domain - Domain name
- * @param {string} sessionId - Session identifier
- * @returns {Object} Empty result structure
- */
-function createEmptySpecialistResult(domain, sessionId) {
-  const domainDef = SPECIALIST_DOMAINS[domain];
-  const result = {
-    domain,
-    analyzedAt: new Date().toISOString(),
-    sessionId: sessionId || null,
-    findings: {}
-  };
-
-  // Initialize empty arrays for each output field
-  domainDef.outputFields.forEach(field => {
-    result.findings[field] = [];
-  });
-
-  return result;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SPECIALIST NODE FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Analyze financial patterns in evidence
- *
- * Focuses on: transaction patterns, account aliases, money flows,
- * timing clusters, financial coordination evidence.
- *
- * @param {Object} state - Current state with evidenceBundle, photoAnalyses
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with specialistAnalyses.financial
- */
-async function analyzeFinancialPatterns(state, config) {
-  return analyzeForDomain('financial', state, config);
-}
-
-/**
- * Analyze behavioral patterns in evidence
- *
- * Focuses on: character dynamics, director observations, behavior-transaction
- * correlations, zero-footprint analysis.
- *
- * @param {Object} state - Current state with evidenceBundle, photoAnalyses
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with specialistAnalyses.behavioral
- */
-async function analyzeBehavioralPatterns(state, config) {
-  return analyzeForDomain('behavioral', state, config);
-}
-
-/**
- * Analyze victimization patterns in evidence
- *
- * Focuses on: targeting relationships, operator identification,
- * self-burial patterns, victim protection.
- *
- * @param {Object} state - Current state with evidenceBundle, photoAnalyses
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with specialistAnalyses.victimization
- */
-async function analyzeVictimizationPatterns(state, config) {
-  return analyzeForDomain('victimization', state, config);
-}
-
-/**
- * Generic domain analysis function
- * @param {string} domain - Domain to analyze
- * @param {Object} state - Current state
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update
- */
-async function analyzeForDomain(domain, state, config) {
-  console.log(`[${domain}Specialist] Starting analysis`);
-
-  // Skip if this specialist's analysis already exists
-  if (state.specialistAnalyses?.[domain]) {
-    console.log(`[${domain}Specialist] Skipping - analysis already exists`);
-    return {
-      currentPhase: PHASES.ARC_SPECIALISTS
-    };
-  }
-
-  // Skip if no evidence to analyze
-  if (!state.evidenceBundle && !state.preprocessedEvidence) {
-    console.log(`[${domain}Specialist] Skipping - no evidence available`);
-    return {
-      specialistAnalyses: {
-        [domain]: createEmptySpecialistResult(domain, state.sessionId)
-      },
-      currentPhase: PHASES.ARC_SPECIALISTS
-    };
-  }
-
-  const sdk = getSdkClient(config);
-  const systemPrompt = buildSpecialistSystemPrompt(domain, state.playerFocus);
-  const prompt = buildSpecialistUserPrompt(state, domain);
-
-  try {
-    // SDK returns parsed object directly when jsonSchema is provided
-    const findings = await sdk({
-      systemPrompt,
-      prompt,
-      model: 'sonnet', // Specialists use Sonnet for quality analysis
-      jsonSchema: {
-        type: 'object',
-        properties: {
-          accountPatterns: { type: 'array' },
-          timingClusters: { type: 'array' },
-          suspiciousFlows: { type: 'array' },
-          financialConnections: { type: 'array' },
-          characterDynamics: { type: 'array' },
-          behaviorCorrelations: { type: 'array' },
-          zeroFootprintCharacters: { type: 'array' },
-          behavioralInsights: { type: 'array' },
-          victims: { type: 'array' },
-          operators: { type: 'array' },
-          selfBurialPatterns: { type: 'array' },
-          targetingInsights: { type: 'array' }
-        }
-      }
-    });
-
-    const result = {
-      domain,
-      analyzedAt: new Date().toISOString(),
-      sessionId: state.sessionId || null,
-      findings
-    };
-
-    console.log(`[${domain}Specialist] Complete: Found ${Object.keys(findings).length} finding categories`);
-
-    return {
-      specialistAnalyses: {
-        [domain]: result
-      },
-      currentPhase: PHASES.ARC_SPECIALISTS
-    };
-
-  } catch (error) {
-    console.error(`[${domain}Specialist] Error:`, error.message);
-
-    return {
-      specialistAnalyses: {
-        [domain]: {
-          ...createEmptySpecialistResult(domain, state.sessionId),
-          _error: error.message
-        }
-      },
-      errors: [{
-        phase: PHASES.ARC_SPECIALISTS,
-        type: `${domain}-specialist-failed`,
-        message: error.message,
-        timestamp: new Date().toISOString()
-      }],
-      currentPhase: PHASES.ARC_SPECIALISTS // Continue with partial results
-    };
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SYNTHESIZER NODE
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Build system prompt for arc synthesizer
- * @param {Object} playerFocus - Player focus data
- * @returns {string} System prompt
- */
-function buildSynthesizerSystemPrompt(playerFocus) {
-  const focusContext = playerFocus?.primaryInvestigation
-    ? `The players were investigating: "${playerFocus.primaryInvestigation}".`
-    : 'Synthesize from a general investigative perspective.';
-
-  const whiteboardNotes = playerFocus?.whiteboardAccusations
-    ? `\n\nWHITEBOARD ACCUSATIONS (what players concluded):\n${JSON.stringify(playerFocus.whiteboardAccusations, null, 2)}`
+  // Build context about what players focused on (Layer 3 drives)
+  const whiteboardContext = playerFocus.whiteboard
+    ? `\n\nWHITEBOARD (Player Conclusions):
+Title: ${playerFocus.whiteboard.title || 'Unknown'}
+Suspects: ${JSON.stringify(playerFocus.whiteboard.suspects || [])}
+Evidence Connections: ${JSON.stringify(playerFocus.whiteboard.evidenceConnections || [])}
+Facts Established: ${JSON.stringify(playerFocus.whiteboard.factsEstablished || [])}`
     : '';
 
-  return `You are the Arc Synthesizer for an investigative article about "About Last Night" - a crime thriller game.
+  const accusationContext = playerFocus.accusationContext
+    ? `\n\nFINAL ACCUSATION:
+Accused: ${JSON.stringify(playerFocus.accusationContext.accused || [])}
+Charge: ${playerFocus.accusationContext.charge || 'Unknown'}`
+    : '';
 
-Your task is to combine analyses from three domain specialists into unified narrative arcs for the article.
+  const rosterContext = sessionConfig.roster
+    ? `\n\nROSTER (Characters in this session):
+${sessionConfig.roster.join(', ')}`
+    : '';
 
-${focusContext}${whiteboardNotes}
+  const observationsContext = directorNotes.observations
+    ? `\n\nDIRECTOR OBSERVATIONS:
+Behavior Patterns: ${JSON.stringify(directorNotes.observations.behaviorPatterns || [])}
+Suspicious Correlations: ${JSON.stringify(directorNotes.observations.suspiciousCorrelations || [])}
+Notable Moments: ${JSON.stringify(directorNotes.observations.notableMoments || [])}`
+    : '';
 
-INPUT: You will receive findings from:
-1. Financial Patterns Specialist - money flows, timing, aliases
-2. Behavioral Patterns Specialist - dynamics, observations, correlations
-3. Victimization Patterns Specialist - targeting, operators, victims
+  return `Analyze the following evidence and coordinate your specialist subagents to create narrative arcs.
 
-OUTPUT: Create 3-5 narrative arcs, each with:
-- title: Compelling arc title
-- summary: 2-3 sentence summary
-- keyEvidence: Most important evidence items
-- characterPlacements: Where each roster member fits
-- emotionalHook: What makes this arc compelling
-- playerEmphasis: How this connects to player focus (Layer 3)
-- storyRelevance: critical/supporting/contextual
+PRIMARY INVESTIGATION (what players focused on):
+${playerFocus.primaryInvestigation || 'General investigation'}
 
-SYNTHESIS RULES:
-1. Cross-reference findings across domains for stronger arcs
-2. Prioritize what players focused on (whiteboard = Layer 3 drives)
-3. Ensure every roster member has a placement
-4. Create emotionally resonant story beats
-5. Flag gaps or contradictions for transparency
+EMOTIONAL HOOK:
+${playerFocus.emotionalHook || 'Standard mystery'}
 
-Provide your synthesis as JSON with: { arcs: [...], synthesisNotes: string }`;
+OPEN QUESTIONS (from players):
+${JSON.stringify(playerFocus.openQuestions || [], null, 2)}
+${whiteboardContext}
+${accusationContext}
+${rosterContext}
+${observationsContext}
+
+═══════════════════════════════════════════════════════════════════════════
+EVIDENCE BUNDLE (Three-Layer Model)
+═══════════════════════════════════════════════════════════════════════════
+
+EXPOSED EVIDENCE (Layer 1 - Freely available):
+${JSON.stringify(evidenceBundle.exposed || [], null, 2)}
+
+BURIED EVIDENCE (Layer 2 - Required investigation):
+${JSON.stringify(evidenceBundle.buried || [], null, 2)}
+
+CONTEXT (Additional supporting evidence):
+${JSON.stringify(evidenceBundle.context || [], null, 2)}
+
+═══════════════════════════════════════════════════════════════════════════
+PHOTO ANALYSES (Visual evidence from session)
+═══════════════════════════════════════════════════════════════════════════
+
+${JSON.stringify(photoAnalyses.analyses?.slice(0, 10) || [], null, 2)}
+${photoAnalyses.analyses?.length > 10 ? `... and ${photoAnalyses.analyses.length - 10} more photos` : ''}
+
+═══════════════════════════════════════════════════════════════════════════
+PREPROCESSED EVIDENCE SUMMARIES
+═══════════════════════════════════════════════════════════════════════════
+
+${JSON.stringify(preprocessedEvidence.items?.slice(0, 20) || [], null, 2)}
+${preprocessedEvidence.items?.length > 20 ? `... and ${preprocessedEvidence.items.length - 20} more items` : ''}
+
+═══════════════════════════════════════════════════════════════════════════
+INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════════════
+
+1. Use the financial-specialist subagent to analyze financial patterns
+2. Use the behavioral-specialist subagent to analyze behavioral patterns
+3. Use the victimization-specialist subagent to analyze targeting patterns
+4. Synthesize all specialist findings into 3-5 narrative arcs
+
+Remember:
+- Layer 3 (player focus/whiteboard) DRIVES narrative priority
+- Every roster member must have a placement
+- Cross-reference specialist findings for stronger arcs`;
 }
 
 /**
- * Build user prompt for arc synthesizer
- * @param {Object} state - Current state with specialistAnalyses
- * @returns {string} User prompt with all specialist findings
+ * Create empty analysis result for error cases
+ * @param {string} sessionId - Session identifier
+ * @returns {Object} Empty analysis structure
  */
-function buildSynthesizerUserPrompt(state) {
-  const specialists = state.specialistAnalyses || {};
-
-  return `Synthesize these specialist findings into narrative arcs:
-
-FINANCIAL SPECIALIST FINDINGS:
-${JSON.stringify(specialists.financial?.findings || {}, null, 2)}
-
-BEHAVIORAL SPECIALIST FINDINGS:
-${JSON.stringify(specialists.behavioral?.findings || {}, null, 2)}
-
-VICTIMIZATION SPECIALIST FINDINGS:
-${JSON.stringify(specialists.victimization?.findings || {}, null, 2)}
-
-PHOTO ANALYSES (for context):
-${JSON.stringify((state.photoAnalyses?.analyses || []).slice(0, 5), null, 2)}
-
-Create 3-5 unified narrative arcs that weave these findings together.`;
+function createEmptyAnalysisResult(sessionId) {
+  return {
+    specialistAnalyses: {
+      financial: { accountPatterns: [], timingClusters: [], suspiciousFlows: [], financialConnections: [] },
+      behavioral: { characterDynamics: [], behaviorCorrelations: [], zeroFootprintCharacters: [], behavioralInsights: [] },
+      victimization: { victims: [], operators: [], selfBurialPatterns: [], targetingInsights: [] }
+    },
+    narrativeArcs: [],
+    synthesisNotes: 'Empty result - no analysis performed',
+    analyzedAt: new Date().toISOString(),
+    sessionId
+  };
 }
 
-/**
- * Synthesize specialist findings into unified narrative arcs
- *
- * Combines outputs from all three domain specialists with player focus
- * to produce cohesive narrative arcs for the article.
- *
- * Skip logic: If state.narrativeArcs exists and is non-empty,
- * skip processing (resume from checkpoint case).
- *
- * @param {Object} state - Current state with specialistAnalyses
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with narrativeArcs, _arcAnalysisCache
- */
-async function synthesizeArcs(state, config) {
-  console.log('[synthesizeArcs] Starting arc synthesis');
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN ORCHESTRATOR NODE
+// ═══════════════════════════════════════════════════════════════════════════
 
-  // Skip if arcs already exist
+/**
+ * Analyze arcs with SDK subagents
+ *
+ * Single orchestrated node that replaces:
+ * - analyzeFinancialPatterns
+ * - analyzeBehavioralPatterns
+ * - analyzeVictimizationPatterns
+ * - synthesizeArcs
+ *
+ * The orchestrator has rich context about the game and coordinates
+ * three specialist subagents to analyze evidence from different perspectives,
+ * then synthesizes their findings into cohesive narrative arcs.
+ *
+ * Skip logic: If narrativeArcs already exist with content, skip processing.
+ *
+ * @param {Object} state - Current state with evidence, player focus, etc.
+ * @param {Object} config - Graph config with SDK client
+ * @returns {Object} Partial state update with specialistAnalyses, narrativeArcs
+ */
+async function analyzeArcsWithSubagents(state, config) {
+  console.log('[analyzeArcsWithSubagents] Starting orchestrated arc analysis');
+
+  // Skip if arcs already exist (resume case)
   if (state.narrativeArcs && state.narrativeArcs.length > 0) {
-    console.log('[synthesizeArcs] Skipping - narrativeArcs already exist');
+    console.log('[analyzeArcsWithSubagents] Skipping - narrativeArcs already exist');
     return {
       currentPhase: PHASES.ARC_SYNTHESIS
     };
   }
 
-  // Check if we have specialist analyses
-  const specialists = state.specialistAnalyses || {};
-  const hasAnalyses = Object.keys(specialists).length > 0;
-
-  if (!hasAnalyses) {
-    console.log('[synthesizeArcs] Warning - no specialist analyses available');
-    // Continue anyway - synthesizer can work with just evidence
-  }
-
-  const sdk = getSdkClient(config);
-  const systemPrompt = buildSynthesizerSystemPrompt(state.playerFocus);
-  const prompt = buildSynthesizerUserPrompt(state);
-
-  try {
-    // SDK returns parsed object directly when jsonSchema is provided
-    const result = await sdk({
-      systemPrompt,
-      prompt,
-      model: 'sonnet', // Synthesizer uses Sonnet for quality
-      jsonSchema: {
-        type: 'object',
-        properties: {
-          arcs: { type: 'array' },
-          narrativeCompass: { type: 'object' },
-          synthesisNotes: { type: 'string' }
-        },
-        required: ['arcs']
-      }
-    });
-
-    const arcs = result.arcs || [];
-
-    console.log(`[synthesizeArcs] Complete: ${arcs.length} arcs synthesized`);
-
+  // Skip if no evidence to analyze
+  if (!state.evidenceBundle && !state.preprocessedEvidence) {
+    console.log('[analyzeArcsWithSubagents] Skipping - no evidence available');
     return {
-      narrativeArcs: arcs,
+      specialistAnalyses: createEmptyAnalysisResult(state.sessionId).specialistAnalyses,
+      narrativeArcs: [],
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
-        specialistDomains: Object.keys(specialists),
-        synthesisNotes: result.synthesisNotes || '',
-        arcCount: arcs.length
+        error: 'No evidence available'
+      },
+      currentPhase: PHASES.ARC_SYNTHESIS,
+      awaitingApproval: true,
+      approvalType: APPROVAL_TYPES.ARC_SELECTION
+    };
+  }
+
+  // Get SDK client - supports subagents via agents option
+  const { query } = require('@anthropic-ai/claude-agent-sdk');
+
+  const orchestratorPrompt = buildOrchestratorPrompt(state);
+
+  try {
+    console.log('[analyzeArcsWithSubagents] Invoking orchestrator with subagents');
+
+    // Call SDK with subagent definitions
+    // The orchestrator will use Task tool to invoke specialists
+    let result = null;
+
+    for await (const msg of query({
+      prompt: orchestratorPrompt,
+      options: {
+        model: 'sonnet',
+        systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
+        agents: ARC_SPECIALIST_SUBAGENTS,
+        outputFormat: {
+          type: 'json_schema',
+          schema: ORCHESTRATOR_OUTPUT_SCHEMA
+        },
+        allowedTools: ['Task'],  // Task tool required for subagent invocation
+        permissionMode: 'bypassPermissions'
+      }
+    })) {
+      if (msg.type === 'result' && msg.subtype === 'success') {
+        result = msg.structured_output;
+        break;
+      }
+      if (msg.type === 'result' && msg.subtype?.includes('error')) {
+        throw new Error(`SDK: ${msg.subtype} - ${msg.errors?.join(', ')}`);
+      }
+    }
+
+    if (!result) {
+      throw new Error('SDK: No result received from orchestrator');
+    }
+
+    const { specialistAnalyses, narrativeArcs, synthesisNotes } = result;
+
+    console.log(`[analyzeArcsWithSubagents] Complete: ${narrativeArcs?.length || 0} arcs synthesized`);
+    console.log(`[analyzeArcsWithSubagents] Specialist domains: ${Object.keys(specialistAnalyses || {}).join(', ')}`);
+
+    return {
+      specialistAnalyses: specialistAnalyses || {},
+      narrativeArcs: narrativeArcs || [],
+      _arcAnalysisCache: {
+        synthesizedAt: new Date().toISOString(),
+        specialistDomains: Object.keys(specialistAnalyses || {}),
+        synthesisNotes: synthesisNotes || '',
+        arcCount: narrativeArcs?.length || 0,
+        orchestratorModel: 'sonnet'
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
       awaitingApproval: true,
@@ -461,9 +262,10 @@ async function synthesizeArcs(state, config) {
     };
 
   } catch (error) {
-    console.error('[synthesizeArcs] Error:', error.message);
+    console.error('[analyzeArcsWithSubagents] Error:', error.message);
 
     return {
+      specialistAnalyses: createEmptyAnalysisResult(state.sessionId).specialistAnalyses,
       narrativeArcs: [],
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
@@ -471,7 +273,7 @@ async function synthesizeArcs(state, config) {
       },
       errors: [{
         phase: PHASES.ARC_SYNTHESIS,
-        type: 'arc-synthesis-failed',
+        type: 'orchestrator-failed',
         message: error.message,
         timestamp: new Date().toISOString()
       }],
@@ -485,23 +287,94 @@ async function synthesizeArcs(state, config) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Create mock specialist for testing
- * @param {string} domain - Domain name
+ * Create mock orchestrator for testing
  * @param {Object} options - Mock options
- * @returns {Function} Mock specialist function
+ * @returns {Function} Mock orchestrator function
+ */
+function createMockOrchestrator(options = {}) {
+  const {
+    specialistAnalyses = null,
+    arcs = null,
+    shouldFail = false,
+    errorMessage = 'Mock orchestrator error'
+  } = options;
+
+  return async (state, config) => {
+    if (shouldFail) {
+      return {
+        specialistAnalyses: createEmptyAnalysisResult(state.sessionId).specialistAnalyses,
+        narrativeArcs: [],
+        _arcAnalysisCache: { _error: errorMessage },
+        errors: [{
+          phase: PHASES.ARC_SYNTHESIS,
+          type: 'orchestrator-failed',
+          message: errorMessage,
+          timestamp: new Date().toISOString()
+        }],
+        currentPhase: PHASES.ERROR
+      };
+    }
+
+    const mockSpecialistAnalyses = specialistAnalyses || {
+      financial: {
+        accountPatterns: [{ description: 'Shell company pattern', confidence: 'high' }],
+        timingClusters: [],
+        suspiciousFlows: [{ description: 'Unusual transfer timing', confidence: 'medium' }],
+        financialConnections: []
+      },
+      behavioral: {
+        characterDynamics: [{ description: 'Alliance shift observed', confidence: 'high' }],
+        behaviorCorrelations: [],
+        zeroFootprintCharacters: [],
+        behavioralInsights: []
+      },
+      victimization: {
+        victims: [{ description: 'Primary victim identified', confidence: 'high' }],
+        operators: [],
+        selfBurialPatterns: [],
+        targetingInsights: []
+      }
+    };
+
+    const mockArcs = arcs || [
+      {
+        title: 'Mock Arc 1',
+        summary: 'A mock narrative arc for testing',
+        keyEvidence: ['evidence-1'],
+        characterPlacements: {},
+        emotionalHook: 'Mock emotional hook',
+        playerEmphasis: 'high',
+        storyRelevance: 'critical'
+      }
+    ];
+
+    return {
+      specialistAnalyses: mockSpecialistAnalyses,
+      narrativeArcs: mockArcs,
+      _arcAnalysisCache: {
+        synthesizedAt: new Date().toISOString(),
+        specialistDomains: Object.keys(mockSpecialistAnalyses),
+        arcCount: mockArcs.length
+      },
+      currentPhase: PHASES.ARC_SYNTHESIS,
+      awaitingApproval: true,
+      approvalType: APPROVAL_TYPES.ARC_SELECTION
+    };
+  };
+}
+
+/**
+ * Legacy mock factories for backwards compatibility
+ * @deprecated Use createMockOrchestrator instead
  */
 function createMockSpecialist(domain, options = {}) {
+  console.warn('[DEPRECATED] createMockSpecialist - use createMockOrchestrator');
   const { findings = {}, shouldFail = false, errorMessage = 'Mock error' } = options;
 
   return async (state, config) => {
     if (shouldFail) {
       return {
-        specialistAnalyses: {
-          [domain]: {
-            ...createEmptySpecialistResult(domain, state.sessionId),
-            _error: errorMessage
-          }
-        },
+        specialistAnalyses: { [domain]: { _error: errorMessage } },
         errors: [{
           phase: PHASES.ARC_SPECIALISTS,
           type: `${domain}-specialist-failed`,
@@ -512,29 +385,21 @@ function createMockSpecialist(domain, options = {}) {
       };
     }
 
+    const defaultFindings = {
+      financial: { accountPatterns: [], timingClusters: [], suspiciousFlows: [], financialConnections: [] },
+      behavioral: { characterDynamics: [], behaviorCorrelations: [], zeroFootprintCharacters: [], behavioralInsights: [] },
+      victimization: { victims: [], operators: [], selfBurialPatterns: [], targetingInsights: [] }
+    };
+
     return {
-      specialistAnalyses: {
-        [domain]: {
-          domain,
-          analyzedAt: new Date().toISOString(),
-          sessionId: state.sessionId || 'mock-session',
-          findings: findings[domain] || SPECIALIST_DOMAINS[domain].outputFields.reduce((acc, field) => {
-            acc[field] = [{ description: `Mock ${field}`, confidence: 'medium' }];
-            return acc;
-          }, {})
-        }
-      },
+      specialistAnalyses: { [domain]: findings[domain] || defaultFindings[domain] },
       currentPhase: PHASES.ARC_SPECIALISTS
     };
   };
 }
 
-/**
- * Create mock synthesizer for testing
- * @param {Object} options - Mock options
- * @returns {Function} Mock synthesizer function
- */
 function createMockSynthesizer(options = {}) {
+  console.warn('[DEPRECATED] createMockSynthesizer - use createMockOrchestrator');
   const { arcs = null, shouldFail = false, errorMessage = 'Mock synthesis error' } = options;
 
   return async (state, config) => {
@@ -579,115 +444,55 @@ function createMockSynthesizer(options = {}) {
 }
 
 module.exports = {
-  // Main node functions
-  analyzeFinancialPatterns,
-  analyzeBehavioralPatterns,
-  analyzeVictimizationPatterns,
-  synthesizeArcs,
+  // Main node function (Commit 8.8)
+  analyzeArcsWithSubagents,
 
-  // Mock factories for testing
+  // Mock factory (Commit 8.8)
+  createMockOrchestrator,
+
+  // Legacy exports for backwards compatibility
+  // These are deprecated but kept to avoid breaking tests during migration
   createMockSpecialist,
   createMockSynthesizer,
 
   // Export for testing
   _testing: {
-    SPECIALIST_DOMAINS,
-    getSdkClient,
-    buildSpecialistSystemPrompt,
-    buildSpecialistUserPrompt,
-    buildSynthesizerSystemPrompt,
-    buildSynthesizerUserPrompt,
-    safeParseJson,
-    createEmptySpecialistResult,
-    analyzeForDomain
+    buildOrchestratorPrompt,
+    createEmptyAnalysisResult,
+    ARC_SPECIALIST_SUBAGENTS,
+    ORCHESTRATOR_SYSTEM_PROMPT,
+    ORCHESTRATOR_OUTPUT_SCHEMA
   }
 };
 
 // Self-test when run directly
 if (require.main === module) {
-  console.log('Arc Specialist Nodes Self-Test\n');
+  console.log('Arc Specialist Nodes Self-Test (Commit 8.8)\n');
 
-  // Test with mock SDK client - returns parsed objects directly
-  const mockSdkClient = async (options) => {
-    if (options.systemPrompt.includes('Financial')) {
-      return {
-        accountPatterns: [{ description: 'Shell company pattern', confidence: 'high' }],
-        timingClusters: [],
-        suspiciousFlows: [{ description: 'Unusual transfer timing', confidence: 'medium' }],
-        financialConnections: []
-      };
-    }
-    if (options.systemPrompt.includes('Behavioral')) {
-      return {
-        characterDynamics: [{ description: 'Alliance shift', confidence: 'high' }],
-        behaviorCorrelations: [],
-        zeroFootprintCharacters: [],
-        behavioralInsights: []
-      };
-    }
-    if (options.systemPrompt.includes('Victimization')) {
-      return {
-        victims: [{ description: 'Primary victim identified', confidence: 'high' }],
-        operators: [],
-        selfBurialPatterns: [],
-        targetingInsights: []
-      };
-    }
-    if (options.systemPrompt.includes('Synthesizer')) {
-      return {
-        arcs: [
-          {
-            title: 'The Hidden Alliance',
-            summary: 'A secret partnership revealed',
-            keyEvidence: ['evidence-1'],
-            characterPlacements: { 'Alice': 'operator', 'Bob': 'victim' },
-            emotionalHook: 'Betrayal of trust',
-            playerEmphasis: 'high',
-            storyRelevance: 'critical'
-          }
-        ],
-        synthesisNotes: 'Self-test synthesis complete'
-      };
-    }
-    return {};
-  };
+  // Test with mock orchestrator
+  const mockOrchestrator = createMockOrchestrator();
 
   const mockState = {
     sessionId: 'self-test',
-    evidenceBundle: { exposed: [], buried: [] },
+    evidenceBundle: { exposed: [], buried: [], context: [] },
     preprocessedEvidence: { items: [{ id: 'test-1' }] },
-    playerFocus: { primaryInvestigation: 'Who is the Valet?' }
+    playerFocus: {
+      primaryInvestigation: 'Who is the Valet?',
+      whiteboard: { title: 'MARCUS BLACKWOOD IS DEAD', suspects: ['Victoria', 'Morgan'] }
+    },
+    sessionConfig: { roster: ['Alex', 'Victoria', 'Morgan'] }
   };
 
-  const mockConfig = {
-    configurable: { sdkClient: mockSdkClient }
-  };
+  const mockConfig = {};
 
-  console.log('Testing specialists...');
+  console.log('Testing mock orchestrator...');
 
-  Promise.all([
-    analyzeFinancialPatterns(mockState, mockConfig),
-    analyzeBehavioralPatterns(mockState, mockConfig),
-    analyzeVictimizationPatterns(mockState, mockConfig)
-  ]).then(async ([financial, behavioral, victimization]) => {
-    console.log('Financial findings:', Object.keys(financial.specialistAnalyses?.financial?.findings || {}));
-    console.log('Behavioral findings:', Object.keys(behavioral.specialistAnalyses?.behavioral?.findings || {}));
-    console.log('Victimization findings:', Object.keys(victimization.specialistAnalyses?.victimization?.findings || {}));
-
-    // Merge specialist results
-    const combinedState = {
-      ...mockState,
-      specialistAnalyses: {
-        ...financial.specialistAnalyses,
-        ...behavioral.specialistAnalyses,
-        ...victimization.specialistAnalyses
-      }
-    };
-
-    console.log('\nTesting synthesizer...');
-    const synthesis = await synthesizeArcs(combinedState, mockConfig);
-    console.log('Arcs synthesized:', synthesis.narrativeArcs?.length);
-    console.log('First arc title:', synthesis.narrativeArcs?.[0]?.title);
+  mockOrchestrator(mockState, mockConfig).then(result => {
+    console.log('Specialist analyses:', Object.keys(result.specialistAnalyses || {}));
+    console.log('Arcs synthesized:', result.narrativeArcs?.length);
+    console.log('First arc title:', result.narrativeArcs?.[0]?.title);
+    console.log('Awaiting approval:', result.awaitingApproval);
+    console.log('Approval type:', result.approvalType);
     console.log('\nSelf-test complete.');
   }).catch(err => {
     console.error('Self-test failed:', err.message);

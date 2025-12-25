@@ -1,10 +1,10 @@
 /**
- * Report Generation Graph - Commit 8.6: Cohesive Generative Workflow
+ * Report Generation Graph - Commit 8.8: SDK Subagent Orchestration
  *
  * Assembles the complete LangGraph StateGraph for report generation.
  * Connects all nodes with edges, conditional routing, and checkpointing.
  *
- * Graph Flow (21 nodes - Commit 8.6):
+ * Graph Flow (18 nodes - Commit 8.8):
  *
  * PHASE 1: Data Acquisition
  * 1.1 initializeSession → 1.2 loadDirectorNotes → 1.3 fetchMemoryTokens
@@ -14,9 +14,8 @@
  * → 1.65 analyzePhotos (Haiku vision) → 1.7 preprocessEvidence
  * → 1.8 curateEvidenceBundle → [checkpoint: evidence-and-photos]
  *
- * PHASE 2: Arc Analysis (Scatter-Gather Pattern)
- * → 2.1 parallel specialists (financial, behavioral, victimization)
- * → 2.2 synthesizeArcs → 2.3 evaluateArcs → [revision loop]
+ * PHASE 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)
+ * → 2 analyzeArcs (orchestrator with 3 subagents) → 2.3 evaluateArcs → [revision loop]
  * → [checkpoint: arc-selection]
  *
  * PHASE 3: Outline Generation
@@ -34,7 +33,7 @@
  * - MemorySaver for testing (in-memory)
  * - SqliteSaver for production (persistent)
  *
- * See ARCHITECTURE_DECISIONS.md 8.6 for design rationale.
+ * See ARCHITECTURE_DECISIONS.md 8.8 for design rationale.
  */
 
 const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
@@ -280,8 +279,8 @@ async function setArticleCheckpoint(state) {
 }
 
 /**
- * Increment arc revision count and clear arcs for re-synthesis
- * Clears narrativeArcs so synthesizeArcs skip logic doesn't trigger
+ * Increment arc revision count and clear arcs for re-analysis
+ * Clears narrativeArcs so analyzeArcs skip logic doesn't trigger
  */
 async function incrementArcRevision(state) {
   console.log(`[incrementArcRevision] Incrementing count to ${(state.arcRevisionCount || 0) + 1}, clearing arcs for regeneration`);
@@ -350,16 +349,12 @@ function createGraphBuilder() {
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 2: Arc Analysis (Scatter-Gather)
+  // ADD NODES - Phase 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)
   // ═══════════════════════════════════════════════════════
 
-  // Parallel arc specialists (scatter)
-  builder.addNode('analyzeFinancialPatterns', nodes.analyzeFinancialPatterns);
-  builder.addNode('analyzeBehavioralPatterns', nodes.analyzeBehavioralPatterns);
-  builder.addNode('analyzeVictimizationPatterns', nodes.analyzeVictimizationPatterns);
-
-  // Arc synthesis (gather)
-  builder.addNode('synthesizeArcs', nodes.synthesizeArcs);
+  // Single orchestrator node replaces 4 sequential nodes (Commit 8.8)
+  // Orchestrator coordinates 3 specialist subagents and synthesizes results
+  builder.addNode('analyzeArcs', nodes.analyzeArcsWithSubagents);
 
   // Arc evaluation
   builder.addNode('evaluateArcs', nodes.evaluateArcs);
@@ -414,22 +409,16 @@ function createGraphBuilder() {
   // Evidence + Photos approval checkpoint
   builder.addConditionalEdges('curateEvidenceBundle', routeEvidenceApproval, {
     wait: END,
-    continue: 'analyzeFinancialPatterns'  // Start arc specialists
+    continue: 'analyzeArcs'  // Start orchestrated arc analysis (Commit 8.8)
   });
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 2: Arc Analysis (Scatter-Gather)
+  // ADD EDGES - Phase 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)
   // ═══════════════════════════════════════════════════════
 
-  // Note: LangGraph doesn't support true fan-out, so specialists run sequentially
-  // but each checks if its analysis already exists (skip logic for parallel execution)
-  // In a real parallel scenario, you'd use async execution outside the graph
-  builder.addEdge('analyzeFinancialPatterns', 'analyzeBehavioralPatterns');
-  builder.addEdge('analyzeBehavioralPatterns', 'analyzeVictimizationPatterns');
-  builder.addEdge('analyzeVictimizationPatterns', 'synthesizeArcs');
-
-  // After synthesis, evaluate arcs
-  builder.addEdge('synthesizeArcs', 'evaluateArcs');
+  // Single orchestrator node handles all arc analysis and synthesis
+  // Subagents run in parallel via SDK Task tool
+  builder.addEdge('analyzeArcs', 'evaluateArcs');
 
   // Arc evaluation routing
   builder.addConditionalEdges('evaluateArcs', routeArcEvaluation, {
@@ -438,8 +427,8 @@ function createGraphBuilder() {
     error: END
   });
 
-  // Revision loop back to synthesis
-  builder.addEdge('incrementArcRevision', 'synthesizeArcs');
+  // Revision loop back to orchestrator (Commit 8.8)
+  builder.addEdge('incrementArcRevision', 'analyzeArcs');
 
   // Arc selection checkpoint
   builder.addConditionalEdges('setArcSelectionCheckpoint', routeArcSelectionApproval, {

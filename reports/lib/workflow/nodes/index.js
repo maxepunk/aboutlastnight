@@ -8,7 +8,7 @@
  * - Fetch Nodes: Data fetching from files/APIs (initializeSession, loadDirectorNotes, etc.)
  * - Photo Nodes: Photo analysis with Haiku vision (analyzePhotos) - Commit 8.6
  * - Preprocess Nodes: Batch evidence preprocessing (preprocessEvidence) - Commit 8.5
- * - Arc Specialist Nodes: Parallel domain analysis (financial, behavioral, victimization) - Commit 8.6
+ * - Arc Specialist Nodes: Orchestrated subagent analysis (analyzeArcsWithSubagents) - Commit 8.8
  * - Evaluator Nodes: Per-phase quality evaluation (arcs, outline, article) - Commit 8.6
  * - AI Nodes: Claude-powered processing (curateEvidenceBundle, generateOutline, etc.)
  * - Template Nodes: HTML assembly (assembleHtml)
@@ -41,11 +41,9 @@ module.exports = {
   // Preprocess nodes (from preprocess-nodes.js) - Commit 8.5
   preprocessEvidence: preprocessNodes.preprocessEvidence,
 
-  // Arc specialist nodes (from arc-specialist-nodes.js) - Commit 8.6
-  analyzeFinancialPatterns: arcSpecialistNodes.analyzeFinancialPatterns,
-  analyzeBehavioralPatterns: arcSpecialistNodes.analyzeBehavioralPatterns,
-  analyzeVictimizationPatterns: arcSpecialistNodes.analyzeVictimizationPatterns,
-  synthesizeArcs: arcSpecialistNodes.synthesizeArcs,
+  // Arc specialist nodes (from arc-specialist-nodes.js) - Commit 8.8
+  // Single orchestrator replaces 4 sequential nodes (financial, behavioral, victimization, synthesize)
+  analyzeArcsWithSubagents: arcSpecialistNodes.analyzeArcsWithSubagents,
 
   // Evaluator nodes (from evaluator-nodes.js) - Commit 8.6
   evaluateArcs: evaluatorNodes.evaluateArcs,
@@ -88,6 +86,9 @@ module.exports = {
     createMockNotionClient: fetchNodes.createMockNotionClient,
     createMockPhotoAnalyzer: photoNodes.createMockPhotoAnalyzer,
     createMockPreprocessor: preprocessNodes.createMockPreprocessor,
+    // Commit 8.8: New orchestrator mock replaces individual specialist mocks
+    createMockOrchestrator: arcSpecialistNodes.createMockOrchestrator,
+    // @deprecated - use createMockOrchestrator (kept for backwards compatibility)
     createMockSpecialist: arcSpecialistNodes.createMockSpecialist,
     createMockSynthesizer: arcSpecialistNodes.createMockSynthesizer,
     createMockEvaluator: evaluatorNodes.createMockEvaluator,
