@@ -182,11 +182,21 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * User-provided character ID mappings
-   * Maps photo descriptions → character names (from character-ids.json)
-   * Provided at checkpoint before arc analysis
+   * User-provided character ID mappings (structured format)
+   * Maps photo descriptions → character names
+   * Either provided directly or parsed from characterIdsRaw
    */
   characterIdMappings: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Raw natural language character ID input from user
+   * Parsed by parseCharacterIds node into characterIdMappings
+   * Added in Commit 8.9.x for natural language input support
+   */
+  characterIdsRaw: Annotation({
     reducer: replaceReducer,
     default: () => null
   }),
@@ -457,6 +467,7 @@ const PHASES = {
   FETCH_PHOTOS: '1.4',
   ANALYZE_PHOTOS: '1.65',           // Commit 8.6: early photo analysis (before preprocessing)
   CHARACTER_ID_CHECKPOINT: '1.66',  // Commit 8.9.5: user provides character IDs for photos
+  PARSE_CHARACTER_IDS: '1.665',     // Commit 8.9.x: parse natural language → structured format
   FINALIZE_PHOTOS: '1.67',          // Commit 8.9.5: enrich photo analyses with character IDs
   PREPROCESS_EVIDENCE: '1.7',       // Commit 8.5: batch summarization before curation
   CURATE_EVIDENCE: '1.8',

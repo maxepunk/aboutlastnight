@@ -11,6 +11,11 @@ const path = require('path');
 // Phase-specific prompt requirements
 // Each phase only loads what it needs to minimize context
 const PHASE_REQUIREMENTS = {
+  imageAnalysis: [
+    'whiteboard-analysis',
+    'photo-analysis',
+    'photo-enrichment'
+  ],
   arcAnalysis: [
     'character-voice',
     'evidence-boundaries',
@@ -49,7 +54,10 @@ const ALL_PROMPTS = [
   'evidence-boundaries',
   'formatting',
   'narrative-structure',
+  'photo-analysis',
+  'photo-enrichment',
   'section-rules',
+  'whiteboard-analysis',
   'writing-principles'
 ];
 

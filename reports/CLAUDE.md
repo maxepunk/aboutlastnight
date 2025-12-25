@@ -4,207 +4,196 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ALN Director Console** - AI-powered case report generator for "About Last Night" using Claude Agent SDK with LangGraph workflow.
+**ALN Director Console** - AI-powered investigative article generator for "About Last Night" using Claude Agent SDK with LangGraph workflow.
 
-Generates detective/journalist-style case reports by:
-1. Fetching inventory items and evidence from Notion database
-2. Curating evidence bundle (memory tokens + paper evidence)
-3. Analyzing narrative arcs based on player focus
-4. Generating article outline and final HTML report
+Generates journalist-style investigative articles by:
+1. Fetching memory tokens and paper evidence from Notion database
+2. Curating evidence bundle using three-layer model (exposed/buried/context)
+3. Analyzing narrative arcs via parallel specialist subagents
+4. Generating article outline and final HTML report with human-in-the-loop checkpoints
 
 **Production URL:** `https://console.aboutlastnightgame.com` (via Cloudflare Tunnel)
 
-## Technology Stack
-
-- **Node.js/Express** - Backend server (`server.js`)
-- **Claude Agent SDK** - AI operations via `@anthropic-ai/claude-agent-sdk`
-- **LangGraph** - Workflow orchestration via `@langchain/langgraph`
-- **Notion API** - Inventory database
-- **Cloudflare Tunnel** - Remote access
-- **React** (inline in HTML) - Frontend UI (`detlogv3.html`)
-
-**Key Dependencies:** express, dotenv, express-session, @anthropic-ai/claude-agent-sdk, @langchain/langgraph
-
-## Common Development Tasks
-
-### Starting the Server
+## Common Commands
 
 ```bash
-cd reports
-npm install  # First time only
-npm start
+# Development
+npm start              # Start server on localhost:3001
+npm run dev            # Same as npm start
+
+# Testing
+npm test               # Run all Jest tests
+npm run test:watch     # Watch mode
+npm run test:coverage  # Coverage report (targets: 80% lines/functions)
+
+# Run single test file
+npx jest lib/__tests__/theme-loader.test.js
+
+# Remote access
+start-everything.bat   # Windows: Start server + Cloudflare tunnel
+cloudflared tunnel run aln-console  # Manual tunnel start
 ```
-
-Server runs at `http://localhost:3001`
-
-### Starting with Remote Access (Cloudflare Tunnel)
-
-```bash
-# Windows - double-click:
-start-everything.bat
-
-# Or manually in two terminals:
-npm start                           # Terminal 1
-cloudflared tunnel run aln-console  # Terminal 2
-```
-
-Remote access at: `https://console.aboutlastnightgame.com`
-
-### Environment Setup
-
-```bash
-cp .env.example .env
-# Edit .env with your values:
-# NOTION_TOKEN=ntn_...
-# ACCESS_PASSWORD=your-password
-# SESSION_SECRET=random-32-char-string
-```
-
-Generate session secret:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-### Verifying Claude Agent SDK
-
-The server performs a health check at startup. If it fails:
-1. Ensure Claude Code is authenticated: `claude /login`
-2. Check network connectivity
-3. Run `npm install` to ensure SDK is installed
 
 ## Architecture
 
-### Core Components
+### LangGraph Workflow (6 Phases, 23 Nodes)
 
 ```
-server.js           - Express server, LangGraph workflow orchestration
-lib/sdk-client.js   - Claude Agent SDK wrapper
-lib/workflow/       - LangGraph nodes and state management
-detlogv3.html       - React frontend (single-page app)
-.env                - Environment variables (NOT in git)
+Phase 0: Input Parsing → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
+→ Phase 2: Arc Analysis → Phase 3: Outline → Phase 4: Article → Phase 5: Assembly
 ```
 
-### API Endpoints
+**Human Checkpoints (workflow pauses for approval):**
+- `input-review` - Review parsed session input
+- `paper-evidence-selection` - Select which evidence was unlocked during gameplay
+- `character-ids` - Map characters to photos based on Haiku's descriptions
+- `evidence-and-photos` - Approve curated evidence bundle
+- `arc-selection` - Select which narrative arcs to develop
+- `outline` - Approve article structure
+- `article` - Final article approval before assembly
 
-| Endpoint | Method | Auth | Purpose |
-|----------|--------|------|---------|
-| `/api/auth/login` | POST | No | Password authentication |
-| `/api/auth/check` | GET | No | Session status |
-| `/api/auth/logout` | POST | No | End session |
-| `/api/generate` | POST | Yes | LangGraph workflow orchestration |
-| `/api/config` | GET | Yes | Serve Notion token |
-| `/api/health` | GET | No | Server status |
+**Revision Loops:** Arcs (max 2), Outline (max 3), Article (max 3)
 
-### LangGraph Workflow Architecture
+### Key Files
 
-The report generation uses a multi-phase LangGraph workflow with human-in-the-loop checkpoints:
-
-**Phases:**
-1. **Fetch** - Load director notes, memory tokens, paper evidence, session photos
-2. **Curate** - Build evidence bundle with three-layer model
-3. **Analyze** - Generate narrative arcs from player focus (parallel specialists)
-4. **Outline** - Create article structure from selected arcs
-5. **Generate** - Write final HTML report
-6. **Validate** - Check article against quality requirements
-
-**Checkpoints (Human Approval):**
-- Evidence bundle approval
-- Arc selection (user picks which arcs to include)
-- Outline approval
-
-**Key Files:**
 ```
+server.js                           # Express server + /api/generate endpoint
+lib/sdk-client.js                   # Claude Agent SDK wrapper with timeouts
 lib/workflow/
-├── state.js              - State annotations, phases, approval types
-├── graph.js              - LangGraph StateGraph definition
-├── generation-supervisor.js - Parallel arc generation
+├── graph.js                        # LangGraph StateGraph (23 nodes, edges)
+├── state.js                        # State annotations, phases, reducers
+├── generation-supervisor.js        # Orchestrator for arc analysis
 └── nodes/
-    ├── fetch-nodes.js    - Data loading from Notion/filesystem
-    ├── ai-nodes.js       - Claude SDK calls for content generation
-    ├── arc-specialist-nodes.js - Parallel arc analysis
-    └── evaluator-nodes.js - Quality validation
+    ├── index.js                    # Node barrel export
+    ├── input-nodes.js              # Raw input parsing
+    ├── fetch-nodes.js              # Notion/filesystem data loading
+    ├── photo-nodes.js              # Haiku vision analysis
+    ├── preprocess-nodes.js         # Batch evidence summarization
+    ├── arc-specialist-nodes.js     # Orchestrated subagent analysis
+    ├── evaluator-nodes.js          # Quality evaluation per phase
+    ├── ai-nodes.js                 # Claude content generation
+    └── template-nodes.js           # HTML assembly
 ```
 
-### Claude Agent SDK Integration
+### Session Data Structure
 
-All AI operations use the Claude Agent SDK via `lib/sdk-client.js`:
+```
+data/{sessionId}/inputs/
+├── session-config.json         # Roster, accusation, game metadata
+├── director-notes.json         # Observations, whiteboard data
+├── selected-paper-evidence.json # User-selected evidence items
+├── character-ids.json          # Photo-to-character mappings
+└── orchestrator-parsed.json    # AI-parsed input (cache)
+```
+
+### Template System
+
+```
+templates/journalist/
+├── layouts/article.hbs         # Main article layout
+└── partials/
+    ├── header.hbs, navigation.hbs
+    ├── content-blocks/         # paragraph, quote, list, evidence-reference
+    └── sidebar/                # financial-tracker, evidence-card, pull-quote
+```
+
+### Claude Agent SDK Usage
 
 ```javascript
-const { query } = require('@anthropic-ai/claude-agent-sdk');
+const { sdkQuery } = require('./lib/sdk-client');
 
-async function sdkQuery({ prompt, systemPrompt, model, jsonSchema }) {
-  for await (const msg of query({ prompt, options })) {
-    if (msg.type === 'result' && msg.subtype === 'success') {
-      return jsonSchema ? msg.structured_output : msg.result;
-    }
+// Standard call with structured output
+const result = await sdkQuery({
+  prompt: 'Analyze this evidence...',
+  systemPrompt: '...',
+  model: 'sonnet',  // 'haiku' | 'sonnet' | 'opus'
+  jsonSchema: { type: 'object', properties: {...} },
+  timeoutMs: 300000,  // Optional, defaults by model
+  onProgress: (msg) => console.log(msg.type, msg.elapsed),  // Optional streaming
+  allowedTools: ['Read'],  // Optional, for images
+  label: 'Evidence analysis'  // For timeout error messages
+});
+```
+
+**Model Timeouts:** Haiku 2min, Sonnet 5min, Opus 10min
+
+### Subagent Architecture (Arc Analysis)
+
+The orchestrator coordinates three specialist subagents via Claude Code Task tool:
+- `journalist-financial-specialist` - Transaction patterns, account analysis
+- `journalist-behavioral-specialist` - Character dynamics, director observations
+- `journalist-victimization-specialist` - Memory burial targeting patterns
+
+Subagents are invoked in parallel and their findings synthesized into narrative arcs.
+
+## State Management
+
+**Reducers in `lib/workflow/state.js`:**
+- `replaceReducer` - Standard replace (most fields)
+- `appendReducer` - Array accumulation (errors)
+- `appendSingleReducer` - Add single item (evaluationHistory)
+- `mergeReducer` - Shallow merge objects
+
+**Rollback System:** API accepts `rollbackTo` parameter to clear state from checkpoint forward and regenerate.
+
+## API Reference
+
+**POST /api/generate** (protected)
+```json
+{
+  "sessionId": "1221",
+  "theme": "journalist",
+  "rawSessionInput": { "roster": "...", "accusation": "...", ... },
+  "rollbackTo": "arc-selection",  // Optional: regenerate from checkpoint
+  "stateOverrides": { "playerFocus": {...} },  // Optional: inject state
+  "approvals": {
+    "selectedArcs": ["arc-id-1", "arc-id-2"],
+    "outline": true
   }
 }
 ```
 
-**Features:**
-- Direct SDK calls (no subprocess spawning)
-- Native structured output (no JSON extraction)
-- Built-in retry and error handling
-- Uses Claude Code authentication
+## Environment Setup
 
-## Key Files
+```bash
+cp .env.example .env
+# Required:
+#   NOTION_TOKEN=ntn_...
+#   ACCESS_PASSWORD=your-password
+#   SESSION_SECRET=<generate with crypto.randomBytes(32).toString('hex')>
+```
 
-| File | Purpose |
-|------|---------|
-| `server.js` | Backend - Express server, LangGraph orchestration |
-| `lib/sdk-client.js` | Claude Agent SDK wrapper |
-| `lib/workflow/graph.js` | LangGraph StateGraph definition |
-| `lib/workflow/nodes/` | Node implementations for each phase |
-| `detlogv3.html` | Frontend - React UI |
-| `.env` | Secrets (NOTION_TOKEN, ACCESS_PASSWORD, SESSION_SECRET) |
-| `start-everything.bat` | Launch server + tunnel together |
+## Testing
+
+Jest with SDK mock at `__tests__/mocks/anthropic-sdk.mock.js`. Coverage thresholds: 80% lines/functions/statements, 70% branches.
+
+```javascript
+// Nodes export mock factories for testing
+const { mocks } = require('./lib/workflow/nodes');
+const mockSdk = mocks.createMockSdkClient();
+```
 
 ## Troubleshooting
 
-### "Claude Agent SDK not available"
+**"Claude Agent SDK not available"**
 ```bash
-claude /login     # Ensure Claude Code is authenticated
-npm install       # Reinstall dependencies
+claude /login     # Re-authenticate
+npm install       # Ensure SDK installed
 ```
 
-### Port 3001 in use
-Edit `server.js` line 22: `const PORT = 3002;`
+**Workflow errors:** Check phase-specific logs. Common issues:
+- Missing `data/{sessionId}/inputs/` files
+- Notion API token expired
+- SDK timeout (increase via `timeoutMs`)
 
-### Token not loading
-```bash
-curl http://localhost:3001/api/config  # Should return Notion token
-# Check .env has NOTION_TOKEN set
-# Restart server after .env changes
-```
+**Resume behavior:** Graph uses `MemorySaver` checkpointer. State persists in memory across API calls via shared checkpointer instance.
 
-### Workflow errors
-Check server console for phase-specific error messages. Common issues:
-- Missing session data files in `data/{sessionId}/inputs/`
-- Notion API connectivity (verify NOTION_TOKEN)
-- SDK authentication (run `claude /login`)
-
-## Emailer Subdirectory
-
-The `emailer/` directory contains a Python-based follow-up email system:
+## Emailer
 
 ```bash
 # Send follow-up emails to attendees
 python emailer/send_followup_emails_smart.py --date MMDD --test
-python emailer/send_followup_emails_smart.py --date 1218 --send  # Actually send
+python emailer/send_followup_emails_smart.py --date 1218 --send
 ```
 
-**Key files:**
-- `send_followup_emails_smart.py` - Email sender script (requires Gmail app password)
-- `about_last_night_followup_template.html` - HTML email template
-- `recipients_MMDD_MMDD.csv` - Recipient lists per show date
-
-See `emailer/SETUP_GUIDE.md` for Gmail configuration.
-
-## Related Documentation
-
-- `README.md` - Full setup and usage guide
-- `QUICK_START.md` - Daily workflow
-- `AUTH_SETUP.md` - Authentication details
-- `CONCURRENT_BATCHING.md` - Technical architecture deep-dive
-- `ENV_SETUP.md` - Environment variable configuration
-- `SETUP_CHECKLIST_CLOUDFLARE.md` - Tunnel setup
+See `emailer/SETUP_GUIDE.md` for Gmail app password configuration.

@@ -41,8 +41,9 @@ module.exports = {
   fetchPaperEvidence: fetchNodes.fetchPaperEvidence,
   fetchSessionPhotos: fetchNodes.fetchSessionPhotos,
 
-  // Photo analysis nodes (from photo-nodes.js) - Commit 8.6, 8.9.5
+  // Photo analysis nodes (from photo-nodes.js) - Commit 8.6, 8.9.5, 8.9.x
   analyzePhotos: photoNodes.analyzePhotos,
+  parseCharacterIds: photoNodes.parseCharacterIds,          // Commit 8.9.x: parse natural language character IDs
   finalizePhotoAnalyses: photoNodes.finalizePhotoAnalyses,  // Commit 8.9.5: enrich with character IDs
 
   // Preprocess nodes (from preprocess-nodes.js) - Commit 8.5

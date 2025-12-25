@@ -22,6 +22,40 @@ const {
 
 // Shared checkpointer instance - must persist across API calls for resume to work
 const sharedCheckpointer = new MemorySaver();
+
+/**
+ * Clear all checkpoints for a specific thread_id from the MemorySaver
+ * Used by fresh mode to start from scratch while remaining resumable
+ */
+function clearThreadCheckpoints(checkpointer, threadId) {
+    // MemorySaver stores checkpoints in a Map with tuple keys containing thread_id
+    // We need to delete all entries where the first element of the key matches our threadId
+    if (checkpointer.storage) {
+        const keysToDelete = [];
+        for (const key of checkpointer.storage.keys()) {
+            // Keys are tuples like [thread_id, checkpoint_ns, checkpoint_id]
+            if (Array.isArray(key) && key[0] === threadId) {
+                keysToDelete.push(key);
+            } else if (typeof key === 'string' && key.startsWith(threadId)) {
+                keysToDelete.push(key);
+            }
+        }
+        keysToDelete.forEach(k => checkpointer.storage.delete(k));
+        console.log(`[clearThreadCheckpoints] Cleared ${keysToDelete.length} checkpoints for thread ${threadId}`);
+    }
+    // Also clear pending writes if they exist
+    if (checkpointer.writes) {
+        const writeKeysToDelete = [];
+        for (const key of checkpointer.writes.keys()) {
+            if (Array.isArray(key) && key[0] === threadId) {
+                writeKeysToDelete.push(key);
+            } else if (typeof key === 'string' && key.startsWith(threadId)) {
+                writeKeysToDelete.push(key);
+            }
+        }
+        writeKeysToDelete.forEach(k => checkpointer.writes.delete(k));
+    }
+}
 const { isClaudeAvailable } = require('./lib/sdk-client');
 
 const app = express();
@@ -165,7 +199,7 @@ app.post('/api/auth/logout', (req, res) => {
  *   sessionId, currentPhase: 'error', errors[]
  */
 app.post('/api/generate', requireAuth, async (req, res) => {
-    const { sessionId, theme, rawSessionInput, rollbackTo, stateOverrides, approvals } = req.body;
+    const { sessionId, theme, rawSessionInput, rollbackTo, stateOverrides, approvals, mode } = req.body;
 
     // Validate required fields
     if (!sessionId) {
@@ -207,18 +241,29 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         }
     }
 
-    console.log(`[${new Date().toISOString()}] /api/generate: sessionId=${sessionId}, theme=${theme}, rollbackTo=${rollbackTo || 'none'}, hasRawInput=${!!rawSessionInput}, hasOverrides=${!!stateOverrides}, approvals=${JSON.stringify(approvals || {})}`);
+    // Always use sessionId as thread_id for consistent session continuity
+    // This allows both fresh and resume modes to be resumable
+    const threadId = sessionId;
+
+    // Fresh mode: clear all cached checkpoints to start from scratch
+    // The session will still be resumable because we use the same thread_id
+    if (mode === 'fresh') {
+        clearThreadCheckpoints(sharedCheckpointer, threadId);
+    }
+
+    console.log(`[${new Date().toISOString()}] /api/generate: sessionId=${sessionId}, theme=${theme}, mode=${mode || 'resume'}, rollbackTo=${rollbackTo || 'none'}, hasRawInput=${!!rawSessionInput}, hasOverrides=${!!stateOverrides}, approvals=${JSON.stringify(approvals || {})}`);
 
     try {
         // Use shared checkpointer to persist state across API calls
         const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
 
         // Build config for graph execution
+        // sessionId = our logical session ID, thread_id = checkpointer key
         const config = {
             configurable: {
                 sessionId,
                 theme,
-                thread_id: sessionId  // For checkpointer to track session
+                thread_id: threadId
             }
         };
 
@@ -275,9 +320,15 @@ app.post('/api/generate', requireAuth, async (req, res) => {
                 initialState.awaitingApproval = false;
             }
 
-            // Character ID mappings (Commit 8.9.5): set characterIdMappings and clear approval flag
-            // Format: { "photo1.jpg": { characters: ["Victoria", "Morgan"], locationCorrection: null }, ... }
-            if (approvals.characterIds && typeof approvals.characterIds === 'object') {
+            // Character ID mappings (Commit 8.9.5, 8.9.x): two input formats supported
+            // 1. Structured: approvals.characterIds = { "photo.jpg": { characterMappings: [...] } }
+            // 2. Natural language: approvals.characterIdsRaw = "Photo 1: Far left = Morgan, Center = Victoria..."
+            if (approvals.characterIdsRaw && typeof approvals.characterIdsRaw === 'string') {
+                // Natural language input - will be parsed by parseCharacterIds node
+                initialState.characterIdsRaw = approvals.characterIdsRaw;
+                initialState.awaitingApproval = false;
+            } else if (approvals.characterIds && typeof approvals.characterIds === 'object') {
+                // Structured input - bypass parsing, go directly to finalization
                 initialState.characterIdMappings = approvals.characterIds;
                 initialState.awaitingApproval = false;
             }

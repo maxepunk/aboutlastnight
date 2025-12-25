@@ -28,6 +28,18 @@ const { PHASES, APPROVAL_TYPES } = require('../state');
 const { safeParseJson, getSdkClient } = require('./node-helpers');
 const { createSemaphore, MODEL_TIMEOUTS } = require('../../sdk-client');
 const { preprocessImages, formatFileSize } = require('../../image-preprocessor');
+const { createImagePromptBuilder } = require('../../image-prompt-builder');
+
+/**
+ * Get ImagePromptBuilder from config or create default instance
+ * Supports dependency injection for testing
+ *
+ * @param {Object} config - Graph config with optional configurable.imagePromptBuilder
+ * @returns {ImagePromptBuilder} ImagePromptBuilder instance
+ */
+function getImagePromptBuilder(config) {
+  return config?.configurable?.imagePromptBuilder || createImagePromptBuilder();
+}
 
 /**
  * Photo processing configuration
@@ -226,13 +238,21 @@ function createProgressLogger(context) {
  */
 async function analyzeSinglePhoto({
   sdk,
-  systemPrompt,
+  imagePromptBuilder,
+  playerFocus,
+  roster,
   processedPath,
   originalFilename,
   timeoutMs,
   onProgress
 }) {
-  const userPrompt = buildPhotoAnalysisUserPrompt(processedPath, originalFilename);
+  // Use ImagePromptBuilder for context-aware prompts
+  const { systemPrompt, userPrompt } = await imagePromptBuilder.buildPhotoAnalysisPrompt({
+    playerFocus,
+    photoPath: processedPath,
+    filename: originalFilename,
+    roster
+  });
 
   try {
     const analysis = await sdk({
@@ -320,16 +340,21 @@ async function analyzePhotos(state, config) {
     console.log(`[analyzePhotos] Step 2/2: Analyzing with SDK (max ${PHOTO_CONFIG.MAX_CONCURRENT} concurrent)...`);
 
     const sdk = getSdkClient(config);
-    const systemPrompt = buildPhotoAnalysisSystemPrompt(state.playerFocus);
+    const imagePromptBuilder = getImagePromptBuilder(config);
     const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
     const onProgress = createProgressLogger('analyzePhotos');
+
+    // Get roster from sessionConfig for photo analysis context
+    const roster = state.sessionConfig?.roster || [];
 
     const analysisPromises = preprocessResults.map((preprocessResult, index) => {
       const originalFilename = path.basename(photoPaths[index]);
 
       return semaphore(() => analyzeSinglePhoto({
         sdk,
-        systemPrompt,
+        imagePromptBuilder,
+        playerFocus: state.playerFocus,
+        roster,
         processedPath: preprocessResult.path,
         originalFilename,
         timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS,
@@ -461,6 +486,139 @@ The caption should be suitable for a NovaNews investigative article - dramatic b
 }
 
 /**
+ * JSON schema for parsed character ID mappings
+ */
+const PARSED_CHARACTER_IDS_SCHEMA = {
+  type: 'object',
+  additionalProperties: {
+    type: 'object',
+    properties: {
+      characterMappings: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            descriptionIndex: { type: 'number' },
+            characterName: { type: 'string' }
+          },
+          required: ['descriptionIndex', 'characterName']
+        }
+      },
+      additionalCharacters: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            description: { type: 'string' },
+            characterName: { type: 'string' },
+            role: { type: 'string' }
+          },
+          required: ['description', 'characterName']
+        }
+      },
+      corrections: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' },
+          context: { type: 'string' },
+          other: { type: 'string' }
+        }
+      },
+      exclude: { type: 'boolean' }
+    }
+  }
+};
+
+/**
+ * Parse natural language character IDs into structured format
+ *
+ * Converts user's natural language input (e.g., "Far left: Morgan, Center: Victoria")
+ * into the structured characterIdMappings format that finalizePhotoAnalyses expects.
+ *
+ * Added in Commit 8.9.x for natural language character ID input.
+ *
+ * Skip logic: If characterIdMappings already exists and is structured, skip parsing.
+ *
+ * @param {Object} state - Current state with photoAnalyses, characterIdsRaw
+ * @param {Object} config - Graph config with optional configurable.sdkClient
+ * @returns {Object} Partial state update with characterIdMappings
+ */
+async function parseCharacterIds(state, config) {
+  const startTime = Date.now();
+
+  // Skip if no raw input to parse
+  if (!state.characterIdsRaw) {
+    console.log('[parseCharacterIds] Skipping - no characterIdsRaw to parse');
+    return {
+      currentPhase: PHASES.PARSE_CHARACTER_IDS
+    };
+  }
+
+  // Skip if already have structured mappings (not from raw parsing)
+  if (state.characterIdMappings && Object.keys(state.characterIdMappings).length > 0 && !state._characterIdsParsed) {
+    console.log('[parseCharacterIds] Skipping - structured characterIdMappings already provided');
+    return {
+      currentPhase: PHASES.PARSE_CHARACTER_IDS
+    };
+  }
+
+  // Skip if no photo analyses to map to
+  if (!state.photoAnalyses?.analyses?.length) {
+    console.log('[parseCharacterIds] Skipping - no photo analyses available');
+    return {
+      currentPhase: PHASES.PARSE_CHARACTER_IDS,
+      characterIdMappings: {}
+    };
+  }
+
+  console.log(`[parseCharacterIds] Parsing natural language input (${state.characterIdsRaw.length} chars)`);
+
+  const sdk = getSdkClient(config);
+  const imagePromptBuilder = getImagePromptBuilder(config);
+
+  try {
+    const { systemPrompt, userPrompt } = await imagePromptBuilder.buildCharacterIdParsingPrompt({
+      photoAnalyses: state.photoAnalyses.analyses,
+      naturalLanguageInput: state.characterIdsRaw,
+      roster: state.sessionConfig?.roster || []
+    });
+
+    const parsed = await sdk({
+      systemPrompt,
+      prompt: userPrompt,
+      model: 'haiku',  // Fast parsing task
+      jsonSchema: PARSED_CHARACTER_IDS_SCHEMA
+    });
+
+    const mappingCount = Object.keys(parsed).length;
+    const processingTimeMs = Date.now() - startTime;
+
+    console.log(`[parseCharacterIds] Parsed ${mappingCount} photo mappings in ${processingTimeMs}ms`);
+
+    return {
+      characterIdMappings: parsed,
+      _characterIdsParsed: true,  // Flag to indicate this came from parsing
+      currentPhase: PHASES.PARSE_CHARACTER_IDS
+    };
+
+  } catch (parseError) {
+    console.error('[parseCharacterIds] Error parsing character IDs:', parseError.message);
+
+    // Return empty mappings on error, allow workflow to continue
+    return {
+      characterIdMappings: {},
+      errors: [{
+        type: 'CHARACTER_ID_PARSE_ERROR',
+        message: `Failed to parse character IDs: ${parseError.message}`,
+        phase: PHASES.PARSE_CHARACTER_IDS,
+        timestamp: new Date().toISOString()
+      }],
+      currentPhase: PHASES.PARSE_CHARACTER_IDS
+    };
+  }
+}
+
+/**
  * Finalize photo analyses by enriching with character identifications (LLM-powered)
  *
  * Uses Claude to intelligently merge user-provided character mappings and corrections
@@ -511,7 +669,14 @@ async function finalizePhotoAnalyses(state, config) {
   console.log(`[finalizePhotoAnalyses] Enriching ${state.photoAnalyses.analyses.length} analyses with ${mappingCount} character mappings`);
 
   const sdk = getSdkClient(config);
+  const imagePromptBuilder = getImagePromptBuilder(config);
   const enrichedAnalyses = [];
+
+  // Build sessionData for enrichment context
+  const sessionData = {
+    roster: state.sessionConfig?.roster || [],
+    directorNotes: state.directorNotes || null
+  };
 
   for (const analysis of state.photoAnalyses.analyses) {
     const userInput = characterIdMappings[analysis.filename] || {};
@@ -530,9 +695,6 @@ async function finalizePhotoAnalyses(state, config) {
       });
       continue;
     }
-
-    // Build enrichment prompt
-    const prompt = buildEnrichmentPrompt(analysis, userInput);
 
     // If no mappings or corrections, do simple passthrough
     const hasMappings = (userInput.characterMappings?.length > 0) || (userInput.additionalCharacters?.length > 0);
@@ -554,9 +716,16 @@ async function finalizePhotoAnalyses(state, config) {
     try {
       console.log(`[finalizePhotoAnalyses] Enriching: ${analysis.filename}`);
 
+      // Use ImagePromptBuilder for context-aware enrichment
+      const { systemPrompt, userPrompt } = await imagePromptBuilder.buildPhotoEnrichmentPrompt({
+        analysis,
+        userInput,
+        sessionData
+      });
+
       const enrichment = await sdk({
-        systemPrompt: 'You are enriching photo analyses for a NovaNews investigative article. Replace generic descriptions with character names and incorporate any corrections naturally.',
-        prompt,
+        systemPrompt,
+        prompt: userPrompt,
         model: 'haiku',  // Fast model for simple text transformation
         jsonSchema: ENRICHED_PHOTO_SCHEMA
       });
@@ -666,6 +835,7 @@ function createMockPhotoAnalyzer(options = {}) {
 module.exports = {
   // Main node functions
   analyzePhotos,
+  parseCharacterIds,      // Commit 8.9.x: parse natural language character IDs
   finalizePhotoAnalyses,  // Commit 8.9.5: enrich with character IDs
 
   // Mock factory for testing
