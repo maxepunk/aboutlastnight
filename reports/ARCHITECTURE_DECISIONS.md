@@ -1623,3 +1623,482 @@ const APPROVAL_TYPES = {
   OUTLINE: 'outline',
   ARTICLE: 'article'                            // NEW in Commit 8.6
 };
+```
+
+---
+
+## Commit 8.7: Claude Agent SDK Migration (MAJOR REFACTOR)
+
+This commit replaces the subprocess-based Claude CLI architecture with the Claude Agent SDK.
+
+### Decision 8.7.1: SDK Client Replaces Subprocess Wrapper
+**Plan:** Replace `claude-client.js` subprocess spawning with SDK
+**Implemented:** New `sdk-client.js` using `@anthropic-ai/claude-agent-sdk`
+
+**Old architecture (DELETED):**
+```javascript
+// claude-client.js (DELETED)
+const claude = spawn('claude', args, { cwd: workDir });
+claude.stdin.write(prompt);
+claude.stdin.end();
+```
+
+**New architecture:**
+```javascript
+// sdk-client.js
+const { query } = require('@anthropic-ai/claude-agent-sdk');
+
+async function sdkQuery({ prompt, systemPrompt, model, jsonSchema }) {
+  for await (const msg of query({ prompt, options })) {
+    if (msg.type === 'result' && msg.subtype === 'success') {
+      return jsonSchema ? msg.structured_output : msg.result;
+    }
+  }
+}
+```
+
+**Rationale:**
+1. Direct SDK calls eliminate subprocess overhead
+2. Native structured output (no JSON extraction from code fences)
+3. Built-in retry and error handling
+4. Uses Claude Code authentication (no separate API key)
+5. Cleaner async/await patterns
+
+**Impact:** Deleted `claude-client.js`, created `sdk-client.js`. All nodes updated to use SDK.
+
+---
+
+### Decision 8.7.2: Server.js Cleanup - DELETE All Subprocess Code
+**Plan:** Remove subprocess code from server.js
+**Implemented:** Complete deletion of ~1600 lines
+
+**DELETED from server.js:**
+- `callClaude()` function (~240 lines) - subprocess wrapper
+- All `runPhase*` handler functions (~870 lines) - 12 phase handlers
+- `/api/analyze` endpoint - batch analysis via subprocess
+- `/api/test-single-item` endpoint - test subprocess
+- `/api/journalist/*` endpoints - manual phase control
+- All temp directory management for subprocess isolation
+
+**KEPT in server.js:**
+- Auth endpoints (`/api/auth/login`, `/api/auth/check`, `/api/auth/logout`)
+- `/api/generate` - LangGraph workflow orchestration
+- `/api/config` - Notion token serving
+- `/api/health` - Server health check
+- Static file serving
+
+**Rationale:**
+1. LangGraph workflow handles all phases via `/api/generate`
+2. Manual phase endpoints were only for debugging subprocess approach
+3. Batch analysis handled by preprocessing nodes, not separate endpoint
+4. No backwards compatibility - clean deletion
+
+**Impact:** server.js reduced from ~1900 lines to ~300 lines.
+
+---
+
+### Decision 8.7.3: SDK Health Check Replaces CLI Check
+**Plan:** Not specified
+**Implemented:** `isClaudeAvailable()` now tests SDK, not CLI
+
+**Old approach (REPLACED):**
+```javascript
+// Tested CLI availability
+const claude = spawn('claude', ['--version']);
+```
+
+**New approach:**
+```javascript
+// Tests SDK availability via minimal query
+async function isClaudeAvailable() {
+  try {
+    await sdkQuery({
+      prompt: 'Respond with exactly: ok',
+      model: 'haiku',
+      systemPrompt: 'Respond with exactly one word: ok'
+    });
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+```
+
+**Rationale:**
+1. Tests actual SDK path used by application
+2. Verifies Claude Code authentication works
+3. Catches network connectivity issues
+4. More accurate health check
+
+---
+
+### Decision 8.7.4: Delete session-manager.js
+**Plan:** Not specified
+**Implemented:** Deleted unused module
+
+`session-manager.js` was only used by the old phase handlers in server.js. With phase handlers deleted, this module had no consumers.
+
+**Deleted files:**
+- `lib/session-manager.js`
+- `lib/__tests__/session-manager.test.js`
+
+**Rationale:** No backwards compatibility, clean deletion of unused code.
+
+---
+
+## Summary of Commit 8.7 Impacts
+
+| Change | Before | After |
+|--------|--------|-------|
+| AI calls | `spawn('claude', ...)` subprocess | `sdkQuery()` direct SDK |
+| server.js | ~1900 lines | ~300 lines |
+| API endpoints | 15+ endpoints | 6 endpoints |
+| claude-client.js | Active | DELETED |
+| session-manager.js | Active | DELETED |
+| Health check | CLI version check | SDK query test |
+
+**Deleted Endpoints:**
+- `/api/analyze`
+- `/api/test-single-item`
+- `/api/journalist/1_6`
+- `/api/journalist/1_8`
+- `/api/journalist/2`
+- `/api/journalist/3`
+- `/api/journalist/4`
+
+**Active Endpoints:**
+- `/api/auth/login`
+- `/api/auth/check`
+- `/api/auth/logout`
+- `/api/generate`
+- `/api/config`
+- `/api/health`
+
+---
+
+### Documentation Updates (Commit 8.7)
+
+Updated to reflect SDK architecture:
+- `CLAUDE.md` - Full rewrite of architecture sections
+- `CONCURRENT_BATCHING.md` - Added deprecation notice
+- `ARCHITECTURE_DECISIONS.md` - Added Commit 8.7 section (this document)
+
+---
+
+## Commit 8.9: Input Layer + File-Based Specialists + Character IDs
+
+This commit completes the user input layer for the workflow, addressing gaps in how raw session data enters the pipeline and how users interact with photo analysis.
+
+### Decision 8.9.1: Raw Input Parsing Node
+**Gap:** Workflow expected pre-populated JSON files in `data/{sessionId}/inputs/`
+**Implemented:** `parseRawInput` node accepts unstructured text and generates structured JSON
+
+**Flow:**
+```
+START → [conditional: hasRawInput?]
+           ↓ YES                    ↓ NO
+    parseRawInput              initializeSession
+           ↓                        ↓
+    [checkpoint: input-review]      (skip parsing)
+           ↓
+    finalizeInput
+           ↓
+    initializeSession
+```
+
+**Input format (rawSessionInput):**
+```javascript
+{
+  roster: "Victoria Blackwood, James Harrison, Morgan Wells...",
+  accusation: "The players ultimately accused Victoria of being The Valet...",
+  sessionReport: "Free-form text with tokens, shell accounts...",
+  directorNotes: "Director observations during gameplay...",
+  photosPath: "path/to/session/photos",
+  whiteboardPhotoPath: "path/to/whiteboard.jpg"
+}
+```
+
+**Rationale:**
+1. Directors copy/paste from notes rather than manually creating JSON
+2. Claude parses structure (roster extraction, accusation parsing)
+3. Whiteboard photo analyzed for player focus (Layer 3)
+4. User reviews/edits parsed input before proceeding
+
+**Impact:** New `input-nodes.js` file. New phases `PARSE_INPUT` (0.1) and `REVIEW_INPUT` (0.2). New approval type `INPUT_REVIEW`.
+
+---
+
+### Decision 8.9.2: Native File-Based Specialist Agents
+**Gap:** Specialist prompts in `subagents.js` were hardcoded inline, disconnected from reference docs
+**Implemented:** Native Claude Code agent files in `.claude/agents/`
+
+**Created agents:**
+- `.claude/agents/journalist-financial-specialist.md` - Transaction patterns, account naming
+- `.claude/agents/journalist-behavioral-specialist.md` - Director observations, behavioral patterns
+- `.claude/agents/journalist-victimization-specialist.md` - Targeting patterns, memory manipulation
+
+**Agent pattern:**
+```markdown
+---
+name: journalist-financial-specialist
+description: Analyzes financial patterns in ALN session evidence
+tools: Read
+model: sonnet
+---
+
+# Financial Patterns Specialist
+
+## First: Load Reference Files
+Read these before proceeding:
+- `.claude/skills/journalist-report/references/prompts/character-voice.md`
+- `.claude/skills/journalist-report/references/prompts/evidence-boundaries.md`
+- `.claude/skills/journalist-report/references/prompts/anti-patterns.md`
+
+## Your Domain
+[Domain-specific instructions...]
+```
+
+**Rationale:**
+1. Single source of truth (agent definitions in `.claude/agents/`)
+2. Reference docs loaded via Read tool at runtime
+3. Specialists evolve without touching Node.js code
+4. Consistent with established Claude Code agent patterns
+
+**Impact:** Deleted hardcoded specialists from `subagents.js`. Orchestrator invokes file-based agents via Task tool.
+
+---
+
+### Decision 8.9.3: Rollback and State Overrides
+**Gap:** No way to re-run from a checkpoint with modified guidance
+**Implemented:** `rollbackTo` and `stateOverrides` API parameters
+
+**Rollback configuration:**
+```javascript
+const ROLLBACK_CLEARS = {
+  'input-review': [...],           // Clears everything
+  'paper-evidence-selection': [...],
+  'character-ids': [...],
+  'evidence-bundle': [...],
+  'arc-selection': [...],          // Most common - regenerate arcs with new focus
+  'outline': [...],
+  'article': [...]
+};
+```
+
+**Usage example:**
+```javascript
+POST /api/generate
+{
+  sessionId: "1220",
+  theme: "journalist",
+  rollbackTo: "arc-selection",
+  stateOverrides: {
+    playerFocus: { primaryInvestigation: "New angle to explore" }
+  }
+}
+```
+
+**Rationale:**
+1. Directors can adjust player focus and regenerate arcs
+2. Each rollback point clears downstream state, triggering regeneration
+3. Revision counters reset for fresh attempts
+4. State overrides applied after rollback, before resuming
+
+**Impact:** New constants `ROLLBACK_CLEARS`, `ROLLBACK_COUNTER_RESETS`, `VALID_ROLLBACK_POINTS` in state.js.
+
+---
+
+### Decision 8.9.4: Paper Evidence Selection Checkpoint
+**Gap:** No way for user to indicate which paper evidence was actually unlocked
+**Implemented:** Checkpoint after `fetchPaperEvidence` for user selection
+
+**Flow:**
+```
+fetchPaperEvidence → setPaperEvidenceCheckpoint → [user selects] → fetchSessionPhotos
+```
+
+**API response at checkpoint:**
+```javascript
+{
+  approvalType: 'paper-evidence-selection',
+  paperEvidence: [/* all available items */]
+}
+```
+
+**User input:**
+```javascript
+{
+  approvals: {
+    selectedPaperEvidence: [
+      { title: "Victoria Voice Memo" },
+      { title: "Shell Company Documents" }
+    ]
+  }
+}
+```
+
+**Rationale:**
+1. Not all evidence is unlocked in every session
+2. User selects what was actually found
+3. Only selected evidence proceeds to curation
+4. Enables session-specific evidence bundles
+
+**Impact:** New phase `SELECT_PAPER_EVIDENCE` (1.35). New state field `selectedPaperEvidence`. New approval type `PAPER_EVIDENCE_SELECTION`.
+
+---
+
+### Decision 8.9.5: Character ID Input with LLM-Powered Enrichment
+**Gap:** Photo analyses had generic descriptions ("person in red dress"), no character names
+**Implemented:** Checkpoint for character identification + LLM-powered enrichment
+
+**Flow:**
+```
+analyzePhotos → setCharacterIdCheckpoint → [user provides IDs] → finalizePhotoAnalyses → preprocessEvidence
+```
+
+**API response at checkpoint:**
+```javascript
+{
+  approvalType: 'character-ids',
+  sessionPhotos: [...],
+  photoAnalyses: {
+    analyses: [{
+      filename: 'photo1.jpg',
+      visualContent: 'Group gathered around table',
+      characterDescriptions: [
+        { description: 'person in red dress', role: 'pointing accusingly' }
+      ]
+    }]
+  },
+  sessionConfig: { roster: ['Victoria Blackwood', 'James Harrison', ...] }
+}
+```
+
+**User input format:**
+```javascript
+{
+  approvals: {
+    characterIds: {
+      "photo1.jpg": {
+        characterMappings: [
+          { descriptionIndex: 0, characterName: "Victoria Blackwood" }
+        ],
+        additionalCharacters: [
+          { description: "person on left edge", characterName: "The Valet (NPC)", role: "observing" }
+        ],
+        corrections: {
+          location: "Actually the study, not the living room",
+          context: "This is the final accusation scene",
+          other: null
+        },
+        exclude: false
+      }
+    }
+  }
+}
+```
+
+**LLM-powered enrichment (finalizePhotoAnalyses):**
+```javascript
+// For each photo with mappings/corrections:
+const enrichment = await sdk({
+  systemPrompt: 'Enrich photo analyses for NovaNews article...',
+  prompt: buildEnrichmentPrompt(analysis, userInput),
+  model: 'haiku',
+  jsonSchema: ENRICHED_PHOTO_SCHEMA
+});
+
+// Output:
+{
+  enrichedVisualContent: "Victoria Blackwood and James Harrison gathered around table...",
+  enrichedNarrativeMoment: "The final accusation in the study...",
+  finalCaption: "Victoria confronts James with the evidence",
+  identifiedCharacters: ["Victoria Blackwood", "James Harrison", "The Valet (NPC)"]
+}
+```
+
+**Key features:**
+1. User maps Haiku's descriptions to character names via dropdown (from roster)
+2. User can add characters Haiku missed (NPCs, partial visibility)
+3. User can provide corrections to location/context
+4. User can exclude photos that aren't useful
+5. LLM rewrites visual content with character names naturally integrated
+6. Enriched photos flow to arc analysis for visual storytelling
+
+**Rationale:**
+1. Photos are critical anchors for visual storytelling
+2. Director knows WHO is in photos (Haiku only describes WHAT)
+3. LLM makes rewrites natural, not mechanical find/replace
+4. Enriched data informs arc selection and outline generation
+
+**Impact:** New phases `CHARACTER_ID_CHECKPOINT` (1.66) and `FINALIZE_PHOTOS` (1.67). `finalizePhotoAnalyses` is LLM-powered. Approval type `CHARACTER_IDS` already existed but now fully implemented.
+
+---
+
+## Summary of Commit 8.9 Impacts
+
+| Decision | Impact |
+|----------|--------|
+| Raw input parsing | Directors paste notes, Claude structures |
+| File-based specialists | Agent definitions in `.claude/agents/` |
+| Rollback mechanism | Re-run from any checkpoint with modified guidance |
+| Paper evidence selection | Session-specific evidence bundles |
+| Character ID enrichment | Photos become visual storytelling anchors |
+
+---
+
+## Updated State Field Count
+
+After Commit 8.9, state has **33 fields** (was 30):
+
+| Field | Added In | Purpose |
+|-------|----------|---------|
+| ... (previous 30 fields) | ... | ... |
+| **rawSessionInput** | **Commit 8.9** | **Unstructured user input** |
+| **selectedPaperEvidence** | **Commit 8.9** | **User-selected paper evidence** |
+| **_parsedInput** | **Commit 8.9** | **Internal: parsed input for review** |
+
+---
+
+## Updated PHASES Constant
+
+After Commit 8.9:
+
+```javascript
+const PHASES = {
+  INIT: 'init',
+  // Phase 0: Input parsing (Commit 8.9)
+  PARSE_INPUT: '0.1',
+  REVIEW_INPUT: '0.2',
+  // Phase 1: Data acquisition
+  LOAD_DIRECTOR_NOTES: '1.1',
+  FETCH_TOKENS: '1.2',
+  FETCH_EVIDENCE: '1.3',
+  SELECT_PAPER_EVIDENCE: '1.35',     // Commit 8.9.4
+  FETCH_PHOTOS: '1.4',
+  ANALYZE_PHOTOS: '1.65',
+  CHARACTER_ID_CHECKPOINT: '1.66',   // Commit 8.9.5
+  FINALIZE_PHOTOS: '1.67',           // Commit 8.9.5
+  PREPROCESS_EVIDENCE: '1.7',
+  CURATE_EVIDENCE: '1.8',
+  // ... remaining phases unchanged
+};
+```
+
+---
+
+## Updated APPROVAL_TYPES Constant
+
+After Commit 8.9:
+
+```javascript
+const APPROVAL_TYPES = {
+  INPUT_REVIEW: 'input-review',                    // Commit 8.9.1
+  PAPER_EVIDENCE_SELECTION: 'paper-evidence-selection', // Commit 8.9.4
+  CHARACTER_IDS: 'character-ids',                  // Commit 8.9.5 (fully implemented)
+  EVIDENCE_AND_PHOTOS: 'evidence-and-photos',
+  EVIDENCE_BUNDLE: 'evidence-bundle',
+  ARC_SELECTION: 'arc-selection',
+  OUTLINE: 'outline',
+  ARTICLE: 'article'
+};

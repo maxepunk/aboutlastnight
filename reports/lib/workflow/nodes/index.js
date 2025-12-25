@@ -5,6 +5,7 @@
  * Follows DRY principle - graph.js imports from here, not individual files.
  *
  * Node Categories:
+ * - Input Nodes: Raw input parsing and review (parseRawInput, finalizeInput) - Commit 8.9
  * - Fetch Nodes: Data fetching from files/APIs (initializeSession, loadDirectorNotes, etc.)
  * - Photo Nodes: Photo analysis with Haiku vision (analyzePhotos) - Commit 8.6
  * - Preprocess Nodes: Batch evidence preprocessing (preprocessEvidence) - Commit 8.5
@@ -16,6 +17,7 @@
  * Each category is in a separate file following Single Responsibility Principle.
  */
 
+const inputNodes = require('./input-nodes');
 const fetchNodes = require('./fetch-nodes');
 const photoNodes = require('./photo-nodes');
 const preprocessNodes = require('./preprocess-nodes');
@@ -28,6 +30,10 @@ const nodeHelpers = require('./node-helpers');
 
 // Re-export all node functions
 module.exports = {
+  // Input nodes (from input-nodes.js) - Commit 8.9
+  parseRawInput: inputNodes.parseRawInput,
+  finalizeInput: inputNodes.finalizeInput,
+
   // Fetch nodes (from fetch-nodes.js)
   initializeSession: fetchNodes.initializeSession,
   loadDirectorNotes: fetchNodes.loadDirectorNotes,
@@ -35,8 +41,9 @@ module.exports = {
   fetchPaperEvidence: fetchNodes.fetchPaperEvidence,
   fetchSessionPhotos: fetchNodes.fetchSessionPhotos,
 
-  // Photo analysis nodes (from photo-nodes.js) - Commit 8.6
+  // Photo analysis nodes (from photo-nodes.js) - Commit 8.6, 8.9.5
   analyzePhotos: photoNodes.analyzePhotos,
+  finalizePhotoAnalyses: photoNodes.finalizePhotoAnalyses,  // Commit 8.9.5: enrich with character IDs
 
   // Preprocess nodes (from preprocess-nodes.js) - Commit 8.5
   preprocessEvidence: preprocessNodes.preprocessEvidence,

@@ -1,21 +1,25 @@
 /**
- * Report Generation Graph - Commit 8.8: SDK Subagent Orchestration
+ * Report Generation Graph - Commit 8.9.5: Input Layer + File-Based Specialists + Character IDs
  *
  * Assembles the complete LangGraph StateGraph for report generation.
  * Connects all nodes with edges, conditional routing, and checkpointing.
  *
- * Graph Flow (18 nodes - Commit 8.8):
+ * Graph Flow (23 nodes - Commit 8.9.5):
+ *
+ * PHASE 0: Input Parsing (Commit 8.9 - conditional entry)
+ * START → [conditional] → parseRawInput OR initializeSession
+ * 0.1 parseRawInput → [checkpoint: input-review] → 0.2 finalizeInput
  *
  * PHASE 1: Data Acquisition
  * 1.1 initializeSession → 1.2 loadDirectorNotes → 1.3 fetchMemoryTokens
- * → 1.4 fetchPaperEvidence → 1.5 fetchSessionPhotos
+ * → 1.4 fetchPaperEvidence → [checkpoint: paper-evidence-selection] → 1.5 fetchSessionPhotos
  *
  * PHASE 1.6-1.8: Early Processing
- * → 1.65 analyzePhotos (Haiku vision) → 1.7 preprocessEvidence
- * → 1.8 curateEvidenceBundle → [checkpoint: evidence-and-photos]
+ * → 1.65 analyzePhotos (Haiku vision) → [checkpoint: character-ids] → 1.67 finalizePhotoAnalyses
+ * → 1.7 preprocessEvidence → 1.8 curateEvidenceBundle → [checkpoint: evidence-and-photos]
  *
- * PHASE 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)
- * → 2 analyzeArcs (orchestrator with 3 subagents) → 2.3 evaluateArcs → [revision loop]
+ * PHASE 2: Arc Analysis (Orchestrated Subagents - Commit 8.8/8.9)
+ * → 2 analyzeArcs (orchestrator with 3 file-based subagents) → 2.3 evaluateArcs → [revision loop]
  * → [checkpoint: arc-selection]
  *
  * PHASE 3: Outline Generation
@@ -33,7 +37,7 @@
  * - MemorySaver for testing (in-memory)
  * - SqliteSaver for production (persistent)
  *
- * See ARCHITECTURE_DECISIONS.md 8.8 for design rationale.
+ * See ARCHITECTURE_DECISIONS.md 8.8/8.9 for design rationale.
  */
 
 const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
@@ -43,6 +47,66 @@ const nodes = require('./nodes');
 // ═══════════════════════════════════════════════════════════════════════════
 // ROUTING FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Route function for conditional entry (Commit 8.9)
+ * Determines whether to parse raw input or skip to initialization
+ *
+ * Decision logic:
+ * - If rawSessionInput exists and sessionConfig doesn't → parse raw input
+ * - If rawSessionInput exists but sessionConfig does → input already parsed, skip to init
+ * - If no rawSessionInput → assume pre-populated files, skip to init
+ *
+ * @param {Object} state - Current graph state
+ * @returns {string} 'parseInput' or 'initialize'
+ */
+function routeEntryPoint(state) {
+  const hasRawInput = state.rawSessionInput !== null && state.rawSessionInput !== undefined;
+  const hasSessionConfig = state.sessionConfig !== null && state.sessionConfig !== undefined;
+
+  // If raw input provided but not yet parsed → parse it
+  if (hasRawInput && !hasSessionConfig) {
+    console.log('[routeEntryPoint] Raw input detected, routing to parseRawInput');
+    return 'parseInput';
+  }
+
+  // Otherwise skip to initialization (pre-populated files or resume)
+  console.log('[routeEntryPoint] No raw input or already parsed, routing to initializeSession');
+  return 'initialize';
+}
+
+/**
+ * Route function for input review approval checkpoint (Commit 8.9)
+ * After raw input is parsed, user reviews before proceeding
+ *
+ * @param {Object} state - Current graph state
+ * @returns {string} 'wait' or 'continue'
+ */
+function routeInputReview(state) {
+  return state.awaitingApproval ? 'wait' : 'continue';
+}
+
+/**
+ * Route function for paper evidence selection checkpoint (Commit 8.9.4)
+ * After paper evidence is fetched, user selects which items were unlocked
+ *
+ * @param {Object} state - Current graph state
+ * @returns {string} 'wait' or 'continue'
+ */
+function routePaperEvidenceSelection(state) {
+  return state.awaitingApproval ? 'wait' : 'continue';
+}
+
+/**
+ * Route function for character ID checkpoint (Commit 8.9.5)
+ * After photo analysis, user provides character-to-photo mappings
+ *
+ * @param {Object} state - Current graph state
+ * @returns {string} 'wait' or 'continue'
+ */
+function routeCharacterIdCheckpoint(state) {
+  return state.awaitingApproval ? 'wait' : 'continue';
+}
 
 /**
  * Route function for evidence+photos approval checkpoint
@@ -162,6 +226,73 @@ function routeArticleApproval(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 // WRAPPER NODES FOR APPROVAL CHECKPOINTS
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Set paper evidence selection checkpoint (Commit 8.9.4)
+ * Called after paper evidence is fetched
+ * Skips if selectedPaperEvidence already exists (resume case)
+ */
+async function setPaperEvidenceCheckpoint(state) {
+  // Skip if evidence already selected (resume after approval)
+  if (state.selectedPaperEvidence && state.selectedPaperEvidence.length > 0) {
+    console.log('[setPaperEvidenceCheckpoint] Skipping - selectedPaperEvidence already exists');
+    return {
+      awaitingApproval: false,
+      currentPhase: PHASES.SELECT_PAPER_EVIDENCE
+    };
+  }
+
+  // Skip if no paper evidence to select from
+  if (!state.paperEvidence || state.paperEvidence.length === 0) {
+    console.log('[setPaperEvidenceCheckpoint] Skipping - no paper evidence available');
+    return {
+      awaitingApproval: false,
+      selectedPaperEvidence: [],
+      currentPhase: PHASES.SELECT_PAPER_EVIDENCE
+    };
+  }
+
+  console.log(`[setPaperEvidenceCheckpoint] Waiting for user to select from ${state.paperEvidence.length} evidence items`);
+  return {
+    awaitingApproval: true,
+    approvalType: APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION,
+    currentPhase: PHASES.SELECT_PAPER_EVIDENCE
+  };
+}
+
+/**
+ * Set character ID checkpoint (Commit 8.9.5)
+ * Called after photo analysis, user provides character-to-photo mappings
+ * Skips if characterIdMappings already exists (resume case)
+ * Skips if no photos to identify (empty photoAnalyses)
+ */
+async function setCharacterIdCheckpoint(state) {
+  // Skip if character IDs already provided (resume after approval)
+  if (state.characterIdMappings && Object.keys(state.characterIdMappings).length > 0) {
+    console.log('[setCharacterIdCheckpoint] Skipping - characterIdMappings already exists');
+    return {
+      awaitingApproval: false,
+      currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
+    };
+  }
+
+  // Skip if no photo analyses to map characters to
+  if (!state.photoAnalyses || !state.photoAnalyses.analyses || state.photoAnalyses.analyses.length === 0) {
+    console.log('[setCharacterIdCheckpoint] Skipping - no photo analyses available');
+    return {
+      awaitingApproval: false,
+      characterIdMappings: {},  // Empty mappings
+      currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
+    };
+  }
+
+  console.log(`[setCharacterIdCheckpoint] Waiting for user to identify characters in ${state.photoAnalyses.analyses.length} photos`);
+  return {
+    awaitingApproval: true,
+    approvalType: APPROVAL_TYPES.CHARACTER_IDS,
+    currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
+  };
+}
 
 /**
  * Set arc selection approval checkpoint
@@ -331,6 +462,13 @@ function createGraphBuilder() {
   const builder = new StateGraph(ReportStateAnnotation);
 
   // ═══════════════════════════════════════════════════════
+  // ADD NODES - Phase 0: Input Parsing (Commit 8.9)
+  // ═══════════════════════════════════════════════════════
+
+  builder.addNode('parseRawInput', nodes.parseRawInput);
+  builder.addNode('finalizeInput', nodes.finalizeInput);
+
+  // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 1: Data Acquisition
   // ═══════════════════════════════════════════════════════
 
@@ -338,6 +476,7 @@ function createGraphBuilder() {
   builder.addNode('loadDirectorNotes', nodes.loadDirectorNotes);
   builder.addNode('fetchMemoryTokens', nodes.fetchMemoryTokens);
   builder.addNode('fetchPaperEvidence', nodes.fetchPaperEvidence);
+  builder.addNode('setPaperEvidenceCheckpoint', setPaperEvidenceCheckpoint);  // Commit 8.9.4
   builder.addNode('fetchSessionPhotos', nodes.fetchSessionPhotos);
 
   // ═══════════════════════════════════════════════════════
@@ -345,6 +484,8 @@ function createGraphBuilder() {
   // ═══════════════════════════════════════════════════════
 
   builder.addNode('analyzePhotos', nodes.analyzePhotos);
+  builder.addNode('setCharacterIdCheckpoint', setCharacterIdCheckpoint);  // Commit 8.9.5
+  builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses);  // Commit 8.9.5
   builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
 
@@ -389,21 +530,55 @@ function createGraphBuilder() {
   builder.addNode('assembleHtml', nodes.assembleHtml);
 
   // ═══════════════════════════════════════════════════════
+  // ADD EDGES - Phase 0: Input Parsing (Commit 8.9)
+  // Conditional entry: raw input → parse → review → initialize
+  //                   no raw input → skip directly to initialize
+  // ═══════════════════════════════════════════════════════
+
+  builder.addConditionalEdges(START, routeEntryPoint, {
+    parseInput: 'parseRawInput',
+    initialize: 'initializeSession'
+  });
+
+  // Input review checkpoint (after parsing, before proceeding)
+  builder.addConditionalEdges('parseRawInput', routeInputReview, {
+    wait: END,
+    continue: 'finalizeInput'
+  });
+
+  // After input finalized, continue to initialization
+  builder.addEdge('finalizeInput', 'initializeSession');
+
+  // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 1: Data Acquisition (linear)
   // ═══════════════════════════════════════════════════════
 
-  builder.addEdge(START, 'initializeSession');
   builder.addEdge('initializeSession', 'loadDirectorNotes');
   builder.addEdge('loadDirectorNotes', 'fetchMemoryTokens');
   builder.addEdge('fetchMemoryTokens', 'fetchPaperEvidence');
-  builder.addEdge('fetchPaperEvidence', 'fetchSessionPhotos');
+
+  // Paper evidence selection checkpoint (Commit 8.9.4)
+  builder.addEdge('fetchPaperEvidence', 'setPaperEvidenceCheckpoint');
+  builder.addConditionalEdges('setPaperEvidenceCheckpoint', routePaperEvidenceSelection, {
+    wait: END,
+    continue: 'fetchSessionPhotos'
+  });
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 1.6-1.8: Early Processing
   // ═══════════════════════════════════════════════════════
 
   builder.addEdge('fetchSessionPhotos', 'analyzePhotos');
-  builder.addEdge('analyzePhotos', 'preprocessEvidence');
+
+  // Character ID checkpoint after photo analysis (Commit 8.9.5)
+  builder.addEdge('analyzePhotos', 'setCharacterIdCheckpoint');
+  builder.addConditionalEdges('setCharacterIdCheckpoint', routeCharacterIdCheckpoint, {
+    wait: END,
+    continue: 'finalizePhotoAnalyses'
+  });
+
+  // Photo finalization enriches analyses with character IDs (Commit 8.9.5)
+  builder.addEdge('finalizePhotoAnalyses', 'preprocessEvidence');
   builder.addEdge('preprocessEvidence', 'curateEvidenceBundle');
 
   // Evidence + Photos approval checkpoint
@@ -547,7 +722,12 @@ module.exports = {
   // For testing
   _testing: {
     createGraphBuilder,
-    // Routing functions
+    // Routing functions - Entry (Commit 8.9)
+    routeEntryPoint,
+    routeInputReview,
+    // Routing functions - Checkpoints
+    routePaperEvidenceSelection,  // Commit 8.9.4
+    routeCharacterIdCheckpoint,   // Commit 8.9.5
     routeEvidenceApproval,
     routeArcEvaluation,
     routeOutlineEvaluation,
@@ -557,6 +737,8 @@ module.exports = {
     routeOutlineApproval,
     routeArticleApproval,
     // Checkpoint nodes
+    setPaperEvidenceCheckpoint,   // Commit 8.9.4
+    setCharacterIdCheckpoint,     // Commit 8.9.5
     setArcSelectionCheckpoint,
     setOutlineCheckpoint,
     setArticleCheckpoint,

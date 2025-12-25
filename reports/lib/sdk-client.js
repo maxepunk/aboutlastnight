@@ -86,31 +86,29 @@ function getModelTimeout(model) {
 }
 
 /**
- * Check if Claude CLI is available
- * Used at server startup to verify Claude is installed and accessible.
+ * Check if Claude Agent SDK is available
+ * Used at server startup to verify SDK is installed and accessible.
+ *
+ * Performs a minimal SDK query to verify:
+ * - SDK package is installed
+ * - API key is configured
+ * - Network connectivity to Anthropic API
  *
  * @returns {Promise<boolean>}
  */
 async function isClaudeAvailable() {
-  const { spawn } = require('child_process');
-
-  return new Promise((resolve) => {
-    const claude = spawn('claude', ['--version'], { windowsHide: true });
-
-    claude.on('close', (code) => {
-      resolve(code === 0);
+  try {
+    // Minimal SDK query to verify availability
+    await sdkQuery({
+      prompt: 'Respond with exactly: ok',
+      model: 'haiku',
+      systemPrompt: 'You are a health check. Respond with exactly one word: ok'
     });
-
-    claude.on('error', () => {
-      resolve(false);
-    });
-
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      claude.kill();
-      resolve(false);
-    }, 5000);
-  });
+    return true;
+  } catch (error) {
+    console.error('[SDK Health Check] Failed:', error.message);
+    return false;
+  }
 }
 
 module.exports = {

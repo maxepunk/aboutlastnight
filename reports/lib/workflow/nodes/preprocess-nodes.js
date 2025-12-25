@@ -78,9 +78,13 @@ async function preprocessEvidence(state, config) {
     };
   }
 
+  // Use selectedPaperEvidence if user has made a selection, otherwise fall back to all paperEvidence
+  // This supports the paper evidence selection checkpoint (Commit 8.9.4)
+  const effectivePaperEvidence = state.selectedPaperEvidence || state.paperEvidence || [];
+
   // Skip if no evidence to preprocess
   const hasTokens = state.memoryTokens && state.memoryTokens.length > 0;
-  const hasEvidence = state.paperEvidence && state.paperEvidence.length > 0;
+  const hasEvidence = effectivePaperEvidence.length > 0;
 
   if (!hasTokens && !hasEvidence) {
     console.log('[preprocessEvidence] Skipping - no evidence to preprocess');
@@ -94,14 +98,14 @@ async function preprocessEvidence(state, config) {
     };
   }
 
-  console.log(`[preprocessEvidence] Processing ${state.memoryTokens?.length || 0} tokens and ${state.paperEvidence?.length || 0} evidence items`);
+  console.log(`[preprocessEvidence] Processing ${state.memoryTokens?.length || 0} tokens and ${effectivePaperEvidence.length} evidence items${state.selectedPaperEvidence ? ' (user-selected subset)' : ''}`);
 
   const preprocessor = getPreprocessor(config);
 
   try {
     const preprocessedEvidence = await preprocessor.process({
       memoryTokens: state.memoryTokens || [],
-      paperEvidence: state.paperEvidence || [],
+      paperEvidence: effectivePaperEvidence,
       playerFocus: state.playerFocus || {},
       sessionId: state.sessionId
     });

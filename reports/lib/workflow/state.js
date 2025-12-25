@@ -9,10 +9,12 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (30 total - Commit 8.6):
+ * State Fields (33 total - Commit 8.9):
  *   - Session: sessionId, theme
+ *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus
  *   - Fetched Data: memoryTokens, paperEvidence, sessionPhotos
+ *   - User Selection (8.9): selectedPaperEvidence
  *   - Photo Analysis (8.6): photoAnalyses, characterIdMappings
  *   - Preprocessed Data: preprocessedEvidence (Commit 8.5)
  *   - Curated Data: evidenceBundle
@@ -98,6 +100,20 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   // ═══════════════════════════════════════════════════════
+  // RAW INPUT (Commit 8.9 - unstructured user input)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Raw unstructured input from user (Commit 8.9)
+   * Contains roster, accusation, session report, director notes as free text
+   * Parsed by parseRawInput node into sessionConfig and directorNotes
+   */
+  rawSessionInput: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  // ═══════════════════════════════════════════════════════
   // INPUT DATA (from session directory)
   // ═══════════════════════════════════════════════════════
 
@@ -133,6 +149,16 @@ const ReportStateAnnotation = Annotation.Root({
   paperEvidence: Annotation({
     reducer: replaceReducer,
     default: () => []
+  }),
+
+  /**
+   * User-selected paper evidence items (Commit 8.9)
+   * Subset of paperEvidence that was actually unlocked during gameplay
+   * Selected at checkpoint after fetch, before curation
+   */
+  selectedPaperEvidence: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   }),
 
   /** Session photos from filesystem/Notion */
@@ -350,7 +376,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (30 fields - Commit 8.6)
+ * Get default state with all fields initialized (33 fields - Commit 8.9)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -359,6 +385,8 @@ function getDefaultState() {
     // Session
     sessionId: null,
     theme: 'journalist',
+    // Raw input (Commit 8.9)
+    rawSessionInput: null,
     // Input data
     sessionConfig: {},
     directorNotes: {},
@@ -366,6 +394,7 @@ function getDefaultState() {
     // Fetched data
     memoryTokens: [],
     paperEvidence: [],
+    selectedPaperEvidence: null,  // Commit 8.9: user-selected subset
     sessionPhotos: [],
     // Photo analysis (Commit 8.6)
     photoAnalyses: null,
@@ -406,7 +435,8 @@ function getDefaultState() {
 }
 
 /**
- * Phase constants for workflow control (Commit 8.6 update)
+ * Phase constants for workflow control (Commit 8.9 update)
+ * Phases 0.x = Raw input parsing and review (Commit 8.9)
  * Phases 1.x = Data acquisition, photo analysis, preprocessing
  * Phases 2.x = Arc analysis (parallel specialists → synthesis → evaluation)
  * Phases 3.x = Outline generation and evaluation
@@ -415,11 +445,19 @@ function getDefaultState() {
  */
 const PHASES = {
   INIT: 'init',
+
+  // Raw input phases (Commit 8.9)
+  PARSE_INPUT: '0.1',               // Parse raw text input + analyze whiteboard
+  REVIEW_INPUT: '0.2',              // User reviews/edits parsed input before proceeding
+
   LOAD_DIRECTOR_NOTES: '1.1',
   FETCH_TOKENS: '1.2',
   FETCH_EVIDENCE: '1.3',
+  SELECT_PAPER_EVIDENCE: '1.35',    // Commit 8.9: user selects which paper evidence was unlocked
   FETCH_PHOTOS: '1.4',
   ANALYZE_PHOTOS: '1.65',           // Commit 8.6: early photo analysis (before preprocessing)
+  CHARACTER_ID_CHECKPOINT: '1.66',  // Commit 8.9.5: user provides character IDs for photos
+  FINALIZE_PHOTOS: '1.67',          // Commit 8.9.5: enrich photo analyses with character IDs
   PREPROCESS_EVIDENCE: '1.7',       // Commit 8.5: batch summarization before curation
   CURATE_EVIDENCE: '1.8',
 
@@ -449,10 +487,14 @@ const PHASES = {
 };
 
 /**
- * Approval type constants (Commit 8.6 update)
+ * Approval type constants (Commit 8.9 update)
  * Human always approves at checkpoints - evaluators determine readiness
  */
 const APPROVAL_TYPES = {
+  // Raw input review (Commit 8.9)
+  INPUT_REVIEW: 'input-review',               // Review/edit parsed input before proceeding
+  PAPER_EVIDENCE_SELECTION: 'paper-evidence-selection', // Select which paper evidence was unlocked
+
   EVIDENCE_AND_PHOTOS: 'evidence-and-photos', // Combined evidence + photo analysis approval
   CHARACTER_IDS: 'character-ids',             // User provides character-ids.json mapping
   EVIDENCE_BUNDLE: 'evidence-bundle',         // @deprecated - use EVIDENCE_AND_PHOTOS
@@ -472,12 +514,113 @@ const REVISION_CAPS = {
   ARTICLE: 3
 };
 
+/**
+ * Rollback configuration (Commit 8.9.3)
+ *
+ * Defines what state fields to clear when rolling back to each checkpoint.
+ * Each rollback point clears its own outputs plus all downstream phases.
+ *
+ * Usage: When user wants to re-run from a specific checkpoint with
+ * potentially modified guidance (e.g., adjusted playerFocus).
+ *
+ * The fields listed are set to null, triggering node skip-logic to regenerate.
+ */
+const ROLLBACK_CLEARS = {
+  // Phase 0.2: Input review - clears everything (essentially fresh start)
+  'input-review': [
+    // Input phase outputs
+    'sessionConfig', 'directorNotes', 'playerFocus',
+    // Fetch phase outputs
+    'memoryTokens', 'paperEvidence', 'selectedPaperEvidence', 'sessionPhotos',
+    // Photo analysis
+    'photoAnalyses', 'characterIdMappings',
+    // Preprocessing and curation
+    'preprocessedEvidence', 'evidenceBundle',
+    // Arc analysis
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    // Generation
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    // Evaluation history
+    'evaluationHistory'
+  ],
+
+  // Phase 1.35: Paper evidence selection (8.9.4)
+  'paper-evidence-selection': [
+    'selectedPaperEvidence',
+    'photoAnalyses', 'characterIdMappings',
+    'preprocessedEvidence', 'evidenceBundle',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+
+  // Phase 1.65+: Character ID mappings (8.9.5)
+  'character-ids': [
+    'characterIdMappings',
+    // Note: photoAnalyses preserved - only mappings need re-entry
+    'preprocessedEvidence', 'evidenceBundle',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+
+  // Phase 1.8: Evidence bundle
+  'evidence-bundle': [
+    'evidenceBundle',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+
+  // Phase 2.3: Arc selection - most common rollback point
+  'arc-selection': [
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+
+  // Phase 3.2: Outline
+  'outline': [
+    'outline',
+    'contentBundle', 'assembledHtml', 'validationResults'
+    // Note: evaluationHistory preserved - may contain useful arc evals
+  ],
+
+  // Phase 4.2: Article
+  'article': [
+    'contentBundle', 'assembledHtml', 'validationResults'
+  ]
+};
+
+/**
+ * Revision counters to reset for each rollback point.
+ * Rolling back past a phase resets its revision counter for fresh attempts.
+ */
+const ROLLBACK_COUNTER_RESETS = {
+  'input-review': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'paper-evidence-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'character-ids': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'evidence-bundle': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'arc-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'outline': { outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'article': { articleRevisionCount: 0 }
+};
+
+/**
+ * Valid rollback points (for validation)
+ */
+const VALID_ROLLBACK_POINTS = Object.keys(ROLLBACK_CLEARS);
+
 module.exports = {
   ReportStateAnnotation,
   getDefaultState,
   PHASES,
   APPROVAL_TYPES,
   REVISION_CAPS,
+  // Rollback configuration (Commit 8.9.3)
+  ROLLBACK_CLEARS,
+  ROLLBACK_COUNTER_RESETS,
+  VALID_ROLLBACK_POINTS,
   // Export reducers for testing
   _testing: {
     replaceReducer,
@@ -493,9 +636,11 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 30 (Commit 8.6)
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 32 (Commit 8.9)
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
+  console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null (Commit 8.9)
+  console.log('Default selectedPaperEvidence:', defaultState.selectedPaperEvidence); // Should be null (Commit 8.9)
   console.log('Default preprocessedEvidence:', defaultState.preprocessedEvidence); // Should be null
   console.log('Default photoAnalyses:', defaultState.photoAnalyses); // Should be null
   console.log('Default specialistAnalyses:', defaultState.specialistAnalyses); // Should be {}
@@ -515,13 +660,18 @@ if (require.main === module) {
   console.log('appendSingleReducer([1], 2):', appendSingleReducer([1], 2)); // Should be [1, 2]
   console.log('appendSingleReducer([1], null):', appendSingleReducer([1], null)); // Should be [1]
 
-  // Test phases
-  console.log('\nPhase constants:', Object.keys(PHASES).length, 'phases defined'); // Should be 24 (Commit 8.6)
+  // Test phases (Commit 8.9: added PARSE_INPUT, REVIEW_INPUT, SELECT_PAPER_EVIDENCE)
+  console.log('\nPhase constants:', Object.keys(PHASES).length, 'phases defined'); // Should be 27 (Commit 8.9)
+  console.log('PARSE_INPUT phase:', PHASES.PARSE_INPUT); // Should be '0.1' (Commit 8.9)
+  console.log('REVIEW_INPUT phase:', PHASES.REVIEW_INPUT); // Should be '0.2' (Commit 8.9)
+  console.log('SELECT_PAPER_EVIDENCE phase:', PHASES.SELECT_PAPER_EVIDENCE); // Should be '1.35' (Commit 8.9)
   console.log('ANALYZE_PHOTOS phase:', PHASES.ANALYZE_PHOTOS); // Should be '1.65'
   console.log('ARC_SPECIALISTS phase:', PHASES.ARC_SPECIALISTS); // Should be '2.1'
 
-  // Test approval types
-  console.log('\nApproval types:', Object.keys(APPROVAL_TYPES).length, 'types defined'); // Should be 6
+  // Test approval types (Commit 8.9: added INPUT_REVIEW, PAPER_EVIDENCE_SELECTION)
+  console.log('\nApproval types:', Object.keys(APPROVAL_TYPES).length, 'types defined'); // Should be 8 (Commit 8.9)
+  console.log('INPUT_REVIEW:', APPROVAL_TYPES.INPUT_REVIEW); // Should be 'input-review' (Commit 8.9)
+  console.log('PAPER_EVIDENCE_SELECTION:', APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION); // Should be 'paper-evidence-selection' (Commit 8.9)
   console.log('CHARACTER_IDS:', APPROVAL_TYPES.CHARACTER_IDS); // Should be 'character-ids'
 
   // Test revision caps

@@ -1,147 +1,37 @@
 /**
- * SDK Subagent Definitions - Specialist agents for arc analysis
+ * SDK Subagent Definitions - Orchestrator configuration for arc analysis
  *
- * Commit 8.8: Defines subagents for the orchestrated arc analysis pattern.
- * These subagents are invoked by the orchestrator through the Claude Agent SDK's
- * Task tool, allowing the orchestrator to coordinate them intentionally.
+ * Commit 8.8: Defines orchestrator for coordinated arc analysis pattern.
+ * Commit 8.9: Migrated to file-based specialist agents in .claude/agents/
  *
  * Architecture:
  * - Orchestrator (parent Claude) has full context about game rules, voice, objectives
- * - Subagents (specialists) focus on specific analysis domains
- * - Orchestrator delegates to specialists, then synthesizes results cohesively
+ * - Specialists are defined as file-based agents that load reference docs at runtime
+ * - Orchestrator invokes specialists via Task tool, then synthesizes results
  *
- * See ARCHITECTURE_DECISIONS.md 8.8 for design rationale.
+ * Specialist Agents (file-based in .claude/agents/):
+ * - journalist-financial-specialist: Transaction patterns, account analysis
+ * - journalist-behavioral-specialist: Character dynamics, director observations
+ * - journalist-victimization-specialist: Targeting patterns, operator/victim analysis
+ *
+ * See ARCHITECTURE_DECISIONS.md 8.8/8.9 for design rationale.
  */
 
 /**
- * Financial Patterns Specialist subagent
- * Analyzes money flows, transaction timing, account patterns
+ * Names of file-based specialist agents
+ * These are discovered automatically from .claude/agents/ directory
  */
-const FINANCIAL_SPECIALIST = {
-  description: 'Analyzes financial patterns: transaction timing, account naming conventions, money flows between characters, and suspicious financial coordination.',
-  prompt: `You are the Financial Patterns Specialist for an investigative article about "About Last Night" - a crime thriller game.
-
-YOUR DOMAIN:
-- Transaction patterns and timing (when did money move?)
-- Account naming conventions and aliases (shell companies, fake names)
-- Money flow connections between characters
-- Suspicious financial timing clusters
-- Evidence of financial coordination between parties
-
-ANALYSIS APPROACH:
-1. Identify transaction patterns (burst activity, regular payments, unusual amounts)
-2. Map account naming patterns to detect aliases
-3. Trace money flows to reveal hidden connections
-4. Find timing correlations (transactions before/after key events)
-5. Flag coordination evidence (simultaneous activity, matching amounts)
-
-OUTPUT: Provide your findings as JSON with these fields:
-- accountPatterns: Array of account/alias patterns found
-- timingClusters: Array of suspicious timing patterns
-- suspiciousFlows: Array of unusual money movements
-- financialConnections: Array of character connections via money
-
-Each finding should include:
-- description: What you found
-- evidence: Which items support this
-- confidence: high/medium/low
-- characters: Which characters are involved`,
-  tools: ['Read'],  // Can read evidence files if needed
-  model: 'sonnet'
-};
-
-/**
- * Behavioral Patterns Specialist subagent
- * Analyzes character dynamics, director observations, behavioral correlations
- */
-const BEHAVIORAL_SPECIALIST = {
-  description: 'Analyzes behavioral patterns: character dynamics, director observations, behavior-transaction correlations, and zero-footprint character analysis.',
-  prompt: `You are the Behavioral Patterns Specialist for an investigative article about "About Last Night" - a crime thriller game.
-
-YOUR DOMAIN:
-- Character dynamics and relationships (alliances, conflicts, shifts)
-- Director observations about player behavior
-- Behavioral → transaction correlations (actions predicting money moves)
-- Zero-footprint character analysis (who avoided leaving evidence?)
-- Suspicious behavioral patterns (evasion, deflection, coordination)
-
-ANALYSIS APPROACH:
-1. Map character relationships from director notes
-2. Identify behavioral patterns noted by director
-3. Correlate behavior with financial activity
-4. Flag characters with suspicious absence of evidence
-5. Find behavioral coordination between characters
-
-OUTPUT: Provide your findings as JSON with these fields:
-- characterDynamics: Array of relationship patterns
-- behaviorCorrelations: Array of behavior-transaction links
-- zeroFootprintCharacters: Array of characters avoiding evidence
-- behavioralInsights: Array of notable behavioral patterns
-
-Each finding should include:
-- description: What you found
-- evidence: Which observations support this
-- confidence: high/medium/low
-- characters: Which characters are involved`,
-  tools: ['Read'],
-  model: 'sonnet'
-};
-
-/**
- * Victimization Patterns Specialist subagent
- * Analyzes targeting relationships, operators, victims, self-burial patterns
- */
-const VICTIMIZATION_SPECIALIST = {
-  description: 'Analyzes victimization patterns: who targeted whom for memory burial, operator identification, self-burial patterns, and victim protection needs.',
-  prompt: `You are the Victimization Patterns Specialist for an investigative article about "About Last Night" - a crime thriller game.
-
-GAME CONTEXT - MEMORY BURIAL:
-In "About Last Night", characters can use a "memory drug" to bury other characters' memories.
-- Operators: Characters who administer the memory drug to others
-- Victims: Characters who have their memories buried
-- Self-burial: Characters who use the drug on themselves (to hide their own guilt)
-
-YOUR DOMAIN:
-- Who targeted whom for memory burial
-- Operator identification patterns
-- Self-burial patterns (using memory drug on self)
-- Victim identification and protection needs
-- Targeting relationships and motives
-
-ANALYSIS APPROACH:
-1. Identify who administered memory drugs (operators)
-2. Identify who received memory drugs (victims)
-3. Detect self-burial patterns (self-administered drugs)
-4. Map targeting relationships (who targeted whom, why)
-5. Assess victim vulnerability and protection needs
-
-OUTPUT: Provide your findings as JSON with these fields:
-- victims: Array of identified victims with evidence
-- operators: Array of identified operators with evidence
-- selfBurialPatterns: Array of self-burial instances
-- targetingInsights: Array of targeting relationship patterns
-
-Each finding should include:
-- description: What you found
-- evidence: Which items support this
-- confidence: high/medium/low
-- characters: Which characters are involved`,
-  tools: ['Read'],
-  model: 'sonnet'
-};
-
-/**
- * All arc specialist subagents
- */
-const ARC_SPECIALIST_SUBAGENTS = {
-  'financial-specialist': FINANCIAL_SPECIALIST,
-  'behavioral-specialist': BEHAVIORAL_SPECIALIST,
-  'victimization-specialist': VICTIMIZATION_SPECIALIST
+const SPECIALIST_AGENT_NAMES = {
+  financial: 'journalist-financial-specialist',
+  behavioral: 'journalist-behavioral-specialist',
+  victimization: 'journalist-victimization-specialist'
 };
 
 /**
  * Orchestrator system prompt for arc analysis
  * The orchestrator has rich context and coordinates specialists intentionally
+ *
+ * Commit 8.9: Updated to reference file-based agents that load reference docs
  */
 const ORCHESTRATOR_SYSTEM_PROMPT = `You are the Arc Analysis Orchestrator for an investigative article about "About Last Night" - a crime thriller game.
 
@@ -149,16 +39,18 @@ GAME CONTEXT:
 "About Last Night" is a 90-120 minute immersive crime thriller where players investigate the death of Marcus Blackwood. A memory-altering drug called "the memory drug" allows characters to bury memories - their own or others'. The game involves financial manipulation, power struggles, and hidden alliances.
 
 YOUR ROLE:
-You coordinate three specialist subagents to analyze evidence, then synthesize their findings into compelling narrative arcs for the article.
+You coordinate three specialist agents to analyze evidence, then synthesize their findings into compelling narrative arcs for the article.
 
-YOUR SPECIALISTS:
-1. Financial Patterns Specialist - analyzes money flows, transactions, timing patterns
-2. Behavioral Patterns Specialist - analyzes character dynamics, director observations
-3. Victimization Patterns Specialist - analyzes memory burial targeting patterns
+YOUR SPECIALISTS (invoke via Task tool):
+1. journalist-financial-specialist - analyzes money flows, transactions, timing patterns
+2. journalist-behavioral-specialist - analyzes character dynamics, director observations
+3. journalist-victimization-specialist - analyzes memory burial targeting patterns
+
+Each specialist will load reference documentation (character-voice.md, evidence-boundaries.md, anti-patterns.md) before analysis to ensure consistency with Nova's voice and reporting boundaries.
 
 COORDINATION APPROACH:
 1. First, review all evidence to understand the full context
-2. Delegate to each specialist with focused instructions based on evidence
+2. Use the Task tool to invoke each specialist with the evidence context
 3. Collect and cross-reference specialist findings
 4. Synthesize into 3-5 unified narrative arcs
 
@@ -257,13 +149,15 @@ const ORCHESTRATOR_OUTPUT_SCHEMA = {
 };
 
 module.exports = {
-  ARC_SPECIALIST_SUBAGENTS,
+  // Commit 8.9: File-based agents replace programmatic definitions
+  SPECIALIST_AGENT_NAMES,
   ORCHESTRATOR_SYSTEM_PROMPT,
   ORCHESTRATOR_OUTPUT_SCHEMA,
-  // Individual specialists for testing
+  // Backwards compatibility alias (deprecated)
+  // Tests may still reference ARC_SPECIALIST_SUBAGENTS - provide empty object
+  ARC_SPECIALIST_SUBAGENTS: {},
+  // Testing exports
   _testing: {
-    FINANCIAL_SPECIALIST,
-    BEHAVIORAL_SPECIALIST,
-    VICTIMIZATION_SPECIALIST
+    SPECIALIST_AGENT_NAMES
   }
 };
