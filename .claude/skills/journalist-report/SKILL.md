@@ -27,6 +27,7 @@ Multi-phase workflow generating investigative articles from ALN session data wit
 Phase 1: DATA GATHERING → evidence_bundle
          └── 1.6: PARALLEL SUBAGENTS analyze images concurrently
 Phase 2: ARC ANALYSIS → arc_analysis (JSON) → ★ USER SELECTS ARCS
+         └── 2.1: PARALLEL SPECIALISTS (financial, behavioral, victimization)
 Phase 3: OUTLINE → article_outline (JSON) → ★ USER APPROVES
 Phase 4: GENERATION → article HTML
 Phase 5: VALIDATION → final HTML
@@ -40,6 +41,9 @@ Phase 5: VALIDATION → final HTML
 | 1.6 Image Analysis | `journalist-image-analyzer` | Parallel visual inspection, game world context pre-loaded |
 | 1.8 Evidence Bundle | `journalist-evidence-curator` | Context isolation, writes summary for checkpoint |
 | 2 Arc Analysis | `journalist-arc-analyzer` | Director observations + whiteboard drive selection |
+| 2.1 Financial | `journalist-financial-specialist` | Transaction patterns, timing clusters, account analysis |
+| 2.1 Behavioral | `journalist-behavioral-specialist` | Character dynamics, zero-footprint analysis |
+| 2.1 Victimization | `journalist-victimization-specialist` | Targeting patterns, operator/victim analysis |
 | 3 Outline | `journalist-outline-generator` | Placement decisions, writes summary for approval |
 | 4 Generation | `journalist-article-generator` | Quality prose, full reference file loading |
 | 5 Validation | `journalist-article-validator` | Isolated anti-pattern checking, returns structured issues |
@@ -51,6 +55,9 @@ Phase 5: VALIDATION → final HTML
 | `journalist-image-analyzer` | Sonnet | Read | Visual analysis of session photos & Notion documents |
 | `journalist-evidence-curator` | Sonnet | Read, Write | Build three-layer evidence bundle from raw data |
 | `journalist-arc-analyzer` | Opus | Read, Write | Maximum analysis with director observations driving arc selection |
+| `journalist-financial-specialist` | Sonnet | Read | Transaction patterns, account analysis, timing clusters |
+| `journalist-behavioral-specialist` | Sonnet | Read | Character dynamics, director observations, zero-footprint analysis |
+| `journalist-victimization-specialist` | Sonnet | Read | Targeting patterns, operator/victim analysis, self-burial |
 | `journalist-outline-generator` | Sonnet | Read, Write | Create outline with evidence/photo placements |
 | `journalist-article-generator` | Opus | Read, Write | Generate final HTML with Nova's voice |
 | `journalist-article-validator` | Sonnet | Read, Grep | Anti-pattern detection, voice scoring, roster coverage |
@@ -63,6 +70,24 @@ Task(subagent_type="journalist-image-analyzer", instruction=`
   Source type: session_photo
   Session date: December 21, 2025
   Return structured JSON analysis.
+`)
+
+// Phase 2: Arc analysis via orchestrated specialists (Commit 8.9)
+// Orchestrator invokes these file-based agents via Task tool
+Task(subagent_type="journalist-financial-specialist", instruction=`
+  Analyze financial patterns in the evidence bundle.
+  Evidence data: {evidence-json-string}
+  Return structured JSON with accountPatterns, timingClusters, suspiciousFlows.
+`)
+Task(subagent_type="journalist-behavioral-specialist", instruction=`
+  Analyze behavioral patterns from director observations.
+  Director notes: {director-notes-json}
+  Return structured JSON with characterDynamics, behaviorCorrelations.
+`)
+Task(subagent_type="journalist-victimization-specialist", instruction=`
+  Analyze victimization patterns in memory burial data.
+  Evidence data: {evidence-json-string}
+  Return structured JSON with victims, operators, selfBurialPatterns.
 `)
 
 // Phase 5: Validation

@@ -1,5 +1,5 @@
 /**
- * Arc Specialist Nodes Unit Tests - Commit 8.8
+ * Arc Specialist Nodes Unit Tests - Commit 8.8/8.9
  *
  * Tests for the orchestrated subagent pattern that performs
  * arc analysis in the workflow.
@@ -7,7 +7,9 @@
  * Commit 8.8 changed from 4 sequential nodes (3 specialists + 1 synthesizer)
  * to 1 orchestrator node with 3 subagents.
  *
- * See ARCHITECTURE_DECISIONS.md 8.8 for design rationale.
+ * Commit 8.9: Specialists are now file-based agents in .claude/agents/
+ *
+ * See ARCHITECTURE_DECISIONS.md 8.8/8.9 for design rationale.
  */
 
 const {
@@ -18,7 +20,8 @@ const {
   _testing: {
     buildOrchestratorPrompt,
     createEmptyAnalysisResult,
-    ARC_SPECIALIST_SUBAGENTS,
+    SPECIALIST_AGENT_NAMES,
+    ARC_SPECIALIST_SUBAGENTS,  // @deprecated - empty object for backwards compatibility
     ORCHESTRATOR_SYSTEM_PROMPT,
     ORCHESTRATOR_OUTPUT_SCHEMA
   }
@@ -46,35 +49,36 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
     it('exports _testing with orchestrator helpers', () => {
       expect(typeof buildOrchestratorPrompt).toBe('function');
       expect(typeof createEmptyAnalysisResult).toBe('function');
-      expect(ARC_SPECIALIST_SUBAGENTS).toBeDefined();
+      expect(SPECIALIST_AGENT_NAMES).toBeDefined();
       expect(ORCHESTRATOR_SYSTEM_PROMPT).toBeDefined();
       expect(ORCHESTRATOR_OUTPUT_SCHEMA).toBeDefined();
     });
   });
 
-  describe('ARC_SPECIALIST_SUBAGENTS', () => {
-    it('defines financial-specialist subagent', () => {
-      expect(ARC_SPECIALIST_SUBAGENTS['financial-specialist']).toBeDefined();
-      expect(ARC_SPECIALIST_SUBAGENTS['financial-specialist'].description).toContain('financial');
-      expect(ARC_SPECIALIST_SUBAGENTS['financial-specialist'].prompt).toBeDefined();
+  describe('SPECIALIST_AGENT_NAMES (Commit 8.9)', () => {
+    it('defines financial specialist agent name', () => {
+      expect(SPECIALIST_AGENT_NAMES.financial).toBe('journalist-financial-specialist');
     });
 
-    it('defines behavioral-specialist subagent', () => {
-      expect(ARC_SPECIALIST_SUBAGENTS['behavioral-specialist']).toBeDefined();
-      expect(ARC_SPECIALIST_SUBAGENTS['behavioral-specialist'].description).toContain('behavioral');
+    it('defines behavioral specialist agent name', () => {
+      expect(SPECIALIST_AGENT_NAMES.behavioral).toBe('journalist-behavioral-specialist');
     });
 
-    it('defines victimization-specialist subagent', () => {
-      expect(ARC_SPECIALIST_SUBAGENTS['victimization-specialist']).toBeDefined();
-      expect(ARC_SPECIALIST_SUBAGENTS['victimization-specialist'].description).toContain('victimization');
+    it('defines victimization specialist agent name', () => {
+      expect(SPECIALIST_AGENT_NAMES.victimization).toBe('journalist-victimization-specialist');
     });
 
-    it('each subagent has required properties', () => {
-      Object.values(ARC_SPECIALIST_SUBAGENTS).forEach(subagent => {
-        expect(subagent.description).toBeDefined();
-        expect(subagent.prompt).toBeDefined();
-        expect(subagent.model).toBeDefined();
-      });
+    it('all three specialist domains are defined', () => {
+      expect(Object.keys(SPECIALIST_AGENT_NAMES)).toHaveLength(3);
+      expect(SPECIALIST_AGENT_NAMES.financial).toBeDefined();
+      expect(SPECIALIST_AGENT_NAMES.behavioral).toBeDefined();
+      expect(SPECIALIST_AGENT_NAMES.victimization).toBeDefined();
+    });
+  });
+
+  describe('ARC_SPECIALIST_SUBAGENTS (deprecated)', () => {
+    it('is empty object for backwards compatibility', () => {
+      expect(ARC_SPECIALIST_SUBAGENTS).toEqual({});
     });
   });
 
@@ -83,10 +87,11 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
       expect(ORCHESTRATOR_SYSTEM_PROMPT).toContain('About Last Night');
     });
 
-    it('mentions all three specialist types', () => {
-      expect(ORCHESTRATOR_SYSTEM_PROMPT).toContain('Financial');
-      expect(ORCHESTRATOR_SYSTEM_PROMPT).toContain('Behavioral');
-      expect(ORCHESTRATOR_SYSTEM_PROMPT).toContain('Victimization');
+    it('mentions all three specialist agent names', () => {
+      // Commit 8.9: Specialists are now file-based agents
+      expect(ORCHESTRATOR_SYSTEM_PROMPT).toContain('journalist-financial-specialist');
+      expect(ORCHESTRATOR_SYSTEM_PROMPT).toContain('journalist-behavioral-specialist');
+      expect(ORCHESTRATOR_SYSTEM_PROMPT).toContain('journalist-victimization-specialist');
     });
 
     it('emphasizes Layer 3 drives narrative', () => {

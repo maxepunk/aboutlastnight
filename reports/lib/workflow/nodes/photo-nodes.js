@@ -269,6 +269,251 @@ Remember: Use physical descriptions for people, NOT names.`;
 // safeParseJson imported from node-helpers.js
 
 /**
+ * Output schema for LLM-powered photo enrichment
+ */
+const ENRICHED_PHOTO_SCHEMA = {
+  type: 'object',
+  required: ['enrichedVisualContent', 'enrichedNarrativeMoment', 'finalCaption', 'identifiedCharacters'],
+  properties: {
+    enrichedVisualContent: {
+      type: 'string',
+      description: 'Visual content description with character names replacing generic descriptions'
+    },
+    enrichedNarrativeMoment: {
+      type: 'string',
+      description: 'Narrative moment with corrections applied and character names included'
+    },
+    finalCaption: {
+      type: 'string',
+      description: 'Natural-sounding caption for the article, using character names'
+    },
+    identifiedCharacters: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'List of all character names visible in the photo'
+    }
+  }
+};
+
+/**
+ * Build enrichment prompt for a single photo analysis
+ * @param {Object} analysis - Original Haiku analysis
+ * @param {Object} userInput - User's character mappings and corrections
+ * @returns {string} Prompt for enrichment
+ */
+function buildEnrichmentPrompt(analysis, userInput) {
+  const { characterMappings = [], additionalCharacters = [], corrections = {}, exclude } = userInput;
+
+  if (exclude) {
+    return null; // Skip excluded photos
+  }
+
+  // Build character mapping context
+  const mappingLines = characterMappings.map(m => {
+    const desc = analysis.characterDescriptions?.[m.descriptionIndex];
+    if (desc) {
+      return `- "${desc.description}" (${desc.role || 'observed'}) → ${m.characterName}`;
+    }
+    return `- Description #${m.descriptionIndex} → ${m.characterName}`;
+  });
+
+  const additionalLines = additionalCharacters.map(c =>
+    `- NEW: "${c.description}" (${c.role || 'observed'}) → ${c.characterName}`
+  );
+
+  const correctionLines = [];
+  if (corrections.location) correctionLines.push(`Location correction: ${corrections.location}`);
+  if (corrections.context) correctionLines.push(`Context correction: ${corrections.context}`);
+  if (corrections.other) correctionLines.push(`Additional notes: ${corrections.other}`);
+
+  return `Enrich this photo analysis by incorporating character identifications and corrections.
+
+ORIGINAL ANALYSIS:
+- Visual Content: ${analysis.visualContent}
+- Narrative Moment: ${analysis.narrativeMoment}
+- Suggested Caption: ${analysis.suggestedCaption || '(none)'}
+- Emotional Tone: ${analysis.emotionalTone}
+- Story Relevance: ${analysis.storyRelevance}
+
+CHARACTER IDENTIFICATIONS:
+${mappingLines.length > 0 ? mappingLines.join('\n') : '(no mappings provided)'}
+${additionalLines.length > 0 ? '\nADDITIONAL CHARACTERS (not detected by initial analysis):\n' + additionalLines.join('\n') : ''}
+
+${correctionLines.length > 0 ? 'CORRECTIONS:\n' + correctionLines.join('\n') : ''}
+
+TASK:
+1. Rewrite the visual content, replacing generic descriptions (e.g., "person in red dress") with character names
+2. Update the narrative moment to incorporate any location/context corrections
+3. Generate a natural-sounding caption that uses character names and captures the moment
+4. List all identified characters (from mappings AND additional characters)
+
+The caption should be suitable for a NovaNews investigative article - dramatic but factual.`;
+}
+
+/**
+ * Finalize photo analyses by enriching with character identifications (LLM-powered)
+ *
+ * Uses Claude to intelligently merge user-provided character mappings and corrections
+ * into photo analyses, generating natural-sounding enriched content.
+ *
+ * Input format (characterIdMappings):
+ * {
+ *   "photo1.jpg": {
+ *     characterMappings: [{ descriptionIndex: 0, characterName: "Victoria" }],
+ *     additionalCharacters: [{ description: "...", characterName: "...", role: "..." }],
+ *     corrections: { location: "...", context: "...", other: "..." },
+ *     exclude: false
+ *   }
+ * }
+ *
+ * Added in Commit 8.9.5 for character ID checkpoint support.
+ *
+ * Skip logic: If photoAnalyses already has enriched data (identifiedCharacters),
+ * skip processing (resume from checkpoint case).
+ *
+ * @param {Object} state - Current state with photoAnalyses, characterIdMappings
+ * @param {Object} config - Graph config with optional configurable.sdkClient
+ * @returns {Object} Partial state update with enriched photoAnalyses
+ */
+async function finalizePhotoAnalyses(state, config) {
+  const startTime = Date.now();
+
+  // Skip if no photo analyses to enrich
+  if (!state.photoAnalyses || !state.photoAnalyses.analyses || state.photoAnalyses.analyses.length === 0) {
+    console.log('[finalizePhotoAnalyses] Skipping - no photo analyses to enrich');
+    return {
+      currentPhase: PHASES.FINALIZE_PHOTOS
+    };
+  }
+
+  // Skip if already enriched (check first analysis for identifiedCharacters)
+  const firstAnalysis = state.photoAnalyses.analyses[0];
+  if (firstAnalysis && firstAnalysis.identifiedCharacters !== undefined) {
+    console.log('[finalizePhotoAnalyses] Skipping - photoAnalyses already enriched');
+    return {
+      currentPhase: PHASES.FINALIZE_PHOTOS
+    };
+  }
+
+  const characterIdMappings = state.characterIdMappings || {};
+  const mappingCount = Object.keys(characterIdMappings).length;
+
+  console.log(`[finalizePhotoAnalyses] Enriching ${state.photoAnalyses.analyses.length} analyses with ${mappingCount} character mappings`);
+
+  const sdk = getSdkClient(config);
+  const enrichedAnalyses = [];
+
+  for (const analysis of state.photoAnalyses.analyses) {
+    const userInput = characterIdMappings[analysis.filename] || {};
+
+    // Handle excluded photos
+    if (userInput.exclude) {
+      console.log(`[finalizePhotoAnalyses] Excluding photo: ${analysis.filename}`);
+      enrichedAnalyses.push({
+        ...analysis,
+        excluded: true,
+        identifiedCharacters: [],
+        enrichedVisualContent: analysis.visualContent,
+        enrichedNarrativeMoment: analysis.narrativeMoment,
+        finalCaption: null,
+        originalCaption: analysis.suggestedCaption
+      });
+      continue;
+    }
+
+    // Build enrichment prompt
+    const prompt = buildEnrichmentPrompt(analysis, userInput);
+
+    // If no mappings or corrections, do simple passthrough
+    const hasMappings = (userInput.characterMappings?.length > 0) || (userInput.additionalCharacters?.length > 0);
+    const hasCorrections = userInput.corrections && Object.values(userInput.corrections).some(v => v);
+
+    if (!hasMappings && !hasCorrections) {
+      console.log(`[finalizePhotoAnalyses] No enrichment data for: ${analysis.filename}`);
+      enrichedAnalyses.push({
+        ...analysis,
+        identifiedCharacters: [],
+        enrichedVisualContent: analysis.visualContent,
+        enrichedNarrativeMoment: analysis.narrativeMoment,
+        finalCaption: analysis.suggestedCaption,
+        originalCaption: analysis.suggestedCaption
+      });
+      continue;
+    }
+
+    try {
+      console.log(`[finalizePhotoAnalyses] Enriching: ${analysis.filename}`);
+
+      const enrichment = await sdk({
+        systemPrompt: 'You are enriching photo analyses for a NovaNews investigative article. Replace generic descriptions with character names and incorporate any corrections naturally.',
+        prompt,
+        model: 'haiku',  // Fast model for simple text transformation
+        jsonSchema: ENRICHED_PHOTO_SCHEMA
+      });
+
+      enrichedAnalyses.push({
+        ...analysis,
+        // Enriched fields
+        identifiedCharacters: enrichment.identifiedCharacters || [],
+        enrichedVisualContent: enrichment.enrichedVisualContent || analysis.visualContent,
+        enrichedNarrativeMoment: enrichment.enrichedNarrativeMoment || analysis.narrativeMoment,
+        finalCaption: enrichment.finalCaption,
+        // Preserve originals
+        originalVisualContent: analysis.visualContent,
+        originalNarrativeMoment: analysis.narrativeMoment,
+        originalCaption: analysis.suggestedCaption,
+        // User input for reference
+        userCorrections: userInput.corrections || null,
+        additionalCharacters: userInput.additionalCharacters || []
+      });
+
+    } catch (enrichError) {
+      console.error(`[finalizePhotoAnalyses] Error enriching ${analysis.filename}:`, enrichError.message);
+      // Fallback to simple enrichment on error
+      const allCharacters = [
+        ...(userInput.characterMappings || []).map(m => m.characterName),
+        ...(userInput.additionalCharacters || []).map(c => c.characterName)
+      ];
+
+      enrichedAnalyses.push({
+        ...analysis,
+        identifiedCharacters: allCharacters,
+        enrichedVisualContent: analysis.visualContent,
+        enrichedNarrativeMoment: analysis.narrativeMoment,
+        finalCaption: allCharacters.length > 0
+          ? `${allCharacters.join(' and ')}: ${analysis.suggestedCaption || 'Scene from the investigation'}`
+          : analysis.suggestedCaption,
+        originalCaption: analysis.suggestedCaption,
+        _enrichmentError: enrichError.message
+      });
+    }
+  }
+
+  const processingTimeMs = Date.now() - startTime;
+
+  // Build enriched photoAnalyses with same structure
+  const enrichedPhotoAnalyses = {
+    ...state.photoAnalyses,
+    analyses: enrichedAnalyses,
+    enrichedAt: new Date().toISOString(),
+    enrichmentStats: {
+      totalAnalyses: enrichedAnalyses.length,
+      withCharacters: enrichedAnalyses.filter(a => a.identifiedCharacters?.length > 0).length,
+      withCorrections: enrichedAnalyses.filter(a => a.userCorrections).length,
+      excluded: enrichedAnalyses.filter(a => a.excluded).length,
+      processingTimeMs
+    }
+  };
+
+  console.log(`[finalizePhotoAnalyses] Complete: ${enrichedPhotoAnalyses.enrichmentStats.withCharacters}/${enrichedAnalyses.length} photos enriched in ${processingTimeMs}ms`);
+
+  return {
+    photoAnalyses: enrichedPhotoAnalyses,
+    currentPhase: PHASES.FINALIZE_PHOTOS
+  };
+}
+
+/**
  * Create mock photo analyzer for testing
  * @param {Object} options - Mock configuration
  * @returns {Object} Mock analyzer with process method
@@ -309,8 +554,9 @@ function createMockPhotoAnalyzer(options = {}) {
 }
 
 module.exports = {
-  // Main node function
+  // Main node functions
   analyzePhotos,
+  finalizePhotoAnalyses,  // Commit 8.9.5: enrich with character IDs
 
   // Mock factory for testing
   createMockPhotoAnalyzer,
@@ -321,7 +567,10 @@ module.exports = {
     buildPhotoAnalysisSystemPrompt,
     createEmptyPhotoAnalysisResult,
     safeParseJson,
-    PHOTO_ANALYSIS_SCHEMA
+    PHOTO_ANALYSIS_SCHEMA,
+    // Commit 8.9.5: Photo enrichment exports
+    buildEnrichmentPrompt,
+    ENRICHED_PHOTO_SCHEMA
   }
 };
 

@@ -11,6 +11,9 @@ const {
   PHASES,
   APPROVAL_TYPES,
   REVISION_CAPS,
+  ROLLBACK_CLEARS,
+  ROLLBACK_COUNTER_RESETS,
+  VALID_ROLLBACK_POINTS,
   _testing
 } = require('../../../lib/workflow/state');
 
@@ -236,11 +239,13 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 30 state fields (Commit 8.6)', () => {
+    it('includes all 32 state fields (Commit 8.9)', () => {
       const expectedFields = [
         // Session
         'sessionId',
         'theme',
+        // Raw input (Commit 8.9)
+        'rawSessionInput',
         // Input data
         'sessionConfig',
         'directorNotes',
@@ -248,6 +253,7 @@ describe('ReportStateAnnotation', () => {
         // Fetched data
         'memoryTokens',
         'paperEvidence',
+        'selectedPaperEvidence',  // Commit 8.9
         'sessionPhotos',
         // Photo analysis (Commit 8.6)
         'photoAnalyses',
@@ -487,8 +493,19 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 25 phases (Commit 8.6 + GENERATION_SUPERVISOR)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(25);
+    it('defines exactly 30 phases (Commit 8.9.5 - Character IDs)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(30);
+    });
+
+    it('defines input parsing phases (Commit 8.9)', () => {
+      expect(PHASES.PARSE_INPUT).toBe('0.1');
+      expect(PHASES.REVIEW_INPUT).toBe('0.2');
+      expect(PHASES.SELECT_PAPER_EVIDENCE).toBe('1.35');
+    });
+
+    it('defines character ID phases (Commit 8.9.5)', () => {
+      expect(PHASES.CHARACTER_ID_CHECKPOINT).toBe('1.66');
+      expect(PHASES.FINALIZE_PHOTOS).toBe('1.67');
     });
 
     it('includes GENERATION_SUPERVISOR phase', () => {
@@ -533,8 +550,16 @@ describe('ReportStateAnnotation', () => {
       expect(APPROVAL_TYPES.ARTICLE).toBe('article');
     });
 
-    it('defines exactly 6 approval types (Commit 8.6)', () => {
-      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(6);
+    it('defines exactly 8 approval types (Commit 8.9)', () => {
+      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(8);
+    });
+
+    it('defines input review approval type (Commit 8.9)', () => {
+      expect(APPROVAL_TYPES.INPUT_REVIEW).toBe('input-review');
+    });
+
+    it('defines paper evidence selection approval type (Commit 8.9)', () => {
+      expect(APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION).toBe('paper-evidence-selection');
     });
 
     it('all approval type values are strings', () => {
@@ -573,6 +598,95 @@ describe('ReportStateAnnotation', () => {
         expect(Number.isInteger(cap)).toBe(true);
         expect(cap).toBeGreaterThan(0);
       });
+    });
+  });
+
+  describe('ROLLBACK_CLEARS constant (Commit 8.9.3)', () => {
+    it('defines 7 rollback points', () => {
+      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(7);
+    });
+
+    it('includes all expected rollback points', () => {
+      const expected = [
+        'input-review',
+        'paper-evidence-selection',
+        'character-ids',
+        'evidence-bundle',
+        'arc-selection',
+        'outline',
+        'article'
+      ];
+      expect(Object.keys(ROLLBACK_CLEARS).sort()).toEqual(expected.sort());
+    });
+
+    it('arc-selection clears arcs and downstream', () => {
+      const fields = ROLLBACK_CLEARS['arc-selection'];
+      expect(fields).toContain('narrativeArcs');
+      expect(fields).toContain('selectedArcs');
+      expect(fields).toContain('outline');
+      expect(fields).toContain('contentBundle');
+      expect(fields).toContain('assembledHtml');
+    });
+
+    it('outline clears outline and downstream', () => {
+      const fields = ROLLBACK_CLEARS['outline'];
+      expect(fields).toContain('outline');
+      expect(fields).toContain('contentBundle');
+      // Should NOT include arcs
+      expect(fields).not.toContain('narrativeArcs');
+    });
+
+    it('input-review clears everything', () => {
+      const fields = ROLLBACK_CLEARS['input-review'];
+      expect(fields).toContain('sessionConfig');
+      expect(fields).toContain('memoryTokens');
+      expect(fields).toContain('narrativeArcs');
+      expect(fields).toContain('assembledHtml');
+    });
+
+    it('all rollback clear lists are arrays', () => {
+      Object.values(ROLLBACK_CLEARS).forEach(fields => {
+        expect(Array.isArray(fields)).toBe(true);
+        expect(fields.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('ROLLBACK_COUNTER_RESETS constant (Commit 8.9.3)', () => {
+    it('defines counter resets for all rollback points', () => {
+      expect(Object.keys(ROLLBACK_COUNTER_RESETS)).toEqual(Object.keys(ROLLBACK_CLEARS));
+    });
+
+    it('arc-selection resets all revision counters', () => {
+      const resets = ROLLBACK_COUNTER_RESETS['arc-selection'];
+      expect(resets.arcRevisionCount).toBe(0);
+      expect(resets.outlineRevisionCount).toBe(0);
+      expect(resets.articleRevisionCount).toBe(0);
+    });
+
+    it('outline only resets outline and article counters', () => {
+      const resets = ROLLBACK_COUNTER_RESETS['outline'];
+      expect(resets.outlineRevisionCount).toBe(0);
+      expect(resets.articleRevisionCount).toBe(0);
+      expect(resets.arcRevisionCount).toBeUndefined();
+    });
+
+    it('article only resets article counter', () => {
+      const resets = ROLLBACK_COUNTER_RESETS['article'];
+      expect(resets.articleRevisionCount).toBe(0);
+      expect(resets.outlineRevisionCount).toBeUndefined();
+      expect(resets.arcRevisionCount).toBeUndefined();
+    });
+  });
+
+  describe('VALID_ROLLBACK_POINTS constant (Commit 8.9.3)', () => {
+    it('matches keys of ROLLBACK_CLEARS', () => {
+      expect(VALID_ROLLBACK_POINTS).toEqual(Object.keys(ROLLBACK_CLEARS));
+    });
+
+    it('can be used for validation', () => {
+      expect(VALID_ROLLBACK_POINTS.includes('arc-selection')).toBe(true);
+      expect(VALID_ROLLBACK_POINTS.includes('invalid-point')).toBe(false);
     });
   });
 

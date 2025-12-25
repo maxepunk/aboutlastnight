@@ -342,6 +342,7 @@ describe('workflow integration', () => {
         directorNotes: { observations: [], playerFocus: {} },
         memoryTokens: [{ tokenId: 'test-001' }],
         paperEvidence: [{ notionId: 'ev-001' }],
+        selectedPaperEvidence: [{ notionId: 'ev-001' }],  // Commit 8.9.4: Skip paper evidence selection checkpoint
         sessionPhotos: [],
         photoAnalyses: { analyses: [] },
         // Processing phase data
@@ -369,17 +370,6 @@ describe('workflow integration', () => {
       };
 
       const result = await graph.invoke(preApprovedState, config);
-
-      // Debug: log key state fields
-      console.log('[TEST DEBUG] Result state:', {
-        hasAssembledHtml: !!result.assembledHtml,
-        currentPhase: result.currentPhase,
-        awaitingApproval: result.awaitingApproval,
-        approvalType: result.approvalType,
-        hasErrors: result.errors?.length > 0,
-        errorsCount: result.errors?.length || 0,
-        errors: result.errors
-      });
 
       expect(result.assembledHtml).toContain('<html>');
       expect(result.assembledHtml).toContain('</html>');
@@ -490,6 +480,7 @@ describe('workflow integration', () => {
         directorNotes: { observations: [], playerFocus: {} },
         memoryTokens: [{ tokenId: 'test-001' }],
         paperEvidence: [{ notionId: 'ev-001' }],
+        selectedPaperEvidence: [{ notionId: 'ev-001' }],  // Commit 8.9.4: Skip paper evidence selection checkpoint
         sessionPhotos: [],
         photoAnalyses: { analyses: [] },
         // Processing phase data
@@ -560,6 +551,7 @@ describe('workflow integration', () => {
         directorNotes: { observations: [], playerFocus: {} },
         memoryTokens: [{ tokenId: 'test-001' }],
         paperEvidence: [{ notionId: 'ev-001' }],
+        selectedPaperEvidence: [{ notionId: 'ev-001' }],  // Commit 8.9.4: Skip paper evidence selection checkpoint
         sessionPhotos: [],
         photoAnalyses: { analyses: [] },
         preprocessedEvidence: mockPreprocessedEvidence,
@@ -621,6 +613,7 @@ describe('workflow integration', () => {
         directorNotes: { observations: [], playerFocus: {} },
         memoryTokens: [{ tokenId: 'test-001' }],
         paperEvidence: [{ notionId: 'ev-001' }],
+        selectedPaperEvidence: [{ notionId: 'ev-001' }],  // Commit 8.9.4: Skip paper evidence selection checkpoint
         sessionPhotos: [],
         photoAnalyses: { analyses: [] },
         preprocessedEvidence: mockPreprocessedEvidence,

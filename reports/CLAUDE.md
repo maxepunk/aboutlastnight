@@ -4,25 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ALN Director Console** - AI-powered case report generator for "About Last Night" using Claude Code CLI (Console MAX).
+**ALN Director Console** - AI-powered case report generator for "About Last Night" using Claude Agent SDK with LangGraph workflow.
 
-Generates detective-style case reports by:
-1. Fetching inventory items from Notion database
-2. Using Claude Haiku to analyze and summarize items (concurrent batching)
-3. Using Claude Sonnet/Opus to write final narrative reports
-4. Exporting styled HTML case files
+Generates detective/journalist-style case reports by:
+1. Fetching inventory items and evidence from Notion database
+2. Curating evidence bundle (memory tokens + paper evidence)
+3. Analyzing narrative arcs based on player focus
+4. Generating article outline and final HTML report
 
 **Production URL:** `https://console.aboutlastnightgame.com` (via Cloudflare Tunnel)
 
 ## Technology Stack
 
 - **Node.js/Express** - Backend server (`server.js`)
-- **Claude Code CLI** - AI operations via `claude` command
+- **Claude Agent SDK** - AI operations via `@anthropic-ai/claude-agent-sdk`
+- **LangGraph** - Workflow orchestration via `@langchain/langgraph`
 - **Notion API** - Inventory database
 - **Cloudflare Tunnel** - Remote access
 - **React** (inline in HTML) - Frontend UI (`detlogv3.html`)
 
-**Dependencies:** express, dotenv, express-session (only 3 packages)
+**Key Dependencies:** express, dotenv, express-session, @anthropic-ai/claude-agent-sdk, @langchain/langgraph
 
 ## Common Development Tasks
 
@@ -64,21 +65,23 @@ Generate session secret:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### Verifying Claude CLI
+### Verifying Claude Agent SDK
 
-```bash
-claude -p "Hello" --model haiku
-# If fails, run: claude /login
-```
+The server performs a health check at startup. If it fails:
+1. Ensure Claude Code is authenticated: `claude /login`
+2. Check network connectivity
+3. Run `npm install` to ensure SDK is installed
 
 ## Architecture
 
 ### Core Components
 
 ```
-server.js         - Express server, Claude CLI wrapper, API endpoints
-detlogv3.html     - React frontend (single-page app)
-.env              - Environment variables (NOT in git)
+server.js           - Express server, LangGraph workflow orchestration
+lib/sdk-client.js   - Claude Agent SDK wrapper
+lib/workflow/       - LangGraph nodes and state management
+detlogv3.html       - React frontend (single-page app)
+.env                - Environment variables (NOT in git)
 ```
 
 ### API Endpoints
@@ -88,70 +91,84 @@ detlogv3.html     - React frontend (single-page app)
 | `/api/auth/login` | POST | No | Password authentication |
 | `/api/auth/check` | GET | No | Session status |
 | `/api/auth/logout` | POST | No | End session |
-| `/api/analyze` | POST | Yes | Batch item analysis (Haiku) |
-| `/api/generate` | POST | Yes | Report generation (Sonnet/Opus) |
+| `/api/generate` | POST | Yes | LangGraph workflow orchestration |
 | `/api/config` | GET | Yes | Serve Notion token |
 | `/api/health` | GET | No | Server status |
 
-### Concurrent Batching Architecture
+### LangGraph Workflow Architecture
 
-**Problem Solved:** Cloudflare 100-second timeout on large-scale analysis
+The report generation uses a multi-phase LangGraph workflow with human-in-the-loop checkpoints:
 
-**Solution:**
-- 150+ items split into 8-item batches
-- 4 batches processed concurrently
-- Isolated temp directories prevent `.claude.json` conflicts
-- Total time: ~3 minutes (vs 12+ minutes sequential)
+**Phases:**
+1. **Fetch** - Load director notes, memory tokens, paper evidence, session photos
+2. **Curate** - Build evidence bundle with three-layer model
+3. **Analyze** - Generate narrative arcs from player focus (parallel specialists)
+4. **Outline** - Create article structure from selected arcs
+5. **Generate** - Write final HTML report
+6. **Validate** - Check article against quality requirements
 
-**Key Parameters:**
-```javascript
-// server.js line 351
-const MAX_BATCH_SIZE = 10;
+**Checkpoints (Human Approval):**
+- Evidence bundle approval
+- Arc selection (user picks which arcs to include)
+- Outline approval
 
-// detlogv3.html lines 1361-1362
-const BATCH_SIZE = 8;
-const CONCURRENCY = 4;
+**Key Files:**
+```
+lib/workflow/
+├── state.js              - State annotations, phases, approval types
+├── graph.js              - LangGraph StateGraph definition
+├── generation-supervisor.js - Parallel arc generation
+└── nodes/
+    ├── fetch-nodes.js    - Data loading from Notion/filesystem
+    ├── ai-nodes.js       - Claude SDK calls for content generation
+    ├── arc-specialist-nodes.js - Parallel arc analysis
+    └── evaluator-nodes.js - Quality validation
 ```
 
-### Claude CLI Integration
+### Claude Agent SDK Integration
 
-**Critical:** Prompts sent via stdin (not command-line args) to avoid Windows CLI length limits (~8KB).
+All AI operations use the Claude Agent SDK via `lib/sdk-client.js`:
 
 ```javascript
-// server.js callClaude()
-const claude = spawn('claude', args, { cwd: workDir });
-claude.stdin.write(prompt);
-claude.stdin.end();
+const { query } = require('@anthropic-ai/claude-agent-sdk');
+
+async function sdkQuery({ prompt, systemPrompt, model, jsonSchema }) {
+  for await (const msg of query({ prompt, options })) {
+    if (msg.type === 'result' && msg.subtype === 'success') {
+      return jsonSchema ? msg.structured_output : msg.result;
+    }
+  }
+}
 ```
 
-**Model-specific timeouts:**
-- Opus: 10 minutes
-- Sonnet: 5 minutes
-- Haiku: 2 minutes
+**Features:**
+- Direct SDK calls (no subprocess spawning)
+- Native structured output (no JSON extraction)
+- Built-in retry and error handling
+- Uses Claude Code authentication
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `server.js` | Backend - Claude CLI wrapper, all API endpoints |
-| `detlogv3.html` | Frontend - React UI, batch orchestration |
+| `server.js` | Backend - Express server, LangGraph orchestration |
+| `lib/sdk-client.js` | Claude Agent SDK wrapper |
+| `lib/workflow/graph.js` | LangGraph StateGraph definition |
+| `lib/workflow/nodes/` | Node implementations for each phase |
+| `detlogv3.html` | Frontend - React UI |
 | `.env` | Secrets (NOTION_TOKEN, ACCESS_PASSWORD, SESSION_SECRET) |
 | `start-everything.bat` | Launch server + tunnel together |
 
 ## Troubleshooting
 
-### "Claude CLI not available"
+### "Claude Agent SDK not available"
 ```bash
-claude --version  # Verify installation
-claude /login     # Re-authenticate if needed
+claude /login     # Ensure Claude Code is authenticated
+npm install       # Reinstall dependencies
 ```
 
 ### Port 3001 in use
-Edit `server.js` line 16: `const PORT = 3002;`
-
-### Timeout during analysis
-1. Reduce batch size: `BATCH_SIZE = 5` in detlogv3.html
-2. Reduce concurrency: `CONCURRENCY = 3` in detlogv3.html
+Edit `server.js` line 22: `const PORT = 3002;`
 
 ### Token not loading
 ```bash
@@ -160,17 +177,11 @@ curl http://localhost:3001/api/config  # Should return Notion token
 # Restart server after .env changes
 ```
 
-## Performance Tuning
-
-| Parameter | Location | Current | Effect |
-|-----------|----------|---------|--------|
-| Batch size | detlogv3.html:1361 | 8 | Items per API call |
-| Concurrency | detlogv3.html:1362 | 4 | Parallel batches |
-| Server batch limit | server.js:351 | 10 | Max items/request |
-
-**Trade-offs:**
-- Larger batch = faster total time, higher timeout risk
-- More concurrency = faster total time, higher server load
+### Workflow errors
+Check server console for phase-specific error messages. Common issues:
+- Missing session data files in `data/{sessionId}/inputs/`
+- Notion API connectivity (verify NOTION_TOKEN)
+- SDK authentication (run `claude /login`)
 
 ## Emailer Subdirectory
 

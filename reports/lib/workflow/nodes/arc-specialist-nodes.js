@@ -2,34 +2,46 @@
  * Arc Specialist Nodes - Orchestrated subagent analysis for report generation
  *
  * Commit 8.8: Replaces sequential 4-node pattern with single orchestrated node.
+ * Commit 8.9: Migrated to file-based specialist agents in .claude/agents/
  *
  * Previous pattern (Commit 8.6):
  * - 3 sequential specialist nodes (financial, behavioral, victimization)
  * - 1 synthesizer node to combine results
  * - Used mergeReducer for accumulating partial results
  *
- * New pattern (Commit 8.8):
+ * Pattern (Commit 8.8):
  * - 1 orchestrator node with access to 3 specialist subagents
  * - Orchestrator has rich context (game rules, voice, objectives)
  * - Orchestrator coordinates specialists intentionally
  * - Orchestrator synthesizes results cohesively
  * - Uses replaceReducer (returns complete object)
  *
+ * Pattern (Commit 8.9 - Current):
+ * - Specialists are file-based agents in .claude/agents/:
+ *   - journalist-financial-specialist
+ *   - journalist-behavioral-specialist
+ *   - journalist-victimization-specialist
+ * - Specialists load reference docs (character-voice.md, evidence-boundaries.md, anti-patterns.md)
+ * - Orchestrator invokes specialists via Task tool
+ * - File-based agents are auto-discovered by Claude Code
+ *
  * Benefits:
  * - Orchestrator maintains narrative coherence
  * - Better alignment with player focus (Layer 3 drives)
  * - Parallel execution via SDK subagent Task tool
  * - Single node simplifies graph structure
+ * - Specialists load reference docs at runtime (not hardcoded prompts)
  *
- * See ARCHITECTURE_DECISIONS.md 8.8 for design rationale.
+ * See ARCHITECTURE_DECISIONS.md 8.8/8.9 for design rationale.
  */
 
 const { PHASES, APPROVAL_TYPES } = require('../state');
-// Note: getSdkClient not used - orchestrator requires direct SDK access for subagents
+// Commit 8.9: Specialists are now file-based agents in .claude/agents/
 const {
-  ARC_SPECIALIST_SUBAGENTS,
+  SPECIALIST_AGENT_NAMES,
   ORCHESTRATOR_SYSTEM_PROMPT,
-  ORCHESTRATOR_OUTPUT_SCHEMA
+  ORCHESTRATOR_OUTPUT_SCHEMA,
+  ARC_SPECIALIST_SUBAGENTS  // Deprecated but kept for test compatibility
 } = require('../../sdk-client/subagents');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -122,15 +134,19 @@ ${preprocessedEvidence.items?.length > 20 ? `... and ${preprocessedEvidence.item
 INSTRUCTIONS
 ═══════════════════════════════════════════════════════════════════════════
 
-1. Use the financial-specialist subagent to analyze financial patterns
-2. Use the behavioral-specialist subagent to analyze behavioral patterns
-3. Use the victimization-specialist subagent to analyze targeting patterns
-4. Synthesize all specialist findings into 3-5 narrative arcs
+Use the Task tool to invoke these specialist agents (they load reference docs automatically):
+
+1. Task(subagent_type="${SPECIALIST_AGENT_NAMES.financial}") - analyze financial patterns
+2. Task(subagent_type="${SPECIALIST_AGENT_NAMES.behavioral}") - analyze behavioral patterns
+3. Task(subagent_type="${SPECIALIST_AGENT_NAMES.victimization}") - analyze targeting patterns
+
+After collecting specialist analyses, synthesize into 3-5 narrative arcs.
 
 Remember:
 - Layer 3 (player focus/whiteboard) DRIVES narrative priority
 - Every roster member must have a placement
-- Cross-reference specialist findings for stronger arcs`;
+- Cross-reference specialist findings for stronger arcs
+- Specialists will load character-voice.md, evidence-boundaries.md, anti-patterns.md`;
 }
 
 /**
@@ -210,8 +226,8 @@ async function analyzeArcsWithSubagents(state, config) {
   try {
     console.log('[analyzeArcsWithSubagents] Invoking orchestrator with subagents');
 
-    // Call SDK with subagent definitions
-    // The orchestrator will use Task tool to invoke specialists
+    // Call SDK - orchestrator uses Task tool to invoke file-based specialist agents
+    // Commit 8.9: Removed agents parameter - specialists are file-based in .claude/agents/
     let result = null;
 
     for await (const msg of query({
@@ -219,12 +235,12 @@ async function analyzeArcsWithSubagents(state, config) {
       options: {
         model: 'sonnet',
         systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
-        agents: ARC_SPECIALIST_SUBAGENTS,
+        // File-based agents are auto-discovered, no agents parameter needed
         outputFormat: {
           type: 'json_schema',
           schema: ORCHESTRATOR_OUTPUT_SCHEMA
         },
-        allowedTools: ['Task'],  // Task tool required for subagent invocation
+        allowedTools: ['Task'],  // Task tool for invoking file-based specialist agents
         permissionMode: 'bypassPermissions'
       }
     })) {
@@ -459,9 +475,11 @@ module.exports = {
   _testing: {
     buildOrchestratorPrompt,
     createEmptyAnalysisResult,
-    ARC_SPECIALIST_SUBAGENTS,
+    SPECIALIST_AGENT_NAMES,
     ORCHESTRATOR_SYSTEM_PROMPT,
-    ORCHESTRATOR_OUTPUT_SCHEMA
+    ORCHESTRATOR_OUTPUT_SCHEMA,
+    // Deprecated but kept for test backwards compatibility
+    ARC_SPECIALIST_SUBAGENTS
   }
 };
 
