@@ -56,6 +56,121 @@ function clearThreadCheckpoints(checkpointer, threadId) {
         writeKeysToDelete.forEach(k => checkpointer.writes.delete(k));
     }
 }
+
+/**
+ * Get session state from checkpointer without invoking the graph
+ * Used by read-only endpoints to inspect state at any checkpoint
+ * @param {string} sessionId - The session/thread ID
+ * @returns {object|null} - { checkpointId, timestamp, state } or null if not found
+ */
+async function getSessionState(sessionId) {
+    const config = { configurable: { thread_id: sessionId } };
+    const tuple = await sharedCheckpointer.getTuple(config);
+
+    if (!tuple) return null;
+
+    return {
+        checkpointId: tuple.checkpoint?.id,
+        timestamp: tuple.checkpoint?.ts,
+        state: tuple.checkpoint?.channel_values || {}
+    };
+}
+
+/**
+ * Build response data for a specific approval type (DRY helper)
+ * Extracts relevant fields from state based on checkpoint type
+ * @param {string} approvalType - The approval type constant
+ * @param {object} state - The current state object
+ * @returns {object} - Checkpoint-specific data for response
+ */
+function getApprovalData(approvalType, state) {
+    switch (approvalType) {
+        case APPROVAL_TYPES.INPUT_REVIEW:
+            return {
+                parsedInput: state._parsedInput,
+                sessionConfig: state.sessionConfig,
+                directorNotes: state.directorNotes,
+                playerFocus: state.playerFocus
+            };
+        case APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION:
+            return { paperEvidence: state.paperEvidence };
+        case APPROVAL_TYPES.CHARACTER_IDS:
+            return {
+                sessionPhotos: state.sessionPhotos,
+                photoAnalyses: state.photoAnalyses,
+                sessionConfig: state.sessionConfig
+            };
+        case APPROVAL_TYPES.EVIDENCE_BUNDLE:
+            return { evidenceBundle: state.evidenceBundle };
+        case APPROVAL_TYPES.ARC_SELECTION:
+            return { narrativeArcs: state.narrativeArcs };
+        case APPROVAL_TYPES.OUTLINE:
+            return { outline: state.outline };
+        case APPROVAL_TYPES.ARTICLE:
+            return {
+                contentBundle: state.contentBundle,
+                articleHtml: state.assembledHtml
+            };
+        default:
+            return {};
+    }
+}
+
+/**
+ * Build state updates from approval decisions (DRY helper)
+ * Used by /api/generate and /api/session/:id/approve endpoints
+ * @param {object} approvals - Approval decisions from request body
+ * @returns {object} - { state: updates to apply, error: validation error or null }
+ */
+function buildApprovalState(approvals) {
+    const updates = { awaitingApproval: false };
+    let error = null;
+
+    // Input review approval
+    if (approvals.inputReview === true) {
+        if (approvals.inputEdits) {
+            updates._inputEdits = approvals.inputEdits;
+        }
+    }
+
+    // Paper evidence selection
+    if (approvals.selectedPaperEvidence && Array.isArray(approvals.selectedPaperEvidence)) {
+        updates.selectedPaperEvidence = approvals.selectedPaperEvidence;
+    }
+
+    // Character ID mappings (two input formats supported)
+    if (approvals.characterIdsRaw && typeof approvals.characterIdsRaw === 'string') {
+        updates.characterIdsRaw = approvals.characterIdsRaw;
+    } else if (approvals.characterIds && typeof approvals.characterIds === 'object') {
+        updates.characterIdMappings = approvals.characterIds;
+    }
+
+    // Evidence bundle approval (boolean)
+    // Just clears awaitingApproval which is already done above
+
+    // Arc selection with validation
+    if (approvals.selectedArcs) {
+        if (!Array.isArray(approvals.selectedArcs) || approvals.selectedArcs.length === 0) {
+            error = 'selectedArcs must be a non-empty array';
+        } else {
+            updates.selectedArcs = approvals.selectedArcs;
+        }
+    }
+
+    // Outline approval (boolean)
+    // Just clears awaitingApproval
+
+    // Article approval (boolean)
+    // Just clears awaitingApproval
+
+    return { state: updates, error };
+}
+
+/**
+ * Valid theme values for validation
+ */
+const VALID_THEMES = ['journalist', 'detective'];
+
 const { isClaudeAvailable } = require('./lib/sdk-client');
 
 const app = express();
@@ -440,6 +555,443 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     }
 });
 
+// ===== SESSION STATE ENDPOINTS (8.9.7) =====
+// Read-only endpoints for inspecting state without advancing workflow
+
+/**
+ * GET /api/session/:id
+ * Get summary of current session state (phase, checkpoint status, counts)
+ */
+app.get('/api/session/:id', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        const state = session.state;
+
+        res.json({
+            sessionId,
+            exists: true,
+            checkpoint: {
+                id: session.checkpointId,
+                timestamp: session.timestamp,
+                currentPhase: state.currentPhase,
+                awaitingApproval: state.awaitingApproval || false,
+                approvalType: state.approvalType || null
+            },
+            counts: {
+                memoryTokens: state.memoryTokens?.length || 0,
+                paperEvidence: state.paperEvidence?.length || 0,
+                sessionPhotos: state.sessionPhotos?.length || 0,
+                photoAnalyses: state.photoAnalyses?.length || 0,
+                narrativeArcs: state.narrativeArcs?.length || 0
+            },
+            errors: state.errors || []
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId} error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/session/:id/state
+ * Get full state object for debugging
+ */
+app.get('/api/session/:id/state', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        res.json({
+            sessionId,
+            checkpointId: session.checkpointId,
+            timestamp: session.timestamp,
+            state: session.state
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/state error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/session/:id/evidence
+ * Get evidence bundle (available after Phase 1.8)
+ */
+app.get('/api/session/:id/evidence', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        const state = session.state;
+        const phaseNum = parseFloat(state.currentPhase || '0');
+
+        res.json({
+            sessionId,
+            available: phaseNum >= 1.8 && !!state.evidenceBundle,
+            evidenceBundle: state.evidenceBundle || null
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/evidence error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/session/:id/arcs
+ * Get narrative arcs (available after Phase 2.3)
+ */
+app.get('/api/session/:id/arcs', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        const state = session.state;
+        const phaseNum = parseFloat(state.currentPhase || '0');
+
+        res.json({
+            sessionId,
+            available: phaseNum >= 2.3 && !!state.narrativeArcs,
+            narrativeArcs: state.narrativeArcs || null,
+            selectedArcs: state.selectedArcs || null
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/arcs error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/session/:id/outline
+ * Get article outline (available after Phase 3.2)
+ */
+app.get('/api/session/:id/outline', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        const state = session.state;
+        const phaseNum = parseFloat(state.currentPhase || '0');
+
+        res.json({
+            sessionId,
+            available: phaseNum >= 3.2 && !!state.outline,
+            outline: state.outline || null
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/outline error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/session/:id/article
+ * Get generated article (available after Phase 4.2)
+ */
+app.get('/api/session/:id/article', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        const state = session.state;
+        const phaseNum = parseFloat(state.currentPhase || '0');
+
+        res.json({
+            sessionId,
+            available: phaseNum >= 4.2 && !!state.contentBundle,
+            contentBundle: state.contentBundle || null,
+            articleHtml: state.assembledHtml || null
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/article error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ===== SESSION ACTION ENDPOINTS (8.9.7) =====
+
+/**
+ * POST /api/session/:id/start
+ * Start a fresh workflow with raw session input
+ */
+app.post('/api/session/:id/start', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+    const { theme = 'journalist', rawSessionInput } = req.body;
+
+    // Validate theme
+    if (!VALID_THEMES.includes(theme)) {
+        return res.status(400).json({
+            error: `Invalid theme: ${theme}. Use 'journalist' or 'detective'.`
+        });
+    }
+
+    // Validate required fields
+    if (!rawSessionInput) {
+        return res.status(400).json({ error: 'rawSessionInput is required' });
+    }
+
+    const requiredFields = ['roster', 'accusation', 'sessionReport', 'directorNotes'];
+    const missingFields = requiredFields.filter(f => !rawSessionInput[f]);
+    if (missingFields.length > 0) {
+        return res.status(400).json({
+            error: `rawSessionInput missing required fields: ${missingFields.join(', ')}`
+        });
+    }
+
+    console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start: theme=${theme}`);
+
+    try {
+        // Clear existing checkpoints for fresh start
+        clearThreadCheckpoints(sharedCheckpointer, sessionId);
+
+        // Use shared graph
+        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
+        const config = {
+            configurable: {
+                sessionId,
+                theme,
+                thread_id: sessionId
+            }
+        };
+
+        // Start with raw input
+        const initialState = { rawSessionInput };
+        const result = await graph.invoke(initialState, config);
+
+        // Build response with checkpoint data
+        const response = {
+            sessionId,
+            currentPhase: result.currentPhase,
+            awaitingApproval: result.awaitingApproval || false,
+            approvalType: result.approvalType || null
+        };
+
+        // Add approval-specific data using DRY helper
+        if (result.awaitingApproval && result.approvalType) {
+            Object.assign(response, getApprovalData(result.approvalType, result));
+        }
+
+        res.json(response);
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start error:`, error);
+        res.status(500).json({
+            sessionId,
+            currentPhase: PHASES.ERROR,
+            error: error.message,
+            details: 'Session start failed. Check server logs.'
+        });
+    }
+});
+
+/**
+ * POST /api/session/:id/approve
+ * Approve current checkpoint and advance workflow
+ */
+app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+    const approvals = req.body;
+
+    console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve:`, JSON.stringify(approvals));
+
+    try {
+        // Check current state first
+        const session = await getSessionState(sessionId);
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
+        }
+
+        const state = session.state;
+        if (!state.awaitingApproval) {
+            return res.status(400).json({
+                sessionId,
+                error: 'Session is not awaiting approval',
+                currentPhase: state.currentPhase
+            });
+        }
+
+        // Use buildApprovalState helper (DRY)
+        const { state: approvalState, error: validationError } = buildApprovalState(approvals);
+        if (validationError) {
+            return res.status(400).json({ sessionId, error: validationError });
+        }
+
+        // Use theme from session state (not hardcoded)
+        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
+        const config = {
+            configurable: {
+                sessionId,
+                theme: state.theme || 'journalist',
+                thread_id: sessionId
+            }
+        };
+
+        const result = await graph.invoke(approvalState, config);
+
+        // Build response
+        const response = {
+            sessionId,
+            previousPhase: state.currentPhase,
+            currentPhase: result.currentPhase,
+            awaitingApproval: result.awaitingApproval || false,
+            approvalType: result.approvalType || null
+        };
+
+        // Add approval-specific data using DRY helper
+        if (result.awaitingApproval && result.approvalType) {
+            Object.assign(response, getApprovalData(result.approvalType, result));
+        }
+
+        // Include completion data
+        if (result.currentPhase === PHASES.COMPLETE) {
+            response.assembledHtml = result.assembledHtml;
+            response.validationResults = result.validationResults;
+        }
+
+        // Include errors
+        if (result.errors?.length > 0) {
+            response.errors = result.errors;
+        }
+
+        res.json(response);
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve error:`, error);
+        res.status(500).json({
+            sessionId,
+            currentPhase: PHASES.ERROR,
+            error: error.message,
+            details: 'Approval operation failed. Check server logs.'
+        });
+    }
+});
+
+/**
+ * POST /api/session/:id/rollback
+ * Rollback to a specific checkpoint
+ */
+app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+    const { rollbackTo, stateOverrides } = req.body;
+
+    // Validate rollbackTo
+    if (!rollbackTo) {
+        return res.status(400).json({ error: 'rollbackTo is required' });
+    }
+    if (!VALID_ROLLBACK_POINTS.includes(rollbackTo)) {
+        return res.status(400).json({
+            error: `Invalid rollbackTo: '${rollbackTo}'. Valid values: ${VALID_ROLLBACK_POINTS.join(', ')}`
+        });
+    }
+
+    console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/rollback: rollbackTo=${rollbackTo}`);
+
+    try {
+        // Check current state first
+        const session = await getSessionState(sessionId);
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
+        }
+
+        // Use theme from session state (not hardcoded)
+        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
+        const config = {
+            configurable: {
+                sessionId,
+                theme: session.state.theme || 'journalist',
+                thread_id: sessionId
+            }
+        };
+
+        // Build rollback state
+        let initialState = {};
+
+        // Clear fields from this checkpoint forward
+        const fieldsToClear = ROLLBACK_CLEARS[rollbackTo];
+        fieldsToClear.forEach(field => {
+            initialState[field] = null;
+        });
+
+        // Reset revision counters
+        const counterResets = ROLLBACK_COUNTER_RESETS[rollbackTo];
+        Object.assign(initialState, counterResets);
+
+        // Clear approval state
+        initialState.awaitingApproval = false;
+        initialState.approvalType = null;
+
+        // Apply overrides
+        if (stateOverrides) {
+            Object.assign(initialState, stateOverrides);
+        }
+
+        const result = await graph.invoke(initialState, config);
+
+        // Build response with approval data (same pattern as /start and /approve)
+        const response = {
+            sessionId,
+            rolledBackTo: rollbackTo,
+            currentPhase: result.currentPhase,
+            awaitingApproval: result.awaitingApproval || false,
+            approvalType: result.approvalType || null,
+            fieldsCleared: fieldsToClear
+        };
+
+        // Add approval-specific data using DRY helper
+        if (result.awaitingApproval && result.approvalType) {
+            Object.assign(response, getApprovalData(result.approvalType, result));
+        }
+
+        res.json(response);
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/rollback error:`, error);
+        res.status(500).json({
+            sessionId,
+            currentPhase: PHASES.ERROR,
+            error: error.message,
+            details: 'Rollback operation failed. Check server logs.'
+        });
+    }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({
@@ -453,6 +1005,17 @@ app.get('/api/health', (req, res) => {
                 login: '/api/auth/login (POST)',
                 check: '/api/auth/check (GET)',
                 logout: '/api/auth/logout (POST)'
+            },
+            session: {
+                summary: '/api/session/:id (GET)',
+                state: '/api/session/:id/state (GET)',
+                evidence: '/api/session/:id/evidence (GET)',
+                arcs: '/api/session/:id/arcs (GET)',
+                outline: '/api/session/:id/outline (GET)',
+                article: '/api/session/:id/article (GET)',
+                start: '/api/session/:id/start (POST)',
+                approve: '/api/session/:id/approve (POST)',
+                rollback: '/api/session/:id/rollback (POST)'
             }
         }
     });
