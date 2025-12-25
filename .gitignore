@@ -35,3 +35,24 @@ node_modules/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Reports - session data and temp files (NOT generated reports)
+reports/data/
+reports/sessionphotos/
+sessionphotos/
+reports/.claude/
+cookies.txt
+reports/cookies.txt
+*cookies.txt
+nul
+reports/nul
+
+# Debug/scratch files
+reports/test-*
+reports/*-debug.md
+reports/scripts/investigate-*.js
+reports/background*.md
+reports/script*.md
+
+# Emailer - recipient lists contain PII
+reports/emailer/recipients_*.csv

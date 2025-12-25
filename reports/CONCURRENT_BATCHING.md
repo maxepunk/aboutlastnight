@@ -1,5 +1,14 @@
 # Concurrent Batching Architecture
 
+> **⚠️ DEPRECATED (Commit 8.7)**: This document describes the legacy subprocess-based architecture.
+> The system now uses **Claude Agent SDK with LangGraph workflow**.
+> Batching is handled by `preprocess-nodes.js` with SDK calls, not subprocess spawning.
+> See `CLAUDE.md` for current architecture.
+
+---
+
+**Historical Context (Pre-Commit 8.7)**
+
 **Implemented:** 2025-11-23
 **Problem Solved:** Cloudflare 100-second timeout on large-scale analysis
 
