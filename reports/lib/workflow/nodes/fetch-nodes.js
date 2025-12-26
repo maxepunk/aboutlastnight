@@ -186,41 +186,70 @@ async function fetchMemoryTokens(state, config) {
   // EVIDENCE BOUNDARY: Tag each token with disposition
   // ─────────────────────────────────────────────────────
 
-  // Get exposed/buried token lists from parsed input
-  // These come from orchestrator-parsed.json created by parseRawInput
-  const orchestratorParsed = state._parsedInput?.orchestratorParsed || {};
+  // Load orchestrator-parsed.json directly from files
+  // Files are the source of truth (LangGraph doesn't persist _parsedInput)
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const orchestratorPath = path.join(dataDir, state.sessionId, 'inputs', 'orchestrator-parsed.json');
+  let orchestratorParsed = {};
+  try {
+    const orchestratorContent = await fs.readFile(orchestratorPath, 'utf-8');
+    orchestratorParsed = JSON.parse(orchestratorContent);
+  } catch (err) {
+    // File doesn't exist - that's okay, disposition will be 'unknown' for all tokens
+    console.log(`[fetchMemoryTokens] No orchestrator-parsed.json found`);
+  }
+
   const exposedTokenIds = new Set(
     (orchestratorParsed.exposedTokens || []).map(id => id.toLowerCase())
   );
-  const buriedTokenIds = new Set(
-    (orchestratorParsed.buriedTokens || []).map(t =>
-      (typeof t === 'string' ? t : t.tokenId).toLowerCase()
-    )
-  );
+
+  // Build a map for buried tokens to include transaction metadata
+  const buriedTokensMap = new Map();
+  for (const t of (orchestratorParsed.buriedTokens || [])) {
+    const tokenId = (typeof t === 'string' ? t : t.tokenId).toLowerCase();
+    buriedTokensMap.set(tokenId, {
+      shellAccount: t.shellAccount || null,
+      amount: t.amount || null,
+      sessionTransactionTime: t.time || null
+    });
+  }
 
   // Debug: Show what IDs we're looking for
-  if (exposedTokenIds.size > 0 || buriedTokenIds.size > 0) {
+  if (exposedTokenIds.size > 0 || buriedTokensMap.size > 0) {
     console.log(`[fetchMemoryTokens] Looking for exposed: [${[...exposedTokenIds].slice(0, 5).join(', ')}${exposedTokenIds.size > 5 ? '...' : ''}]`);
-    console.log(`[fetchMemoryTokens] Looking for buried: [${[...buriedTokenIds].slice(0, 5).join(', ')}${buriedTokenIds.size > 5 ? '...' : ''}]`);
+    console.log(`[fetchMemoryTokens] Looking for buried: [${[...buriedTokensMap.keys()].slice(0, 5).join(', ')}${buriedTokensMap.size > 5 ? '...' : ''}]`);
     // Show sample token IDs from Notion
     const sampleTokenIds = tokens.slice(0, 5).map(t => t.tokenId || t.id || 'no-id');
     console.log(`[fetchMemoryTokens] Sample Notion token IDs: [${sampleTokenIds.join(', ')}]`);
   }
 
-  // Tag each token with its disposition
+  // Tag each token with its disposition and transaction metadata (for buried tokens)
   const taggedTokens = tokens.map(token => {
     const tokenIdLower = (token.tokenId || token.id || '').toLowerCase();
 
-    let disposition = 'unknown';
     if (exposedTokenIds.has(tokenIdLower)) {
-      disposition = 'exposed';
-    } else if (buriedTokenIds.has(tokenIdLower)) {
-      disposition = 'buried';
+      return {
+        ...token,
+        disposition: 'exposed'
+      };
+    }
+
+    const buriedMeta = buriedTokensMap.get(tokenIdLower);
+    if (buriedMeta) {
+      // Attach transaction metadata for buried tokens
+      // This enables curateEvidenceBundle to create proper buried.transactions entries
+      return {
+        ...token,
+        disposition: 'buried',
+        shellAccount: buriedMeta.shellAccount,
+        transactionAmount: buriedMeta.amount,
+        sessionTransactionTime: buriedMeta.sessionTransactionTime
+      };
     }
 
     return {
       ...token,
-      disposition
+      disposition: 'unknown'
     };
   });
 
