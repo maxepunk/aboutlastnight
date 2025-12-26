@@ -201,9 +201,10 @@ function createEvidencePreprocessor(options = {}) {
     const startTime = Date.now();
 
     // Normalize all items into common format for batching
+    // NOTE: Memory tokens use tokenId (game ID like "alr001"), paper evidence uses notionId
     const allItems = [
       ...memoryTokens.map(token => ({
-        id: token.id,
+        id: token.tokenId || token.notionId || token.id, // tokenId is primary (matches orchestrator-parsed)
         sourceType: 'memory-token',
         originalType: token.type || 'Memory Token',
         disposition: token.disposition || 'unknown', // exposed | buried | unknown
@@ -216,7 +217,7 @@ function createEvidencePreprocessor(options = {}) {
       // Previously paper evidence had no disposition field, causing it to be misclassified
       // in the curation step which only checked the disposition field.
       ...paperEvidence.map(evidence => ({
-        id: evidence.id,
+        id: evidence.notionId || evidence.id, // notionId is the Notion page ID
         sourceType: 'paper-evidence',
         originalType: evidence.type || 'Paper Evidence',
         disposition: 'exposed', // Paper evidence was unlocked by players during gameplay
