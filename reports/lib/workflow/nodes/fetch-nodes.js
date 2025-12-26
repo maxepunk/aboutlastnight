@@ -83,31 +83,12 @@ async function initializeSession(state, config) {
  * @returns {Object} Partial state update with directorNotes, sessionConfig, playerFocus, _parsedInput, currentPhase
  */
 async function loadDirectorNotes(state, config) {
-  // Skip if already loaded (resume case or pre-populated)
-  if (state.directorNotes && Object.keys(state.directorNotes).length > 0) {
-    console.log('[loadDirectorNotes] Skipping - directorNotes already loaded');
-    return {
-      currentPhase: PHASES.FETCH_TOKENS
-    };
-  }
-
-  console.log('[loadDirectorNotes] Loading from files...');
-
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
   const sessionPath = path.join(dataDir, state.sessionId, 'inputs');
 
-  // Load director notes
-  const notesPath = path.join(sessionPath, 'director-notes.json');
-  const notesContent = await fs.readFile(notesPath, 'utf-8');
-  const directorNotes = JSON.parse(notesContent);
-
-  // Load session config
-  const configPath = path.join(sessionPath, 'session-config.json');
-  const configContent = await fs.readFile(configPath, 'utf-8');
-  const sessionConfig = JSON.parse(configContent);
-
-  // Load orchestrator-parsed for disposition data (COMMIT 8.10 FIX)
-  // This contains exposedTokens and buriedTokens lists from session report parsing
+  // Always load orchestrator-parsed for disposition data
+  // This is needed by fetchMemoryTokens regardless of whether we skip other loading
+  // Files are the source of truth (survives server restart, works for both fresh and resume)
   let orchestratorParsed = {};
   const orchestratorPath = path.join(sessionPath, 'orchestrator-parsed.json');
   try {
@@ -118,6 +99,30 @@ async function loadDirectorNotes(state, config) {
     // File doesn't exist - that's okay, disposition will be 'unknown' for all tokens
     console.log(`[loadDirectorNotes] No orchestrator-parsed.json found (optional)`);
   }
+
+  // Skip full loading if already loaded (resume case or pre-populated by parseRawInput)
+  // But still return _parsedInput for fetchMemoryTokens disposition tagging
+  if (state.directorNotes && Object.keys(state.directorNotes).length > 0) {
+    console.log('[loadDirectorNotes] Skipping full load - directorNotes already in state');
+    return {
+      _parsedInput: {
+        orchestratorParsed
+      },
+      currentPhase: PHASES.FETCH_TOKENS
+    };
+  }
+
+  console.log('[loadDirectorNotes] Loading from files...');
+
+  // Load director notes
+  const notesPath = path.join(sessionPath, 'director-notes.json');
+  const notesContent = await fs.readFile(notesPath, 'utf-8');
+  const directorNotes = JSON.parse(notesContent);
+
+  // Load session config
+  const configPath = path.join(sessionPath, 'session-config.json');
+  const configContent = await fs.readFile(configPath, 'utf-8');
+  const sessionConfig = JSON.parse(configContent);
 
   // Extract player focus (Layer 3 drives narrative per plan)
   // If missing, synthesize from available data (backwards compatibility)
