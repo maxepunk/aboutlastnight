@@ -239,7 +239,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 32 state fields (Commit 8.9)', () => {
+    it('includes all 33 state fields (Commit 8.9.x)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -258,6 +258,7 @@ describe('ReportStateAnnotation', () => {
         // Photo analysis (Commit 8.6)
         'photoAnalyses',
         'characterIdMappings',
+        'characterIdsRaw',  // Commit 8.9.x
         // Preprocessed data (Commit 8.5)
         'preprocessedEvidence',
         // Curated data
@@ -493,8 +494,8 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 30 phases (Commit 8.9.5 - Character IDs)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(30);
+    it('defines exactly 31 phases (Commit 8.9.8 - Phase additions)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(31);
     });
 
     it('defines input parsing phases (Commit 8.9)', () => {
@@ -526,10 +527,6 @@ describe('ReportStateAnnotation', () => {
   });
 
   describe('APPROVAL_TYPES constant', () => {
-    it('defines EVIDENCE_BUNDLE type', () => {
-      expect(APPROVAL_TYPES.EVIDENCE_BUNDLE).toBe('evidence-bundle');
-    });
-
     it('defines ARC_SELECTION type', () => {
       expect(APPROVAL_TYPES.ARC_SELECTION).toBe('arc-selection');
     });
@@ -550,8 +547,8 @@ describe('ReportStateAnnotation', () => {
       expect(APPROVAL_TYPES.ARTICLE).toBe('article');
     });
 
-    it('defines exactly 8 approval types (Commit 8.9)', () => {
-      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(8);
+    it('defines exactly 7 approval types (Commit 8.9.x)', () => {
+      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(7);
     });
 
     it('defines input review approval type (Commit 8.9)', () => {
@@ -611,7 +608,7 @@ describe('ReportStateAnnotation', () => {
         'input-review',
         'paper-evidence-selection',
         'character-ids',
-        'evidence-bundle',
+        'evidence-and-photos',
         'arc-selection',
         'outline',
         'article'

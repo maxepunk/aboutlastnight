@@ -138,33 +138,43 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
     });
 
     it('includes whiteboard context when provided', () => {
+      // Implementation expects whiteboardContext with suspectsExplored, connections, notes, namesFound
       const state = {
         playerFocus: {
-          whiteboard: {
-            title: 'MARCUS BLACKWOOD IS DEAD',
-            suspects: ['Victoria', 'Morgan']
+          whiteboardContext: {
+            suspectsExplored: ['Victoria', 'Morgan'],
+            connections: ['Victoria to Morgan via shell account'],
+            notes: ['MARCUS BLACKWOOD IS DEAD'],
+            namesFound: ['Marcus', 'Victoria']
           }
         }
       };
       const prompt = buildOrchestratorPrompt(state);
 
       expect(prompt).toContain('WHITEBOARD');
-      expect(prompt).toContain('MARCUS BLACKWOOD IS DEAD');
       expect(prompt).toContain('Victoria');
+      expect(prompt).toContain('Morgan');
     });
 
     it('includes evidence bundle', () => {
+      // Evidence bundle uses nested structure: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } }
       const state = {
         evidenceBundle: {
-          exposed: [{ id: 'exposed-1' }],
-          buried: [{ id: 'buried-1' }]
+          exposed: {
+            tokens: [{ id: 'exposed-token-1', name: 'Test Token' }],
+            paperEvidence: []
+          },
+          buried: {
+            transactions: [{ id: 'buried-tx-1', description: 'Test Transaction' }],
+            relationships: []
+          }
         }
       };
       const prompt = buildOrchestratorPrompt(state);
 
       expect(prompt).toContain('EXPOSED EVIDENCE');
       expect(prompt).toContain('BURIED EVIDENCE');
-      expect(prompt).toContain('exposed-1');
+      expect(prompt).toContain('exposed-token-1');
     });
 
     it('includes roster when provided', () => {

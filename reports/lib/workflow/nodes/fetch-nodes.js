@@ -68,13 +68,19 @@ async function initializeSession(state, config) {
  * Reads from the session's inputs directory:
  * - director-notes.json: Observations, whiteboard, accusation context
  * - session-config.json: Roster, session metadata
+ * - orchestrator-parsed.json: Exposed/buried token lists (for disposition tagging)
  *
  * Extracts playerFocus from director notes for downstream arc analysis.
  * If playerFocus is missing (legacy files), synthesizes it from available data.
  *
+ * COMMIT 8.10 FIX: Also loads orchestrator-parsed.json and populates _parsedInput
+ * so that fetchMemoryTokens can access exposed/buried token lists for disposition
+ * tagging. Previously this data was only available when parseRawInput ran (fresh mode),
+ * causing all tokens to be tagged 'unknown' on resume.
+ *
  * @param {Object} state - Current state with sessionId
  * @param {Object} config - Graph config with optional configurable.dataDir
- * @returns {Object} Partial state update with directorNotes, sessionConfig, playerFocus, currentPhase
+ * @returns {Object} Partial state update with directorNotes, sessionConfig, playerFocus, _parsedInput, currentPhase
  */
 async function loadDirectorNotes(state, config) {
   // Skip if already loaded (resume case or pre-populated)
@@ -100,6 +106,19 @@ async function loadDirectorNotes(state, config) {
   const configContent = await fs.readFile(configPath, 'utf-8');
   const sessionConfig = JSON.parse(configContent);
 
+  // Load orchestrator-parsed for disposition data (COMMIT 8.10 FIX)
+  // This contains exposedTokens and buriedTokens lists from session report parsing
+  let orchestratorParsed = {};
+  const orchestratorPath = path.join(sessionPath, 'orchestrator-parsed.json');
+  try {
+    const orchestratorContent = await fs.readFile(orchestratorPath, 'utf-8');
+    orchestratorParsed = JSON.parse(orchestratorContent);
+    console.log(`[loadDirectorNotes] Loaded orchestratorParsed: ${orchestratorParsed.exposedTokens?.length || 0} exposed, ${orchestratorParsed.buriedTokens?.length || 0} buried`);
+  } catch (err) {
+    // File doesn't exist - that's okay, disposition will be 'unknown' for all tokens
+    console.log(`[loadDirectorNotes] No orchestrator-parsed.json found (optional)`);
+  }
+
   // Extract player focus (Layer 3 drives narrative per plan)
   // If missing, synthesize from available data (backwards compatibility)
   let playerFocus = directorNotes.playerFocus;
@@ -113,6 +132,10 @@ async function loadDirectorNotes(state, config) {
     directorNotes,
     sessionConfig,
     playerFocus,
+    // Store orchestratorParsed for fetchMemoryTokens disposition tagging
+    _parsedInput: {
+      orchestratorParsed
+    },
     currentPhase: PHASES.FETCH_TOKENS
   };
 }
@@ -169,6 +192,15 @@ async function fetchMemoryTokens(state, config) {
       (typeof t === 'string' ? t : t.tokenId).toLowerCase()
     )
   );
+
+  // Debug: Show what IDs we're looking for
+  if (exposedTokenIds.size > 0 || buriedTokenIds.size > 0) {
+    console.log(`[fetchMemoryTokens] Looking for exposed: [${[...exposedTokenIds].slice(0, 5).join(', ')}${exposedTokenIds.size > 5 ? '...' : ''}]`);
+    console.log(`[fetchMemoryTokens] Looking for buried: [${[...buriedTokenIds].slice(0, 5).join(', ')}${buriedTokenIds.size > 5 ? '...' : ''}]`);
+    // Show sample token IDs from Notion
+    const sampleTokenIds = tokens.slice(0, 5).map(t => t.tokenId || t.id || 'no-id');
+    console.log(`[fetchMemoryTokens] Sample Notion token IDs: [${sampleTokenIds.join(', ')}]`);
+  }
 
   // Tag each token with its disposition
   const taggedTokens = tokens.map(token => {

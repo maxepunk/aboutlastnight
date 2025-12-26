@@ -215,8 +215,7 @@ describe('workflow integration', () => {
       const result = await graph.invoke(initialState, config);
 
       expect(result.awaitingApproval).toBe(true);
-      // Commit 8.6: evidence curation still sets EVIDENCE_BUNDLE approval type
-      expect([APPROVAL_TYPES.EVIDENCE_BUNDLE, APPROVAL_TYPES.EVIDENCE_AND_PHOTOS]).toContain(result.approvalType);
+      expect(result.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS);
       expect(result.evidenceBundle).toBeDefined();
       expect(result.currentPhase).toBe(PHASES.CURATE_EVIDENCE);
     });

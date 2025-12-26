@@ -19,8 +19,8 @@
       <span class="account-row__name">{{description}}</span>
       <span class="account-row__amount">{{amount}}</span>
       <div class="account-row__bar-container">
-        {{!-- Bar width calculated as percentage of max --}}
-        <div class="account-row__bar" style="width: {{@root.barWidth}}%"></div>
+        {{!-- Bar width calculated as percentage of max by template-assembler --}}
+        <div class="account-row__bar" style="width: {{barWidth}}%"></div>
       </div>
     </div>
     {{/each}}

@@ -90,7 +90,7 @@ async function handleGenerateRequest(req, graph) {
         // Include data for approval UI based on approval type
         if (result.awaitingApproval) {
             switch (result.approvalType) {
-                case APPROVAL_TYPES.EVIDENCE_BUNDLE:
+                case APPROVAL_TYPES.EVIDENCE_AND_PHOTOS:
                     response.evidenceBundle = result.evidenceBundle;
                     break;
                 case APPROVAL_TYPES.ARC_SELECTION:
@@ -159,7 +159,7 @@ function createMockEvidenceApprovalGraph() {
         invoke: async () => ({
             currentPhase: PHASES.CURATE_EVIDENCE,
             awaitingApproval: true,
-            approvalType: APPROVAL_TYPES.EVIDENCE_BUNDLE,
+            approvalType: APPROVAL_TYPES.EVIDENCE_AND_PHOTOS,
             evidenceBundle: mockEvidenceBundle
         })
     };
@@ -278,7 +278,7 @@ describe('API /api/generate endpoint', () => {
 
             expect(response.status).toBe(200);
             expect(response.json.awaitingApproval).toBe(true);
-            expect(response.json.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_BUNDLE);
+            expect(response.json.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS);
             expect(response.json.evidenceBundle).toBeDefined();
         });
 

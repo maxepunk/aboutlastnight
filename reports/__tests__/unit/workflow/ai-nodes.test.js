@@ -235,10 +235,10 @@ describe('ai-nodes', () => {
       expect(result.awaitingApproval).toBe(true);
     });
 
-    it('sets approvalType to EVIDENCE_BUNDLE', async () => {
+    it('sets approvalType to EVIDENCE_AND_PHOTOS', async () => {
       const result = await curateEvidenceBundle({}, config);
 
-      expect(result.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_BUNDLE);
+      expect(result.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS);
     });
 
     it('calls SDK with haiku model', async () => {

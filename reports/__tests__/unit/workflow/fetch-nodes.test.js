@@ -157,7 +157,7 @@ describe('fetch-nodes', () => {
       const result = await loadDirectorNotes(state, config);
 
       expect(Object.keys(result).sort()).toEqual([
-        'currentPhase', 'directorNotes', 'playerFocus', 'sessionConfig'
+        '_parsedInput', 'currentPhase', 'directorNotes', 'playerFocus', 'sessionConfig'
       ]);
     });
   });

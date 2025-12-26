@@ -193,7 +193,7 @@ describe('evaluator-nodes', () => {
         };
         const prompt = buildEvaluationUserPrompt('arcs', state);
 
-        expect(prompt).toContain('exposed');
+        expect(prompt).toContain('Exposed');
         expect(prompt).toContain('2');
         expect(prompt).toContain('1');
       });

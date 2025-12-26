@@ -344,11 +344,19 @@ async function parseRawInput(state, config) {
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
   const rawInput = state.rawSessionInput;
 
+  // Get sessionId from config (passed from API request)
+  const configSessionId = config?.configurable?.sessionId;
+
   // ─────────────────────────────────────────────────────
   // Step 1: Parse roster and accusation
   // ─────────────────────────────────────────────────────
 
   console.log('[parseRawInput] Step 1: Parsing roster and accusation');
+
+  // Use config sessionId if provided, otherwise try to derive from session report
+  const sessionIdHint = configSessionId
+    ? `Use sessionId: "${configSessionId}" (provided by caller)`
+    : `Derive sessionId from: ${rawInput.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'current date'}`;
 
   const sessionConfigPrompt = `Parse the following information into structured JSON:
 
@@ -358,13 +366,13 @@ ${rawInput.roster || 'Not provided'}
 MURDER ACCUSATION:
 ${rawInput.accusation || 'Not provided'}
 
-SESSION START TIME (for deriving session ID):
-${rawInput.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'Not provided'}
+SESSION ID INSTRUCTION:
+${sessionIdHint}
 
 Rules for parsing:
 1. Extract character first names from the roster (comma-separated list)
 2. For accusation, identify WHO was accused and WHAT they were accused of
-3. Derive sessionId in MMDD format from the start time (e.g., Dec 21 → "1221")
+3. For sessionId: If a specific sessionId is provided above, use it exactly. Otherwise derive in MMDD format.
 4. sessionDate should be YYYY-MM-DD format
 
 Return structured JSON matching the schema.`;
