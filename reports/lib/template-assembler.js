@@ -239,6 +239,12 @@ class TemplateAssembler {
         Array.isArray(contentBundle.financialTracker.entries) &&
         contentBundle.financialTracker.entries.length > 0,
 
+      // Transform financialTracker to include bar widths
+      financialTracker: contentBundle.financialTracker ? {
+        ...contentBundle.financialTracker,
+        entries: this._calculateBarWidths(contentBundle.financialTracker.entries)
+      } : null,
+
       hasPullQuotes: Array.isArray(contentBundle.pullQuotes) &&
         contentBundle.pullQuotes.length > 0,
 
@@ -248,6 +254,30 @@ class TemplateAssembler {
       // Section navigation items (for sidebar)
       sectionNav: this.buildSectionNav(contentBundle.sections)
     };
+  }
+
+  /**
+   * Calculate bar widths as percentages for financial tracker visualization
+   *
+   * @private
+   * @param {Array} entries - Financial tracker entries with amount field
+   * @returns {Array} Entries with barWidth percentage added
+   */
+  _calculateBarWidths(entries) {
+    if (!entries?.length) return entries;
+
+    const parseAmount = (amount) => {
+      if (typeof amount === 'number') return amount;
+      return parseFloat(String(amount).replace(/[$,]/g, '')) || 0;
+    };
+
+    const amounts = entries.map(e => parseAmount(e.amount));
+    const maxAmount = Math.max(...amounts);
+
+    return entries.map((entry, i) => ({
+      ...entry,
+      barWidth: maxAmount > 0 ? Math.round((amounts[i] / maxAmount) * 100) : 0
+    }));
   }
 
   /**

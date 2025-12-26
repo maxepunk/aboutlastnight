@@ -18,7 +18,7 @@
  *   1. INPUT_REVIEW - Review parsed raw input
  *   2. PAPER_EVIDENCE_SELECTION - Select unlocked paper evidence
  *   3. CHARACTER_IDS - Map characters to photos
- *   4. EVIDENCE_BUNDLE - Approve curated evidence bundle
+ *   4. EVIDENCE_AND_PHOTOS - Approve curated evidence bundle
  *   5. ARC_SELECTION - Select narrative arcs to develop
  *   6. OUTLINE - Approve article outline
  *   7. ARTICLE - Approve final article
@@ -46,6 +46,7 @@ const args = process.argv.slice(2);
 const AUTO_MODE = args.includes('--auto');
 const HELP_MODE = args.includes('--help') || args.includes('-h');
 const FRESH_MODE = args.includes('--fresh');
+const STEP_MODE = args.includes('--step');  // Run one checkpoint, display, exit
 
 // Get argument values
 function getArgValue(flag) {
@@ -57,6 +58,8 @@ const SESSION_ID = getArgValue('--session');
 const INPUT_FILE = getArgValue('--input');
 const OVERRIDE_FILE = getArgValue('--override');
 const ROLLBACK_TO = getArgValue('--rollback');
+const APPROVE_TYPE = getArgValue('--approve');  // Approve specific checkpoint type
+const APPROVE_FILE = getArgValue('--approve-file');  // Custom approval payload JSON file
 
 // Colors for terminal output
 const colors = {
@@ -239,6 +242,9 @@ ${color('OPTIONS:', 'cyan')}
   --override <file>  Load stateOverrides from JSON file (e.g., playerFocus)
   --rollback <type>  Rollback to checkpoint before running
   --auto             Auto-approve all checkpoints (for CI/testing)
+  --step             Run one checkpoint, display data, exit (non-interactive)
+  --approve <type>   Approve the current checkpoint and advance to next
+  --approve-file <f> Use custom JSON payload for approval (with --approve)
   --verbose, -v      Show full request/response JSON
   --help, -h         Show this help message
 
@@ -261,6 +267,14 @@ ${color('EXAMPLES:', 'cyan')}
 
   # Auto-approve everything (CI mode)
   node scripts/e2e-walkthrough.js --session 1221 --auto --verbose
+
+  # Step-by-step collaborative mode (non-interactive):
+  # 1. Start fresh, show first checkpoint:
+  node scripts/e2e-walkthrough.js --session 1225 --fresh --step
+  # 2. Review the output, then approve and continue:
+  node scripts/e2e-walkthrough.js --session 1225 --approve input-review --step
+  # 3. Approve with custom payload (e.g., character mappings):
+  node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --approve-file mappings.json --step
 
 ${color('CHECKPOINTS:', 'cyan')}
   At each checkpoint you can:
@@ -386,6 +400,21 @@ function loadOverrideFile(filePath) {
   }
 }
 
+// Load custom approval payload from JSON file (--approve-file flag)
+function loadApprovalFile(filePath) {
+  console.log(color(`Loading approval payload from ${filePath}...`, 'dim'));
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(content);
+    console.log(color(`  ✓ Loaded approval: ${Object.keys(data).join(', ')}`, 'green'));
+    return data;
+  } catch (error) {
+    console.error(color(`  ✗ Failed to load: ${error.message}`, 'red'));
+    throw error;
+  }
+}
+
 // ============================================================================
 // Checkpoint Handlers
 // ============================================================================
@@ -400,7 +429,7 @@ async function handleInputReview(response) {
 
   console.log('\n' + color('Session Config:', 'bright'));
   if (response.sessionConfig) {
-    console.log(`  Roster: ${response.sessionConfig.roster?.map(c => c.name).join(', ')}`);
+    console.log(`  Roster: ${response.sessionConfig.roster?.join(', ')}`);
     console.log(`  Accused: ${response.sessionConfig.accusation?.accused?.join(', ')}`);
   }
 
@@ -472,7 +501,7 @@ async function handleCharacterIds(response) {
   checkpointHeader('CHARACTER_IDS', response.currentPhase);
 
   const photos = response.sessionPhotos || [];
-  const analyses = response.photoAnalyses || [];  // Direct array, not nested
+  const analyses = response.photoAnalyses?.analyses || [];  // Nested under .analyses property
   const roster = response.sessionConfig?.roster || [];
 
   console.log(color(`Photos to identify (${photos.length}):`, 'bright'));
@@ -486,7 +515,7 @@ async function handleCharacterIds(response) {
     });
   });
 
-  console.log(color(`\nRoster: ${roster.map(c => c.name).join(', ')}`, 'bright'));
+  console.log(color(`\nRoster: ${roster.join(', ')}`, 'bright'));
 
   if (AUTO_MODE) {
     console.log(color('\n[AUTO] Skipping character mapping...', 'yellow'));
@@ -515,14 +544,14 @@ async function handleCharacterIds(response) {
 }
 
 async function handleEvidenceBundle(response) {
-  checkpointHeader('EVIDENCE_BUNDLE', response.currentPhase);
+  checkpointHeader('EVIDENCE_AND_PHOTOS', response.currentPhase);
 
   const bundle = response.evidenceBundle || {};
 
   console.log(color('Evidence Bundle Summary:', 'bright'));
   console.log(`  Exposed Tokens: ${bundle.exposed?.tokens?.length || 0}`);
   console.log(`  Buried Transactions: ${bundle.buried?.transactions?.length || 0}`);
-  console.log(`  Paper Evidence: ${bundle.paper?.length || 0}`);
+  console.log(`  Paper Evidence: ${bundle.exposed?.paperEvidence?.length || 0}`);
 
   if (bundle.exposed?.tokens?.length > 0) {
     console.log(color('\nExposed Tokens (first 3):', 'dim'));
@@ -604,13 +633,16 @@ async function handleOutline(response) {
   const outline = response.outline || {};
 
   console.log(color('Article Outline:', 'bright'));
-  console.log(`  Headline: ${outline.headline || 'N/A'}`);
-  console.log(`  Sections: ${outline.sections?.length || 0}`);
+  // Fix: Use correct outline schema fields (Commit 8.9.9)
+  // Outline has: lede.hook, lede.keyTension, theStory.arcs[], not headline/sections
+  console.log(`  Opening Hook: ${outline.lede?.hook?.substring(0, 80) || 'N/A'}${outline.lede?.hook?.length > 80 ? '...' : ''}`);
+  console.log(`  Key Tension: ${outline.lede?.keyTension?.substring(0, 60) || 'N/A'}${outline.lede?.keyTension?.length > 60 ? '...' : ''}`);
+  console.log(`  Story Arcs: ${outline.theStory?.arcs?.length || 0}`);
 
-  if (outline.sections) {
-    outline.sections.forEach((section, i) => {
-      console.log(`\n  ${color(`Section ${i + 1}: ${section.title || section.type}`, 'cyan')}`);
-      if (section.content) console.log(`    ${section.content.substring(0, 100)}...`);
+  if (outline.theStory?.arcs) {
+    outline.theStory.arcs.forEach((arc, i) => {
+      console.log(`\n  ${color(`Arc ${i + 1}: ${arc.name || 'Unnamed'}`, 'cyan')}`);
+      console.log(`    Paragraphs: ${arc.paragraphCount || 0}, Evidence Cards: ${arc.evidenceCards?.length || 0}`);
     });
   }
 
@@ -684,11 +716,151 @@ const checkpointHandlers = {
   'input-review': handleInputReview,
   'paper-evidence-selection': handlePaperEvidenceSelection,
   'character-ids': handleCharacterIds,
-  'evidence-bundle': handleEvidenceBundle,
+  'evidence-and-photos': handleEvidenceBundle,
   'arc-selection': handleArcSelection,
   'outline': handleOutline,
   'article': handleArticle
 };
+
+// Display checkpoint data without interactive prompts (for step mode)
+function displayCheckpointData(approvalType, response) {
+  switch (approvalType) {
+    case 'input-review':
+      checkpointHeader('INPUT_REVIEW', response.currentPhase);
+      console.log(color('Parsed Input:', 'bright'));
+      if (response.parsedInput) prettyPrint(response.parsedInput);
+      console.log('\n' + color('Session Config:', 'bright'));
+      if (response.sessionConfig) {
+        console.log(`  Roster: ${response.sessionConfig.roster?.join(', ')}`);
+        console.log(`  Accused: ${response.sessionConfig.accusation?.accused?.join(', ')}`);
+      }
+      console.log('\n' + color('Player Focus:', 'bright'));
+      if (response.playerFocus) {
+        console.log(`  Primary: ${response.playerFocus.primaryInvestigation}`);
+      }
+      break;
+
+    case 'paper-evidence-selection':
+      checkpointHeader('PAPER_EVIDENCE_SELECTION', response.currentPhase);
+      const evidence = response.paperEvidence || [];
+      console.log(color(`Available Paper Evidence (${evidence.length} items):`, 'bright'));
+      evidence.forEach((item, i) => {
+        console.log(`  ${i + 1}. ${item.title || item.description || 'Untitled'}`);
+        if (item.type) console.log(color(`     Type: ${item.type}`, 'dim'));
+      });
+      break;
+
+    case 'character-ids':
+      checkpointHeader('CHARACTER_IDS', response.currentPhase);
+      const photos = response.sessionPhotos || [];
+      // photoAnalyses can be { analyses: [...] } or direct array
+      const analysesData = response.photoAnalyses?.analyses || response.photoAnalyses || [];
+      const analyses = Array.isArray(analysesData) ? analysesData : [];
+      const roster = response.sessionConfig?.roster || [];
+      console.log(color(`Photos to identify (${photos.length}):`, 'bright'));
+      analyses.forEach((analysis, i) => {
+        const photoPath = photos[i] || 'unknown';
+        const photoName = photoPath.split(/[/\\]/).pop(); // Get filename only
+        console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${photoName}`);
+        console.log(`  ${color('Visual:', 'dim')} ${analysis.visualContent?.substring(0, 100)}...`);
+        const charDescs = analysis.characterDescriptions || analysis.peopleDescriptions || [];
+        console.log(`  ${color('People:', 'dim')} ${charDescs.length} detected`);
+        charDescs.slice(0, 3).forEach((desc, j) => {
+          // Handle both string and object formats
+          const descText = typeof desc === 'string' ? desc : desc.description || JSON.stringify(desc);
+          console.log(`    ${j + 1}. ${descText.substring(0, 80)}...`);
+        });
+        if (charDescs.length > 3) {
+          console.log(color(`    ... and ${charDescs.length - 3} more`, 'dim'));
+        }
+      });
+      console.log(color(`\nRoster: ${roster.join(', ')}`, 'bright'));
+      break;
+
+    case 'evidence-and-photos':
+      checkpointHeader('EVIDENCE_AND_PHOTOS', response.currentPhase);
+      const bundle = response.evidenceBundle || {};
+      console.log(color('Evidence Bundle Summary:', 'bright'));
+      console.log(`  Exposed Tokens: ${bundle.exposed?.tokens?.length || 0}`);
+      console.log(`  Buried Transactions: ${bundle.buried?.transactions?.length || 0}`);
+      console.log(`  Paper Evidence: ${bundle.exposed?.paperEvidence?.length || 0}`);
+      if (bundle.exposed?.tokens?.length > 0) {
+        console.log(color('\nExposed Tokens (first 3):', 'dim'));
+        bundle.exposed.tokens.slice(0, 3).forEach(t => {
+          console.log(`  - ${t.summary?.substring(0, 60) || t.content?.substring(0, 60)}...`);
+        });
+      }
+      break;
+
+    case 'arc-selection':
+      checkpointHeader('ARC_SELECTION', response.currentPhase);
+      const arcs = response.narrativeArcs || [];
+      console.log(color(`Available Narrative Arcs (${arcs.length}):`, 'bright'));
+      arcs.forEach((arc, i) => {
+        console.log(`\n  ${color(`${i + 1}. ${arc.title || arc.id}`, 'cyan')}`);
+        if (arc.hook) console.log(`     Hook: ${arc.hook.substring(0, 80)}...`);
+        if (arc.evidence) console.log(color(`     Evidence: ${arc.evidence.length} items`, 'dim'));
+      });
+      break;
+
+    case 'outline':
+      checkpointHeader('OUTLINE', response.currentPhase);
+      const outline = response.outline || {};
+      console.log(color('Article Outline:', 'bright'));
+      // Fix: Use correct outline schema fields (Commit 8.9.9)
+      console.log(`  Opening Hook: ${outline.lede?.hook?.substring(0, 80) || 'N/A'}${outline.lede?.hook?.length > 80 ? '...' : ''}`);
+      console.log(`  Key Tension: ${outline.lede?.keyTension?.substring(0, 60) || 'N/A'}${outline.lede?.keyTension?.length > 60 ? '...' : ''}`);
+      console.log(`  Story Arcs: ${outline.theStory?.arcs?.length || 0}`);
+      if (outline.theStory?.arcs) {
+        outline.theStory.arcs.forEach((arc, i) => {
+          console.log(`\n  ${color(`Arc ${i + 1}: ${arc.name || 'Unnamed'}`, 'cyan')}`);
+          console.log(`    Paragraphs: ${arc.paragraphCount || 0}, Evidence Cards: ${arc.evidenceCards?.length || 0}`);
+        });
+      }
+      break;
+
+    case 'article':
+      checkpointHeader('ARTICLE', response.currentPhase);
+      const html = response.assembledHtml || response.articleHtml || null;
+      if (html) {
+        console.log(color('Article Preview:', 'bright'));
+        console.log(color('─'.repeat(40), 'dim'));
+        console.log(html.substring(0, 500) + '...');
+        console.log(color('─'.repeat(40), 'dim'));
+        console.log(color(`Total length: ${html.length} characters`, 'dim'));
+      } else {
+        console.log(color('Article ready for final assembly.', 'bright'));
+      }
+      break;
+
+    default:
+      console.log(color(`Unknown checkpoint type: ${approvalType}`, 'yellow'));
+      prettyPrint(response);
+  }
+}
+
+// Get default approval payload for step mode (auto-approve with sensible defaults)
+function getDefaultApproval(approvalType, response) {
+  switch (approvalType) {
+    case 'input-review':
+      return { inputReview: true };
+    case 'paper-evidence-selection':
+      return { selectedPaperEvidence: response.paperEvidence || [] };
+    case 'character-ids':
+      return { characterIds: {} };
+    case 'evidence-and-photos':
+      return { evidenceBundle: true };
+    case 'arc-selection':
+      const arcs = response.narrativeArcs || [];
+      return { selectedArcs: arcs.slice(0, 2).map(a => a.id || a.title) };
+    case 'outline':
+      return { outline: true };
+    case 'article':
+      return { article: true };
+    default:
+      return {};
+  }
+}
 
 // ============================================================================
 // Main Walkthrough Loop
@@ -737,7 +909,12 @@ async function runWalkthrough() {
       inputData = await loadSessionInput(SESSION_ID);
       sessionId = SESSION_ID;
     } else {
-      // Interactive input gathering
+      // Interactive input gathering - not available in step mode
+      if (STEP_MODE) {
+        console.error(color('Error: --step mode requires --session <id> or --input <file>', 'red'));
+        console.log(color('Step mode is non-interactive and cannot gather raw input.', 'dim'));
+        return;
+      }
       inputData = await gatherRawInput();
       sessionId = inputData.sessionId;
     }
@@ -869,6 +1046,62 @@ async function runWalkthrough() {
 
     // Handle checkpoint
     if (currentData.awaitingApproval && currentData.approvalType) {
+      // STEP MODE: Non-interactive checkpoint handling
+      if (STEP_MODE) {
+        // If --approve was provided, verify it matches current checkpoint
+        if (APPROVE_TYPE) {
+          if (APPROVE_TYPE !== currentData.approvalType) {
+            console.log(color(`\nError: --approve ${APPROVE_TYPE} does not match current checkpoint: ${currentData.approvalType}`, 'red'));
+            console.log(color('Use --step without --approve to view current checkpoint', 'dim'));
+            break;
+          }
+
+          // Approve this checkpoint - use custom file if provided, otherwise defaults
+          let approvals;
+          if (APPROVE_FILE) {
+            approvals = loadApprovalFile(APPROVE_FILE);
+          } else {
+            approvals = getDefaultApproval(currentData.approvalType, currentData);
+          }
+          console.log(color(`\n─── Approving ${currentData.approvalType}... ───`, 'dim'));
+
+          const { status, data, error, durationMs } = await apiCall(
+            `/api/session/${sessionId}/approve`,
+            approvals
+          );
+
+          if (!VERBOSE) {
+            console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
+          }
+
+          if (status !== 200) {
+            console.error(color(`Approval failed: ${data?.error || error}`, 'red'));
+            break;
+          }
+
+          currentData = data;
+
+          // Display the next checkpoint (or completion)
+          if (currentData.currentPhase === 'complete') {
+            console.log(color('\n✓ Pipeline complete!', 'green'));
+          } else if (currentData.awaitingApproval && currentData.approvalType) {
+            console.log(color(`\n✓ Advanced to next checkpoint:`, 'green'));
+            displayCheckpointData(currentData.approvalType, currentData);
+            console.log(color(`\nTo approve this checkpoint, run:`, 'dim'));
+            console.log(color(`  node scripts/e2e-walkthrough.js --session ${sessionId} --approve ${currentData.approvalType} --step`, 'cyan'));
+          }
+          break; // Exit after one approval in step mode
+
+        } else {
+          // No --approve: Just display current checkpoint and exit
+          displayCheckpointData(currentData.approvalType, currentData);
+          console.log(color(`\nTo approve this checkpoint, run:`, 'dim'));
+          console.log(color(`  node scripts/e2e-walkthrough.js --session ${sessionId} --approve ${currentData.approvalType} --step`, 'cyan'));
+          break; // Exit after displaying in step mode
+        }
+      }
+
+      // INTERACTIVE/AUTO MODE: Use checkpoint handlers
       const handler = checkpointHandlers[currentData.approvalType];
 
       if (handler) {
@@ -932,7 +1165,10 @@ async function main() {
   console.log(color('  Commit 8.9.8', 'dim'));
   console.log(color('═'.repeat(60), 'magenta'));
 
-  createReadline();
+  // Only create readline if we need interactive input
+  if (!STEP_MODE && !AUTO_MODE) {
+    createReadline();
+  }
 
   try {
     await runWalkthrough();
@@ -941,7 +1177,9 @@ async function main() {
     console.error(error.stack);
     process.exit(1);
   } finally {
-    rl.close();
+    if (rl) {
+      rl.close();
+    }
   }
 
   console.log(color('\nWalkthrough complete.', 'green'));

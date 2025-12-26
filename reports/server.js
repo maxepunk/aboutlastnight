@@ -24,40 +24,6 @@ const {
 const sharedCheckpointer = new MemorySaver();
 
 /**
- * Clear all checkpoints for a specific thread_id from the MemorySaver
- * Used by fresh mode to start from scratch while remaining resumable
- */
-function clearThreadCheckpoints(checkpointer, threadId) {
-    // MemorySaver stores checkpoints in a Map with tuple keys containing thread_id
-    // We need to delete all entries where the first element of the key matches our threadId
-    if (checkpointer.storage) {
-        const keysToDelete = [];
-        for (const key of checkpointer.storage.keys()) {
-            // Keys are tuples like [thread_id, checkpoint_ns, checkpoint_id]
-            if (Array.isArray(key) && key[0] === threadId) {
-                keysToDelete.push(key);
-            } else if (typeof key === 'string' && key.startsWith(threadId)) {
-                keysToDelete.push(key);
-            }
-        }
-        keysToDelete.forEach(k => checkpointer.storage.delete(k));
-        console.log(`[clearThreadCheckpoints] Cleared ${keysToDelete.length} checkpoints for thread ${threadId}`);
-    }
-    // Also clear pending writes if they exist
-    if (checkpointer.writes) {
-        const writeKeysToDelete = [];
-        for (const key of checkpointer.writes.keys()) {
-            if (Array.isArray(key) && key[0] === threadId) {
-                writeKeysToDelete.push(key);
-            } else if (typeof key === 'string' && key.startsWith(threadId)) {
-                writeKeysToDelete.push(key);
-            }
-        }
-        writeKeysToDelete.forEach(k => checkpointer.writes.delete(k));
-    }
-}
-
-/**
  * Get session state from checkpointer without invoking the graph
  * Used by read-only endpoints to inspect state at any checkpoint
  * @param {string} sessionId - The session/thread ID
@@ -100,7 +66,7 @@ function getApprovalData(approvalType, state) {
                 photoAnalyses: state.photoAnalyses,
                 sessionConfig: state.sessionConfig
             };
-        case APPROVAL_TYPES.EVIDENCE_BUNDLE:
+        case APPROVAL_TYPES.EVIDENCE_AND_PHOTOS:
             return { evidenceBundle: state.evidenceBundle };
         case APPROVAL_TYPES.ARC_SELECTION:
             return { narrativeArcs: state.narrativeArcs };
@@ -303,7 +269,7 @@ app.post('/api/auth/logout', (req, res) => {
  *     - INPUT_REVIEW: parsedInput, sessionConfig, directorNotes, playerFocus
  *     - PAPER_EVIDENCE_SELECTION: paperEvidence (Commit 8.9.4)
  *     - CHARACTER_IDS: sessionPhotos, photoAnalyses, sessionConfig (Commit 8.9.5)
- *     - EVIDENCE_BUNDLE: evidenceBundle
+ *     - EVIDENCE_AND_PHOTOS: evidenceBundle
  *     - ARC_SELECTION: narrativeArcs
  *     - OUTLINE: outline
  *
@@ -357,14 +323,9 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     }
 
     // Always use sessionId as thread_id for consistent session continuity
-    // This allows both fresh and resume modes to be resumable
+    // This allows both fresh and resume modes to be resumable via /api/session/:id/approve
+    // (Commit 8.9.9 - Fixed thread_id mismatch that caused OUTLINE infinite loop)
     const threadId = sessionId;
-
-    // Fresh mode: clear all cached checkpoints to start from scratch
-    // The session will still be resumable because we use the same thread_id
-    if (mode === 'fresh') {
-        clearThreadCheckpoints(sharedCheckpointer, threadId);
-    }
 
     console.log(`[${new Date().toISOString()}] /api/generate: sessionId=${sessionId}, theme=${theme}, mode=${mode || 'resume'}, rollbackTo=${rollbackTo || 'none'}, hasRawInput=${!!rawSessionInput}, hasOverrides=${!!stateOverrides}, approvals=${JSON.stringify(approvals || {})}`);
 
@@ -384,6 +345,25 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
         // Build initial state from rollback, overrides, rawSessionInput, and approvals
         let initialState = {};
+
+        // Fresh mode: clear all state fields (Commit 8.9.9 - Fix for thread_id mismatch)
+        // Uses ROLLBACK_CLEARS['input-review'] which clears everything for a true fresh start
+        // This replaces the old timestamped thread_id approach that caused mismatches
+        // with /api/session/:id/approve endpoint
+        if (mode === 'fresh') {
+            const fieldsToClear = ROLLBACK_CLEARS['input-review'];
+            fieldsToClear.forEach(field => {
+                initialState[field] = null;
+            });
+            // Reset all revision counters
+            const counterResets = ROLLBACK_COUNTER_RESETS['input-review'];
+            Object.assign(initialState, counterResets);
+            // Reset control flow
+            initialState.currentPhase = null;
+            initialState.awaitingApproval = false;
+            initialState.approvalType = null;
+            console.log(`[${new Date().toISOString()}] Fresh mode: Cleared ${fieldsToClear.length} fields via ROLLBACK_CLEARS`);
+        }
 
         // Apply rollback if specified (Commit 8.9.3)
         // This clears state from the rollback point forward, triggering regeneration
@@ -510,7 +490,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
                     response.photoAnalyses = result.photoAnalyses;
                     response.sessionConfig = result.sessionConfig;  // Contains roster for dropdown
                     break;
-                case APPROVAL_TYPES.EVIDENCE_BUNDLE:
+                case APPROVAL_TYPES.EVIDENCE_AND_PHOTOS:
                     response.evidenceBundle = result.evidenceBundle;
                     break;
                 case APPROVAL_TYPES.ARC_SELECTION:
@@ -623,6 +603,62 @@ app.get('/api/session/:id/state', requireAuth, async (req, res) => {
 
     } catch (error) {
         console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/state error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/session/:id/checkpoint
+ * Get current checkpoint info (convenience endpoint)
+ */
+app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        res.json({
+            sessionId,
+            approvalType: session.state.approvalType || null,
+            currentPhase: session.state.currentPhase,
+            awaitingApproval: session.state.awaitingApproval || false
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/checkpoint error:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/session/:id/state/:field
+ * Get specific state field value
+ */
+app.get('/api/session/:id/state/:field', requireAuth, async (req, res) => {
+    const { id: sessionId, field } = req.params;
+
+    try {
+        const session = await getSessionState(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+
+        const hasField = Object.prototype.hasOwnProperty.call(session.state, field);
+
+        res.json({
+            sessionId,
+            field,
+            exists: hasField,
+            value: hasField ? session.state[field] : null
+        });
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/state/${field} error:`, error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -778,8 +814,9 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start: theme=${theme}`);
 
     try {
-        // Clear existing checkpoints for fresh start
-        clearThreadCheckpoints(sharedCheckpointer, sessionId);
+        // Use sessionId as thread_id for consistency with /api/session/:id/approve
+        // (Commit 8.9.9 - Fix for thread_id mismatch that caused infinite loops)
+        const threadId = sessionId;
 
         // Use shared graph
         const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
@@ -787,12 +824,20 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
             configurable: {
                 sessionId,
                 theme,
-                thread_id: sessionId
+                thread_id: threadId
             }
         };
 
-        // Start with raw input
+        // Clear all state fields for fresh start using ROLLBACK_CLEARS pattern
         const initialState = { rawSessionInput };
+        const fieldsToClear = ROLLBACK_CLEARS['input-review'];
+        fieldsToClear.forEach(field => {
+            initialState[field] = null;
+        });
+        Object.assign(initialState, ROLLBACK_COUNTER_RESETS['input-review']);
+        initialState.currentPhase = null;
+        initialState.awaitingApproval = false;
+        initialState.approvalType = null;
         const result = await graph.invoke(initialState, config);
 
         // Build response with checkpoint data

@@ -409,6 +409,7 @@ function getDefaultState() {
     // Photo analysis (Commit 8.6)
     photoAnalyses: null,
     characterIdMappings: null,
+    characterIdsRaw: null,  // Natural language character ID input (Commit 8.9.x)
     // Preprocessed data (Commit 8.5)
     preprocessedEvidence: null,
     // Curated data
@@ -508,7 +509,6 @@ const APPROVAL_TYPES = {
 
   EVIDENCE_AND_PHOTOS: 'evidence-and-photos', // Combined evidence + photo analysis approval
   CHARACTER_IDS: 'character-ids',             // User provides character-ids.json mapping
-  EVIDENCE_BUNDLE: 'evidence-bundle',         // @deprecated - use EVIDENCE_AND_PHOTOS
   ARC_SELECTION: 'arc-selection',             // Select which arcs to develop
   OUTLINE: 'outline',                         // Approve outline structure
   ARTICLE: 'article'                          // Final article approval before assembly
@@ -575,8 +575,8 @@ const ROLLBACK_CLEARS = {
     'evaluationHistory'
   ],
 
-  // Phase 1.8: Evidence bundle
-  'evidence-bundle': [
+  // Phase 1.8: Evidence and photos approval
+  'evidence-and-photos': [
     'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
     'outline', 'contentBundle', 'assembledHtml', 'validationResults',
@@ -611,7 +611,7 @@ const ROLLBACK_COUNTER_RESETS = {
   'input-review': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'paper-evidence-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'character-ids': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'evidence-bundle': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'evidence-and-photos': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'arc-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'outline': { outlineRevisionCount: 0, articleRevisionCount: 0 },
   'article': { articleRevisionCount: 0 }
@@ -647,7 +647,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 32 (Commit 8.9)
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 33 (Commit 8.9.x)
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null (Commit 8.9)

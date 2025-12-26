@@ -4,7 +4,7 @@
  * Assembles the complete LangGraph StateGraph for report generation.
  * Connects all nodes with edges, conditional routing, and checkpointing.
  *
- * Graph Flow (23 nodes - Commit 8.9.5):
+ * Graph Flow (27 nodes - Commit 8.9.5):
  *
  * PHASE 0: Input Parsing (Commit 8.9 - conditional entry)
  * START → [conditional] → parseRawInput OR initializeSession
@@ -352,14 +352,10 @@ async function setOutlineCheckpoint(state) {
   }
 
   // Check if user approved THIS checkpoint
-  // - awaitingApproval=false means user sent approval
-  // - approvalType=OUTLINE means this specific checkpoint was waiting
-  // - outlineEval.ready means outline passed evaluation
-  const evalHistory = state.evaluationHistory || [];
-  const outlineEval = evalHistory.find(e => e.phase === 'outline' && e.ready === true);
+  // User approval overrides evaluator - if they approved, we continue
+  // (Commit 8.10 fix: removed outlineEval.ready requirement that caused infinite loop)
   if (state.awaitingApproval === false &&
       state.approvalType === APPROVAL_TYPES.OUTLINE &&
-      outlineEval &&
       state.outline) {
     console.log('[setOutlineCheckpoint] User approved outline, continuing to article generation');
     return {
@@ -397,14 +393,10 @@ async function setArticleCheckpoint(state) {
   }
 
   // Check if user approved THIS checkpoint
-  // - awaitingApproval=false means user sent approval
-  // - approvalType=ARTICLE means this specific checkpoint was waiting
-  // - articleEval.ready means article passed evaluation
-  const evalHistory = state.evaluationHistory || [];
-  const articleEval = evalHistory.find(e => e.phase === 'article' && e.ready === true);
+  // User approval overrides evaluator - if they approved, we continue
+  // (Commit 8.10 fix: removed articleEval.ready requirement that caused infinite loop)
   if (state.awaitingApproval === false &&
       state.approvalType === APPROVAL_TYPES.ARTICLE &&
-      articleEval &&
       state.contentBundle) {
     console.log('[setArticleCheckpoint] User approved article, continuing to schema validation');
     return {

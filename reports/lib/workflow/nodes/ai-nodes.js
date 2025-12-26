@@ -71,6 +71,7 @@ function getSchemaValidator(config) {
 async function curateEvidenceBundle(state, config) {
   // Skip if already curated and approval cleared (resume case)
   if (state.evidenceBundle && !state.awaitingApproval) {
+    console.log('[curateEvidenceBundle] Skipping - evidenceBundle already exists and approval cleared');
     return {
       currentPhase: PHASES.CURATE_EVIDENCE
     };
@@ -103,9 +104,19 @@ async function curateEvidenceBundle(state, config) {
       },
       currentPhase: PHASES.CURATE_EVIDENCE,
       awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.EVIDENCE_BUNDLE
+      approvalType: APPROVAL_TYPES.EVIDENCE_AND_PHOTOS
     };
   }
+
+  // Count items by type for logging
+  const tokenCount = preprocessed.items.filter(i => i.sourceType === 'memory-token').length;
+  const paperCount = preprocessed.items.filter(i => i.sourceType === 'paper-evidence').length;
+  const exposedDisposition = preprocessed.items.filter(i => i.disposition === 'exposed').length;
+  const buriedDisposition = preprocessed.items.filter(i => i.disposition === 'buried').length;
+  const unknownDisposition = preprocessed.items.filter(i => i.disposition === 'unknown').length;
+  console.log(`[curateEvidenceBundle] Starting curation of ${preprocessed.items.length} items:`);
+  console.log(`  - sourceType: ${tokenCount} memory-tokens, ${paperCount} paper-evidence`);
+  console.log(`  - disposition: ${exposedDisposition} exposed, ${buriedDisposition} buried, ${unknownDisposition} unknown`);
 
   // Build curation prompt using preprocessed summaries
   const systemPrompt = `You are curating PREPROCESSED evidence for a NovaNews investigative article.
@@ -158,10 +169,11 @@ ${JSON.stringify(preprocessed.playerFocus || state.playerFocus || {}, null, 2)}
 PREPROCESSED EVIDENCE (${preprocessed.items.length} items):
 ${JSON.stringify(preprocessed.items, null, 2)}
 
-IMPORTANT: Check each item's "disposition" field to determine placement:
+IMPORTANT: Check each item's fields to determine placement:
 - disposition: 'exposed' → exposed layer (full data)
 - disposition: 'buried' → buried layer (transaction data ONLY - strip owner/content)
 - disposition: 'unknown' → use significance to place appropriately
+- sourceType: 'paper-evidence' → ALWAYS goes to exposed.paperEvidence (physical documents players unlocked)
 
 Return JSON with structure:
 {
@@ -205,11 +217,39 @@ Return JSON with structure:
     }
   });
 
+  // Post-processing: Ensure paper evidence items are in exposed.paperEvidence, not exposed.tokens
+  // The LLM sometimes puts all exposed items in tokens instead of splitting by sourceType
+  if (evidenceBundle.exposed) {
+    // Initialize arrays if missing
+    if (!evidenceBundle.exposed.tokens) evidenceBundle.exposed.tokens = [];
+    if (!evidenceBundle.exposed.paperEvidence) evidenceBundle.exposed.paperEvidence = [];
+
+    // Find paper evidence items that were incorrectly placed in tokens
+    const tokensToMove = evidenceBundle.exposed.tokens.filter(item =>
+      item.sourceType === 'paper-evidence' || item.originalType?.includes('Paper')
+    );
+
+    if (tokensToMove.length > 0) {
+      // Move them to paperEvidence
+      evidenceBundle.exposed.paperEvidence.push(...tokensToMove);
+      evidenceBundle.exposed.tokens = evidenceBundle.exposed.tokens.filter(item =>
+        item.sourceType !== 'paper-evidence' && !item.originalType?.includes('Paper')
+      );
+      console.log(`[curateEvidenceBundle] Post-processing: Moved ${tokensToMove.length} paper evidence items from tokens to paperEvidence`);
+    }
+  }
+
+  // Debug logging to understand curation result structure
+  const tokensCount = evidenceBundle.exposed?.tokens?.length || 0;
+  const paperEvidenceCount = evidenceBundle.exposed?.paperEvidence?.length || 0;
+  const transactionsCount = evidenceBundle.buried?.transactions?.length || 0;
+  console.log(`[curateEvidenceBundle] Complete: ${tokensCount} exposed tokens, ${paperEvidenceCount} paper evidence, ${transactionsCount} buried transactions`);
+
   return {
     evidenceBundle,
     currentPhase: PHASES.CURATE_EVIDENCE,
     awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.EVIDENCE_BUNDLE
+    approvalType: APPROVAL_TYPES.EVIDENCE_AND_PHOTOS
   };
 }
 

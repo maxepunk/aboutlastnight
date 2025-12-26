@@ -212,10 +212,14 @@ function createEvidencePreprocessor(options = {}) {
         timelineContext: token.timeline || null,
         sfFields: token.sfFields || {}
       })),
+      // COMMIT 8.10 FIX: Paper evidence is ALWAYS exposed (players physically unlocked it)
+      // Previously paper evidence had no disposition field, causing it to be misclassified
+      // in the curation step which only checked the disposition field.
       ...paperEvidence.map(evidence => ({
         id: evidence.id,
         sourceType: 'paper-evidence',
         originalType: evidence.type || 'Paper Evidence',
+        disposition: 'exposed', // Paper evidence was unlocked by players during gameplay
         rawData: evidence,
         ownerLogline: null,
         timelineContext: evidence.timeline || null,
