@@ -312,13 +312,23 @@ async function gatherRawInput() {
   console.log('\n' + color('Director Notes', 'bright') + ' - Your observations about player dynamics:');
   const directorNotes = await promptMultiline(color('> ', 'cyan'));
 
+  console.log('\n' + color('Session Photos Path', 'bright') + ' - Directory containing session photos:');
+  console.log(color('(Press Enter to use default: data/{sessionId}/inputs/photos)', 'dim'));
+  const photosPath = await prompt(color('> ', 'cyan'));
+
+  console.log('\n' + color('Whiteboard Photo Path', 'bright') + ' - Path to whiteboard image for Layer 3 analysis:');
+  console.log(color('(Press Enter to skip whiteboard analysis)', 'dim'));
+  const whiteboardPhotoPath = await prompt(color('> ', 'cyan'));
+
   return {
     sessionId,
     rawSessionInput: {
       roster,
       accusation,
       sessionReport,
-      directorNotes
+      directorNotes,
+      photosPath: photosPath || null,
+      whiteboardPhotoPath: whiteboardPhotoPath || null
     }
   };
 }
