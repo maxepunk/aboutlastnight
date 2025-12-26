@@ -351,7 +351,9 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
       if (original) {
         return {
           ...item,
-          disposition: item.disposition || original.disposition, // CRITICAL: preserve disposition
+          // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
+          // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
+          disposition: original.disposition || item.disposition || 'unknown',
           ownerLogline: item.ownerLogline || original.ownerLogline,
           narrativeTimelineContext: item.narrativeTimelineContext || original.timelineContext,
           sfFields: item.sfFields || original.sfFields,
