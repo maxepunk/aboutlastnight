@@ -316,6 +316,10 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
       ownerLogline: item.ownerLogline,
       timelineContext: item.timelineContext,
       sfFields: item.sfFields,
+      // Transaction metadata for buried tokens (from orchestrator-parsed.json)
+      shellAccount: item.rawData.shellAccount || null,
+      transactionAmount: item.rawData.transactionAmount || null,
+      sessionTransactionTime: item.rawData.sessionTransactionTime || null,
       // Include key raw data fields
       name: item.rawData.name || item.rawData.title,
       description: item.rawData.description || item.rawData.text,
@@ -341,7 +345,7 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
 
     const items = parsed.items || [];
 
-    // Merge with preserved context (disposition, owner logline, timeline context, SF fields)
+    // Merge with preserved context (disposition, owner logline, timeline context, SF fields, transaction metadata)
     const mergedItems = items.map(item => {
       const original = batch.find(b => b.id === item.id);
       if (original) {
@@ -350,7 +354,11 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
           disposition: item.disposition || original.disposition, // CRITICAL: preserve disposition
           ownerLogline: item.ownerLogline || original.ownerLogline,
           narrativeTimelineContext: item.narrativeTimelineContext || original.timelineContext,
-          sfFields: item.sfFields || original.sfFields
+          sfFields: item.sfFields || original.sfFields,
+          // Preserve transaction metadata for buried tokens
+          shellAccount: item.shellAccount || original.rawData?.shellAccount || null,
+          transactionAmount: item.transactionAmount || original.rawData?.transactionAmount || null,
+          sessionTransactionTime: item.sessionTransactionTime || original.rawData?.sessionTransactionTime || null
         };
       }
       return item;
@@ -376,7 +384,10 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
       ownerLogline: item.ownerLogline,
       narrativeTimelineRef: null,
       narrativeTimelineContext: item.timelineContext,
-      sessionTransactionTime: null,
+      // Preserve transaction metadata for buried tokens
+      shellAccount: item.rawData?.shellAccount || null,
+      transactionAmount: item.rawData?.transactionAmount || null,
+      sessionTransactionTime: item.rawData?.sessionTransactionTime || null,
       narrativeRelevance: false,
       tags: [],
       groupCluster: null,

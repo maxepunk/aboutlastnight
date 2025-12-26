@@ -167,8 +167,11 @@ describe('fetch-nodes', () => {
       tokens: mockTokensResponse.tokens
     });
 
+    // Note: sessionId is required for orchestrator-parsed.json path building
+    // Tests without orchestrator-parsed.json will tag all tokens as 'unknown'
+
     it('fetches tokens using NotionClient', async () => {
-      const state = { directorNotes: { scannedTokens: ['blk001', 'chr001'] } };
+      const state = { sessionId: 'test-session', directorNotes: { scannedTokens: ['blk001', 'chr001'] } };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -178,7 +181,7 @@ describe('fetch-nodes', () => {
     });
 
     it('filters tokens by scannedTokens from director notes', async () => {
-      const state = { directorNotes: { scannedTokens: ['blk001'] } };
+      const state = { sessionId: 'test-session', directorNotes: { scannedTokens: ['blk001'] } };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -188,7 +191,7 @@ describe('fetch-nodes', () => {
     });
 
     it('returns all tokens when scannedTokens is empty', async () => {
-      const state = { directorNotes: { scannedTokens: [] } };
+      const state = { sessionId: 'test-session', directorNotes: { scannedTokens: [] } };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -197,7 +200,7 @@ describe('fetch-nodes', () => {
     });
 
     it('returns all tokens when scannedTokens is undefined', async () => {
-      const state = { directorNotes: {} };
+      const state = { sessionId: 'test-session', directorNotes: {} };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -206,7 +209,7 @@ describe('fetch-nodes', () => {
     });
 
     it('sets currentPhase to FETCH_EVIDENCE', async () => {
-      const state = { directorNotes: {} };
+      const state = { sessionId: 'test-session', directorNotes: {} };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -215,7 +218,7 @@ describe('fetch-nodes', () => {
     });
 
     it('returns tokens with expected structure', async () => {
-      const state = { directorNotes: { scannedTokens: ['blk001'] } };
+      const state = { sessionId: 'test-session', directorNotes: { scannedTokens: ['blk001'] } };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -234,7 +237,7 @@ describe('fetch-nodes', () => {
     });
 
     it('handles case-insensitive token ID matching', async () => {
-      const state = { directorNotes: { scannedTokens: ['BLK001'] } };
+      const state = { sessionId: 'test-session', directorNotes: { scannedTokens: ['BLK001'] } };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -244,7 +247,7 @@ describe('fetch-nodes', () => {
     });
 
     it('returns empty array when no tokens match', async () => {
-      const state = { directorNotes: { scannedTokens: ['nonexistent'] } };
+      const state = { sessionId: 'test-session', directorNotes: { scannedTokens: ['nonexistent'] } };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
@@ -253,7 +256,7 @@ describe('fetch-nodes', () => {
     });
 
     it('returns partial state update', async () => {
-      const state = { directorNotes: {} };
+      const state = { sessionId: 'test-session', directorNotes: {} };
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchMemoryTokens(state, config);
