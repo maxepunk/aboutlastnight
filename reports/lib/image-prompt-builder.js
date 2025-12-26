@@ -101,7 +101,11 @@ Analyze this photo and provide a detailed description focusing on:
 2. The narrative moment captured
 3. Generic character descriptions (physical features, clothing, position)
 4. Emotional tone and story relevance
-5. A suggested caption for article use`;
+5. A suggested caption for article use
+
+IMPORTANT: You MUST populate the characterDescriptions array with one entry per visible person.
+Each entry needs a "description" (physical appearance) and optional "role" (what they're doing).
+Example: {"description": "person in blue jacket with glasses", "role": "pointing at whiteboard"}`;
 
     return { systemPrompt, userPrompt };
   }

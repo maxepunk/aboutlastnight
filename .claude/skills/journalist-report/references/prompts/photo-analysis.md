@@ -63,10 +63,15 @@ Note any quality issues that may affect usefulness for the article.
 
 ## Output Format
 
-Return structured JSON with:
-- `subjects`: Array of `{descriptor, position, action}` for each visible person
-- `sceneContext`: Brief description of the setting and atmosphere
-- `evidenceVisible`: Any game props or evidence items in frame
-- `notableInteractions`: Observable dynamics between people
-- `qualityNotes`: Any issues affecting photo usability
-- `suggestedCaptions`: 2-3 possible captions for article use (generic, without names)
+Return structured JSON matching this schema:
+- `filename`: Original filename of the photo
+- `visualContent`: Detailed description of what is visible (people, objects, setting, actions)
+- `narrativeMoment`: What story moment or interaction this photo captures
+- `characterDescriptions`: **REQUIRED** - Array of people visible, each with:
+  - `description`: Physical description (e.g., "person in blue dress", "tall person with glasses")
+  - `role`: Apparent role or action (e.g., "appears to be accusing", "looks surprised")
+- `emotionalTone`: One of: tense, celebratory, suspicious, revelatory, confrontational, collaborative, neutral
+- `storyRelevance`: One of: critical, supporting, contextual
+- `suggestedCaption`: A caption for article use (generic, without names)
+
+**CRITICAL:** You MUST populate characterDescriptions with one entry per visible person. Do not embed person descriptions only in visualContent.

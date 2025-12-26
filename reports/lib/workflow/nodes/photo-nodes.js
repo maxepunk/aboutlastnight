@@ -58,7 +58,7 @@ const PHOTO_CONFIG = {
  */
 const PHOTO_ANALYSIS_SCHEMA = {
   type: 'object',
-  required: ['filename', 'visualContent', 'narrativeMoment'],
+  required: ['filename', 'visualContent', 'narrativeMoment', 'characterDescriptions'],
   properties: {
     filename: {
       type: 'string',

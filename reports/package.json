@@ -4,8 +4,9 @@
   "description": "Director's Console for About Last Night - Claude Code Edition",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node scripts/kill-port.js 3001 && node server.js",
+    "dev": "node scripts/kill-port.js 3001 && node server.js",
+    "kill": "node scripts/kill-port.js 3001",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
