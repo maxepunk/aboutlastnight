@@ -6,10 +6,13 @@
  * Commit 8.10: SDK requires programmatic agent definitions via `agents` parameter.
  *              File-based agents in .claude/agents/ are NOT auto-discovered by SDK.
  *              Definitions extracted from .md files and converted to SDK format.
+ * Commit 8.11: Factory function with absolute paths to fix subagent workingDirectory.
+ *              SDK doesn't support agent-specific workingDirectory - subagents default
+ *              to process.cwd() not parent's workingDirectory. Absolute paths fix this.
  *
  * Architecture:
  * - Orchestrator (parent Claude) has full context about game rules, voice, objectives
- * - Specialists are defined programmatically in SPECIALIST_AGENTS object
+ * - Specialists are defined programmatically via getSpecialistAgents() factory
  * - Orchestrator invokes specialists via Task tool with agents passed to SDK
  *
  * Specialist Agents:
@@ -17,8 +20,21 @@
  * - journalist-behavioral-specialist: Character dynamics, director observations
  * - journalist-victimization-specialist: Targeting patterns, operator/victim analysis
  *
- * See ARCHITECTURE_DECISIONS.md 8.8/8.9/8.10 for design rationale.
+ * See ARCHITECTURE_DECISIONS.md 8.8/8.9/8.10/8.11 for design rationale.
  */
+
+const path = require('path');
+
+/**
+ * Normalize path to forward slashes for cross-platform consistency
+ * Claude SDK's Read tool works with forward slashes on all platforms
+ */
+const normalizePath = (p) => p.replace(/\\/g, '/');
+
+// Compute absolute paths at module load time
+// __dirname = lib/sdk-client, so go up 2 levels to reach reports/
+const REPORTS_ROOT = path.resolve(__dirname, '../..');
+const REFS_PATH = normalizePath(path.join(REPORTS_ROOT, '.claude/skills/journalist-report/references/prompts'));
 
 /**
  * Names of specialist agents (keys for SPECIALIST_AGENTS object)
@@ -30,13 +46,21 @@ const SPECIALIST_AGENT_NAMES = {
 };
 
 /**
- * Specialist agent definitions for SDK `agents` parameter
- * Extracted from .claude/agents/*.md files - Commit 8.10
+ * Factory function to get specialist agent definitions with absolute paths
+ *
+ * Commit 8.11: Converted from constant to factory function to compute
+ * absolute paths at runtime. SDK doesn't propagate workingDirectory to
+ * subagents, so they default to process.cwd() instead of parent's setting.
+ * Using absolute paths ensures subagents find reference files regardless
+ * of the CLI's working directory.
  *
  * Format required by SDK:
  * { description: string, prompt: string, tools?: string[], model?: string }
+ *
+ * @returns {Object} Specialist agent definitions keyed by agent name
  */
-const SPECIALIST_AGENTS = {
+function getSpecialistAgents() {
+  return {
   'journalist-financial-specialist': {
     description: 'Analyzes financial patterns in ALN session evidence. Use for transaction timing, account naming conventions, money flows, and financial coordination analysis.',
     tools: ['Read'],
@@ -48,11 +72,9 @@ You analyze financial evidence for NovaNews investigative articles about "About 
 ## First: Load Reference Files
 
 Read these before proceeding:
-\`\`\`
-.claude/skills/journalist-report/references/prompts/evidence-boundaries.md
-.claude/skills/journalist-report/references/prompts/character-voice.md
-.claude/skills/journalist-report/references/prompts/anti-patterns.md
-\`\`\`
+- ${normalizePath(path.join(REFS_PATH, 'evidence-boundaries.md'))}
+- ${normalizePath(path.join(REFS_PATH, 'character-voice.md'))}
+- ${normalizePath(path.join(REFS_PATH, 'anti-patterns.md'))}
 
 ## CRITICAL: Evidence Layer Boundaries
 
@@ -129,11 +151,9 @@ You analyze behavioral patterns for NovaNews investigative articles about "About
 ## First: Load Reference Files
 
 Read these before proceeding:
-\`\`\`
-.claude/skills/journalist-report/references/prompts/evidence-boundaries.md
-.claude/skills/journalist-report/references/prompts/character-voice.md
-.claude/skills/journalist-report/references/prompts/anti-patterns.md
-\`\`\`
+- ${normalizePath(path.join(REFS_PATH, 'evidence-boundaries.md'))}
+- ${normalizePath(path.join(REFS_PATH, 'character-voice.md'))}
+- ${normalizePath(path.join(REFS_PATH, 'anti-patterns.md'))}
 
 ## CRITICAL: Director Notes Hierarchy
 
@@ -206,11 +226,9 @@ You analyze victimization patterns for NovaNews investigative articles about "Ab
 ## First: Load Reference Files
 
 Read these before proceeding:
-\`\`\`
-.claude/skills/journalist-report/references/prompts/evidence-boundaries.md
-.claude/skills/journalist-report/references/prompts/character-voice.md
-.claude/skills/journalist-report/references/prompts/anti-patterns.md
-\`\`\`
+- ${normalizePath(path.join(REFS_PATH, 'evidence-boundaries.md'))}
+- ${normalizePath(path.join(REFS_PATH, 'character-voice.md'))}
+- ${normalizePath(path.join(REFS_PATH, 'anti-patterns.md'))}
 
 ## CRITICAL: Game Mechanics Context
 
@@ -283,7 +301,8 @@ Return JSON with: victims, operators, selfBurialPatterns, targetingInsights, vic
 - **medium**: Strong pattern inference (name correlation, timing, relationship context)
 - **low**: Speculation based on limited evidence`
   }
-};
+  };
+}
 
 /**
  * Orchestrator system prompt for arc analysis
@@ -427,17 +446,15 @@ const ORCHESTRATOR_OUTPUT_SCHEMA = {
 };
 
 module.exports = {
-  // Commit 8.10: Programmatic agent definitions for SDK
+  // Commit 8.11: Factory function with absolute paths
+  getSpecialistAgents,
   SPECIALIST_AGENT_NAMES,
-  SPECIALIST_AGENTS,
   ORCHESTRATOR_SYSTEM_PROMPT,
   ORCHESTRATOR_OUTPUT_SCHEMA,
-  // Backwards compatibility alias (deprecated)
-  // Tests may still reference ARC_SPECIALIST_SUBAGENTS - provide empty object
-  ARC_SPECIALIST_SUBAGENTS: {},
   // Testing exports
   _testing: {
     SPECIALIST_AGENT_NAMES,
-    SPECIALIST_AGENTS
+    getSpecialistAgents,
+    normalizePath  // Exported for testing path normalization
   }
 };

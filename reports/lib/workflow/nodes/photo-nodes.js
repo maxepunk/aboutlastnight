@@ -480,45 +480,72 @@ The caption should be suitable for a NovaNews investigative article - dramatic b
 }
 
 /**
+ * Template for character ID photo structure - single source of truth (DRY)
+ * Used by both PARSED_CHARACTER_IDS_SCHEMA and image-prompt-builder.js
+ * to keep schema and prompt examples in sync.
+ */
+const CHARACTER_IDS_PHOTO_TEMPLATE = {
+  filename: '',  // Will be filled with actual filename
+  characterMappings: [],
+  additionalCharacters: [],
+  corrections: {},
+  exclude: false
+};
+
+/**
  * JSON schema for parsed character ID mappings
+ *
+ * Commit 8.11+: Changed from additionalProperties (dynamic keys) to array-based
+ * structure. The additionalProperties keyword was being interpreted literally
+ * by Claude's structured output as a key name instead of a schema construct.
+ *
+ * Array structure with explicit filename property avoids this ambiguity.
  */
 const PARSED_CHARACTER_IDS_SCHEMA = {
   type: 'object',
-  additionalProperties: {
-    type: 'object',
-    properties: {
-      characterMappings: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            descriptionIndex: { type: 'number' },
-            characterName: { type: 'string' }
-          },
-          required: ['descriptionIndex', 'characterName']
-        }
-      },
-      additionalCharacters: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            description: { type: 'string' },
-            characterName: { type: 'string' },
-            role: { type: 'string' }
-          },
-          required: ['description', 'characterName']
-        }
-      },
-      corrections: {
+  required: ['photos'],
+  properties: {
+    photos: {
+      type: 'array',
+      items: {
         type: 'object',
+        required: ['filename'],
         properties: {
-          location: { type: 'string' },
-          context: { type: 'string' },
-          other: { type: 'string' }
+          filename: { type: 'string' },
+          characterMappings: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                descriptionIndex: { type: 'number' },
+                characterName: { type: 'string' }
+              },
+              required: ['descriptionIndex', 'characterName']
+            }
+          },
+          additionalCharacters: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                description: { type: 'string' },
+                characterName: { type: 'string' },
+                role: { type: 'string' }
+              },
+              required: ['description', 'characterName']
+            }
+          },
+          corrections: {
+            type: 'object',
+            properties: {
+              location: { type: 'string' },
+              context: { type: 'string' },
+              other: { type: 'string' }
+            }
+          },
+          exclude: { type: 'boolean' }
         }
-      },
-      exclude: { type: 'boolean' }
+      }
     }
   }
 };
@@ -584,15 +611,36 @@ async function parseCharacterIds(state, config) {
       jsonSchema: PARSED_CHARACTER_IDS_SCHEMA
     });
 
-    const parsedKeys = Object.keys(parsed);
     const processingTimeMs = Date.now() - startTime;
+
+    // Commit 8.11+: Convert array-based response to object keyed by filename
+    // Schema uses array to avoid additionalProperties keyword being interpreted as literal key
+    const photosArray = parsed.photos || [];
+    const characterIdMappings = {};
+    for (const photo of photosArray) {
+      // Validate filename is a non-empty string
+      if (photo.filename && typeof photo.filename === 'string' && photo.filename.trim()) {
+        const normalizedFilename = photo.filename.trim();
+        characterIdMappings[normalizedFilename] = {
+          characterMappings: photo.characterMappings || [],
+          additionalCharacters: photo.additionalCharacters || [],
+          corrections: photo.corrections || {},
+          exclude: photo.exclude || false
+        };
+      } else if (photo.filename !== undefined) {
+        // Log invalid filenames to help debug SDK output issues
+        console.warn(`[parseCharacterIds] Skipping photo with invalid filename: ${JSON.stringify(photo.filename)}`);
+      }
+    }
+
+    const parsedKeys = Object.keys(characterIdMappings);
 
     // Debug: show what keys were returned vs what filenames exist
     const expectedFilenames = (state.photoAnalyses?.analyses || []).map(a => a.filename);
     const matchingKeys = parsedKeys.filter(key => expectedFilenames.includes(key));
     const unmatchedKeys = parsedKeys.filter(key => !expectedFilenames.includes(key));
 
-    console.log(`[parseCharacterIds] Parsed ${parsedKeys.length} photo mappings in ${processingTimeMs}ms`);
+    console.log(`[parseCharacterIds] Parsed ${photosArray.length} photos → ${parsedKeys.length} mappings in ${processingTimeMs}ms`);
     console.log(`[parseCharacterIds] Keys: ${parsedKeys.join(', ')}`);
 
     // Fail loud if LLM returned keys that don't match actual filenames
@@ -608,7 +656,7 @@ async function parseCharacterIds(state, config) {
     }
 
     return {
-      characterIdMappings: parsed,
+      characterIdMappings,
       _characterIdsParsed: true,  // Flag to indicate this came from parsing
       currentPhase: PHASES.PARSE_CHARACTER_IDS
     };
@@ -859,6 +907,9 @@ module.exports = {
   parseCharacterIds,      // Commit 8.9.x: parse natural language character IDs
   finalizePhotoAnalyses,  // Commit 8.9.5: enrich with character IDs
 
+  // Commit 8.11+: Template for prompt builder (DRY - single source of truth)
+  CHARACTER_IDS_PHOTO_TEMPLATE,
+
   // Mock factory for testing
   createMockPhotoAnalyzer,
 
@@ -875,7 +926,9 @@ module.exports = {
     PHOTO_CONFIG,
     // Commit 8.9.5: Photo enrichment exports
     buildEnrichmentPrompt,
-    ENRICHED_PHOTO_SCHEMA
+    ENRICHED_PHOTO_SCHEMA,
+    // Commit 8.11+: Character ID schema (template exported at top-level for prompt builder)
+    PARSED_CHARACTER_IDS_SCHEMA
   }
 };
 

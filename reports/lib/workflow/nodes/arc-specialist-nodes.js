@@ -37,12 +37,12 @@
 
 const { PHASES, APPROVAL_TYPES } = require('../state');
 // Commit 8.10: Specialists defined programmatically for SDK (file-based not auto-discovered)
+// Commit 8.11: Use getSpecialistAgents() factory for absolute paths (fixes subagent workingDirectory)
 const {
   SPECIALIST_AGENT_NAMES,
-  SPECIALIST_AGENTS,
+  getSpecialistAgents,
   ORCHESTRATOR_SYSTEM_PROMPT,
-  ORCHESTRATOR_OUTPUT_SCHEMA,
-  ARC_SPECIALIST_SUBAGENTS  // Deprecated but kept for test compatibility
+  ORCHESTRATOR_OUTPUT_SCHEMA
 } = require('../../sdk-client/subagents');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -313,13 +313,14 @@ async function analyzeArcsWithSubagents(state, config) {
 
     // Call SDK via wrapper - orchestrator uses Task tool to invoke specialist agents
     // Commit 8.10: Pass SPECIALIST_AGENTS programmatically (SDK doesn't auto-discover .claude/agents/)
+    // Commit 8.11: Use getSpecialistAgents() factory for absolute paths (fixes subagent workingDirectory)
     const result = await sdkQuery({
       prompt: orchestratorPrompt,
       systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
       model: 'sonnet',
       jsonSchema: ORCHESTRATOR_OUTPUT_SCHEMA,
       allowedTools: ['Task', 'Read'],  // Task for subagents, Read for reference docs
-      agents: SPECIALIST_AGENTS,  // Programmatic agent definitions
+      agents: getSpecialistAgents(),  // Factory returns agents with absolute paths
       timeoutMs: 10 * 60 * 1000,  // 10 minutes for orchestrator with subagents
       label: 'Arc orchestrator with subagents',
       onProgress: createProgressLogger('analyzeArcsWithSubagents')
@@ -548,11 +549,9 @@ module.exports = {
     buildOrchestratorPrompt,
     createEmptyAnalysisResult,
     SPECIALIST_AGENT_NAMES,
-    SPECIALIST_AGENTS,
+    getSpecialistAgents,  // Commit 8.11: Factory function for absolute paths
     ORCHESTRATOR_SYSTEM_PROMPT,
-    ORCHESTRATOR_OUTPUT_SCHEMA,
-    // Deprecated but kept for test backwards compatibility
-    ARC_SPECIALIST_SUBAGENTS
+    ORCHESTRATOR_OUTPUT_SCHEMA
   }
 };
 

@@ -527,7 +527,11 @@ module.exports = {
   BATCH_SIZE,
   CONCURRENCY,
 
-  // Export internal functions for testing
+  // Export batching utilities for reuse (used by ai-nodes.js for paper scoring)
+  createBatches,
+  processWithConcurrency,
+
+  // Export internal functions for testing (preserved for backwards compatibility)
   _testing: {
     createBatches,
     processWithConcurrency,

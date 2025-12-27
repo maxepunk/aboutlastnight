@@ -21,7 +21,7 @@ const {
     buildOrchestratorPrompt,
     createEmptyAnalysisResult,
     SPECIALIST_AGENT_NAMES,
-    ARC_SPECIALIST_SUBAGENTS,  // @deprecated - empty object for backwards compatibility
+    getSpecialistAgents,  // Commit 8.11: Factory function for absolute paths
     ORCHESTRATOR_SYSTEM_PROMPT,
     ORCHESTRATOR_OUTPUT_SCHEMA
   }
@@ -76,9 +76,21 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
     });
   });
 
-  describe('ARC_SPECIALIST_SUBAGENTS (deprecated)', () => {
-    it('is empty object for backwards compatibility', () => {
-      expect(ARC_SPECIALIST_SUBAGENTS).toEqual({});
+  describe('getSpecialistAgents (Commit 8.11)', () => {
+    it('returns all three specialist agents', () => {
+      const agents = getSpecialistAgents();
+      expect(agents['journalist-financial-specialist']).toBeDefined();
+      expect(agents['journalist-behavioral-specialist']).toBeDefined();
+      expect(agents['journalist-victimization-specialist']).toBeDefined();
+    });
+
+    it('includes absolute paths with forward slashes', () => {
+      const agents = getSpecialistAgents();
+      const financialPrompt = agents['journalist-financial-specialist'].prompt;
+      // Paths should be absolute and use forward slashes
+      expect(financialPrompt).toContain('evidence-boundaries.md');
+      expect(financialPrompt).not.toContain('\\');  // No backslashes
+      expect(financialPrompt).toMatch(/\/.*evidence-boundaries\.md/);  // Forward slash before filename
     });
   });
 
