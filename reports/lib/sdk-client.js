@@ -16,6 +16,7 @@
  */
 
 const { query } = require('@anthropic-ai/claude-agent-sdk');
+const { progressEmitter } = require('./progress-emitter');
 
 // Increase max listeners to support 8 concurrent SDK calls
 // Each SDK call adds exit listeners for subprocess cleanup
@@ -257,6 +258,76 @@ function createSemaphore(limit) {
 }
 
 /**
+ * Format a progress event into display components
+ *
+ * Extracts icon, short text, and detail text from SDK messages.
+ * No truncation - full content for maximum observability.
+ *
+ * @param {Object} msg - SDK progress message
+ * @returns {Object} - { icon, shortText, detailText } for formatting
+ */
+function formatProgressEvent(msg) {
+  switch (msg.type) {
+    case 'assistant':
+      if (msg.toolName) {
+        let detail = '';
+        if (msg.toolInput?.subagent_type) {
+          detail = msg.toolInput.subagent_type;
+        } else if (msg.toolInput?.file_path) {
+          detail = msg.toolInput.file_path;
+        } else if (msg.toolInput?.command) {
+          detail = msg.toolInput.command;  // Full command, no truncation
+        }
+        return { icon: '🔧', shortText: msg.toolName, detailText: detail };
+      }
+      const preview = msg.contentPreview?.replace(/\n/g, ' ').trim() || '';
+      return {
+        icon: '💭',
+        shortText: preview.slice(0, 100) || 'Thinking...',  // Increased from 60
+        detailText: preview  // Full content, no truncation
+      };
+
+    case 'user':
+      return {
+        icon: '✓',
+        shortText: 'Processing result...',
+        detailText: msg.contentPreview?.replace(/\n/g, ' ') || ''  // Full content
+      };
+
+    case 'tool_progress':
+      return {
+        icon: '⏳',
+        shortText: `${msg.toolName} running...`,
+        detailText: `${msg.elapsedSeconds?.toFixed(1) || '?'}s`
+      };
+
+    case 'system':
+      return {
+        icon: '⚙️',
+        shortText: msg.subtype || 'Initializing...',
+        detailText: ''
+      };
+
+    case 'error':
+      return {
+        icon: '❌',
+        shortText: msg.error?.message || 'Error occurred',
+        detailText: ''
+      };
+
+    case 'result':
+      return {
+        icon: '✅',
+        shortText: 'Complete',
+        detailText: msg.subtype || ''
+      };
+
+    default:
+      return { icon: '', shortText: msg.type, detailText: '' };
+  }
+}
+
+/**
  * Create a reusable progress logger for SDK calls
  *
  * Formats SDK progress messages with emoji indicators and content previews.
@@ -270,74 +341,49 @@ function createSemaphore(limit) {
  * - result: Final result
  *
  * @param {string} context - Log prefix (e.g., 'analyzePhotos', 'analyzeArcs')
+ * @param {string} [sessionId] - Session ID for SSE streaming (optional)
  * @returns {Function} Progress callback for sdkQuery onProgress option
  *
  * @example
  * const { sdkQuery, createProgressLogger } = require('./sdk-client');
  * await sdkQuery({
  *   prompt: '...',
- *   onProgress: createProgressLogger('myNode')
+ *   onProgress: createProgressLogger('myNode', sessionId)
  * });
  */
-function createProgressLogger(context) {
+function createProgressLogger(context, sessionId = null) {
   return (msg) => {
-    let logLine = `[${context}] [${msg.elapsed}s]`;
+    const { icon, shortText, detailText } = formatProgressEvent(msg);
 
-    switch (msg.type) {
-      case 'assistant':
-        // Check for tool use first (tool calls are in assistant messages)
-        if (msg.toolName) {
-          logLine += ` 🔧 ${msg.toolName}`;
-          if (msg.toolInput) {
-            // Show subagent type for Task calls
-            if (msg.toolName === 'Task' && msg.toolInput.subagent_type) {
-              logLine += ` → ${msg.toolInput.subagent_type}`;
-            } else if (msg.toolInput.file_path) {
-              logLine += `: ${msg.toolInput.file_path}`;
-            } else if (msg.toolInput.command) {
-              logLine += `: ${msg.toolInput.command.slice(0, 50)}`;
-            }
-          }
-        } else if (msg.contentPreview) {
-          const preview = msg.contentPreview.replace(/\n/g, ' ').trim();
-          logLine += ` 💭 ${preview}${msg.contentPreview.length >= 150 ? '...' : ''}`;
-        } else {
-          logLine += ' 💭 (thinking)';
-        }
-        break;
-
-      case 'user':
-        // User messages often contain tool results
-        if (msg.contentPreview) {
-          const preview = msg.contentPreview.replace(/\n/g, ' ').slice(0, 80);
-          logLine += ` ✓ result: ${preview}...`;
-        } else {
-          logLine += ' 📥 (tool result)';
-        }
-        break;
-
-      case 'tool_progress':
-        logLine += ` ⏳ ${msg.toolName} (${msg.elapsedSeconds?.toFixed(1) || '?'}s)`;
-        break;
-
-      case 'system':
-        logLine += ` ⚙️ ${msg.subtype || 'system'}`;
-        break;
-
-      case 'error':
-        logLine += ` ❌ ${msg.error?.message || msg.error || 'error'}`;
-        break;
-
-      case 'result':
-        // Final result - usually don't need to log, but handle gracefully
-        logLine += ` ✅ ${msg.subtype || 'complete'}`;
-        break;
-
-      default:
-        logLine += ` ${msg.type}`;
+    // Build log line with full detail
+    let logLine = `[${context}] [${msg.elapsed}s] ${icon} ${shortText}`;
+    if (detailText && msg.type === 'assistant' && msg.toolName) {
+      // For tool calls, show detail as arrow or colon depending on type
+      logLine += msg.toolInput?.subagent_type ? ` → ${detailText}` : `: ${detailText}`;
+    } else if (detailText && msg.type === 'user') {
+      logLine += `: ${detailText}...`;
+    } else if (detailText && msg.type === 'tool_progress') {
+      logLine = `[${context}] [${msg.elapsed}s] ${icon} ${msg.toolName} (${detailText})`;
     }
 
+    // Build short display message for SSE
+    const displayMessage = `${icon} ${shortText}`;
+
+    // Always log to console (server-side visibility)
     console.log(logLine);
+
+    // Emit to SSE if sessionId provided (Commit 8.16)
+    if (sessionId) {
+      progressEmitter.emitProgress(sessionId, {
+        context,
+        type: msg.type,
+        subtype: msg.subtype,
+        elapsed: msg.elapsed,
+        message: displayMessage,
+        // Include tool info for detailed progress
+        ...(msg.toolName && { toolName: msg.toolName })
+      });
+    }
   };
 }
 

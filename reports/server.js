@@ -21,6 +21,7 @@ const {
 } = require('./lib/workflow/state');
 const { backgroundPipelineManager } = require('./lib/background-pipeline-manager');
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
+const { progressEmitter } = require('./lib/progress-emitter');
 
 // Shared checkpointer instance - must persist across API calls for resume to work
 const sharedCheckpointer = new MemorySaver();
@@ -189,6 +190,9 @@ const PORT = 3001;
 // Server timeout: workflow steps can take several minutes
 // (e.g., finalizePhotoAnalyses ~90s, preprocessEvidence ~110s)
 const SERVER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes (matches e2e-walkthrough client timeout)
+
+// SSE heartbeat interval to keep connections alive (Commit 8.16)
+const SSE_HEARTBEAT_MS = 15000;
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
@@ -633,6 +637,65 @@ app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
         console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/checkpoint error:`, error);
         res.status(500).json({ error: error.message });
     }
+});
+
+/**
+ * GET /api/session/:id/progress
+ * SSE endpoint for real-time progress streaming (Commit 8.16)
+ *
+ * Streams progress events from SDK calls to the client to prevent
+ * browser timeout during long-running operations (arc analysis, etc.)
+ *
+ * Event format: { timestamp, context, type, elapsed, message, toolName? }
+ *
+ * Connection lifecycle:
+ * - Client connects at session start, stays connected throughout
+ * - Server sends heartbeat every SSE_HEARTBEAT_MS to keep connection alive
+ * - Connection closes when client disconnects or session completes
+ */
+app.get('/api/session/:id/progress', requireAuth, (req, res) => {
+    const { id: sessionId } = req.params;
+    let connectionClosed = false;  // Guard against double cleanup
+
+    console.log(`[${new Date().toISOString()}] SSE connected: session ${sessionId}`);
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');  // Disable nginx buffering if proxied
+
+    // Send initial connection event
+    res.write(`data: ${JSON.stringify({ type: 'connected', sessionId })}\n\n`);
+
+    // Heartbeat to prevent connection timeout
+    const heartbeat = setInterval(() => {
+        res.write(`: heartbeat\n\n`);
+    }, SSE_HEARTBEAT_MS);
+
+    // Subscribe to progress events for this session
+    const unsubscribe = progressEmitter.subscribe(sessionId, (data) => {
+        if (connectionClosed) return;
+        try {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        } catch (err) {
+            if (connectionClosed) return;
+            connectionClosed = true;
+            console.error(`[SSE] Error writing to session ${sessionId}:`, err.message);
+            clearInterval(heartbeat);
+            unsubscribe();
+            try { res.end(); } catch { /* already closed */ }
+        }
+    });
+
+    // Cleanup on client disconnect
+    req.on('close', () => {
+        if (connectionClosed) return;
+        connectionClosed = true;
+        console.log(`[${new Date().toISOString()}] SSE disconnected: session ${sessionId}`);
+        clearInterval(heartbeat);
+        unsubscribe();
+    });
 });
 
 /**
@@ -1095,6 +1158,7 @@ app.get('/api/health', (req, res) => {
             session: {
                 summary: '/api/session/:id (GET)',
                 state: '/api/session/:id/state (GET)',
+                progress: '/api/session/:id/progress (GET SSE)',
                 evidence: '/api/session/:id/evidence (GET)',
                 arcs: '/api/session/:id/arcs (GET)',
                 outline: '/api/session/:id/outline (GET)',
