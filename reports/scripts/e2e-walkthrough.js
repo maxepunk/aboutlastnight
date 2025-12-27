@@ -29,6 +29,8 @@ require('dotenv').config();
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 
 // Configuration
 const API_BASE = process.env.API_BASE || 'http://localhost:3001';
@@ -79,6 +81,111 @@ function color(text, colorName) {
   return `${colors[colorName]}${text}${colors.reset}`;
 }
 
+// SSE Progress Connection (Commit 8.16)
+// Connects to SSE endpoint and displays progress while API call runs
+let activeSSE = null;
+let lastProgressLine = '';
+const isTTY = process.stdout.isTTY;  // Safe line clearing only in interactive terminals
+
+function connectSSE(sessionId) {
+  if (activeSSE) {
+    activeSSE.destroy();
+    activeSSE = null;
+  }
+
+  const url = new URL(`${API_BASE}/api/session/${sessionId}/progress`);
+  const isHttps = url.protocol === 'https:';
+  const httpModule = isHttps ? https : http;
+
+  const options = {
+    hostname: url.hostname,
+    port: url.port || (isHttps ? 443 : 80),
+    path: url.pathname,
+    method: 'GET',
+    headers: {
+      'Accept': 'text/event-stream',
+      ...(sessionCookie ? { 'Cookie': sessionCookie } : {})
+    }
+  };
+
+  const req = httpModule.request(options, (res) => {
+    if (res.statusCode !== 200) {
+      console.log(color(`  SSE connection failed: ${res.statusCode}`, 'yellow'));
+      return;
+    }
+
+    res.setEncoding('utf8');
+    let buffer = '';
+
+    res.on('data', (chunk) => {
+      buffer += chunk;
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.message && data.message !== lastProgressLine) {
+              lastProgressLine = data.message;
+              // TTY-safe progress display
+              if (isTTY) {
+                process.stdout.write(`\r\x1b[K  ${color('Progress:', 'dim')} ${data.message}`);
+              } else {
+                console.log(`  Progress: ${data.message}`);
+              }
+            }
+          } catch (e) {
+            // Ignore parse errors (heartbeats, malformed data)
+          }
+        }
+      }
+    });
+
+    res.on('end', () => {
+      // Process any remaining buffer content before closing
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.trim().slice(6));
+          if (data.message) {
+            if (isTTY) {
+              process.stdout.write(`\r\x1b[K  ${color('Progress:', 'dim')} ${data.message}`);
+            } else {
+              console.log(`  Progress: ${data.message}`);
+            }
+          }
+        } catch (_) {
+          // Ignore parse errors on final buffer
+        }
+      }
+      activeSSE = null;
+    });
+  });
+
+  req.on('error', (err) => {
+    // SSE connection errors are non-fatal - API call continues
+    if (VERBOSE) {
+      console.log(color(`\n  SSE error: ${err.message}`, 'yellow'));
+    }
+  });
+
+  req.end();
+  activeSSE = req;
+  return req;
+}
+
+function disconnectSSE() {
+  if (activeSSE) {
+    activeSSE.destroy();
+    activeSSE = null;
+  }
+  // Clear progress line if we printed one (TTY only)
+  if (lastProgressLine && isTTY) {
+    process.stdout.write('\r\x1b[K');
+  }
+  lastProgressLine = '';
+}
+
 // Readline interface for prompts
 let rl;
 
@@ -114,8 +221,9 @@ function promptMultiline(promptText) {
   });
 }
 
-// HTTP helper using native fetch (Node 18+) with timeout
-async function apiCall(endpoint, body, method = 'POST') {
+// HTTP helper using native fetch (Node 18+) with timeout and optional SSE progress
+// When sseSessionId is provided, connects to SSE for real-time progress during long operations
+async function apiCall(endpoint, body, method = 'POST', sseSessionId = null) {
   const url = `${API_BASE}${endpoint}`;
 
   const headers = {
@@ -137,6 +245,11 @@ async function apiCall(endpoint, body, method = 'POST') {
     }
   }
 
+  // Connect SSE for progress streaming if sessionId provided (Commit 8.16)
+  if (sseSessionId) {
+    connectSSE(sseSessionId);
+  }
+
   // Create AbortController for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -151,6 +264,7 @@ async function apiCall(endpoint, body, method = 'POST') {
     });
 
     clearTimeout(timeoutId);
+    disconnectSSE();  // Clean up SSE connection
     const durationMs = Date.now() - startTime;
 
     // Store session cookie from login response
@@ -177,6 +291,7 @@ async function apiCall(endpoint, body, method = 'POST') {
     return { status: response.status, data, durationMs };
   } catch (error) {
     clearTimeout(timeoutId);
+    disconnectSSE();  // Clean up SSE connection on error
     if (error.name === 'AbortError') {
       return { status: 408, error: `Request timeout after ${API_TIMEOUT_MS / 1000}s` };
     }
@@ -1056,7 +1171,7 @@ async function runWalkthrough() {
       theme: DEFAULT_THEME,
       rawSessionInput: inputData.rawSessionInput
     };
-    const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/start`, startBody);
+    const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/start`, startBody, 'POST', sessionId);
 
     if (!VERBOSE) {
       console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
@@ -1078,7 +1193,7 @@ async function runWalkthrough() {
     if (stateOverrides) {
       requestBody.stateOverrides = stateOverrides;
     }
-    const { status, data, error, durationMs } = await apiCall('/api/generate', requestBody);
+    const { status, data, error, durationMs } = await apiCall('/api/generate', requestBody, 'POST', sessionId);
 
     if (!VERBOSE) {
       console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
@@ -1163,7 +1278,9 @@ async function runWalkthrough() {
 
           const { status, data, error, durationMs } = await apiCall(
             `/api/session/${sessionId}/approve`,
-            approvals
+            approvals,
+            'POST',
+            sessionId
           );
 
           if (!VERBOSE) {
@@ -1208,7 +1325,9 @@ async function runWalkthrough() {
           console.log(color(`\n─── Approving... ───`, 'dim'));
           const { status, data, error, durationMs } = await apiCall(
             `/api/session/${sessionId}/approve`,
-            approvals
+            approvals,
+            'POST',
+            sessionId
           );
 
           if (!VERBOSE) {

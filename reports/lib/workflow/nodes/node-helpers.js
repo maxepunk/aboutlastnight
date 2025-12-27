@@ -47,11 +47,15 @@ function safeParseJson(response, context = 'response') {
  * progress logging via createProgressLogger. This provides visibility
  * into Claude's thinking and tool usage for all SDK calls.
  *
+ * Commit 8.16: Extracts sessionId from config and passes to createProgressLogger
+ * for SSE progress streaming. If sessionId is present, progress events are
+ * emitted to progressEmitter for client consumption.
+ *
  * SDK-proper error handling:
  * - Validates callback is a function before passing to SDK
  * - Catches and logs SDK error codes (RATE_LIMIT_EXCEEDED, etc.)
  *
- * @param {Object} config - Graph config with optional configurable.sdkClient
+ * @param {Object} config - Graph config with optional configurable.sdkClient and configurable.sessionId
  * @param {string} [context='sdk'] - Log prefix for progress messages (e.g., 'generateOutline')
  * @returns {Function} SDK query function (wrapped with logging if using real SDK)
  */
@@ -61,8 +65,11 @@ function getSdkClient(config, context = 'sdk') {
     return config.configurable.sdkClient;
   }
 
-  // Create progress logger - validate it's a function
-  const progressLogger = createProgressLogger(context);
+  // Extract sessionId for SSE streaming (Commit 8.16)
+  const sessionId = config?.configurable?.sessionId || null;
+
+  // Create progress logger with sessionId for SSE emission
+  const progressLogger = createProgressLogger(context, sessionId);
   const hasValidLogger = typeof progressLogger === 'function';
 
   if (!hasValidLogger) {
@@ -484,17 +491,10 @@ function buildValidEvidenceIds(evidenceBundle) {
     if (p.pageId) ids.add(p.pageId);  // Notion page ID
   }
 
-  // Buried transactions - can be referenced by transaction ID
-  const buriedTransactions = evidenceBundle.buried?.transactions || [];
-  for (const t of buriedTransactions) {
-    if (t.id) ids.add(t.id);
-  }
-
-  // Buried relationships - can be referenced by relationship ID
-  const buriedRelationships = evidenceBundle.buried?.relationships || [];
-  for (const r of buriedRelationships) {
-    if (r.id) ids.add(r.id);
-  }
+  // NOTE: Buried transactions and relationships are intentionally EXCLUDED from valid IDs
+  // They are Layer 2 evidence - can be discussed in analysisNotes but NOT cited in keyEvidence
+  // This matches the prompt guidance in buildPlayerFocusGuidedPrompt() and the evaluator's check
+  // See: evidenceIdValidity criterion in evaluator-nodes.js
 
   console.log(`[buildValidEvidenceIds] Extracted ${ids.size} valid evidence IDs`);
   return ids;
