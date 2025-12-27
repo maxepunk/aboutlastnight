@@ -19,6 +19,7 @@ const {
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS
 } = require('./lib/workflow/state');
+const { backgroundPipelineManager } = require('./lib/background-pipeline-manager');
 
 // Shared checkpointer instance - must persist across API calls for resume to work
 const sharedCheckpointer = new MemorySaver();
@@ -85,49 +86,80 @@ function getApprovalData(approvalType, state) {
 /**
  * Build state updates from approval decisions (DRY helper)
  * Used by /api/generate and /api/session/:id/approve endpoints
+ *
+ * Only clears awaitingApproval when a VALID approval type is detected.
+ * This prevents invalid approval requests from advancing the workflow.
+ *
  * @param {object} approvals - Approval decisions from request body
  * @returns {object} - { state: updates to apply, error: validation error or null }
  */
 function buildApprovalState(approvals) {
-    const updates = { awaitingApproval: false };
+    const updates = {};
     let error = null;
+    let validApprovalDetected = false;
 
-    // Input review approval
+    // Input review approval (Commit 8.9)
     if (approvals.inputReview === true) {
+        validApprovalDetected = true;
         if (approvals.inputEdits) {
             updates._inputEdits = approvals.inputEdits;
         }
     }
 
-    // Paper evidence selection
+    // Paper evidence selection (Commit 8.9.4)
     if (approvals.selectedPaperEvidence && Array.isArray(approvals.selectedPaperEvidence)) {
+        validApprovalDetected = true;
         updates.selectedPaperEvidence = approvals.selectedPaperEvidence;
     }
 
-    // Character ID mappings (two input formats supported)
+    // Character ID mappings (Commit 8.9.5, 8.9.x) - two input formats supported
     if (approvals.characterIdsRaw && typeof approvals.characterIdsRaw === 'string') {
+        validApprovalDetected = true;
         updates.characterIdsRaw = approvals.characterIdsRaw;
     } else if (approvals.characterIds && typeof approvals.characterIds === 'object') {
+        validApprovalDetected = true;
         updates.characterIdMappings = approvals.characterIds;
     }
 
-    // Evidence bundle approval (boolean)
-    // Just clears awaitingApproval which is already done above
+    // Evidence bundle approval with rescue mechanism (Commit 8.10+)
+    if (approvals.evidenceBundle === true) {
+        validApprovalDetected = true;
+        if (approvals.rescuedItems && Array.isArray(approvals.rescuedItems) && approvals.rescuedItems.length > 0) {
+            // Validate: filter to non-empty strings only
+            const validItems = approvals.rescuedItems.filter(item =>
+                typeof item === 'string' && item.trim().length > 0
+            );
+
+            if (validItems.length > 0) {
+                updates._rescuedItems = validItems;
+            }
+        }
+    }
 
     // Arc selection with validation
     if (approvals.selectedArcs) {
         if (!Array.isArray(approvals.selectedArcs) || approvals.selectedArcs.length === 0) {
             error = 'selectedArcs must be a non-empty array';
         } else {
+            validApprovalDetected = true;
             updates.selectedArcs = approvals.selectedArcs;
         }
     }
 
     // Outline approval (boolean)
-    // Just clears awaitingApproval
+    if (approvals.outline === true) {
+        validApprovalDetected = true;
+    }
 
-    // Article approval (boolean)
-    // Just clears awaitingApproval
+    // Article approval (boolean) (Commit 8.9.7)
+    if (approvals.article === true) {
+        validApprovalDetected = true;
+    }
+
+    // Only clear awaitingApproval if a valid approval type was detected
+    if (validApprovalDetected) {
+        updates.awaitingApproval = false;
+    }
 
     return { state: updates, error };
 }
@@ -403,60 +435,13 @@ app.post('/api/generate', requireAuth, async (req, res) => {
             initialState.rawSessionInput = rawSessionInput;
         }
 
+        // Apply approval decisions using shared helper (DRY - Commit 8.10+)
         if (approvals) {
-            // Input review approval (Commit 8.9): apply edits and clear approval flag
-            if (approvals.inputReview === true) {
-                initialState.awaitingApproval = false;
-                // Apply user edits if provided
-                if (approvals.inputEdits) {
-                    initialState._inputEdits = approvals.inputEdits;
-                }
+            const { state: approvalState, error: validationError } = buildApprovalState(approvals);
+            if (validationError) {
+                return res.status(400).json({ error: validationError });
             }
-
-            // Paper evidence selection (Commit 8.9.4): set selectedPaperEvidence and clear approval flag
-            if (approvals.selectedPaperEvidence && Array.isArray(approvals.selectedPaperEvidence)) {
-                initialState.selectedPaperEvidence = approvals.selectedPaperEvidence;
-                initialState.awaitingApproval = false;
-            }
-
-            // Character ID mappings (Commit 8.9.5, 8.9.x): two input formats supported
-            // 1. Structured: approvals.characterIds = { "photo.jpg": { characterMappings: [...] } }
-            // 2. Natural language: approvals.characterIdsRaw = "Photo 1: Far left = Morgan, Center = Victoria..."
-            if (approvals.characterIdsRaw && typeof approvals.characterIdsRaw === 'string') {
-                // Natural language input - will be parsed by parseCharacterIds node
-                initialState.characterIdsRaw = approvals.characterIdsRaw;
-                initialState.awaitingApproval = false;
-            } else if (approvals.characterIds && typeof approvals.characterIds === 'object') {
-                // Structured input - bypass parsing, go directly to finalization
-                initialState.characterIdMappings = approvals.characterIds;
-                initialState.awaitingApproval = false;
-            }
-
-            // Evidence bundle approval: clear awaitingApproval flag
-            if (approvals.evidenceBundle === true) {
-                initialState.awaitingApproval = false;
-            }
-
-            // Arc selection: set selectedArcs and clear approval flag
-            if (approvals.selectedArcs && Array.isArray(approvals.selectedArcs)) {
-                if (approvals.selectedArcs.length === 0) {
-                    return res.status(400).json({
-                        error: 'selectedArcs cannot be empty. At least one arc must be selected.'
-                    });
-                }
-                initialState.selectedArcs = approvals.selectedArcs;
-                initialState.awaitingApproval = false;
-            }
-
-            // Outline approval: clear awaitingApproval flag
-            if (approvals.outline === true) {
-                initialState.awaitingApproval = false;
-            }
-
-            // Article approval: clear awaitingApproval flag (Commit 8.9.7)
-            if (approvals.article === true) {
-                initialState.awaitingApproval = false;
-            }
+            Object.assign(initialState, approvalState);
         }
 
         // Run graph until it pauses at checkpoint or completes
@@ -902,6 +887,27 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
             return res.status(400).json({ sessionId, error: validationError });
         }
 
+        // Start background pipelines on input-review approval (fire-and-forget)
+        // Pipelines run in parallel with user's next checkpoint interactions
+        if (state.approvalType === APPROVAL_TYPES.INPUT_REVIEW && approvals.inputReview === true) {
+            const sessionData = {
+                sessionId,
+                directorNotes: state.directorNotes,
+                sessionConfig: state.sessionConfig,
+                playerFocus: state.playerFocus,
+                _parsedInput: state._parsedInput
+            };
+            const pipelineConfig = {
+                configurable: {
+                    sessionId,
+                    theme: state.theme || 'journalist',
+                    dataDir: path.join(__dirname, 'data')
+                }
+            };
+            backgroundPipelineManager.startPipelines(sessionId, sessionData, pipelineConfig);
+            console.log(`[${new Date().toISOString()}] Started background pipelines for session ${sessionId}`);
+        }
+
         // Use theme from session state (not hardcoded)
         const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
         const config = {
@@ -1064,9 +1070,23 @@ app.get('/api/health', (req, res) => {
                 article: '/api/session/:id/article (GET)',
                 start: '/api/session/:id/start (POST)',
                 approve: '/api/session/:id/approve (POST)',
-                rollback: '/api/session/:id/rollback (POST)'
+                rollback: '/api/session/:id/rollback (POST)',
+                background: '/api/session/:id/background (GET)'
             }
         }
+    });
+});
+
+/**
+ * GET /api/session/:id/background
+ * Get background pipeline status for debugging
+ */
+app.get('/api/session/:id/background', requireAuth, (req, res) => {
+    const { id: sessionId } = req.params;
+    const status = backgroundPipelineManager.getFullStatus(sessionId);
+    res.json({
+        sessionId,
+        ...status
     });
 });
 
@@ -1133,5 +1153,13 @@ app.get('/', (req, res) => {
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n\nShutting down gracefully...');
+    // Close cached Notion client (SQLite connection)
+    try {
+        const { resetCachedNotionClient } = require('./lib/cache');
+        resetCachedNotionClient();
+        console.log('Closed cache connections.');
+    } catch (err) {
+        console.warn('Cache cleanup skipped:', err.message);
+    }
     process.exit(0);
 });

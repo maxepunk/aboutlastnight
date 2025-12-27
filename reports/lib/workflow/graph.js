@@ -494,6 +494,7 @@ function createGraphBuilder() {
   builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses);  // Commit 8.9.5
   builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
+  builder.addNode('processRescuedItems', nodes.processRescuedItems);  // Commit 8.10+: Handle human-rescued paper evidence
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)
@@ -593,8 +594,11 @@ function createGraphBuilder() {
   // Evidence + Photos approval checkpoint
   builder.addConditionalEdges('curateEvidenceBundle', routeEvidenceApproval, {
     wait: END,
-    continue: 'analyzeArcs'  // Start orchestrated arc analysis (Commit 8.8)
+    continue: 'processRescuedItems'  // Process any human-rescued items before arc analysis
   });
+
+  // Process rescued items then continue to arc analysis (Commit 8.10+)
+  builder.addEdge('processRescuedItems', 'analyzeArcs');
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)

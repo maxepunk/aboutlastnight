@@ -241,14 +241,14 @@ describe('ai-nodes', () => {
       expect(result.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS);
     });
 
-    it('calls SDK with haiku model', async () => {
+    it('calls SDK with opus model for judgment-heavy curation', async () => {
       mockClient.clearCalls();
       // Provide preprocessedEvidence so SDK is called
       const state = { preprocessedEvidence: mockPreprocessedEvidence };
       await curateEvidenceBundle(state, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('haiku');
+      expect(lastCall.model).toBe('opus');
     });
 
     it('includes playerFocus in prompt', async () => {
