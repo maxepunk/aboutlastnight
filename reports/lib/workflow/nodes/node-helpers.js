@@ -443,6 +443,122 @@ function buildCurationReport(scoredPaper, exposedTokens, context) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ARC VALIDATION HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// These functions support programmatic validation of arc generation output.
+// Strict ID matching replaces LLM semantic matching for evidence grounding.
+
+/**
+ * Extract all valid evidence IDs from evidence bundle
+ *
+ * Used for strict programmatic validation of arc keyEvidence references.
+ * Arcs can only reference evidence IDs that exist in this set.
+ *
+ * Commit 8.12: Created for arc validation - evidence grounding must be strict.
+ *
+ * @param {Object} evidenceBundle - Curated evidence bundle from Phase 1.8
+ * @returns {Set<string>} Set of all valid evidence IDs
+ */
+function buildValidEvidenceIds(evidenceBundle) {
+  const ids = new Set();
+
+  if (!evidenceBundle) {
+    console.warn('[buildValidEvidenceIds] No evidence bundle provided');
+    return ids;
+  }
+
+  // Exposed tokens - use both id and tokenId as valid references
+  const exposedTokens = evidenceBundle.exposed?.tokens || [];
+  for (const t of exposedTokens) {
+    if (t.id) ids.add(t.id);
+    if (t.tokenId) ids.add(t.tokenId);
+  }
+
+  // Exposed paper evidence - use id, name, and pageId as valid references
+  const exposedPaper = evidenceBundle.exposed?.paperEvidence || [];
+  for (const p of exposedPaper) {
+    if (p.id) ids.add(p.id);
+    if (p.name) ids.add(p.name);  // Some arcs reference by name
+    if (p.pageId) ids.add(p.pageId);  // Notion page ID
+  }
+
+  // Buried transactions - can be referenced by transaction ID
+  const buriedTransactions = evidenceBundle.buried?.transactions || [];
+  for (const t of buriedTransactions) {
+    if (t.id) ids.add(t.id);
+  }
+
+  // Buried relationships - can be referenced by relationship ID
+  const buriedRelationships = evidenceBundle.buried?.relationships || [];
+  for (const r of buriedRelationships) {
+    if (r.id) ids.add(r.id);
+  }
+
+  console.log(`[buildValidEvidenceIds] Extracted ${ids.size} valid evidence IDs`);
+  return ids;
+}
+
+/**
+ * Validate roster name with fuzzy matching
+ *
+ * Used to validate characterPlacements in arcs reference actual roster members.
+ * Returns the canonical roster name if matched, null otherwise.
+ *
+ * Matching order:
+ * 1. Exact match (case-insensitive)
+ * 2. Substring match with tie-breaking:
+ *    - Prefer exact length match
+ *    - Prefer shortest match (most specific)
+ * 3. No match → returns null
+ *
+ * Commit 8.12: Added tie-breaking for ambiguous substring matches
+ * (e.g., "Taylor" matching both "Taylor" and "Taylor Chase")
+ *
+ * @param {string} name - Character name from arc characterPlacements
+ * @param {string[]} roster - Array of canonical roster names
+ * @returns {string|null} Matched roster name or null
+ */
+function validateRosterName(name, roster) {
+  if (!name || !Array.isArray(roster) || roster.length === 0) {
+    return null;
+  }
+
+  const normalizedInput = name.toLowerCase().trim();
+
+  // 1. Exact match (case-insensitive)
+  const exactMatch = roster.find(r => r.toLowerCase().trim() === normalizedInput);
+  if (exactMatch) return exactMatch;
+
+  // 2. Substring matches with tie-breaking
+  const substringMatches = roster.filter(r => {
+    const normalizedRoster = r.toLowerCase().trim();
+    return normalizedRoster.includes(normalizedInput) ||
+           normalizedInput.includes(normalizedRoster);
+  });
+
+  if (substringMatches.length === 0) {
+    return null;  // No match
+  }
+
+  if (substringMatches.length === 1) {
+    return substringMatches[0];  // Single match - use it
+  }
+
+  // Multiple matches - apply tie-breaking
+  // First: prefer exact length match (name length equals roster name length)
+  const exactLengthMatch = substringMatches.find(r =>
+    r.toLowerCase().trim().length === normalizedInput.length
+  );
+  if (exactLengthMatch) return exactLengthMatch;
+
+  // Second: prefer shortest match (most specific - "Jon" over "Jonathan")
+  return substringMatches.reduce((shortest, current) =>
+    current.length <= shortest.length ? current : shortest
+  );
+}
+
 module.exports = {
   safeParseJson,
   getSdkClient,
@@ -457,6 +573,10 @@ module.exports = {
   buildExposedTokenSummaries,
   buildCurationReport,
   deriveNarrativeThreads,
+
+  // Arc validation helpers (Commit 8.12+)
+  buildValidEvidenceIds,
+  validateRosterName,
 
   // Re-export batching utilities from preprocessor for convenience
   createBatches,

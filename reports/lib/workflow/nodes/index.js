@@ -49,9 +49,10 @@ module.exports = {
   // Preprocess nodes (from preprocess-nodes.js) - Commit 8.5
   preprocessEvidence: preprocessNodes.preprocessEvidence,
 
-  // Arc specialist nodes (from arc-specialist-nodes.js) - Commit 8.8
-  // Single orchestrator replaces 4 sequential nodes (financial, behavioral, victimization, synthesize)
-  analyzeArcsWithSubagents: arcSpecialistNodes.analyzeArcsWithSubagents,
+  // Arc specialist nodes (from arc-specialist-nodes.js) - Commit 8.15
+  // Commit 8.15: Player-focus-guided single-call architecture (replaces parallel specialists)
+  analyzeArcsPlayerFocusGuided: arcSpecialistNodes.analyzeArcsPlayerFocusGuided,
+  validateArcStructure: arcSpecialistNodes.validateArcStructure,  // Commit 8.12: Strict evidence/roster validation
 
   // Evaluator nodes (from evaluator-nodes.js) - Commit 8.6
   evaluateArcs: evaluatorNodes.evaluateArcs,

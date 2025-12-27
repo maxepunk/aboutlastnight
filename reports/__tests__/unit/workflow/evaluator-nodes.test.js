@@ -61,11 +61,13 @@ describe('evaluator-nodes', () => {
   describe('QUALITY_CRITERIA', () => {
     it('defines criteria for arcs phase', () => {
       expect(QUALITY_CRITERIA.arcs).toBeDefined();
-      expect(QUALITY_CRITERIA.arcs.coherence).toBeDefined();
-      expect(QUALITY_CRITERIA.arcs.evidenceGrounding).toBeDefined();
-      expect(QUALITY_CRITERIA.arcs.narrativePotential).toBeDefined();
+      // Commit 8.15: Structural criteria
       expect(QUALITY_CRITERIA.arcs.rosterCoverage).toBeDefined();
-      expect(QUALITY_CRITERIA.arcs.playerFocusAlignment).toBeDefined();
+      expect(QUALITY_CRITERIA.arcs.evidenceIdValidity).toBeDefined();
+      expect(QUALITY_CRITERIA.arcs.accusationArcPresent).toBeDefined();
+      // Commit 8.15: Advisory criteria
+      expect(QUALITY_CRITERIA.arcs.coherence).toBeDefined();
+      expect(QUALITY_CRITERIA.arcs.evidenceConfidenceBalance).toBeDefined();
     });
 
     it('defines criteria for outline phase', () => {
@@ -132,8 +134,9 @@ describe('evaluator-nodes', () => {
       const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs);
 
       expect(prompt).toContain('coherence');
-      expect(prompt).toContain('25%');
-      expect(prompt).toContain('evidenceGrounding');
+      // Commit 8.15: Changed from evidenceGrounding to evidenceIdValidity
+      expect(prompt).toContain('evidenceIdValidity');
+      expect(prompt).toContain('rosterCoverage');
     });
 
     it('includes evaluation rules', () => {
@@ -187,15 +190,22 @@ describe('evaluator-nodes', () => {
       it('includes evidence bundle summary', () => {
         const state = {
           evidenceBundle: {
-            exposed: ['item1', 'item2'],
-            buried: ['item3']
+            exposed: {
+              tokens: [{ id: 'item1' }, { id: 'item2' }],
+              paperEvidence: []
+            },
+            buried: {
+              transactions: [{ id: 'item3' }],
+              relationships: []
+            }
           }
         };
         const prompt = buildEvaluationUserPrompt('arcs', state);
 
-        expect(prompt).toContain('Exposed');
-        expect(prompt).toContain('2');
-        expect(prompt).toContain('1');
+        // Updated to match new format with IDs and details sections
+        expect(prompt).toContain('EXPOSED EVIDENCE DETAILS');
+        expect(prompt).toContain('BURIED TRANSACTIONS');
+        expect(prompt).toContain('ALL VALID EVIDENCE IDS');
       });
     });
 

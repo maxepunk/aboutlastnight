@@ -37,29 +37,48 @@ const { safeParseJson, getSdkClient, formatIssuesForMessage } = require('./node-
 
 /**
  * Quality criteria for each phase
- * Each criterion has a description and weight
+ * Each criterion has a description, weight, and type (structural or advisory)
+ *
+ * Commit 8.15: Arc criteria updated for player-focus-guided architecture:
+ * - STRUCTURAL criteria: Block if failed (rosterCoverage, evidenceIdValidity, accusationArcPresent)
+ * - ADVISORY criteria: Warn but don't block (coherence, evidenceConfidenceBalance)
+ *
+ * The player-focus-guided architecture GUARANTEES playerFocusAlignment by design
+ * (accusation arc is required, arcs are driven by player conclusions not evidence patterns)
  */
 const QUALITY_CRITERIA = {
   arcs: {
-    coherence: {
-      description: 'Do arcs tell a consistent story?',
-      weight: 0.25
-    },
-    evidenceGrounding: {
-      description: 'Are arcs supported by evidence?',
-      weight: 0.25
-    },
-    narrativePotential: {
-      description: 'Do arcs have emotional resonance?',
-      weight: 0.2
-    },
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.75)
+    // ═══════════════════════════════════════════════════════════════════════
     rosterCoverage: {
-      description: 'Does every roster member have placement?',
-      weight: 0.15
+      description: 'Does every roster member have a placement in at least one arc?',
+      weight: 0.30,
+      type: 'structural'
     },
-    playerFocusAlignment: {
-      description: 'Do arcs reflect what players focused on?',
-      weight: 0.15
+    evidenceIdValidity: {
+      description: 'Are all keyEvidence IDs valid (exist in evidence bundle)?',
+      weight: 0.25,
+      type: 'structural'
+    },
+    accusationArcPresent: {
+      description: 'Is there an arc with arcSource="accusation" addressing the player accusation?',
+      weight: 0.20,
+      type: 'structural'
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.25)
+    // ═══════════════════════════════════════════════════════════════════════
+    coherence: {
+      description: 'Do arcs tell a consistent story without contradictions?',
+      weight: 0.15,
+      type: 'advisory'
+    },
+    evidenceConfidenceBalance: {
+      description: 'Are there arcs with strong/moderate evidence (not all speculative)?',
+      weight: 0.10,
+      type: 'advisory'
     }
   },
   outline: {
@@ -121,6 +140,75 @@ const QUALITY_CRITERIA = {
  * @returns {string} System prompt
  */
 function buildEvaluationSystemPrompt(phase, criteria) {
+  // Commit 8.15: Separate structural vs advisory criteria in prompt
+  const structuralCriteria = Object.entries(criteria)
+    .filter(([_, { type }]) => type === 'structural')
+    .map(([key, { description, weight }]) =>
+      `- ${key} (${Math.round(weight * 100)}%): ${description}`)
+    .join('\n');
+
+  const advisoryCriteria = Object.entries(criteria)
+    .filter(([_, { type }]) => type === 'advisory' || !type)  // Default to advisory if no type
+    .map(([key, { description, weight }]) =>
+      `- ${key} (${Math.round(weight * 100)}%): ${description}`)
+    .join('\n');
+
+  // For arcs phase, use structural/advisory distinction
+  if (phase === 'arcs') {
+    return `You are the ARCS Evaluator for an investigative article about "About Last Night" - a crime thriller game.
+
+Your task is to evaluate if the arcs are ready for human review.
+
+═══════════════════════════════════════════════════════════════════════════
+STRUCTURAL CRITERIA (MUST PASS - these block if failed)
+═══════════════════════════════════════════════════════════════════════════
+${structuralCriteria}
+
+═══════════════════════════════════════════════════════════════════════════
+ADVISORY CRITERIA (Warn but don't block - these are quality guidance)
+═══════════════════════════════════════════════════════════════════════════
+${advisoryCriteria}
+
+EVALUATION RULES:
+1. Score each criterion as: pass (1.0), partial (0.5), fail (0.0)
+2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)
+3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
+4. Content is READY if ALL structural criteria pass
+5. Content is NOT READY only if a STRUCTURAL criterion fails
+
+CRITICAL DISTINCTION:
+- accusationArcPresent: Check if any arc has arcSource="accusation"
+- evidenceIdValidity: Check if keyEvidence IDs exist in the evidence bundle
+- rosterCoverage: Check if every roster member appears in characterPlacements of at least one arc
+
+CRITICAL: Your feedback MUST be actionable. Include:
+- SPECIFIC names (characters missing from roster coverage)
+- SPECIFIC evidence IDs (which IDs are invalid)
+- CONCRETE fixes (not "improve grounding" but "Arc 2 should reference evidence ID xyz123")
+
+OUTPUT FORMAT (JSON):
+{
+  "ready": boolean,
+  "overallScore": number (0-1),
+  "structuralPassed": boolean,
+  "criteriaScores": {
+    "criterionName": {
+      "score": number,
+      "type": "structural" | "advisory",
+      "notes": "specific explanation with names/evidence",
+      "fix": "concrete action to improve this criterion"
+    }
+  },
+  "structuralIssues": [ "issues that MUST be fixed" ],
+  "advisoryWarnings": [ "issues that are suggestions, not blockers" ],
+  "revisionGuidance": "Step 1: Fix structural issue. Step 2: Optional advisory fix.",
+  "confidence": "high" | "medium" | "low"
+}
+
+Remember: STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
+  }
+
+  // For other phases, use original format (all criteria treated equally)
   const criteriaList = Object.entries(criteria)
     .map(([key, { description, weight }]) =>
       `- ${key} (${Math.round(weight * 100)}%): ${description}`)
@@ -175,20 +263,36 @@ function buildEvaluationUserPrompt(phase, state) {
     case 'arcs':
       // Provide roster for rosterCoverage evaluation
       const roster = state.sessionConfig?.roster || [];
-      // Provide evidence titles/summaries for evidenceGrounding evaluation
+      // Provide evidence with IDs for evidenceGrounding verification
       // evidenceBundle has nested structure: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } }
       const exposedData = state.evidenceBundle?.exposed || {};
       const buriedData = state.evidenceBundle?.buried || {};
-      // Flatten exposed items (tokens + paperEvidence)
+      // Flatten exposed items (tokens + paperEvidence) - INCLUDE IDs for verification
       const exposedTokens = Array.isArray(exposedData.tokens) ? exposedData.tokens : [];
       const exposedPaper = Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence : [];
       const exposedEvidence = [...exposedTokens, ...exposedPaper]
-        .map(e => ({ title: e.title || e.name || e.tokenId, summary: e.summary || e.description?.substring?.(0, 100) }));
-      // Flatten buried items (transactions + relationships)
+        .map(e => ({
+          id: e.id || e.tokenId || e.pageId || e.name,  // Include ID for keyEvidence verification
+          title: e.title || e.name || e.tokenId,
+          summary: e.summary || e.description?.substring?.(0, 100)
+        }));
+      // Extract ALL evidence IDs for verification (no truncation)
+      const allEvidenceIds = exposedEvidence.map(e => e.id).filter(Boolean);
+
+      // Flatten buried items - INCLUDE IDs and amounts for financial verification
       const buriedTx = Array.isArray(buriedData.transactions) ? buriedData.transactions : [];
       const buriedRel = Array.isArray(buriedData.relationships) ? buriedData.relationships : [];
       const buriedEvidence = [...buriedTx, ...buriedRel]
-        .map(e => ({ title: e.title || e.name || e.tokenId, summary: e.summary || e.description?.substring?.(0, 100) }));
+        .map(e => ({
+          id: e.id || e.tokenId || e.name,
+          title: e.title || e.name || e.tokenId,
+          // Include amounts for financial claim verification
+          ...(e.amount && { amount: e.amount }),
+          ...(e.from && { from: e.from }),
+          ...(e.to && { to: e.to }),
+          ...(e.accountName && { accountName: e.accountName })
+        }));
+
       // Extract key playerFocus elements for evaluation
       const playerFocusForEval = {
         primaryInvestigation: state.playerFocus?.primaryInvestigation,
@@ -202,24 +306,52 @@ function buildEvaluationUserPrompt(phase, state) {
 ARCS:
 ${JSON.stringify(state.narrativeArcs || [], null, 2)}
 
-ROSTER (every character MUST have placement in at least one arc):
+SESSION ROSTER (${roster.length} players who were PRESENT this session):
 ${JSON.stringify(roster, null, 2)}
+
+CRITICAL ROSTER vs EVIDENCE DISTINCTION:
+- The ROSTER above lists the ONLY characters who need arc coverage (they were played this session)
+- Evidence IDs may reference characters NOT on the roster (from the broader game universe)
+- Do NOT infer roster members from evidence ID prefixes (e.g., "hos011" does NOT mean "Howie" is on roster)
+- ONLY check coverage for the ${roster.length} names listed in SESSION ROSTER above
 
 PLAYER FOCUS (arcs should reflect what players investigated):
 ${JSON.stringify(playerFocusForEval, null, 2)}
 
-AVAILABLE EVIDENCE (arcs should reference these):
-Exposed (${exposedEvidence.length}): ${JSON.stringify(exposedEvidence.slice(0, 10), null, 2)}
-Buried (${buriedEvidence.length}): ${JSON.stringify(buriedEvidence.slice(0, 10), null, 2)}
+ALL VALID EVIDENCE IDS (${allEvidenceIds.length} total - use to verify keyEvidence references):
+${JSON.stringify(allEvidenceIds, null, 2)}
 
-EVALUATION CHECKLIST:
-1. ROSTER COVERAGE: Check characterPlacements in each arc - every roster member needs a role
-2. EVIDENCE GROUNDING: keyEvidence should reference actual evidence titles shown above
-3. PLAYER FOCUS ALIGNMENT: Does primaryInvestigation drive the main arc?
+EXPOSED EVIDENCE DETAILS (first 25 of ${exposedEvidence.length}):
+${JSON.stringify(exposedEvidence.slice(0, 25), null, 2)}
+
+BURIED TRANSACTIONS (${buriedEvidence.length} - for amount/account verification):
+${JSON.stringify(buriedEvidence, null, 2)}
+
+EVALUATION CHECKLIST (Commit 8.15 - Structural vs Advisory):
+
+═══════════════════════════════════════════════════════════════════════════
+STRUCTURAL CHECKS (MUST PASS)
+═══════════════════════════════════════════════════════════════════════════
+1. ROSTER COVERAGE: Every name in SESSION ROSTER needs a role in characterPlacements of at least one arc
+2. EVIDENCE ID VALIDITY: Every keyEvidence ID should exist in ALL VALID EVIDENCE IDS list
+3. ACCUSATION ARC PRESENT: At least one arc should have arcSource="accusation"
+
+═══════════════════════════════════════════════════════════════════════════
+ADVISORY CHECKS (Warn but don't block)
+═══════════════════════════════════════════════════════════════════════════
 4. COHERENCE: Do arcs tell a consistent story without contradictions?
-5. NARRATIVE POTENTIAL: Do arcs have emotional hooks that would engage readers?
+5. EVIDENCE CONFIDENCE BALANCE: Are there arcs with evidenceStrength="strong" or "moderate" (not all speculative)?
 
-Be SPECIFIC in issues - name missing characters, cite ungrounded evidence claims.
+IMPORTANT FOR NEW FIELDS (Commit 8.15):
+- arcSource: Should be one of ["accusation", "whiteboard", "observation", "discovered"]
+- evidenceStrength: Should be one of ["strong", "moderate", "weak", "speculative"]
+- caveats: Array of complications/contradictions
+- unansweredQuestions: Array of evidence gaps
+
+Be SPECIFIC in issues:
+- Name missing characters FROM THE ROSTER
+- List invalid evidence IDs
+- Note if accusation arc is missing
 
 Are these arcs ready for human review?`;
 
@@ -413,50 +545,87 @@ function createEvaluator(phase, options = {}) {
     const prompt = buildEvaluationUserPrompt(phase, state);
 
     try {
+      // Commit 8.15: Updated schema with structural/advisory fields for arcs phase
+      const jsonSchema = phase === 'arcs' ? {
+        type: 'object',
+        properties: {
+          ready: { type: 'boolean' },
+          overallScore: { type: 'number' },
+          structuralPassed: { type: 'boolean' },
+          criteriaScores: { type: 'object' },
+          structuralIssues: { type: 'array' },
+          advisoryWarnings: { type: 'array' },
+          revisionGuidance: { type: 'string' },
+          confidence: { type: 'string' }
+        },
+        required: ['ready', 'overallScore', 'structuralPassed']
+      } : {
+        type: 'object',
+        properties: {
+          ready: { type: 'boolean' },
+          overallScore: { type: 'number' },
+          criteriaScores: { type: 'object' },
+          issues: { type: 'array' },
+          revisionGuidance: { type: 'string' },
+          confidence: { type: 'string' }
+        },
+        required: ['ready', 'overallScore']
+      };
+
       // SDK returns parsed object directly when jsonSchema is provided
       const evaluation = await sdk({
         systemPrompt,
         prompt,
         model,
-        jsonSchema: {
-          type: 'object',
-          properties: {
-            ready: { type: 'boolean' },
-            overallScore: { type: 'number' },
-            criteriaScores: { type: 'object' },
-            issues: { type: 'array' },
-            revisionGuidance: { type: 'string' },
-            confidence: { type: 'string' }
-          },
-          required: ['ready', 'overallScore']
-        }
+        jsonSchema
       });
+
+      // Commit 8.15: For arcs phase, use structuralPassed to determine readiness
+      // Advisory issues become warnings, not blockers
+      // Backward compat: if structuralPassed not provided, fall back to ready field
+      const isReady = phase === 'arcs'
+        ? (evaluation.structuralPassed !== undefined ? evaluation.structuralPassed : evaluation.ready)
+        : evaluation.ready;
 
       // Create evaluation history entry
       const historyEntry = {
         phase,
         timestamp: new Date().toISOString(),
-        ready: evaluation.ready,
+        ready: isReady,
         overallScore: evaluation.overallScore,
-        issues: evaluation.issues || [],
+        // Commit 8.15: Separate structural issues from advisory warnings
+        structuralIssues: evaluation.structuralIssues || [],
+        advisoryWarnings: evaluation.advisoryWarnings || [],
+        issues: evaluation.issues || evaluation.structuralIssues || [],  // Backward compat
         confidence: evaluation.confidence || 'medium',
         revisionNumber: currentRevisions
       };
 
       // Debug: Log evaluation result details
       console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Evaluation result:`);
-      console.log(`  - ready: ${evaluation.ready}, score: ${evaluation.overallScore}`);
+      console.log(`  - ready: ${isReady}, score: ${evaluation.overallScore}`);
+      if (phase === 'arcs') {
+        console.log(`  - structuralPassed: ${evaluation.structuralPassed}`);
+      }
       if (evaluation.criteriaScores) {
         Object.entries(evaluation.criteriaScores).forEach(([key, val]) => {
-          console.log(`  - ${key}: ${val.score} (${val.notes || 'no notes'})`);
+          const typeLabel = val.type === 'structural' ? '[STRUCTURAL]' : '[advisory]';
+          console.log(`  - ${typeLabel} ${key}: ${val.score} (${val.notes || 'no notes'})`);
         });
       }
-      if (evaluation.issues && evaluation.issues.length > 0) {
+      if (evaluation.structuralIssues && evaluation.structuralIssues.length > 0) {
+        console.log(`  - STRUCTURAL ISSUES: ${JSON.stringify(evaluation.structuralIssues)}`);
+      }
+      if (evaluation.advisoryWarnings && evaluation.advisoryWarnings.length > 0) {
+        console.log(`  - Advisory warnings: ${JSON.stringify(evaluation.advisoryWarnings)}`);
+      }
+      if (evaluation.issues && evaluation.issues.length > 0 && !evaluation.structuralIssues) {
         console.log(`  - issues: ${JSON.stringify(evaluation.issues)}`);
       }
 
       // Determine next action based on evaluation result
-      if (evaluation.ready) {
+      // Commit 8.15: Use isReady (which factors in structuralPassed for arcs)
+      if (isReady) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Ready for human review (score: ${evaluation.overallScore})`);
 
         // Note: Don't set awaitingApproval here - that's the checkpoint's responsibility
