@@ -208,33 +208,19 @@ Remember: Use physical descriptions for people, NOT names.`;
 }
 
 /**
- * Create progress logger for SDK operations
- * @param {string} context - Context prefix for log messages
- * @returns {Function} Progress callback for sdkQuery
- */
-function createProgressLogger(context) {
-  return (progress) => {
-    const { type, label, elapsed, toolName } = progress;
-    if (type === 'tool_call') {
-      console.log(`[${context}] ${label}: ${elapsed}s - calling ${toolName}`);
-    } else if (type === 'system' && progress.subtype === 'init') {
-      console.log(`[${context}] ${label}: ${elapsed}s - session started`);
-    }
-  };
-}
-
-/**
  * Analyze a single photo with the SDK
  *
  * Extracted for testability and single-responsibility.
+ * Progress logging is handled automatically by the SDK wrapper (getSdkClient).
  *
  * @param {Object} params - Analysis parameters
- * @param {Function} params.sdk - SDK query function
- * @param {string} params.systemPrompt - System prompt for analysis
+ * @param {Function} params.sdk - SDK query function (wrapped with progress logging)
+ * @param {Object} params.imagePromptBuilder - Prompt builder instance
+ * @param {Object} params.playerFocus - Player focus context
+ * @param {Array} params.roster - Character roster
  * @param {string} params.processedPath - Path to preprocessed image
  * @param {string} params.originalFilename - Original filename (for output)
  * @param {number} params.timeoutMs - Timeout in milliseconds
- * @param {Function} params.onProgress - Progress callback
  * @returns {Promise<Object>} Analysis result or error placeholder
  */
 async function analyzeSinglePhoto({
@@ -244,8 +230,7 @@ async function analyzeSinglePhoto({
   roster,
   processedPath,
   originalFilename,
-  timeoutMs,
-  onProgress
+  timeoutMs
 }) {
   // Use ImagePromptBuilder for context-aware prompts
   const { systemPrompt, userPrompt } = await imagePromptBuilder.buildPhotoAnalysisPrompt({
@@ -256,6 +241,7 @@ async function analyzeSinglePhoto({
   });
 
   try {
+    // Progress logging handled by SDK wrapper (getSdkClient)
     const analysis = await sdk({
       systemPrompt,
       prompt: userPrompt,
@@ -263,7 +249,6 @@ async function analyzeSinglePhoto({
       jsonSchema: PHOTO_ANALYSIS_SCHEMA,
       allowedTools: ['Read'],
       timeoutMs,
-      onProgress,
       label: originalFilename
     });
 
@@ -349,10 +334,9 @@ async function analyzePhotos(state, config) {
     // Step 2: Analyze with SDK (limited concurrency + timeout + progress)
     console.log(`[analyzePhotos] Step 2/2: Analyzing with SDK (max ${PHOTO_CONFIG.MAX_CONCURRENT} concurrent)...`);
 
-    const sdk = getSdkClient(config);
+    const sdk = getSdkClient(config, 'analyzePhotos');
     const imagePromptBuilder = getImagePromptBuilder(config);
     const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
-    const onProgress = createProgressLogger('analyzePhotos');
 
     // Get roster from sessionConfig for photo analysis context
     const roster = state.sessionConfig?.roster || [];
@@ -367,8 +351,8 @@ async function analyzePhotos(state, config) {
         roster,
         processedPath: preprocessResult.path,
         originalFilename,
-        timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS,
-        onProgress
+        timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS
+        // onProgress handled automatically by getSdkClient wrapper
       }));
     });
 
@@ -583,7 +567,7 @@ async function parseCharacterIds(state, config) {
 
   console.log(`[parseCharacterIds] Parsing natural language input (${state.characterIdsRaw.length} chars)`);
 
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'parseCharacterIds');
   const imagePromptBuilder = getImagePromptBuilder(config);
 
   try {
@@ -699,7 +683,7 @@ async function finalizePhotoAnalyses(state, config) {
 
   console.log(`[finalizePhotoAnalyses] Enriching ${state.photoAnalyses.analyses.length} analyses with ${mappingCount} character mappings`);
 
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'finalizePhotos');
   const imagePromptBuilder = getImagePromptBuilder(config);
 
   // Build sessionData for enrichment context
@@ -885,7 +869,6 @@ module.exports = {
     buildPhotoAnalysisUserPrompt,
     createEmptyPhotoAnalysisResult,
     createFailedPhotoAnalysis,
-    createProgressLogger,
     analyzeSinglePhoto,
     safeParseJson,
     PHOTO_ANALYSIS_SCHEMA,

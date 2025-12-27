@@ -353,7 +353,7 @@ async function parseRawInput(state, config) {
   console.log('[parseRawInput] Processing raw session input');
   const startTime = Date.now();
 
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'parseRawInput');
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
   const rawInput = state.rawSessionInput;
 

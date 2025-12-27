@@ -408,7 +408,7 @@ function createEvaluator(phase, options = {}) {
       }
     }
 
-    const sdk = getSdkClient(config);
+    const sdk = getSdkClient(config, `evaluate-${phase}`);
     const systemPrompt = buildEvaluationSystemPrompt(phase, criteria);
     const prompt = buildEvaluationUserPrompt(phase, state);
 

@@ -7,7 +7,7 @@
  * @module node-helpers
  */
 
-const { sdkQuery } = require('../../sdk-client');
+const { sdkQuery, createProgressLogger } = require('../../sdk-client');
 
 /**
  * Safely parse JSON with informative error messages
@@ -37,16 +37,32 @@ function safeParseJson(response, context = 'response') {
 }
 
 /**
- * Get SDK client from config or use default
+ * Get SDK client from config or use default with progress logging
  *
  * Supports dependency injection for testing - nodes can receive
  * a mock client via config.configurable.sdkClient
  *
+ * When using the real SDK (not a mock), automatically injects
+ * progress logging via createProgressLogger. This provides visibility
+ * into Claude's thinking and tool usage for all SDK calls.
+ *
  * @param {Object} config - Graph config with optional configurable.sdkClient
- * @returns {Function} SDK query function
+ * @param {string} [context='sdk'] - Log prefix for progress messages (e.g., 'generateOutline')
+ * @returns {Function} SDK query function (wrapped with logging if using real SDK)
  */
-function getSdkClient(config) {
-  return config?.configurable?.sdkClient || sdkQuery;
+function getSdkClient(config, context = 'sdk') {
+  // If mock client is injected (for testing), return it directly
+  if (config?.configurable?.sdkClient) {
+    return config.configurable.sdkClient;
+  }
+
+  // Wrap real SDK with progress logging
+  const progressLogger = createProgressLogger(context);
+  return (options) => sdkQuery({
+    ...options,
+    // Use provided onProgress if caller passed one, otherwise use our logger
+    onProgress: options.onProgress || progressLogger
+  });
 }
 
 /**
