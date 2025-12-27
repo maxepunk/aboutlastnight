@@ -261,6 +261,19 @@ const WHITEBOARD_SCHEMA = {
 // ═══════════════════════════════════════════════════════
 
 /**
+ * Sanitize a file path by removing surrounding quotes and whitespace
+ * Handles cases like: "\"C:\\path\\to\\file\"" -> "C:\\path\\to\\file"
+ *
+ * @param {string} pathString - Path string to sanitize
+ * @returns {string|null} Sanitized path or null if empty
+ */
+function sanitizePath(pathString) {
+  if (!pathString) return null;
+  // Remove surrounding quotes (both single and double) and trim whitespace
+  return pathString.replace(/^["']|["']$/g, '').trim();
+}
+
+/**
  * Ensure directory exists, create if needed
  * @param {string} dirPath - Directory path
  */
@@ -386,7 +399,7 @@ Return structured JSON matching the schema.`;
       jsonSchema: SESSION_CONFIG_SCHEMA
     });
     sessionConfig.rosterCount = sessionConfig.roster?.length || 0;
-    sessionConfig.photosPath = rawInput.photosPath || null;
+    sessionConfig.photosPath = sanitizePath(rawInput.photosPath);
     sessionConfig.journalistName = 'Cassandra'; // Default journalist NPC name
     sessionConfig.createdAt = new Date().toISOString();
   } catch (error) {
@@ -759,6 +772,7 @@ module.exports = {
     DIRECTOR_NOTES_SCHEMA,
     WHITEBOARD_SCHEMA,
     deriveSessionId,
-    ensureDir
+    ensureDir,
+    sanitizePath
   }
 };

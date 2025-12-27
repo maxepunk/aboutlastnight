@@ -218,6 +218,10 @@ TASK:
 ${descriptions || '    (no people detected)'}`;
     }).join('\n\n');
 
+    // Extract just the filenames for the output format example
+    const filenameList = photoAnalyses.map(a => a.filename).slice(0, 3);
+    const exampleFilename = filenameList[0] || 'photo1.jpg';
+
     const systemPrompt = `You are a data parser that converts natural language character identifications into structured JSON.
 
 You will receive:
@@ -227,12 +231,19 @@ You will receive:
 
 Your task is to parse the natural language into the exact JSON structure needed by the system.
 
-IMPORTANT:
+CRITICAL FILENAME RULES:
+- Each key in the output MUST be the EXACT filename shown after "PHOTO N:" (e.g., "${exampleFilename}")
+- Do NOT use "PHOTO 1" or "Photo 1" or just "1" as keys - use the actual filename
+- The user may reference photos by number ("Photo 1"), position, or filename - YOU must translate to the exact filename
+${filenameList.length > 1 ? `- Valid filenames for this session: ${filenameList.join(', ')}${photoAnalyses.length > 3 ? ', ...' : ''}` : ''}
+
+OTHER RULES:
 - Match user's positional references ("far left", "center", "right") to the indexed descriptions
 - Validate character names against the roster (correct typos if obvious)
 - Note any additional characters the user mentions that weren't in the original analysis
 - Capture any corrections (location, context, etc.)
 - Mark photos to exclude if user indicates
+- Create an entry for EACH photo the user provides mappings for
 
 Output valid JSON only. No explanation needed.`;
 
@@ -251,25 +262,29 @@ ${naturalLanguageInput}
 
 ---
 
-Output JSON in this exact format:
+Output JSON with the EXACT FILENAME as each key (not "PHOTO 1", use the actual filename like "${exampleFilename}"):
 {
-  "<filename>": {
+  "${exampleFilename}": {
     "characterMappings": [
-      { "descriptionIndex": <number>, "characterName": "<name from roster>" }
+      { "descriptionIndex": 0, "characterName": "Victoria" }
     ],
     "additionalCharacters": [
-      { "description": "<what user described>", "characterName": "<name>", "role": "<role if mentioned>" }
+      { "description": "person in background", "characterName": "Morgan", "role": "observing" }
     ],
     "corrections": {
-      "location": "<location correction if mentioned>",
-      "context": "<context note if mentioned>",
-      "other": "<any other correction>"
+      "location": "near the evidence table",
+      "context": null,
+      "other": null
     },
-    "exclude": <true if user wants to exclude this photo, false otherwise>
-  }
+    "exclude": false
+  }${filenameList.length > 1 ? `,
+  "${filenameList[1]}": {
+    "characterMappings": [...],
+    ...
+  }` : ''}
 }
 
-Parse the input now:`;
+IMPORTANT: Use the EXACT filename from the PHOTO ANALYSES section above. Parse the input now:`;
 
     return { systemPrompt, userPrompt };
   }

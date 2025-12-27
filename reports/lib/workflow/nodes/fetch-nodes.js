@@ -167,7 +167,11 @@ async function loadDirectorNotes(state, config) {
  */
 async function fetchMemoryTokens(state, config) {
   // Skip if already fetched (resume case or pre-populated)
-  if (state.memoryTokens && state.memoryTokens.length > 0) {
+  // Use null check, not truthy/length check:
+  // - null/undefined = not yet fetched (run fetch)
+  // - array (even empty) = already fetched (skip)
+  if (state.memoryTokens !== null && state.memoryTokens !== undefined) {
+    console.log(`[fetchMemoryTokens] Skipping - already set (${state.memoryTokens.length} tokens)`);
     return {
       currentPhase: PHASES.FETCH_EVIDENCE
     };
@@ -277,7 +281,11 @@ async function fetchMemoryTokens(state, config) {
  */
 async function fetchPaperEvidence(state, config) {
   // Skip if already fetched (resume case or pre-populated)
-  if (state.paperEvidence && state.paperEvidence.length > 0) {
+  // Use null check, not truthy/length check:
+  // - null/undefined = not yet fetched (run fetch)
+  // - array (even empty) = already fetched (skip)
+  if (state.paperEvidence !== null && state.paperEvidence !== undefined) {
+    console.log(`[fetchPaperEvidence] Skipping - already set (${state.paperEvidence.length} items)`);
     return {
       currentPhase: PHASES.FETCH_PHOTOS
     };
@@ -309,7 +317,11 @@ async function fetchPaperEvidence(state, config) {
  */
 async function fetchSessionPhotos(state, config) {
   // Skip if already fetched (resume case or pre-populated)
-  if (state.sessionPhotos && state.sessionPhotos.length > 0) {
+  // Use null check, not truthy/length check:
+  // - null/undefined = not yet fetched (run fetch)
+  // - array (even empty) = already fetched (skip)
+  if (state.sessionPhotos !== null && state.sessionPhotos !== undefined) {
+    console.log(`[fetchSessionPhotos] Skipping - already set (${state.sessionPhotos.length} photos)`);
     return {
       currentPhase: PHASES.ANALYZE_PHOTOS
     };

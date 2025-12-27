@@ -240,10 +240,10 @@ class ThemeLoader {
 
 // Factory function for creating loader with default skill path
 function createThemeLoader(customPath = null) {
+  // Path resolves from lib/ -> reports/.claude/skills/journalist-report
   const skillPath = customPath || path.resolve(
-    __dirname,
-    '..',
-    '..',
+    __dirname,      // lib/
+    '..',           // reports/
     '.claude',
     'skills',
     'journalist-report'

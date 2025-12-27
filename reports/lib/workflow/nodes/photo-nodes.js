@@ -268,7 +268,8 @@ async function analyzeSinglePhoto({
 
     // Ensure filename is set (use original, not processed)
     analysis.filename = originalFilename;
-    console.log(`[analyzePhotos] Completed: ${originalFilename}`);
+    const charCount = analysis.characterDescriptions?.length || 0;
+    console.log(`[analyzePhotos] Completed: ${originalFilename} (${charCount} people detected)`);
     return analysis;
 
   } catch (error) {
@@ -586,14 +587,32 @@ async function parseCharacterIds(state, config) {
     const parsed = await sdk({
       systemPrompt,
       prompt: userPrompt,
-      model: 'haiku',  // Fast parsing task
+      model: 'sonnet',  // Complex table parsing requires sonnet (same as input-nodes.js:445)
       jsonSchema: PARSED_CHARACTER_IDS_SCHEMA
     });
 
-    const mappingCount = Object.keys(parsed).length;
+    const parsedKeys = Object.keys(parsed);
     const processingTimeMs = Date.now() - startTime;
 
-    console.log(`[parseCharacterIds] Parsed ${mappingCount} photo mappings in ${processingTimeMs}ms`);
+    // Debug: show what keys were returned vs what filenames exist
+    const expectedFilenames = (state.photoAnalyses?.analyses || []).map(a => a.filename);
+    const matchingKeys = parsedKeys.filter(key => expectedFilenames.includes(key));
+    const unmatchedKeys = parsedKeys.filter(key => !expectedFilenames.includes(key));
+
+    console.log(`[parseCharacterIds] Parsed ${parsedKeys.length} photo mappings in ${processingTimeMs}ms`);
+    console.log(`[parseCharacterIds] Keys: ${parsedKeys.join(', ')}`);
+
+    // Fail loud if LLM returned keys that don't match actual filenames
+    if (unmatchedKeys.length > 0) {
+      console.error(`[parseCharacterIds] ERROR: ${unmatchedKeys.length} keys don't match any filename`);
+      console.error(`[parseCharacterIds] Unmatched keys: ${unmatchedKeys.join(', ')}`);
+      console.error(`[parseCharacterIds] Expected filenames: ${expectedFilenames.join(', ')}`);
+      console.error(`[parseCharacterIds] This means the LLM ignored the prompt instruction to use exact filenames.`);
+    }
+
+    if (matchingKeys.length > 0) {
+      console.log(`[parseCharacterIds] Matched ${matchingKeys.length}/${expectedFilenames.length} photos`);
+    }
 
     return {
       characterIdMappings: parsed,
@@ -654,10 +673,13 @@ async function finalizePhotoAnalyses(state, config) {
     };
   }
 
-  // Skip if already enriched (check first analysis for identifiedCharacters)
-  const firstAnalysis = state.photoAnalyses.analyses[0];
-  if (firstAnalysis && firstAnalysis.identifiedCharacters !== undefined) {
-    console.log('[finalizePhotoAnalyses] Skipping - photoAnalyses already enriched');
+  // Skip if already enriched WITH actual character names (not just empty arrays from failed parse)
+  // Check if ANY photo has identifiedCharacters with content
+  const hasActualEnrichment = state.photoAnalyses.analyses.some(
+    a => a.identifiedCharacters && a.identifiedCharacters.length > 0
+  );
+  if (hasActualEnrichment) {
+    console.log('[finalizePhotoAnalyses] Skipping - photoAnalyses already enriched with character names');
     return {
       currentPhase: PHASES.FINALIZE_PHOTOS
     };
