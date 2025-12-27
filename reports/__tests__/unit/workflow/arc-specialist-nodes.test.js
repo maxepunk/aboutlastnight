@@ -84,13 +84,14 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
       expect(agents['journalist-victimization-specialist']).toBeDefined();
     });
 
-    it('includes absolute paths with forward slashes', () => {
+    it('includes evidence boundaries content', () => {
       const agents = getSpecialistAgents();
       const financialPrompt = agents['journalist-financial-specialist'].prompt;
-      // Paths should be absolute and use forward slashes
+      // Commit 8.14: Content is now inlined, not referenced by path
       expect(financialPrompt).toContain('evidence-boundaries.md');
-      expect(financialPrompt).not.toContain('\\');  // No backslashes
-      expect(financialPrompt).toMatch(/\/.*evidence-boundaries\.md/);  // Forward slash before filename
+      expect(financialPrompt).not.toContain('\\');  // No backslashes in prompt
+      // Check that evidence boundaries content is present
+      expect(financialPrompt).toContain('REPORTABLE');
     });
   });
 

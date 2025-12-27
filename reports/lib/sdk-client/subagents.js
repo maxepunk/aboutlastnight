@@ -63,18 +63,11 @@ function getSpecialistAgents() {
   return {
   'journalist-financial-specialist': {
     description: 'Analyzes financial patterns in ALN session evidence. Use for transaction timing, account naming conventions, money flows, and financial coordination analysis.',
-    tools: ['Read'],
+    tools: [],  // No tools needed - reference content injected into prompt
     model: 'sonnet',
     prompt: `# Financial Patterns Specialist
 
 You analyze financial evidence for NovaNews investigative articles about "About Last Night" sessions.
-
-## First: Load Reference Files
-
-Read these before proceeding:
-- ${normalizePath(path.join(REFS_PATH, 'evidence-boundaries.md'))}
-- ${normalizePath(path.join(REFS_PATH, 'character-voice.md'))}
-- ${normalizePath(path.join(REFS_PATH, 'anti-patterns.md'))}
 
 ## CRITICAL: Evidence Layer Boundaries
 
@@ -142,18 +135,11 @@ Return JSON with: accountPatterns, timingClusters, suspiciousFlows, financialCon
 
   'journalist-behavioral-specialist': {
     description: 'Analyzes behavioral patterns in ALN session evidence. Use for character dynamics, director observations, behavior-transaction correlations, and zero-footprint analysis.',
-    tools: ['Read'],
+    tools: [],  // No tools needed - reference content injected into prompt
     model: 'sonnet',
     prompt: `# Behavioral Patterns Specialist
 
 You analyze behavioral patterns for NovaNews investigative articles about "About Last Night" sessions.
-
-## First: Load Reference Files
-
-Read these before proceeding:
-- ${normalizePath(path.join(REFS_PATH, 'evidence-boundaries.md'))}
-- ${normalizePath(path.join(REFS_PATH, 'character-voice.md'))}
-- ${normalizePath(path.join(REFS_PATH, 'anti-patterns.md'))}
 
 ## CRITICAL: Director Notes Hierarchy
 
@@ -217,18 +203,11 @@ Return JSON with: characterDynamics, behaviorCorrelations, zeroFootprintCharacte
 
   'journalist-victimization-specialist': {
     description: 'Analyzes victimization patterns in ALN session evidence. Use for memory burial targeting, operator identification, self-burial patterns, and victim protection needs.',
-    tools: ['Read'],
+    tools: [],  // No tools needed - reference content injected into prompt
     model: 'sonnet',
     prompt: `# Victimization Patterns Specialist
 
 You analyze victimization patterns for NovaNews investigative articles about "About Last Night" sessions.
-
-## First: Load Reference Files
-
-Read these before proceeding:
-- ${normalizePath(path.join(REFS_PATH, 'evidence-boundaries.md'))}
-- ${normalizePath(path.join(REFS_PATH, 'character-voice.md'))}
-- ${normalizePath(path.join(REFS_PATH, 'anti-patterns.md'))}
 
 ## CRITICAL: Game Mechanics Context
 
@@ -387,6 +366,247 @@ After coordinating specialists, provide:
 }`;
 
 /**
+ * Synthesis system prompt for arc generation
+ *
+ * Commit 8.12: New synthesis prompt for parallel specialist architecture.
+ * Called AFTER specialists complete (not before) with their findings included.
+ * The synthesis call combines specialist findings into unified narrative arcs.
+ */
+const SYNTHESIS_SYSTEM_PROMPT = `You are the Arc Synthesis Expert for an investigative article about "About Last Night" - a crime thriller game.
+
+GAME CONTEXT:
+"About Last Night" is a 90-120 minute immersive crime thriller where players investigate the death of Marcus Blackwood. A memory-altering drug called "the memory drug" allows characters to bury memories - their own or others'. The game involves financial manipulation, power struggles, and hidden alliances.
+
+YOUR ROLE:
+You receive findings from three specialist analyses (financial, behavioral, victimization) and synthesize them into 3-5 compelling narrative arcs for the article.
+
+LAYER 3 DRIVES (CRITICAL):
+Layer 3 = Director Notes, which includes:
+- DIRECTOR OBSERVATIONS: Behavioral patterns, notable moments, suspicious correlations (PRIMARY AUTHORITY - ground truth of what happened)
+- WHITEBOARD: Player conclusions and connections during "getting the story straight" (determines arc PRIORITIZATION)
+- ACCUSATION CONTEXT: Who was accused and why
+
+The article tells THIS GROUP'S investigation story. The whiteboard shows what players focused on, but director observations provide the authoritative behavioral evidence. Both shape which arcs to prioritize.
+
+NARRATIVE ARC REQUIREMENTS:
+Each arc must have:
+- id: Unique identifier (e.g., "arc-1", "arc-financial-cover-up")
+- title: Compelling, specific arc title
+- summary: 2-3 sentence summary of the arc
+- keyEvidence: Array of evidence IDs that support this arc (MUST be actual IDs from the evidence bundle)
+- characterPlacements: Object mapping roster member names to their role in this arc
+- emotionalHook: What makes this arc compelling for readers
+- playerEmphasis: How this connects to player focus (high/medium/low)
+- storyRelevance: critical/supporting/contextual
+
+CRITICAL - keyEvidence MUST contain actual evidence IDs:
+- Use IDs from exposed tokens (e.g., "token-123", "abc123-def456")
+- Use paper evidence names or IDs (e.g., "Marcus Blackwood's Will", "page-id-xyz")
+- DO NOT use descriptive references like "the transaction showing..."
+- Every ID in keyEvidence will be validated - invalid IDs will be removed
+
+CRITICAL - characterPlacements MUST use roster names:
+- Only use character names that appear in the ROSTER
+- Do not invent character names from evidence content
+- Every roster member should appear in at least one arc
+
+SYNTHESIS RULES:
+1. Cross-reference findings across all three domains for stronger arcs
+2. Prioritize what players focused on (whiteboard accusations = Layer 3 drives)
+3. Ensure every roster member has a placement across arcs
+4. Create emotionally resonant story beats
+5. Flag gaps or contradictions for transparency
+
+OUTPUT:
+Provide 3-5 narrative arcs:
+{
+  "narrativeArcs": [
+    { id, title, summary, keyEvidence, characterPlacements, emotionalHook, playerEmphasis, storyRelevance },
+    ...
+  ],
+  "synthesisNotes": "How you synthesized specialist findings into arcs, noting any gaps or contradictions"
+}`;
+
+/**
+ * JSON schema for synthesis output (without specialistAnalyses since they're input)
+ */
+const SYNTHESIS_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    narrativeArcs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          summary: { type: 'string' },
+          keyEvidence: { type: 'array', items: { type: 'string' } },
+          characterPlacements: { type: 'object' },
+          emotionalHook: { type: 'string' },
+          playerEmphasis: { type: 'string', enum: ['high', 'medium', 'low'] },
+          storyRelevance: { type: 'string', enum: ['critical', 'supporting', 'contextual'] }
+        },
+        required: ['id', 'title', 'summary', 'keyEvidence', 'characterPlacements', 'emotionalHook', 'playerEmphasis', 'storyRelevance']
+      }
+    },
+    synthesisNotes: { type: 'string' }
+  },
+  required: ['narrativeArcs', 'synthesisNotes']
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLAYER-FOCUS-GUIDED ARCHITECTURE (Commit 8.15)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// New architecture: Single comprehensive call with player focus FIRST.
+// Replaces parallel specialists + synthesis with unified player-driven analysis.
+
+/**
+ * System prompt for player-focus-guided arc analysis
+ *
+ * Commit 8.15: Single comprehensive call driven by player conclusions
+ */
+const PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT = `You are the Arc Analyst for an investigative article about "About Last Night" - a crime thriller game where players investigate the death of Marcus Blackwood.
+
+GAME CONTEXT:
+"About Last Night" is a 90-120 minute immersive crime thriller. A memory-altering drug called "the memory drug" allows characters to bury memories - their own or others'. The game involves financial manipulation, power struggles, and hidden alliances.
+
+YOUR ROLE:
+You analyze evidence through three lenses (financial, behavioral, victimization) and generate narrative arcs that address what PLAYERS concluded and investigated. The accusation is PRIMARY - you must always include an arc addressing it.
+
+CRITICAL PRINCIPLES:
+
+1. PLAYER FOCUS FIRST
+   - The accusation MUST have an arc, even if evidence is "speculative"
+   - Whiteboard connections get priority over discovered patterns
+   - Director observations are ground truth for behavioral claims
+   - Arcs serve the players' investigation story, not just evidence patterns
+
+2. HONEST UNCERTAINTY
+   - Use evidenceStrength to indicate confidence level
+   - Include caveats for complications and contradictions
+   - List unanswered questions explicitly
+   - "Speculative" arcs are allowed with proper caveats
+
+3. THREE-LENS ANALYSIS
+   - Every arc should be analyzed through financial, behavioral, and victimization lenses
+   - Document which lenses support vs. contradict each arc
+   - Cross-reference patterns across domains
+
+4. EVIDENCE BOUNDARIES
+   - Layer 1 (Exposed): Can quote and describe freely
+   - Layer 2 (Buried): Can report amounts/accounts/timing, NOT content or ownership
+   - Layer 3 (Director Notes): Shapes emphasis and provides ground truth
+
+5. ANTI-PATTERNS
+   - Never use "token" (say "memory")
+   - Never use em-dashes
+   - Never claim to know buried content
+
+OUTPUT:
+Generate 3-5 narrative arcs with the required fields. Ensure:
+- One arc with arcSource="accusation" (required)
+- Every roster member has at least one placement
+- All keyEvidence IDs are from the valid ID list
+- Each arc has caveats and unansweredQuestions (even if minimal)`;
+
+/**
+ * JSON schema for player-focus-guided arc analysis output
+ *
+ * Commit 8.15: New schema with arcSource, evidenceStrength, caveats, etc.
+ */
+const PLAYER_FOCUS_GUIDED_SCHEMA = {
+  type: 'object',
+  properties: {
+    narrativeArcs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          summary: { type: 'string' },
+          arcSource: {
+            type: 'string',
+            enum: ['accusation', 'whiteboard', 'observation', 'discovered']
+          },
+          keyEvidence: { type: 'array', items: { type: 'string' } },
+          characterPlacements: { type: 'object' },
+          evidenceStrength: {
+            type: 'string',
+            enum: ['strong', 'moderate', 'weak', 'speculative']
+          },
+          caveats: { type: 'array', items: { type: 'string' } },
+          unansweredQuestions: { type: 'array', items: { type: 'string' } },
+          emotionalHook: { type: 'string' },
+          playerEmphasis: { type: 'string', enum: ['high', 'medium', 'low'] },
+          storyRelevance: { type: 'string', enum: ['critical', 'supporting', 'contextual'] },
+          analysisNotes: {
+            type: 'object',
+            properties: {
+              financial: { type: 'string' },
+              behavioral: { type: 'string' },
+              victimization: { type: 'string' }
+            }
+          }
+        },
+        required: [
+          'id', 'title', 'summary', 'arcSource', 'keyEvidence', 'characterPlacements',
+          'evidenceStrength', 'playerEmphasis', 'storyRelevance'
+        ]
+      }
+    },
+    synthesisNotes: { type: 'string' },
+    rosterCoverageCheck: { type: 'object' }
+  },
+  required: ['narrativeArcs', 'synthesisNotes']
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGACY: PARALLEL SPECIALIST ARCHITECTURE (Commit 8.12)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * JSON schema for specialist output (individual specialist response)
+ */
+const SPECIALIST_OUTPUT_SCHEMAS = {
+  financial: {
+    type: 'object',
+    properties: {
+      accountPatterns: { type: 'array' },
+      timingClusters: { type: 'array' },
+      suspiciousFlows: { type: 'array' },
+      financialConnections: { type: 'array' },
+      summary: { type: 'string' }
+    },
+    required: ['accountPatterns', 'summary']
+  },
+  behavioral: {
+    type: 'object',
+    properties: {
+      characterDynamics: { type: 'array' },
+      behaviorCorrelations: { type: 'array' },
+      zeroFootprintCharacters: { type: 'array' },
+      behavioralInsights: { type: 'array' },
+      rosterCoverage: { type: 'object' }
+    },
+    required: ['characterDynamics', 'behavioralInsights']
+  },
+  victimization: {
+    type: 'object',
+    properties: {
+      victims: { type: 'array' },
+      operators: { type: 'array' },
+      selfBurialPatterns: { type: 'array' },
+      targetingInsights: { type: 'array' },
+      victimizationSummary: { type: 'string' }
+    },
+    required: ['victims', 'victimizationSummary']
+  }
+};
+
+/**
  * JSON schema for orchestrator output
  */
 const ORCHESTRATOR_OUTPUT_SCHEMA = {
@@ -446,15 +666,27 @@ const ORCHESTRATOR_OUTPUT_SCHEMA = {
 };
 
 module.exports = {
+  // Commit 8.15: Player-focus-guided architecture (preferred)
+  PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
+  PLAYER_FOCUS_GUIDED_SCHEMA,
+
   // Commit 8.11: Factory function with absolute paths
   getSpecialistAgents,
   SPECIALIST_AGENT_NAMES,
   ORCHESTRATOR_SYSTEM_PROMPT,
   ORCHESTRATOR_OUTPUT_SCHEMA,
+
+  // Commit 8.12: Parallel specialist architecture (legacy)
+  SYNTHESIS_SYSTEM_PROMPT,
+  SYNTHESIS_OUTPUT_SCHEMA,
+  SPECIALIST_OUTPUT_SCHEMAS,
+
   // Testing exports
   _testing: {
     SPECIALIST_AGENT_NAMES,
     getSpecialistAgents,
-    normalizePath  // Exported for testing path normalization
+    normalizePath,  // Exported for testing path normalization
+    PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
+    PLAYER_FOCUS_GUIDED_SCHEMA
   }
 };

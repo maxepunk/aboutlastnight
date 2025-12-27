@@ -13,8 +13,8 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
-// Commit 8.11+: Import template for DRY prompt generation
-const { CHARACTER_IDS_PHOTO_TEMPLATE } = require('./workflow/nodes/photo-nodes');
+// Commit 8.11 fix: Import from shared module to break circular dependency
+const { CHARACTER_IDS_PHOTO_TEMPLATE } = require('./schemas/character-ids');
 
 class ImagePromptBuilder {
   /**

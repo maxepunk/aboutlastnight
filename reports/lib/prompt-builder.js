@@ -99,6 +99,17 @@ ${prompts['section-rules']}
 
 ${prompts['editorial-design']}`;
 
+    // Commit 8.15: Extract arc-specific fields for outline guidance
+    const arcsWithMetadata = (arcAnalysis.narrativeArcs || []).map(arc => ({
+      id: arc.id,
+      title: arc.title,
+      arcSource: arc.arcSource,  // accusation | whiteboard | observation | discovered
+      evidenceStrength: arc.evidenceStrength,  // strong | moderate | weak | speculative
+      caveats: arc.caveats || [],  // Complications to acknowledge
+      unansweredQuestions: arc.unansweredQuestions || [],  // Gaps for narrative tension
+      analysisNotes: arc.analysisNotes || {}  // Financial/behavioral/victimization insights
+    }));
+
     const userPrompt = `Generate an article outline using these selected arcs.
 
 SELECTED ARCS (in order of appearance):
@@ -106,7 +117,38 @@ ${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
 
 HERO IMAGE: ${heroImage}
 
-FULL ARC ANALYSIS:
+═══════════════════════════════════════════════════════════════════════════
+ARC METADATA (Commit 8.15 - use these for framing)
+═══════════════════════════════════════════════════════════════════════════
+
+${JSON.stringify(arcsWithMetadata, null, 2)}
+
+USING ARC METADATA IN THE OUTLINE:
+
+1. **arcSource** determines framing:
+   - "accusation": This is what players concluded. Frame as "The group accused..."
+   - "whiteboard": Players explored this. Frame as investigation thread.
+   - "observation": Director saw this. Frame as behavioral evidence.
+   - "discovered": Evidence pattern players missed. Frame as revelation.
+
+2. **evidenceStrength** determines confidence:
+   - "strong": State conclusions confidently
+   - "moderate": Use "suggests", "indicates"
+   - "weak": Use "hints at", "raises questions about"
+   - "speculative": Use "The group believed..." with uncertainty markers
+
+3. **caveats** become "But questions remain..." sections
+   - Each caveat is a complication to weave into the narrative
+   - Don't ignore complications - acknowledge them
+
+4. **unansweredQuestions** create narrative tension in "What's Missing"
+   - These become hooks for the reader
+   - Nova can explicitly say "I don't know why..."
+
+═══════════════════════════════════════════════════════════════════════════
+FULL ARC ANALYSIS (for complete context)
+═══════════════════════════════════════════════════════════════════════════
+
 ${JSON.stringify(arcAnalysis, null, 2)}
 
 EVIDENCE BUNDLE (for evidence card selection):

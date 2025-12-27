@@ -18,8 +18,8 @@
  * → 1.65 analyzePhotos (Haiku vision) → [checkpoint: character-ids] → 1.67 finalizePhotoAnalyses
  * → 1.7 preprocessEvidence → 1.8 curateEvidenceBundle → [checkpoint: evidence-and-photos]
  *
- * PHASE 2: Arc Analysis (Orchestrated Subagents - Commit 8.8/8.9)
- * → 2 analyzeArcs (orchestrator with 3 file-based subagents) → 2.3 evaluateArcs → [revision loop]
+ * PHASE 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
+ * → 2 analyzeArcs (single SDK call, player focus drives arcs) → 2.3 evaluateArcs → [revision loop]
  * → [checkpoint: arc-selection]
  *
  * PHASE 3: Outline Generation
@@ -545,12 +545,17 @@ function createGraphBuilder() {
   builder.addNode('processRescuedItems', nodes.processRescuedItems);  // Commit 8.10+: Handle human-rescued paper evidence
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)
+  // ADD NODES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
   // ═══════════════════════════════════════════════════════
 
-  // Single orchestrator node replaces 4 sequential nodes (Commit 8.8)
-  // Orchestrator coordinates 3 specialist subagents and synthesizes results
-  builder.addNode('analyzeArcs', nodes.analyzeArcsWithSubagents);
+  // Arc analysis with player-focus-guided single-call architecture (Commit 8.15)
+  // Player conclusions (accusation/whiteboard) drive arc generation
+  // Single SDK call replaces 4-call parallel specialist pattern
+  builder.addNode('analyzeArcs', nodes.analyzeArcsPlayerFocusGuided);
+
+  // Arc structure validation - programmatic, no LLM (Commit 8.12)
+  // Validates keyEvidence IDs exist in bundle, characterPlacements use roster names
+  builder.addNode('validateArcs', nodes.validateArcStructure);
 
   // Arc evaluation
   builder.addNode('evaluateArcs', nodes.evaluateArcs);
@@ -655,12 +660,13 @@ function createGraphBuilder() {
   builder.addEdge('processRescuedItems', 'analyzeArcs');
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 2: Arc Analysis (Orchestrated Subagents - Commit 8.8)
+  // ADD EDGES - Phase 2: Arc Analysis (Parallel Specialists - Commit 8.12)
   // ═══════════════════════════════════════════════════════
 
-  // Single orchestrator node handles all arc analysis and synthesis
-  // Subagents run in parallel via SDK Task tool
-  builder.addEdge('analyzeArcs', 'evaluateArcs');
+  // Parallel specialist calls → programmatic validation → LLM evaluation
+  // Commit 8.12: Added validateArcs node between analyzeArcs and evaluateArcs
+  builder.addEdge('analyzeArcs', 'validateArcs');
+  builder.addEdge('validateArcs', 'evaluateArcs');
 
   // Arc evaluation routing
   builder.addConditionalEdges('evaluateArcs', routeArcEvaluation, {
