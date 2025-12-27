@@ -239,7 +239,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 36 state fields (Commit 8.10+)', () => {
+    it('includes all 38 state fields (Phase 4f)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -261,6 +261,9 @@ describe('ReportStateAnnotation', () => {
         'characterIdsRaw',  // Commit 8.9.x
         // Preprocessed data (Commit 8.5)
         'preprocessedEvidence',
+        // Pre-curation checkpoint (Phase 4f)
+        'preCurationApproved',
+        'preCurationSummary',
         // Curated data
         'evidenceBundle',
         // Arc specialists (Commit 8.6)
@@ -498,8 +501,8 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 31 phases (Commit 8.9.8 - Phase additions)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(31);
+    it('defines exactly 32 phases (Phase 4f)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(32);
     });
 
     it('defines input parsing phases (Commit 8.9)', () => {
@@ -551,8 +554,12 @@ describe('ReportStateAnnotation', () => {
       expect(APPROVAL_TYPES.ARTICLE).toBe('article');
     });
 
-    it('defines exactly 7 approval types (Commit 8.9.x)', () => {
-      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(7);
+    it('defines PRE_CURATION type (Phase 4f)', () => {
+      expect(APPROVAL_TYPES.PRE_CURATION).toBe('pre-curation');
+    });
+
+    it('defines exactly 8 approval types (Phase 4f)', () => {
+      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(8);
     });
 
     it('defines input review approval type (Commit 8.9)', () => {
@@ -602,9 +609,9 @@ describe('ReportStateAnnotation', () => {
     });
   });
 
-  describe('ROLLBACK_CLEARS constant (Commit 8.9.3)', () => {
-    it('defines 7 rollback points', () => {
-      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(7);
+  describe('ROLLBACK_CLEARS constant (Phase 4f)', () => {
+    it('defines 8 rollback points', () => {
+      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(8);
     });
 
     it('includes all expected rollback points', () => {
@@ -612,6 +619,7 @@ describe('ReportStateAnnotation', () => {
         'input-review',
         'paper-evidence-selection',
         'character-ids',
+        'pre-curation',
         'evidence-and-photos',
         'arc-selection',
         'outline',

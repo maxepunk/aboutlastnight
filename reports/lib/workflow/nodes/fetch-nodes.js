@@ -19,6 +19,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const { PHASES } = require('../state');
 const { createNotionClient } = require('../../notion-client');
+const { createCachedNotionClient } = require('../../cache');
+const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
 const { synthesizePlayerFocus } = require('./node-helpers');
 
 /**
@@ -28,14 +30,83 @@ const { synthesizePlayerFocus } = require('./node-helpers');
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', '..', 'data');
 
 /**
- * Get NotionClient from config or create default instance
+ * Get NotionClient from config or create cached instance
  * Supports dependency injection for testing
  *
+ * Priority:
+ * 1. Injected mock client (for testing)
+ * 2. Global cached singleton (default - uses SQLite cache)
+ *
  * @param {Object} config - Graph config with optional configurable.notionClient
- * @returns {Object} NotionClient instance
+ * @returns {Object} NotionClient or CachedNotionClient instance
  */
 function getNotionClient(config) {
-  return config?.configurable?.notionClient || createNotionClient();
+  // Allow injected mock client for testing
+  if (config?.configurable?.notionClient) {
+    return config.configurable.notionClient;
+  }
+  // Use global cached singleton by default
+  return createCachedNotionClient();
+}
+
+/**
+ * Tag tokens with disposition based on orchestratorParsed data (shared helper)
+ *
+ * Builds exposed/buried lookup maps and tags each token with:
+ * - disposition: 'exposed' | 'buried' | 'unknown'
+ * - Transaction metadata for buried tokens (shellAccount, transactionAmount, sessionTransactionTime)
+ *
+ * @param {Array} tokens - Raw tokens to tag
+ * @param {Object} orchestratorParsed - Parsed orchestrator data with exposedTokens/buriedTokens
+ * @returns {Object} { taggedTokens, exposedCount, buriedCount, unknownCount }
+ * @private
+ */
+function tagTokensWithDisposition(tokens, orchestratorParsed) {
+  const exposedTokenIds = new Set(
+    (orchestratorParsed.exposedTokens || []).map(id => id.toLowerCase())
+  );
+
+  // Build a map for buried tokens to include transaction metadata
+  const buriedTokensMap = new Map();
+  for (const t of (orchestratorParsed.buriedTokens || [])) {
+    // Null safety: handle both string tokens and objects with/without tokenId
+    const tokenId = (typeof t === 'string' ? t : (t.tokenId || t.id || '')).toLowerCase();
+    if (tokenId) {
+      buriedTokensMap.set(tokenId, {
+        shellAccount: t.shellAccount || null,
+        amount: t.amount || null,
+        sessionTransactionTime: t.time || null
+      });
+    }
+  }
+
+  // Tag each token with its disposition and transaction metadata (for buried tokens)
+  const taggedTokens = tokens.map(token => {
+    const tokenIdLower = (token.tokenId || token.id || '').toLowerCase();
+
+    if (exposedTokenIds.has(tokenIdLower)) {
+      return { ...token, disposition: 'exposed' };
+    }
+
+    const buriedMeta = buriedTokensMap.get(tokenIdLower);
+    if (buriedMeta) {
+      return {
+        ...token,
+        disposition: 'buried',
+        shellAccount: buriedMeta.shellAccount,
+        transactionAmount: buriedMeta.amount,
+        sessionTransactionTime: buriedMeta.sessionTransactionTime
+      };
+    }
+
+    return { ...token, disposition: 'unknown' };
+  });
+
+  const exposedCount = taggedTokens.filter(t => t.disposition === 'exposed').length;
+  const buriedCount = taggedTokens.filter(t => t.disposition === 'buried').length;
+  const unknownCount = taggedTokens.filter(t => t.disposition === 'unknown').length;
+
+  return { taggedTokens, exposedCount, buriedCount, unknownCount };
 }
 
 /**
@@ -166,6 +237,35 @@ async function loadDirectorNotes(state, config) {
  * @returns {Object} Partial state update with memoryTokens, currentPhase
  */
 async function fetchMemoryTokens(state, config) {
+  // Check background pipeline for already-tagged tokens (legacy path)
+  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.TOKENS, config);
+  if (bgResult) {
+    console.log(`[fetchMemoryTokens] Using background result (${bgResult.length} tokens)`);
+    return { memoryTokens: bgResult, currentPhase: PHASES.FETCH_EVIDENCE };
+  }
+
+  // Check background pipeline for RAW tokens (new path: background fetches raw, we tag here)
+  // Use shorter timeout since raw tokens should already be available if pipeline ran
+  const rawBgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.RAW_TOKENS, config, 5000);
+  if (rawBgResult) {
+    console.log(`[fetchMemoryTokens] Using raw background result, tagging ${rawBgResult.length} tokens`);
+
+    // Load orchestrator-parsed.json for tagging
+    const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+    const orchestratorPath = path.join(dataDir, state.sessionId, 'inputs', 'orchestrator-parsed.json');
+    let orchestratorParsed = {};
+    try {
+      const orchestratorContent = await fs.readFile(orchestratorPath, 'utf-8');
+      orchestratorParsed = JSON.parse(orchestratorContent);
+    } catch (err) {
+      console.log(`[fetchMemoryTokens] No orchestrator-parsed.json found for raw tokens`);
+    }
+
+    const { taggedTokens, exposedCount, buriedCount, unknownCount } = tagTokensWithDisposition(rawBgResult, orchestratorParsed);
+    console.log(`[fetchMemoryTokens] Tagged ${taggedTokens.length} tokens: ${exposedCount} exposed, ${buriedCount} buried, ${unknownCount} unknown`);
+    return { memoryTokens: taggedTokens, currentPhase: PHASES.FETCH_EVIDENCE };
+  }
+
   // Skip if already fetched (resume case or pre-populated)
   // Use null check, not truthy/length check:
   // - null/undefined = not yet fetched (run fetch)
@@ -203,63 +303,8 @@ async function fetchMemoryTokens(state, config) {
     console.log(`[fetchMemoryTokens] No orchestrator-parsed.json found`);
   }
 
-  const exposedTokenIds = new Set(
-    (orchestratorParsed.exposedTokens || []).map(id => id.toLowerCase())
-  );
-
-  // Build a map for buried tokens to include transaction metadata
-  const buriedTokensMap = new Map();
-  for (const t of (orchestratorParsed.buriedTokens || [])) {
-    const tokenId = (typeof t === 'string' ? t : t.tokenId).toLowerCase();
-    buriedTokensMap.set(tokenId, {
-      shellAccount: t.shellAccount || null,
-      amount: t.amount || null,
-      sessionTransactionTime: t.time || null
-    });
-  }
-
-  // Debug: Show what IDs we're looking for
-  if (exposedTokenIds.size > 0 || buriedTokensMap.size > 0) {
-    console.log(`[fetchMemoryTokens] Looking for exposed: [${[...exposedTokenIds].slice(0, 5).join(', ')}${exposedTokenIds.size > 5 ? '...' : ''}]`);
-    console.log(`[fetchMemoryTokens] Looking for buried: [${[...buriedTokensMap.keys()].slice(0, 5).join(', ')}${buriedTokensMap.size > 5 ? '...' : ''}]`);
-    // Show sample token IDs from Notion
-    const sampleTokenIds = tokens.slice(0, 5).map(t => t.tokenId || t.id || 'no-id');
-    console.log(`[fetchMemoryTokens] Sample Notion token IDs: [${sampleTokenIds.join(', ')}]`);
-  }
-
-  // Tag each token with its disposition and transaction metadata (for buried tokens)
-  const taggedTokens = tokens.map(token => {
-    const tokenIdLower = (token.tokenId || token.id || '').toLowerCase();
-
-    if (exposedTokenIds.has(tokenIdLower)) {
-      return {
-        ...token,
-        disposition: 'exposed'
-      };
-    }
-
-    const buriedMeta = buriedTokensMap.get(tokenIdLower);
-    if (buriedMeta) {
-      // Attach transaction metadata for buried tokens
-      // This enables curateEvidenceBundle to create proper buried.transactions entries
-      return {
-        ...token,
-        disposition: 'buried',
-        shellAccount: buriedMeta.shellAccount,
-        transactionAmount: buriedMeta.amount,
-        sessionTransactionTime: buriedMeta.sessionTransactionTime
-      };
-    }
-
-    return {
-      ...token,
-      disposition: 'unknown'
-    };
-  });
-
-  const exposedCount = taggedTokens.filter(t => t.disposition === 'exposed').length;
-  const buriedCount = taggedTokens.filter(t => t.disposition === 'buried').length;
-  const unknownCount = taggedTokens.filter(t => t.disposition === 'unknown').length;
+  // Use shared helper for tagging
+  const { taggedTokens, exposedCount, buriedCount, unknownCount } = tagTokensWithDisposition(tokens, orchestratorParsed);
 
   console.log(`[fetchMemoryTokens] Tagged ${taggedTokens.length} tokens: ${exposedCount} exposed, ${buriedCount} buried, ${unknownCount} unknown`);
 
@@ -267,6 +312,104 @@ async function fetchMemoryTokens(state, config) {
     memoryTokens: taggedTokens,
     currentPhase: PHASES.FETCH_EVIDENCE
   };
+}
+
+/**
+ * Fetch raw memory tokens from Notion WITHOUT disposition tagging
+ *
+ * This is designed for background pipeline use - it fetches tokens immediately
+ * without needing orchestrator-parsed.json (which is created by parseRawInput).
+ *
+ * @param {Object} state - Current state with sessionId, directorNotes
+ * @param {Object} config - Graph config with optional configurable.dataDir
+ * @returns {Object} Partial state update with memoryTokens (untagged), currentPhase
+ */
+async function fetchMemoryTokensRaw(state, config) {
+  // Check background pipeline for RAW_TOKENS first
+  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.RAW_TOKENS, config);
+  if (bgResult) {
+    console.log(`[fetchMemoryTokensRaw] Using background result (${bgResult.length} tokens)`);
+    return { memoryTokens: bgResult, currentPhase: PHASES.FETCH_EVIDENCE };
+  }
+
+  // Skip if already fetched (resume case or pre-populated)
+  if (state.memoryTokens !== null && state.memoryTokens !== undefined) {
+    console.log(`[fetchMemoryTokensRaw] Skipping - already set (${state.memoryTokens.length} tokens)`);
+    return { currentPhase: PHASES.FETCH_EVIDENCE };
+  }
+
+  const client = getNotionClient(config);
+  const tokenIds = state.directorNotes?.scannedTokens || [];
+
+  console.log(`[fetchMemoryTokensRaw] Fetching ${tokenIds.length || 'all'} tokens from Notion...`);
+
+  const result = await client.fetchMemoryTokens(tokenIds);
+  const tokens = result.tokens || [];
+
+  console.log(`[fetchMemoryTokensRaw] Fetched ${tokens.length} raw tokens (no disposition tagging)`);
+
+  return {
+    memoryTokens: tokens,
+    currentPhase: PHASES.FETCH_EVIDENCE
+  };
+}
+
+/**
+ * Tag memory tokens with disposition (exposed/buried/unknown)
+ *
+ * This runs AFTER orchestrator-parsed.json exists (created by parseRawInput).
+ * Reads the file to get exposed/buried token lists and tags each token accordingly.
+ *
+ * Disposition determines evidence boundary enforcement:
+ * - EXPOSED: Full data accessible, owner field usable
+ * - BURIED: Only transaction data accessible, owner field is private
+ *
+ * @param {Object} state - Current state with memoryTokens, sessionId
+ * @param {Object} config - Graph config with optional configurable.dataDir
+ * @returns {Object} Partial state update with memoryTokens (tagged)
+ */
+async function tagTokenDispositions(state, config) {
+  // Skip if no tokens to tag
+  if (!state.memoryTokens || state.memoryTokens.length === 0) {
+    console.log('[tagTokenDispositions] No tokens to tag');
+    return {};
+  }
+
+  // Skip if ALL tokens already have disposition (non-unknown)
+  // Using .every() ensures we don't skip when only some tokens are tagged
+  const allTagged = state.memoryTokens.every(t =>
+    t.disposition && t.disposition !== 'unknown'
+  );
+  if (allTagged) {
+    console.log('[tagTokenDispositions] All tokens already tagged, skipping');
+    return {};
+  }
+
+  // Load orchestrator-parsed.json
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const orchestratorPath = path.join(dataDir, state.sessionId, 'inputs', 'orchestrator-parsed.json');
+
+  let orchestratorParsed = {};
+  try {
+    const content = await fs.readFile(orchestratorPath, 'utf-8');
+    orchestratorParsed = JSON.parse(content);
+    console.log(`[tagTokenDispositions] Loaded orchestrator-parsed: ${orchestratorParsed.exposedTokens?.length || 0} exposed, ${orchestratorParsed.buriedTokens?.length || 0} buried`);
+  } catch (err) {
+    console.log('[tagTokenDispositions] No orchestrator-parsed.json found, all tokens will be unknown');
+    // Tag all as unknown and return
+    const unknownTokens = state.memoryTokens.map(token => ({
+      ...token,
+      disposition: 'unknown'
+    }));
+    return { memoryTokens: unknownTokens };
+  }
+
+  // Use shared helper for tagging
+  const { taggedTokens, exposedCount, buriedCount, unknownCount } = tagTokensWithDisposition(state.memoryTokens, orchestratorParsed);
+
+  console.log(`[tagTokenDispositions] Tagged ${taggedTokens.length} tokens: ${exposedCount} exposed, ${buriedCount} buried, ${unknownCount} unknown`);
+
+  return { memoryTokens: taggedTokens };
 }
 
 /**
@@ -280,6 +423,13 @@ async function fetchMemoryTokens(state, config) {
  * @returns {Object} Partial state update with paperEvidence, currentPhase
  */
 async function fetchPaperEvidence(state, config) {
+  // Check background pipeline first (DRY - single helper for all nodes)
+  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.PAPER_EVIDENCE, config);
+  if (bgResult) {
+    console.log(`[fetchPaperEvidence] Using background result (${bgResult.length} items)`);
+    return { paperEvidence: bgResult, currentPhase: PHASES.FETCH_PHOTOS };
+  }
+
   // Skip if already fetched (resume case or pre-populated)
   // Use null check, not truthy/length check:
   // - null/undefined = not yet fetched (run fetch)
@@ -316,6 +466,13 @@ async function fetchPaperEvidence(state, config) {
  * @returns {Object} Partial state update with sessionPhotos, currentPhase
  */
 async function fetchSessionPhotos(state, config) {
+  // Check background pipeline first (DRY - single helper for all nodes)
+  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.PHOTOS, config);
+  if (bgResult) {
+    console.log(`[fetchSessionPhotos] Using background result (${bgResult.length} photos)`);
+    return { sessionPhotos: bgResult, currentPhase: PHASES.ANALYZE_PHOTOS };
+  }
+
   // Skip if already fetched (resume case or pre-populated)
   // Use null check, not truthy/length check:
   // - null/undefined = not yet fetched (run fetch)
@@ -422,6 +579,8 @@ module.exports = {
   initializeSession,
   loadDirectorNotes,
   fetchMemoryTokens,
+  fetchMemoryTokensRaw,
+  tagTokenDispositions,
   fetchPaperEvidence,
   fetchSessionPhotos,
 

@@ -361,17 +361,21 @@ async function parseRawInput(state, config) {
   const configSessionId = config?.configurable?.sessionId;
 
   // ─────────────────────────────────────────────────────
-  // Step 1: Parse roster and accusation
+  // Phase 4c: Run Steps 1, 2, 3 in parallel (independent AI calls)
+  // Step 4 (whiteboard) depends on Step 1 (roster for OCR)
   // ─────────────────────────────────────────────────────
 
-  console.log('[parseRawInput] Step 1: Parsing roster and accusation');
+  console.log('[parseRawInput] Running Steps 1-3 in parallel');
 
   // Use config sessionId if provided, otherwise try to derive from session report
   const sessionIdHint = configSessionId
     ? `Use sessionId: "${configSessionId}" (provided by caller)`
     : `Derive sessionId from: ${rawInput.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'current date'}`;
 
-  const sessionConfigPrompt = `Parse the following information into structured JSON:
+  // Step 1 Promise: Parse roster and accusation
+  const step1Promise = (async () => {
+    console.log('[parseRawInput] Step 1: Parsing roster and accusation');
+    const sessionConfigPrompt = `Parse the following information into structured JSON:
 
 ROSTER OF CHARACTERS:
 ${rawInput.roster || 'Not provided'}
@@ -390,39 +394,33 @@ Rules for parsing:
 
 Return structured JSON matching the schema.`;
 
-  let sessionConfig;
-  try {
-    sessionConfig = await sdk({
+    const result = await sdk({
       prompt: sessionConfigPrompt,
       systemPrompt: 'You parse game session information into structured JSON. Be precise and accurate.',
       model: 'haiku',
       jsonSchema: SESSION_CONFIG_SCHEMA
     });
-    sessionConfig.rosterCount = sessionConfig.roster?.length || 0;
-    sessionConfig.photosPath = sanitizePath(rawInput.photosPath);
-    sessionConfig.journalistName = 'Cassandra'; // Default journalist NPC name
-    sessionConfig.createdAt = new Date().toISOString();
-  } catch (error) {
-    console.error('[parseRawInput] Error parsing session config:', error.message);
-    throw new Error(`Failed to parse session config: ${error.message}`);
-  }
+    result.rosterCount = result.roster?.length || 0;
+    result.photosPath = sanitizePath(rawInput.photosPath);
+    result.journalistName = 'Cassandra'; // Default journalist NPC name
+    result.createdAt = new Date().toISOString();
+    return result;
+  })();
 
-  // ─────────────────────────────────────────────────────
-  // Step 2: Parse session report (tokens, shell accounts)
-  // ─────────────────────────────────────────────────────
+  // Step 2 Promise: Parse session report (tokens, shell accounts)
+  const step2Promise = (async () => {
+    if (!rawInput.sessionReport) {
+      return {
+        exposedTokens: [],
+        buriedTokens: [],
+        shellAccounts: [],
+        exposedCount: 0,
+        buriedCount: 0,
+        totalBuried: 0
+      };
+    }
 
-  console.log('[parseRawInput] Step 2: Parsing session report');
-
-  let orchestratorParsed = {
-    exposedTokens: [],
-    buriedTokens: [],
-    shellAccounts: [],
-    exposedCount: 0,
-    buriedCount: 0,
-    totalBuried: 0
-  };
-
-  if (rawInput.sessionReport) {
+    console.log('[parseRawInput] Step 2: Parsing session report');
     const sessionReportPrompt = `Parse the following session gameplay report into structured JSON:
 
 SESSION REPORT:
@@ -439,7 +437,7 @@ Rules for parsing:
 Return structured JSON matching the schema.`;
 
     try {
-      orchestratorParsed = await sdk({
+      return await sdk({
         prompt: sessionReportPrompt,
         systemPrompt: 'You parse game session reports with token and transaction data. Be precise with numbers and IDs.',
         model: 'sonnet', // Use sonnet for complex table parsing
@@ -448,24 +446,30 @@ Return structured JSON matching the schema.`;
     } catch (error) {
       console.warn('[parseRawInput] Error parsing session report:', error.message);
       // Continue with empty orchestrator data - not critical
+      return {
+        exposedTokens: [],
+        buriedTokens: [],
+        shellAccounts: [],
+        exposedCount: 0,
+        buriedCount: 0,
+        totalBuried: 0
+      };
     }
-  }
+  })();
 
-  // ─────────────────────────────────────────────────────
-  // Step 3: Parse director notes
-  // ─────────────────────────────────────────────────────
-
-  console.log('[parseRawInput] Step 3: Parsing director notes');
-
-  let directorNotes = {
-    observations: {
-      behaviorPatterns: [],
-      suspiciousCorrelations: [],
-      notableMoments: []
+  // Step 3 Promise: Parse director notes
+  const step3Promise = (async () => {
+    if (!rawInput.directorNotes) {
+      return {
+        observations: {
+          behaviorPatterns: [],
+          suspiciousCorrelations: [],
+          notableMoments: []
+        }
+      };
     }
-  };
 
-  if (rawInput.directorNotes) {
+    console.log('[parseRawInput] Step 3: Parsing director notes');
     const directorNotesPrompt = `Parse the following director observations into categorized lists:
 
 DIRECTOR NOTES:
@@ -479,7 +483,7 @@ Categories:
 Return structured JSON matching the schema.`;
 
     try {
-      directorNotes = await sdk({
+      return await sdk({
         prompt: directorNotesPrompt,
         systemPrompt: 'You categorize game director observations into behavior patterns, suspicions, and notable moments.',
         model: 'haiku',
@@ -488,11 +492,46 @@ Return structured JSON matching the schema.`;
     } catch (error) {
       console.warn('[parseRawInput] Error parsing director notes:', error.message);
       // Continue with empty observations - not critical
+      return {
+        observations: {
+          behaviorPatterns: [],
+          suspiciousCorrelations: [],
+          notableMoments: []
+        }
+      };
     }
+  })();
+
+  // Wait for Steps 1-3 to complete in parallel
+  // Use allSettled to handle partial failures gracefully
+  const [step1Result, step2Result, step3Result] = await Promise.allSettled([
+    step1Promise,
+    step2Promise,
+    step3Promise
+  ]);
+
+  // Extract results (Step 1 is critical, Steps 2-3 have fallbacks)
+  let sessionConfig;
+  if (step1Result.status === 'fulfilled') {
+    sessionConfig = step1Result.value;
+  } else {
+    console.error('[parseRawInput] Error parsing session config:', step1Result.reason?.message);
+    throw new Error(`Failed to parse session config: ${step1Result.reason?.message}`);
   }
+
+  const orchestratorParsed = step2Result.status === 'fulfilled'
+    ? step2Result.value
+    : { exposedTokens: [], buriedTokens: [], shellAccounts: [], exposedCount: 0, buriedCount: 0, totalBuried: 0 };
+
+  let directorNotes = step3Result.status === 'fulfilled'
+    ? step3Result.value
+    : { observations: { behaviorPatterns: [], suspiciousCorrelations: [], notableMoments: [] } };
+
+  console.log('[parseRawInput] Steps 1-3 complete');
 
   // ─────────────────────────────────────────────────────
   // Step 4: Analyze whiteboard photo (Layer 3 data)
+  // Sequential - depends on Step 1 roster for OCR disambiguation
   // ─────────────────────────────────────────────────────
 
   let whiteboardData = {
@@ -760,6 +799,9 @@ module.exports = {
   // Node functions
   parseRawInput,
   finalizeInput,
+
+  // Utilities (exported for DRY reuse in server.js Phase 4e)
+  sanitizePath,
 
   // Testing utilities
   createMockInputParser,

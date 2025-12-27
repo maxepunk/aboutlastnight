@@ -17,6 +17,10 @@
 
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 
+// Increase max listeners to support 8 concurrent SDK calls
+// Each SDK call adds exit listeners for subprocess cleanup
+process.setMaxListeners(20);
+
 /**
  * Default timeouts per model (in milliseconds)
  */

@@ -198,11 +198,11 @@ async function preprocessImage(imagePath, options = {}) {
  *
  * @param {string[]} imagePaths - Array of image paths
  * @param {Object} options - Processing options (same as preprocessImage)
- * @param {number} [options.concurrency] - Max parallel operations (default: 3)
+ * @param {number} [options.concurrency] - Max parallel operations (default: 8)
  * @returns {Promise<Object[]>} Array of processing results
  */
 async function preprocessImages(imagePaths, options = {}) {
-  const { concurrency = 3, ...imageOptions } = options;
+  const { concurrency = 8, ...imageOptions } = options;
 
   console.log(`[imagePreprocessor] Processing ${imagePaths.length} images (concurrency: ${concurrency})`);
   const startTime = Date.now();

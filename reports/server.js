@@ -20,6 +20,7 @@ const {
   VALID_ROLLBACK_POINTS
 } = require('./lib/workflow/state');
 const { backgroundPipelineManager } = require('./lib/background-pipeline-manager');
+const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 
 // Shared checkpointer instance - must persist across API calls for resume to work
 const sharedCheckpointer = new MemorySaver();
@@ -77,6 +78,11 @@ function getApprovalData(approvalType, state) {
             return {
                 contentBundle: state.contentBundle,
                 articleHtml: state.assembledHtml
+            };
+        case APPROVAL_TYPES.PRE_CURATION:
+            return {
+                preCurationSummary: state.preCurationSummary,
+                preprocessedEvidence: state.preprocessedEvidence
             };
         default:
             return {};
@@ -154,6 +160,12 @@ function buildApprovalState(approvals) {
     // Article approval (boolean) (Commit 8.9.7)
     if (approvals.article === true) {
         validApprovalDetected = true;
+    }
+
+    // Pre-curation approval (Phase 4f)
+    if (approvals.preCuration === true) {
+        validApprovalDetected = true;
+        updates.preCurationApproved = true;
     }
 
     // Only clear awaitingApproval if a valid approval type was detected
@@ -803,6 +815,30 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start: theme=${theme}`);
 
     try {
+        // Phase 3: Start EVIDENCE pipeline immediately (context-free preprocessing)
+        // Evidence pipeline only needs sessionId - no playerFocus or sessionConfig required
+        const pipelineConfig = {
+            configurable: {
+                sessionId,
+                theme,
+                dataDir: path.join(__dirname, 'data')
+            }
+        };
+        backgroundPipelineManager.startEvidencePipeline(sessionId, { sessionId }, pipelineConfig);
+        console.log(`[${new Date().toISOString()}] Started evidence pipeline for session ${sessionId}`);
+
+        // Phase 4e: Start PHOTO pipeline at T+0 (not after parseRawInput)
+        // photosPath is available now - reuse sanitizePath from input-nodes.js (DRY)
+        // Photo analysis takes ~60s - starting now hides it behind user think time during checkpoints.
+        const photosPath = sanitizePath(rawSessionInput.photosPath);
+        if (photosPath) {
+            backgroundPipelineManager.startPhotoPipeline(sessionId, {
+                sessionId,
+                sessionConfig: { photosPath }
+            }, pipelineConfig);
+            console.log(`[${new Date().toISOString()}] Started photo pipeline for session ${sessionId}`);
+        }
+
         // Use sessionId as thread_id for consistency with /api/session/:id/approve
         // (Commit 8.9.9 - Fix for thread_id mismatch that caused infinite loops)
         const threadId = sessionId;
@@ -828,6 +864,17 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         initialState.awaitingApproval = false;
         initialState.approvalType = null;
         const result = await graph.invoke(initialState, config);
+
+        // Phase 4e: Fallback photo pipeline start (only if not started at T+0)
+        // If photosPath wasn't in rawSessionInput but is in parsed sessionConfig, start now.
+        // startPhotoPipeline has internal guard preventing duplicate starts.
+        if (result.sessionConfig?.photosPath && !photosPath) {
+            backgroundPipelineManager.startPhotoPipeline(sessionId, {
+                sessionId,
+                sessionConfig: result.sessionConfig
+            }, pipelineConfig);
+            console.log(`[${new Date().toISOString()}] Started photo pipeline for session ${sessionId} (fallback)`);
+        }
 
         // Build response with checkpoint data
         const response = {
@@ -887,26 +934,10 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
             return res.status(400).json({ sessionId, error: validationError });
         }
 
-        // Start background pipelines on input-review approval (fire-and-forget)
-        // Pipelines run in parallel with user's next checkpoint interactions
-        if (state.approvalType === APPROVAL_TYPES.INPUT_REVIEW && approvals.inputReview === true) {
-            const sessionData = {
-                sessionId,
-                directorNotes: state.directorNotes,
-                sessionConfig: state.sessionConfig,
-                playerFocus: state.playerFocus,
-                _parsedInput: state._parsedInput
-            };
-            const pipelineConfig = {
-                configurable: {
-                    sessionId,
-                    theme: state.theme || 'journalist',
-                    dataDir: path.join(__dirname, 'data')
-                }
-            };
-            backgroundPipelineManager.startPipelines(sessionId, sessionData, pipelineConfig);
-            console.log(`[${new Date().toISOString()}] Started background pipelines for session ${sessionId}`);
-        }
+        // NOTE: Background pipelines now start earlier with staggered timing (Phase 3 optimization):
+        // - Evidence pipeline: starts at session start (context-free, no playerFocus needed)
+        // - Photo pipeline: starts after parseRawInput completes (needs sessionConfig.photosPath)
+        // See POST /api/session/:id/start handler for pipeline triggers
 
         // Use theme from session state (not hardcoded)
         const graph = createReportGraphWithCheckpointer(sharedCheckpointer);

@@ -16,6 +16,7 @@ const path = require('path');
 const {
   createReportGraph,
   createReportGraphNoCheckpoint,
+  RECURSION_LIMIT,
   _testing: {
     routeEvidenceApproval,
     routeArcEvaluation,
@@ -196,7 +197,8 @@ describe('workflow integration', () => {
           notionClient,
           useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
-        }
+        },
+        recursionLimit: RECURSION_LIMIT  // Must be passed to invoke(), not compile()
       };
     }
 
@@ -205,11 +207,13 @@ describe('workflow integration', () => {
       const config = createMockConfig('test-session');
 
       // Initial state is minimal - sessionId comes from config
+      // Phase 4f: preCurationApproved skips the new pre-curation checkpoint
       const initialState = {
         sessionConfig: {
           roster: [{ name: 'Alice' }, { name: 'Bob' }],
           accusation: { accused: ['Blake'] }
-        }
+        },
+        preCurationApproved: true  // Phase 4f: skip pre-curation checkpoint
       };
 
       const result = await graph.invoke(initialState, config);
@@ -225,6 +229,7 @@ describe('workflow integration', () => {
       const config = createMockConfig('test-session');
 
       // Simulate resuming after approval (evidenceBundle already set, awaitingApproval cleared)
+      // Phase 4f: preCurationApproved must be true to skip pre-curation checkpoint
       const stateAfterApproval = {
         evidenceBundle: mockEvidenceBundle,
         awaitingApproval: false,
@@ -232,7 +237,8 @@ describe('workflow integration', () => {
         sessionConfig: {
           roster: [{ name: 'Alice' }],
           accusation: { accused: ['Blake'] }
-        }
+        },
+        preCurationApproved: true  // Phase 4f: skip pre-curation checkpoint
       };
 
       const result = await graph.invoke(stateAfterApproval, config);
@@ -282,7 +288,8 @@ describe('workflow integration', () => {
           schemaValidator,
           useMockPreprocessor: true,  // Use mock preprocessor for testing
           thread_id: `test-${Date.now()}`
-        }
+        },
+        recursionLimit: RECURSION_LIMIT  // Must be passed to invoke(), not compile()
       };
     }
 
@@ -299,6 +306,7 @@ describe('workflow integration', () => {
         },
         // Pre-populate with data as if approvals were given
         preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
+        preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         specialistAnalyses: {
           financial: { findings: {} },
@@ -346,6 +354,7 @@ describe('workflow integration', () => {
         photoAnalyses: { analyses: [] },
         // Processing phase data
         preprocessedEvidence: mockPreprocessedEvidence,
+        preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         // Arc phase data
         specialistAnalyses: {
@@ -402,7 +411,8 @@ describe('workflow integration', () => {
           schemaValidator: { validate: () => ({ valid: true, errors: null }) },
           useMockPreprocessor: true,
           thread_id: `test-${Date.now()}`
-        }
+        },
+        recursionLimit: RECURSION_LIMIT  // Must be passed to invoke(), not compile()
       };
     }
 
@@ -465,7 +475,8 @@ describe('workflow integration', () => {
           schemaValidator: failingSchemaValidator,
           useMockPreprocessor: true,
           thread_id: `test-${Date.now()}`
-        }
+        },
+        recursionLimit: RECURSION_LIMIT  // Must be passed to invoke(), not compile()
       };
 
       // Complete state with all fields needed for nodes to skip
@@ -484,6 +495,7 @@ describe('workflow integration', () => {
         photoAnalyses: { analyses: [] },
         // Processing phase data
         preprocessedEvidence: mockPreprocessedEvidence,
+        preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         // Arc phase data
         specialistAnalyses: {
@@ -538,7 +550,8 @@ describe('workflow integration', () => {
           schemaValidator: { validate: () => ({ valid: true, errors: null }) },
           useMockPreprocessor: true,
           thread_id: `test-${Date.now()}`
-        }
+        },
+        recursionLimit: RECURSION_LIMIT  // Must be passed to invoke(), not compile()
       };
 
       // Complete state with all fields needed for nodes to skip
@@ -554,6 +567,7 @@ describe('workflow integration', () => {
         sessionPhotos: [],
         photoAnalyses: { analyses: [] },
         preprocessedEvidence: mockPreprocessedEvidence,
+        preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         specialistAnalyses: {
           financial: { findings: {} },
@@ -600,7 +614,8 @@ describe('workflow integration', () => {
           schemaValidator: { validate: () => ({ valid: true, errors: null }) },
           useMockPreprocessor: true,
           thread_id: `test-${Date.now()}`
-        }
+        },
+        recursionLimit: RECURSION_LIMIT  // Must be passed to invoke(), not compile()
       };
 
       // Complete state with all fields needed for nodes to skip
@@ -616,6 +631,7 @@ describe('workflow integration', () => {
         sessionPhotos: [],
         photoAnalyses: { analyses: [] },
         preprocessedEvidence: mockPreprocessedEvidence,
+        preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         specialistAnalyses: {
           financial: { findings: {} },

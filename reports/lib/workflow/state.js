@@ -215,6 +215,24 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => null
   }),
 
+  /**
+   * Pre-curation checkpoint approval flag (Phase 4f)
+   * Set to true when user approves preprocessed evidence
+   */
+  preCurationApproved: Annotation({
+    reducer: replaceReducer,
+    default: () => false
+  }),
+
+  /**
+   * Summary of preprocessed data for user review (Phase 4f)
+   * Contains counts of exposed/buried items, photos, etc.
+   */
+  preCurationSummary: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
   // ═══════════════════════════════════════════════════════
   // CURATED DATA (AI-processed)
   // ═══════════════════════════════════════════════════════
@@ -445,6 +463,9 @@ function getDefaultState() {
     characterIdsRaw: null,  // Natural language character ID input (Commit 8.9.x)
     // Preprocessed data (Commit 8.5)
     preprocessedEvidence: null,
+    // Pre-curation checkpoint (Phase 4f)
+    preCurationApproved: false,
+    preCurationSummary: null,
     // Curated data
     evidenceBundle: null,
     // Arc specialists (Commit 8.6)
@@ -508,6 +529,7 @@ const PHASES = {
   PARSE_CHARACTER_IDS: '1.665',     // Commit 8.9.x: parse natural language → structured format
   FINALIZE_PHOTOS: '1.67',          // Commit 8.9.5: enrich photo analyses with character IDs
   PREPROCESS_EVIDENCE: '1.7',       // Commit 8.5: batch summarization before curation
+  PRE_CURATION_CHECKPOINT: '1.75',  // Phase 4f: user approves evidence before curation
   CURATE_EVIDENCE: '1.8',
 
   // Arc analysis sub-phases (Commit 8.6)
@@ -544,6 +566,7 @@ const APPROVAL_TYPES = {
   INPUT_REVIEW: 'input-review',               // Review/edit parsed input before proceeding
   PAPER_EVIDENCE_SELECTION: 'paper-evidence-selection', // Select which paper evidence was unlocked
 
+  PRE_CURATION: 'pre-curation',               // Phase 4f: approve evidence before curation
   EVIDENCE_AND_PHOTOS: 'evidence-and-photos', // Combined evidence + photo analysis approval
   CHARACTER_IDS: 'character-ids',             // User provides character-ids.json mapping
   ARC_SELECTION: 'arc-selection',             // Select which arcs to develop
@@ -583,7 +606,7 @@ const ROLLBACK_CLEARS = {
     // Photo analysis
     'photoAnalyses', 'characterIdMappings',
     // Preprocessing and curation
-    'preprocessedEvidence', 'evidenceBundle',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     // Arc analysis
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
     // Generation
@@ -596,7 +619,7 @@ const ROLLBACK_CLEARS = {
   'paper-evidence-selection': [
     'selectedPaperEvidence',
     'photoAnalyses', 'characterIdMappings',
-    'preprocessedEvidence', 'evidenceBundle',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
     'outline', 'contentBundle', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -606,7 +629,17 @@ const ROLLBACK_CLEARS = {
   'character-ids': [
     'characterIdMappings',
     // Note: photoAnalyses preserved - only mappings need re-entry
-    'preprocessedEvidence', 'evidenceBundle',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+
+  // Phase 1.75: Pre-curation checkpoint (Phase 4f)
+  'pre-curation': [
+    'preCurationApproved',
+    // Note: preprocessedEvidence preserved - expensive to regenerate
+    'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
     'outline', 'contentBundle', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -648,6 +681,7 @@ const ROLLBACK_COUNTER_RESETS = {
   'input-review': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'paper-evidence-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'character-ids': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'pre-curation': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'evidence-and-photos': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'arc-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'outline': { outlineRevisionCount: 0, articleRevisionCount: 0 },
@@ -716,8 +750,8 @@ if (require.main === module) {
   console.log('ANALYZE_PHOTOS phase:', PHASES.ANALYZE_PHOTOS); // Should be '1.65'
   console.log('ARC_SPECIALISTS phase:', PHASES.ARC_SPECIALISTS); // Should be '2.1'
 
-  // Test approval types (Commit 8.9: added INPUT_REVIEW, PAPER_EVIDENCE_SELECTION)
-  console.log('\nApproval types:', Object.keys(APPROVAL_TYPES).length, 'types defined'); // Should be 8 (Commit 8.9)
+  // Test approval types (Commit 8.9: added INPUT_REVIEW, PAPER_EVIDENCE_SELECTION; Phase 4f: added PRE_CURATION)
+  console.log('\nApproval types:', Object.keys(APPROVAL_TYPES).length, 'types defined'); // Should be 9 (Phase 4f)
   console.log('INPUT_REVIEW:', APPROVAL_TYPES.INPUT_REVIEW); // Should be 'input-review' (Commit 8.9)
   console.log('PAPER_EVIDENCE_SELECTION:', APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION); // Should be 'paper-evidence-selection' (Commit 8.9)
   console.log('CHARACTER_IDS:', APPROVAL_TYPES.CHARACTER_IDS); // Should be 'character-ids'

@@ -27,6 +27,11 @@ const {
   _testing: { createEmptyResult }
 } = require('../../evidence-preprocessor');
 const { sdkQuery } = require('../../sdk-client');
+const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
+
+// Phase 4a: Short timeout for background paper result check
+// Paper preprocessing should complete early if running; if not ready, fall through to standard path
+const BACKGROUND_PAPER_TIMEOUT_MS = 5000;
 
 /**
  * Get EvidencePreprocessor from config or create default instance
@@ -70,6 +75,24 @@ function getPreprocessor(config) {
  * @returns {Object} Partial state update with preprocessedEvidence, currentPhase
  */
 async function preprocessEvidence(state, config) {
+  // Check background pipeline first (DRY - single helper for all nodes)
+  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.PREPROCESSED, config);
+  if (bgResult) {
+    console.log(`[preprocessEvidence] Using background result (${bgResult.items?.length || 0} items)`);
+    return { preprocessedEvidence: bgResult, currentPhase: PHASES.PREPROCESS_EVIDENCE };
+  }
+
+  // Phase 4a: Check for background paper-only preprocessing
+  // Paper evidence is ALWAYS 'exposed' (players physically unlocked it) so it can be
+  // preprocessed immediately without waiting for token disposition from orchestrator-parsed.json.
+  // See evidence-preprocessor.js line 214: disposition: 'exposed'
+  const bgPaperResult = await getBackgroundResultOrWait(
+    state.sessionId,
+    RESULT_TYPES.PREPROCESSED_PAPER,
+    config,
+    BACKGROUND_PAPER_TIMEOUT_MS
+  );
+
   // Skip if already preprocessed (resume case)
   if (state.preprocessedEvidence) {
     console.log('[preprocessEvidence] Skipping - preprocessedEvidence already exists');
@@ -89,20 +112,57 @@ async function preprocessEvidence(state, config) {
   if (!hasTokens && !hasEvidence) {
     console.log('[preprocessEvidence] Skipping - no evidence to preprocess');
     return {
-      preprocessedEvidence: createEmptyResult(
-        state.sessionId,
-        state.playerFocus || {},
-        Date.now()
-      ),
+      preprocessedEvidence: createEmptyResult(state.sessionId, Date.now()),
       currentPhase: PHASES.PREPROCESS_EVIDENCE
     };
   }
 
-  console.log(`[preprocessEvidence] Processing ${state.memoryTokens?.length || 0} tokens and ${effectivePaperEvidence.length} evidence items${state.selectedPaperEvidence ? ' (user-selected subset)' : ''}`);
-
   const preprocessor = getPreprocessor(config);
 
   try {
+    // Phase 4a: If background paper preprocessing is available, only preprocess tokens
+    if (bgPaperResult && bgPaperResult.items?.length > 0) {
+      console.log(`[preprocessEvidence] Using background paper evidence (${bgPaperResult.items.length} items), preprocessing tokens only`);
+
+      // Only process memory tokens - paper already done in background
+      const tokenOnlyResult = await preprocessor.process({
+        memoryTokens: state.memoryTokens || [],
+        paperEvidence: [],  // Skip - already preprocessed in background
+        playerFocus: state.playerFocus || {},
+        sessionId: state.sessionId
+      });
+
+      // Merge paper (from background) + token results
+      // Defensive: validate stats objects exist before accessing fields
+      const tokenStats = tokenOnlyResult.stats || {};
+      const paperStats = bgPaperResult.stats || {};
+
+      const mergedResult = {
+        items: [...bgPaperResult.items, ...tokenOnlyResult.items],
+        preprocessedAt: new Date().toISOString(),
+        sessionId: state.sessionId,
+        stats: {
+          totalItems: bgPaperResult.items.length + tokenOnlyResult.items.length,
+          memoryTokenCount: tokenStats.memoryTokenCount || 0,
+          paperEvidenceCount: paperStats.paperEvidenceCount || bgPaperResult.items.length,
+          batchesProcessed: (paperStats.batchesProcessed || 0) + (tokenStats.batchesProcessed || 0),
+          processingTimeMs: tokenStats.processingTimeMs || 0,
+          paperFromBackground: true,
+          paperProcessingTimeMs: paperStats.processingTimeMs || 0
+        }
+      };
+
+      console.log(`[preprocessEvidence] Complete: ${mergedResult.stats.totalItems} items (${mergedResult.stats.paperEvidenceCount} paper from background, ${mergedResult.stats.memoryTokenCount} tokens) in ${mergedResult.stats.processingTimeMs}ms`);
+
+      return {
+        preprocessedEvidence: mergedResult,
+        currentPhase: PHASES.PREPROCESS_EVIDENCE
+      };
+    }
+
+    // Standard path: preprocess both tokens and paper evidence
+    console.log(`[preprocessEvidence] Processing ${state.memoryTokens?.length || 0} tokens and ${effectivePaperEvidence.length} evidence items${state.selectedPaperEvidence ? ' (user-selected subset)' : ''}`);
+
     const preprocessedEvidence = await preprocessor.process({
       memoryTokens: state.memoryTokens || [],
       paperEvidence: effectivePaperEvidence,
@@ -123,11 +183,7 @@ async function preprocessEvidence(state, config) {
     // Return error state with empty preprocessedEvidence to signal "attempted but failed"
     // This prevents retry ambiguity: null = not attempted, empty = attempted + failed
     return {
-      preprocessedEvidence: createEmptyResult(
-        state.sessionId,
-        state.playerFocus || {},
-        Date.now()
-      ),
+      preprocessedEvidence: createEmptyResult(state.sessionId, Date.now()),
       errors: [{
         phase: PHASES.PREPROCESS_EVIDENCE,
         type: 'preprocessing-failed',

@@ -110,6 +110,15 @@ function routeCharacterIdCheckpoint(state) {
 }
 
 /**
+ * Route function for pre-curation checkpoint (Phase 4f)
+ * @param {Object} state - Current graph state
+ * @returns {string} 'wait' or 'continue'
+ */
+function routePreCurationCheckpoint(state) {
+  return state.awaitingApproval ? 'wait' : 'continue';
+}
+
+/**
  * Route function for evidence+photos approval checkpoint
  * @param {Object} state - Current graph state
  * @returns {string} 'wait' or 'continue'
@@ -308,6 +317,44 @@ async function setCharacterIdCheckpoint(state) {
 }
 
 /**
+ * Set pre-curation checkpoint (Phase 4f)
+ * Called after preprocessEvidence, before curateEvidenceBundle
+ * Allows user to review preprocessed evidence before curation begins
+ * Skips if preCurationApproved already true (resume case)
+ */
+async function setPreCurationCheckpoint(state) {
+  // Skip if already approved (resume after approval)
+  if (state.preCurationApproved) {
+    console.log('[setPreCurationCheckpoint] Skipping - already approved');
+    return {
+      awaitingApproval: false,
+      currentPhase: PHASES.PRE_CURATION_CHECKPOINT
+    };
+  }
+
+  // Build summary for user review
+  const preprocessedItems = state.preprocessedEvidence?.items || [];
+  const exposedCount = preprocessedItems.filter(i => i.disposition === 'exposed').length;
+  const buriedCount = preprocessedItems.filter(i => i.disposition === 'buried').length;
+
+  console.log(`[setPreCurationCheckpoint] Waiting for user approval: ${preprocessedItems.length} preprocessed items (${exposedCount} exposed, ${buriedCount} buried)`);
+
+  return {
+    awaitingApproval: true,
+    approvalType: APPROVAL_TYPES.PRE_CURATION,
+    currentPhase: PHASES.PRE_CURATION_CHECKPOINT,
+    preCurationSummary: {
+      preprocessedItemCount: preprocessedItems.length,
+      exposedCount,
+      buriedCount,
+      selectedPaperCount: state.selectedPaperEvidence?.length || 0,
+      photoCount: state.finalizedPhotoAnalyses?.length || 0,
+      memoryTokenCount: state.memoryTokens?.length || 0
+    }
+  };
+}
+
+/**
  * Set arc selection approval checkpoint
  * Called after arc evaluation passes or hits revision cap
  * Skips if selectedArcs already exist (resume case)
@@ -493,6 +540,7 @@ function createGraphBuilder() {
   builder.addNode('parseCharacterIds', nodes.parseCharacterIds);          // Commit 8.9.x: parse natural language
   builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses);  // Commit 8.9.5
   builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
+  builder.addNode('setPreCurationCheckpoint', setPreCurationCheckpoint);  // Phase 4f
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
   builder.addNode('processRescuedItems', nodes.processRescuedItems);  // Commit 8.10+: Handle human-rescued paper evidence
 
@@ -589,7 +637,13 @@ function createGraphBuilder() {
 
   // Photo finalization enriches analyses with character IDs (Commit 8.9.5)
   builder.addEdge('finalizePhotoAnalyses', 'preprocessEvidence');
-  builder.addEdge('preprocessEvidence', 'curateEvidenceBundle');
+
+  // Phase 4f: Pre-curation checkpoint between preprocessing and curation
+  builder.addEdge('preprocessEvidence', 'setPreCurationCheckpoint');
+  builder.addConditionalEdges('setPreCurationCheckpoint', routePreCurationCheckpoint, {
+    wait: END,
+    continue: 'curateEvidenceBundle'
+  });
 
   // Evidence + Photos approval checkpoint
   builder.addConditionalEdges('curateEvidenceBundle', routeEvidenceApproval, {
@@ -688,19 +742,22 @@ function createGraphBuilder() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Recursion limit for graph execution.
+ * Graph has 27+ nodes and revision loops can exceed LangGraph's default of 25 steps.
+ * IMPORTANT: Must be passed to invoke(), NOT compile() - LangGraph JS ignores compile options.
+ */
+const RECURSION_LIMIT = 75;
+
+/**
  * Create compiled report graph with MemorySaver checkpointing
  * Use for testing or ephemeral sessions
  *
  * @returns {Object} Compiled StateGraph
  */
-// Default recursion limit - graph has 20+ nodes and revision loops can exceed 25 steps
-const RECURSION_LIMIT = 75;
-
 function createReportGraph() {
   const builder = createGraphBuilder();
   const checkpointer = new MemorySaver();
-
-  return builder.compile({ checkpointer, recursionLimit: RECURSION_LIMIT });
+  return builder.compile({ checkpointer });
 }
 
 /**
@@ -712,7 +769,7 @@ function createReportGraph() {
  */
 function createReportGraphWithCheckpointer(checkpointer) {
   const builder = createGraphBuilder();
-  return builder.compile({ checkpointer, recursionLimit: RECURSION_LIMIT });
+  return builder.compile({ checkpointer });
 }
 
 /**
@@ -723,7 +780,7 @@ function createReportGraphWithCheckpointer(checkpointer) {
  */
 function createReportGraphNoCheckpoint() {
   const builder = createGraphBuilder();
-  return builder.compile({ recursionLimit: RECURSION_LIMIT });
+  return builder.compile();
 }
 
 module.exports = {
@@ -731,6 +788,9 @@ module.exports = {
   createReportGraph,
   createReportGraphWithCheckpointer,
   createReportGraphNoCheckpoint,
+
+  // Config constants - must be passed to invoke(), not compile()
+  RECURSION_LIMIT,
 
   // For testing
   _testing: {

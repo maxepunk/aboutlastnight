@@ -1,9 +1,15 @@
 /**
- * EvidencePreprocessor - Batch processing for evidence summarization
+ * EvidencePreprocessor - Batch processing for evidence NORMALIZATION
  *
  * Addresses the scalability gap discovered during Commit 8 validation:
  * Single Claude calls with 100+ tokens would timeout. This module batch-processes
  * evidence items with Haiku for fast summarization before theme-specific curation.
+ *
+ * SRP FIX (Phase 3): This is pure NORMALIZATION - no judgment calls.
+ * - significance and narrativeRelevance fields REMOVED
+ * - playerFocus parameter REMOVED
+ * - Enables context-free preprocessing that can run in background pipelines
+ *   before playerFocus is available (staggered start)
  *
  * Design Decisions (per ARCHITECTURE_DECISIONS.md 8.5.1-8.5.5):
  * - Universal preprocessing schema (theme-agnostic intermediate format)
@@ -17,14 +23,13 @@
  *   const result = await preprocessor.process({
  *     memoryTokens: [...],
  *     paperEvidence: [...],
- *     playerFocus: { primaryInvestigation: '...' },
  *     sessionId: '20251221'
  *   });
  */
 
 // Batch configuration - proven in detective flow (150+ items in ~3 minutes)
 const BATCH_SIZE = 8;
-const CONCURRENCY = 4;
+const CONCURRENCY = 8;
 
 // Preprocessing prompt template
 const SYSTEM_PROMPT = `You are an evidence analyst preprocessing raw investigation data for narrative curation.
@@ -79,24 +84,21 @@ EXAMPLE - CORRECT (exposed token):
 
 ═══════════════════════════════════════════════════════════════════
 
+Your task is NORMALIZATION only - extract and structure the data. Do NOT make judgment calls about significance or narrative relevance (that happens later during curation with full context).
+
 For each evidence item, provide:
 1. A concise summary (max 150 chars) - RESPECTING DISPOSITION BOUNDARIES
-2. Significance level: critical, supporting, contextual, background
-3. Character references - characters IN THE CONTENT (exposed only); empty for buried
-4. Narrative timeline reference (exposed only) - when did events in this memory occur?
-5. Session transaction time (buried only) - when was this sold during game night?
-6. Whether this advances the main investigation narrative (true/false)
-7. Categorical tags (e.g., "financial", "relationship", "timeline", "communication")
-8. Suggested grouping cluster with related evidence
-
-Consider the player focus when assessing significance:
-{{playerFocus}}
+2. Character references - characters IN THE CONTENT (exposed only); empty for buried
+3. Narrative timeline reference (exposed only) - when did events in this memory occur?
+4. Session transaction time (buried only) - when was this sold during game night?
+5. Categorical tags (e.g., "financial", "relationship", "timeline", "communication")
+6. Suggested grouping cluster with related evidence
 
 Return a JSON array with one object per evidence item.`;
 
 const ITEM_SCHEMA = {
   type: 'object',
-  required: ['id', 'sourceType', 'summary', 'significance'],
+  required: ['id', 'sourceType', 'summary'],
   additionalProperties: false,
   properties: {
     id: { type: 'string' },
@@ -104,7 +106,9 @@ const ITEM_SCHEMA = {
     originalType: { type: 'string' },
     disposition: { type: 'string', enum: ['exposed', 'buried', 'unknown'] },
     summary: { type: 'string', maxLength: 150 },
-    significance: { type: 'string', enum: ['critical', 'supporting', 'contextual', 'background'] },
+    // NOTE: significance and narrativeRelevance REMOVED (SRP fix)
+    // These are JUDGMENT fields that belong in curation, not preprocessing
+    // See Phase 3 in plan file for rationale
     characterRefs: { type: 'array', items: { type: 'string' } },
     ownerLogline: { type: 'string' },
     // NARRATIVE TIMELINE: when events in the memory occurred (exposed tokens only)
@@ -119,7 +123,6 @@ const ITEM_SCHEMA = {
     },
     // SESSION TIMELINE: when token was sold during game night (buried tokens only)
     sessionTransactionTime: { type: 'string' },
-    narrativeRelevance: { type: 'boolean' },
     tags: { type: 'array', items: { type: 'string' } },
     groupCluster: { type: 'string' },
     sfFields: { type: 'object', additionalProperties: true }
@@ -152,21 +155,6 @@ const BATCH_RESPONSE_SCHEMA = {
 };
 
 /**
- * Normalize playerFocus to consistent structure
- * Extracts the three core fields with null/empty defaults
- *
- * @param {Object} playerFocus - Raw playerFocus object
- * @returns {Object} Normalized playerFocus with primaryInvestigation, emotionalHook, openQuestions
- */
-function normalizePlayerFocus(playerFocus = {}) {
-  return {
-    primaryInvestigation: playerFocus.primaryInvestigation || null,
-    emotionalHook: playerFocus.emotionalHook || null,
-    openQuestions: playerFocus.openQuestions || []
-  };
-}
-
-/**
  * Create an evidence preprocessor instance
  *
  * @param {Object} options - Configuration options
@@ -183,10 +171,14 @@ function createEvidencePreprocessor(options = {}) {
   /**
    * Process raw evidence into preprocessed format
    *
+   * NOTE: This is a NORMALIZATION step only. Judgment fields (significance,
+   * narrativeRelevance) are NOT assigned here - that's curation's job.
+   * This enables context-free preprocessing that can run in background
+   * before playerFocus is available.
+   *
    * @param {Object} input - Processing input
    * @param {Array} input.memoryTokens - Raw memory tokens from Notion
    * @param {Array} input.paperEvidence - Raw paper evidence from Notion
-   * @param {Object} input.playerFocus - Player focus from director notes
    * @param {string} input.sessionId - Session identifier
    * @returns {Promise<Object>} - Preprocessed evidence in universal schema
    */
@@ -194,7 +186,6 @@ function createEvidencePreprocessor(options = {}) {
     const {
       memoryTokens = [],
       paperEvidence = [],
-      playerFocus = {},
       sessionId = 'unknown'
     } = input;
 
@@ -229,7 +220,7 @@ function createEvidencePreprocessor(options = {}) {
     ];
 
     if (allItems.length === 0) {
-      return createEmptyResult(sessionId, playerFocus, startTime);
+      return createEmptyResult(sessionId, startTime);
     }
 
     // Split into batches
@@ -240,7 +231,7 @@ function createEvidencePreprocessor(options = {}) {
     // Process batches with controlled concurrency
     const results = await processWithConcurrency(batches, CONCURRENCY, async (batch, batchIndex) => {
       console.log(`[EvidencePreprocessor] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} items)`);
-      return processBatch(batch, playerFocus, sdkClient, batchIndex);
+      return processBatch(batch, sdkClient, batchIndex);
     });
 
     // Flatten results and handle errors
@@ -264,32 +255,18 @@ function createEvidencePreprocessor(options = {}) {
 
     console.log(`[EvidencePreprocessor] Complete: ${processedItems.length} items processed in ${processingTimeMs}ms (${successCount} batches succeeded, ${errorCount} failed)`);
 
-    // Calculate significance counts
-    const significanceCounts = {
-      critical: 0,
-      supporting: 0,
-      contextual: 0,
-      background: 0
-    };
-
-    for (const item of processedItems) {
-      if (item.significance in significanceCounts) {
-        significanceCounts[item.significance]++;
-      }
-    }
+    // NOTE: significanceCounts removed - significance is now assigned during curation
 
     return {
       items: processedItems,
       preprocessedAt: new Date().toISOString(),
       sessionId,
-      playerFocus: normalizePlayerFocus(playerFocus),
       stats: {
         totalItems: processedItems.length,
         memoryTokenCount: memoryTokens.length,
         paperEvidenceCount: paperEvidence.length,
         batchesProcessed: batches.length,
-        processingTimeMs,
-        significanceCounts
+        processingTimeMs
       }
     };
   }
@@ -300,13 +277,15 @@ function createEvidencePreprocessor(options = {}) {
 /**
  * Process a single batch of evidence items
  *
+ * NOTE: This is pure normalization - no judgment calls about significance.
+ * playerFocus is NOT used here (SRP fix).
+ *
  * @param {Array} batch - Items to process
- * @param {Object} playerFocus - Player focus context
  * @param {Function} sdkClient - SDK client function
  * @param {number} batchIndex - Batch index for logging
  * @returns {Promise<Object>} - { success: boolean, items: Array, error?: string }
  */
-async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
+async function processBatch(batch, sdkClient, batchIndex) {
   try {
     // Build user prompt with batch items
     const batchData = batch.map(item => ({
@@ -328,18 +307,12 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
       tags: item.rawData.tags || []
     }));
 
-    const playerFocusStr = playerFocus.primaryInvestigation
-      ? `Primary Investigation: ${playerFocus.primaryInvestigation}\nEmotional Hook: ${playerFocus.emotionalHook || 'Not specified'}`
-      : 'No specific player focus provided.';
-
-    const systemPrompt = SYSTEM_PROMPT.replace('{{playerFocus}}', playerFocusStr);
-
     const userPrompt = `Process these ${batch.length} evidence items:\n\n${JSON.stringify(batchData, null, 2)}`;
 
     // SDK returns parsed object directly when jsonSchema is provided
     const parsed = await sdkClient({
       prompt: userPrompt,
-      systemPrompt,
+      systemPrompt: SYSTEM_PROMPT,
       model: 'haiku',
       jsonSchema: BATCH_RESPONSE_SCHEMA
     });
@@ -375,14 +348,14 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
   } catch (error) {
     console.error(`[EvidencePreprocessor] Batch ${batchIndex} error: ${error.message}`);
 
-    // Create fallback items with minimal classification
+    // Create fallback items with minimal normalization (no judgment fields)
     const fallbackItems = batch.map(item => ({
       id: item.id,
       sourceType: item.sourceType,
       originalType: item.originalType,
       disposition: item.disposition || 'unknown', // Preserve disposition
       summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
-      significance: 'contextual',
+      // NOTE: significance and narrativeRelevance removed (SRP fix)
       characterRefs: [],
       ownerLogline: item.ownerLogline,
       narrativeTimelineRef: null,
@@ -391,7 +364,6 @@ async function processBatch(batch, playerFocus, sdkClient, batchIndex) {
       shellAccount: item.rawData?.shellAccount || null,
       transactionAmount: item.rawData?.transactionAmount || null,
       sessionTransactionTime: item.rawData?.sessionTransactionTime || null,
-      narrativeRelevance: false,
       tags: [],
       groupCluster: null,
       sfFields: item.sfFields
@@ -452,30 +424,26 @@ async function processWithConcurrency(items, concurrency, processor) {
 /**
  * Create empty result for sessions with no evidence
  */
-function createEmptyResult(sessionId, playerFocus, startTime) {
+function createEmptyResult(sessionId, startTime) {
   return {
     items: [],
     preprocessedAt: new Date().toISOString(),
     sessionId,
-    playerFocus: normalizePlayerFocus(playerFocus),
     stats: {
       totalItems: 0,
       memoryTokenCount: 0,
       paperEvidenceCount: 0,
       batchesProcessed: 0,
-      processingTimeMs: Date.now() - startTime,
-      significanceCounts: {
-        critical: 0,
-        supporting: 0,
-        contextual: 0,
-        background: 0
-      }
+      processingTimeMs: Date.now() - startTime
+      // NOTE: significanceCounts removed (SRP fix)
     }
   };
 }
 
 /**
  * Create a mock preprocessor for testing
+ *
+ * NOTE: Mock output no longer includes significance/narrativeRelevance (SRP fix)
  *
  * @param {Object} mockData - Optional mock data to return
  * @returns {Object} - Mock preprocessor instance
@@ -489,11 +457,10 @@ function createMockPreprocessor(mockData = {}) {
     const {
       memoryTokens = [],
       paperEvidence = [],
-      playerFocus = {},
       sessionId = 'mock-session'
     } = input;
 
-    // Generate mock preprocessed items
+    // Generate mock preprocessed items (normalization only, no judgment fields)
     const items = [
       ...memoryTokens.map((token, i) => ({
         id: token.id || `mock-token-${i}`,
@@ -502,12 +469,11 @@ function createMockPreprocessor(mockData = {}) {
         summary: mockData.summaryPrefix
           ? `${mockData.summaryPrefix} - Token ${i + 1}`
           : `Mock summary for token ${i + 1}`,
-        significance: i === 0 ? 'critical' : 'supporting',
+        // NOTE: significance and narrativeRelevance removed (SRP fix)
         characterRefs: token.characterRefs || [],
         ownerLogline: token.owner?.logline || null,
         timelineRef: null,
         timelineContext: token.timeline || null,
-        narrativeRelevance: i < 3,
         tags: ['mock'],
         groupCluster: 'mock-cluster',
         sfFields: token.sfFields || {}
@@ -519,12 +485,11 @@ function createMockPreprocessor(mockData = {}) {
         summary: mockData.summaryPrefix
           ? `${mockData.summaryPrefix} - Evidence ${i + 1}`
           : `Mock summary for evidence ${i + 1}`,
-        significance: 'contextual',
+        // NOTE: significance and narrativeRelevance removed (SRP fix)
         characterRefs: [],
         ownerLogline: null,
         timelineRef: null,
         timelineContext: evidence.timeline || null,
-        narrativeRelevance: false,
         tags: ['mock'],
         groupCluster: 'mock-cluster',
         sfFields: evidence.sfFields || {}
@@ -535,19 +500,13 @@ function createMockPreprocessor(mockData = {}) {
       items: mockData.items || items,
       preprocessedAt: new Date().toISOString(),
       sessionId,
-      playerFocus: normalizePlayerFocus(playerFocus),
       stats: {
         totalItems: items.length,
         memoryTokenCount: memoryTokens.length,
         paperEvidenceCount: paperEvidence.length,
         batchesProcessed: Math.ceil(items.length / BATCH_SIZE),
-        processingTimeMs: mockData.processingTimeMs || 100,
-        significanceCounts: {
-          critical: 1,
-          supporting: memoryTokens.length - 1,
-          contextual: paperEvidence.length,
-          background: 0
-        }
+        processingTimeMs: mockData.processingTimeMs || 100
+        // NOTE: significanceCounts removed (SRP fix)
       }
     };
   }
@@ -574,7 +533,6 @@ module.exports = {
     processWithConcurrency,
     processBatch,
     createEmptyResult,
-    normalizePlayerFocus,
     BATCH_RESPONSE_SCHEMA
   }
 };
@@ -614,7 +572,7 @@ if (require.main === module) {
   mockPreprocessor.process({
     memoryTokens: [{ id: '1' }, { id: '2' }],
     paperEvidence: [{ id: '3' }],
-    playerFocus: { primaryInvestigation: 'Test investigation' },
+    // NOTE: playerFocus no longer needed (SRP fix)
     sessionId: 'test-session'
   }).then(result => {
     console.log(`Mock processed ${result.items.length} items`);
