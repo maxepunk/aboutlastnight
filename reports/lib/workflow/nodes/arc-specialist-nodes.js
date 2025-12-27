@@ -413,13 +413,19 @@ ${JSON.stringify(exposedTokens, null, 2)}
 ### Paper Evidence (${exposedPaper.length} items - Layer 1)
 ${JSON.stringify(exposedPaper, null, 2)}
 
-### Buried Transactions (${buriedTransactions.length} items - Layer 2)
+### Buried Transactions (${buriedTransactions.length} items - Layer 2 CONTEXT ONLY)
 ${JSON.stringify(buriedTransactions, null, 2)}
 
-### All Valid Evidence IDs (keyEvidence MUST use these exact IDs)
+⚠️ BURIED TRANSACTIONS ARE FOR CONTEXT/ANALYSIS ONLY - DO NOT USE THEIR IDs IN keyEvidence!
+You can DISCUSS patterns from buried transactions in analysisNotes.financial,
+but keyEvidence must ONLY contain IDs from the EXPOSED evidence below.
+
+### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
 ${JSON.stringify(allEvidenceIds)}
 
-CRITICAL: keyEvidence arrays MUST contain IDs from this list. Invalid IDs will fail validation.
+CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
+Buried transaction IDs (vik001, mor021, etc.) are NOT valid keyEvidence - they will fail validation.
+Use buried patterns in analysisNotes.financial, but cite EXPOSED evidence in keyEvidence.
 
 ---
 
@@ -675,11 +681,14 @@ function extractEvidenceSummary(evidenceBundle) {
     exposedTokens,
     exposedPaper,
     buriedTransactions,
-    // Complete ID list for strict validation in synthesis
+    // Valid keyEvidence IDs: EXPOSED ONLY (Layer 1)
+    // Buried transactions are shown for context but cannot be cited as keyEvidence
+    // This matches the evaluator's evidenceIdValidity check
     allEvidenceIds: [
       ...exposedTokens.map(t => t.id),
-      ...exposedPaper.map(p => p.id),
-      ...buriedTransactions.map(t => t.id)
+      ...exposedPaper.map(p => p.id)
+      // NOTE: buriedTransactions intentionally excluded - they're Layer 2
+      // Arcs can DISCUSS buried patterns but cannot CITE them as evidence
     ].filter(Boolean)
   };
 }
