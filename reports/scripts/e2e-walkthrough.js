@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * E2E Walkthrough Script (Commit 8.9.8)
+ * E2E Walkthrough Script (Phase 4f)
  *
  * Interactive walkthrough of the complete report generation pipeline.
  * Uses REST endpoints for granular state access and control.
@@ -14,14 +14,15 @@
  *   node scripts/e2e-walkthrough.js --verbose         # Show full request/response
  *   node scripts/e2e-walkthrough.js --help            # Show help
  *
- * Checkpoints (7 total):
+ * Checkpoints (8 total):
  *   1. INPUT_REVIEW - Review parsed raw input
  *   2. PAPER_EVIDENCE_SELECTION - Select unlocked paper evidence
  *   3. CHARACTER_IDS - Map characters to photos
- *   4. EVIDENCE_AND_PHOTOS - Approve curated evidence bundle
- *   5. ARC_SELECTION - Select narrative arcs to develop
- *   6. OUTLINE - Approve article outline
- *   7. ARTICLE - Approve final article
+ *   4. PRE_CURATION - Review preprocessed evidence before curation (Phase 4f)
+ *   5. EVIDENCE_AND_PHOTOS - Approve curated evidence bundle
+ *   6. ARC_SELECTION - Select narrative arcs to develop
+ *   7. OUTLINE - Approve article outline
+ *   8. ARTICLE - Approve final article
  */
 
 require('dotenv').config();
@@ -249,7 +250,7 @@ ${color('OPTIONS:', 'cyan')}
   --help, -h         Show this help message
 
 ${color('ROLLBACK VALUES:', 'cyan')}
-  input-review, paper-evidence-selection, character-ids,
+  input-review, paper-evidence-selection, character-ids, pre-curation,
   evidence-bundle, arc-selection, outline, article
 
 ${color('EXAMPLES:', 'cyan')}
@@ -570,6 +571,51 @@ async function handleCharacterIds(response) {
   return { characterIds: {} };
 }
 
+async function handlePreCuration(response) {
+  checkpointHeader('PRE_CURATION', response.currentPhase);
+
+  const summary = response.preCurationSummary || {};
+  const preprocessed = response.preprocessedEvidence || {};
+
+  console.log(color('Pre-Curation Summary (Phase 4f):', 'bright'));
+  console.log(`  Total Preprocessed Items: ${summary.preprocessedItemCount || preprocessed.items?.length || 0}`);
+  console.log(`  Exposed Items: ${summary.exposedCount || 0}`);
+  console.log(`  Buried Items: ${summary.buriedCount || 0}`);
+  console.log(`  Selected Paper Evidence: ${summary.selectedPaperCount || 0}`);
+  console.log(`  Photos Analyzed: ${summary.photoCount || 0}`);
+
+  if (preprocessed.items?.length > 0) {
+    console.log(color('\nPreprocessed Items (first 3):', 'dim'));
+    preprocessed.items.slice(0, 3).forEach(item => {
+      const disposition = item.disposition || 'unknown';
+      const dispColor = disposition === 'exposed' ? 'green' : disposition === 'buried' ? 'yellow' : 'dim';
+      console.log(`  - [${color(disposition.toUpperCase(), dispColor)}] ${item.summary?.substring(0, 50) || item.content?.substring(0, 50) || 'No summary'}...`);
+    });
+  }
+
+  if (AUTO_MODE) {
+    console.log(color('\n[AUTO] Approving pre-curation...', 'yellow'));
+    return { preCuration: true };
+  }
+
+  const choice = await prompt('\n[A]pprove, [F]ull (view all items), or [Q]uit? ');
+
+  if (choice.toLowerCase() === 'q') {
+    throw new Error('User quit');
+  }
+
+  if (choice.toLowerCase() === 'f') {
+    console.log(color('\nFull Preprocessed Evidence:', 'cyan'));
+    prettyPrint(preprocessed);
+    const confirm = await prompt('\nApprove and proceed to curation? [Y/n] ');
+    if (confirm.toLowerCase() === 'n') {
+      throw new Error('User rejected pre-curation');
+    }
+  }
+
+  return { preCuration: true };
+}
+
 async function handleEvidenceBundle(response) {
   checkpointHeader('EVIDENCE_AND_PHOTOS', response.currentPhase);
 
@@ -743,6 +789,7 @@ const checkpointHandlers = {
   'input-review': handleInputReview,
   'paper-evidence-selection': handlePaperEvidenceSelection,
   'character-ids': handleCharacterIds,
+  'pre-curation': handlePreCuration,  // Phase 4f
   'evidence-and-photos': handleEvidenceBundle,
   'arc-selection': handleArcSelection,
   'outline': handleOutline,
@@ -802,6 +849,26 @@ function displayCheckpointData(approvalType, response) {
         }
       });
       console.log(color(`\nRoster: ${roster.join(', ')}`, 'bright'));
+      break;
+
+    case 'pre-curation':
+      checkpointHeader('PRE_CURATION', response.currentPhase);
+      const preCurationSummary = response.preCurationSummary || {};
+      const preprocessedEvidence = response.preprocessedEvidence || {};
+      console.log(color('Pre-Curation Summary (Phase 4f):', 'bright'));
+      console.log(`  Total Preprocessed Items: ${preCurationSummary.preprocessedItemCount || preprocessedEvidence.items?.length || 0}`);
+      console.log(`  Exposed Items: ${preCurationSummary.exposedCount || 0}`);
+      console.log(`  Buried Items: ${preCurationSummary.buriedCount || 0}`);
+      console.log(`  Selected Paper Evidence: ${preCurationSummary.selectedPaperCount || 0}`);
+      console.log(`  Photos Analyzed: ${preCurationSummary.photoCount || 0}`);
+      if (preprocessedEvidence.items?.length > 0) {
+        console.log(color('\nPreprocessed Items (first 3):', 'dim'));
+        preprocessedEvidence.items.slice(0, 3).forEach(item => {
+          const disp = item.disposition || 'unknown';
+          const dispColor = disp === 'exposed' ? 'green' : disp === 'buried' ? 'yellow' : 'dim';
+          console.log(`  - [${color(disp.toUpperCase(), dispColor)}] ${item.summary?.substring(0, 50) || 'No summary'}...`);
+        });
+      }
       break;
 
     case 'evidence-and-photos':
@@ -875,6 +942,8 @@ function getDefaultApproval(approvalType, response) {
       return { selectedPaperEvidence: response.paperEvidence || [] };
     case 'character-ids':
       return { characterIds: {} };
+    case 'pre-curation':
+      return { preCuration: true };  // Phase 4f
     case 'evidence-and-photos':
       return { evidenceBundle: true };
     case 'arc-selection':
@@ -1189,7 +1258,7 @@ async function main() {
 
   console.log('\n' + color('═'.repeat(60), 'magenta'));
   console.log(color('  ALN Director Console - E2E Walkthrough', 'bright'));
-  console.log(color('  Commit 8.9.8', 'dim'));
+  console.log(color('  Phase 4f (8 checkpoints)', 'dim'));
   console.log(color('═'.repeat(60), 'magenta'));
 
   // Only create readline if we need interactive input

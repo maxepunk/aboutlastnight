@@ -29,6 +29,7 @@ const { safeParseJson, getSdkClient } = require('./node-helpers');
 const { createSemaphore, MODEL_TIMEOUTS } = require('../../sdk-client');
 const { preprocessImages, formatFileSize } = require('../../image-preprocessor');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
+const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
 
 /**
  * Get ImagePromptBuilder from config or create default instance
@@ -46,7 +47,7 @@ function getImagePromptBuilder(config) {
  */
 const PHOTO_CONFIG = {
   // Concurrency limit: max parallel SDK calls (each spawns a CLI process)
-  MAX_CONCURRENT: 3,
+  MAX_CONCURRENT: 8,
 
   // Timeout for each photo analysis (2 min for haiku + overhead for preprocessing)
   ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000  // 3 minutes
@@ -301,10 +302,18 @@ async function analyzeSinglePhoto({
 async function analyzePhotos(state, config) {
   const startTime = Date.now();
 
-  // Skip if already analyzed (resume case)
+  // Skip if already analyzed (resume case) - check BEFORE background cache
+  // to avoid overwriting enriched analyses from finalizePhotoAnalyses
   if (state.photoAnalyses) {
     console.log('[analyzePhotos] Skipping - photoAnalyses already exists');
     return { currentPhase: PHASES.ANALYZE_PHOTOS };
+  }
+
+  // Check background pipeline (DRY - single helper for all nodes)
+  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.PHOTO_ANALYSES, config);
+  if (bgResult) {
+    console.log(`[analyzePhotos] Using background result (${bgResult.analyses?.length || 0} analyses)`);
+    return { photoAnalyses: bgResult, currentPhase: PHASES.ANALYZE_PHOTOS };
   }
 
   // Skip if no photos to analyze
@@ -692,7 +701,6 @@ async function finalizePhotoAnalyses(state, config) {
 
   const sdk = getSdkClient(config);
   const imagePromptBuilder = getImagePromptBuilder(config);
-  const enrichedAnalyses = [];
 
   // Build sessionData for enrichment context
   const sessionData = {
@@ -700,13 +708,16 @@ async function finalizePhotoAnalyses(state, config) {
     directorNotes: state.directorNotes || null
   };
 
-  for (const analysis of state.photoAnalyses.analyses) {
+  // Phase 4b: Parallelize photo enrichment using same semaphore pattern as analyzePhotos
+  const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
+
+  const enrichmentPromises = state.photoAnalyses.analyses.map((analysis) => {
     const userInput = characterIdMappings[analysis.filename] || {};
 
-    // Handle excluded photos
+    // Handle excluded photos (no SDK call needed)
     if (userInput.exclude) {
       console.log(`[finalizePhotoAnalyses] Excluding photo: ${analysis.filename}`);
-      enrichedAnalyses.push({
+      return Promise.resolve({
         ...analysis,
         excluded: true,
         identifiedCharacters: [],
@@ -715,16 +726,15 @@ async function finalizePhotoAnalyses(state, config) {
         finalCaption: null,
         originalCaption: analysis.suggestedCaption
       });
-      continue;
     }
 
-    // If no mappings or corrections, do simple passthrough
+    // If no mappings or corrections, do simple passthrough (no SDK call needed)
     const hasMappings = (userInput.characterMappings?.length > 0) || (userInput.additionalCharacters?.length > 0);
     const hasCorrections = userInput.corrections && Object.values(userInput.corrections).some(v => v);
 
     if (!hasMappings && !hasCorrections) {
       console.log(`[finalizePhotoAnalyses] No enrichment data for: ${analysis.filename}`);
-      enrichedAnalyses.push({
+      return Promise.resolve({
         ...analysis,
         identifiedCharacters: [],
         enrichedVisualContent: analysis.visualContent,
@@ -732,63 +742,68 @@ async function finalizePhotoAnalyses(state, config) {
         finalCaption: analysis.suggestedCaption,
         originalCaption: analysis.suggestedCaption
       });
-      continue;
     }
 
-    try {
-      console.log(`[finalizePhotoAnalyses] Enriching: ${analysis.filename}`);
+    // SDK enrichment call - wrap with semaphore for concurrency control
+    return semaphore(async () => {
+      try {
+        console.log(`[finalizePhotoAnalyses] Enriching: ${analysis.filename}`);
 
-      // Use ImagePromptBuilder for context-aware enrichment
-      const { systemPrompt, userPrompt } = await imagePromptBuilder.buildPhotoEnrichmentPrompt({
-        analysis,
-        userInput,
-        sessionData
-      });
+        // Use ImagePromptBuilder for context-aware enrichment
+        const { systemPrompt, userPrompt } = await imagePromptBuilder.buildPhotoEnrichmentPrompt({
+          analysis,
+          userInput,
+          sessionData
+        });
 
-      const enrichment = await sdk({
-        systemPrompt,
-        prompt: userPrompt,
-        model: 'haiku',  // Fast model for simple text transformation
-        jsonSchema: ENRICHED_PHOTO_SCHEMA
-      });
+        const enrichment = await sdk({
+          systemPrompt,
+          prompt: userPrompt,
+          model: 'haiku',  // Fast model for simple text transformation
+          jsonSchema: ENRICHED_PHOTO_SCHEMA
+        });
 
-      enrichedAnalyses.push({
-        ...analysis,
-        // Enriched fields
-        identifiedCharacters: enrichment.identifiedCharacters || [],
-        enrichedVisualContent: enrichment.enrichedVisualContent || analysis.visualContent,
-        enrichedNarrativeMoment: enrichment.enrichedNarrativeMoment || analysis.narrativeMoment,
-        finalCaption: enrichment.finalCaption,
-        // Preserve originals
-        originalVisualContent: analysis.visualContent,
-        originalNarrativeMoment: analysis.narrativeMoment,
-        originalCaption: analysis.suggestedCaption,
-        // User input for reference
-        userCorrections: userInput.corrections || null,
-        additionalCharacters: userInput.additionalCharacters || []
-      });
+        return {
+          ...analysis,
+          // Enriched fields
+          identifiedCharacters: enrichment.identifiedCharacters || [],
+          enrichedVisualContent: enrichment.enrichedVisualContent || analysis.visualContent,
+          enrichedNarrativeMoment: enrichment.enrichedNarrativeMoment || analysis.narrativeMoment,
+          finalCaption: enrichment.finalCaption,
+          // Preserve originals
+          originalVisualContent: analysis.visualContent,
+          originalNarrativeMoment: analysis.narrativeMoment,
+          originalCaption: analysis.suggestedCaption,
+          // User input for reference
+          userCorrections: userInput.corrections || null,
+          additionalCharacters: userInput.additionalCharacters || []
+        };
 
-    } catch (enrichError) {
-      console.error(`[finalizePhotoAnalyses] Error enriching ${analysis.filename}:`, enrichError.message);
-      // Fallback to simple enrichment on error
-      const allCharacters = [
-        ...(userInput.characterMappings || []).map(m => m.characterName),
-        ...(userInput.additionalCharacters || []).map(c => c.characterName)
-      ];
+      } catch (enrichError) {
+        console.error(`[finalizePhotoAnalyses] Error enriching ${analysis.filename}:`, enrichError.message);
+        // Fallback to simple enrichment on error
+        const allCharacters = [
+          ...(userInput.characterMappings || []).map(m => m.characterName),
+          ...(userInput.additionalCharacters || []).map(c => c.characterName)
+        ];
 
-      enrichedAnalyses.push({
-        ...analysis,
-        identifiedCharacters: allCharacters,
-        enrichedVisualContent: analysis.visualContent,
-        enrichedNarrativeMoment: analysis.narrativeMoment,
-        finalCaption: allCharacters.length > 0
-          ? `${allCharacters.join(' and ')}: ${analysis.suggestedCaption || 'Scene from the investigation'}`
-          : analysis.suggestedCaption,
-        originalCaption: analysis.suggestedCaption,
-        _enrichmentError: enrichError.message
-      });
-    }
-  }
+        return {
+          ...analysis,
+          identifiedCharacters: allCharacters,
+          enrichedVisualContent: analysis.visualContent,
+          enrichedNarrativeMoment: analysis.narrativeMoment,
+          finalCaption: allCharacters.length > 0
+            ? `${allCharacters.join(' and ')}: ${analysis.suggestedCaption || 'Scene from the investigation'}`
+            : analysis.suggestedCaption,
+          originalCaption: analysis.suggestedCaption,
+          _enrichmentError: enrichError.message
+        };
+      }
+    });
+  });
+
+  // Wait for all enrichments to complete (runs with MAX_CONCURRENT limit)
+  const enrichedAnalyses = await Promise.all(enrichmentPromises);
 
   const processingTimeMs = Date.now() - startTime;
 
