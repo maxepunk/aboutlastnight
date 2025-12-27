@@ -91,7 +91,7 @@ async function curateEvidenceBundle(state, config) {
     };
   }
 
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'curateEvidence');
 
   // Use preprocessed evidence (Commit 8.5)
   const preprocessed = state.preprocessedEvidence || {
@@ -641,7 +641,7 @@ async function analyzeNarrativeArcs(state, config) {
     };
   }
 
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'analyzeArcs');
   const promptBuilder = getPromptBuilder(config);
 
   // Build session data for prompt builder
@@ -698,7 +698,7 @@ async function generateOutline(state, config) {
     };
   }
 
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'generateOutline');
   const promptBuilder = getPromptBuilder(config);
 
   // Get arc analysis from cache or reconstruct from narrativeArcs
@@ -764,7 +764,7 @@ async function generateContentBundle(state, config) {
     };
   }
 
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'generateContent');
   const promptBuilder = getPromptBuilder(config);
 
   // Load template for context (optional - article generation can proceed without it)
@@ -856,7 +856,7 @@ async function validateContentBundle(state, config) {
  * @returns {Object} Partial state update with validationResults, currentPhase, voiceRevisionCount
  */
 async function validateArticle(state, config) {
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'validateArticle');
   const promptBuilder = getPromptBuilder(config);
 
   // Get roster for coverage check
@@ -924,7 +924,7 @@ async function validateArticle(state, config) {
  * @returns {Object} Partial state update with contentBundle, currentPhase
  */
 async function reviseContentBundle(state, config) {
-  const sdk = getSdkClient(config);
+  const sdk = getSdkClient(config, 'reviseContent');
   const promptBuilder = getPromptBuilder(config);
 
   // Build revision prompt from validation feedback

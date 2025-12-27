@@ -303,7 +303,7 @@ async function analyzeArcsWithSubagents(state, config) {
   }
 
   // Import sdkQuery wrapper with timeout protection (Commit 8.9 fix)
-  const { sdkQuery } = require('../../sdk-client');
+  const { sdkQuery, createProgressLogger } = require('../../sdk-client');
 
   const orchestratorPrompt = buildOrchestratorPrompt(state);
 
@@ -322,10 +322,7 @@ async function analyzeArcsWithSubagents(state, config) {
       agents: SPECIALIST_AGENTS,  // Programmatic agent definitions
       timeoutMs: 10 * 60 * 1000,  // 10 minutes for orchestrator with subagents
       label: 'Arc orchestrator with subagents',
-      onProgress: (msg) => {
-        const elapsed = msg.elapsed || ((Date.now() - startTime) / 1000).toFixed(1);
-        console.log(`[analyzeArcsWithSubagents] Progress: ${msg.type} (${elapsed}s)${msg.toolName ? ` - ${msg.toolName}` : ''}`);
-      }
+      onProgress: createProgressLogger('analyzeArcsWithSubagents')
     });
 
     if (!result) {

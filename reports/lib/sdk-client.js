@@ -109,15 +109,52 @@ async function sdkQuery({
 
       // Stream progress for intermediate messages
       if (onProgress) {
+        // SDK message structure: content is nested in msg.message.content
+        // See: node_modules/@anthropic-ai/claude-agent-sdk/entrypoints/agentSdkTypes.d.ts
+        const messageContent = msg.message?.content;
+
+        let contentPreview;
+        let toolUseBlock;  // For tool_use blocks in assistant messages
+
+        if (msg.type === 'assistant' && Array.isArray(messageContent)) {
+          // Find text blocks for preview
+          const textBlock = messageContent.find(b => b.type === 'text');
+          if (textBlock?.text) {
+            contentPreview = textBlock.text.slice(0, 150);
+          }
+          // Find tool_use blocks (these are the "tool calls")
+          toolUseBlock = messageContent.find(b => b.type === 'tool_use');
+        } else if (msg.type === 'user' && msg.tool_use_result) {
+          // User messages with tool results
+          if (typeof msg.tool_use_result === 'string') {
+            contentPreview = msg.tool_use_result.slice(0, 100);
+          } else {
+            try {
+              contentPreview = JSON.stringify(msg.tool_use_result).slice(0, 100);
+            } catch {
+              contentPreview = '[Unable to serialize tool result]';
+            }
+          }
+        }
+
         onProgress({
           type: msg.type,
           subtype: msg.subtype,
           elapsed,
           messageCount,
           label: progressLabel,
-          // Include relevant details based on message type
-          ...(msg.type === 'tool_call' && { toolName: msg.tool_name }),
-          ...(msg.type === 'error' && { error: msg.error })
+          // Tool progress messages have tool_name directly
+          ...(msg.type === 'tool_progress' && {
+            toolName: msg.tool_name,
+            elapsedSeconds: msg.elapsed_time_seconds
+          }),
+          // Tool use blocks from assistant messages
+          ...(toolUseBlock && {
+            toolName: toolUseBlock.name,
+            toolInput: toolUseBlock.input
+          }),
+          ...(msg.type === 'error' && { error: msg.error }),
+          ...(contentPreview && { contentPreview })
         });
       }
 
@@ -210,6 +247,91 @@ function createSemaphore(limit) {
 }
 
 /**
+ * Create a reusable progress logger for SDK calls
+ *
+ * Formats SDK progress messages with emoji indicators and content previews.
+ * Use this in any node that calls sdkQuery with onProgress.
+ *
+ * SDK message types (from agentSdkTypes.d.ts):
+ * - assistant: Claude's response with text and/or tool_use blocks
+ * - user: User messages or tool results
+ * - system: Init, status, hooks
+ * - tool_progress: Progress updates during tool execution
+ * - result: Final result
+ *
+ * @param {string} context - Log prefix (e.g., 'analyzePhotos', 'analyzeArcs')
+ * @returns {Function} Progress callback for sdkQuery onProgress option
+ *
+ * @example
+ * const { sdkQuery, createProgressLogger } = require('./sdk-client');
+ * await sdkQuery({
+ *   prompt: '...',
+ *   onProgress: createProgressLogger('myNode')
+ * });
+ */
+function createProgressLogger(context) {
+  return (msg) => {
+    let logLine = `[${context}] [${msg.elapsed}s]`;
+
+    switch (msg.type) {
+      case 'assistant':
+        // Check for tool use first (tool calls are in assistant messages)
+        if (msg.toolName) {
+          logLine += ` 🔧 ${msg.toolName}`;
+          if (msg.toolInput) {
+            // Show subagent type for Task calls
+            if (msg.toolName === 'Task' && msg.toolInput.subagent_type) {
+              logLine += ` → ${msg.toolInput.subagent_type}`;
+            } else if (msg.toolInput.file_path) {
+              logLine += `: ${msg.toolInput.file_path}`;
+            } else if (msg.toolInput.command) {
+              logLine += `: ${msg.toolInput.command.slice(0, 50)}`;
+            }
+          }
+        } else if (msg.contentPreview) {
+          const preview = msg.contentPreview.replace(/\n/g, ' ').trim();
+          logLine += ` 💭 ${preview}${msg.contentPreview.length >= 150 ? '...' : ''}`;
+        } else {
+          logLine += ' 💭 (thinking)';
+        }
+        break;
+
+      case 'user':
+        // User messages often contain tool results
+        if (msg.contentPreview) {
+          const preview = msg.contentPreview.replace(/\n/g, ' ').slice(0, 80);
+          logLine += ` ✓ result: ${preview}...`;
+        } else {
+          logLine += ' 📥 (tool result)';
+        }
+        break;
+
+      case 'tool_progress':
+        logLine += ` ⏳ ${msg.toolName} (${msg.elapsedSeconds?.toFixed(1) || '?'}s)`;
+        break;
+
+      case 'system':
+        logLine += ` ⚙️ ${msg.subtype || 'system'}`;
+        break;
+
+      case 'error':
+        logLine += ` ❌ ${msg.error?.message || msg.error || 'error'}`;
+        break;
+
+      case 'result':
+        // Final result - usually don't need to log, but handle gracefully
+        logLine += ` ✅ ${msg.subtype || 'complete'}`;
+        break;
+
+      default:
+        logLine += ` ${msg.type}`;
+    }
+
+    console.log(logLine);
+  };
+}
+
+/**
  * Check if Claude Agent SDK is available
  * Used at server startup to verify SDK is installed and accessible.
  *
@@ -240,6 +362,7 @@ module.exports = {
   query,  // Export raw SDK query for subagent use (Commit 8.8)
   getModelTimeout,
   isClaudeAvailable,
-  createSemaphore,  // Concurrency limiter (Commit 8.9)
-  MODEL_TIMEOUTS    // Expose for custom timeout logic
+  createSemaphore,       // Concurrency limiter (Commit 8.9)
+  createProgressLogger,  // Reusable progress logger (Commit 8.11)
+  MODEL_TIMEOUTS         // Expose for custom timeout logic
 };
