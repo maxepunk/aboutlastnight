@@ -248,7 +248,8 @@ describe('ai-nodes', () => {
       await curateEvidenceBundle(state, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('opus');
+      // Commit 8.11+: Now uses batched Sonnet calls instead of single Opus call
+      expect(lastCall.model).toBe('sonnet');
     });
 
     it('includes playerFocus in prompt', async () => {
@@ -779,12 +780,20 @@ describe('ai-nodes', () => {
       };
     }
 
-    it('curateEvidenceBundle propagates SDK errors', async () => {
+    it('curateEvidenceBundle handles SDK errors gracefully', async () => {
+      // Commit 8.11+: curateEvidenceBundle now handles SDK errors gracefully
+      // instead of throwing - items are marked as rescuable with scoring errors
       const config = { configurable: { sdkClient: createErrorClient('SDK connection failed') } };
       const state = { preprocessedEvidence: mockPreprocessedEvidence };
 
-      await expect(curateEvidenceBundle(state, config))
-        .rejects.toThrow(/SDK connection failed/);
+      const result = await curateEvidenceBundle(state, config);
+
+      // Should return valid result with excluded items marked as scoring errors
+      expect(result.evidenceBundle).toBeDefined();
+      expect(result.awaitingApproval).toBe(true);
+      // All items should be excluded due to scoring failure
+      expect(result.evidenceBundle.curationReport.excluded.length).toBeGreaterThan(0);
+      expect(result.evidenceBundle.curationReport.excluded[0].reason).toBe('scoringError');
     });
 
     it('analyzeNarrativeArcs propagates SDK errors', async () => {

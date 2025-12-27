@@ -158,6 +158,16 @@ async function sdkQuery({
         });
       }
 
+      // SDK-proper: Handle error message type explicitly (per SDK docs)
+      // These are non-fatal errors during execution - log but continue
+      if (msg.type === 'error') {
+        const errorMsg = msg.error?.message || msg.error || 'unknown error';
+        const errorType = msg.error?.type || 'unknown';
+        console.error(`[${progressLabel}] SDK error (${errorType}): ${errorMsg}`);
+        // Don't throw - let the loop continue to get the result
+        // Fatal errors will come as 'result' type with error subtype
+      }
+
       // Handle successful result
       if (msg.type === 'result' && msg.subtype === 'success') {
         clearTimeout(timeoutId);

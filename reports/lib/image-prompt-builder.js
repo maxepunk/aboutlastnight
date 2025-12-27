@@ -13,6 +13,8 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
+// Commit 8.11+: Import template for DRY prompt generation
+const { CHARACTER_IDS_PHOTO_TEMPLATE } = require('./workflow/nodes/photo-nodes');
 
 class ImagePromptBuilder {
   /**
@@ -231,21 +233,35 @@ You will receive:
 
 Your task is to parse the natural language into the exact JSON structure needed by the system.
 
-CRITICAL FILENAME RULES:
-- Each key in the output MUST be the EXACT filename shown after "PHOTO N:" (e.g., "${exampleFilename}")
-- Do NOT use "PHOTO 1" or "Photo 1" or just "1" as keys - use the actual filename
-- The user may reference photos by number ("Photo 1"), position, or filename - YOU must translate to the exact filename
-${filenameList.length > 1 ? `- Valid filenames for this session: ${filenameList.join(', ')}${photoAnalyses.length > 3 ? ', ...' : ''}` : ''}
+OUTPUT FORMAT:
+Return a JSON object with a "photos" array. Each photo entry MUST have:
+- "filename": the EXACT filename from "PHOTO N:" (e.g., "${exampleFilename}")
+- "characterMappings": array of {descriptionIndex, characterName} objects
+- "additionalCharacters": array for characters not in original analysis
+- "corrections": object with location/context/other fields
+- "exclude": boolean
+
+CRITICAL:
+- Use the EXACT filename shown after "PHOTO N:" - NOT "PHOTO 1" or "Photo 1"
+- The user may reference photos by number - YOU must translate to the exact filename
+${filenameList.length > 1 ? `- Valid filenames: ${filenameList.join(', ')}${photoAnalyses.length > 3 ? ', ...' : ''}` : ''}
 
 OTHER RULES:
 - Match user's positional references ("far left", "center", "right") to the indexed descriptions
 - Validate character names against the roster (correct typos if obvious)
-- Note any additional characters the user mentions that weren't in the original analysis
-- Capture any corrections (location, context, etc.)
-- Mark photos to exclude if user indicates
 - Create an entry for EACH photo the user provides mappings for
 
 Output valid JSON only. No explanation needed.`;
+
+    // Commit 8.11+: Generate example from template (DRY - single source of truth)
+    const examplePhoto = {
+      ...CHARACTER_IDS_PHOTO_TEMPLATE,
+      filename: exampleFilename,
+      characterMappings: [{ descriptionIndex: 0, characterName: 'Victoria' }],
+      additionalCharacters: [{ description: 'person in background', characterName: 'Morgan', role: 'observing' }],
+      corrections: { location: 'near the evidence table' }  // Omit null values per JSON best practice
+    };
+    const exampleOutput = JSON.stringify({ photos: [examplePhoto] }, null, 2);
 
     const userPrompt = `Parse these character identifications into structured format.
 
@@ -262,29 +278,10 @@ ${naturalLanguageInput}
 
 ---
 
-Output JSON with the EXACT FILENAME as each key (not "PHOTO 1", use the actual filename like "${exampleFilename}"):
-{
-  "${exampleFilename}": {
-    "characterMappings": [
-      { "descriptionIndex": 0, "characterName": "Victoria" }
-    ],
-    "additionalCharacters": [
-      { "description": "person in background", "characterName": "Morgan", "role": "observing" }
-    ],
-    "corrections": {
-      "location": "near the evidence table",
-      "context": null,
-      "other": null
-    },
-    "exclude": false
-  }${filenameList.length > 1 ? `,
-  "${filenameList[1]}": {
-    "characterMappings": [...],
-    ...
-  }` : ''}
-}
+Output JSON with a "photos" array. Each entry must have "filename" set to the EXACT filename (not "PHOTO 1"):
+${exampleOutput}
 
-IMPORTANT: Use the EXACT filename from the PHOTO ANALYSES section above. Parse the input now:`;
+IMPORTANT: Include an entry for EACH photo the user provides mappings for. Use EXACT filenames from PHOTO ANALYSES above. Parse the input now:`;
 
     return { systemPrompt, userPrompt };
   }
