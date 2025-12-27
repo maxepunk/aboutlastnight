@@ -142,6 +142,10 @@ const { isClaudeAvailable } = require('./lib/sdk-client');
 const app = express();
 const PORT = 3001;
 
+// Server timeout: workflow steps can take several minutes
+// (e.g., finalizePhotoAnalyses ~90s, preprocessEvidence ~110s)
+const SERVER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes (matches e2e-walkthrough client timeout)
+
 // Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
@@ -1101,7 +1105,7 @@ app.get('/', (req, res) => {
 
     console.log('Claude Agent SDK available ✓');
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
         console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
@@ -1119,6 +1123,11 @@ app.get('/', (req, res) => {
         `);
         console.log('Press Ctrl+C to stop\n');
     });
+
+    // Configure server timeouts (default 2min is too short for workflow steps)
+    server.timeout = SERVER_TIMEOUT_MS;
+    server.keepAliveTimeout = SERVER_TIMEOUT_MS;
+    server.headersTimeout = SERVER_TIMEOUT_MS + 1000; // Must be > keepAliveTimeout
 })();
 
 // Graceful shutdown

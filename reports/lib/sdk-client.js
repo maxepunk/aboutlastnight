@@ -34,7 +34,10 @@ const MODEL_TIMEOUTS = {
  * @param {string} [options.systemPrompt] - System prompt
  * @param {string} [options.model='sonnet'] - Model: 'haiku', 'sonnet', 'opus'
  * @param {Object} [options.jsonSchema] - JSON schema for structured output
- * @param {string[]} [options.allowedTools=[]] - Tools the SDK can use (e.g., ['Read'] for images)
+ * @param {string[]} [options.allowedTools=[]] - Tools the SDK can use (e.g., ['Read', 'Task'])
+ * @param {Object} [options.agents] - Custom agent definitions for Task tool invocation
+ *   Each agent: { description: string, prompt: string, tools?: string[], model?: string }
+ * @param {string} [options.workingDirectory] - Working directory for file operations (required for agents to find files)
  * @param {number} [options.timeoutMs] - Timeout in ms (defaults to model timeout)
  * @param {Function} [options.onProgress] - Callback for intermediate messages: (msg) => void
  * @param {string} [options.label] - Label for progress logging
@@ -47,6 +50,8 @@ async function sdkQuery({
   model = 'sonnet',
   jsonSchema,
   allowedTools = [],
+  agents,
+  workingDirectory,
   timeoutMs,
   onProgress,
   label
@@ -68,6 +73,20 @@ async function sdkQuery({
     permissionMode: 'bypassPermissions',
     abortController
   };
+
+  // Set working directory for file operations (required for agents to find reference files)
+  // Defaults to reports/ directory where .claude/skills/ lives
+  if (workingDirectory) {
+    options.workingDirectory = workingDirectory;
+  } else {
+    // Default to the reports directory (parent of lib/)
+    options.workingDirectory = require('path').resolve(__dirname, '..');
+  }
+
+  // Add custom agent definitions for Task tool invocation
+  if (agents && Object.keys(agents).length > 0) {
+    options.agents = agents;
+  }
 
   // Add structured output format if schema provided
   if (jsonSchema) {

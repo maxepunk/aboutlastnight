@@ -519,9 +519,13 @@ async function handleCharacterIds(response) {
   analyses.forEach((analysis, i) => {
     console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${photos[i] || 'unknown'}`);
     console.log(`  ${color('Visual:', 'dim')} ${analysis.visualContent?.substring(0, 100)}...`);
-    console.log(`  ${color('People:', 'dim')} ${analysis.peopleDescriptions?.length || 0} detected`);
-    analysis.peopleDescriptions?.forEach((desc, j) => {
-      console.log(`    ${j + 1}. ${desc.substring(0, 80)}...`);
+    // Schema uses characterDescriptions (array of {description, role} objects)
+    const charDescs = analysis.characterDescriptions || [];
+    console.log(`  ${color('People:', 'dim')} ${charDescs.length} detected`);
+    charDescs.forEach((desc, j) => {
+      // Handle object format: {description: "...", role: "..."}
+      const text = typeof desc === 'string' ? desc : desc.description || JSON.stringify(desc);
+      console.log(`    ${j + 1}. ${text.substring(0, 80)}${text.length > 80 ? '...' : ''}`);
     });
   });
 
@@ -532,13 +536,26 @@ async function handleCharacterIds(response) {
     return { characterIds: {} };
   }
 
-  const choice = await prompt('\n[A]pprove (skip mapping), [E]dit mappings, or [Q]uit? ');
+  const choice = await prompt('\n[A]pprove (skip mapping), [E]nter natural text, [J]SON format, or [Q]uit? ');
 
   if (choice.toLowerCase() === 'q') {
     throw new Error('User quit');
   }
 
   if (choice.toLowerCase() === 'e') {
+    console.log(color('\nDescribe who is in each photo using natural language:', 'cyan'));
+    console.log(color('Example: "Photo 1 shows Marcus in the red shirt and Elena with glasses.', 'dim'));
+    console.log(color('         Photo 2 has David by the window talking to Sarah."', 'dim'));
+    console.log(color('(Empty line to finish)', 'dim'));
+    const naturalText = await promptMultiline('');
+    if (naturalText.trim()) {
+      // Pass as characterIdsRaw - the parseCharacterIds node will convert to structured format
+      return { characterIdsRaw: naturalText.trim() };
+    }
+    console.log(color('No input provided, skipping mappings', 'yellow'));
+  }
+
+  if (choice.toLowerCase() === 'j') {
     console.log(color('\nEnter character mappings as JSON:', 'cyan'));
     console.log(color('Format: { "photo.jpg": { characterMappings: [{descriptionIndex: 0, characterName: "Name"}] } }', 'dim'));
     const mappingsJson = await promptMultiline('');

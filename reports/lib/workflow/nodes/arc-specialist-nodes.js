@@ -36,9 +36,10 @@
  */
 
 const { PHASES, APPROVAL_TYPES } = require('../state');
-// Commit 8.9: Specialists are now file-based agents in .claude/agents/
+// Commit 8.10: Specialists defined programmatically for SDK (file-based not auto-discovered)
 const {
   SPECIALIST_AGENT_NAMES,
+  SPECIALIST_AGENTS,
   ORCHESTRATOR_SYSTEM_PROMPT,
   ORCHESTRATOR_OUTPUT_SCHEMA,
   ARC_SPECIALIST_SUBAGENTS  // Deprecated but kept for test compatibility
@@ -301,40 +302,31 @@ async function analyzeArcsWithSubagents(state, config) {
     };
   }
 
-  // Get SDK client - supports subagents via agents option
-  const { query } = require('@anthropic-ai/claude-agent-sdk');
+  // Import sdkQuery wrapper with timeout protection (Commit 8.9 fix)
+  const { sdkQuery } = require('../../sdk-client');
 
   const orchestratorPrompt = buildOrchestratorPrompt(state);
 
   try {
     console.log('[analyzeArcsWithSubagents] Invoking orchestrator with subagents');
+    const startTime = Date.now();
 
-    // Call SDK - orchestrator uses Task tool to invoke file-based specialist agents
-    // Commit 8.9: Removed agents parameter - specialists are file-based in .claude/agents/
-    let result = null;
-
-    for await (const msg of query({
+    // Call SDK via wrapper - orchestrator uses Task tool to invoke specialist agents
+    // Commit 8.10: Pass SPECIALIST_AGENTS programmatically (SDK doesn't auto-discover .claude/agents/)
+    const result = await sdkQuery({
       prompt: orchestratorPrompt,
-      options: {
-        model: 'sonnet',
-        systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
-        // File-based agents are auto-discovered, no agents parameter needed
-        outputFormat: {
-          type: 'json_schema',
-          schema: ORCHESTRATOR_OUTPUT_SCHEMA
-        },
-        allowedTools: ['Task'],  // Task tool for invoking file-based specialist agents
-        permissionMode: 'bypassPermissions'
+      systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
+      model: 'sonnet',
+      jsonSchema: ORCHESTRATOR_OUTPUT_SCHEMA,
+      allowedTools: ['Task', 'Read'],  // Task for subagents, Read for reference docs
+      agents: SPECIALIST_AGENTS,  // Programmatic agent definitions
+      timeoutMs: 10 * 60 * 1000,  // 10 minutes for orchestrator with subagents
+      label: 'Arc orchestrator with subagents',
+      onProgress: (msg) => {
+        const elapsed = msg.elapsed || ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`[analyzeArcsWithSubagents] Progress: ${msg.type} (${elapsed}s)${msg.toolName ? ` - ${msg.toolName}` : ''}`);
       }
-    })) {
-      if (msg.type === 'result' && msg.subtype === 'success') {
-        result = msg.structured_output;
-        break;
-      }
-      if (msg.type === 'result' && msg.subtype?.includes('error')) {
-        throw new Error(`SDK: ${msg.subtype} - ${msg.errors?.join(', ')}`);
-      }
-    }
+    });
 
     if (!result) {
       throw new Error('SDK: No result received from orchestrator');
@@ -559,6 +551,7 @@ module.exports = {
     buildOrchestratorPrompt,
     createEmptyAnalysisResult,
     SPECIALIST_AGENT_NAMES,
+    SPECIALIST_AGENTS,
     ORCHESTRATOR_SYSTEM_PROMPT,
     ORCHESTRATOR_OUTPUT_SCHEMA,
     // Deprecated but kept for test backwards compatibility
