@@ -55,16 +55,30 @@ function getSchemaValidator(config) {
 /**
  * Curate evidence bundle from PREPROCESSED evidence summaries
  *
- * Uses Claude to ORGANIZE (not summarize) preprocessed evidence into three layers:
- * - exposed: Evidence players actively discovered (critical/supporting, narrativeRelevance: true)
- * - buried: Evidence that requires inference (supporting/contextual)
- * - context: Timeline and metadata (background/contextual)
+ * Performs TWO distinct tasks:
  *
- * COMMIT 8.5 UPDATE: Now uses state.preprocessedEvidence instead of raw tokens.
- * The preprocessing phase (1.7) batch-summarizes evidence using Haiku.
- * This allows processing 100+ items without timeout.
+ * 1. TOKEN DISPOSITION (Privacy Boundary):
+ *    - EXPOSED tokens → full content in exposed.tokens
+ *    - BURIED tokens → transaction data only in buried.transactions
+ *    - UNKNOWN tokens → excluded entirely
  *
- * @param {Object} state - Current state with preprocessedEvidence, playerFocus
+ * 2. PAPER EVIDENCE CURATION (Relevance Filter):
+ *    - All paper evidence is UNLOCKED (director confirmed players found it)
+ *    - Scores each item against criteria (roster +1, token corroboration +2,
+ *      suspect relevance +2, theme alignment +1, substantive content +1)
+ *    - Items scoring 2+ go to exposed.paperEvidence (CURATED)
+ *    - Items below threshold go to curationReport.excluded with reason
+ *    - Excluded items marked rescuable can be overridden at human checkpoint
+ *
+ * Uses Opus model for judgment-heavy curation decisions.
+ *
+ * Output structure:
+ * - exposed.tokens: Full content of EXPOSED memory tokens
+ * - exposed.paperEvidence: CURATED paper evidence (relevance-filtered)
+ * - buried.transactions: Transaction-only data from BURIED tokens
+ * - curationReport: Included/excluded paper evidence with scoring rationale
+ *
+ * @param {Object} state - Current state with preprocessedEvidence, playerFocus, sessionConfig
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update with evidenceBundle, currentPhase, approval flags
  */
@@ -118,107 +132,257 @@ async function curateEvidenceBundle(state, config) {
   console.log(`  - sourceType: ${tokenCount} memory-tokens, ${paperCount} paper-evidence`);
   console.log(`  - disposition: ${exposedDisposition} exposed, ${buriedDisposition} buried, ${unknownDisposition} unknown`);
 
-  // Build curation prompt using preprocessed summaries
-  const systemPrompt = `You are curating PREPROCESSED evidence for a NovaNews investigative article.
+  // Extract roster and accusation context for curation
+  const roster = state.sessionConfig?.roster || [];
+  const rosterNames = roster.map(p => typeof p === 'string' ? p : p.name).filter(Boolean);
+  const accusationContext = state.directorNotes?.accusationContext || state.playerFocus?.accusation || {};
+  const suspects = accusationContext.accused || [];
 
-═══════════════════════════════════════════════════════════════════
-CRITICAL: EVIDENCE BOUNDARY RULES (MUST FOLLOW)
-═══════════════════════════════════════════════════════════════════
+  // Build curation prompt with separated concerns:
+  // 1. Token Disposition (privacy boundary) - exposed/buried/unknown
+  // 2. Paper Evidence Curation (relevance filter) - unlocked -> curated
+  const systemPrompt = `You are curating evidence for a NovaNews investigative article about a specific game session.
 
-Each evidence item has a "disposition" field that determines which layer it belongs to:
+You have TWO separate tasks:
 
-disposition: 'exposed' → EXPOSED LAYER
-- These were submitted to the Detective/Reporter (public record)
-- You CAN include: content, owner (whose POV), characterRefs, narrativeTimeline
-- You CANNOT include: who brought it (operator) - reporter protects sources
+═══════════════════════════════════════════════════════════════════════════════
+TASK 1: MEMORY TOKEN DISPOSITION (Privacy Boundary)
+═══════════════════════════════════════════════════════════════════════════════
 
-disposition: 'buried' → BURIED LAYER
-- These were sold to Black Market (private, promised discretion)
-- You CAN include: transaction time, shell account, dollar amount
-- You CANNOT include: owner, content, narrative timeline, characterRefs
-- Operator can be INFERRED from session timing + director observations
+Each memory token has a "disposition" field that determines what data is accessible:
+
+┌─────────────┬────────────────────────────────────────────────────────────────┐
+│ EXPOSED     │ Token was submitted to Detective/Reporter (public record)     │
+│             │ ✓ Include: content, owner, characterRefs, narrativeTimeline   │
+│             │ ✗ Exclude: who brought it (operator) - protect sources        │
+├─────────────┼────────────────────────────────────────────────────────────────┤
+│ BURIED      │ Token was sold to Black Market (private, discretion promised) │
+│             │ ✓ Include: sessionTransactionTime, shellAccount, amount       │
+│             │ ✗ Exclude: owner, content, narrativeTimeline, characterRefs   │
+├─────────────┼────────────────────────────────────────────────────────────────┤
+│ UNKNOWN     │ Token was not processed during session                        │
+│             │ ✗ Exclude entirely - no data available                        │
+└─────────────┴────────────────────────────────────────────────────────────────┘
 
 TIMELINE DISTINCTION:
-- NARRATIVE TIMELINE = when events in memory occurred (Feb 2025, 2009, etc.)
-- SESSION TIMELINE = when tokens were sold during game night (11:21 PM, etc.)
-For buried items, only SESSION TIMELINE (transaction time) is accessible.
+- NARRATIVE TIMELINE = when events in memory occurred (e.g., "Feb 2025", "2009")
+- SESSION TIMELINE = when tokens were transacted during game night (e.g., "11:21 PM")
+For BURIED tokens, only SESSION TIMELINE (transaction time) is accessible.
 
-WRONG (buried token in output):
-  { "id": "ALR002", "summary": "Alex's memory shows...", "characterRefs": ["Alex"] }
-  WHY WRONG: Cannot reference owner or content for buried tokens
+═══════════════════════════════════════════════════════════════════════════════
+TASK 2: PAPER EVIDENCE CURATION (Relevance Filter)
+═══════════════════════════════════════════════════════════════════════════════
 
-CORRECT (buried token in output):
-  { "id": "ALR002", "summary": "Transaction of $75K to Gorlan at 11:21 PM" }
-  WHY CORRECT: Only transaction data, no owner/content attribution
+Paper evidence has been marked UNLOCKED by the director (players found it).
+Your job is to filter UNLOCKED → CURATED based on relevance to THIS session's narrative.
 
-═══════════════════════════════════════════════════════════════════
+IMPORTANT CHARACTER DISTINCTIONS:
 
-Your job is to ORGANIZE evidence into three layers based on disposition:
-1. EXPOSED: Items with disposition='exposed' - full content accessible
-2. BURIED: Items with disposition='buried' - transaction data only
-3. CONTEXT: Timeline synthesis, metadata, player focus summary
+┌─────────────────────┬────────────────────────────────────────────────────────┐
+│ ROSTER              │ Active PLAYERS this session (humans at the table)     │
+│ (sessionConfig)     │ These are the perspectives we're writing FOR          │
+├─────────────────────┼────────────────────────────────────────────────────────┤
+│ TOKEN CHARACTERS    │ Characters the exposed tokens are ABOUT               │
+│ (from exposed       │ Includes NPCs, historical figures, absent characters  │
+│  token owners +     │ These are the characters whose stories were REVEALED  │
+│  characterRefs)     │                                                        │
+├─────────────────────┼────────────────────────────────────────────────────────┤
+│ SUSPECTS            │ Characters players accused or investigated            │
+│ (from playerFocus)  │ These drove the session's narrative focus             │
+└─────────────────────┴────────────────────────────────────────────────────────┘
 
-Weight evidence based on player focus. DO NOT re-summarize exposed items.
-For buried items, REPLACE any content/owner summaries with transaction-only data.`;
+CURATION CRITERIA - Include paper evidence if it scores 2+ points:
 
-  const userPrompt = `Organize this preprocessed evidence based on disposition and player focus.
+┌─────────────────────┬─────┬──────────────────────────────────────────────────┐
+│ CRITERION           │ PTS │ DESCRIPTION                                      │
+├─────────────────────┼─────┼──────────────────────────────────────────────────┤
+│ ROSTER CONNECTION   │ +1  │ Owned by or directly involves a ROSTER player   │
+├─────────────────────┼─────┼──────────────────────────────────────────────────┤
+│ TOKEN CORROBORATION │ +2  │ Provides supporting detail for an EXPOSED token │
+│                     │     │ (same event, relationship, or reveals context)  │
+├─────────────────────┼─────┼──────────────────────────────────────────────────┤
+│ SUSPECT RELEVANCE   │ +2  │ Features a character on the suspect list or     │
+│                     │     │ directly relates to the accusation              │
+├─────────────────────┼─────┼──────────────────────────────────────────────────┤
+│ THEME ALIGNMENT     │ +1  │ Connects to playerFocus themes (whiteboard      │
+│                     │     │ conclusions, key moments, open questions)       │
+├─────────────────────┼─────┼──────────────────────────────────────────────────┤
+│ SUBSTANTIVE CONTENT │ +1  │ Contains quotable narrative content (emails,    │
+│                     │     │ messages, documents with actual text)           │
+└─────────────────────┴─────┴──────────────────────────────────────────────────┘
 
-PLAYER FOCUS:
-${JSON.stringify(preprocessed.playerFocus || state.playerFocus || {}, null, 2)}
+AUTOMATIC EXCLUSION (regardless of score):
+- Paper evidence with ONLY puzzle/mechanical content (lock combos, container descriptions)
+- Paper evidence with empty or minimal description
+- Paper evidence that would introduce entirely NEW narrative threads not touched by
+  exposed tokens, player focus, or suspects
 
-PREPROCESSED EVIDENCE (${preprocessed.items.length} items):
-${JSON.stringify(preprocessed.items, null, 2)}
+EDGE CASES:
+- Character sheets for ROSTER players: Include (context for their perspective)
+- Character sheets for SUSPECTS: Include (context for accusation)
+- Character sheets for others: Exclude unless token corroboration exists
+- Props that CONTAIN other documents: Exclude the container, include the contents if relevant
 
-IMPORTANT: Check each item's fields to determine placement:
-- disposition: 'exposed' → exposed layer (full data)
-- disposition: 'buried' → buried layer (transaction data ONLY - strip owner/content)
-- disposition: 'unknown' → use significance to place appropriately
-- sourceType: 'paper-evidence' → ALWAYS goes to exposed.paperEvidence (physical documents players unlocked)
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
 
-Return JSON with structure:
 {
   "exposed": {
-    "tokens": [{ "id": "...", "summary": "...", "significance": "...", "characterRefs": [...], ... }],
-    "paperEvidence": [{ "id": "...", "summary": "...", "significance": "...", ... }]
+    "tokens": [...],           // EXPOSED disposition tokens with full content
+    "paperEvidence": [...]     // CURATED paper evidence only
   },
   "buried": {
-    "transactions": [{ "id": "...", "sessionTransactionTime": "...", "shellAccount": "...", "amount": ..., "summary": "Transaction only - no content" }],
+    "transactions": [...],     // BURIED disposition tokens (transaction data only)
     "relationships": []
   },
   "context": {
-    "narrativeTimeline": { "yearOrPeriod": "event description (from exposed only)" },
-    "sessionTimeline": { "time": "transaction description (from buried)" },
-    "playerFocus": { ... },
-    "sessionMetadata": { ... }
+    "narrativeTimeline": {},   // Key dates from EXPOSED tokens only
+    "sessionTimeline": {},     // Transaction times from BURIED layer
+    "playerFocus": {},         // Summarized themes
+    "sessionMetadata": {}
+  },
+  "curationReport": {
+    "included": [
+      {
+        "name": "...",
+        "score": 3,
+        "criteriaMatched": ["tokenCorroboration", "suspectRelevance"],
+        "relevanceNote": "Why this supports the narrative"
+      }
+    ],
+    "excluded": [
+      {
+        "name": "...",
+        "score": 1,
+        "reason": "puzzleArtifact" | "insufficientConnection" | "tangentialThread" | "minimalContent" | "containerOnly",
+        "note": "Brief explanation",
+        "rescuable": true | false
+      }
+    ],
+    "curationSummary": {
+      "totalUnlocked": 0,
+      "totalCurated": 0,
+      "totalExcluded": 0,
+      "rosterPlayers": [...],
+      "tokenCharacters": [...],
+      "suspects": [...],
+      "activeNarrativeThreads": [...]
+    }
   },
   "curatorNotes": {
-    "layerRationale": "explanation of curation decisions",
-    "characterCoverage": { "characterName": "coverage level", ... },
-    "boundaryViolationCheck": "confirm no buried content/owner leaked to output"
+    "dispositionSummary": "X exposed, Y buried, Z unknown tokens",
+    "curationRationale": "High-level explanation of curation decisions",
+    "boundaryCheck": "Confirm no buried content leaked, no excluded items in exposed layer"
   }
-}`;
+}
 
-  // Use longer timeout for large evidence sets (101 items takes ~3-4 minutes)
+NOTE ON RESCUABLE FLAG:
+- Set rescuable: true for items excluded due to low score but with some merit
+- Set rescuable: false for puzzle artifacts or empty content (no narrative value)
+- Human can override rescuable items at the checkpoint`;
+
+  const userPrompt = `Curate evidence for this session.
+
+═══════════════════════════════════════════════════════════════════════════════
+ROSTER (Active players this session)
+═══════════════════════════════════════════════════════════════════════════════
+
+${JSON.stringify(rosterNames, null, 2)}
+
+These are the humans who played. Paper evidence owned by roster players gets +1.
+
+═══════════════════════════════════════════════════════════════════════════════
+PLAYER FOCUS (What players investigated and concluded)
+═══════════════════════════════════════════════════════════════════════════════
+
+${JSON.stringify(preprocessed.playerFocus || state.playerFocus || {}, null, 2)}
+
+Suspects and whiteboard conclusions drive narrative priority.
+
+═══════════════════════════════════════════════════════════════════════════════
+ACCUSATION CONTEXT
+═══════════════════════════════════════════════════════════════════════════════
+
+${JSON.stringify(accusationContext, null, 2)}
+
+Paper evidence about accused characters gets +2.
+
+═══════════════════════════════════════════════════════════════════════════════
+PREPROCESSED EVIDENCE (${preprocessed.items.length} items)
+═══════════════════════════════════════════════════════════════════════════════
+
+MEMORY TOKENS (sourceType: "memory-token"):
+- Route by disposition: exposed → full content, buried → transaction only, unknown → exclude
+
+PAPER EVIDENCE (sourceType: "paper-evidence"):
+- All items are UNLOCKED (director confirmed)
+- Score each item against criteria (roster +1, token corroboration +2, suspect +2, theme +1, substantive +1)
+- Include if score >= 2 AND no automatic exclusion applies
+- For excluded items, set rescuable: true if there's any narrative merit
+
+ITEMS:
+${JSON.stringify(preprocessed.items, null, 2)}
+
+═══════════════════════════════════════════════════════════════════════════════
+CURATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Before finalizing:
+
+[ ] EXPOSED tokens have full content (no summarization)
+[ ] BURIED tokens have ONLY transaction data (no owner/content)
+[ ] UNKNOWN tokens excluded entirely
+[ ] Paper evidence in exposed.paperEvidence scored >= 2
+[ ] Excluded items have reason + rescuable flag
+[ ] curationReport.curationSummary.rosterPlayers matches input roster
+[ ] curationReport.curationSummary.tokenCharacters derived from exposed token owners/refs
+[ ] No puzzle-only artifacts in exposed.paperEvidence
+[ ] Container props excluded, their contents evaluated separately`
+
+  // Use Opus for judgment-heavy curation task with 10-minute timeout
   const evidenceBundle = await sdk({
     prompt: userPrompt,
     systemPrompt,
-    model: 'haiku',
-    timeoutMs: 5 * 60 * 1000, // 5 minutes for large evidence sets
-    label: `Curating ${preprocessed.items.length} evidence items`,
+    model: 'opus',
+    timeoutMs: 10 * 60 * 1000, // 10 minutes for Opus curation
+    label: `Curating ${preprocessed.items.length} evidence items (Opus)`,
     jsonSchema: {
       type: 'object',
       properties: {
-        exposed: { type: 'object' },
-        buried: { type: 'object' },
+        exposed: {
+          type: 'object',
+          properties: {
+            tokens: { type: 'array' },
+            paperEvidence: { type: 'array' }
+          },
+          required: ['tokens', 'paperEvidence']
+        },
+        buried: {
+          type: 'object',
+          properties: {
+            transactions: { type: 'array' },
+            relationships: { type: 'array' }
+          },
+          required: ['transactions']
+        },
         context: { type: 'object' },
+        curationReport: {
+          type: 'object',
+          properties: {
+            included: { type: 'array' },
+            excluded: { type: 'array' },
+            curationSummary: { type: 'object' }
+          },
+          required: ['included', 'excluded', 'curationSummary']
+        },
         curatorNotes: { type: 'object' }
       },
-      required: ['exposed', 'buried', 'context']
+      required: ['exposed', 'buried', 'context', 'curationReport']
     }
   });
 
-  // Post-processing: Ensure paper evidence items are in exposed.paperEvidence, not exposed.tokens
-  // The LLM sometimes puts all exposed items in tokens instead of splitting by sourceType
+  // Post-processing: Ensure structure integrity
   if (evidenceBundle.exposed) {
     // Initialize arrays if missing
     if (!evidenceBundle.exposed.tokens) evidenceBundle.exposed.tokens = [];
@@ -239,17 +403,223 @@ Return JSON with structure:
     }
   }
 
-  // Debug logging to understand curation result structure
+  // Initialize curationReport if missing (safety fallback)
+  if (!evidenceBundle.curationReport) {
+    console.warn('[curateEvidenceBundle] Warning: curationReport missing from Opus response, creating stub');
+    evidenceBundle.curationReport = {
+      included: evidenceBundle.exposed?.paperEvidence?.map(item => ({
+        name: item.name,
+        score: 2,
+        criteriaMatched: ['fallback'],
+        relevanceNote: 'Included by Opus but curation details missing'
+      })) || [],
+      excluded: [],
+      curationSummary: {
+        totalUnlocked: paperCount,
+        totalCurated: evidenceBundle.exposed?.paperEvidence?.length || 0,
+        totalExcluded: 0,
+        rosterPlayers: rosterNames,
+        tokenCharacters: [],
+        suspects: suspects,
+        activeNarrativeThreads: []
+      }
+    };
+  }
+
+  // Debug logging for curation results
   const tokensCount = evidenceBundle.exposed?.tokens?.length || 0;
-  const paperEvidenceCount = evidenceBundle.exposed?.paperEvidence?.length || 0;
+  const curatedCount = evidenceBundle.exposed?.paperEvidence?.length || 0;
+  const excludedCount = evidenceBundle.curationReport?.excluded?.length || 0;
   const transactionsCount = evidenceBundle.buried?.transactions?.length || 0;
-  console.log(`[curateEvidenceBundle] Complete: ${tokensCount} exposed tokens, ${paperEvidenceCount} paper evidence, ${transactionsCount} buried transactions`);
+  const rescuableCount = evidenceBundle.curationReport?.excluded?.filter(e => e.rescuable === true)?.length || 0;
+
+  console.log(`[curateEvidenceBundle] Complete:`);
+  console.log(`  - Tokens: ${tokensCount} exposed, ${transactionsCount} buried`);
+  console.log(`  - Paper Evidence: ${curatedCount} curated, ${excludedCount} excluded (${rescuableCount} rescuable)`);
+  if (evidenceBundle.curationReport?.curationSummary) {
+    const summary = evidenceBundle.curationReport.curationSummary;
+    console.log(`  - Roster: ${summary.rosterPlayers?.join(', ') || 'unknown'}`);
+    console.log(`  - Suspects: ${summary.suspects?.join(', ') || 'none'}`);
+    console.log(`  - Active threads: ${summary.activeNarrativeThreads?.join(', ') || 'unknown'}`);
+  }
+
+  // Build cache of excluded items for rescue mechanism
+  // Maps item name → full preprocessed item data so rescue doesn't require lookup
+  const _excludedItemsCache = {};
+  const excludedNames = new Set(
+    (evidenceBundle.curationReport?.excluded || []).map(e => e.name)
+  );
+
+  for (const item of preprocessed.items) {
+    if (item.sourceType === 'paper-evidence' && excludedNames.has(item.name)) {
+      _excludedItemsCache[item.name] = item;
+    }
+  }
+
+  console.log(`[curateEvidenceBundle] Built cache for ${Object.keys(_excludedItemsCache).length} excluded items`);
 
   return {
     evidenceBundle,
+    _excludedItemsCache,
     currentPhase: PHASES.CURATE_EVIDENCE,
     awaitingApproval: true,
     approvalType: APPROVAL_TYPES.EVIDENCE_AND_PHOTOS
+  };
+}
+
+/**
+ * Process rescued paper evidence items after human approval
+ *
+ * When user approves the evidence-and-photos checkpoint, they can optionally
+ * specify items to "rescue" from the excluded list. This node moves those
+ * items into the curated set before arc analysis.
+ *
+ * Uses _excludedItemsCache (built by curateEvidenceBundle) for reliable lookup.
+ * Reports warnings via _rescueWarnings for items that couldn't be rescued.
+ *
+ * @param {Object} state - Current state with evidenceBundle, _rescuedItems, _excludedItemsCache
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with modified evidenceBundle, cleared temp state
+ */
+async function processRescuedItems(state, config) {
+  const rescuedItems = state._rescuedItems;
+
+  // Skip if no rescued items
+  if (!rescuedItems || !Array.isArray(rescuedItems) || rescuedItems.length === 0) {
+    return {};
+  }
+
+  // Safety check: evidenceBundle must exist
+  if (!state.evidenceBundle) {
+    console.warn('[processRescuedItems] No evidenceBundle in state, skipping rescue');
+    return {
+      _rescuedItems: null,
+      _excludedItemsCache: null,
+      _rescueWarnings: [{ item: '*', reason: 'No evidence bundle in state' }]
+    };
+  }
+
+  const { evidenceBundle, _excludedItemsCache } = state;
+  const curationReport = evidenceBundle.curationReport || { included: [], excluded: [] };
+  const excludedByName = new Map(
+    (curationReport.excluded || []).map(e => [e.name, e])
+  );
+
+  // Track rescue outcomes
+  const itemsToRescue = [];
+  const remainingExcluded = [];
+  const warnings = [];
+
+  // Process each excluded item
+  for (const excludedItem of (curationReport.excluded || [])) {
+    if (rescuedItems.includes(excludedItem.name)) {
+      // User wants to rescue this item - check if rescuable
+      if (excludedItem.rescuable === true) {
+        itemsToRescue.push(excludedItem);
+      } else {
+        // Not rescuable - add warning and keep excluded
+        const reason = excludedItem.rescuable === false
+          ? 'Item marked as not rescuable (no narrative value)'
+          : 'Item missing rescuable flag (curation may have excluded for safety)';
+        warnings.push({ item: excludedItem.name, reason });
+        console.warn(`[processRescuedItems] Item "${excludedItem.name}": ${reason}`);
+        remainingExcluded.push(excludedItem);
+      }
+    } else {
+      remainingExcluded.push(excludedItem);
+    }
+  }
+
+  // Check for items user requested that weren't in excluded list
+  const excludedNames = new Set((curationReport.excluded || []).map(e => e.name));
+  for (const requestedName of rescuedItems) {
+    if (!excludedNames.has(requestedName)) {
+      warnings.push({ item: requestedName, reason: 'Item not found in excluded list' });
+      console.warn(`[processRescuedItems] Requested item "${requestedName}" not found in excluded list`);
+    }
+  }
+
+  if (itemsToRescue.length === 0) {
+    console.log('[processRescuedItems] No matching rescuable items found');
+    return {
+      _rescuedItems: null,
+      _excludedItemsCache: null,
+      _rescueWarnings: warnings.length > 0 ? warnings : null
+    };
+  }
+
+  // Get full paper evidence data from cache (built by curateEvidenceBundle)
+  const rescuedFullItems = [];
+
+  for (const rescueItem of itemsToRescue) {
+    // Use cache for reliable lookup (avoids name matching issues)
+    const cachedItem = _excludedItemsCache?.[rescueItem.name];
+
+    if (cachedItem) {
+      // Add rescue marker to the full item
+      rescuedFullItems.push({
+        ...cachedItem,
+        rescuedByHuman: true
+      });
+    } else {
+      // Fallback: minimal object if cache miss (shouldn't happen)
+      warnings.push({
+        item: rescueItem.name,
+        reason: 'Full item data not found in cache, using minimal data'
+      });
+      console.warn(`[processRescuedItems] Cache miss for "${rescueItem.name}", using fallback`);
+      rescuedFullItems.push({
+        name: rescueItem.name,
+        score: rescueItem.score,
+        note: rescueItem.note,
+        sourceType: 'paper-evidence',
+        rescuedByHuman: true,
+        _incomplete: true
+      });
+    }
+  }
+
+  // Update evidenceBundle
+  const updatedBundle = {
+    ...evidenceBundle,
+    exposed: {
+      ...evidenceBundle.exposed,
+      paperEvidence: [
+        ...(evidenceBundle.exposed?.paperEvidence || []),
+        ...rescuedFullItems
+      ]
+    },
+    curationReport: {
+      ...curationReport,
+      included: [
+        ...(curationReport.included || []),
+        ...itemsToRescue.map(item => ({
+          name: item.name,
+          score: 5, // Human override gets high score
+          criteriaMatched: ['humanOverride'],
+          relevanceNote: `Rescued by human at checkpoint: ${item.note || 'No reason given'}`
+        }))
+      ],
+      excluded: remainingExcluded,
+      curationSummary: {
+        ...curationReport.curationSummary,
+        totalCurated: (curationReport.curationSummary?.totalCurated || 0) + itemsToRescue.length,
+        totalExcluded: remainingExcluded.length,
+        humanRescued: itemsToRescue.length
+      }
+    }
+  };
+
+  console.log(`[processRescuedItems] Rescued ${itemsToRescue.length} items: ${itemsToRescue.map(i => i.name).join(', ')}`);
+  if (warnings.length > 0) {
+    console.log(`[processRescuedItems] Warnings: ${warnings.length} issues encountered`);
+  }
+
+  return {
+    evidenceBundle: updatedBundle,
+    _rescuedItems: null,      // Clear the rescue request
+    _excludedItemsCache: null, // Clear the cache
+    _rescueWarnings: warnings.length > 0 ? warnings : null
   };
 }
 
@@ -742,6 +1112,7 @@ function getDefaultRevision() {
 module.exports = {
   // Node functions
   curateEvidenceBundle,
+  processRescuedItems,  // Commit 8.10+: Handle human-rescued paper evidence
   analyzeNarrativeArcs,
   generateOutline,
   generateContentBundle,

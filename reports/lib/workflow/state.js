@@ -382,11 +382,44 @@ const ReportStateAnnotation = Annotation.Root({
   approvalType: Annotation({
     reducer: replaceReducer,
     default: () => null
+  }),
+
+  // ═══════════════════════════════════════════════════════
+  // INTERNAL TEMPORARY STATE (Commit 8.10+)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Rescued item names from human override at evidence checkpoint
+   * Set by server approval handler, consumed by processRescuedItems node
+   * Cleared after processing
+   */
+  _rescuedItems: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Cache of full excluded item data for rescue mechanism
+   * Maps item name → full preprocessed item data
+   * Built by curateEvidenceBundle, consumed by processRescuedItems
+   */
+  _excludedItemsCache: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Warnings from rescue process (non-fatal issues)
+   * Array of { item, reason } for items that couldn't be rescued
+   */
+  _rescueWarnings: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   })
 });
 
 /**
- * Get default state with all fields initialized (33 fields - Commit 8.9)
+ * Get default state with all fields initialized (36 fields - Commit 8.10+)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -441,7 +474,11 @@ function getDefaultState() {
     errors: [],
     // Human approval
     awaitingApproval: false,
-    approvalType: null
+    approvalType: null,
+    // Internal temporary state (Commit 8.10+)
+    _rescuedItems: null,
+    _excludedItemsCache: null,
+    _rescueWarnings: null
   };
 }
 

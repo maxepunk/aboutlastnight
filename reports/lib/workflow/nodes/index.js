@@ -60,6 +60,7 @@ module.exports = {
 
   // AI nodes (from ai-nodes.js)
   curateEvidenceBundle: aiNodes.curateEvidenceBundle,
+  processRescuedItems: aiNodes.processRescuedItems,  // Commit 8.10+: Handle human-rescued paper evidence
   analyzeNarrativeArcs: aiNodes.analyzeNarrativeArcs, // @deprecated - use arc specialists
   generateOutline: aiNodes.generateOutline,
   generateContentBundle: aiNodes.generateContentBundle,

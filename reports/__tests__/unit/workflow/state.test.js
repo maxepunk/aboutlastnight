@@ -239,7 +239,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 33 state fields (Commit 8.9.x)', () => {
+    it('includes all 36 state fields (Commit 8.10+)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -290,7 +290,11 @@ describe('ReportStateAnnotation', () => {
         'errors',
         // Human approval
         'awaitingApproval',
-        'approvalType'
+        'approvalType',
+        // Internal temporary state (Commit 8.10+)
+        '_rescuedItems',
+        '_excludedItemsCache',
+        '_rescueWarnings'
       ];
 
       expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort());
