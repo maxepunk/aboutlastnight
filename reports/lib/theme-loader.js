@@ -113,16 +113,26 @@ class ThemeLoader {
 
   /**
    * Load a single prompt file (cached)
+   * Graceful degradation: returns empty string if file not found (Commit 8.18)
    * @param {string} name - Prompt name without extension
-   * @returns {Promise<string>} - Prompt content
+   * @returns {Promise<string>} - Prompt content or empty string
    */
   async loadPrompt(name) {
     const cacheKey = `prompt:${name}`;
 
     if (!this.cache.has(cacheKey)) {
       const filePath = path.join(this.promptsPath, `${name}.md`);
-      const content = await fs.readFile(filePath, 'utf8');
-      this.cache.set(cacheKey, content);
+      try {
+        const content = await fs.readFile(filePath, 'utf8');
+        this.cache.set(cacheKey, content);
+      } catch (error) {
+        console.warn(
+          `[theme-loader] Failed to load prompt "${name}": ${error.message}\n` +
+          `  Expected path: ${filePath}\n` +
+          `  Pipeline will continue with empty prompt content.`
+        );
+        this.cache.set(cacheKey, '');
+      }
     }
 
     return this.cache.get(cacheKey);
@@ -180,6 +190,29 @@ class ThemeLoader {
       }
 
       this.cache.set(cacheKey, styles);
+    }
+
+    return this.cache.get(cacheKey);
+  }
+
+  /**
+   * Load JavaScript files for the template
+   * @returns {Promise<Object>} - Map of JS filename to content
+   */
+  async loadScripts() {
+    const cacheKey = 'scripts:all';
+
+    if (!this.cache.has(cacheKey)) {
+      const jsPath = path.join(this.assetsPath, 'js');
+      const jsFiles = ['article.js'];
+
+      const scripts = {};
+      for (const file of jsFiles) {
+        const filePath = path.join(jsPath, file);
+        scripts[file] = await fs.readFile(filePath, 'utf8');
+      }
+
+      this.cache.set(cacheKey, scripts);
     }
 
     return this.cache.get(cacheKey);
