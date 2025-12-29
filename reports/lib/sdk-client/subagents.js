@@ -504,12 +504,34 @@ CRITICAL PRINCIPLES:
    - Never use em-dashes
    - Never claim to know buried content
 
+6. INTERWEAVING FOR COMPULSIVE READABILITY
+   Arcs are not sequential chapters. They interweave through CALLBACKS.
+
+   For each arc, identify:
+   - sharedCharacters: Who appears in this arc AND other arcs? These are bridges.
+   - bridgeOpportunities: How can we connect FROM this arc TO others?
+     - shared_character: Same person, different context
+     - causal_chain: This arc explains WHY another happened
+     - temporal: Events overlapping in time
+     - contradiction: This arc recontextualizes another
+   - callbackSeeds: Details that can be recontextualized later
+     Example: "Victoria's confident smile" planted early, pays off when we learn she knew all along
+   - convergenceRole: How does this arc connect to the murder/accusation?
+
+   Also provide interweavingPlan:
+   - suggestedOrder: Arrange arcs so each answer opens a NEW question
+   - convergencePoint: Where do all threads meet?
+   - keyCallbacks: Specific [plant → payoff] opportunities across arcs
+     Example: { plantIn: "arc-funding", payoffIn: "arc-murder", detail: "Derek's panic has a price tag" }
+
 OUTPUT:
 Generate 3-5 narrative arcs with the required fields. Ensure:
 - One arc with arcSource="accusation" (required)
 - Every roster member has at least one placement
 - All keyEvidence IDs are from the valid ID list
-- Each arc has caveats and unansweredQuestions (even if minimal)`;
+- Each arc has caveats and unansweredQuestions (even if minimal)
+- Each arc has interweaving metadata for callback opportunities
+- Include interweavingPlan with suggestedOrder and keyCallbacks`;
 
 /**
  * JSON schema for player-focus-guided arc analysis output
@@ -549,6 +571,38 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
               behavioral: { type: 'string' },
               victimization: { type: 'string' }
             }
+          },
+          // Commit 8.24: Interweaving metadata for compulsive readability
+          interweaving: {
+            type: 'object',
+            properties: {
+              sharedCharacters: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Characters that appear in this AND other arcs - bridges for transitions'
+              },
+              bridgeOpportunities: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    toArc: { type: 'string' },
+                    bridgeType: { type: 'string', enum: ['shared_character', 'causal_chain', 'temporal', 'contradiction'] },
+                    bridgeDetail: { type: 'string' }
+                  }
+                },
+                description: 'How this arc can connect to other arcs for interweaving'
+              },
+              callbackSeeds: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Details in this arc that can be recontextualized later for aha moments'
+              },
+              convergenceRole: {
+                type: 'string',
+                description: 'How this arc contributes to the convergence point (murder/accusation)'
+              }
+            }
           }
         },
         required: [
@@ -558,7 +612,34 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
       }
     },
     synthesisNotes: { type: 'string' },
-    rosterCoverageCheck: { type: 'object' }
+    rosterCoverageCheck: { type: 'object' },
+    // Commit 8.24: Interweaving plan for outline generation
+    interweavingPlan: {
+      type: 'object',
+      properties: {
+        suggestedOrder: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Suggested arc order for maximum interweaving potential'
+        },
+        convergencePoint: {
+          type: 'string',
+          description: 'Where all arcs meet (the murder, the accusation, etc.)'
+        },
+        keyCallbacks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              plantIn: { type: 'string' },
+              payoffIn: { type: 'string' },
+              detail: { type: 'string' }
+            }
+          },
+          description: 'Key callback opportunities across arcs for recontextualization'
+        }
+      }
+    }
   },
   required: ['narrativeArcs', 'synthesisNotes']
 };

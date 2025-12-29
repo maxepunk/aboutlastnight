@@ -239,7 +239,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 38 state fields (Phase 4f)', () => {
+    it('includes all 39 state fields (Phase 1 Fix: added arcEvidencePackages)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -271,6 +271,7 @@ describe('ReportStateAnnotation', () => {
         // Analysis results
         'narrativeArcs',
         'selectedArcs',
+        'arcEvidencePackages',  // Phase 1 Fix: per-arc evidence with fullContent
         '_arcAnalysisCache',
         // Evaluation (Commit 8.6)
         'evaluationHistory',
@@ -501,8 +502,8 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 32 phases (Phase 4f)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(32);
+    it('defines exactly 33 phases (Phase 1 Fix: added BUILD_ARC_PACKAGES)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(33);
     });
 
     it('defines input parsing phases (Commit 8.9)', () => {

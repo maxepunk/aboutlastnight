@@ -31,6 +31,21 @@ class ProgressEmitter extends EventEmitter {
   }
 
   /**
+   * Emit workflow completion event with full result
+   * Used by non-blocking approve endpoint to signal completion via SSE
+   * @param {string} sessionId - Session identifier
+   * @param {object} result - Workflow result (currentPhase, awaitingApproval, etc.)
+   */
+  emitComplete(sessionId, result) {
+    if (!sessionId) return;
+    this.emit(`progress:${sessionId}`, {
+      type: 'complete',
+      timestamp: new Date().toISOString(),
+      result
+    });
+  }
+
+  /**
    * Subscribe to session progress events
    * @param {string} sessionId - Session identifier
    * @param {Function} handler - Event handler: (data) => void

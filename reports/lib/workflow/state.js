@@ -276,6 +276,17 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => []
   }),
 
+  /**
+   * Per-arc evidence packages with full quotable content
+   * Built by buildArcEvidencePackages after arc selection
+   * Contains: { arcId, arcTitle, evidence: [{ id, fullContent, quotableExcerpts }], photos: [...] }
+   * @see Phase 1 Fix in plan
+   */
+  arcEvidencePackages: Annotation({
+    reducer: replaceReducer,
+    default: () => []
+  }),
+
   /** Cached arc analysis for outline generation (internal) */
   _arcAnalysisCache: Annotation({
     reducer: replaceReducer,
@@ -311,6 +322,9 @@ const ReportStateAnnotation = Annotation.Root({
     reducer: replaceReducer,
     default: () => null
   }),
+
+  // NOTE: outlineValidation and articleValidation removed in Commit 8.23
+  // Programmatic validation was too brittle - trust Opus evaluators instead
 
   // ═══════════════════════════════════════════════════════
   // SUPERVISOR STATE (Commit 8.6)
@@ -473,6 +487,7 @@ function getDefaultState() {
     // Analysis results
     narrativeArcs: [],
     selectedArcs: [],
+    arcEvidencePackages: [],  // Phase 1 Fix: per-arc evidence with fullContent
     _arcAnalysisCache: null,
     // Evaluation (Commit 8.6)
     evaluationHistory: [],
@@ -537,6 +552,7 @@ const PHASES = {
   ARC_SPECIALISTS: '2.1',           // Parallel domain specialists (financial, behavioral, victimization)
   ARC_SYNTHESIS: '2.2',             // Synthesizer combines specialist outputs
   ARC_EVALUATION: '2.3',            // Evaluator checks arcs
+  BUILD_ARC_PACKAGES: '2.4',        // Phase 1 Fix: Build per-arc evidence packages after selection
   ANALYZE_ARCS: '2',                // @deprecated - use sub-phases
 
   // Outline sub-phases (Commit 8.6)
@@ -656,14 +672,14 @@ const ROLLBACK_CLEARS = {
   // Phase 2.3: Arc selection - most common rollback point
   'arc-selection': [
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'outline', 'contentBundle',
+    'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
   // Phase 3.2: Outline
   'outline': [
-    'outline',
-    'contentBundle', 'assembledHtml', 'validationResults'
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults'
     // Note: evaluationHistory preserved - may contain useful arc evals
   ],
 

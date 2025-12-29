@@ -106,9 +106,9 @@ const ITEM_SCHEMA = {
     originalType: { type: 'string' },
     disposition: { type: 'string', enum: ['exposed', 'buried', 'unknown'] },
     summary: { type: 'string', maxLength: 150 },
-    // NOTE: significance and narrativeRelevance REMOVED (SRP fix)
-    // These are JUDGMENT fields that belong in curation, not preprocessing
-    // See Phase 3 in plan file for rationale
+    // PHASE 1 FIX: Preserve full content for verbatim quoting in article generation
+    // Summary is for curation decisions; fullContent is for actual quotes
+    fullContent: { type: 'string' },
     characterRefs: { type: 'array', items: { type: 'string' } },
     ownerLogline: { type: 'string' },
     // NARRATIVE TIMELINE: when events in the memory occurred (exposed tokens only)
@@ -319,15 +319,26 @@ async function processBatch(batch, sdkClient, batchIndex) {
 
     const items = parsed.items || [];
 
-    // Merge with preserved context (disposition, owner logline, timeline context, SF fields, transaction metadata)
+    // Merge with preserved context (disposition, owner logline, timeline context, SF fields, transaction metadata, fullContent)
     const mergedItems = items.map(item => {
       const original = batch.find(b => b.id === item.id);
       if (original) {
+        // PHASE 1 FIX: Extract fullContent from raw data for verbatim quoting
+        // Priority: content field > description field > name/title as fallback
+        const rawFullContent = original.rawData?.content
+          || original.rawData?.description
+          || original.rawData?.text
+          || original.rawData?.name
+          || original.rawData?.title
+          || '';
+
         return {
           ...item,
           // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
           // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
           disposition: original.disposition || item.disposition || 'unknown',
+          // PHASE 1 FIX: Preserve full content for article generation quotes
+          fullContent: rawFullContent,
           ownerLogline: item.ownerLogline || original.ownerLogline,
           narrativeTimelineContext: item.narrativeTimelineContext || original.timelineContext,
           sfFields: item.sfFields || original.sfFields,
@@ -349,25 +360,36 @@ async function processBatch(batch, sdkClient, batchIndex) {
     console.error(`[EvidencePreprocessor] Batch ${batchIndex} error: ${error.message}`);
 
     // Create fallback items with minimal normalization (no judgment fields)
-    const fallbackItems = batch.map(item => ({
-      id: item.id,
-      sourceType: item.sourceType,
-      originalType: item.originalType,
-      disposition: item.disposition || 'unknown', // Preserve disposition
-      summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
-      // NOTE: significance and narrativeRelevance removed (SRP fix)
-      characterRefs: [],
-      ownerLogline: item.ownerLogline,
-      narrativeTimelineRef: null,
-      narrativeTimelineContext: item.timelineContext,
-      // Preserve transaction metadata for buried tokens
-      shellAccount: item.rawData?.shellAccount || null,
-      transactionAmount: item.rawData?.transactionAmount || null,
-      sessionTransactionTime: item.rawData?.sessionTransactionTime || null,
-      tags: [],
-      groupCluster: null,
-      sfFields: item.sfFields
-    }));
+    const fallbackItems = batch.map(item => {
+      // PHASE 1 FIX: Extract fullContent even in fallback case
+      const rawFullContent = item.rawData?.content
+        || item.rawData?.description
+        || item.rawData?.text
+        || item.rawData?.name
+        || item.rawData?.title
+        || '';
+
+      return {
+        id: item.id,
+        sourceType: item.sourceType,
+        originalType: item.originalType,
+        disposition: item.disposition || 'unknown', // Preserve disposition
+        summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
+        // PHASE 1 FIX: Preserve full content for article generation quotes
+        fullContent: rawFullContent,
+        characterRefs: [],
+        ownerLogline: item.ownerLogline,
+        narrativeTimelineRef: null,
+        narrativeTimelineContext: item.timelineContext,
+        // Preserve transaction metadata for buried tokens
+        shellAccount: item.rawData?.shellAccount || null,
+        transactionAmount: item.rawData?.transactionAmount || null,
+        sessionTransactionTime: item.rawData?.sessionTransactionTime || null,
+        tags: [],
+        groupCluster: null,
+        sfFields: item.sfFields
+      };
+    });
 
     return {
       success: false,
@@ -469,7 +491,8 @@ function createMockPreprocessor(mockData = {}) {
         summary: mockData.summaryPrefix
           ? `${mockData.summaryPrefix} - Token ${i + 1}`
           : `Mock summary for token ${i + 1}`,
-        // NOTE: significance and narrativeRelevance removed (SRP fix)
+        // PHASE 1 FIX: Include fullContent for verbatim quoting
+        fullContent: token.content || token.description || `Mock full content for token ${i + 1}`,
         characterRefs: token.characterRefs || [],
         ownerLogline: token.owner?.logline || null,
         timelineRef: null,
@@ -485,7 +508,8 @@ function createMockPreprocessor(mockData = {}) {
         summary: mockData.summaryPrefix
           ? `${mockData.summaryPrefix} - Evidence ${i + 1}`
           : `Mock summary for evidence ${i + 1}`,
-        // NOTE: significance and narrativeRelevance removed (SRP fix)
+        // PHASE 1 FIX: Include fullContent for verbatim quoting
+        fullContent: evidence.content || evidence.description || `Mock full content for evidence ${i + 1}`,
         characterRefs: [],
         ownerLogline: null,
         timelineRef: null,

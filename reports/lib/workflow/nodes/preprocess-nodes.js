@@ -28,6 +28,7 @@ const {
 } = require('../../evidence-preprocessor');
 const { sdkQuery } = require('../../sdk-client');
 const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
+const { traceNode } = require('../tracing');
 
 // Phase 4a: Short timeout for background paper result check
 // Paper preprocessing should complete early if running; if not ready, fall through to standard path
@@ -196,8 +197,10 @@ async function preprocessEvidence(state, config) {
 }
 
 module.exports = {
-  // Main node function
-  preprocessEvidence,
+  // Main node function (wrapped with LangSmith tracing)
+  preprocessEvidence: traceNode(preprocessEvidence, 'preprocessEvidence', {
+    stateFields: ['memoryTokens', 'paperEvidence']
+  }),
 
   // Mock factory for testing
   createMockPreprocessor,

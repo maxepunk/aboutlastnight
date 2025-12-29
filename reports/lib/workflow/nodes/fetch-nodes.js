@@ -22,6 +22,7 @@ const { createNotionClient } = require('../../notion-client');
 const { createCachedNotionClient } = require('../../cache');
 const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
 const { synthesizePlayerFocus } = require('./node-helpers');
+const { traceNode } = require('../tracing');
 
 /**
  * Default data directory for session files
@@ -575,14 +576,14 @@ function createMockNotionClient(mockData = {}) {
 }
 
 module.exports = {
-  // Node functions
-  initializeSession,
-  loadDirectorNotes,
-  fetchMemoryTokens,
-  fetchMemoryTokensRaw,
-  tagTokenDispositions,
-  fetchPaperEvidence,
-  fetchSessionPhotos,
+  // Node functions (wrapped with LangSmith tracing)
+  initializeSession: traceNode(initializeSession, 'initializeSession'),
+  loadDirectorNotes: traceNode(loadDirectorNotes, 'loadDirectorNotes'),
+  fetchMemoryTokens: traceNode(fetchMemoryTokens, 'fetchMemoryTokens'),
+  fetchMemoryTokensRaw: traceNode(fetchMemoryTokensRaw, 'fetchMemoryTokensRaw'),
+  tagTokenDispositions: traceNode(tagTokenDispositions, 'tagTokenDispositions'),
+  fetchPaperEvidence: traceNode(fetchPaperEvidence, 'fetchPaperEvidence'),
+  fetchSessionPhotos: traceNode(fetchSessionPhotos, 'fetchSessionPhotos'),
 
   // Testing utilities
   createMockNotionClient,

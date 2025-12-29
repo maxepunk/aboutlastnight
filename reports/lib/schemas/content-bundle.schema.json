@@ -211,6 +211,60 @@
         "totalExposed": { "type": "string" }
       },
       "additionalProperties": false
+    },
+    "photos": {
+      "type": "array",
+      "description": "Session photos for inline article placement",
+      "items": {
+        "type": "object",
+        "required": ["filename", "caption"],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Photo filename in photos/ directory"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Photo caption for figcaption element"
+          },
+          "characters": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Character names visible in photo"
+          },
+          "placement": {
+            "type": "string",
+            "enum": ["inline", "sidebar"],
+            "default": "inline",
+            "description": "Where photo appears in article layout"
+          },
+          "afterSection": {
+            "type": "string",
+            "description": "Section ID after which photo appears"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "heroImage": {
+      "type": "object",
+      "description": "Featured image at top of article",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "Photo filename in photos/ directory"
+        },
+        "caption": {
+          "type": "string",
+          "description": "Hero image caption"
+        },
+        "characters": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Character names visible in hero image"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

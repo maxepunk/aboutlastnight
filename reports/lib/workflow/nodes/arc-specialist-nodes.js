@@ -31,8 +31,11 @@ const { PHASES, APPROVAL_TYPES } = require('../state');
 const {
   buildValidEvidenceIds,
   validateRosterName,
-  getSdkClient
+  getSdkClient,
+  isKnownNPC  // Commit 8.17: NPC validation (accepts NPCs from theme config)
 } = require('./node-helpers');
+const { getThemeNPCs } = require('../../theme-config');  // Commit 8.17: Theme-configurable NPCs
+const { traceNode } = require('../tracing');
 
 // Commit 8.13: Import centralized rules loader for evidence boundaries
 // Commit 8.14: Use full reference content instead of summaries to avoid file reads
@@ -1282,11 +1285,16 @@ const VALID_EVIDENCE_STRENGTHS = ['strong', 'moderate', 'weak', 'speculative'];
  * @returns {Object} Partial state update with validated narrativeArcs
  */
 function validateArcStructure(state, config) {
-  console.log('[validateArcStructure] Starting programmatic validation (Commit 8.15)');
+  console.log('[validateArcStructure] Starting programmatic validation (Commit 8.17)');
 
   const arcs = state.narrativeArcs || [];
   const roster = (state.sessionConfig?.roster || []).filter(n => typeof n === 'string');
   const rosterLower = new Set(roster.map(n => n.toLowerCase()));
+
+  // Commit 8.17: Get theme-specific NPCs for validation
+  const theme = state.theme || config?.configurable?.theme || 'journalist';
+  const themeNPCs = getThemeNPCs(theme);
+  console.log(`[validateArcStructure] Theme "${theme}" NPCs: ${themeNPCs.join(', ') || '(none)'}`);
 
   // Build valid evidence ID set using helper from node-helpers
   const validIds = buildValidEvidenceIds(state.evidenceBundle);
@@ -1359,7 +1367,7 @@ function validateArcStructure(state, config) {
       const matchedName = validateRosterName(name, roster);
 
       if (matchedName) {
-        // Preserve original casing from roster
+        // Roster member - preserve original casing from roster
         validatedPlacements[matchedName] = role;
         placementRoles[matchedName.toLowerCase()] = role;
 
@@ -1367,6 +1375,11 @@ function validateArcStructure(state, config) {
           issues.push(`Character "${name}" corrected to roster name "${matchedName}"`);
           totalCharactersCorrected++;
         }
+      } else if (isKnownNPC(name, themeNPCs)) {
+        // Commit 8.17: Known NPC from theme config - preserve as-is
+        // NPCs are valid in characterPlacements but don't count toward roster coverage
+        validatedPlacements[name] = role;
+        // Don't add to placementRoles - NPCs don't affect roster coverage checks
       } else {
         issues.push(`Removed non-roster character: ${name}`);
         totalCharactersRemoved++;
@@ -1685,13 +1698,17 @@ function createMockSynthesizer(options = {}) {
 
 module.exports = {
   // Commit 8.15: Player-focus-guided architecture (preferred)
-  analyzeArcsPlayerFocusGuided,
+  analyzeArcsPlayerFocusGuided: traceNode(analyzeArcsPlayerFocusGuided, 'analyzeArcsPlayerFocusGuided', {
+    stateFields: ['playerFocus', 'evidenceBundle']
+  }),
 
   // Commit 8.12: Parallel specialist architecture (legacy, kept for comparison)
   analyzeArcsWithSubagents,
 
   // Programmatic validation node
-  validateArcStructure,
+  validateArcStructure: traceNode(validateArcStructure, 'validateArcStructure', {
+    stateFields: ['narrativeArcs']
+  }),
 
   // Mock factory (Commit 8.8)
   createMockOrchestrator,
