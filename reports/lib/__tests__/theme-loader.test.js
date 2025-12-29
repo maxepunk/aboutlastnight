@@ -133,11 +133,41 @@ describe('ThemeLoader', () => {
       expect(fs.readFile).toHaveBeenCalledTimes(1);
     });
 
-    it('should throw on missing file', async () => {
+    // Graceful degradation tests (Commit 8.18)
+    it('should return empty string on missing file (graceful degradation)', async () => {
+      fs.readFile.mockRejectedValue(new Error('ENOENT: no such file'));
+
+      const result = await loader.loadPrompt('nonexistent');
+
+      expect(result).toBe('');
+    });
+
+    it('should log warning with file path on missing file', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      fs.readFile.mockRejectedValue(new Error('ENOENT: no such file'));
+
+      await loader.loadPrompt('missing-prompt');
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/\[theme-loader\] Failed to load prompt "missing-prompt":/)
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Expected path:')
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Pipeline will continue with empty prompt content.')
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('should cache empty string on file error', async () => {
       fs.readFile.mockRejectedValue(new Error('ENOENT'));
 
-      await expect(loader.loadPrompt('nonexistent'))
-        .rejects.toThrow('ENOENT');
+      await loader.loadPrompt('broken-prompt');
+      await loader.loadPrompt('broken-prompt');
+
+      // Should only attempt to read file once, then use cached empty string
+      expect(fs.readFile).toHaveBeenCalledTimes(1);
     });
   });
 
