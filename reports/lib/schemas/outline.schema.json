@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "outline",
+  "title": "ArticleOutline",
+  "description": "Structured outline for NovaNews article generation with arc interweaving",
+  "type": "object",
+  "required": ["lede", "theStory", "followTheMoney", "thePlayers", "whatsMissing", "closing"],
+  "properties": {
+    "lede": {
+      "type": "object",
+      "description": "Opening hook that establishes the central mystery"
+    },
+    "theStory": {
+      "type": "object",
+      "description": "Main narrative section weaving selected arcs together"
+    },
+    "followTheMoney": {
+      "type": "object",
+      "description": "Financial analysis section connecting arcs to money trails",
+      "properties": {
+        "arcConnections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "arcName": { "type": "string" },
+              "financialAngle": { "type": "string" }
+            },
+            "required": ["arcName", "financialAngle"]
+          }
+        }
+      },
+      "required": ["arcConnections"]
+    },
+    "thePlayers": {
+      "type": "object",
+      "description": "Character profiles section connecting arcs to key players",
+      "properties": {
+        "arcConnections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "arcName": { "type": "string" },
+              "characterAngle": { "type": "string" }
+            },
+            "required": ["arcName", "characterAngle"]
+          }
+        }
+      },
+      "required": ["arcConnections"]
+    },
+    "whatsMissing": {
+      "type": "object",
+      "description": "Open questions section connecting arcs to unresolved mysteries",
+      "properties": {
+        "arcConnections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "arcName": { "type": "string" },
+              "openQuestion": { "type": "string" }
+            },
+            "required": ["arcName", "openQuestion"]
+          }
+        }
+      },
+      "required": ["arcConnections"]
+    },
+    "closing": {
+      "type": "object",
+      "description": "Conclusion section with arc resolutions and final thoughts",
+      "properties": {
+        "arcResolutions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "arcName": { "type": "string" },
+              "resolution": { "type": "string" }
+            },
+            "required": ["arcName", "resolution"]
+          }
+        }
+      },
+      "required": ["arcResolutions"]
+    },
+    "visualComponentCount": {
+      "type": "object",
+      "description": "Counts of visual elements planned for the article"
+    }
+  }
+}

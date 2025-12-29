@@ -88,9 +88,11 @@ Return JSON with the following structure:
    * @param {string[]} selectedArcs - User-selected arc names
    * @param {string} heroImage - Confirmed hero image filename
    * @param {Object} evidenceBundle - Evidence bundle for reference
+   * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
+   * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle) {
+  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos = [], arcEvidencePackages = []) {
     const prompts = await this.theme.loadPhasePrompts('outlineGeneration');
 
     const systemPrompt = `You are creating an article outline for a NovaNews investigative piece.
@@ -146,6 +148,99 @@ USING ARC METADATA IN THE OUTLINE:
    - Nova can explicitly say "I don't know why..."
 
 ═══════════════════════════════════════════════════════════════════════════
+ARC INTERWEAVING (Critical for Compulsive Readability)
+═══════════════════════════════════════════════════════════════════════════
+
+Arcs are THREADS, not CHAPTERS. Plan them as intercut narratives:
+
+- Arc A paragraph → Arc B paragraph → Arc A continues → Arc C reveals
+- Later paragraphs should RECONTEXTUALIZE earlier ones ("wait, so THAT'S why...")
+- Plant details in Arc A that pay off in Arc C
+- If you can shuffle arc paragraphs without breaking the narrative, you've failed
+
+**Callback opportunities:** For each arc, identify what detail can be planted that pays off later.
+
+═══════════════════════════════════════════════════════════════════════════
+VISUAL COMPONENT RULES
+═══════════════════════════════════════════════════════════════════════════
+
+**Pull Quotes (Two Types - CRITICAL):**
+1. Nova's crystallized insight = NO attribution (just styled text)
+2. Verbatim evidence quote = Character name attribution (e.g., "— Victoria Chen")
+
+Pull quotes must be VERBATIM text from evidence, NOT summaries.
+- WRONG: "$163 million. That's what Skyler threatened to withdraw."
+- RIGHT: "Pull your funding and I'll pull your secrets into the light." — Skyler Chen
+
+**Photo Placement:**
+- Humanize BEFORE damning revelation about that character
+- Provide breathing room after intense sequences
+- Cross-arc bridge: same character in different arc contexts
+- ONLY use filenames from AVAILABLE PHOTOS below (do not invent paths)
+
+═══════════════════════════════════════════════════════════════════════════
+VISUAL DISTRIBUTION (Phase 1 Fix: Prevent clustering)
+═══════════════════════════════════════════════════════════════════════════
+
+HARD RULE: Visual components MUST be distributed across sections.
+
+**Distribution Requirements:**
+- MAX 2 evidence cards per section
+- MAX 1 photo per section (except THE STORY which may have 2)
+- MAX 1 pull quote per section
+- MINIMUM 3 prose paragraphs between any two visual components
+
+**Section Visual Budget:**
+- LEDE: 0-1 photo (hero only)
+- THE STORY: 2-3 evidence cards, 1-2 photos, 1 pull quote
+- FOLLOW THE MONEY: 1-2 evidence cards, 0-1 photo
+- THE PLAYERS: 1 evidence card, 0-1 photo, 1-2 pull quotes
+- WHAT'S MISSING: 0-1 evidence card (NO PHOTOS - maintains mystery)
+- CLOSING: 0-1 pull quote (NO EVIDENCE CARDS - resolution, not revelation)
+
+**Anti-Clustering Check:**
+Before finalizing, verify:
+- No two evidence cards adjacent (must have prose between)
+- No photo immediately after evidence card (breaks pacing)
+- Pull quotes appear in AT LEAST 2 different sections
+
+═══════════════════════════════════════════════════════════════════════════
+AVAILABLE PHOTOS (Commit 8.24 - use these EXACT filenames)
+═══════════════════════════════════════════════════════════════════════════
+
+${availablePhotos.length > 0 ? availablePhotos.map((p, i) => `${i + 1}. ${p.filename}
+   Characters: ${p.characters.slice(0, 3).join('; ') || 'Unknown'}
+   Visual: ${(p.visualContent || '').substring(0, 100)}...`).join('\n\n') : 'No session photos available'}
+
+IMPORTANT: When specifying photoPlacement, use the EXACT filename from above (e.g., "IMG_1234.jpg").
+Do NOT use paths like "character-photos/victoria.png" - these files do not exist.
+
+**Evidence Cards:**
+- Every card must CLOSE or OPEN a loop (not just illustrate)
+- CLOSER: proves what was hinted
+- OPENER: raises new question while answering old
+
+═══════════════════════════════════════════════════════════════════════════
+PER-ARC EVIDENCE PACKAGES (Phase 1 Fix: Full content for quoting)
+═══════════════════════════════════════════════════════════════════════════
+
+${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
+### ${pkg.arcId} - ${pkg.arcTitle}
+
+**Evidence Items (${pkg.evidenceItems?.length || 0} items):**
+${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type} - "${(item.fullContent || item.summary || '').substring(0, 150)}..."
+  Quotable: ${(item.quotableExcerpts || []).slice(0, 2).map(q => `"${q.substring(0, 60)}..."`).join(' | ') || 'None extracted'}`).join('\n')}
+
+**Arc-Relevant Photos (${pkg.photos?.length || 0} photos):**
+${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown characters'}`).join('\n') || 'No arc-specific photos'}
+`).join('\n') : 'No arc evidence packages available - using evidence bundle directly'}
+
+**Using Arc Evidence Packages:**
+1. For pull quotes, use **quotableExcerpts** - these are pre-extracted verbatim text
+2. For evidence cards, use **evidenceItems** with their **fullContent**
+3. For photo placement, use **arc-relevant photos** that feature arc characters
+
+═══════════════════════════════════════════════════════════════════════════
 FULL ARC ANALYSIS (for complete context)
 ═══════════════════════════════════════════════════════════════════════════
 
@@ -160,43 +255,82 @@ ${prompts['formatting']}
 
 ${prompts['evidence-boundaries']}
 
+═══════════════════════════════════════════════════════════════════════════
+ARC-SECTION FLOW (Phase 1 Fix: Arcs flow THROUGH all sections)
+═══════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Arcs are THREADS that weave through the entire article, not chapters isolated to THE STORY.
+
+Each arc should appear in multiple sections with different focus:
+- LEDE: Hooks with arc's central tension
+- THE STORY: Full arc development with evidence
+- FOLLOW THE MONEY: Financial angles of the arc
+- THE PLAYERS: Character revelations that advance the arc
+- WHAT'S MISSING: Gaps/questions raised by the arc
+- CLOSING: Arc resolution or haunting continuation
+
+Every section (except LEDE) must have "arcConnections" showing which arcs it advances.
+
 Return JSON with the following structure:
 {
   "lede": {
     "hook": "Opening hook text",
-    "keyTension": "Central conflict"
+    "keyTension": "Central conflict",
+    "primaryArc": "Which arc drives the hook"
   },
   "theStory": {
+    "arcInterweaving": {
+      "interleavingPlan": "How arcs will be intercut (not sequential)",
+      "callbackOpportunities": [
+        {"plantIn": "Arc A", "payoffIn": "Arc C", "detail": "What's planted and paid off"}
+      ],
+      "convergencePoint": "Where all arcs meet (paragraph/section location)"
+    },
     "arcs": [
       {
         "name": "Arc name",
         "paragraphCount": 3,
-        "evidenceCards": [{"tokenId": "xxx", "placement": "after para 1"}],
-        "photoPlacement": {"filename": "xxx.png", "afterParagraph": 2} or null
+        "evidenceCards": [{"tokenId": "xxx", "placement": "after para 1", "loopFunction": "CLOSER|OPENER"}],
+        "photoPlacement": {"filename": "xxx.png", "afterParagraph": 2, "purpose": "breathing|humanize|bridge"} or null
       }
     ]
   },
   "followTheMoney": {
-    "shellAccounts": [{"name": "X", "total": 123, "inference": "What it means"}],
+    "arcConnections": [
+      {"arcName": "Arc A", "financialAngle": "How this arc's financial thread continues here"}
+    ],
+    "shellAccounts": [{"name": "X", "total": 123, "inference": "What it means", "relatedArc": "Arc name"}],
     "photoPlacement": {"filename": "xxx.png"} or null
   },
   "thePlayers": {
+    "arcConnections": [
+      {"arcName": "Arc A", "characterAngle": "How this arc advances through character revelation"}
+    ],
     "exposed": ["names"],
     "buried": ["names"],
-    "pullQuotes": [{"source": "token/observation", "text": "quote"}]
+    "pullQuotes": [
+      {"type": "verbatim", "text": "Exact quote from evidence", "attribution": "Character Name", "advancesArc": "Arc name"},
+      {"type": "insight", "text": "Nova's crystallized observation", "attribution": null, "advancesArc": "Arc name"}
+    ]
   },
   "whatsMissing": {
-    "buriedMarkers": [{"account": "X", "amount": 123, "inference": "What might be there"}]
+    "arcConnections": [
+      {"arcName": "Arc A", "openQuestion": "What gap in this arc creates tension"}
+    ],
+    "knownUnknowns": ["Questions Nova explicitly noticed but couldn't answer - NOT buried evidence IDs"],
+    "narrativePurpose": "How these gaps create tension and pull the reader forward"
   },
   "closing": {
+    "arcResolutions": [
+      {"arcName": "Arc A", "resolution": "How this arc concludes or haunts"}
+    ],
     "systemicAngle": "What broader point to make",
     "accusationHandling": "How to present the accusation"
   },
   "visualComponentCount": {
     "evidenceCards": 5,
     "photos": 3,
-    "pullQuotes": 2,
-    "buriedMarkers": 4
+    "pullQuotes": 2
   }
 }`;
 
@@ -216,9 +350,10 @@ Return JSON with the following structure:
    * @param {Object} outline - Approved article outline
    * @param {Object} evidenceBundle - Full evidence bundle for quoting
    * @param {string} template - HTML template content
+   * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent (Phase 1 Fix)
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, evidenceBundle, template) {
+  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = []) {
     const prompts = await this.theme.loadPhasePrompts('articleGeneration');
 
     // System prompt: Identity and hard constraints (kept short for salience)
@@ -235,6 +370,27 @@ HARD CONSTRAINTS (violations = failure):
 
 ${prompts['evidence-boundaries']}`;
 
+    // Format arc evidence packages for verbatim quoting
+    const arcEvidenceSection = arcEvidencePackages.length > 0 ? `
+ARC EVIDENCE PACKAGES (Phase 1 Fix - use these for verbatim quotes):
+${arcEvidencePackages.map(pkg => `
+### ${pkg.arcId} - ${pkg.arcTitle}
+
+QUOTABLE EXCERPTS (use these VERBATIM for pull quotes and article text):
+${(pkg.evidenceItems || []).flatMap(item =>
+  (item.quotableExcerpts || []).map(q => `- "${q}" (from ${item.id})`)
+).join('\n') || 'No extracted quotes - use fullContent directly'}
+
+FULL EVIDENCE (for context and additional quoting):
+${(pkg.evidenceItems || []).map(item =>
+  `${item.id} (${item.type}): "${(item.fullContent || item.summary || '').substring(0, 300)}..."`
+).join('\n')}
+
+ARC PHOTOS:
+${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown'}`).join('\n') || 'None'}
+`).join('\n---\n')}
+` : '';
+
     // User prompt: Data first, then template, then RULES LAST (recency bias)
     const userPrompt = `<DATA_CONTEXT>
 APPROVED OUTLINE:
@@ -242,6 +398,7 @@ ${JSON.stringify(outline, null, 2)}
 
 EVIDENCE BUNDLE (quote ONLY from exposed evidence):
 ${JSON.stringify(evidenceBundle, null, 2)}
+${arcEvidenceSection}
 </DATA_CONTEXT>
 
 <TEMPLATE>
@@ -258,6 +415,38 @@ ${prompts['formatting']}
 ${prompts['editorial-design']}
 </RULES>
 
+<ARC_FLOW>
+CRITICAL: Arcs are THREADS that weave through the entire article.
+
+Use the outline's arcConnections in each section:
+- THE STORY: Interweave arcs per the interleavingPlan
+- FOLLOW THE MONEY: Continue arc threads through financial lens per arcConnections
+- THE PLAYERS: Advance arcs through character revelations per arcConnections
+- WHAT'S MISSING: Honor the knownUnknowns - gaps Nova noticed, NOT buried evidence IDs
+- CLOSING: Resolve or haunt per arcResolutions
+
+If the reader can identify where one arc ends and another begins, you've failed.
+Arc boundaries should feel like a conversation topic shifting, not a chapter break.
+</ARC_FLOW>
+
+<VISUAL_DISTRIBUTION>
+CRITICAL: Visual components MUST be distributed across sections, not clustered.
+
+HARD RULES:
+- MAX 2 evidence cards per section
+- MAX 1 photo per section (THE STORY may have 2)
+- MINIMUM 3 prose paragraphs between any two visual components
+- No evidence cards in CLOSING (resolution, not revelation)
+- No photos in WHAT'S MISSING (maintains mystery)
+
+ANTI-CLUSTERING:
+- Evidence cards must have prose between them (never adjacent)
+- Photo never immediately after evidence card (breaks pacing)
+- Pull quotes in AT LEAST 2 different sections
+
+Follow the outline's visualComponentCount and section visual budgets.
+</VISUAL_DISTRIBUTION>
+
 <ANTI_PATTERNS>
 ${prompts['anti-patterns']}
 </ANTI_PATTERNS>
@@ -273,11 +462,62 @@ The answer must be AS Nova. Every sentence should feel like it's coming from som
 </VOICE_CHECKPOINT>
 
 <GENERATION_INSTRUCTION>
-Generate the complete article HTML with all visual components (evidence cards, photos, pull quotes, buried markers, financial tracker).
+Generate structured article content as JSON matching the ContentBundle schema.
 
-Your response JSON must include:
-1. "html" - Complete HTML document starting with <!DOCTYPE html>
-2. "voice_self_check" - Brief self-assessment: Did you maintain first-person participatory voice throughout? Any sentences that slipped into passive/observer mode?
+STRUCTURE:
+1. "sections" - Array of article sections, each with:
+   - "id": Section identifier (lede, the-story, follow-the-money, the-players, whats-missing, closing)
+   - "type": Section type for styling (narrative, evidence-highlight, investigation-notes, conclusion)
+   - "heading": Optional section heading
+   - "content": Array of content blocks:
+     * {"type": "paragraph", "text": "..."} - Prose text
+     * {"type": "quote", "text": "...", "attribution": "..."} - Inline quotes
+     * {"type": "evidence-reference", "tokenId": "xxx", "caption": "..."} - Reference to evidence card
+     * {"type": "list", "items": [...], "ordered": false} - Lists
+
+2. "evidenceCards" - Array of evidence card content:
+   - "tokenId": ID matching evidence-reference blocks
+   - "headline": Card headline (compelling, not just descriptive)
+   - "summary": Brief context
+   - "significance": "critical" | "supporting" | "contextual"
+
+   CRITICAL: Cards are VISUAL COMPONENTS for compulsive readability:
+   - Each card is a CLOSER (proves what was hinted) or OPENER (raises new question)
+   - The prose BEFORE sets up tension, prose AFTER draws implications
+   - Distribute across sections per the outline - NOT all in THE STORY
+
+3. "pullQuotes" - Featured quotes for sidebar (distribute across 2+ sections)
+
+4. "photos" - Session photos with placement:
+   - "filename": EXACT filename from available photos
+   - "caption": Caption text
+   - "sectionId": Which section it appears in
+
+5. "financialTracker" - Shell account entries (required for FOLLOW THE MONEY)
+
+6. "headline" - Article headline with main, kicker, deck
+
+7. "voice_self_check" - Self-assessment against ALL voice requirements:
+
+   VOICE INFLUENCES CHECK:
+   - Hunter S. Thompson: Am I participatory, in-the-muck, part of the chaos? NOT observing from outside?
+   - Kara Swisher: Am I direct, calling out BS, no corporate spin tolerance?
+   - Casey Newton: Am I explaining tech clearly, accessible but not dumbed down?
+   - Heather Cox Richardson: Am I connecting to bigger patterns, systemic meaning?
+   - Marisa Kabas: Am I maintaining moral clarity without preaching?
+
+   VOICE MECHANICS CHECK:
+   - First-person witness: "I watched", "I saw" NOT "The group decided"
+   - Sentence rhythm: Short punchy, then longer building, then short again
+   - No em-dashes (commas or periods instead)
+   - "Extracted memories" NOT "tokens"
+   - Celebrating sources who exposed, understanding those who buried
+   - Systemic critique woven throughout, not just in closing
+
+   ANTI-PATTERN CHECK:
+   - Any passive/observer voice that slipped through?
+   - Any game mechanics language?
+   - Any generic praise or vague attribution?
 </GENERATION_INSTRUCTION>`;
 
     return { systemPrompt, userPrompt };
@@ -288,35 +528,44 @@ Your response JSON must include:
    * Phase 4b: Revise article based on voice self-check findings
    *
    * Uses Sonnet for targeted fixes (faster than Opus for surgical edits)
+   * Accepts either ContentBundle JSON or assembled HTML as input.
    *
-   * @param {string} articleHtml - Generated article HTML to revise
+   * @param {string} articleContent - Generated article (ContentBundle JSON or HTML)
    * @param {string} voiceSelfCheck - Self-assessment from initial generation
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildRevisionPrompt(articleHtml, voiceSelfCheck) {
+  async buildRevisionPrompt(articleContent, voiceSelfCheck) {
     const prompts = await this.theme.loadPhasePrompts('articleGeneration');
 
     const systemPrompt = `You are Nova, revising your investigative article to fix voice issues you identified.
 
 REVISION RULES:
 - Make TARGETED fixes only - do not rewrite sections that are working
-- Preserve all HTML structure, CSS, evidence cards, photos
+- Preserve structure: sections, evidence cards, photos, pull quotes, financial tracker
 - Focus on the specific issues you identified in your self-check
 - Every fix should make the voice MORE participatory, not less
 
-VOICE STANDARD:
+VOICE INFLUENCES TO EMBODY:
+- Hunter S. Thompson: Participatory, in-the-muck, part of the chaos
+- Kara Swisher: Directness, calling out BS, no corporate spin
+- Casey Newton: Tech fluency, accessible explanations
+- Heather Cox Richardson: Connects to bigger patterns
+- Marisa Kabas: Moral clarity without preaching
+
+VOICE MECHANICS:
 - First-person participatory: "I watched", "I saw", "I was there"
 - NOT observer mode: "The group decided", "They concluded", "It was noted"
 - Transform: "The group came to a conclusion" -> "I watched them reach their conclusion"
 - Transform: "From my notes that night" -> remove attribution or use "- Nova"
-- Transform: "guests" -> "people" or "those present" or "partygoers"`;
+- Transform: "guests" -> "people" or "those present" or "partygoers"
+- Sentence rhythm: Short punchy, then longer building, then short again`;
 
     const userPrompt = `<YOUR_SELF_CHECK>
 ${voiceSelfCheck}
 </YOUR_SELF_CHECK>
 
 <ARTICLE_TO_REVISE>
-${articleHtml}
+${articleContent}
 </ARTICLE_TO_REVISE>
 
 <ANTI_PATTERNS_REFERENCE>
@@ -329,10 +578,13 @@ Fix the issues you identified in your self-check. Also check for:
 - "From my notes that night" -> "- Nova" or remove
 - Any remaining passive/observer voice patterns
 - Any em-dashes that slipped through
+- Generic praise or vague attributions
+- Game mechanics language ("tokens", "transactions", "buried bonus")
 
-Return JSON:
-1. "html" - Complete revised HTML document
-2. "fixes_applied" - List of specific fixes you made (be specific about what changed)
+Return JSON with:
+1. "contentBundle" - Revised ContentBundle (if input was JSON) with all sections, evidenceCards, pullQuotes, photos preserved
+2. "html" - Revised HTML (if input was HTML)
+3. "fixes_applied" - List of specific fixes you made (be specific about what changed and which voice influence guided each fix)
 </REVISION_INSTRUCTION>`;
 
     return { systemPrompt, userPrompt };

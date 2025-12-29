@@ -15,6 +15,7 @@ const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 const preprocessedEvidenceSchema = require('./schemas/preprocessed-evidence.schema.json');
+const outlineSchema = require('./schemas/outline.schema.json');
 
 class SchemaValidator {
   /**
@@ -38,6 +39,7 @@ class SchemaValidator {
     // Register built-in schemas
     this.registerSchema('content-bundle', contentBundleSchema);
     this.registerSchema('preprocessed-evidence', preprocessedEvidenceSchema);
+    this.registerSchema('outline', outlineSchema);
   }
 
   /**
