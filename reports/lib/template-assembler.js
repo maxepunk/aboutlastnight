@@ -23,6 +23,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { registerHelpers } = require('./template-helpers');
 const { SchemaValidator } = require('./schema-validator');
+const { createThemeLoader } = require('./theme-loader');
 
 /**
  * Default base directory for templates
@@ -79,6 +80,9 @@ class TemplateAssembler {
    * @param {Object} options.cssPaths - CSS path configuration
    * @param {Object} options.jsPaths - JS path configuration
    * @param {boolean} options.validateSchema - Whether to validate ContentBundle (default: true)
+   * @param {boolean} options.inlineCss - Whether to inline CSS (default: true for standalone HTML)
+   * @param {boolean} options.inlineJs - Whether to inline JS (default: true for standalone HTML)
+   * @param {Object} options.themeLoader - ThemeLoader instance for loading assets (optional)
    */
   constructor(theme, options = {}) {
     this.theme = theme;
@@ -87,6 +91,8 @@ class TemplateAssembler {
     this.cssPaths = options.cssPaths || DEFAULT_CSS_PATHS[theme] || DEFAULT_CSS_PATHS.journalist;
     this.jsPaths = options.jsPaths || DEFAULT_JS_PATHS[theme] || DEFAULT_JS_PATHS.journalist;
     this.validateSchema = options.validateSchema !== false;
+    this.inlineCss = options.inlineCss !== false;  // Default true for standalone HTML
+    this.inlineJs = options.inlineJs !== false;    // Default true for standalone HTML
 
     // Create isolated Handlebars instance
     this.handlebars = Handlebars.create();
@@ -97,6 +103,9 @@ class TemplateAssembler {
 
     // Schema validator
     this.validator = new SchemaValidator();
+
+    // ThemeLoader for CSS/JS (needed if inlining assets)
+    this.themeLoader = options.themeLoader || ((this.inlineCss || this.inlineJs) ? createThemeLoader() : null);
   }
 
   /**
@@ -194,8 +203,8 @@ class TemplateAssembler {
       }
     }
 
-    // Build template context
-    const context = this.buildContext(contentBundle);
+    // Build template context (async for CSS loading)
+    const context = await this.buildContext(contentBundle);
 
     // Render template
     return this.mainTemplate(context);
@@ -205,26 +214,59 @@ class TemplateAssembler {
    * Build template context from ContentBundle
    *
    * Adds computed properties and theme-specific data.
+   * When inlineCss/inlineJs is enabled, loads and embeds asset content.
    *
    * @private
    * @param {Object} contentBundle - ContentBundle JSON
-   * @returns {Object} Template context
+   * @returns {Promise<Object>} Template context
    */
-  buildContext(contentBundle) {
+  async buildContext(contentBundle) {
+    // Load inline CSS if enabled
+    let inlineCss = null;
+    if (this.inlineCss && this.themeLoader) {
+      try {
+        const styles = await this.themeLoader.loadStyles();
+        // Concatenate all CSS files in order
+        inlineCss = Object.values(styles).join('\n\n');
+      } catch (err) {
+        console.warn('[TemplateAssembler] Failed to load inline CSS:', err.message);
+        // Fall back to external CSS references
+      }
+    }
+
+    // Load inline JS if enabled
+    let inlineJs = null;
+    if (this.inlineJs && this.themeLoader) {
+      try {
+        const scripts = await this.themeLoader.loadScripts();
+        // Concatenate all JS files in order
+        inlineJs = Object.values(scripts).join('\n\n');
+      } catch (err) {
+        console.warn('[TemplateAssembler] Failed to load inline JS:', err.message);
+        // Fall back to external JS references
+      }
+    }
+
     return {
       // Pass through ContentBundle data
       ...contentBundle,
 
-      // Add CSS configuration
-      css: {
+      // Inline CSS for standalone HTML (takes precedence over external)
+      inlineCss,
+
+      // Inline JS for standalone HTML (takes precedence over external)
+      inlineJs,
+
+      // External CSS configuration (fallback when inlineCss is null)
+      css: inlineCss ? null : {
         basePath: this.cssPaths.basePath,
         files: this.cssPaths.files.map(file => ({
           href: `${this.cssPaths.basePath}${file}`
         }))
       },
 
-      // Add JS configuration
-      js: {
+      // External JS configuration (fallback when inlineJs is null)
+      js: inlineJs ? null : {
         basePath: this.jsPaths.basePath,
         files: this.jsPaths.files.map(file => ({
           src: `${this.jsPaths.basePath}${file}`

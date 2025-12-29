@@ -18,10 +18,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
 
-  {{!-- NovaNews Stylesheets --}}
+  {{!-- NovaNews Stylesheets (inline for standalone HTML, external fallback) --}}
+  {{#if inlineCss}}
+  <style>
+{{{inlineCss}}}
+  </style>
+  {{else}}
   {{#each css.files}}
   <link rel="stylesheet" href="{{href}}">
   {{/each}}
+  {{/if}}
 </head>
 <body>
   {{!-- Reading Progress Bar (Mobile) - crimson to amber gradient --}}
@@ -40,6 +46,20 @@
 
       {{!-- Article Header with headline, kicker, byline, article ID --}}
       {{> header headline=headline byline=byline metadata=metadata}}
+
+      {{!-- Hero Image (if provided) --}}
+      {{#if heroImage}}
+      <figure class="article-photo article-photo--hero">
+        <img
+          src="photos/{{heroImage.filename}}"
+          alt="{{heroImage.caption}}"
+          class="article-photo__image"
+        >
+        {{#if heroImage.caption}}
+        <figcaption class="article-photo__caption">{{heroImage.caption}}</figcaption>
+        {{/if}}
+      </figure>
+      {{/if}}
 
       {{!-- Render each section from ContentBundle --}}
       {{#each sections}}
@@ -110,18 +130,24 @@
     <div class="nn-footer__inner">
       <div class="nn-footer__brand">Nova<span>News</span></div>
       <ul class="nn-footer__links">
-        <li><a href="/about" class="nn-footer__link">About</a></li>
-        <li><a href="/contact" class="nn-footer__link">Contact</a></li>
-        <li><a href="/privacy" class="nn-footer__link">Privacy</a></li>
-        <li><a href="/subscribe" class="nn-footer__link">Subscribe</a></li>
+        <li><span class="nn-footer__link">About</span></li>
+        <li><span class="nn-footer__link">Contact</span></li>
+        <li><span class="nn-footer__link">Privacy</span></li>
+        <li><span class="nn-footer__link">Subscribe</span></li>
       </ul>
       <p class="nn-footer__copyright">&copy; 2027 NovaNews. Independent tech accountability journalism.</p>
     </div>
   </footer>
 
-  {{!-- Scripts --}}
+  {{!-- Scripts (inline for standalone HTML, external fallback) --}}
+  {{#if inlineJs}}
+  <script>
+{{{inlineJs}}}
+  </script>
+  {{else}}
   {{#each js.files}}
   <script src="{{src}}"></script>
   {{/each}}
+  {{/if}}
 </body>
 </html>

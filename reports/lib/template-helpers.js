@@ -329,6 +329,7 @@ function registerHelpers(handlebars) {
   });
 
   // Render content block using dynamic partial
+  // Returns SafeString to prevent Handlebars from escaping the rendered HTML
   handlebars.registerHelper('renderContentBlock', function(block, options) {
     if (!block || !block.type) return '';
 
@@ -339,12 +340,12 @@ function registerHelpers(handlebars) {
       // Fallback to paragraph if partial not found
       const fallback = handlebars.partials['content-blocks/paragraph'];
       if (fallback) {
-        return compilePartial(handlebars, fallback)(block);
+        return new handlebars.SafeString(compilePartial(handlebars, fallback)(block));
       }
       return '';
     }
 
-    return compilePartial(handlebars, partial)(block);
+    return new handlebars.SafeString(compilePartial(handlebars, partial)(block));
   });
 }
 
