@@ -10,6 +10,41 @@
 const { sdkQuery, createProgressLogger } = require('../../sdk-client');
 const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NPC VALIDATION
+// Commit 8.17: Theme-configurable NPC allowlist for arc validation
+// NPCs are defined in lib/theme-config.js (DRY/SOLID - single source of truth)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if a character name is a known NPC
+ * NPCs are valid in characterPlacements but don't count toward roster coverage.
+ *
+ * Uses word-boundary matching to avoid false positives:
+ * - "Marcus" matches "Marcus", "Marcus Blackwood" ✓
+ * - "Nova" matches "Nova", "Leyla Nova" ✓
+ * - "Renovated" does NOT match "Nova" ✓
+ *
+ * @param {string} name - Character name to check
+ * @param {string[]} npcs - Array of NPC names from theme config
+ * @returns {boolean} True if known NPC
+ */
+function isKnownNPC(name, npcs = []) {
+  if (!name || !Array.isArray(npcs) || npcs.length === 0) return false;
+  const normalized = name.toLowerCase().trim();
+
+  return npcs.some(npc => {
+    const npcLower = npc.toLowerCase();
+    // Exact match
+    if (normalized === npcLower) return true;
+
+    // Word-boundary match (handles "Leyla Nova", "Marcus Blackwood", etc.)
+    // Matches if NPC name appears as a complete word
+    const wordBoundaryRegex = new RegExp(`\\b${npcLower}\\b`, 'i');
+    return wordBoundaryRegex.test(name);
+  });
+}
+
 /**
  * Safely parse JSON with informative error messages
  *
@@ -289,7 +324,10 @@ function routeTokensByDisposition(tokens) {
         sourceType: 'memory-token',
         owner: t.ownerLogline,
         summary: t.summary,
-        // Fallback chain to ensure content is never undefined
+        // PHASE 1 FIX: Use preprocessed fullContent for verbatim quoting
+        // Fallback chain for backwards compatibility
+        fullContent: t.fullContent || t.rawData?.content || t.rawData?.description || t.summary || '',
+        // Legacy content field kept for backwards compatibility
         content: t.rawData?.content || t.rawData?.description || t.summary || '',
         characterRefs: t.characterRefs ?? [],
         narrativeTimeline: t.narrativeTimelineContext,
@@ -559,6 +597,57 @@ function validateRosterName(name, roster) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ARC RESOLUTION HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// selectedArcs contains string IDs, but many nodes need full arc objects.
+// These helpers resolve string IDs to arc objects from state.narrativeArcs.
+// DRY extraction from ai-nodes.js and evaluator-nodes.js.
+
+/**
+ * Resolve arc ID (string) or arc object to full arc object
+ *
+ * Used when selectedArcs may contain either string IDs or arc objects.
+ * This handles the contract where API passes string IDs but code expects objects.
+ *
+ * @param {string|Object} arcIdOrObj - Arc ID string or arc object
+ * @param {Array} availableArcs - Array of arc objects to search (state.narrativeArcs)
+ * @returns {Object|null} - Resolved arc object or null if not found
+ *
+ * @example
+ * resolveArc('murder-accusation', arcs)     // Returns matching arc object
+ * resolveArc({ id: 'arc-1' }, arcs)         // Returns the object as-is
+ * resolveArc('nonexistent', arcs)           // Returns null
+ * resolveArc(null, arcs)                    // Returns null
+ */
+function resolveArc(arcIdOrObj, availableArcs) {
+  if (!arcIdOrObj) return null;
+  if (typeof arcIdOrObj !== 'string') return arcIdOrObj;
+  if (!Array.isArray(availableArcs)) return null;
+
+  return availableArcs.find(a =>
+    a.id === arcIdOrObj || a.title === arcIdOrObj
+  ) || null;
+}
+
+/**
+ * Resolve array of arc IDs/objects to arc objects
+ *
+ * Filters out nulls (arcs not found in availableArcs).
+ * Safe to use with undefined/null input.
+ *
+ * @param {Array} arcs - Array of arc IDs (strings) or arc objects
+ * @param {Array} availableArcs - Array of arc objects to search (state.narrativeArcs)
+ * @returns {Array} - Array of resolved arc objects (nulls filtered out)
+ */
+function resolveArcs(arcs, availableArcs) {
+  if (!Array.isArray(arcs)) return [];
+  return arcs
+    .map(arc => resolveArc(arc, availableArcs))
+    .filter(Boolean);
+}
+
 module.exports = {
   safeParseJson,
   getSdkClient,
@@ -577,6 +666,13 @@ module.exports = {
   // Arc validation helpers (Commit 8.12+)
   buildValidEvidenceIds,
   validateRosterName,
+
+  // Arc resolution helpers (Commit 8.25)
+  resolveArc,
+  resolveArcs,
+
+  // NPC validation (Commit 8.17) - NPCs defined in lib/theme-config.js
+  isKnownNPC,
 
   // Re-export batching utilities from preprocessor for convenience
   createBatches,

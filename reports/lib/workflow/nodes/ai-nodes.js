@@ -26,6 +26,7 @@
 const { PHASES, APPROVAL_TYPES } = require('../state');
 const { SchemaValidator } = require('../../schema-validator');
 const { createPromptBuilder } = require('../../prompt-builder');
+const outlineSchema = require('../../schemas/outline.schema.json');
 const {
   safeParseJson,
   getSdkClient,
@@ -34,8 +35,10 @@ const {
   buildExposedTokenSummaries,
   buildCurationReport,
   createBatches,
-  processWithConcurrency
+  processWithConcurrency,
+  resolveArc
 } = require('./node-helpers');
+const { traceNode } = require('../tracing');
 // Import consolidated mock from test mocks (avoids duplication)
 const { createMockSdkClient, createMockClaudeClient } = require('../../../__tests__/mocks/sdk-client.mock');
 
@@ -190,6 +193,7 @@ Score each item and return the results.`;
         model: 'sonnet',
         timeoutMs: 2 * 60 * 1000,  // 2 minutes per batch
         jsonSchema: PAPER_SCORING_SCHEMA,
+        disableTools: true,
         label: `Paper evidence batch ${batchIdx + 1}/${batches.length}`
       });
 
@@ -642,6 +646,7 @@ async function analyzeNarrativeArcs(state, config) {
     prompt: userPrompt,
     systemPrompt,
     model: 'sonnet',
+    disableTools: true,
     jsonSchema: {
       type: 'object',
       properties: {
@@ -661,6 +666,147 @@ async function analyzeNarrativeArcs(state, config) {
     approvalType: APPROVAL_TYPES.ARC_SELECTION,
     // Store full analysis for outline generation
     _arcAnalysisCache: arcAnalysis
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ARC EVIDENCE PACKAGES (Phase 1 Fix - Data Wiring)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Helper to extract quotable excerpts from full content
+ *
+ * @param {string} fullContent - Full text content
+ * @returns {Array<string>} Key quotable phrases (max 5)
+ */
+function extractQuotableExcerpts(fullContent) {
+  if (!fullContent || typeof fullContent !== 'string') return [];
+
+  // Split by sentences and filter for quotable ones (10-100 chars, contains dialogue indicators)
+  const sentences = fullContent.split(/[.!?]+/).filter(s => s.trim().length >= 10 && s.trim().length <= 100);
+
+  // Prioritize sentences with dialogue indicators or dramatic content
+  const quotable = sentences.filter(s =>
+    /"/.test(s) ||        // Contains quotes
+    /said|told|asked|whispered|shouted/i.test(s) ||  // Dialogue verbs
+    /never|always|everything|nothing/i.test(s) ||     // Absolute statements
+    /must|have to|need to/i.test(s)                   // Obligation/urgency
+  );
+
+  return quotable.slice(0, 5).map(s => s.trim());
+}
+
+/**
+ * Build per-arc evidence packages after arc selection
+ *
+ * PHASE 1 FIX: This node extracts curated, per-arc evidence packages with:
+ * - Full quotable content (not just 150-char summaries)
+ * - Enriched photo analyses for characters in each arc
+ * - Key quotable excerpts for pull quotes
+ *
+ * Runs after arc selection checkpoint, before outline generation.
+ *
+ * @param {Object} state - Current state with selectedArcs, evidenceBundle, photoAnalyses
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with arcEvidencePackages
+ */
+async function buildArcEvidencePackages(state, config) {
+  // Skip if already built (resume case)
+  if (state.arcEvidencePackages && state.arcEvidencePackages.length > 0) {
+    console.log('[buildArcEvidencePackages] Skipping - packages already exist');
+    return { currentPhase: PHASES.BUILD_ARC_PACKAGES };
+  }
+
+  const selectedArcIds = state.selectedArcs || [];
+  const allArcs = state.narrativeArcs || [];
+  const evidenceBundle = state.evidenceBundle || { exposed: { tokens: [], paperEvidence: [] } };
+  const photoAnalyses = state.photoAnalyses || { analyses: [] };
+
+  console.log(`[buildArcEvidencePackages] Building packages for ${selectedArcIds.length} selected arcs`);
+
+  // Resolve arc IDs to full arc objects using helper (DRY - Commit 8.25)
+  const packages = selectedArcIds.map(arcIdOrObj => {
+    const arc = resolveArc(arcIdOrObj, allArcs);
+
+    if (!arc) {
+      console.log(`[buildArcEvidencePackages] Warning: arc "${arcIdOrObj}" not found in narrativeArcs`);
+      return null;
+    }
+    // Extract FULL content for this arc's keyEvidence
+    // Use Array.isArray to guard against non-array truthy values
+    const evidenceItems = (Array.isArray(arc.keyEvidence) ? arc.keyEvidence : []).map(evidenceId => {
+      // Look in exposed tokens
+      const token = (evidenceBundle.exposed?.tokens || []).find(t =>
+        t.id === evidenceId || t.tokenId === evidenceId
+      );
+
+      // Look in exposed paper evidence
+      const paper = (evidenceBundle.exposed?.paperEvidence || []).find(p =>
+        p.id === evidenceId || p.notionId === evidenceId || p.pageId === evidenceId || p.name === evidenceId
+      );
+
+      const item = token || paper;
+      if (!item) {
+        console.log(`[buildArcEvidencePackages] Warning: keyEvidence ${evidenceId} not found in bundle`);
+        return null;
+      }
+
+      // Extract full content using the new fullContent field or fallback chain
+      const fullContent = item.fullContent ||
+                         item.content ||
+                         item.rawData?.content ||
+                         item.rawData?.description ||
+                         item.summary ||
+                         '';
+
+      return {
+        id: evidenceId,
+        type: token ? 'memory' : 'paper',
+        owner: item.owner || item.ownerLogline || item.owners?.[0] || null,
+        summary: item.summary || item.description?.substring(0, 150) || '',
+        fullContent: fullContent,
+        quotableExcerpts: extractQuotableExcerpts(fullContent)
+      };
+    }).filter(Boolean);
+
+    // Include enriched photo analyses for characters in this arc
+    const arcCharacters = Object.keys(arc.characterPlacements || {});
+    const relevantPhotos = (photoAnalyses.analyses || [])
+      .filter(p => {
+        const photoCharacters = p.identifiedCharacters || p.characterDescriptions || [];
+        return photoCharacters.some(c => {
+          const charName = typeof c === 'string' ? c : c?.name || c?.description || '';
+          return arcCharacters.some(ac => charName?.toLowerCase().includes(ac.toLowerCase()));
+        });
+      })
+      .map(p => ({
+        filename: p.filename,
+        characters: p.identifiedCharacters || p.characterDescriptions?.map(c => typeof c === 'string' ? c : c.name) || [],
+        enrichedCaption: p.finalCaption || p.captionSuggestion || '',
+        emotionalTone: p.emotionalTone || '',
+        storyRelevance: p.storyRelevance || '',
+        visualContext: p.enrichedVisualContent || p.visualContent || ''
+      }));
+
+    console.log(`[buildArcEvidencePackages] Arc "${arc.title}": ${evidenceItems.length} evidence items, ${relevantPhotos.length} photos`);
+
+    return {
+      arcId: arc.id,
+      arcTitle: arc.title,
+      arcSource: arc.arcSource,
+      evidenceStrength: arc.evidenceStrength,
+      evidenceItems,  // Named to match prompt-builder.js usage
+      photos: relevantPhotos,
+      characterPlacements: arc.characterPlacements || {},
+      analysisNotes: arc.analysisNotes || ''
+    };
+  }).filter(Boolean);  // Filter out arcs that weren't found in narrativeArcs
+
+  console.log(`[buildArcEvidencePackages] Built ${packages.length} arc evidence packages`);
+
+  return {
+    arcEvidencePackages: packages,
+    currentPhase: PHASES.BUILD_ARC_PACKAGES
   };
 }
 
@@ -696,30 +842,37 @@ async function generateOutline(state, config) {
   // Use first photo as hero image or default
   const heroImage = state.sessionPhotos?.[0]?.filename || 'evidence-board.png';
 
+  // Build available photos list with analyses for outline generation (Commit 8.24)
+  const availablePhotos = (state.sessionPhotos || []).map((photoPath, i) => {
+    // Get just the filename from the full path
+    const filename = typeof photoPath === 'string' ? photoPath.split(/[/\\]/).pop() : (photoPath.filename || `photo-${i}.jpg`);
+    const analysis = state.photoAnalyses?.analyses?.[i] || {};
+    return {
+      filename,
+      fullPath: photoPath,
+      characters: analysis.characterDescriptions?.map(c => typeof c === 'string' ? c : c.description) || [],
+      visualContent: analysis.visualContent || ''
+    };
+  });
+
+  // PHASE 1 FIX: Pass arcEvidencePackages with full content and enriched photos
+  const arcEvidencePackages = state.arcEvidencePackages || [];
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(
     arcAnalysis,
     state.selectedArcs || [],
     heroImage,
-    state.evidenceBundle || {}
+    state.evidenceBundle || {},
+    availablePhotos,  // Available photos
+    arcEvidencePackages  // NEW: per-arc curated evidence with fullContent and photos
   );
 
   const outline = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'sonnet',
-    jsonSchema: {
-      type: 'object',
-      properties: {
-        lede: { type: 'object' },
-        theStory: { type: 'object' },
-        followTheMoney: { type: 'object' },
-        thePlayers: { type: 'object' },
-        whatsMissing: { type: 'object' },
-        closing: { type: 'object' },
-        visualComponentCount: { type: 'object' }
-      },
-      required: ['lede', 'theStory']
-    }
+    disableTools: true,
+    jsonSchema: outlineSchema  // Extracted to lib/schemas/outline.schema.json (Commit 8.25)
   });
 
   return {
@@ -757,10 +910,14 @@ async function generateContentBundle(state, config) {
     return '';
   });
 
+  // PHASE 1 FIX: Pass arcEvidencePackages with fullContent for verbatim quoting
+  const arcEvidencePackages = state.arcEvidencePackages || [];
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     state.outline || {},
     state.evidenceBundle || {},
-    template
+    template,
+    arcEvidencePackages  // NEW: per-arc curated evidence with fullContent and photos
   );
 
   // Get JSON schema for structured output
@@ -768,11 +925,13 @@ async function generateContentBundle(state, config) {
     require('../../schemas/content-bundle.schema.json');
 
   // SDK returns parsed object directly when jsonSchema is provided
+  // Commit 8.23: disableTools prevents tool use during pure generation
   const generatedContent = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'opus',
-    jsonSchema: contentBundleSchema
+    jsonSchema: contentBundleSchema,
+    disableTools: true
   });
 
   // Extract ContentBundle from response (may include voice_self_check)
@@ -859,6 +1018,7 @@ async function validateArticle(state, config) {
     prompt: userPrompt,
     systemPrompt,
     model: 'haiku',
+    disableTools: true,
     jsonSchema: {
       type: 'object',
       properties: {
@@ -928,6 +1088,7 @@ async function reviseContentBundle(state, config) {
     prompt: userPrompt,
     systemPrompt,
     model: 'sonnet',
+    disableTools: true,
     jsonSchema: {
       type: 'object',
       properties: {
@@ -1094,15 +1255,24 @@ function getDefaultRevision() {
 }
 
 module.exports = {
-  // Node functions
-  curateEvidenceBundle,
-  processRescuedItems,  // Commit 8.10+: Handle human-rescued paper evidence
-  analyzeNarrativeArcs,
-  generateOutline,
-  generateContentBundle,
-  validateContentBundle,
-  validateArticle,
-  reviseContentBundle,
+  // Node functions (wrapped with LangSmith tracing)
+  curateEvidenceBundle: traceNode(curateEvidenceBundle, 'curateEvidenceBundle', {
+    stateFields: ['preprocessedEvidence', 'selectedPaperEvidence']
+  }),
+  processRescuedItems: traceNode(processRescuedItems, 'processRescuedItems'),
+  analyzeNarrativeArcs: traceNode(analyzeNarrativeArcs, 'analyzeNarrativeArcs'),
+  buildArcEvidencePackages: traceNode(buildArcEvidencePackages, 'buildArcEvidencePackages', {
+    stateFields: ['selectedArcs', 'evidenceBundle', 'photoAnalyses']
+  }),
+  generateOutline: traceNode(generateOutline, 'generateOutline', {
+    stateFields: ['selectedArcs', 'playerFocus']
+  }),
+  generateContentBundle: traceNode(generateContentBundle, 'generateContentBundle', {
+    stateFields: ['outline', 'selectedArcs']
+  }),
+  validateContentBundle: traceNode(validateContentBundle, 'validateContentBundle'),
+  validateArticle: traceNode(validateArticle, 'validateArticle'),
+  reviseContentBundle: traceNode(reviseContentBundle, 'reviseContentBundle'),
 
   // Testing utilities
   createMockSdkClient,

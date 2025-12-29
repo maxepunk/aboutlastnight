@@ -17,6 +17,7 @@
 
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 const { progressEmitter } = require('./progress-emitter');
+const { traceLLMCall } = require('./workflow/tracing');
 
 // Increase max listeners to support 8 concurrent SDK calls
 // Each SDK call adds exit listeners for subprocess cleanup
@@ -40,6 +41,8 @@ const MODEL_TIMEOUTS = {
  * @param {string} [options.model='sonnet'] - Model: 'haiku', 'sonnet', 'opus'
  * @param {Object} [options.jsonSchema] - JSON schema for structured output
  * @param {string[]} [options.allowedTools=[]] - Tools the SDK can use (e.g., ['Read', 'Task'])
+ * @param {boolean} [options.disableTools=false] - If true, disables ALL built-in tools for pure structured output.
+ *   Note: Takes precedence over allowedTools when set. (Commit 8.23)
  * @param {Object} [options.agents] - Custom agent definitions for Task tool invocation
  *   Each agent: { description: string, prompt: string, tools?: string[], model?: string }
  * @param {string} [options.workingDirectory] - Working directory for file operations (required for agents to find files)
@@ -49,7 +52,7 @@ const MODEL_TIMEOUTS = {
  * @returns {Promise<Object|string>} - Parsed result (object if schema, string otherwise)
  * @throws {Error} - If SDK returns error, timeout, or no result
  */
-async function sdkQuery({
+async function sdkQueryImpl({
   prompt,
   systemPrompt,
   model = 'sonnet',
@@ -59,7 +62,8 @@ async function sdkQuery({
   workingDirectory,
   timeoutMs,
   onProgress,
-  label
+  label,
+  disableTools = false
 }) {
   const effectiveTimeout = timeoutMs || MODEL_TIMEOUTS[model] || MODEL_TIMEOUTS.sonnet;
   const abortController = new AbortController();
@@ -91,6 +95,12 @@ async function sdkQuery({
   // Add custom agent definitions for Task tool invocation
   if (agents && Object.keys(agents).length > 0) {
     options.agents = agents;
+  }
+
+  // Disable ALL built-in tools for pure structured output (Commit 8.23)
+  // Per SDK docs: `tools = []` disables all built-in tools (Read, Bash, etc.)
+  if (disableTools) {
+    options.tools = [];
   }
 
   // Add structured output format if schema provided
@@ -207,6 +217,9 @@ async function sdkQuery({
     throw error;
   }
 }
+
+// Wrap with LangSmith tracing (no-op if tracing disabled)
+const sdkQuery = traceLLMCall(sdkQueryImpl, 'claude-sdk-query');
 
 /**
  * Get model timeout for compatibility with existing code
