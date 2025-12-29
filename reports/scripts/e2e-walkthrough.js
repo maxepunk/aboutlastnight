@@ -38,7 +38,7 @@ const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD;
 const DEFAULT_THEME = 'journalist';
 
 // Timeout configuration (in ms) - photo analysis can take 5+ minutes for 7 photos
-const API_TIMEOUT_MS = parseInt(process.env.API_TIMEOUT_MS) || 10 * 60 * 1000; // 10 minutes default
+const API_TIMEOUT_MS = parseInt(process.env.API_TIMEOUT_MS) || 20 * 60 * 1000; // 20 minutes default (matches server)
 const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
 
 // Session cookie storage for authenticated requests
@@ -87,7 +87,7 @@ let activeSSE = null;
 let lastProgressLine = '';
 const isTTY = process.stdout.isTTY;  // Safe line clearing only in interactive terminals
 
-function connectSSE(sessionId) {
+function connectSSE(sessionId, { onEvent, onComplete, onConnected, onError } = {}) {
   if (activeSSE) {
     activeSSE.destroy();
     activeSSE = null;
@@ -111,13 +111,25 @@ function connectSSE(sessionId) {
   const req = httpModule.request(options, (res) => {
     if (res.statusCode !== 200) {
       console.log(color(`  SSE connection failed: ${res.statusCode}`, 'yellow'));
+      if (onError) onError(new Error(`SSE connection failed: ${res.statusCode}`));
       return;
     }
 
+    console.log(color('  [SSE] Connection established', 'dim'));
     res.setEncoding('utf8');
     let buffer = '';
+    let dataEventCount = 0;
 
     res.on('data', (chunk) => {
+      dataEventCount++;
+      // Reset timeout on ANY data (heartbeats, progress, any SSE event)
+      if (onEvent) {
+        if (dataEventCount <= 3 || dataEventCount % 10 === 0) {
+          console.log(color(`  [SSE] Data received #${dataEventCount}, resetting timeout`, 'dim'));
+        }
+        onEvent();
+      }
+
       buffer += chunk;
       const lines = buffer.split('\n');
       buffer = lines.pop(); // Keep incomplete line in buffer
@@ -126,6 +138,21 @@ function connectSSE(sessionId) {
         if (line.startsWith('data: ')) {
           try {
             const data = JSON.parse(line.slice(6));
+
+            // Handle 'connected' event - SSE ready for workflow to start
+            if (data.type === 'connected' && onConnected) {
+              onConnected();
+              continue;
+            }
+
+            // Handle completion event (non-blocking approve pattern)
+            if (data.type === 'complete' && onComplete) {
+              console.log(color('\n  [SSE] Received completion event', 'green'));
+              onComplete(data.result);
+              continue;
+            }
+
+            // Handle progress messages
             if (data.message && data.message !== lastProgressLine) {
               lastProgressLine = data.message;
               // TTY-safe progress display
@@ -163,10 +190,11 @@ function connectSSE(sessionId) {
   });
 
   req.on('error', (err) => {
-    // SSE connection errors are non-fatal - API call continues
+    // SSE connection errors - notify caller if handler provided
     if (VERBOSE) {
       console.log(color(`\n  SSE error: ${err.message}`, 'yellow'));
     }
+    if (onError) onError(err);
   });
 
   req.end();
@@ -245,14 +273,59 @@ async function apiCall(endpoint, body, method = 'POST', sseSessionId = null) {
     }
   }
 
-  // Connect SSE for progress streaming if sessionId provided (Commit 8.16)
-  if (sseSessionId) {
-    connectSSE(sseSessionId);
-  }
-
   // Create AbortController for timeout
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  // For non-blocking endpoints (with SSE), we wait for completion via SSE
+  // CRITICAL: Establish SSE connection BEFORE sending POST to avoid race condition
+  // where fast-completing workflows emit 'complete' before we're subscribed
+  let sseCompletionPromise = null;
+  let sseConnectedPromise = null;
+  let timeoutResetCount = 0;
+
+  if (sseSessionId) {
+    // Create two promises:
+    // 1. sseConnectedPromise - resolves when SSE connection is ready (wait for this before POST)
+    // 2. sseCompletionPromise - resolves when workflow completes (wait for this after POST)
+    let resolveConnected, rejectConnected;
+    sseConnectedPromise = new Promise((resolve, reject) => {
+      resolveConnected = resolve;
+      rejectConnected = reject;
+    });
+
+    sseCompletionPromise = new Promise((resolve, reject) => {
+      connectSSE(sseSessionId, {
+        onConnected: () => {
+          resolveConnected();
+        },
+        onError: (err) => {
+          rejectConnected(err);
+          reject(err);
+        },
+        onEvent: () => {
+          timeoutResetCount++;
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            console.log(color(`\n  [TIMEOUT] Firing after ${timeoutResetCount} resets`, 'red'));
+            controller.abort();
+          }, API_TIMEOUT_MS);
+        },
+        onComplete: (result) => {
+          clearTimeout(timeoutId);
+          resolve(result);
+        }
+      });
+    });
+
+    // Wait for SSE to be ready before sending POST
+    try {
+      await sseConnectedPromise;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      return { status: 503, error: `SSE connection failed: ${err.message}` };
+    }
+  }
   const startTime = Date.now();
 
   try {
@@ -263,12 +336,7 @@ async function apiCall(endpoint, body, method = 'POST', sseSessionId = null) {
       signal: controller.signal
     });
 
-    clearTimeout(timeoutId);
-    disconnectSSE();  // Clean up SSE connection
-    const durationMs = Date.now() - startTime;
-
     // Store session cookie from login response
-    // Handle both single string and comma-separated multiple cookies
     const setCookie = response.headers.get('set-cookie');
     if (setCookie) {
       const cookies = setCookie.split(',').map(c => c.trim());
@@ -279,6 +347,33 @@ async function apiCall(endpoint, body, method = 'POST', sseSessionId = null) {
     }
 
     const data = await response.json();
+
+    // If server returns 'processing', wait for SSE completion
+    if (data.status === 'processing' && sseCompletionPromise) {
+      if (VERBOSE) {
+        console.log(color('\n─── PROCESSING (non-blocking) ───', 'dim'));
+        console.log(color('Waiting for SSE completion...', 'cyan'));
+      }
+
+      // Wait for SSE completion event
+      const sseResult = await sseCompletionPromise;
+      disconnectSSE();
+      const durationMs = Date.now() - startTime;
+
+      if (VERBOSE) {
+        console.log(color('\n─── SSE COMPLETION ───', 'dim'));
+        console.log(color(`Duration: ${durationMs}ms`, 'green'));
+        console.log(color('Result:', 'dim'));
+        console.log(JSON.stringify(sseResult, null, 2));
+      }
+
+      return { status: 200, data: sseResult, durationMs };
+    }
+
+    // Normal response (non-processing or no SSE)
+    clearTimeout(timeoutId);
+    disconnectSSE();
+    const durationMs = Date.now() - startTime;
 
     // Verbose logging - response
     if (VERBOSE) {
@@ -395,9 +490,12 @@ ${color('EXAMPLES:', 'cyan')}
 ${color('CHECKPOINTS:', 'cyan')}
   At each checkpoint you can:
   - [A]pprove - Continue with current data
-  - [F]ull    - View full JSON response
-  - [E]dit    - Modify the data before continuing
+  - [J]SON    - View raw JSON response
+  - [R]eject  - Reject with feedback for revision (outline/article only)
+  - [H]TML    - View rendered HTML (article only)
   - [Q]uit    - Exit the walkthrough
+
+  Outline and Article checkpoints show FULL content by default.
 
 ${color('NOTES:', 'cyan')}
   - Server must be running at ${API_BASE}
@@ -820,38 +918,199 @@ async function handleOutline(response) {
 
   const outline = response.outline || {};
 
-  console.log(color('Article Outline:', 'bright'));
-  // Fix: Use correct outline schema fields (Commit 8.9.9)
-  // Outline has: lede.hook, lede.keyTension, theStory.arcs[], not headline/sections
-  console.log(`  Opening Hook: ${outline.lede?.hook?.substring(0, 80) || 'N/A'}${outline.lede?.hook?.length > 80 ? '...' : ''}`);
-  console.log(`  Key Tension: ${outline.lede?.keyTension?.substring(0, 60) || 'N/A'}${outline.lede?.keyTension?.length > 60 ? '...' : ''}`);
-  console.log(`  Story Arcs: ${outline.theStory?.arcs?.length || 0}`);
+  // Show FULL outline for review (Commit 8.24)
+  console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
+  console.log(color('                         FULL ARTICLE OUTLINE', 'bright'));
+  console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
 
+  // LEDE Section
+  console.log(color('\n┌─ LEDE ─────────────────────────────────────────────────────────┐', 'yellow'));
+  console.log(color('│ Hook:', 'bright'));
+  console.log(`│   ${outline.lede?.hook || 'N/A'}`);
+  console.log(color('│ Key Tension:', 'bright'));
+  console.log(`│   ${outline.lede?.keyTension || 'N/A'}`);
+  if (outline.lede?.selectedEvidence?.length > 0) {
+    console.log(color('│ Selected Evidence:', 'bright'));
+    outline.lede.selectedEvidence.forEach(e => console.log(`│   - ${e}`));
+  }
+  console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+
+  // THE STORY Section
+  console.log(color('\n┌─ THE STORY ────────────────────────────────────────────────────┐', 'yellow'));
   if (outline.theStory?.arcs) {
     outline.theStory.arcs.forEach((arc, i) => {
-      console.log(`\n  ${color(`Arc ${i + 1}: ${arc.name || 'Unnamed'}`, 'cyan')}`);
-      console.log(`    Paragraphs: ${arc.paragraphCount || 0}, Evidence Cards: ${arc.evidenceCards?.length || 0}`);
+      console.log(color(`│\n│ Arc ${i + 1}: ${arc.name || arc.arcId || 'Unnamed'}`, 'cyan'));
+      console.log(`│   Paragraphs: ${arc.paragraphCount || 0}`);
+      if (arc.keyPoints?.length > 0) {
+        console.log(color('│   Key Points:', 'dim'));
+        arc.keyPoints.forEach(p => {
+          const text = typeof p === 'string' ? p : JSON.stringify(p);
+          console.log(`│     • ${text}`);
+        });
+      }
+      if (arc.evidenceCards?.length > 0) {
+        console.log(color('│   Evidence Cards:', 'dim'));
+        arc.evidenceCards.forEach(c => {
+          const id = typeof c === 'string' ? c : (c.evidenceId || c.id || JSON.stringify(c));
+          const purpose = typeof c === 'object' && c.purpose ? ` - ${c.purpose}` : '';
+          console.log(`│     📄 ${id}${purpose}`);
+        });
+      }
+      if (arc.photoPlacement) {
+        const photo = arc.photoPlacement;
+        const filename = typeof photo === 'string' ? photo : (photo.filename || photo.photo || JSON.stringify(photo));
+        const purpose = typeof photo === 'object' && photo.purpose ? ` (${photo.purpose})` : '';
+        console.log(color(`│   Photo: ${filename}${purpose}`, 'dim'));
+      }
     });
   }
+  if (outline.theStory?.arcInterweaving) {
+    console.log(color('│\n│ Arc Interweaving:', 'bright'));
+    const interweaving = outline.theStory.arcInterweaving;
+    if (typeof interweaving === 'string') {
+      console.log(`│   ${interweaving}`);
+    } else if (typeof interweaving === 'object') {
+      // Handle object format with interleavingPlan, callbackOpportunities, convergencePoint
+      if (interweaving.interleavingPlan) console.log(`│   Plan: ${interweaving.interleavingPlan}`);
+      if (interweaving.convergencePoint) console.log(`│   Convergence: ${interweaving.convergencePoint}`);
+      if (interweaving.callbackOpportunities?.length > 0) {
+        console.log(color('│   Callbacks:', 'dim'));
+        interweaving.callbackOpportunities.forEach(cb => {
+          const detail = typeof cb === 'string' ? cb : `${cb.plantIn} → ${cb.payoffIn}: ${cb.detail || ''}`;
+          console.log(`│     ↩ ${detail}`);
+        });
+      }
+    }
+  }
+  console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+
+  // FOLLOW THE MONEY Section
+  if (outline.followTheMoney) {
+    console.log(color('\n┌─ FOLLOW THE MONEY ─────────────────────────────────────────────┐', 'yellow'));
+    // Display arcConnections (new schema) or fall back to focus (legacy)
+    if (outline.followTheMoney.arcConnections?.length > 0) {
+      console.log(color('│ Arc Connections:', 'dim'));
+      outline.followTheMoney.arcConnections.forEach(ac => {
+        console.log(`│   🔗 ${ac.arcName}: ${ac.financialAngle || ''}`);
+      });
+    } else if (outline.followTheMoney.focus) {
+      console.log(`│ Focus: ${outline.followTheMoney.focus}`);
+    }
+    if (outline.followTheMoney.shellAccounts?.length > 0) {
+      console.log(color('│ Shell Accounts:', 'dim'));
+      outline.followTheMoney.shellAccounts.forEach(a => {
+        if (typeof a === 'string') {
+          console.log(`│   💰 ${a}`);
+        } else if (typeof a === 'object') {
+          const name = a.name || a.account || a.accountName || 'Unknown';
+          const amount = a.amount || a.total || '';
+          const note = a.note || a.observation || '';
+          console.log(`│   💰 ${name}${amount ? `: ${amount}` : ''}${note ? ` - ${note}` : ''}`);
+        }
+      });
+    }
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  // THE PLAYERS Section
+  if (outline.thePlayers) {
+    console.log(color('\n┌─ THE PLAYERS ──────────────────────────────────────────────────┐', 'yellow'));
+    // Display arcConnections (new schema) or fall back to focus (legacy)
+    if (outline.thePlayers.arcConnections?.length > 0) {
+      console.log(color('│ Arc Connections:', 'dim'));
+      outline.thePlayers.arcConnections.forEach(ac => {
+        console.log(`│   🔗 ${ac.arcName}: ${ac.characterAngle || ''}`);
+      });
+    } else if (outline.thePlayers.focus) {
+      console.log(`│ Focus: ${outline.thePlayers.focus}`);
+    }
+    if (outline.thePlayers.characterHighlights) {
+      console.log(color('│ Character Highlights:', 'dim'));
+      Object.entries(outline.thePlayers.characterHighlights).forEach(([char, highlight]) => {
+        console.log(`│   👤 ${char}: ${highlight}`);
+      });
+    }
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  // WHAT'S MISSING Section
+  if (outline.whatsMissing) {
+    console.log(color('\n┌─ WHAT\'S MISSING ───────────────────────────────────────────────┐', 'yellow'));
+    // Display arcConnections (new schema) or fall back to focus (legacy)
+    if (outline.whatsMissing.arcConnections?.length > 0) {
+      console.log(color('│ Arc Connections:', 'dim'));
+      outline.whatsMissing.arcConnections.forEach(ac => {
+        console.log(`│   🔗 ${ac.arcName}: ${ac.openQuestion || ''}`);
+      });
+    } else if (outline.whatsMissing.focus) {
+      console.log(`│ Focus: ${outline.whatsMissing.focus}`);
+    }
+    if (outline.whatsMissing.buriedItems?.length > 0) {
+      console.log(color('│ Buried Items:', 'dim'));
+      outline.whatsMissing.buriedItems.forEach(b => console.log(`│   🔒 ${b}`));
+    }
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  // CLOSING Section
+  if (outline.closing) {
+    console.log(color('\n┌─ CLOSING ──────────────────────────────────────────────────────┐', 'yellow'));
+    // Display arcResolutions (new schema) or fall back to theme (legacy)
+    if (outline.closing.arcResolutions?.length > 0) {
+      console.log(color('│ Arc Resolutions:', 'dim'));
+      outline.closing.arcResolutions.forEach(ar => {
+        console.log(`│   🎭 ${ar.arcName}: ${ar.resolution || ''}`);
+      });
+    } else if (outline.closing.theme) {
+      console.log(`│ Theme: ${outline.closing.theme}`);
+    }
+    if (outline.closing.systemicAngle) {
+      console.log(`│ Systemic Angle: ${outline.closing.systemicAngle}`);
+    }
+    console.log(`│ Final Line: ${outline.closing.finalLine || 'N/A'}`);
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  // Pull Quotes
+  if (outline.pullQuotes?.length > 0) {
+    console.log(color('\n┌─ PULL QUOTES ──────────────────────────────────────────────────┐', 'yellow'));
+    outline.pullQuotes.forEach((pq, i) => {
+      const attr = pq.attribution ? ` — ${pq.attribution}` : ' (Nova insight)';
+      console.log(`│ ${i + 1}. "${pq.text}"${attr}`);
+      console.log(color(`│    Placement: ${pq.placement || 'unspecified'}`, 'dim'));
+    });
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
 
   if (AUTO_MODE) {
     console.log(color('\n[AUTO] Approving outline...', 'yellow'));
     return { outline: true };
   }
 
-  const choice = await prompt('\n[A]pprove, [E]dit (view full), or [Q]uit? ');
+  const choice = await prompt('\n[A]pprove, [J]SON (raw), [R]eject with feedback, or [Q]uit? ');
 
   if (choice.toLowerCase() === 'q') {
     throw new Error('User quit');
   }
 
-  if (choice.toLowerCase() === 'e') {
-    console.log(color('\nFull Outline:', 'cyan'));
+  if (choice.toLowerCase() === 'j') {
+    console.log(color('\nRaw JSON Outline:', 'cyan'));
     prettyPrint(outline);
     const confirm = await prompt('\nApprove this outline? [Y/n] ');
     if (confirm.toLowerCase() === 'n') {
       throw new Error('User rejected outline');
     }
+  }
+
+  if (choice.toLowerCase() === 'r') {
+    console.log(color('\nEnter revision feedback:', 'cyan'));
+    const feedback = await promptMultiline('');
+    if (feedback.trim()) {
+      return { outline: false, outlineFeedback: feedback.trim() };
+    }
+    console.log(color('No feedback provided, approving as-is', 'yellow'));
   }
 
   return { outline: true };
@@ -860,18 +1119,110 @@ async function handleOutline(response) {
 async function handleArticle(response) {
   checkpointHeader('ARTICLE', response.currentPhase);
 
-  // Note: ARTICLE checkpoint may include the HTML for preview
+  const contentBundle = response.contentBundle || {};
   const html = response.assembledHtml || response.articleHtml || null;
 
+  // Show FULL article content for review (Commit 8.24)
+  console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
+  console.log(color('                         FULL ARTICLE DRAFT', 'bright'));
+  console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
+
+  // Headline
+  if (contentBundle.headline) {
+    console.log(color('\n┌─ HEADLINE ─────────────────────────────────────────────────────┐', 'yellow'));
+    console.log(color('│ Main:', 'bright'));
+    console.log(`│   ${contentBundle.headline.main || 'N/A'}`);
+    if (contentBundle.headline.sub) {
+      console.log(color('│ Sub:', 'dim'));
+      console.log(`│   ${contentBundle.headline.sub}`);
+    }
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  // Byline
+  if (contentBundle.byline) {
+    console.log(color(`\nByline: ${contentBundle.byline.author} | ${contentBundle.byline.location}`, 'dim'));
+  }
+
+  // Sections - show FULL prose content
+  if (contentBundle.sections?.length > 0) {
+    console.log(color('\n═══════════════════════════════════════════════════════════════', 'magenta'));
+    console.log(color('                         ARTICLE SECTIONS', 'bright'));
+    console.log(color('═══════════════════════════════════════════════════════════════', 'magenta'));
+
+    contentBundle.sections.forEach((section, i) => {
+      console.log(color(`\n┌─ ${section.id?.toUpperCase() || `SECTION ${i + 1}`} ─${'─'.repeat(Math.max(0, 50 - (section.id?.length || 10)))}┐`, 'yellow'));
+      if (section.heading) {
+        console.log(color(`│ ${section.heading}`, 'bright'));
+      }
+      console.log('│');
+
+      // Show all content blocks
+      if (section.content?.length > 0) {
+        section.content.forEach((block, j) => {
+          if (block.type === 'paragraph') {
+            // Wrap long paragraphs for readability
+            const text = block.text || '';
+            const lines = text.match(/.{1,70}(\s|$)/g) || [text];
+            lines.forEach(line => console.log(`│ ${line.trim()}`));
+            console.log('│');
+          } else if (block.type === 'quote') {
+            console.log(color(`│ "${block.text}"`, 'cyan'));
+            if (block.attribution) console.log(color(`│   — ${block.attribution}`, 'dim'));
+            console.log('│');
+          } else if (block.type === 'evidence-reference') {
+            console.log(color(`│ 📄 [Evidence: ${block.evidenceId}] ${block.caption || ''}`, 'green'));
+            console.log('│');
+          } else if (block.type === 'photo') {
+            console.log(color(`│ 📷 [Photo: ${block.filename}] ${block.caption || ''}`, 'blue'));
+            console.log('│');
+          } else if (block.type === 'list') {
+            (block.items || []).forEach(item => console.log(`│   • ${item}`));
+            console.log('│');
+          }
+        });
+      }
+      console.log(color(`└${'─'.repeat(68)}┘`, 'yellow'));
+    });
+  }
+
+  // Pull Quotes
+  if (contentBundle.pullQuotes?.length > 0) {
+    console.log(color('\n┌─ PULL QUOTES ──────────────────────────────────────────────────┐', 'yellow'));
+    contentBundle.pullQuotes.forEach((pq, i) => {
+      const attr = pq.attribution ? ` — ${pq.attribution}` : ' (Nova insight)';
+      console.log(`│ ${i + 1}. "${pq.text}"${attr}`);
+    });
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  // Evidence Cards (sidebar)
+  if (contentBundle.evidenceCards?.length > 0) {
+    console.log(color('\n┌─ EVIDENCE CARDS (Sidebar) ─────────────────────────────────────┐', 'yellow'));
+    contentBundle.evidenceCards.forEach((card, i) => {
+      console.log(color(`│ ${i + 1}. ${card.title || card.evidenceId}`, 'cyan'));
+      if (card.summary) console.log(`│    ${card.summary.substring(0, 60)}...`);
+    });
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  // Financial Tracker
+  if (contentBundle.financialTracker?.entries?.length > 0) {
+    console.log(color('\n┌─ FINANCIAL TRACKER ────────────────────────────────────────────┐', 'yellow'));
+    contentBundle.financialTracker.entries.forEach(entry => {
+      console.log(`│ 💰 ${entry.account}: ${entry.amount}`);
+    });
+    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+  }
+
+  console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
+
+  // Word count estimate
+  const wordCount = JSON.stringify(contentBundle).split(/\s+/).length;
+  console.log(color(`Estimated word count: ~${wordCount} words`, 'dim'));
+
   if (html) {
-    console.log(color('Article Preview:', 'bright'));
-    console.log(color('─'.repeat(40), 'dim'));
-    // Show first 500 chars of HTML
-    console.log(html.substring(0, 500) + '...');
-    console.log(color('─'.repeat(40), 'dim'));
-    console.log(color(`Total length: ${html.length} characters`, 'dim'));
-  } else {
-    console.log(color('Article ready for final assembly.', 'bright'));
+    console.log(color(`HTML length: ${html.length} characters`, 'dim'));
   }
 
   if (AUTO_MODE) {
@@ -879,21 +1230,41 @@ async function handleArticle(response) {
     return { article: true };
   }
 
-  const choice = await prompt('\n[A]pprove, [E]dit (view full HTML), or [Q]uit? ');
+  const choice = await prompt('\n[A]pprove, [H]TML (view rendered), [J]SON (raw), [R]eject with feedback, or [Q]uit? ');
 
   if (choice.toLowerCase() === 'q') {
     throw new Error('User quit');
   }
 
-  if (choice.toLowerCase() === 'e') {
+  if (choice.toLowerCase() === 'h') {
     if (html) {
       console.log(color('\nFull HTML:', 'cyan'));
       console.log(html);
+    } else {
+      console.log(color('HTML not yet assembled', 'yellow'));
     }
     const confirm = await prompt('\nApprove this article? [Y/n] ');
     if (confirm.toLowerCase() === 'n') {
       throw new Error('User rejected article');
     }
+  }
+
+  if (choice.toLowerCase() === 'j') {
+    console.log(color('\nRaw JSON ContentBundle:', 'cyan'));
+    prettyPrint(contentBundle);
+    const confirm = await prompt('\nApprove this article? [Y/n] ');
+    if (confirm.toLowerCase() === 'n') {
+      throw new Error('User rejected article');
+    }
+  }
+
+  if (choice.toLowerCase() === 'r') {
+    console.log(color('\nEnter revision feedback:', 'cyan'));
+    const feedback = await promptMultiline('');
+    if (feedback.trim()) {
+      return { article: false, articleFeedback: feedback.trim() };
+    }
+    console.log(color('No feedback provided, approving as-is', 'yellow'));
   }
 
   return { article: true };
@@ -1015,30 +1386,141 @@ function displayCheckpointData(approvalType, response) {
     case 'outline':
       checkpointHeader('OUTLINE', response.currentPhase);
       const outline = response.outline || {};
-      console.log(color('Article Outline:', 'bright'));
-      // Fix: Use correct outline schema fields (Commit 8.9.9)
-      console.log(`  Opening Hook: ${outline.lede?.hook?.substring(0, 80) || 'N/A'}${outline.lede?.hook?.length > 80 ? '...' : ''}`);
-      console.log(`  Key Tension: ${outline.lede?.keyTension?.substring(0, 60) || 'N/A'}${outline.lede?.keyTension?.length > 60 ? '...' : ''}`);
-      console.log(`  Story Arcs: ${outline.theStory?.arcs?.length || 0}`);
+
+      // Show FULL outline for step mode (Commit 8.24)
+      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
+      console.log(color('                         FULL ARTICLE OUTLINE', 'bright'));
+      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
+
+      // LEDE
+      console.log(color('\n┌─ LEDE ─────────────────────────────────────────────────────────┐', 'yellow'));
+      console.log(color('│ Hook:', 'bright'));
+      console.log(`│   ${outline.lede?.hook || 'N/A'}`);
+      console.log(color('│ Key Tension:', 'bright'));
+      console.log(`│   ${outline.lede?.keyTension || 'N/A'}`);
+      console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+
+      // THE STORY
+      console.log(color('\n┌─ THE STORY ────────────────────────────────────────────────────┐', 'yellow'));
       if (outline.theStory?.arcs) {
         outline.theStory.arcs.forEach((arc, i) => {
-          console.log(`\n  ${color(`Arc ${i + 1}: ${arc.name || 'Unnamed'}`, 'cyan')}`);
-          console.log(`    Paragraphs: ${arc.paragraphCount || 0}, Evidence Cards: ${arc.evidenceCards?.length || 0}`);
+          console.log(color(`│\n│ Arc ${i + 1}: ${arc.name || arc.arcId || 'Unnamed'}`, 'cyan'));
+          console.log(`│   Paragraphs: ${arc.paragraphCount || 0}`);
+          if (arc.keyPoints?.length > 0) {
+            arc.keyPoints.forEach(p => {
+              const text = typeof p === 'string' ? p : JSON.stringify(p);
+              console.log(`│     • ${text}`);
+            });
+          }
+          if (arc.evidenceCards?.length > 0) {
+            arc.evidenceCards.forEach(c => {
+              const id = typeof c === 'string' ? c : (c.evidenceId || c.id || JSON.stringify(c));
+              console.log(`│     📄 ${id}`);
+            });
+          }
+          if (arc.photoPlacement) {
+            const photo = arc.photoPlacement;
+            const filename = typeof photo === 'string' ? photo : (photo.filename || photo.photo || JSON.stringify(photo));
+            console.log(color(`│   Photo: ${filename}`, 'dim'));
+          }
         });
       }
+      console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+
+      // Other sections summary
+      if (outline.followTheMoney) {
+        console.log(color(`\n┌─ FOLLOW THE MONEY: ${outline.followTheMoney.focus || 'N/A'}`, 'yellow'));
+        if (outline.followTheMoney.shellAccounts?.length > 0) {
+          outline.followTheMoney.shellAccounts.forEach(a => {
+            if (typeof a === 'string') {
+              console.log(`│   💰 ${a}`);
+            } else {
+              const name = a.name || a.account || a.accountName || 'Unknown';
+              const amount = a.amount || '';
+              console.log(`│   💰 ${name}${amount ? `: ${amount}` : ''}`);
+            }
+          });
+        }
+      }
+      if (outline.thePlayers) {
+        console.log(color(`┌─ THE PLAYERS: ${outline.thePlayers.focus || 'N/A'}`, 'yellow'));
+      }
+      if (outline.whatsMissing) {
+        console.log(color(`┌─ WHAT'S MISSING: ${outline.whatsMissing.focus || 'N/A'}`, 'yellow'));
+      }
+      if (outline.closing) {
+        console.log(color(`┌─ CLOSING: ${outline.closing.theme || 'N/A'}`, 'yellow'));
+      }
+      if (outline.pullQuotes?.length > 0) {
+        console.log(color(`\nPull Quotes: ${outline.pullQuotes.length}`, 'dim'));
+        outline.pullQuotes.forEach((pq, i) => {
+          const text = typeof pq === 'string' ? pq : (pq.text || JSON.stringify(pq));
+          const attr = pq.attribution ? ` — ${pq.attribution}` : '';
+          console.log(`  ${i + 1}. "${text.substring(0, 50)}..."${attr}`);
+        });
+      }
+      console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
       break;
 
     case 'article':
       checkpointHeader('ARTICLE', response.currentPhase);
-      const html = response.assembledHtml || response.articleHtml || null;
-      if (html) {
-        console.log(color('Article Preview:', 'bright'));
-        console.log(color('─'.repeat(40), 'dim'));
-        console.log(html.substring(0, 500) + '...');
-        console.log(color('─'.repeat(40), 'dim'));
-        console.log(color(`Total length: ${html.length} characters`, 'dim'));
-      } else {
-        console.log(color('Article ready for final assembly.', 'bright'));
+      const contentBundle = response.contentBundle || {};
+      const htmlContent = response.assembledHtml || response.articleHtml || null;
+
+      // Show FULL article for step mode (Commit 8.24)
+      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
+      console.log(color('                         FULL ARTICLE DRAFT', 'bright'));
+      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
+
+      // Headline
+      if (contentBundle.headline) {
+        console.log(color('\n┌─ HEADLINE ─────────────────────────────────────────────────────┐', 'yellow'));
+        console.log(`│   ${contentBundle.headline.main || 'N/A'}`);
+        if (contentBundle.headline.sub) console.log(`│   ${contentBundle.headline.sub}`);
+        console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+      }
+
+      // Sections with full prose
+      if (contentBundle.sections?.length > 0) {
+        console.log(color('\n═══════════════════════════════════════════════════════════════', 'magenta'));
+        contentBundle.sections.forEach((section, i) => {
+          console.log(color(`\n┌─ ${section.id?.toUpperCase() || `SECTION ${i + 1}`} ─${'─'.repeat(Math.max(0, 50 - (section.id?.length || 10)))}┐`, 'yellow'));
+          if (section.heading) console.log(color(`│ ${section.heading}`, 'bright'));
+          if (section.content?.length > 0) {
+            section.content.forEach(block => {
+              if (block.type === 'paragraph') {
+                const text = block.text || '';
+                const lines = text.match(/.{1,70}(\s|$)/g) || [text];
+                lines.forEach(line => console.log(`│ ${line.trim()}`));
+                console.log('│');
+              } else if (block.type === 'quote') {
+                console.log(color(`│ "${block.text}"`, 'cyan'));
+                if (block.attribution) console.log(color(`│   — ${block.attribution}`, 'dim'));
+              } else if (block.type === 'evidence-reference') {
+                console.log(color(`│ 📄 [Evidence: ${block.evidenceId}]`, 'green'));
+              } else if (block.type === 'photo') {
+                console.log(color(`│ 📷 [Photo: ${block.filename}]`, 'blue'));
+              }
+            });
+          }
+          console.log(color(`└${'─'.repeat(68)}┘`, 'yellow'));
+        });
+      }
+
+      // Sidebar components summary
+      if (contentBundle.pullQuotes?.length > 0) {
+        console.log(color(`\nPull Quotes: ${contentBundle.pullQuotes.length}`, 'dim'));
+      }
+      if (contentBundle.evidenceCards?.length > 0) {
+        console.log(color(`Evidence Cards: ${contentBundle.evidenceCards.length}`, 'dim'));
+      }
+      if (contentBundle.financialTracker?.entries?.length > 0) {
+        console.log(color(`Financial Tracker: ${contentBundle.financialTracker.entries.length} entries`, 'dim'));
+      }
+
+      console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
+      if (htmlContent) {
+        console.log(color(`HTML length: ${htmlContent.length} characters`, 'dim'));
       }
       break;
 

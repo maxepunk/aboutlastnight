@@ -18,6 +18,7 @@
 
 const { PHASES } = require('../state');
 const { createTemplateAssembler } = require('../../template-assembler');
+const { traceNode } = require('../tracing');
 
 /**
  * Get TemplateAssembler from config or create default
@@ -113,7 +114,7 @@ async function assembleHtml(state, config) {
 
   return {
     assembledHtml: html,
-    currentPhase: PHASES.ASSEMBLE_HTML
+    currentPhase: PHASES.COMPLETE  // Final phase - signals pipeline completion
   };
 }
 
@@ -135,8 +136,10 @@ function createMockTemplateAssembler(options = {}) {
 }
 
 module.exports = {
-  // Node functions
-  assembleHtml,
+  // Node functions (wrapped with LangSmith tracing)
+  assembleHtml: traceNode(assembleHtml, 'assembleHtml', {
+    stateFields: ['contentBundle']
+  }),
 
   // Testing utilities
   createMockTemplateAssembler,

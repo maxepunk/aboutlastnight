@@ -34,6 +34,7 @@ const path = require('path');
 const { PHASES, APPROVAL_TYPES } = require('../state');
 const { getSdkClient, synthesizePlayerFocus } = require('./node-helpers');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
+const { traceNode } = require('../tracing');
 
 /**
  * Default data directory for session files
@@ -796,9 +797,11 @@ function createMockInputParser(mockResponses = {}) {
 }
 
 module.exports = {
-  // Node functions
-  parseRawInput,
-  finalizeInput,
+  // Node functions (wrapped with LangSmith tracing)
+  parseRawInput: traceNode(parseRawInput, 'parseRawInput', {
+    stateFields: ['rawSessionInput']
+  }),
+  finalizeInput: traceNode(finalizeInput, 'finalizeInput'),
 
   // Utilities (exported for DRY reuse in server.js Phase 4e)
   sanitizePath,

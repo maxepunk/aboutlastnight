@@ -23,6 +23,7 @@ const photoNodes = require('./photo-nodes');
 const preprocessNodes = require('./preprocess-nodes');
 const arcSpecialistNodes = require('./arc-specialist-nodes');
 const evaluatorNodes = require('./evaluator-nodes');
+// NOTE: validationNodes removed in Commit 8.23 - trust Opus evaluators instead
 const aiNodes = require('./ai-nodes');
 const templateNodes = require('./template-nodes');
 const generationSupervisor = require('../generation-supervisor');
@@ -59,10 +60,14 @@ module.exports = {
   evaluateOutline: evaluatorNodes.evaluateOutline,
   evaluateArticle: evaluatorNodes.evaluateArticle,
 
+  // NOTE: validateOutlineStructure and validateArticleContent removed in Commit 8.23
+  // Programmatic validation was too brittle - trust Opus evaluators instead
+
   // AI nodes (from ai-nodes.js)
   curateEvidenceBundle: aiNodes.curateEvidenceBundle,
   processRescuedItems: aiNodes.processRescuedItems,  // Commit 8.10+: Handle human-rescued paper evidence
   analyzeNarrativeArcs: aiNodes.analyzeNarrativeArcs, // @deprecated - use arc specialists
+  buildArcEvidencePackages: aiNodes.buildArcEvidencePackages, // Phase 1 Fix: Extract per-arc evidence with fullContent
   generateOutline: aiNodes.generateOutline,
   generateContentBundle: aiNodes.generateContentBundle,
   validateContentBundle: aiNodes.validateContentBundle,
@@ -85,6 +90,7 @@ module.exports = {
     preprocess: preprocessNodes._testing,
     arcSpecialists: arcSpecialistNodes._testing,
     evaluators: evaluatorNodes._testing,
+    // NOTE: validation removed in Commit 8.23
     ai: aiNodes._testing,
     template: templateNodes._testing,
     supervisor: generationSupervisor._testing,

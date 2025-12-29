@@ -83,11 +83,12 @@ describe('TemplateAssembler', () => {
       expect(html).toContain(validBundle.headline.main);
     });
 
-    it('includes CSS references', async () => {
+    it('includes inline CSS by default', async () => {
       const html = await assembler.assemble(validBundle);
 
-      expect(html).toContain('variables.css');
-      expect(html).toContain('base.css');
+      // With inline CSS enabled (default), CSS content is embedded in <style> block
+      expect(html).toContain('<style>');
+      expect(html).toContain('--nn-'); // CSS variables prefix from variables.css
     });
 
     it('includes NovaNews brand', async () => {
@@ -128,24 +129,37 @@ describe('TemplateAssembler', () => {
       await assembler.initialize();
     });
 
-    it('adds CSS configuration', () => {
-      const context = assembler.buildContext(validBundle);
+    it('adds inline CSS by default for standalone HTML', async () => {
+      const context = await assembler.buildContext(validBundle);
+
+      // With inlineCss enabled (default), css is null and inlineCss has content
+      expect(context.inlineCss).toBeDefined();
+      expect(typeof context.inlineCss).toBe('string');
+      expect(context.inlineCss.length).toBeGreaterThan(0);
+      expect(context.css).toBeNull();
+    });
+
+    it('adds external CSS configuration when inline disabled', async () => {
+      const externalCssAssembler = new TemplateAssembler('journalist', { inlineCss: false });
+      await externalCssAssembler.initialize();
+      const context = await externalCssAssembler.buildContext(validBundle);
 
       expect(context.css).toBeDefined();
       expect(context.css.files).toBeInstanceOf(Array);
       expect(context.css.files.length).toBeGreaterThan(0);
+      expect(context.inlineCss).toBeNull();
     });
 
-    it('adds computed boolean flags', () => {
-      const context = assembler.buildContext(validBundle);
+    it('adds computed boolean flags', async () => {
+      const context = await assembler.buildContext(validBundle);
 
       expect(typeof context.hasFinancialTracker).toBe('boolean');
       expect(typeof context.hasPullQuotes).toBe('boolean');
       expect(typeof context.hasEvidenceCards).toBe('boolean');
     });
 
-    it('builds section navigation', () => {
-      const context = assembler.buildContext(validBundle);
+    it('builds section navigation', async () => {
+      const context = await assembler.buildContext(validBundle);
 
       expect(context.sectionNav).toBeInstanceOf(Array);
       context.sectionNav.forEach(item => {
@@ -155,8 +169,8 @@ describe('TemplateAssembler', () => {
       });
     });
 
-    it('passes through original ContentBundle data', () => {
-      const context = assembler.buildContext(validBundle);
+    it('passes through original ContentBundle data', async () => {
+      const context = await assembler.buildContext(validBundle);
 
       expect(context.headline).toEqual(validBundle.headline);
       expect(context.sections).toEqual(validBundle.sections);

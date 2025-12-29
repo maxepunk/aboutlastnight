@@ -1,10 +1,10 @@
 /**
- * Report Generation Graph - Commit 8.9.5: Input Layer + File-Based Specialists + Character IDs
+ * Report Generation Graph - Commit 8.23: Removed brittle programmatic validation
  *
  * Assembles the complete LangGraph StateGraph for report generation.
  * Connects all nodes with edges, conditional routing, and checkpointing.
  *
- * Graph Flow (27 nodes - Commit 8.9.5):
+ * Graph Flow (25 nodes - Commit 8.23):
  *
  * PHASE 0: Input Parsing (Commit 8.9 - conditional entry)
  * START → [conditional] → parseRawInput OR initializeSession
@@ -22,12 +22,12 @@
  * → 2 analyzeArcs (single SDK call, player focus drives arcs) → 2.3 evaluateArcs → [revision loop]
  * → [checkpoint: arc-selection]
  *
- * PHASE 3: Outline Generation
- * → 3.1 generateOutline → 3.2 evaluateOutline → [revision loop]
+ * PHASE 3: Outline Generation (Commit 8.23: validation removed, trust Opus evaluator)
+ * → 3.1 generateOutline → 3.2 evaluateOutline (Opus) → [revision loop]
  * → [checkpoint: outline]
  *
- * PHASE 4: Article Generation
- * → 4.1 generateContentBundle → 4.2 evaluateArticle → [revision loop]
+ * PHASE 4: Article Generation (Commit 8.23: validation removed, trust Opus evaluator)
+ * → 4.1 generateContentBundle → 4.2 evaluateArticle (Opus) → [revision loop]
  * → [checkpoint: article] → 4.3 validateContentBundle
  *
  * PHASE 5: Assembly
@@ -192,6 +192,10 @@ function routeArticleEvaluation(state) {
 
   return 'revise';
 }
+
+// NOTE: routeOutlineValidation and routeArticleValidation removed in Commit 8.23
+// Programmatic validation was too brittle (checked form, not substance)
+// Trust Opus evaluators for quality judgment instead
 
 /**
  * Route function for schema validation
@@ -565,10 +569,19 @@ function createGraphBuilder() {
   builder.addNode('incrementArcRevision', incrementArcRevision);
 
   // ═══════════════════════════════════════════════════════
+  // ADD NODES - Phase 2.4: Arc Evidence Packages (Phase 1 Fix)
+  // ═══════════════════════════════════════════════════════
+
+  // Runs after arc selection, before outline generation
+  // Extracts full quotable content and enriched photos per arc
+  builder.addNode('buildArcEvidencePackages', nodes.buildArcEvidencePackages);
+
+  // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 3: Outline Generation
   // ═══════════════════════════════════════════════════════
 
   builder.addNode('generateOutline', nodes.generateOutline);
+  // NOTE: validateOutlineStructure removed in Commit 8.23 - trust Opus evaluators instead
   builder.addNode('evaluateOutline', nodes.evaluateOutline);
   builder.addNode('setOutlineCheckpoint', setOutlineCheckpoint);
   builder.addNode('incrementOutlineRevision', incrementOutlineRevision);
@@ -578,6 +591,7 @@ function createGraphBuilder() {
   // ═══════════════════════════════════════════════════════
 
   builder.addNode('generateContentBundle', nodes.generateContentBundle);
+  // NOTE: validateArticleContent removed in Commit 8.23 - trust Opus evaluators instead
   builder.addNode('evaluateArticle', nodes.evaluateArticle);
   builder.addNode('setArticleCheckpoint', setArticleCheckpoint);
   builder.addNode('incrementArticleRevision', incrementArticleRevision);
@@ -679,13 +693,18 @@ function createGraphBuilder() {
   builder.addEdge('incrementArcRevision', 'analyzeArcs');
 
   // Arc selection checkpoint
+  // PHASE 1 FIX: Route through buildArcEvidencePackages before outline
   builder.addConditionalEdges('setArcSelectionCheckpoint', routeArcSelectionApproval, {
     wait: END,
-    continue: 'generateOutline'
+    continue: 'buildArcEvidencePackages'
   });
+
+  // Arc evidence packages → outline generation
+  builder.addEdge('buildArcEvidencePackages', 'generateOutline');
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 3: Outline Generation
+  // Commit 8.23: Removed programmatic validation, trust Opus evaluators
   // ═══════════════════════════════════════════════════════
 
   builder.addEdge('generateOutline', 'evaluateOutline');
@@ -708,6 +727,7 @@ function createGraphBuilder() {
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 4: Article Generation
+  // Commit 8.23: Removed programmatic validation, trust Opus evaluators
   // ═══════════════════════════════════════════════════════
 
   builder.addEdge('generateContentBundle', 'evaluateArticle');

@@ -11,7 +11,7 @@ const path = require('path');
 
 // LangGraph workflow modules
 const { MemorySaver } = require('@langchain/langgraph');
-const { createReportGraphWithCheckpointer } = require('./lib/workflow/graph');
+const { createReportGraphWithCheckpointer, RECURSION_LIMIT } = require('./lib/workflow/graph');
 const {
   PHASES,
   APPROVAL_TYPES,
@@ -22,9 +22,14 @@ const {
 const { backgroundPipelineManager } = require('./lib/background-pipeline-manager');
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/progress-emitter');
+const { createPromptBuilder } = require('./lib/prompt-builder');
 
 // Shared checkpointer instance - must persist across API calls for resume to work
 const sharedCheckpointer = new MemorySaver();
+
+// Shared promptBuilder - created at startup, injected into workflow config (Commit 8.18)
+// Persists cache across all graph invocations for efficient prompt loading
+let sharedPromptBuilder = null;
 
 /**
  * Get session state from checkpointer without invoking the graph
@@ -189,7 +194,7 @@ const PORT = 3001;
 
 // Server timeout: workflow steps can take several minutes
 // (e.g., finalizePhotoAnalyses ~90s, preprocessEvidence ~110s)
-const SERVER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes (matches e2e-walkthrough client timeout)
+const SERVER_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes for long-running workflows
 
 // SSE heartbeat interval to keep connections alive (Commit 8.16)
 const SSE_HEARTBEAT_MS = 15000;
@@ -391,7 +396,8 @@ app.post('/api/generate', requireAuth, async (req, res) => {
             configurable: {
                 sessionId,
                 theme,
-                thread_id: threadId
+                thread_id: threadId,
+                promptBuilder: sharedPromptBuilder
             }
         };
 
@@ -462,7 +468,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
         // Run graph until it pauses at checkpoint or completes
         console.log(`[${new Date().toISOString()}] Invoking graph with initialState:`, JSON.stringify(initialState));
-        const result = await graph.invoke(initialState, config);
+        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
         console.log(`[${new Date().toISOString()}] Graph completed. Phase: ${result.currentPhase}, awaitingApproval: ${result.awaitingApproval}`);
 
         // Build response based on current state
@@ -912,7 +918,8 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
             configurable: {
                 sessionId,
                 theme,
-                thread_id: threadId
+                thread_id: threadId,
+                promptBuilder: sharedPromptBuilder
             }
         };
 
@@ -926,7 +933,7 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         initialState.currentPhase = null;
         initialState.awaitingApproval = false;
         initialState.approvalType = null;
-        const result = await graph.invoke(initialState, config);
+        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
 
         // Phase 4e: Fallback photo pipeline start (only if not started at T+0)
         // If photosPath wasn't in rawSessionInput but is in parsed sessionConfig, start now.
@@ -1002,47 +1009,81 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         // - Photo pipeline: starts after parseRawInput completes (needs sessionConfig.photosPath)
         // See POST /api/session/:id/start handler for pipeline triggers
 
-        // Use theme from session state (not hardcoded)
+        // Return immediately - workflow runs in background
+        const previousPhase = state.currentPhase;
+        res.json({
+            sessionId,
+            status: 'processing',
+            previousPhase
+        });
+
+        // Run workflow in background (non-blocking)
         const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
         const config = {
             configurable: {
                 sessionId,
                 theme: state.theme || 'journalist',
-                thread_id: sessionId
+                thread_id: sessionId,
+                promptBuilder: sharedPromptBuilder
             }
         };
 
-        const result = await graph.invoke(approvalState, config);
+        setImmediate(async () => {
+            try {
+                const result = await graph.invoke(approvalState, { ...config, recursionLimit: RECURSION_LIMIT });
 
-        // Build response
-        const response = {
-            sessionId,
-            previousPhase: state.currentPhase,
-            currentPhase: result.currentPhase,
-            awaitingApproval: result.awaitingApproval || false,
-            approvalType: result.approvalType || null
-        };
+                // Build response (same logic as before, now for SSE)
+                const response = {
+                    sessionId,
+                    previousPhase,
+                    currentPhase: result.currentPhase,
+                    awaitingApproval: result.awaitingApproval || false,
+                    approvalType: result.approvalType || null
+                };
 
-        // Add approval-specific data using DRY helper
-        if (result.awaitingApproval && result.approvalType) {
-            Object.assign(response, getApprovalData(result.approvalType, result));
-        }
+                // Add approval-specific data using DRY helper
+                if (result.awaitingApproval && result.approvalType) {
+                    Object.assign(response, getApprovalData(result.approvalType, result));
+                }
 
-        // Include completion data
-        if (result.currentPhase === PHASES.COMPLETE) {
-            response.assembledHtml = result.assembledHtml;
-            response.validationResults = result.validationResults;
-        }
+                // Include completion data
+                if (result.currentPhase === PHASES.COMPLETE) {
+                    response.assembledHtml = result.assembledHtml;
+                    response.validationResults = result.validationResults;
+                }
 
-        // Include errors
-        if (result.errors?.length > 0) {
-            response.errors = result.errors;
-        }
+                // Include errors
+                if (result.errors?.length > 0) {
+                    response.errors = result.errors;
+                }
 
-        res.json(response);
+                // Emit completion via SSE
+                progressEmitter.emitComplete(sessionId, response);
+                console.log(`[${new Date().toISOString()}] Workflow complete for session ${sessionId}, phase: ${result.currentPhase}`);
+
+            } catch (error) {
+                console.error(`[${new Date().toISOString()}] Background workflow error for session ${sessionId}:`, error);
+                progressEmitter.emitComplete(sessionId, {
+                    sessionId,
+                    currentPhase: PHASES.ERROR,
+                    error: error.message,
+                    details: 'Approval operation failed. Check server logs.'
+                });
+            }
+        });
 
     } catch (error) {
+        // This only catches errors BEFORE the background task starts (validation, etc.)
         console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve error:`, error);
+
+        // Emit SSE completion for sync errors so client doesn't hang waiting
+        progressEmitter.emitComplete(sessionId, {
+            sessionId,
+            currentPhase: PHASES.ERROR,
+            error: error.message,
+            details: 'Approval operation failed. Check server logs.'
+        });
+
         res.status(500).json({
             sessionId,
             currentPhase: PHASES.ERROR,
@@ -1085,7 +1126,8 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             configurable: {
                 sessionId,
                 theme: session.state.theme || 'journalist',
-                thread_id: sessionId
+                thread_id: sessionId,
+                promptBuilder: sharedPromptBuilder
             }
         };
 
@@ -1111,7 +1153,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             Object.assign(initialState, stateOverrides);
         }
 
-        const result = await graph.invoke(initialState, config);
+        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
 
         // Build response with approval data (same pattern as /start and /approve)
         const response = {
@@ -1220,6 +1262,16 @@ app.get('/', (req, res) => {
 
     console.log('Claude Agent SDK available ✓');
 
+    // Validate theme files at startup (Commit 8.18)
+    console.log('Validating theme files...');
+    sharedPromptBuilder = createPromptBuilder();
+    const themeValidation = await sharedPromptBuilder.theme.validate();
+    if (!themeValidation.valid) {
+        console.warn(`[startup] Missing theme files: ${themeValidation.missing.join(', ')}`);
+    } else {
+        console.log(`Theme files validated (${sharedPromptBuilder.theme.cache.size} cached) ✓`);
+    }
+
     const server = app.listen(PORT, () => {
         console.log(`
 ╔═══════════════════════════════════════════════════════════╗
@@ -1241,6 +1293,7 @@ app.get('/', (req, res) => {
 
     // Configure server timeouts (default 2min is too short for workflow steps)
     server.timeout = SERVER_TIMEOUT_MS;
+    server.requestTimeout = SERVER_TIMEOUT_MS;  // Node 18+ default is 5min, we need 20min
     server.keepAliveTimeout = SERVER_TIMEOUT_MS;
     server.headersTimeout = SERVER_TIMEOUT_MS + 1000; // Must be > keepAliveTimeout
 })();

@@ -27,6 +27,7 @@ const path = require('path');
 const { PHASES, APPROVAL_TYPES } = require('../state');
 const { safeParseJson, getSdkClient } = require('./node-helpers');
 const { createSemaphore, MODEL_TIMEOUTS } = require('../../sdk-client');
+const { traceNode } = require('../tracing');
 const { preprocessImages, formatFileSize } = require('../../image-preprocessor');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
@@ -835,10 +836,16 @@ function createMockPhotoAnalyzer(options = {}) {
 }
 
 module.exports = {
-  // Main node functions
-  analyzePhotos,
-  parseCharacterIds,      // Commit 8.9.x: parse natural language character IDs
-  finalizePhotoAnalyses,  // Commit 8.9.5: enrich with character IDs
+  // Main node functions (wrapped with LangSmith tracing)
+  analyzePhotos: traceNode(analyzePhotos, 'analyzePhotos', {
+    stateFields: ['sessionPhotos']
+  }),
+  parseCharacterIds: traceNode(parseCharacterIds, 'parseCharacterIds', {
+    stateFields: ['characterIdsRaw', 'photoAnalyses']
+  }),
+  finalizePhotoAnalyses: traceNode(finalizePhotoAnalyses, 'finalizePhotoAnalyses', {
+    stateFields: ['photoAnalyses', 'characterIdMappings']
+  }),
 
   // Commit 8.11+: Template for prompt builder (DRY - single source of truth)
   CHARACTER_IDS_PHOTO_TEMPLATE,
