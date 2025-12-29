@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Generates journalist-style investigative articles by:
 1. Fetching memory tokens and paper evidence from Notion database
 2. Curating evidence bundle using three-layer model (exposed/buried/context)
-3. Analyzing narrative arcs via parallel specialist subagents
+3. Analyzing narrative arcs via single SDK call with player-focus guidance
 4. Generating article outline and final HTML report with human-in-the-loop checkpoints
 
 **Production URL:** `https://console.aboutlastnightgame.com` (via Cloudflare Tunnel)
@@ -50,7 +50,7 @@ cloudflared tunnel run aln-console  # Manual tunnel start
 
 ```
 Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
-→ Phase 2: Arc Analysis (orchestrated subagents) → Phase 3: Outline → Phase 4: Article → Phase 5: Assembly
+→ Phase 2: Arc Analysis (single SDK call) → Phase 3: Outline → Phase 4: Article → Phase 5: Assembly
 ```
 
 **Human Checkpoints (7 total - workflow pauses for approval):**
@@ -72,20 +72,28 @@ Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6
 ```
 server.js                           # Express server + /api/generate endpoint
 lib/sdk-client.js                   # Claude Agent SDK wrapper with timeouts
+lib/theme-config.js                 # Theme settings, NPC definitions, validation rules (8.17)
+lib/prompt-builder.js               # Prompt assembly for each phase
 lib/workflow/
 ├── graph.js                        # LangGraph StateGraph (27 nodes, edges)
 ├── state.js                        # State annotations, phases, reducers
-├── generation-supervisor.js        # Orchestrator for arc analysis
+├── tracing.js                      # LangSmith observability integration
+├── generation-supervisor.js        # Deprecated - see arc-specialist-nodes.js (8.15)
 └── nodes/
     ├── index.js                    # Node barrel export
     ├── input-nodes.js              # Raw input parsing
     ├── fetch-nodes.js              # Notion/filesystem data loading
     ├── photo-nodes.js              # Haiku vision analysis
     ├── preprocess-nodes.js         # Batch evidence summarization
-    ├── arc-specialist-nodes.js     # Orchestrated subagent analysis
+    ├── arc-specialist-nodes.js     # Single SDK call arc analysis (8.15)
     ├── evaluator-nodes.js          # Quality evaluation per phase
     ├── ai-nodes.js                 # Claude content generation
+    ├── validation-nodes.js         # Programmatic validation (8.20)
     └── template-nodes.js           # HTML assembly
+lib/schemas/
+├── content-bundle.schema.json      # Final article content structure
+├── preprocessed-evidence.schema.json # Batch-summarized evidence items
+└── outline.schema.json             # Article outline validation (8.25)
 ```
 
 ### Template System
@@ -119,14 +127,15 @@ const result = await sdkQuery({
 
 **Model Timeouts:** Haiku 2min, Sonnet 5min, Opus 10min
 
-### Subagent Architecture (Arc Analysis)
+### Arc Analysis Architecture (Commit 8.15)
 
-The orchestrator (`lib/workflow/generation-supervisor.js`) coordinates three specialist subagents via Claude Code Task tool:
-- `journalist-financial-specialist` - Transaction patterns, account analysis
-- `journalist-behavioral-specialist` - Character dynamics, director observations
-- `journalist-victimization-specialist` - Memory burial targeting patterns
+Arc analysis uses a **single comprehensive SDK call** (not parallel subagents):
+- Player conclusions (accusation + whiteboard) drive arc identification
+- Director observations provide ground truth weighting
+- Three-lens analysis (financial/behavioral/victimization) embedded in prompt
+- Returns 3-5 narrative arcs with evidence mapping
 
-Subagents are invoked **in parallel** and their findings synthesized into narrative arcs. This is a key architectural decision - each specialist has context isolation and returns structured JSON.
+**Why single-call?** Player focus must guide everything. Parallel specialists couldn't share this context efficiently. See `lib/workflow/nodes/arc-specialist-nodes.js`.
 
 **Three-Layer Evidence Model:**
 | Layer | Contains | Journalist Can |
@@ -134,6 +143,67 @@ Subagents are invoked **in parallel** and their findings synthesized into narrat
 | **EXPOSED** | Full memory content, paper evidence | Quote, describe, draw conclusions |
 | **BURIED** | Transaction data ONLY (amounts, accounts) | Report patterns, NOT content |
 | **DIRECTOR** | Observations + whiteboard | Shape emphasis and focus |
+
+### Prompt Architecture
+
+**Prompt Loading (ThemeLoader):**
+- Prompts stored in `.claude/skills/journalist-report/references/prompts/`
+- 11 markdown files define rules (not templates)
+- Cached at startup, loaded per-phase via `lib/theme-loader.js`
+
+**Prompt Assembly (PromptBuilder):**
+- `lib/prompt-builder.js` assembles complete prompts
+- Combines: loaded rules + session context + structural framing
+- Methods: `buildArcAnalysisPrompt()`, `buildOutlinePrompt()`, `buildArticlePrompt()`
+
+| Phase | Required Prompts |
+|-------|-----------------|
+| arcAnalysis | character-voice, evidence-boundaries, narrative-structure, anti-patterns |
+| outlineGeneration | section-rules, editorial-design, narrative-structure, formatting |
+| articleGeneration | All prompts (8 files) |
+
+**Recency Bias Pattern:** Rules placed LAST in user prompt for maximum salience:
+```
+<DATA_CONTEXT>...</DATA_CONTEXT>
+<TEMPLATE>...</TEMPLATE>
+<RULES>...</RULES>  ← Most recent = highest weight
+```
+
+### SDK vs LangGraph Responsibilities
+
+| Aspect | Claude Agent SDK | LangGraph |
+|--------|-----------------|-----------|
+| AI Calls | `sdkQuery()` makes all Claude requests | Routes between nodes |
+| Structured Output | JSON schemas via `jsonSchema` param | N/A |
+| State Management | N/A | 33+ state fields with reducers |
+| Checkpointing | N/A | MemorySaver/SqliteSaver |
+| Human Approval | N/A | `awaitingApproval` routing |
+| Revision Loops | N/A | Conditional edges with caps |
+| Timeouts | AbortController per call | N/A |
+
+**Data Flow:**
+```
+State → Node extracts context → PromptBuilder assembles prompt
+→ sdkQuery() calls Claude → Returns structured output → Node updates state
+→ LangGraph routes to next node (or checkpoint)
+```
+
+### LangSmith Tracing
+
+Enable observability with environment variables:
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=aln-director-console
+```
+
+**Usage in nodes:**
+```javascript
+const { traceNode } = require('../tracing');
+module.exports = { myNode: traceNode(myNodeImpl, 'myNode') };
+```
+
+Traces include: execution timing, state snapshots, SDK call inputs/outputs.
 
 ## State Management
 
@@ -249,12 +319,14 @@ The `/journalist-report` skill in `.claude/skills/journalist-report/` enables ar
 | `journalist-image-analyzer` | Sonnet | Visual analysis of session photos & Notion documents |
 | `journalist-evidence-curator` | Sonnet | Build three-layer evidence bundle from raw data |
 | `journalist-arc-analyzer` | Opus | Director observations drive arc selection |
-| `journalist-financial-specialist` | Sonnet | Transaction patterns, account analysis |
-| `journalist-behavioral-specialist` | Sonnet | Character dynamics, zero-footprint analysis |
-| `journalist-victimization-specialist` | Sonnet | Targeting patterns, operator/victim analysis |
 | `journalist-outline-generator` | Sonnet | Create outline with evidence/photo placements |
 | `journalist-article-generator` | Opus | Generate final HTML with Nova's voice |
 | `journalist-article-validator` | Sonnet | Anti-pattern detection, voice scoring |
+
+**Note:** The following specialist agents exist for direct skill use but are NOT invoked by the server workflow (Commit 8.15 moved to single SDK call):
+- `journalist-financial-specialist` - Transaction patterns, account analysis
+- `journalist-behavioral-specialist` - Character dynamics, zero-footprint analysis
+- `journalist-victimization-specialist` - Targeting patterns, operator/victim analysis
 
 **Key Reference Files:**
 - `references/prompts/writing-principles.md` - Nova's voice and style

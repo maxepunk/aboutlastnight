@@ -281,7 +281,7 @@ Restart server.
 
 **Check:**
 1. Server terminal - is it running?
-2. Try localhost first: `http://localhost:3000`
+2. Try localhost first: `http://localhost:3001`
 3. If localhost works, tunnel might be down
 
 **Solution:**
@@ -428,10 +428,10 @@ After authentication is working:
 **Quick test commands:**
 ```bash
 # Test auth check endpoint
-curl http://localhost:3000/api/auth/check
+curl http://localhost:3001/api/auth/check
 
 # Test login endpoint
-curl -X POST http://localhost:3000/api/auth/login \
+curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
   -d "{\"password\":\"@LN-c0nn3ct\"}"
 ```

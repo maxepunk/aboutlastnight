@@ -17,7 +17,7 @@ You DON'T need to set up anything - just run the console:
 **Double-click:** `start-everything.bat`
 
 This opens 2 windows:
-- Window 1: Server (localhost:3000)
+- Window 1: Server (localhost:3001)
 - Window 2: Cloudflare Tunnel
 
 Done! Your console is live at `https://console.aboutlastnightgame.com`
@@ -65,7 +65,7 @@ credentials-file: C:\Users\spide\.cloudflared\f1105ac0-fc4f-4262-827c-e17b4a829f
 
 ingress:
   - hostname: console.aboutlastnightgame.com
-    service: http://localhost:3000
+    service: http://localhost:3001
   - service: http_status:404
 ```
 
@@ -84,7 +84,7 @@ ingress:
 
 **Solution:**
 1. Check Terminal 1 - is `npm start` still running?
-2. Test locally: `http://localhost:3000`
+2. Test locally: `http://localhost:3001`
 3. Restart server if needed
 
 ---
@@ -125,7 +125,7 @@ cat C:\Users\spide\.cloudflared\config.yml
 **Test checklist:**
 ```bash
 # 1. Check server responds locally
-curl http://localhost:3000
+curl http://localhost:3001
 
 # 2. Check tunnel is configured
 cloudflared tunnel list
@@ -207,7 +207,7 @@ credentials-file: C:\Users\YourUsername\.cloudflared\YOUR-TUNNEL-ID-HERE.json
 
 ingress:
   - hostname: console.aboutlastnightgame.com
-    service: http://localhost:3000
+    service: http://localhost:3001
   - service: http_status:404
 ```
 
