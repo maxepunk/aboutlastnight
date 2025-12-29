@@ -29,7 +29,8 @@
  */
 
 const { PHASES, APPROVAL_TYPES, REVISION_CAPS } = require('../state');
-const { safeParseJson, getSdkClient, formatIssuesForMessage } = require('./node-helpers');
+const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = require('./node-helpers');
+const { traceNode } = require('../tracing');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -82,47 +83,122 @@ const QUALITY_CRITERIA = {
     }
   },
   outline: {
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.70)
+    // ═══════════════════════════════════════════════════════════════════════
     arcCoverage: {
       description: 'Does outline address all selected arcs?',
-      weight: 0.25
+      weight: 0.20,
+      type: 'structural'
     },
+    requiredSections: {
+      description: 'Are all required sections present (lede, theStory, thePlayers, closing)?',
+      weight: 0.20,
+      type: 'structural'
+    },
+    // Phase 1 Fix: Arc-section flow validation
+    arcSectionFlow: {
+      description: 'Do arcs flow THROUGH multiple sections (not isolated to THE STORY)? Check: arcConnections in followTheMoney, thePlayers, whatsMissing, closing.',
+      weight: 0.20,
+      type: 'structural'
+    },
+    visualDistributionPlan: {
+      description: 'Does outline distribute visuals across sections (not clustered)? Check visualComponentCount and section budgets.',
+      weight: 0.10,
+      type: 'structural'
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.30)
+    // ═══════════════════════════════════════════════════════════════════════
     sectionBalance: {
       description: 'Are sections appropriately weighted?',
-      weight: 0.2
+      weight: 0.05,
+      type: 'advisory'
     },
     flowLogic: {
       description: 'Does narrative flow make sense?',
-      weight: 0.25
+      weight: 0.05,
+      type: 'advisory'
     },
     photoPlacement: {
       description: 'Are photos integrated meaningfully?',
-      weight: 0.15
+      weight: 0.05,
+      type: 'advisory'
     },
     wordBudget: {
       description: 'Is section word budget reasonable?',
-      weight: 0.15
+      weight: 0.05,
+      type: 'advisory'
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MOMENTUM CRITERIA - Compulsive Readability (Commit 8.24)
+    // ═══════════════════════════════════════════════════════════════════════
+    loopArchitecture: {
+      description: 'Does each arc open AND close loops? Are there cognitive gaps that pull readers forward?',
+      weight: 0.025,
+      type: 'advisory'
+    },
+    arcInterweaving: {
+      description: 'Do arcs connect through callbacks and recontextualization? Are there "wait, so THAT\'s why..." moments planned?',
+      weight: 0.025,
+      type: 'advisory'
+    },
+    visualMomentum: {
+      description: 'Do visual components (evidence cards, photos, pull quotes) serve loop mechanics (CLOSER/OPENER)?',
+      weight: 0.025,
+      type: 'advisory'
+    },
+    convergence: {
+      description: 'Do arcs converge at satisfying point(s) where all threads meet?',
+      weight: 0.025,
+      type: 'advisory'
     }
   },
   article: {
+    // ═══════════════════════════════════════════════════════════════════════
+    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.60)
+    // ═══════════════════════════════════════════════════════════════════════
     voiceConsistency: {
-      description: 'Does article maintain NovaNews voice throughout?',
-      weight: 0.25
+      description: 'Does article maintain NovaNews first-person participatory voice (I, my, we)?',
+      weight: 0.20,
+      type: 'structural'
     },
     antiPatterns: {
-      description: 'Are anti-patterns avoided? (per validator spec)',
-      weight: 0.2
+      description: 'Are anti-patterns avoided? (em-dash, token terminology, game mechanics)',
+      weight: 0.15,
+      type: 'structural'
     },
+    // Phase 1 Fix: Visual distribution validation
+    visualDistribution: {
+      description: 'Are visual components (evidence cards, photos, pull quotes) distributed across sections, not clustered? Check: no adjacent evidence cards, 3+ prose paragraphs between visuals.',
+      weight: 0.15,
+      type: 'structural'
+    },
+    arcThreading: {
+      description: 'Do arcs weave through multiple sections (THE STORY → FOLLOW THE MONEY → THE PLAYERS)? Arcs should feel like conversation topics shifting, not chapter breaks.',
+      weight: 0.10,
+      type: 'structural'
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.40)
+    // ═══════════════════════════════════════════════════════════════════════
     evidenceIntegration: {
       description: 'Is evidence woven in naturally?',
-      weight: 0.2
+      weight: 0.15,
+      type: 'advisory'
     },
     characterPlacement: {
       description: 'Are all roster members mentioned?',
-      weight: 0.15
+      weight: 0.10,
+      type: 'advisory'
     },
     emotionalResonance: {
       description: 'Does article deliver the promised experience?',
-      weight: 0.2
+      weight: 0.15,
+      type: 'advisory'
     }
   }
 };
@@ -154,10 +230,35 @@ function buildEvaluationSystemPrompt(phase, criteria) {
     .join('\n');
 
   // For arcs phase, use structural/advisory distinction
+  // Commit 8.17: Added immutability guidance and NPC allowlist
   if (phase === 'arcs') {
     return `You are the ARCS Evaluator for an investigative article about "About Last Night" - a crime thriller game.
 
 Your task is to evaluate if the arcs are ready for human review.
+
+═══════════════════════════════════════════════════════════════════════════
+IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)
+═══════════════════════════════════════════════════════════════════════════
+The following inputs were approved in earlier phases and CANNOT be modified:
+- evidenceBundle: The curated evidence is final (exposed/buried structure is locked)
+- playerFocus: The accusation and whiteboard conclusions are immutable
+- directorNotes: The director's observations are ground truth - never question them
+- roster: The session roster is fixed (these are the players who attended)
+
+Your feedback should focus on how ARCS USE these inputs, not changing the inputs themselves.
+Do NOT suggest adding new evidence, changing the roster, or modifying player conclusions.
+
+═══════════════════════════════════════════════════════════════════════════
+KNOWN NPCs (Valid in characterPlacements despite NOT being on roster)
+═══════════════════════════════════════════════════════════════════════════
+The following NPCs are valid in arc characterPlacements:
+- Marcus (the murder victim) - should appear in most arcs as the central victim
+- Nova (the journalist narrator) - may appear as the article's narrator/voice
+- Blake / Valet (NPC character) - may appear in relevant arcs
+
+These are NOT roster members and should NOT be flagged as missing from roster coverage.
+Do NOT remove them from characterPlacements or flag them as "non-roster characters".
+Roster coverage ONLY applies to the actual player roster, not NPCs.
 
 ═══════════════════════════════════════════════════════════════════════════
 STRUCTURAL CRITERIA (MUST PASS - these block if failed)
@@ -208,48 +309,137 @@ OUTPUT FORMAT (JSON):
 Remember: STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
   }
 
-  // For other phases, use original format (all criteria treated equally)
-  const criteriaList = Object.entries(criteria)
-    .map(([key, { description, weight }]) =>
-      `- ${key} (${Math.round(weight * 100)}%): ${description}`)
-    .join('\n');
+  // Commit 8.21: Use structural/advisory distinction for outline and article phases too
+  if (phase === 'outline') {
+    return `You are the OUTLINE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
 
-  return `You are the ${phase.toUpperCase()} Evaluator for an investigative article about "About Last Night" - a crime thriller game.
+Your task is to evaluate if the article outline is ready for human review.
 
-Your task is to evaluate if the ${phase} content is ready for human review.
+═══════════════════════════════════════════════════════════════════════════
+IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)
+═══════════════════════════════════════════════════════════════════════════
+The following inputs were approved in earlier phases and CANNOT be modified:
+- selectedArcs: The arcs chosen for this article are final
+- photoAnalyses: The photo descriptions are ground truth
+- evidenceBundle: The evidence is curated and locked
 
-QUALITY CRITERIA:
-${criteriaList}
+Your feedback should focus on how the OUTLINE USES these inputs, not changing the inputs.
+
+═══════════════════════════════════════════════════════════════════════════
+STRUCTURAL CRITERIA (MUST PASS - these block if failed)
+═══════════════════════════════════════════════════════════════════════════
+${structuralCriteria}
+
+═══════════════════════════════════════════════════════════════════════════
+ADVISORY CRITERIA (Warn but don't block - these are quality guidance)
+═══════════════════════════════════════════════════════════════════════════
+${advisoryCriteria}
 
 EVALUATION RULES:
 1. Score each criterion as: pass (1.0), partial (0.5), fail (0.0)
-2. Calculate weighted average score
-3. If score >= 0.7, content is READY for human review
-4. If score < 0.7, provide specific revision guidance
-5. Be honest but constructive - flag real issues, not nitpicks
+2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)
+3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
+4. Content is READY if ALL structural criteria pass
+5. Content is NOT READY only if a STRUCTURAL criterion fails
+
+CRITICAL CHECKS:
+- arcCoverage: Every selected arc should be referenced in theStory section
+- requiredSections: lede, theStory, thePlayers, closing MUST exist
 
 CRITICAL: Your feedback MUST be actionable. Include:
-- SPECIFIC names (characters missing from roster coverage)
-- SPECIFIC evidence (which evidence items should be referenced)
-- CONCRETE fixes (not "improve grounding" but "Arc 2 should reference the Victoria Voice Memo")
+- SPECIFIC arc titles that are missing coverage
+- SPECIFIC section names that are missing
+- CONCRETE fixes (not "add more detail" but "add section X with Y content")
 
 OUTPUT FORMAT (JSON):
 {
   "ready": boolean,
   "overallScore": number (0-1),
+  "structuralPassed": boolean,
   "criteriaScores": {
     "criterionName": {
       "score": number,
-      "notes": "specific explanation with names/evidence",
+      "type": "structural" | "advisory",
+      "notes": "specific explanation",
       "fix": "concrete action to improve this criterion"
     }
   },
-  "issues": [ "Character X is missing from all arcs", "Arc 2 claims Y but no evidence supports this" ],
-  "revisionGuidance": "Step 1: Add X to Arc 1 as [role]. Step 2: Reference [specific evidence] in Arc 2.",
+  "structuralIssues": [ "issues that MUST be fixed" ],
+  "advisoryWarnings": [ "issues that are suggestions, not blockers" ],
+  "revisionGuidance": "Step 1: Fix structural issue. Step 2: Optional advisory fix.",
   "confidence": "high" | "medium" | "low"
 }
 
-Remember: You determine READINESS for human review, not approval. Human always makes final decision.`;
+Remember: You determine READINESS for human review, not approval. Human always makes final decision.
+STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
+  }
+
+  if (phase === 'article') {
+    return `You are the ARTICLE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
+
+Your task is to evaluate if the article content is ready for human review.
+
+═══════════════════════════════════════════════════════════════════════════
+IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)
+═══════════════════════════════════════════════════════════════════════════
+The following inputs were approved in earlier phases and CANNOT be modified:
+- outline: The article structure is approved
+- selectedArcs: The narrative arcs are locked
+- evidenceBundle: The evidence is curated and final
+
+Your feedback should focus on how the ARTICLE EXECUTES the outline, not changing the outline.
+
+═══════════════════════════════════════════════════════════════════════════
+STRUCTURAL CRITERIA (MUST PASS - these block if failed)
+═══════════════════════════════════════════════════════════════════════════
+${structuralCriteria}
+
+═══════════════════════════════════════════════════════════════════════════
+ADVISORY CRITERIA (Warn but don't block - these are quality guidance)
+═══════════════════════════════════════════════════════════════════════════
+${advisoryCriteria}
+
+EVALUATION RULES:
+1. Score each criterion as: pass (1.0), partial (0.5), fail (0.0)
+2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)
+3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
+4. Content is READY if ALL structural criteria pass
+5. Content is NOT READY only if a STRUCTURAL criterion fails
+
+CRITICAL CHECKS:
+- voiceConsistency: Article MUST use first-person participatory voice ("I", "my", "we")
+- antiPatterns: Article MUST NOT contain em-dashes (—), "token", "Act 1/2/3", game terminology
+
+CRITICAL: Your feedback MUST be actionable. Include:
+- SPECIFIC lines with voice issues
+- SPECIFIC anti-patterns found with line locations
+- CONCRETE fixes (not "improve voice" but "change 'The investigation revealed' to 'I discovered'")
+
+OUTPUT FORMAT (JSON):
+{
+  "ready": boolean,
+  "overallScore": number (0-1),
+  "structuralPassed": boolean,
+  "criteriaScores": {
+    "criterionName": {
+      "score": number,
+      "type": "structural" | "advisory",
+      "notes": "specific explanation with line references",
+      "fix": "concrete action to improve this criterion"
+    }
+  },
+  "structuralIssues": [ "issues that MUST be fixed" ],
+  "advisoryWarnings": [ "issues that are suggestions, not blockers" ],
+  "revisionGuidance": "Step 1: Fix structural issue. Step 2: Optional advisory fix.",
+  "confidence": "high" | "medium" | "low"
+}
+
+Remember: You determine READINESS for human review, not approval. Human always makes final decision.
+STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
+  }
+
+  // Fallback for any unknown phase (shouldn't happen)
+  throw new Error(`Unknown evaluation phase: ${phase}`);
 }
 
 /**
@@ -356,16 +546,53 @@ Be SPECIFIC in issues:
 Are these arcs ready for human review?`;
 
     case 'outline':
+      // Extract interweaving metadata from selected arcs for momentum evaluation
+      // Resolve arc IDs (strings) to full arc objects from narrativeArcs
+      const resolvedArcs = resolveArcs(state.selectedArcs, state.narrativeArcs);
+      const selectedArcsWithInterweaving = resolvedArcs.map(arc => ({
+        id: arc.id,
+        title: arc.title,
+        interweaving: arc.interweaving || {}
+      }));
+      // Get interweaving plan if available from arc analysis
+      const interweavingPlan = state.narrativeArcsInterweavingPlan || state.interweavingPlan || null;
+
       return `Evaluate this article outline:
 
 OUTLINE:
 ${JSON.stringify(state.outline || {}, null, 2)}
 
-SELECTED ARCS:
-${JSON.stringify(state.selectedArcs || [], null, 2)}
+SELECTED ARCS (with interweaving metadata):
+${JSON.stringify(selectedArcsWithInterweaving, null, 2)}
+
+INTERWEAVING PLAN (from arc analysis):
+${JSON.stringify(interweavingPlan, null, 2)}
 
 PHOTO ANALYSES:
 ${JSON.stringify((state.photoAnalyses?.analyses || []).slice(0, 5), null, 2)}
+
+═══════════════════════════════════════════════════════════════════════════
+MOMENTUM EVALUATION (Commit 8.24 - Compulsive Readability)
+═══════════════════════════════════════════════════════════════════════════
+
+Check for narrative momentum:
+
+1. LOOP ARCHITECTURE: Does each arc section open cognitive gaps (questions) and close them?
+   - Are there unanswered questions that pull readers forward?
+   - Do answers open NEW questions before fully closing?
+
+2. ARC INTERWEAVING: Are arcs connected through callbacks, not just sequential chapters?
+   - Do later sections reference and recontextualize earlier ones?
+   - Are there "wait, so THAT'S why..." moments planned?
+   - Does the outline use shared characters as bridges between arcs?
+
+3. VISUAL MOMENTUM: Do evidence cards, photos, and pull quotes serve loop mechanics?
+   - Is each visual component a CLOSER (proves what was hinted) or OPENER (raises new question)?
+   - Are photos placed for emotional pacing (breathe before escalation)?
+
+4. CONVERGENCE: Do arcs meet at a satisfying convergence point?
+   - Where do all threads meet (the murder, the accusation)?
+   - Is the convergence point given appropriate weight?
 
 Is this outline ready for human review?`;
 
@@ -545,8 +772,8 @@ function createEvaluator(phase, options = {}) {
     const prompt = buildEvaluationUserPrompt(phase, state);
 
     try {
-      // Commit 8.15: Updated schema with structural/advisory fields for arcs phase
-      const jsonSchema = phase === 'arcs' ? {
+      // Commit 8.21: All phases use structural/advisory schema
+      const jsonSchema = {
         type: 'object',
         properties: {
           ready: { type: 'boolean' },
@@ -559,32 +786,23 @@ function createEvaluator(phase, options = {}) {
           confidence: { type: 'string' }
         },
         required: ['ready', 'overallScore', 'structuralPassed']
-      } : {
-        type: 'object',
-        properties: {
-          ready: { type: 'boolean' },
-          overallScore: { type: 'number' },
-          criteriaScores: { type: 'object' },
-          issues: { type: 'array' },
-          revisionGuidance: { type: 'string' },
-          confidence: { type: 'string' }
-        },
-        required: ['ready', 'overallScore']
       };
 
       // SDK returns parsed object directly when jsonSchema is provided
+      // Commit 8.23: disableTools prevents evaluator from using Grep/Read during evaluation
       const evaluation = await sdk({
         systemPrompt,
         prompt,
         model,
-        jsonSchema
+        jsonSchema,
+        disableTools: true
       });
 
-      // Commit 8.15: For arcs phase, use structuralPassed to determine readiness
+      // Commit 8.21: All phases use structuralPassed to determine readiness
       // Advisory issues become warnings, not blockers
       // Backward compat: if structuralPassed not provided, fall back to ready field
-      const isReady = phase === 'arcs'
-        ? (evaluation.structuralPassed !== undefined ? evaluation.structuralPassed : evaluation.ready)
+      const isReady = evaluation.structuralPassed !== undefined
+        ? evaluation.structuralPassed
         : evaluation.ready;
 
       // Create evaluation history entry
@@ -604,9 +822,7 @@ function createEvaluator(phase, options = {}) {
       // Debug: Log evaluation result details
       console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Evaluation result:`);
       console.log(`  - ready: ${isReady}, score: ${evaluation.overallScore}`);
-      if (phase === 'arcs') {
-        console.log(`  - structuralPassed: ${evaluation.structuralPassed}`);
-      }
+      console.log(`  - structuralPassed: ${evaluation.structuralPassed}`);
       if (evaluation.criteriaScores) {
         Object.entries(evaluation.criteriaScores).forEach(([key, val]) => {
           const typeLabel = val.type === 'structural' ? '[STRUCTURAL]' : '[advisory]';
@@ -699,21 +915,21 @@ function createEvaluator(phase, options = {}) {
 
 /**
  * Evaluate narrative arcs for quality
- * Uses haiku for fast evaluation
+ * Uses opus for high-quality evaluation (upgraded from haiku in Commit 8.17)
  */
-const evaluateArcs = createEvaluator('arcs', { model: 'haiku' });
+const evaluateArcs = createEvaluator('arcs', { model: 'opus' });
 
 /**
  * Evaluate article outline for quality
- * Uses haiku for fast evaluation
+ * Uses opus for high-quality evaluation (upgraded from haiku in Commit 8.22)
  */
-const evaluateOutline = createEvaluator('outline', { model: 'haiku' });
+const evaluateOutline = createEvaluator('outline', { model: 'opus' });
 
 /**
  * Evaluate article content for quality
- * Uses haiku for fast evaluation
+ * Uses opus for high-quality evaluation (upgraded from haiku in Commit 8.22)
  */
-const evaluateArticle = createEvaluator('article', { model: 'haiku' });
+const evaluateArticle = createEvaluator('article', { model: 'opus' });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MOCK FACTORY FOR TESTING
@@ -792,10 +1008,16 @@ function createMockEvaluator(phase, options = {}) {
 }
 
 module.exports = {
-  // Main evaluator functions
-  evaluateArcs,
-  evaluateOutline,
-  evaluateArticle,
+  // Main evaluator functions (wrapped with LangSmith tracing)
+  evaluateArcs: traceNode(evaluateArcs, 'evaluateArcs', {
+    stateFields: ['narrativeArcs', 'evaluationHistory']
+  }),
+  evaluateOutline: traceNode(evaluateOutline, 'evaluateOutline', {
+    stateFields: ['outline', 'evaluationHistory']
+  }),
+  evaluateArticle: traceNode(evaluateArticle, 'evaluateArticle', {
+    stateFields: ['contentBundle', 'evaluationHistory']
+  }),
 
   // Factory for custom evaluators
   createEvaluator,

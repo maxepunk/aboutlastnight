@@ -1,0 +1,29 @@
+{{!--
+  Inline Article Photo
+
+  Session photos placed within article flow.
+  Photos serve as emotional beats and arc bridges.
+
+  Context:
+    filename: string (photo filename in photos/ directory)
+    caption: string (figcaption text)
+    characters: string[]? (character names visible in photo)
+    placement: "inline" | "sidebar" (determines styling)
+
+  NARRATIVE PURPOSE:
+  Photos reset emotional temperature. Use them to:
+  - Let reader breathe before escalation
+  - Humanize a character before damning revelation
+  - Bridge between arcs with same character in different context
+--}}
+<figure class="article-photo article-photo--{{placement}}">
+  <img
+    src="photos/{{filename}}"
+    alt="{{caption}}"
+    loading="lazy"
+    class="article-photo__image"
+  >
+  {{#if caption}}
+  <figcaption class="article-photo__caption">{{caption}}</figcaption>
+  {{/if}}
+</figure>

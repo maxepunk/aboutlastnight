@@ -142,8 +142,10 @@ describe('evaluator-nodes', () => {
     it('includes evaluation rules', () => {
       const prompt = buildEvaluationSystemPrompt('outline', QUALITY_CRITERIA.outline);
 
-      expect(prompt).toContain('score >= 0.7');
-      expect(prompt).toContain('READY for human review');
+      // Commit 8.21: Now uses structural/advisory criteria (0.8 threshold for structural)
+      expect(prompt).toContain('score >= 0.8');
+      expect(prompt).toContain('STRUCTURAL criteria MUST');
+      expect(prompt).toContain('READY');
     });
 
     it('includes output format', () => {
@@ -488,14 +490,14 @@ describe('evaluator-nodes', () => {
       expect(result.errors[0].message).toBe('API timeout');
     });
 
-    it('uses haiku model by default', async () => {
+    it('uses opus model for high-quality arc evaluation (Commit 8.17)', async () => {
       const mockClient = jest.fn().mockResolvedValue('{"ready":true,"overallScore":0.8}');
       const config = { configurable: { sdkClient: mockClient } };
 
       await evaluateArcs(createMockState(), config);
 
       expect(mockClient).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'haiku' })
+        expect.objectContaining({ model: 'opus' })
       );
     });
   });
