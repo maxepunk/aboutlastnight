@@ -203,10 +203,38 @@ describe('validation-nodes', () => {
   });
 
   describe('validateArticleContent', () => {
+    // Phase 3.1 Fix: Include required visual components for valid article
     const createValidArticle = () => ({
       lede: 'I walked into the room that night, my notes in hand. We had no idea what we would find.',
       theStory: 'The investigation led us down a dark path. I discovered evidence that connected the dots.',
-      closing: 'In the end, we learned the truth. My investigation is complete.'
+      closing: 'In the end, we learned the truth. My investigation is complete.',
+      // Required: 3+ inline evidence-cards in sections[].content[]
+      sections: [
+        {
+          id: 'the-story',
+          type: 'narrative',
+          content: [
+            { type: 'paragraph', text: 'I watched them gather...' },
+            { type: 'evidence-card', tokenId: 'tok001', headline: 'Card 1', content: 'Full content 1', owner: 'Alice', significance: 'critical' },
+            { type: 'paragraph', text: 'More investigation...' },
+            { type: 'evidence-card', tokenId: 'tok002', headline: 'Card 2', content: 'Full content 2', owner: 'Bob', significance: 'supporting' },
+            { type: 'paragraph', text: 'The pattern emerged...' }
+          ]
+        },
+        {
+          id: 'follow-the-money',
+          type: 'evidence-highlight',
+          content: [
+            { type: 'paragraph', text: 'Following the money...' },
+            { type: 'evidence-card', tokenId: 'tok003', headline: 'Card 3', content: 'Full content 3', owner: 'Alice', significance: 'contextual' }
+          ]
+        }
+      ],
+      // Required: 2+ pull quotes
+      pullQuotes: [
+        { type: 'verbatim', text: 'Quote one', attribution: 'Alice' },
+        { type: 'crystallization', text: 'Quote two' }
+      ]
     });
 
     const createMockState = (overrides = {}) => ({

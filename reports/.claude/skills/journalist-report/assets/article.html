@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="{{META_DESCRIPTION}}">
+  <meta name="author" content="{{JOURNALIST_FIRST_NAME}} Nova">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="{{HEADLINE}}">
+  <meta property="og:description" content="{{META_DESCRIPTION}}">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="NovaNews">
+
+  <title>{{HEADLINE}} | NovaNews</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+</head>
+<body>
+  <!-- Reading Progress Bar (Mobile) -->
+  <div class="nn-progress" aria-hidden="true">
+    <div class="nn-progress__bar"></div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="nn-nav" role="navigation" aria-label="Main navigation">
+    <a href="/" class="nn-nav__brand">Nova<span>News</span></a>
+
+    <button class="nn-nav__toggle" aria-label="Toggle menu" aria-expanded="false">
+      <span class="nn-nav__toggle-icon"></span>
+    </button>
+
+    <ul class="nn-nav__links">
+      <li><span class="nn-nav__link nn-nav__link--active">Investigations</span></li>
+      <li><span class="nn-nav__link">About</span></li>
+      <li><span class="nn-nav__link">Subscribe</span></li>
+    </ul>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="nn-container">
+
+    <!-- Article Column -->
+    <article class="nn-article" role="main">
+
+      <!-- Article Header -->
+      <header class="nn-article__header">
+        <p class="nn-article__kicker">Investigation</p>
+        <h1 class="nn-article__headline">{{HEADLINE}}</h1>
+        <div class="nn-article__meta">
+          <span class="nn-article__byline">By <a href="/author/nova">{{JOURNALIST_FIRST_NAME}} Nova</a></span>
+          <span class="nn-article__divider">|</span>
+          <time class="nn-article__date" datetime="2027-02-22">February 22, 2027</time>
+          <span class="nn-article__divider">|</span>
+          <span class="nn-article__id">Case {{ARTICLE_ID}}</span>
+        </div>
+      </header>
+
+      <!-- ============================================
+           LEDE SECTION
+           No header. Immediate hook. Pure prose.
+           ============================================ -->
+      <section class="nn-section" id="lede">
+        {{LEDE_CONTENT}}
+      </section>
+
+      <!-- ============================================
+           THE STORY SECTION
+           Narrative arc with evidence cards and timeline markers.
+           ============================================ -->
+      <section class="nn-section" id="story">
+        <h2 class="nn-section__title">The Story</h2>
+        {{STORY_CONTENT}}
+      </section>
+
+      <!-- ============================================
+           FOLLOW THE MONEY SECTION
+           Financial analysis. Mobile financial tracker appears here.
+           ============================================ -->
+      <section class="nn-section" id="money">
+        <h2 class="nn-section__title">Follow the Money</h2>
+        {{MONEY_CONTENT}}
+
+        <!-- Mobile Financial Tracker (inline, hidden on desktop) -->
+        <div class="sidebar-box financial-tracker financial-tracker--inline">
+          <div class="sidebar-box__title">Black Market Ledger</div>
+          <div class="financial-tracker__accounts">
+            {{FINANCIAL_TRACKER_ROWS}}
+          </div>
+          <div class="financial-tracker__divider"></div>
+          <div class="financial-tracker__total">
+            <span class="financial-tracker__total-label">Total Buried</span>
+            <span class="financial-tracker__total-amount">{{TOTAL_BURIED}}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================
+           THE PLAYERS SECTION
+           Character evaluations, not recaps. Pull quotes.
+           ============================================ -->
+      <section class="nn-section" id="players">
+        <h2 class="nn-section__title">The Players</h2>
+        {{PLAYERS_CONTENT}}
+      </section>
+
+      <!-- ============================================
+           WHAT'S MISSING SECTION
+           Buried evidence markers. Create intrigue.
+           ============================================ -->
+      <section class="nn-section" id="missing">
+        <h2 class="nn-section__title">What's Missing</h2>
+        {{MISSING_CONTENT}}
+      </section>
+
+      <!-- ============================================
+           CLOSING SECTION
+           No header. Systemic critique. Land the bigger story.
+           ============================================ -->
+      <section class="nn-section" id="closing">
+        {{CLOSING_CONTENT}}
+      </section>
+
+    </article>
+
+    <!-- Sidebar Column -->
+    <aside class="nn-sidebar" role="complementary">
+
+      <!-- REMOVED: Case File Box (breaks immersion with game mechanics)
+           If re-enabling, restyle as in-world "Investigator's Notes" with narrative framing
+      -->
+
+      <!-- Financial Tracker (Desktop) -->
+      <div class="sidebar-box financial-tracker">
+        <div class="sidebar-box__title">Black Market Ledger</div>
+        <div class="financial-tracker__accounts">
+          {{FINANCIAL_TRACKER_ROWS}}
+        </div>
+        <div class="financial-tracker__divider"></div>
+        <div class="financial-tracker__total">
+          <span class="financial-tracker__total-label">Total Buried</span>
+          <span class="financial-tracker__total-amount">{{TOTAL_BURIED}}</span>
+        </div>
+      </div>
+
+      <!-- Section Navigation -->
+      <nav class="sidebar-box section-nav" aria-label="Article sections">
+        <div class="sidebar-box__title">Sections</div>
+        <ul class="section-nav__list">
+          <li><a href="#story" class="section-nav__link">The Story</a></li>
+          <li><a href="#money" class="section-nav__link">Follow the Money</a></li>
+          <li><a href="#players" class="section-nav__link">The Players</a></li>
+          <li><a href="#missing" class="section-nav__link">What's Missing</a></li>
+        </ul>
+      </nav>
+
+      <!-- Reading Progress (Desktop) -->
+      <div class="sidebar-box reading-progress">
+        <div class="sidebar-box__title">Reading Progress</div>
+        <div class="reading-progress__bar-container">
+          <div class="reading-progress__bar"></div>
+        </div>
+        <div class="reading-progress__text">0% complete</div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="nn-footer">
+    <div class="nn-footer__inner">
+      <div class="nn-footer__brand">Nova<span>News</span></div>
+      <ul class="nn-footer__links">
+        <li><a href="/about" class="nn-footer__link">About</a></li>
+        <li><a href="/contact" class="nn-footer__link">Contact</a></li>
+        <li><a href="/privacy" class="nn-footer__link">Privacy</a></li>
+        <li><a href="/subscribe" class="nn-footer__link">Subscribe</a></li>
+      </ul>
+      <p class="nn-footer__copyright">&copy; 2027 NovaNews. Independent tech accountability journalism.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/article.js"></script>
+</body>
+</html>

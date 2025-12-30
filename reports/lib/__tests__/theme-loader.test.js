@@ -424,8 +424,8 @@ describe('ThemeLoader', () => {
     it('should export ALL_PROMPTS', () => {
       expect(ALL_PROMPTS).toBeDefined();
       expect(Array.isArray(ALL_PROMPTS)).toBe(true);
-      // 8 original + 3 image analysis (whiteboard-analysis, photo-analysis, photo-enrichment)
-      expect(ALL_PROMPTS.length).toBe(11);
+      // 8 original + 3 image analysis + 1 arc-flow
+      expect(ALL_PROMPTS.length).toBe(12);
     });
   });
 });

@@ -187,13 +187,25 @@
     },
     "pullQuotes": {
       "type": "array",
-      "description": "Featured quotes for sidebar display",
+      "description": "Featured quotes - verbatim (from evidence, with attribution) or crystallization (journalist insight, no attribution)",
       "items": {
         "type": "object",
-        "required": ["text"],
+        "required": ["type", "text"],
         "properties": {
-          "text": { "type": "string" },
-          "attribution": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["verbatim", "crystallization"],
+            "description": "verbatim = exact quote from evidence (has attribution), crystallization = journalist insight echoing article prose (NO attribution)"
+          },
+          "text": { "type": "string", "description": "The quote text" },
+          "attribution": {
+            "type": ["string", "null"],
+            "description": "Character name for verbatim quotes (e.g., 'Skyler'), null for crystallization"
+          },
+          "sourceTokenId": {
+            "type": "string",
+            "description": "For verbatim quotes: the tokenId of the evidence being quoted"
+          },
           "placement": {
             "type": "string",
             "enum": ["left", "right", "center"],
@@ -306,6 +318,50 @@
         }
       },
       "additionalProperties": false
+    },
+    "voice_self_check": {
+      "type": "object",
+      "description": "Self-assessment of voice requirements compliance during generation",
+      "properties": {
+        "influences_check": {
+          "type": "object",
+          "description": "Check against each voice influence",
+          "additionalProperties": { "type": "string" }
+        },
+        "mechanics_check": {
+          "type": "object",
+          "description": "Check against voice mechanics requirements",
+          "additionalProperties": { "type": "string" }
+        },
+        "anti_pattern_check": {
+          "type": "object",
+          "description": "Check for anti-patterns",
+          "additionalProperties": { "type": "string" }
+        },
+        "issues_found": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of specific issues to fix in revision"
+        },
+        "overall_assessment": {
+          "type": "string",
+          "description": "Summary of voice compliance"
+        }
+      },
+      "additionalProperties": true
+    },
+    "_revisionHistory": {
+      "type": "array",
+      "description": "Internal: tracks revision iterations for debugging",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string" },
+          "revisionNumber": { "type": "integer" },
+          "duration": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

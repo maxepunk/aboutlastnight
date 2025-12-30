@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 45 state fields (includes revision context fields)', () => {
+    it('includes all 50 state fields (includes revision context fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -268,6 +268,9 @@ describe('ReportStateAnnotation', () => {
         // Pre-curation checkpoint (Phase 4f)
         'preCurationApproved',
         'preCurationSummary',
+        // Checkpoint approvals (Commit 8.26 - SRP separation)
+        'outlineApproved',
+        'articleApproved',
         // Curated data
         'evidenceBundle',
         // Arc specialists (Commit 8.6)
@@ -275,6 +278,7 @@ describe('ReportStateAnnotation', () => {
         // Analysis results
         'narrativeArcs',
         'selectedArcs',
+        'heroImage',  // Hero image filename for article generation
         'arcEvidencePackages',  // Phase 1 Fix: per-arc evidence with fullContent
         '_arcAnalysisCache',
         // Evaluation (Commit 8.6)
@@ -286,6 +290,8 @@ describe('ReportStateAnnotation', () => {
         'supervisorNarrativeCompass',
         // Final outputs
         'assembledHtml',
+        'outputPath',
+        'photosCopied',
         'validationResults',
         // Control flow
         'currentPhase',
@@ -501,8 +507,8 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 38 phases (Parallel branch architecture: added 5 phases)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(38);
+    it('defines exactly 41 phases (Commit 8.26: added 3 SRP checkpoint phases)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(41);
     });
 
     it('defines input parsing phases (Commit 8.9)', () => {

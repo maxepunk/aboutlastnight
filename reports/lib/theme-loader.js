@@ -26,6 +26,7 @@ const PHASE_REQUIREMENTS = {
     'section-rules',
     'editorial-design',
     'narrative-structure',
+    'arc-flow',
     // 'formatting' removed - describes ContentBundle format, not Outline format (Fix 7.3)
     'evidence-boundaries'
   ],
@@ -35,6 +36,7 @@ const PHASE_REQUIREMENTS = {
     'evidence-boundaries',
     'section-rules',
     'narrative-structure',
+    'arc-flow',
     'formatting',
     'anti-patterns',
     'editorial-design'
@@ -49,6 +51,7 @@ const PHASE_REQUIREMENTS = {
 // All prompt files that should exist
 const ALL_PROMPTS = [
   'anti-patterns',
+  'arc-flow',
   'character-voice',
   'editorial-design',
   'evidence-boundaries',

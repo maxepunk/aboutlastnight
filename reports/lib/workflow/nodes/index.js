@@ -61,6 +61,11 @@ module.exports = {
   checkpointAwaitContext: checkpointNodes.checkpointAwaitContext,
   joinParallelBranches: checkpointNodes.joinParallelBranches,
 
+  // Evaluation checkpoint nodes (Commit 8.26: SRP separation from evaluators)
+  checkpointArcSelection: checkpointNodes.checkpointArcSelection,
+  checkpointOutline: checkpointNodes.checkpointOutline,
+  checkpointArticle: checkpointNodes.checkpointArticle,
+
   // Arc specialist nodes (from arc-specialist-nodes.js) - Commit 8.15
   // Commit 8.15: Player-focus-guided single-call architecture (replaces parallel specialists)
   analyzeArcsPlayerFocusGuided: arcSpecialistNodes.analyzeArcsPlayerFocusGuided,

@@ -414,6 +414,84 @@ async function validateArticleContent(state, config) {
     }
   }
 
+  // 4. Check evidence card subset relationship (Commit 8.26)
+  // Body evidence-references must be a subset of sidebar evidenceCards
+  const sidebarCardIds = new Set(
+    (contentBundle.evidenceCards || []).map(card => card.tokenId).filter(Boolean)
+  );
+
+  const bodyCardIds = [];
+  if (Array.isArray(contentBundle.sections)) {
+    for (const section of contentBundle.sections) {
+      if (Array.isArray(section.content)) {
+        for (const block of section.content) {
+          if (block.type === 'evidence-reference' && block.tokenId) {
+            bodyCardIds.push(block.tokenId);
+          }
+        }
+      }
+    }
+  }
+
+  const orphanedBodyCards = bodyCardIds.filter(id => !sidebarCardIds.has(id));
+  if (orphanedBodyCards.length > 0) {
+    issues.push({
+      type: 'structural',
+      field: 'evidenceCardSubset',
+      orphaned: orphanedBodyCards,
+      sidebarCount: sidebarCardIds.size,
+      bodyCount: bodyCardIds.length,
+      message: `Body evidence-references must be subset of sidebar evidenceCards. Orphaned: ${orphanedBodyCards.join(', ')}`
+    });
+  }
+
+  // 5. Check visual component minimums (BLOCKING - Commit 8.27 visual regression fix)
+  // Validates inline evidence-cards and pull quotes exist for visual momentum
+  const inlineEvidenceCards = [];
+  if (Array.isArray(contentBundle.sections)) {
+    for (const section of contentBundle.sections) {
+      if (Array.isArray(section.content)) {
+        for (const block of section.content) {
+          // Count evidence-card type (NOT evidence-reference - those are just links)
+          if (block.type === 'evidence-card') {
+            inlineEvidenceCards.push({
+              tokenId: block.tokenId,
+              section: section.id || section.type
+            });
+          }
+        }
+      }
+    }
+  }
+
+  const minInlineCards = 3;
+  if (inlineEvidenceCards.length < minInlineCards) {
+    issues.push({
+      type: 'structural',
+      field: 'visualComponentMinimums',
+      criterion: 'inlineEvidenceCards',
+      actual: inlineEvidenceCards.length,
+      expected: minInlineCards,
+      message: `Only ${inlineEvidenceCards.length} inline evidence-cards found (type="evidence-card" in sections.content). Minimum ${minInlineCards} required for visual momentum. Use evidence-card (NOT evidence-reference) to display full evidence content inline.`,
+      fix: 'Add evidence-card blocks in sections[].content[] with tokenId, headline, content (VERBATIM from arcEvidencePackages), owner, significance'
+    });
+  }
+
+  // Check for pull quotes
+  const pullQuoteCount = Array.isArray(contentBundle.pullQuotes) ? contentBundle.pullQuotes.length : 0;
+  const minPullQuotes = 2;
+  if (pullQuoteCount < minPullQuotes) {
+    issues.push({
+      type: 'structural',
+      field: 'visualComponentMinimums',
+      criterion: 'pullQuotes',
+      actual: pullQuoteCount,
+      expected: minPullQuotes,
+      message: `Only ${pullQuoteCount} pull quotes found. Minimum ${minPullQuotes} required.`,
+      fix: 'Add pullQuotes array entries with type "verbatim" (with attribution) or "crystallization" (no attribution - NEVER "— Nova")'
+    });
+  }
+
   // Determine if validation passed
   const structuralIssues = issues.filter(i => i.type === 'structural');
   const valid = structuralIssues.length === 0;
