@@ -324,8 +324,9 @@ async function processBatch(batch, sdkClient, batchIndex) {
       const original = batch.find(b => b.id === item.id);
       if (original) {
         // PHASE 1 FIX: Extract fullContent from raw data for verbatim quoting
-        // Priority: content field > description field > name/title as fallback
-        const rawFullContent = original.rawData?.content
+        // Priority: fullDescription (memory tokens) > content > description > name/title as fallback
+        const rawFullContent = original.rawData?.fullDescription
+          || original.rawData?.content
           || original.rawData?.description
           || original.rawData?.text
           || original.rawData?.name
@@ -362,7 +363,9 @@ async function processBatch(batch, sdkClient, batchIndex) {
     // Create fallback items with minimal normalization (no judgment fields)
     const fallbackItems = batch.map(item => {
       // PHASE 1 FIX: Extract fullContent even in fallback case
-      const rawFullContent = item.rawData?.content
+      // Priority: fullDescription (memory tokens) > content > description > name/title as fallback
+      const rawFullContent = item.rawData?.fullDescription
+        || item.rawData?.content
         || item.rawData?.description
         || item.rawData?.text
         || item.rawData?.name

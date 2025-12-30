@@ -325,10 +325,10 @@ function routeTokensByDisposition(tokens) {
         owner: t.ownerLogline,
         summary: t.summary,
         // PHASE 1 FIX: Use preprocessed fullContent for verbatim quoting
-        // Fallback chain for backwards compatibility
-        fullContent: t.fullContent || t.rawData?.content || t.rawData?.description || t.summary || '',
+        // Fallback chain: fullDescription (memory tokens) > fullContent > content > description > summary
+        fullContent: t.fullContent || t.fullDescription || t.rawData?.fullDescription || t.rawData?.content || t.rawData?.description || t.summary || '',
         // Legacy content field kept for backwards compatibility
-        content: t.rawData?.content || t.rawData?.description || t.summary || '',
+        content: t.fullDescription || t.rawData?.fullDescription || t.rawData?.content || t.rawData?.description || t.summary || '',
         characterRefs: t.characterRefs ?? [],
         narrativeTimeline: t.narrativeTimelineContext,
         tags: t.tags ?? [],
