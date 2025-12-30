@@ -7,6 +7,11 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
+// Mock checkpointInterrupt to prevent GraphInterrupt in unit tests
+// Uses shared mock - see __tests__/mocks/checkpoint-helpers.mock.js
+jest.mock('../../../lib/workflow/checkpoint-helpers',
+  () => require('../../mocks/checkpoint-helpers.mock'));
+
 const path = require('path');
 const {
   initializeSession,
@@ -146,11 +151,15 @@ describe('fetch-nodes', () => {
       expect(typeof result.playerFocus).toBe('object');
     });
 
-    it('throws error for non-existent session', async () => {
+    it('returns null values for non-existent session (incremental input mode)', async () => {
       const badState = { sessionId: 'non-existent-session' };
 
-      await expect(loadDirectorNotes(badState, config))
-        .rejects.toThrow();
+      // Incremental input: missing files are handled gracefully, not thrown
+      const result = await loadDirectorNotes(badState, config);
+      expect(result.directorNotes).toBeNull();
+      expect(result.sessionConfig).toBeNull();
+      expect(result.playerFocus).toBeNull();
+      expect(result.currentPhase).toBe('1.2'); // PHASES.FETCH_TOKENS
     });
 
     it('returns partial state update', async () => {
@@ -287,12 +296,13 @@ describe('fetch-nodes', () => {
       expect(result.paperEvidence).toHaveLength(4);
     });
 
-    it('sets currentPhase to FETCH_PHOTOS', async () => {
+    it('sets currentPhase to FETCH_EVIDENCE (pure function - checkpoint handled by checkpointPaperEvidence)', async () => {
       const config = { configurable: { notionClient: mockClient } };
 
       const result = await fetchPaperEvidence({}, config);
 
-      expect(result.currentPhase).toBe(PHASES.FETCH_PHOTOS);
+      // Parallel branch architecture: fetchPaperEvidence is pure, checkpointPaperEvidence handles interrupt
+      expect(result.currentPhase).toBe(PHASES.FETCH_EVIDENCE);
     });
 
     it('includes file attachments by default', async () => {

@@ -179,30 +179,30 @@ Pull quotes must be VERBATIM text from evidence, NOT summaries.
 - ONLY use filenames from AVAILABLE PHOTOS below (do not invent paths)
 
 ═══════════════════════════════════════════════════════════════════════════
-VISUAL DISTRIBUTION (Phase 1 Fix: Prevent clustering)
+VISUAL COMPONENT PRINCIPLES
 ═══════════════════════════════════════════════════════════════════════════
 
-HARD RULE: Visual components MUST be distributed across sections.
+**Each component must EARN its place:**
+- Evidence cards: CLOSE or OPEN a narrative loop (not just illustrate)
+- Photos: Create emotional beats (humanize before revelation, breathe after intensity)
+- Pull quotes: Crystallize powerful moments (verbatim, not summaries)
 
-**Distribution Requirements:**
-- MAX 2 evidence cards per section
-- MAX 1 photo per section (except THE STORY which may have 2)
-- MAX 1 pull quote per section
-- MINIMUM 3 prose paragraphs between any two visual components
-
-**Section Visual Budget:**
-- LEDE: 0-1 photo (hero only)
-- THE STORY: 2-3 evidence cards, 1-2 photos, 1 pull quote
-- FOLLOW THE MONEY: 1-2 evidence cards, 0-1 photo
-- THE PLAYERS: 1 evidence card, 0-1 photo, 1-2 pull quotes
-- WHAT'S MISSING: 0-1 evidence card (NO PHOTOS - maintains mystery)
-- CLOSING: 0-1 pull quote (NO EVIDENCE CARDS - resolution, not revelation)
-
-**Anti-Clustering Check:**
-Before finalizing, verify:
-- No two evidence cards adjacent (must have prose between)
+**Anti-Clustering (REQUIRED):**
+- No two evidence cards adjacent (prose between)
 - No photo immediately after evidence card (breaks pacing)
-- Pull quotes appear in AT LEAST 2 different sections
+- Distribute across sections, don't cluster in one
+
+**Section Appropriateness:**
+- LEDE: Pure prose hook (hero image optional)
+- THE STORY: Primary home for evidence cards and photos
+- FOLLOW THE MONEY: Financial tracker required, evidence cards optional
+- THE PLAYERS: Pull quotes for standout moments
+- WHAT'S MISSING: Prose-driven (no photos - maintains mystery)
+- CLOSING: Reflection (no evidence cards - resolution, not revelation)
+
+**Quality Over Quantity:**
+A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
+The goal is a compelling GIFT for players, not quota compliance.
 
 ═══════════════════════════════════════════════════════════════════════════
 AVAILABLE PHOTOS (Commit 8.24 - use these EXACT filenames)
@@ -326,11 +326,6 @@ Return JSON with the following structure:
     ],
     "systemicAngle": "What broader point to make",
     "accusationHandling": "How to present the accusation"
-  },
-  "visualComponentCount": {
-    "evidenceCards": 5,
-    "photos": 3,
-    "pullQuotes": 2
   }
 }`;
 
@@ -430,21 +425,27 @@ Arc boundaries should feel like a conversation topic shifting, not a chapter bre
 </ARC_FLOW>
 
 <VISUAL_DISTRIBUTION>
-CRITICAL: Visual components MUST be distributed across sections, not clustered.
+Visual components EARN their place by serving the narrative.
 
-HARD RULES:
-- MAX 2 evidence cards per section
-- MAX 1 photo per section (THE STORY may have 2)
-- MINIMUM 3 prose paragraphs between any two visual components
-- No evidence cards in CLOSING (resolution, not revelation)
-- No photos in WHAT'S MISSING (maintains mystery)
+PRINCIPLES:
+- Evidence cards: CLOSE or OPEN a narrative loop (not just illustrate)
+- Photos: Create emotional beats (humanize before revelation, breathe after intensity)
+- Pull quotes: Crystallize powerful moments (verbatim, not summaries)
 
 ANTI-CLUSTERING:
-- Evidence cards must have prose between them (never adjacent)
-- Photo never immediately after evidence card (breaks pacing)
-- Pull quotes in AT LEAST 2 different sections
+- No two evidence cards adjacent (prose between)
+- No photo immediately after evidence card (breaks pacing)
+- Distribute across sections, don't cluster in one
 
-Follow the outline's visualComponentCount and section visual budgets.
+SECTION APPROPRIATENESS:
+- LEDE: Pure prose hook (hero image optional)
+- THE STORY: Primary home for evidence cards and photos
+- FOLLOW THE MONEY: Financial tracker required
+- THE PLAYERS: Pull quotes for standout moments
+- WHAT'S MISSING: Prose-driven (no photos)
+- CLOSING: Reflection (no evidence cards)
+
+Quality over quantity. A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
 </VISUAL_DISTRIBUTION>
 
 <ANTI_PATTERNS>

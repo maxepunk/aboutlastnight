@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (33 total - Commit 8.9):
+ * State Fields (45 total - includes revision context):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus
@@ -24,7 +24,7 @@
  *   - Generation: outline, contentBundle
  *   - Supervisor (8.6): supervisorNarrativeCompass
  *   - Output: assembledHtml, validationResults
- *   - Control: currentPhase, errors, awaitingApproval, approvalType
+ *   - Control: currentPhase, errors
  *   - Revision Counters (8.6): arcRevisionCount, outlineRevisionCount, articleRevisionCount
  */
 
@@ -165,6 +165,61 @@ const ReportStateAnnotation = Annotation.Root({
   sessionPhotos: Annotation({
     reducer: replaceReducer,
     default: () => []
+  }),
+
+  // ═══════════════════════════════════════════════════════
+  // INCREMENTAL INPUT (Parallel branch architecture)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Roster provided via /approve endpoint (incremental input)
+   * Array of character names for whiteboard OCR disambiguation
+   * Set by checkpointAwaitRoster when user provides roster
+   */
+  roster: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Generic photo analyses (before roster is available)
+   * Created by analyzePhotosGeneric - descriptions use visual markers, not names
+   * Character names resolved later via characterIdMappings
+   */
+  genericPhotoAnalyses: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  // ═══════════════════════════════════════════════════════
+  // PHOTO PROCESSING (Parallel branch architecture)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Auto-detected whiteboard photo path
+   * Set by detectWhiteboard node via fuzzy filename matching
+   */
+  whiteboardPhotoPath: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Photo preprocessing statistics
+   * Set by preprocessPhotos node: { totalPhotos, preprocessed, originalSizeBytes, processedSizeBytes }
+   */
+  preprocessStats: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Whiteboard OCR analysis result (requires roster for disambiguation)
+   * Set by analyzeWhiteboard node after roster is provided
+   */
+  whiteboardAnalysis: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   }),
 
   // ═══════════════════════════════════════════════════════
@@ -401,22 +456,6 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   // ═══════════════════════════════════════════════════════
-  // HUMAN APPROVAL CHECKPOINTS
-  // ═══════════════════════════════════════════════════════
-
-  /** Whether workflow is paused for human approval */
-  awaitingApproval: Annotation({
-    reducer: replaceReducer,
-    default: () => false
-  }),
-
-  /** Type of approval needed: "evidence-bundle", "arc-selection", "outline" */
-  approvalType: Annotation({
-    reducer: replaceReducer,
-    default: () => null
-  }),
-
-  // ═══════════════════════════════════════════════════════
   // INTERNAL TEMPORARY STATE (Commit 8.10+)
   // ═══════════════════════════════════════════════════════
 
@@ -447,11 +486,45 @@ const ReportStateAnnotation = Annotation.Root({
   _rescueWarnings: Annotation({
     reducer: replaceReducer,
     default: () => null
+  }),
+
+  // ═══════════════════════════════════════════════════════
+  // REVISION CONTEXT (Preserves previous output for targeted fixes)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Previous arcs before revision (for revision context)
+   * Set by incrementArcRevision, consumed by reviseArcs
+   * Contains full narrativeArcs array from failed evaluation
+   */
+  _previousArcs: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Previous outline before revision (for revision context)
+   * Set by incrementOutlineRevision, consumed by reviseOutline
+   * Contains full outline object from failed evaluation
+   */
+  _previousOutline: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Previous content bundle before revision (for revision context)
+   * Set by incrementArticleRevision, consumed by reviseContentBundle
+   * Contains full contentBundle object from failed evaluation
+   */
+  _previousContentBundle: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   })
 });
 
 /**
- * Get default state with all fields initialized (36 fields - Commit 8.10+)
+ * Get default state with all fields initialized (45 fields after revision context)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -471,6 +544,13 @@ function getDefaultState() {
     paperEvidence: [],
     selectedPaperEvidence: null,  // Commit 8.9: user-selected subset
     sessionPhotos: [],
+    // Incremental input (parallel branch architecture)
+    roster: null,
+    genericPhotoAnalyses: null,
+    // Photo processing (parallel branch architecture)
+    whiteboardPhotoPath: null,
+    preprocessStats: null,
+    whiteboardAnalysis: null,
     // Photo analysis (Commit 8.6)
     photoAnalyses: null,
     characterIdMappings: null,
@@ -508,13 +588,14 @@ function getDefaultState() {
     articleRevisionCount: 0,
     // Error handling
     errors: [],
-    // Human approval
-    awaitingApproval: false,
-    approvalType: null,
     // Internal temporary state (Commit 8.10+)
     _rescuedItems: null,
     _excludedItemsCache: null,
-    _rescueWarnings: null
+    _rescueWarnings: null,
+    // Revision context (preserves previous output for targeted fixes)
+    _previousArcs: null,
+    _previousOutline: null,
+    _previousContentBundle: null
   };
 }
 
@@ -539,6 +620,14 @@ const PHASES = {
   FETCH_EVIDENCE: '1.3',
   SELECT_PAPER_EVIDENCE: '1.35',    // Commit 8.9: user selects which paper evidence was unlocked
   FETCH_PHOTOS: '1.4',
+
+  // Parallel branch phases (new - for parallel branch architecture)
+  PREPROCESS_PHOTOS: '1.42',        // Resize/optimize photos for LLM + article display
+  DETECT_WHITEBOARD: '1.43',        // Auto-detect whiteboard from photo folder
+  JOIN_PARALLEL: '1.5',             // Synchronization point for parallel branches
+  AWAIT_ROSTER: '1.51',             // Wait for roster via /approve (incremental input)
+  AWAIT_FULL_CONTEXT: '1.52',       // Wait for accusation/sessionReport/directorNotes
+
   ANALYZE_PHOTOS: '1.65',           // Commit 8.6: early photo analysis (before preprocessing)
   CHARACTER_ID_CHECKPOINT: '1.66',  // Commit 8.9.5: user provides character IDs for photos
   PARSE_CHARACTER_IDS: '1.665',     // Commit 8.9.x: parse natural language → structured format
@@ -573,22 +662,9 @@ const PHASES = {
   ERROR: 'error'
 };
 
-/**
- * Approval type constants (Commit 8.9 update)
- * Human always approves at checkpoints - evaluators determine readiness
- */
-const APPROVAL_TYPES = {
-  // Raw input review (Commit 8.9)
-  INPUT_REVIEW: 'input-review',               // Review/edit parsed input before proceeding
-  PAPER_EVIDENCE_SELECTION: 'paper-evidence-selection', // Select which paper evidence was unlocked
-
-  PRE_CURATION: 'pre-curation',               // Phase 4f: approve evidence before curation
-  EVIDENCE_AND_PHOTOS: 'evidence-and-photos', // Combined evidence + photo analysis approval
-  CHARACTER_IDS: 'character-ids',             // User provides character-ids.json mapping
-  ARC_SELECTION: 'arc-selection',             // Select which arcs to develop
-  OUTLINE: 'outline',                         // Approve outline structure
-  ARTICLE: 'article'                          // Final article approval before assembly
-};
+// NOTE: APPROVAL_TYPES removed in interrupt() migration
+// Checkpoint types now defined in checkpoint-helpers.js as CHECKPOINT_TYPES
+// See: lib/workflow/checkpoint-helpers.js
 
 /**
  * Revision cap constants (Commit 8.6)
@@ -635,6 +711,16 @@ const ROLLBACK_CLEARS = {
   'paper-evidence-selection': [
     'selectedPaperEvidence',
     'photoAnalyses', 'characterIdMappings',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+
+  // Phase 1.51: Await roster (incremental input)
+  'await-roster': [
+    'whiteboardAnalysis',
+    'characterIdMappings',
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
     'outline', 'contentBundle', 'assembledHtml', 'validationResults',
@@ -696,6 +782,7 @@ const ROLLBACK_CLEARS = {
 const ROLLBACK_COUNTER_RESETS = {
   'input-review': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'paper-evidence-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'await-roster': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'character-ids': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'pre-curation': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'evidence-and-photos': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
@@ -713,7 +800,6 @@ module.exports = {
   ReportStateAnnotation,
   getDefaultState,
   PHASES,
-  APPROVAL_TYPES,
   REVISION_CAPS,
   // Rollback configuration (Commit 8.9.3)
   ROLLBACK_CLEARS,
@@ -734,11 +820,11 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 33 (Commit 8.9.x)
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 37 (after interrupt() migration)
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
-  console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null (Commit 8.9)
-  console.log('Default selectedPaperEvidence:', defaultState.selectedPaperEvidence); // Should be null (Commit 8.9)
+  console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null
+  console.log('Default selectedPaperEvidence:', defaultState.selectedPaperEvidence); // Should be null
   console.log('Default preprocessedEvidence:', defaultState.preprocessedEvidence); // Should be null
   console.log('Default photoAnalyses:', defaultState.photoAnalyses); // Should be null
   console.log('Default specialistAnalyses:', defaultState.specialistAnalyses); // Should be {}
@@ -750,7 +836,7 @@ if (require.main === module) {
 
   console.log('\nReducer tests:');
   console.log('replaceReducer(1, 2):', replaceReducer(1, 2)); // Should be 2
-  console.log('replaceReducer(1, null):', replaceReducer(1, null)); // Should be 1
+  console.log('replaceReducer(1, null):', replaceReducer(1, null)); // Should be null (allows clearing)
   console.log('appendReducer([1], [2, 3]):', appendReducer([1], [2, 3])); // Should be [1, 2, 3]
   console.log('appendReducer(null, [1]):', appendReducer(null, [1])); // Should be [1]
   console.log('mergeReducer({a:1}, {b:2}):', mergeReducer({a:1}, {b:2})); // Should be {a:1, b:2}
@@ -758,22 +844,21 @@ if (require.main === module) {
   console.log('appendSingleReducer([1], 2):', appendSingleReducer([1], 2)); // Should be [1, 2]
   console.log('appendSingleReducer([1], null):', appendSingleReducer([1], null)); // Should be [1]
 
-  // Test phases (Commit 8.9: added PARSE_INPUT, REVIEW_INPUT, SELECT_PAPER_EVIDENCE)
-  console.log('\nPhase constants:', Object.keys(PHASES).length, 'phases defined'); // Should be 27 (Commit 8.9)
-  console.log('PARSE_INPUT phase:', PHASES.PARSE_INPUT); // Should be '0.1' (Commit 8.9)
-  console.log('REVIEW_INPUT phase:', PHASES.REVIEW_INPUT); // Should be '0.2' (Commit 8.9)
-  console.log('SELECT_PAPER_EVIDENCE phase:', PHASES.SELECT_PAPER_EVIDENCE); // Should be '1.35' (Commit 8.9)
+  // Test phases
+  console.log('\nPhase constants:', Object.keys(PHASES).length, 'phases defined');
+  console.log('PARSE_INPUT phase:', PHASES.PARSE_INPUT); // Should be '0.1'
+  console.log('REVIEW_INPUT phase:', PHASES.REVIEW_INPUT); // Should be '0.2'
+  console.log('SELECT_PAPER_EVIDENCE phase:', PHASES.SELECT_PAPER_EVIDENCE); // Should be '1.35'
   console.log('ANALYZE_PHOTOS phase:', PHASES.ANALYZE_PHOTOS); // Should be '1.65'
   console.log('ARC_SPECIALISTS phase:', PHASES.ARC_SPECIALISTS); // Should be '2.1'
 
-  // Test approval types (Commit 8.9: added INPUT_REVIEW, PAPER_EVIDENCE_SELECTION; Phase 4f: added PRE_CURATION)
-  console.log('\nApproval types:', Object.keys(APPROVAL_TYPES).length, 'types defined'); // Should be 9 (Phase 4f)
-  console.log('INPUT_REVIEW:', APPROVAL_TYPES.INPUT_REVIEW); // Should be 'input-review' (Commit 8.9)
-  console.log('PAPER_EVIDENCE_SELECTION:', APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION); // Should be 'paper-evidence-selection' (Commit 8.9)
-  console.log('CHARACTER_IDS:', APPROVAL_TYPES.CHARACTER_IDS); // Should be 'character-ids'
+  // NOTE: APPROVAL_TYPES removed - checkpoint types now in checkpoint-helpers.js
 
   // Test revision caps
   console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, OUTLINE: 3, ARTICLE: 3 }
+
+  // Test rollback points
+  console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 8
 
   console.log('\nSelf-test complete.');
 }

@@ -1,0 +1,43 @@
+{
+  "name": "smart-defaults",
+  "description": "Intelligent defaults based on session context - recommended for most use cases",
+  "checkpoints": {
+    "input-review": {
+      "strategy": "approve",
+      "notes": "Input parsing is reliable - auto-approve"
+    },
+    "paper-evidence-selection": {
+      "strategy": "select-all",
+      "notes": "Include all fetched paper evidence by default"
+    },
+    "character-ids": {
+      "strategy": "skip",
+      "notes": "Character mapping requires human judgment - skip for auto mode"
+    },
+    "pre-curation": {
+      "strategy": "approve",
+      "notes": "Pre-curation summary is informational - auto-approve"
+    },
+    "evidence-and-photos": {
+      "strategy": "approve",
+      "notes": "Curated bundle is ready for arc analysis"
+    },
+    "arc-selection": {
+      "strategy": "smart-select",
+      "targetCount": 3,
+      "preferences": {
+        "evidenceStrength": { "strong": 3, "moderate": 2, "weak": 1 },
+        "arcSource": { "accusation": 3, "whiteboard": 2, "evidence": 1 }
+      },
+      "notes": "Select 3 arcs prioritizing strong evidence and accusation-driven"
+    },
+    "outline": {
+      "strategy": "approve",
+      "notes": "Outline structure is guided by selected arcs"
+    },
+    "article": {
+      "strategy": "approve",
+      "notes": "Final article ready for assembly"
+    }
+  }
+}

@@ -85,10 +85,6 @@
         }
       },
       "required": ["arcResolutions"]
-    },
-    "visualComponentCount": {
-      "type": "object",
-      "description": "Counts of visual elements planned for the article"
     }
   }
 }

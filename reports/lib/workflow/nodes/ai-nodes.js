@@ -12,7 +12,7 @@
  * All nodes follow the LangGraph pattern:
  * - Accept (state, config) parameters
  * - Return partial state updates
- * - Use PHASES and APPROVAL_TYPES constants
+ * - Use PHASES constants and native interrupt() for checkpoints
  * - Support dependency injection via config.configurable
  *
  * Testing:
@@ -23,10 +23,12 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
-const { PHASES, APPROVAL_TYPES } = require('../state');
+const { PHASES } = require('../state');
+const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
 const { SchemaValidator } = require('../../schema-validator');
 const { createPromptBuilder } = require('../../prompt-builder');
 const outlineSchema = require('../../schemas/outline.schema.json');
+const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 const {
   safeParseJson,
   getSdkClient,
@@ -36,11 +38,12 @@ const {
   buildCurationReport,
   createBatches,
   processWithConcurrency,
-  resolveArc
+  resolveArc,
+  buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper
 } = require('./node-helpers');
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 // Import consolidated mock from test mocks (avoids duplication)
-const { createMockSdkClient, createMockClaudeClient } = require('../../../__tests__/mocks/sdk-client.mock');
+const { createMockSdkClient, createMockClaudeClient } = require('../../../__tests__/mocks/llm-client.mock');
 
 /**
  * Get PromptBuilder from config or create default
@@ -281,9 +284,9 @@ Score each item and return the results.`;
  * @returns {Object} Partial state update with evidenceBundle, currentPhase, approval flags
  */
 async function curateEvidenceBundle(state, config) {
-  // Skip if already curated and approval cleared (resume case)
-  if (state.evidenceBundle && !state.awaitingApproval) {
-    console.log('[curateEvidenceBundle] Skipping - evidenceBundle already exists and approval cleared');
+  // Skip if already curated (resume case)
+  if (state.evidenceBundle) {
+    console.log('[curateEvidenceBundle] Skipping - evidenceBundle already exists');
     return {
       currentPhase: PHASES.CURATE_EVIDENCE
     };
@@ -300,23 +303,30 @@ async function curateEvidenceBundle(state, config) {
   // If no preprocessed items, create empty evidence bundle
   if (!preprocessed.items || preprocessed.items.length === 0) {
     console.log('[curateEvidenceBundle] No preprocessed evidence - creating empty bundle');
-    return {
-      evidenceBundle: {
-        exposed: { tokens: [], paperEvidence: [] },
-        buried: { transactions: [], relationships: [] },
-        context: {
-          timeline: {},
-          playerFocus: state.playerFocus || {},
-          sessionMetadata: { sessionId: state.sessionId }
-        },
-        curatorNotes: {
-          layerRationale: 'No evidence to curate',
-          characterCoverage: {}
-        }
+    const emptyBundle = {
+      exposed: { tokens: [], paperEvidence: [] },
+      buried: { transactions: [], relationships: [] },
+      context: {
+        timeline: {},
+        playerFocus: state.playerFocus || {},
+        sessionMetadata: { sessionId: state.sessionId }
       },
-      currentPhase: PHASES.CURATE_EVIDENCE,
-      awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.EVIDENCE_AND_PHOTOS
+      curatorNotes: {
+        layerRationale: 'No evidence to curate',
+        characterCoverage: {}
+      }
+    };
+
+    // Interrupt for evidence approval - user reviews evidence bundle and photos
+    checkpointInterrupt(
+      CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS,
+      { evidenceBundle: emptyBundle },
+      null  // No skip - always pause for approval after curation
+    );
+
+    return {
+      evidenceBundle: emptyBundle,
+      currentPhase: PHASES.CURATE_EVIDENCE
     };
   }
 
@@ -446,12 +456,17 @@ async function curateEvidenceBundle(state, config) {
 
   console.log(`[curateEvidenceBundle] Built cache for ${Object.keys(_excludedItemsCache).length} excluded items`);
 
+  // Interrupt for evidence approval - user reviews evidence bundle and photos
+  checkpointInterrupt(
+    CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS,
+    { evidenceBundle, _excludedItemsCache },
+    null  // No skip - always pause for approval after curation
+  );
+
   return {
     evidenceBundle,
     _excludedItemsCache,
-    currentPhase: PHASES.CURATE_EVIDENCE,
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.EVIDENCE_AND_PHOTOS
+    currentPhase: PHASES.CURATE_EVIDENCE
   };
 }
 
@@ -622,8 +637,8 @@ async function processRescuedItems(state, config) {
  * @returns {Object} Partial state update with narrativeArcs, currentPhase, approval flags
  */
 async function analyzeNarrativeArcs(state, config) {
-  // Skip if already analyzed and approval cleared (resume case)
-  if (state.narrativeArcs && state.narrativeArcs.length > 0 && !state.awaitingApproval) {
+  // Skip if already analyzed (resume case)
+  if (state.narrativeArcs && state.narrativeArcs.length > 0) {
     return {
       currentPhase: PHASES.ANALYZE_ARCS
     };
@@ -662,8 +677,6 @@ async function analyzeNarrativeArcs(state, config) {
   return {
     narrativeArcs: arcAnalysis.narrativeArcs || [],
     currentPhase: PHASES.ANALYZE_ARCS,
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.ARC_SELECTION,
     // Store full analysis for outline generation
     _arcAnalysisCache: arcAnalysis
   };
@@ -821,8 +834,8 @@ async function buildArcEvidencePackages(state, config) {
  * @returns {Object} Partial state update with outline, currentPhase, approval flags
  */
 async function generateOutline(state, config) {
-  // Skip if already outlined and approval cleared (resume case)
-  if (state.outline && !state.awaitingApproval) {
+  // Skip if already outlined (resume case)
+  if (state.outline) {
     return {
       currentPhase: PHASES.GENERATE_OUTLINE
     };
@@ -870,17 +883,195 @@ async function generateOutline(state, config) {
   const outline = await sdk({
     prompt: userPrompt,
     systemPrompt,
-    model: 'sonnet',
+    model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
     disableTools: true,
     jsonSchema: outlineSchema  // Extracted to lib/schemas/outline.schema.json (Commit 8.25)
   });
 
   return {
     outline,
-    currentPhase: PHASES.GENERATE_OUTLINE,
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.OUTLINE
+    currentPhase: PHASES.GENERATE_OUTLINE
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REVISION NODE - Targeted outline fixes with previous output context
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// This node handles outline revisions by providing the FULL previous output
+// along with specific feedback from the evaluator. This solves the
+// "whack-a-mole" problem where fixing one issue caused regression of
+// previously-correct output.
+//
+// Data flow:
+// 1. incrementOutlineRevision preserves outline in _previousOutline, clears outline
+// 2. reviseOutline receives _previousOutline + validationResults
+// 3. Uses buildRevisionContextDRY helper (DRY) to format context
+// 4. Makes targeted fixes, returns new outline, clears _previousOutline
+
+/**
+ * Revise outline with previous output context for targeted fixes
+ *
+ * Called after incrementOutlineRevision when evaluator says outline needs work.
+ * Uses the centralized buildRevisionContext helper for DRY formatting.
+ *
+ * Key difference from generateOutline: receives PREVIOUS OUTPUT + FEEDBACK
+ * so it can make targeted fixes instead of regenerating from scratch.
+ *
+ * @param {Object} state - Current state with _previousOutline, validationResults
+ * @param {Object} config - Graph config with SDK client
+ * @returns {Object} Partial state update with outline, cleared _previousOutline
+ */
+async function reviseOutline(state, config) {
+  const revisionCount = state.outlineRevisionCount || 0;
+  console.log(`[reviseOutline] Starting outline revision ${revisionCount}`);
+  const startTime = Date.now();
+
+  // Get previous outline (preserved by incrementOutlineRevision)
+  const previousOutline = state._previousOutline;
+  if (!previousOutline) {
+    // CRITICAL: This should never happen in normal flow.
+    // If we're here, incrementOutlineRevision ran with null outline.
+    console.error('[reviseOutline] CRITICAL: No previous outline to revise. This indicates incrementOutlineRevision ran with null outline.');
+    return {
+      outline: null,
+      _previousOutline: null,
+      errors: [{
+        phase: PHASES.GENERATE_OUTLINE,
+        type: 'revision-no-previous-output',
+        message: 'Cannot revise: no previous outline available. Increment node may have run with null outline.',
+        timestamp: new Date().toISOString()
+      }],
+      currentPhase: PHASES.ERROR
+    };
+  }
+
+  // Build revision context using centralized helper (DRY)
+  const { contextSection, previousOutputSection } = buildRevisionContextDRY({
+    phase: 'outline',
+    revisionCount,
+    validationResults: state.validationResults,
+    previousOutput: previousOutline
+  });
+
+  // Get SDK client and prompt builder
+  const sdk = getSdkClient(config, 'reviseOutline');
+  const promptBuilder = getPromptBuilder(config);
+
+  // Build revision prompt
+  const revisionPrompt = buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
+
+  try {
+    const result = await sdk({
+      prompt: revisionPrompt,
+      systemPrompt: getOutlineRevisionSystemPrompt(),
+      model: 'opus',  // Same as generateOutline
+      jsonSchema: outlineSchema,
+      timeoutMs: 5 * 60 * 1000,  // 5 minutes
+      disableTools: true,
+      label: `Outline revision ${revisionCount}`
+    });
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[reviseOutline] Complete: ${result?.theStory?.arcs?.length || 0} arcs in ${duration}s`);
+
+    return {
+      outline: result || {},
+      _previousOutline: null,  // Clear temporary field after use
+      currentPhase: PHASES.GENERATE_OUTLINE
+    };
+
+  } catch (error) {
+    console.error('[reviseOutline] Error:', error.message);
+
+    return {
+      outline: null,
+      _previousOutline: null,  // Clear temporary field
+      errors: [{
+        phase: PHASES.GENERATE_OUTLINE,
+        type: 'outline-revision-failed',
+        message: error.message,
+        timestamp: new Date().toISOString()
+      }],
+      currentPhase: PHASES.ERROR
+    };
+  }
+}
+
+/**
+ * Get system prompt for outline revision
+ * Focuses on TARGETED FIXES, not regeneration
+ */
+function getOutlineRevisionSystemPrompt() {
+  return `You are revising an article outline for an investigative article about "About Last Night".
+
+CRITICAL REVISION RULES:
+1. You are IMPROVING an existing outline, not generating from scratch
+2. The previous outline is provided - PRESERVE everything that's working well
+3. Only modify the specific issues identified in the feedback
+4. If a criterion is scoring ≥80%, do NOT change anything related to it
+5. Maintain the same overall structure and organization
+6. Output complete outline with all required sections
+
+Your goal is TARGETED FIXES that address the evaluator's feedback while preserving all the good work from the previous attempt.
+
+Do NOT:
+- Regenerate the outline from scratch (you lose good content)
+- Change sections that weren't flagged as issues
+- Drop content that was working well
+- Introduce new problems while fixing old ones
+
+DO:
+- Read the previous outline carefully
+- Identify exactly what needs to change
+- Make minimal, surgical fixes
+- Verify your changes address the feedback
+- Return the complete updated outline`;
+}
+
+/**
+ * Build revision prompt with previous outline and feedback
+ *
+ * @param {Object} state - Current workflow state
+ * @param {string} contextSection - Formatted revision context from helper
+ * @param {string} previousOutputSection - Formatted previous output from helper
+ * @param {Object} promptBuilder - PromptBuilder instance (unused but kept for consistency)
+ * @returns {string} Complete revision prompt
+ */
+function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+  const selectedArcs = state.selectedArcs || [];
+  const evidenceBundle = state.evidenceBundle || {};
+  const arcEvidencePackages = state.arcEvidencePackages || [];
+
+  return `# Outline Revision Request
+
+${contextSection}
+
+## SESSION CONTEXT (Reference Only - Do NOT regenerate)
+
+### Selected Arcs
+${JSON.stringify(selectedArcs, null, 2)}
+
+### Evidence Summary
+- Exposed tokens: ${evidenceBundle.exposed?.tokens?.length || 0}
+- Paper evidence: ${evidenceBundle.exposed?.paperEvidence?.length || 0}
+- Arc packages: ${arcEvidencePackages.length}
+
+---
+
+${previousOutputSection}
+
+---
+
+## YOUR TASK
+
+1. Review the PREVIOUS OUTLINE OUTPUT above
+2. Review the ISSUES TO ADDRESS in the revision context
+3. Make TARGETED FIXES to address those specific issues
+4. PRESERVE everything that's working well (high-scoring criteria)
+5. Return the complete updated outline in the same JSON format
+
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 /**
@@ -1060,62 +1251,162 @@ async function validateArticle(state, config) {
 /**
  * Revise ContentBundle based on validation feedback
  *
- * Uses Claude to make targeted fixes based on validation issues.
- * Preserves structure while fixing voice/style problems.
+ * Called after incrementArticleRevision when evaluator says article needs work.
+ * Uses the centralized buildRevisionContext helper for DRY formatting.
  *
- * @param {Object} state - Current state with contentBundle, validationResults
+ * Key difference from generateContentBundle: receives PREVIOUS OUTPUT + FEEDBACK
+ * so it can make targeted fixes instead of regenerating from scratch.
+ *
+ * @param {Object} state - Current state with _previousContentBundle, validationResults
  * @param {Object} config - Graph config
- * @returns {Object} Partial state update with contentBundle, currentPhase
+ * @returns {Object} Partial state update with contentBundle, cleared _previousContentBundle
  */
 async function reviseContentBundle(state, config) {
+  const revisionCount = state.articleRevisionCount || 0;
+  console.log(`[reviseContentBundle] Starting article revision ${revisionCount}`);
+  const startTime = Date.now();
+
+  // Get previous content bundle (preserved by incrementArticleRevision)
+  const previousContentBundle = state._previousContentBundle;
+  if (!previousContentBundle) {
+    // CRITICAL: This should never happen in normal flow.
+    // If we're here, incrementArticleRevision ran with null contentBundle.
+    console.error('[reviseContentBundle] CRITICAL: No previous contentBundle to revise. This indicates incrementArticleRevision ran with null contentBundle.');
+    return {
+      contentBundle: null,
+      _previousContentBundle: null,
+      errors: [{
+        phase: PHASES.GENERATE_CONTENT,
+        type: 'revision-no-previous-output',
+        message: 'Cannot revise: no previous contentBundle available. Increment node may have run with null contentBundle.',
+        timestamp: new Date().toISOString()
+      }],
+      currentPhase: PHASES.ERROR
+    };
+  }
+
+  // Build revision context using centralized helper (DRY)
+  const { contextSection, previousOutputSection } = buildRevisionContextDRY({
+    phase: 'article',
+    revisionCount,
+    validationResults: state.validationResults,
+    previousOutput: previousContentBundle
+  });
+
   const sdk = getSdkClient(config, 'reviseContent');
   const promptBuilder = getPromptBuilder(config);
 
-  // Build revision prompt from validation feedback
-  const voiceSelfCheck = state.validationResults?.voice_notes ||
-    state.contentBundle?._voiceSelfCheck ||
-    'No specific feedback available';
+  // Build revision prompt with full context
+  const revisionPrompt = buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
 
-  const articleContent = state.assembledHtml ||
-    JSON.stringify(state.contentBundle, null, 2);
+  try {
+    const revised = await sdk({
+      prompt: revisionPrompt,
+      systemPrompt: getArticleRevisionSystemPrompt(),
+      model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
+      disableTools: true,
+      jsonSchema: contentBundleSchema,  // Use full schema (Fix 3)
+      timeoutMs: 10 * 60 * 1000,  // 10 minutes for Opus
+      label: `Article revision ${revisionCount}`
+    });
 
-  const { systemPrompt, userPrompt } = await promptBuilder.buildRevisionPrompt(
-    articleContent,
-    voiceSelfCheck
-  );
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[reviseContentBundle] Complete in ${duration}s`);
 
-  const revised = await sdk({
-    prompt: userPrompt,
-    systemPrompt,
-    model: 'sonnet',
-    disableTools: true,
-    jsonSchema: {
-      type: 'object',
-      properties: {
-        contentBundle: { type: 'object' },
-        html: { type: 'string' },
-        fixes_applied: { type: 'array' }
-      }
-    }
-  });
+    // Update contentBundle with revision history
+    const updatedBundle = revised || previousContentBundle;
 
-  // Update contentBundle or assembledHtml based on response
-  const updatedBundle = revised.contentBundle || state.contentBundle;
+    return {
+      contentBundle: {
+        ...updatedBundle,
+        _revisionHistory: [
+          ...(previousContentBundle?._revisionHistory || []),
+          {
+            timestamp: new Date().toISOString(),
+            revisionNumber: revisionCount,
+            duration: `${duration}s`
+          }
+        ]
+      },
+      _previousContentBundle: null,  // Clear temporary field after use
+      currentPhase: PHASES.GENERATE_CONTENT
+    };
 
-  return {
-    contentBundle: {
-      ...updatedBundle,
-      _revisionHistory: [
-        ...(state.contentBundle?._revisionHistory || []),
-        {
-          timestamp: new Date().toISOString(),
-          fixes: revised.fixes_applied || []
-        }
-      ]
-    },
-    assembledHtml: revised.html || state.assembledHtml,
-    currentPhase: PHASES.GENERATE_CONTENT
-  };
+  } catch (error) {
+    console.error('[reviseContentBundle] Error:', error.message);
+
+    return {
+      contentBundle: null,
+      _previousContentBundle: null,  // Clear temporary field
+      errors: [{
+        phase: PHASES.GENERATE_CONTENT,
+        type: 'article-revision-failed',
+        message: error.message,
+        timestamp: new Date().toISOString()
+      }],
+      currentPhase: PHASES.ERROR
+    };
+  }
+}
+
+/**
+ * Get system prompt for article revision
+ * Focuses on TARGETED FIXES, not regeneration
+ */
+function getArticleRevisionSystemPrompt() {
+  return `You are revising an investigative article for "About Last Night".
+
+CRITICAL REVISION RULES:
+1. You are IMPROVING an existing article, not generating from scratch
+2. The previous output represents significant work - PRESERVE what's good
+3. Focus ONLY on the specific issues listed in the revision context
+4. High-scoring criteria (0.8+) should be left unchanged
+5. Low-scoring criteria need targeted fixes
+
+WHAT TO PRESERVE:
+- Article structure and flow that's working
+- Narrative arcs that are properly developed
+- Evidence integration that's accurate
+- Voice elements that score well
+
+WHAT TO FIX:
+- Only the specific issues mentioned in the feedback
+- Low-scoring criteria in the evaluation
+- Any anti-patterns flagged by the evaluator
+
+Return the complete revised article in the same JSON format.`;
+}
+
+/**
+ * Build revision prompt for article with full context
+ * @param {Object} state - Current state
+ * @param {string} contextSection - Formatted revision context
+ * @param {string} previousOutputSection - Formatted previous output
+ * @param {Object} promptBuilder - PromptBuilder instance
+ * @returns {string} Complete revision prompt
+ */
+function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+  return `## REVISION CONTEXT
+
+${contextSection}
+
+---
+
+## PREVIOUS ARTICLE OUTPUT (to revise)
+
+${previousOutputSection}
+
+---
+
+## YOUR TASK
+
+1. Review the PREVIOUS ARTICLE OUTPUT above
+2. Review the ISSUES TO ADDRESS in the revision context
+3. Make TARGETED FIXES to address those specific issues
+4. PRESERVE everything that's working well (high-scoring criteria)
+5. Return the complete updated article in the same JSON format
+
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1217,9 +1508,8 @@ function getDefaultOutline() {
     theStory: { arcs: [] },
     followTheMoney: { shellAccounts: [] },
     thePlayers: { exposed: [], buried: [], pullQuotes: [] },
-    whatsMissing: { buriedMarkers: [] },
-    closing: { systemicAngle: 'Test angle', accusationHandling: 'Test handling' },
-    visualComponentCount: { evidenceCards: 0, photos: 0, pullQuotes: 0, buriedMarkers: 0 }
+    whatsMissing: { gaps: [], unansweredQuestions: [] },
+    closing: { systemicAngle: 'Test angle', accusationHandling: 'Test handling' }
   };
 }
 
@@ -1266,6 +1556,10 @@ module.exports = {
   }),
   generateOutline: traceNode(generateOutline, 'generateOutline', {
     stateFields: ['selectedArcs', 'playerFocus']
+  }),
+  // Revision node - uses previous output context for targeted fixes (DRY)
+  reviseOutline: traceNode(reviseOutline, 'reviseOutline', {
+    stateFields: ['_previousOutline', 'validationResults']
   }),
   generateContentBundle: traceNode(generateContentBundle, 'generateContentBundle', {
     stateFields: ['outline', 'selectedArcs']

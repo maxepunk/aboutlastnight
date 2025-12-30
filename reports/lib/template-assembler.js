@@ -83,6 +83,7 @@ class TemplateAssembler {
    * @param {boolean} options.inlineCss - Whether to inline CSS (default: true for standalone HTML)
    * @param {boolean} options.inlineJs - Whether to inline JS (default: true for standalone HTML)
    * @param {Object} options.themeLoader - ThemeLoader instance for loading assets (optional)
+   * @param {string} options.sessionId - Session ID for photo path generation
    */
   constructor(theme, options = {}) {
     this.theme = theme;
@@ -93,6 +94,7 @@ class TemplateAssembler {
     this.validateSchema = options.validateSchema !== false;
     this.inlineCss = options.inlineCss !== false;  // Default true for standalone HTML
     this.inlineJs = options.inlineJs !== false;    // Default true for standalone HTML
+    this.sessionId = options.sessionId || null;    // For photo path generation
 
     // Create isolated Handlebars instance
     this.handlebars = Handlebars.create();
@@ -186,6 +188,7 @@ class TemplateAssembler {
    * @param {Object} contentBundle - ContentBundle JSON
    * @param {Object} options - Assembly options
    * @param {boolean} options.skipValidation - Skip schema validation
+   * @param {string} options.sessionId - Session ID for photo paths (overrides constructor)
    * @returns {Promise<string>} Assembled HTML
    * @throws {Error} If ContentBundle is invalid
    */
@@ -203,8 +206,11 @@ class TemplateAssembler {
       }
     }
 
+    // Use sessionId from options or constructor
+    const sessionId = options.sessionId || this.sessionId;
+
     // Build template context (async for CSS loading)
-    const context = await this.buildContext(contentBundle);
+    const context = await this.buildContext(contentBundle, sessionId);
 
     // Render template
     return this.mainTemplate(context);
@@ -215,12 +221,18 @@ class TemplateAssembler {
    *
    * Adds computed properties and theme-specific data.
    * When inlineCss/inlineJs is enabled, loads and embeds asset content.
+   * When sessionId is provided, transforms photo paths to use session-specific URLs.
    *
    * @private
    * @param {Object} contentBundle - ContentBundle JSON
+   * @param {string} sessionId - Session ID for photo path transformation
    * @returns {Promise<Object>} Template context
    */
-  async buildContext(contentBundle) {
+  async buildContext(contentBundle, sessionId) {
+    // Calculate photos base path for session-specific photo serving
+    // If sessionId is provided, use /sessionphotos/{sessionId}/ instead of photos/
+    const photosBasePath = sessionId ? `/sessionphotos/${sessionId}/` : 'photos/';
+
     // Load inline CSS if enabled
     let inlineCss = null;
     if (this.inlineCss && this.themeLoader) {
@@ -250,6 +262,37 @@ class TemplateAssembler {
     return {
       // Pass through ContentBundle data
       ...contentBundle,
+
+      // Photos base path for session-specific photo serving
+      photosBasePath,
+
+      // Transform heroImage to use session-specific path
+      heroImage: contentBundle.heroImage ? {
+        ...contentBundle.heroImage,
+        src: `${photosBasePath}${contentBundle.heroImage.filename}`
+      } : null,
+
+      // Transform photos array to use session-specific paths
+      photos: Array.isArray(contentBundle.photos)
+        ? contentBundle.photos.map(photo => ({
+            ...photo,
+            src: `${photosBasePath}${photo.filename}`
+          }))
+        : [],
+
+      // Transform sections to update photo content blocks with session-specific paths
+      sections: Array.isArray(contentBundle.sections)
+        ? contentBundle.sections.map(section => ({
+            ...section,
+            content: Array.isArray(section.content)
+              ? section.content.map(block =>
+                  block.type === 'photo'
+                    ? { ...block, src: `${photosBasePath}${block.filename}` }
+                    : block
+                )
+              : section.content
+          }))
+        : contentBundle.sections,
 
       // Inline CSS for standalone HTML (takes precedence over external)
       inlineCss,

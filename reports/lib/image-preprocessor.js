@@ -65,9 +65,19 @@ function formatFileSize(bytes) {
 /**
  * Get or create the processed images directory
  * @param {string} originalPath - Path to original image
+ * @param {string} [outputDir] - Custom output directory (optional)
  * @returns {string} Path to processed directory
  */
-function getProcessedDir(originalPath) {
+function getProcessedDir(originalPath, outputDir) {
+  // Use custom output directory if provided
+  if (outputDir) {
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    return outputDir;
+  }
+
+  // Default: .processed subdirectory next to original
   const dir = path.dirname(originalPath);
   const processedDir = path.join(dir, '.processed');
 
@@ -106,13 +116,15 @@ function hasValidProcessedVersion(processedPath, originalPath) {
  * @param {number} [options.maxDimension] - Max width/height (default: 1568)
  * @param {number} [options.quality] - JPEG quality (default: 85)
  * @param {boolean} [options.force] - Force reprocessing even if cached
+ * @param {string} [options.outputDir] - Custom output directory for processed images
  * @returns {Promise<Object>} Result with { path, originalSize, processedSize, wasProcessed }
  */
 async function preprocessImage(imagePath, options = {}) {
   const {
     maxDimension = CONFIG.MAX_DIMENSION,
     quality = CONFIG.JPEG_QUALITY,
-    force = false
+    force = false,
+    outputDir = null
   } = options;
 
   const originalSize = getFileSize(imagePath);
@@ -120,7 +132,8 @@ async function preprocessImage(imagePath, options = {}) {
   const filenameWithoutExt = path.parse(filename).name;
 
   // Check if processing is needed
-  if (originalSize <= CONFIG.NEEDS_PROCESSING_SIZE && !force) {
+  // If outputDir is specified, we always copy/process to that location
+  if (originalSize <= CONFIG.NEEDS_PROCESSING_SIZE && !force && !outputDir) {
     console.log(`[imagePreprocessor] ${filename}: ${formatFileSize(originalSize)} - no processing needed`);
     return {
       path: imagePath,
@@ -131,7 +144,7 @@ async function preprocessImage(imagePath, options = {}) {
   }
 
   // Set up processed path
-  const processedDir = getProcessedDir(imagePath);
+  const processedDir = getProcessedDir(imagePath, outputDir);
   const processedFilename = `${filenameWithoutExt}.jpg`;
   const processedPath = path.join(processedDir, processedFilename);
 
@@ -199,6 +212,7 @@ async function preprocessImage(imagePath, options = {}) {
  * @param {string[]} imagePaths - Array of image paths
  * @param {Object} options - Processing options (same as preprocessImage)
  * @param {number} [options.concurrency] - Max parallel operations (default: 8)
+ * @param {string} [options.outputDir] - Custom output directory for all processed images
  * @returns {Promise<Object[]>} Array of processing results
  */
 async function preprocessImages(imagePaths, options = {}) {

@@ -7,8 +7,16 @@
  * Updated for SDK pattern (Commit 8.7): Mock returns objects directly,
  * not JSON strings. Config uses `sdkClient` instead of `claudeClient`.
  *
+ * Updated for interrupt() migration: Mock checkpointInterrupt to prevent
+ * GraphInterrupt errors in unit tests.
+ *
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
+
+// Mock checkpointInterrupt to prevent GraphInterrupt in unit tests
+// Uses shared mock - see __tests__/mocks/checkpoint-helpers.mock.js
+jest.mock('../../../lib/workflow/checkpoint-helpers',
+  () => require('../../mocks/checkpoint-helpers.mock'));
 
 const {
   curateEvidenceBundle,
@@ -23,7 +31,9 @@ const {
   createMockPromptBuilder,
   _testing
 } = require('../../../lib/workflow/nodes/ai-nodes');
-const { PHASES, APPROVAL_TYPES } = require('../../../lib/workflow/state');
+const { PHASES } = require('../../../lib/workflow/state');
+// NOTE: APPROVAL_TYPES removed in interrupt() migration
+// AI nodes no longer set awaitingApproval/approvalType - that's checkpoint-helpers' job
 
 // Load test fixtures
 const mockEvidenceBundle = require('../../fixtures/mock-responses/evidence-bundle.json');
@@ -229,19 +239,10 @@ describe('ai-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.CURATE_EVIDENCE);
     });
 
-    it('sets awaitingApproval to true', async () => {
-      const result = await curateEvidenceBundle({}, config);
+    // NOTE: awaitingApproval/approvalType tests removed in interrupt() migration
+    // AI nodes no longer set these fields - checkpoint-helpers.js handles interrupts
 
-      expect(result.awaitingApproval).toBe(true);
-    });
-
-    it('sets approvalType to EVIDENCE_AND_PHOTOS', async () => {
-      const result = await curateEvidenceBundle({}, config);
-
-      expect(result.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS);
-    });
-
-    it('calls SDK with opus model for judgment-heavy curation', async () => {
+    it('calls SDK with sonnet model for batched curation', async () => {
       mockClient.clearCalls();
       // Provide preprocessedEvidence so SDK is called
       const state = { preprocessedEvidence: mockPreprocessedEvidence };
@@ -294,11 +295,8 @@ describe('ai-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.ANALYZE_ARCS);
     });
 
-    it('sets approvalType to ARC_SELECTION', async () => {
-      const result = await analyzeNarrativeArcs({}, config);
-
-      expect(result.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
-    });
+    // NOTE: approvalType test removed in interrupt() migration
+    // AI nodes no longer set approvalType - checkpoint-helpers.js handles interrupts
 
     it('calls SDK with sonnet model', async () => {
       mockClient.clearCalls();
@@ -352,18 +350,15 @@ describe('ai-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.GENERATE_OUTLINE);
     });
 
-    it('sets approvalType to OUTLINE', async () => {
-      const result = await generateOutline({}, config);
+    // NOTE: approvalType test removed in interrupt() migration
+    // AI nodes no longer set approvalType - checkpoint-helpers.js handles interrupts
 
-      expect(result.approvalType).toBe(APPROVAL_TYPES.OUTLINE);
-    });
-
-    it('calls SDK with sonnet model', async () => {
+    it('calls SDK with opus model (Commit 8.25)', async () => {
       mockClient.clearCalls();
       await generateOutline({}, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('sonnet');
+      expect(lastCall.model).toBe('opus');  // Upgraded from sonnet for quality
     });
 
     it('uses first sessionPhoto as heroImage', async () => {
@@ -409,11 +404,8 @@ describe('ai-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.GENERATE_CONTENT);
     });
 
-    it('does NOT set awaitingApproval (no approval needed after generation)', async () => {
-      const result = await generateContentBundle({}, config);
-
-      expect(result.awaitingApproval).toBeUndefined();
-    });
+    // NOTE: awaitingApproval test removed in interrupt() migration
+    // AI nodes no longer set awaitingApproval - this field no longer exists
 
     it('calls SDK with opus model', async () => {
       mockClient.clearCalls();
@@ -592,7 +584,7 @@ describe('ai-nodes', () => {
 
     it('returns updated contentBundle in state update', async () => {
       const state = {
-        contentBundle: mockContentBundle,
+        _previousContentBundle: mockContentBundle,
         validationResults: mockValidationFailed
       };
 
@@ -602,14 +594,17 @@ describe('ai-nodes', () => {
     });
 
     it('sets currentPhase to GENERATE_CONTENT (to re-validate)', async () => {
-      const result = await reviseContentBundle({}, config);
+      const state = {
+        _previousContentBundle: mockContentBundle
+      };
+      const result = await reviseContentBundle(state, config);
 
       expect(result.currentPhase).toBe(PHASES.GENERATE_CONTENT);
     });
 
     it('preserves revision history', async () => {
       const state = {
-        contentBundle: {
+        _previousContentBundle: {
           ...mockContentBundle,
           _revisionHistory: [
             { timestamp: '2024-01-01T00:00:00Z', fixes: ['Previous fix'] }
@@ -623,16 +618,20 @@ describe('ai-nodes', () => {
       expect(result.contentBundle._revisionHistory).toHaveLength(2);
     });
 
-    it('calls SDK with sonnet model', async () => {
+    it('calls SDK with opus model (Commit 8.25)', async () => {
       mockClient.clearCalls();
-      await reviseContentBundle({}, config);
+      const state = {
+        _previousContentBundle: mockContentBundle
+      };
+      await reviseContentBundle(state, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('sonnet');
+      expect(lastCall.model).toBe('opus');  // Upgraded from sonnet for quality
     });
 
-    it('uses voice_notes from validationResults', async () => {
+    it('uses validationResults when revising', async () => {
       const state = {
+        _previousContentBundle: mockContentBundle,
         validationResults: {
           voice_notes: 'Multiple passive voice issues detected'
         }
@@ -641,6 +640,23 @@ describe('ai-nodes', () => {
       const result = await reviseContentBundle(state, config);
 
       expect(result.contentBundle).toBeDefined();
+    });
+
+    it('returns error state when _previousContentBundle is missing', async () => {
+      const result = await reviseContentBundle({}, config);
+
+      expect(result.currentPhase).toBe(PHASES.ERROR);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].type).toBe('revision-no-previous-output');
+    });
+
+    it('clears _previousContentBundle after use', async () => {
+      const state = {
+        _previousContentBundle: mockContentBundle
+      };
+      const result = await reviseContentBundle(state, config);
+
+      expect(result._previousContentBundle).toBeNull();
     });
   });
 
@@ -790,7 +806,7 @@ describe('ai-nodes', () => {
 
       // Should return valid result with excluded items marked as scoring errors
       expect(result.evidenceBundle).toBeDefined();
-      expect(result.awaitingApproval).toBe(true);
+      // NOTE: awaitingApproval removed in interrupt() migration
       // All items should be excluded due to scoring failure
       expect(result.evidenceBundle.curationReport.excluded.length).toBeGreaterThan(0);
       expect(result.evidenceBundle.curationReport.excluded[0].reason).toBe('scoringError');
@@ -844,16 +860,23 @@ describe('ai-nodes', () => {
         .rejects.toThrow(/Authentication failed/);
     });
 
-    it('reviseContentBundle propagates SDK errors', async () => {
+    it('reviseContentBundle returns error state on SDK errors', async () => {
       const config = {
         configurable: {
           sdkClient: createErrorClient('Timeout'),
           promptBuilder: createMockPromptBuilder()
         }
       };
+      const state = {
+        _previousContentBundle: { html: '<article>Test</article>' }
+      };
 
-      await expect(reviseContentBundle({}, config))
-        .rejects.toThrow(/Timeout/);
+      const result = await reviseContentBundle(state, config);
+
+      expect(result.currentPhase).toBe(PHASES.ERROR);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].type).toBe('article-revision-failed');
+      expect(result.errors[0].message).toMatch(/Timeout/);
     });
   });
 
@@ -928,12 +951,13 @@ describe('ai-nodes', () => {
       const validateResult = await validateArticle({ contentBundle: mockContentBundle }, failConfig);
       expect(validateResult.currentPhase).toBe(PHASES.REVISE_CONTENT);
 
-      // Phase 4.2
-      const reviseState = { ...validateResult, contentBundle: mockContentBundle };
+      // Phase 4.2 - incrementArticleRevision would set _previousContentBundle in real flow
+      const reviseState = { ...validateResult, _previousContentBundle: mockContentBundle };
       const reviseResult = await reviseContentBundle(reviseState, failConfig);
 
       expect(reviseResult.contentBundle).toBeDefined();
       expect(reviseResult.currentPhase).toBe(PHASES.GENERATE_CONTENT);
+      expect(reviseResult._previousContentBundle).toBeNull(); // Cleared after use
     });
   });
 });

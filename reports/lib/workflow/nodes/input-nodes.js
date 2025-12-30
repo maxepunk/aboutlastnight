@@ -31,10 +31,11 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-const { PHASES, APPROVAL_TYPES } = require('../state');
+const { PHASES } = require('../state');
+const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
 const { getSdkClient, synthesizePlayerFocus } = require('./node-helpers');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 
 /**
  * Default data directory for session files
@@ -373,13 +374,16 @@ async function parseRawInput(state, config) {
     ? `Use sessionId: "${configSessionId}" (provided by caller)`
     : `Derive sessionId from: ${rawInput.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'current date'}`;
 
+  // Use state.roster if available (from await-roster checkpoint), otherwise fall back to rawInput.roster
+  const rosterForParsing = state.roster?.length > 0 ? state.roster : rawInput.roster;
+
   // Step 1 Promise: Parse roster and accusation
   const step1Promise = (async () => {
     console.log('[parseRawInput] Step 1: Parsing roster and accusation');
     const sessionConfigPrompt = `Parse the following information into structured JSON:
 
 ROSTER OF CHARACTERS:
-${rawInput.roster || 'Not provided'}
+${Array.isArray(rosterForParsing) ? rosterForParsing.join(', ') : (rosterForParsing || 'Not provided')}
 
 MURDER ACCUSATION:
 ${rawInput.accusation || 'Not provided'}
@@ -622,8 +626,8 @@ Return structured JSON matching the schema.`;
   const processingTimeMs = Date.now() - startTime;
   console.log(`[parseRawInput] Complete in ${processingTimeMs}ms`);
 
-  // Return parsed data for review checkpoint
-  return {
+  // Build parsed data for review checkpoint
+  const parsedData = {
     sessionId,
     sessionConfig,
     directorNotes,
@@ -634,10 +638,22 @@ Return structured JSON matching the schema.`;
       orchestratorParsed,
       parsedAt: new Date().toISOString(),
       processingTimeMs
-    },
-    currentPhase: PHASES.REVIEW_INPUT,
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.INPUT_REVIEW
+    }
+  };
+
+  // Interrupt for input review - skip if sessionConfig already populated (resume case)
+  // NOTE: On resume, interrupt() returns the user's approval/edits
+  // Spread parsedData directly so e2e-walkthrough can access checkpoint.sessionConfig, checkpoint.playerFocus
+  checkpointInterrupt(
+    CHECKPOINT_TYPES.INPUT_REVIEW,
+    parsedData,
+    sessionConfig.roster?.length > 0 ? true : null
+  );
+
+  // Return parsed data (on first run, this executes after resume with approval)
+  return {
+    ...parsedData,
+    currentPhase: PHASES.REVIEW_INPUT
   };
 }
 
@@ -698,8 +714,6 @@ async function finalizeInput(state, config) {
       sessionConfig: editedInput.sessionConfig || state.sessionConfig,
       directorNotes: editedInput.directorNotes || state.directorNotes,
       playerFocus: editedInput.playerFocus || state.playerFocus,
-      awaitingApproval: false,
-      approvalType: null,
       currentPhase: PHASES.LOAD_DIRECTOR_NOTES
     };
   }
@@ -708,8 +722,6 @@ async function finalizeInput(state, config) {
   console.log('[finalizeInput] Input approved, proceeding to workflow');
 
   return {
-    awaitingApproval: false,
-    approvalType: null,
     currentPhase: PHASES.LOAD_DIRECTOR_NOTES
   };
 }

@@ -24,15 +24,19 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PHASES, APPROVAL_TYPES } = require('../state');
+const { PHASES } = require('../state');
 const { safeParseJson, getSdkClient } = require('./node-helpers');
-const { createSemaphore, MODEL_TIMEOUTS } = require('../../sdk-client');
-const { traceNode } = require('../tracing');
+const { createSemaphore, MODEL_TIMEOUTS } = require('../../llm');
+const { traceNode } = require('../../observability');
 const { preprocessImages, formatFileSize } = require('../../image-preprocessor');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
-const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
 // Commit 8.11 fix: Import from shared module to break circular dependency
 const { CHARACTER_IDS_PHOTO_TEMPLATE, PARSED_CHARACTER_IDS_SCHEMA } = require('../../schemas/character-ids');
+
+/**
+ * Default data directory for session outputs
+ */
+const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', '..', 'data');
 
 /**
  * Get ImagePromptBuilder from config or create default instance
@@ -268,20 +272,128 @@ async function analyzeSinglePhoto({
 }
 
 /**
- * Analyze session photos using Haiku vision
+ * Preprocess session photos for LLM analysis and article display
  *
- * Processes photos early in pipeline to provide rich visual context
- * for arc analysis. Produces generic character descriptions that
- * the user maps to names at the character-ids checkpoint.
+ * Resizes/compresses photos optimized for:
+ * - LLM consumption (fast analysis without SDK timeouts)
+ * - Article HTML display (reasonable file sizes)
  *
- * Architecture (Commit 8.9):
- * 1. Preprocess large images (resize/compress via sharp) to avoid SDK timeouts
- * 2. Use semaphore to limit concurrent SDK calls (each spawns CLI process)
- * 3. Use AbortController timeout for each analysis
- * 4. Stream progress for visibility
+ * Output goes to data/{sessionId}/photos/ for consistent serving.
  *
- * Skip logic: If state.photoAnalyses exists and is non-null,
- * skip processing (resume from checkpoint case).
+ * @param {Object} state - Current state with sessionPhotos, sessionId
+ * @param {Object} config - Graph config with optional configurable.dataDir
+ * @returns {Object} Partial state update with preprocessed sessionPhotos, preprocessStats, currentPhase
+ */
+async function preprocessPhotos(state, config) {
+  // Skip if no photos to preprocess
+  const photos = state.sessionPhotos || [];
+  if (photos.length === 0) {
+    console.log('[preprocessPhotos] Skipping - no session photos');
+    return {
+      preprocessStats: { totalPhotos: 0, preprocessed: 0 },
+      currentPhase: PHASES.PREPROCESS_PHOTOS
+    };
+  }
+
+  // Skip if already preprocessed (check for preprocessStats)
+  if (state.preprocessStats) {
+    console.log('[preprocessPhotos] Skipping - already preprocessed');
+    return { currentPhase: PHASES.PREPROCESS_PHOTOS };
+  }
+
+  // Extract paths from photo objects
+  const photoPaths = photos.map(photo =>
+    typeof photo === 'string' ? photo : photo.path || photo.filename
+  );
+
+  // Determine standard output directory for processed photos
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const standardPhotosDir = path.join(dataDir, state.sessionId, 'photos');
+
+  console.log(`[preprocessPhotos] Processing ${photos.length} photos to ${standardPhotosDir}...`);
+
+  const preprocessResults = await preprocessImages(photoPaths, {
+    concurrency: PHOTO_CONFIG.MAX_CONCURRENT,
+    outputDir: standardPhotosDir
+  });
+
+  const preprocessStats = {
+    totalPhotos: photos.length,
+    preprocessed: preprocessResults.filter(r => r.wasProcessed).length,
+    originalSizeBytes: preprocessResults.reduce((sum, r) => sum + r.originalSize, 0),
+    processedSizeBytes: preprocessResults.reduce((sum, r) => sum + r.processedSize, 0)
+  };
+
+  // Update sessionPhotos to point to preprocessed paths
+  const processedPhotoPaths = preprocessResults.map(r => r.path);
+
+  console.log(`[preprocessPhotos] Complete: ${preprocessStats.preprocessed}/${photos.length} resized, ${formatFileSize(preprocessStats.originalSizeBytes)} → ${formatFileSize(preprocessStats.processedSizeBytes)}`);
+
+  return {
+    sessionPhotos: processedPhotoPaths,
+    preprocessStats,
+    currentPhase: PHASES.PREPROCESS_PHOTOS
+  };
+}
+
+/**
+ * Detect whiteboard photo from session photos
+ *
+ * Fuzzy matches filenames containing "whiteboard" (case-insensitive).
+ * Throws error if multiple or no whiteboard photos found.
+ *
+ * @param {Object} state - Current state with sessionPhotos
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with whiteboardPhotoPath, currentPhase
+ */
+async function detectWhiteboard(state, config) {
+  const photos = state.sessionPhotos || [];
+
+  if (photos.length === 0) {
+    console.log('[detectWhiteboard] No photos to check');
+    return {
+      whiteboardPhotoPath: null,
+      currentPhase: PHASES.DETECT_WHITEBOARD
+    };
+  }
+
+  // Skip if already detected
+  if (state.whiteboardPhotoPath !== null && state.whiteboardPhotoPath !== undefined) {
+    console.log(`[detectWhiteboard] Skipping - already detected: ${state.whiteboardPhotoPath}`);
+    return { currentPhase: PHASES.DETECT_WHITEBOARD };
+  }
+
+  // Fuzzy match "whiteboard" in filename (case-insensitive)
+  const whiteboardPattern = /whiteboard/i;
+  const matches = photos.filter(photo => {
+    const filename = typeof photo === 'string' ? path.basename(photo) : photo.filename || '';
+    return whiteboardPattern.test(filename);
+  });
+
+  if (matches.length === 0) {
+    throw new Error('No whiteboard photo found. Ensure one photo has "whiteboard" in filename.');
+  }
+
+  if (matches.length > 1) {
+    const matchNames = matches.map(p => path.basename(typeof p === 'string' ? p : p.path)).join(', ');
+    throw new Error(`Multiple whiteboard photos found: ${matchNames}. Ensure only one photo has "whiteboard" in filename.`);
+  }
+
+  const whiteboardPath = typeof matches[0] === 'string' ? matches[0] : matches[0].path;
+  console.log(`[detectWhiteboard] Found whiteboard: ${path.basename(whiteboardPath)}`);
+
+  return {
+    whiteboardPhotoPath: whiteboardPath,
+    currentPhase: PHASES.DETECT_WHITEBOARD
+  };
+}
+
+/**
+ * Analyze session photos using Haiku vision (pure data fetch, no checkpoint)
+ *
+ * Processes photos to provide rich visual context for arc analysis.
+ * Produces generic character descriptions (not names).
+ * Checkpoint is handled by dedicated checkpointCharacterIds node.
  *
  * @param {Object} state - Current state with sessionPhotos, playerFocus
  * @param {Object} config - Graph config with optional configurable.sdkClient
@@ -290,18 +402,10 @@ async function analyzeSinglePhoto({
 async function analyzePhotos(state, config) {
   const startTime = Date.now();
 
-  // Skip if already analyzed (resume case) - check BEFORE background cache
-  // to avoid overwriting enriched analyses from finalizePhotoAnalyses
+  // Skip if already analyzed (resume case)
   if (state.photoAnalyses) {
     console.log('[analyzePhotos] Skipping - photoAnalyses already exists');
     return { currentPhase: PHASES.ANALYZE_PHOTOS };
-  }
-
-  // Check background pipeline (DRY - single helper for all nodes)
-  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.PHOTO_ANALYSES, config);
-  if (bgResult) {
-    console.log(`[analyzePhotos] Using background result (${bgResult.analyses?.length || 0} analyses)`);
-    return { photoAnalyses: bgResult, currentPhase: PHASES.ANALYZE_PHOTOS };
   }
 
   // Skip if no photos to analyze
@@ -319,43 +423,27 @@ async function analyzePhotos(state, config) {
     typeof photo === 'string' ? photo : photo.path || photo.filename
   );
 
-  console.log(`[analyzePhotos] Processing ${photos.length} photos`);
+  console.log(`[analyzePhotos] Analyzing ${photos.length} photos with SDK...`);
+
+  const sdk = getSdkClient(config, 'analyzePhotos');
+  const imagePromptBuilder = getImagePromptBuilder(config);
+  const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
+
+  // Get roster from sessionConfig for photo analysis context (optional - may not exist yet)
+  const roster = state.sessionConfig?.roster || [];
 
   try {
-    // Step 1: Preprocess images (resize/compress large files)
-    console.log('[analyzePhotos] Step 1/2: Preprocessing images...');
-    const preprocessResults = await preprocessImages(photoPaths, {
-      concurrency: PHOTO_CONFIG.MAX_CONCURRENT
-    });
-
-    const preprocessStats = {
-      preprocessed: preprocessResults.filter(r => r.wasProcessed).length,
-      originalSizeBytes: preprocessResults.reduce((sum, r) => sum + r.originalSize, 0),
-      processedSizeBytes: preprocessResults.reduce((sum, r) => sum + r.processedSize, 0)
-    };
-
-    // Step 2: Analyze with SDK (limited concurrency + timeout + progress)
-    console.log(`[analyzePhotos] Step 2/2: Analyzing with SDK (max ${PHOTO_CONFIG.MAX_CONCURRENT} concurrent)...`);
-
-    const sdk = getSdkClient(config, 'analyzePhotos');
-    const imagePromptBuilder = getImagePromptBuilder(config);
-    const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
-
-    // Get roster from sessionConfig for photo analysis context
-    const roster = state.sessionConfig?.roster || [];
-
-    const analysisPromises = preprocessResults.map((preprocessResult, index) => {
-      const originalFilename = path.basename(photoPaths[index]);
+    const analysisPromises = photoPaths.map((photoPath, index) => {
+      const originalFilename = path.basename(photoPath);
 
       return semaphore(() => analyzeSinglePhoto({
         sdk,
         imagePromptBuilder,
         playerFocus: state.playerFocus,
         roster,
-        processedPath: preprocessResult.path,
+        processedPath: photoPath,
         originalFilename,
         timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS
-        // onProgress handled automatically by getSdkClient wrapper
       }));
     });
 
@@ -370,8 +458,7 @@ async function analyzePhotos(state, config) {
         totalPhotos: photos.length,
         analyzedPhotos: analyses.filter(a => !a._error).length,
         failedPhotos: analyses.filter(a => a._error).length,
-        processingTimeMs,
-        ...preprocessStats
+        processingTimeMs
       }
     };
 
@@ -837,6 +924,12 @@ function createMockPhotoAnalyzer(options = {}) {
 
 module.exports = {
   // Main node functions (wrapped with LangSmith tracing)
+  preprocessPhotos: traceNode(preprocessPhotos, 'preprocessPhotos', {
+    stateFields: ['sessionPhotos']
+  }),
+  detectWhiteboard: traceNode(detectWhiteboard, 'detectWhiteboard', {
+    stateFields: ['sessionPhotos']
+  }),
   analyzePhotos: traceNode(analyzePhotos, 'analyzePhotos', {
     stateFields: ['sessionPhotos']
   }),
@@ -861,6 +954,8 @@ module.exports = {
     createEmptyPhotoAnalysisResult,
     createFailedPhotoAnalysis,
     analyzeSinglePhoto,
+    preprocessPhotos,
+    detectWhiteboard,
     safeParseJson,
     PHOTO_ANALYSIS_SCHEMA,
     PHOTO_CONFIG,

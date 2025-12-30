@@ -1,131 +1,76 @@
 /**
- * Report Generation Graph - Commit 8.23: Removed brittle programmatic validation
+ * Report Generation Graph - Sequential Architecture
  *
  * Assembles the complete LangGraph StateGraph for report generation.
- * Connects all nodes with edges, conditional routing, and checkpointing.
+ * Uses native LangGraph interrupt() for human checkpoints with DEDICATED
+ * checkpoint nodes (SRP - separate data from checkpoints).
  *
- * Graph Flow (25 nodes - Commit 8.23):
+ * Graph Flow (27+ nodes):
  *
- * PHASE 0: Input Parsing (Commit 8.9 - conditional entry)
+ * PHASE 0: Input Parsing (conditional entry)
  * START → [conditional] → parseRawInput OR initializeSession
- * 0.1 parseRawInput → [checkpoint: input-review] → 0.2 finalizeInput
+ * 0.1 parseRawInput [interrupt: input-review] → 0.2 finalizeInput
  *
- * PHASE 1: Data Acquisition
- * 1.1 initializeSession → 1.2 loadDirectorNotes → 1.3 fetchMemoryTokens
- * → 1.4 fetchPaperEvidence → [checkpoint: paper-evidence-selection] → 1.5 fetchSessionPhotos
+ * PHASE 1: Data Acquisition (SEQUENTIAL)
+ * 1.1 initializeSession → 1.2 loadDirectorNotes
+ *   → fetchMemoryTokens → fetchPaperEvidence
+ *   → fetchSessionPhotos → preprocessPhotos → analyzePhotos
+ *   → detectWhiteboard
  *
- * PHASE 1.6-1.8: Early Processing
- * → 1.65 analyzePhotos (Haiku vision) → [checkpoint: character-ids] → 1.67 finalizePhotoAnalyses
- * → 1.7 preprocessEvidence → 1.8 curateEvidenceBundle → [checkpoint: evidence-and-photos]
+ * NOTE: Parallel execution deferred - LangGraph's addEdge doesn't create
+ * proper fan-in behavior (each edge triggers target independently).
+ * TODO: Implement proper parallelization using Send() pattern when needed.
  *
- * PHASE 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
- * → 2 analyzeArcs (single SDK call, player focus drives arcs) → 2.3 evaluateArcs → [revision loop]
- * → [checkpoint: arc-selection]
+ * PHASE 1.35-1.8: Sequential Checkpoints & Processing
+ * → checkpointPaperEvidence [interrupt: paper-evidence-selection]
+ * → checkpointCharacterIds [interrupt: character-ids]
+ * → parseCharacterIds → finalizePhotoAnalyses
+ * → preprocessEvidence → checkpointPreCuration [interrupt: pre-curation]
+ * → curateEvidenceBundle [interrupt: evidence-photos] → processRescuedItems
  *
- * PHASE 3: Outline Generation (Commit 8.23: validation removed, trust Opus evaluator)
- * → 3.1 generateOutline → 3.2 evaluateOutline (Opus) → [revision loop]
- * → [checkpoint: outline]
+ * PHASE 2: Arc Analysis (Player-Focus-Guided)
+ * → analyzeArcs → validateArcs → evaluateArcs [interrupt: arc-selection]
+ * → [revision loop] → buildArcEvidencePackages
  *
- * PHASE 4: Article Generation (Commit 8.23: validation removed, trust Opus evaluator)
- * → 4.1 generateContentBundle → 4.2 evaluateArticle (Opus) → [revision loop]
- * → [checkpoint: article] → 4.3 validateContentBundle
+ * PHASE 3: Outline Generation
+ * → generateOutline → evaluateOutline [interrupt: outline] → [revision loop]
+ *
+ * PHASE 4: Article Generation
+ * → generateContentBundle → evaluateArticle [interrupt: article] → [revision loop]
+ * → validateContentBundle
  *
  * PHASE 5: Assembly
- * → 5 assembleHtml → COMPLETE
+ * → assembleHtml → COMPLETE
  *
- * Checkpointing:
+ * Checkpoint Pattern (SRP):
+ * - Data nodes are PURE (no interrupt calls) - can be called outside LangGraph
+ * - Dedicated checkpoint nodes handle interrupt() for human approval
+ * - Server resumes with Command({ resume: data })
+ *
+ * Checkpointing Storage:
  * - MemorySaver for testing (in-memory)
  * - SqliteSaver for production (persistent)
- *
- * See ARCHITECTURE_DECISIONS.md 8.8/8.9 for design rationale.
  */
 
 const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
-const { ReportStateAnnotation, PHASES, APPROVAL_TYPES, REVISION_CAPS } = require('./state');
+const { ReportStateAnnotation, PHASES, REVISION_CAPS } = require('./state');
 const nodes = require('./nodes');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ROUTING FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Route function for conditional entry (Commit 8.9)
- * Determines whether to parse raw input or skip to initialization
- *
- * Decision logic:
- * - If rawSessionInput exists and sessionConfig doesn't → parse raw input
- * - If rawSessionInput exists but sessionConfig does → input already parsed, skip to init
- * - If no rawSessionInput → assume pre-populated files, skip to init
- *
- * @param {Object} state - Current graph state
- * @returns {string} 'parseInput' or 'initialize'
- */
-function routeEntryPoint(state) {
-  const hasRawInput = state.rawSessionInput !== null && state.rawSessionInput !== undefined;
-  // sessionConfig defaults to {} so check if it has actual content
-  const hasSessionConfig = state.sessionConfig && Object.keys(state.sessionConfig).length > 0;
+// NOTE: routeEntryPoint removed - simplified to single incremental flow
+// START always goes directly to initializeSession
+// parseRawInput runs after checkpointAwaitContext (not at entry)
 
-  // If raw input provided but not yet parsed → parse it
-  if (hasRawInput && !hasSessionConfig) {
-    console.log('[routeEntryPoint] Raw input detected, routing to parseRawInput');
-    return 'parseInput';
-  }
-
-  // Otherwise skip to initialization (pre-populated files or resume)
-  console.log('[routeEntryPoint] No raw input or already parsed, routing to initializeSession');
-  return 'initialize';
-}
-
-/**
- * Route function for input review approval checkpoint (Commit 8.9)
- * After raw input is parsed, user reviews before proceeding
- *
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routeInputReview(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
-
-/**
- * Route function for paper evidence selection checkpoint (Commit 8.9.4)
- * After paper evidence is fetched, user selects which items were unlocked
- *
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routePaperEvidenceSelection(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
-
-/**
- * Route function for character ID checkpoint (Commit 8.9.5)
- * After photo analysis, user provides character-to-photo mappings
- *
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routeCharacterIdCheckpoint(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
-
-/**
- * Route function for pre-curation checkpoint (Phase 4f)
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routePreCurationCheckpoint(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
-
-/**
- * Route function for evidence+photos approval checkpoint
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routeEvidenceApproval(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTE: Approval-based routing functions removed in interrupt() migration
+// (routeInputReview, routePaperEvidenceSelection, routeCharacterIdCheckpoint,
+//  routePreCurationCheckpoint, routeEvidenceApproval)
+// Checkpoints now use native LangGraph interrupt() in nodes themselves.
+// See lib/workflow/checkpoint-helpers.js for the new pattern.
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
  * Route function for arc evaluation results
@@ -207,301 +152,61 @@ function routeSchemaValidation(state) {
   return hasErrors ? 'error' : 'continue';
 }
 
-/**
- * Route after arc selection approval
- * Continues to outline generation
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routeArcSelectionApproval(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
-
-/**
- * Route after outline approval
- * Continues to article generation
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routeOutlineApproval(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
-
-/**
- * Route after article approval
- * Continues to schema validation and assembly
- * @param {Object} state - Current graph state
- * @returns {string} 'wait' or 'continue'
- */
-function routeArticleApproval(state) {
-  return state.awaitingApproval ? 'wait' : 'continue';
-}
+// NOTE: routeArcSelectionApproval, routeOutlineApproval, routeArticleApproval
+// removed in interrupt() migration. See checkpoint-helpers.js.
 
 // ═══════════════════════════════════════════════════════════════════════════
-// WRAPPER NODES FOR APPROVAL CHECKPOINTS
+// NOTE: Checkpoint-setting nodes removed in interrupt() migration
+// (setPaperEvidenceCheckpoint, setCharacterIdCheckpoint, setPreCurationCheckpoint,
+//  setArcSelectionCheckpoint, setOutlineCheckpoint, setArticleCheckpoint)
+//
+// Checkpoints now use native LangGraph interrupt() directly in content nodes.
+// Skip logic moved into checkpointInterrupt() helper in checkpoint-helpers.js.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Set paper evidence selection checkpoint (Commit 8.9.4)
- * Called after paper evidence is fetched
- * Skips if selectedPaperEvidence already exists (resume case)
- */
-async function setPaperEvidenceCheckpoint(state) {
-  // Skip if evidence already selected (resume after approval)
-  if (state.selectedPaperEvidence && state.selectedPaperEvidence.length > 0) {
-    console.log('[setPaperEvidenceCheckpoint] Skipping - selectedPaperEvidence already exists');
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.SELECT_PAPER_EVIDENCE
-    };
-  }
-
-  // Skip if no paper evidence to select from
-  if (!state.paperEvidence || state.paperEvidence.length === 0) {
-    console.log('[setPaperEvidenceCheckpoint] Skipping - no paper evidence available');
-    return {
-      awaitingApproval: false,
-      selectedPaperEvidence: [],
-      currentPhase: PHASES.SELECT_PAPER_EVIDENCE
-    };
-  }
-
-  console.log(`[setPaperEvidenceCheckpoint] Waiting for user to select from ${state.paperEvidence.length} evidence items`);
-  return {
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION,
-    currentPhase: PHASES.SELECT_PAPER_EVIDENCE
-  };
-}
-
-/**
- * Set character ID checkpoint (Commit 8.9.5)
- * Called after photo analysis, user provides character-to-photo mappings
- * Skips if characterIdMappings already exists (resume case)
- * Skips if no photos to identify (empty photoAnalyses)
- */
-async function setCharacterIdCheckpoint(state) {
-  // Skip if character IDs already provided (empty object means user skipped mappings)
-  // Check for explicit existence (null/undefined = not yet provided, {} = user skipped)
-  if (state.characterIdMappings !== undefined && state.characterIdMappings !== null) {
-    const mappingCount = Object.keys(state.characterIdMappings).length;
-    console.log(`[setCharacterIdCheckpoint] Skipping - characterIdMappings provided (${mappingCount} mappings)`);
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
-    };
-  }
-
-  // Skip if natural language input provided (Commit 8.9.x)
-  // parseCharacterIds node will convert to structured format
-  if (state.characterIdsRaw) {
-    console.log(`[setCharacterIdCheckpoint] Skipping - characterIdsRaw provided (${state.characterIdsRaw.length} chars)`);
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
-    };
-  }
-
-  // Skip if no photo analyses to map characters to
-  if (!state.photoAnalyses || !state.photoAnalyses.analyses || state.photoAnalyses.analyses.length === 0) {
-    console.log('[setCharacterIdCheckpoint] Skipping - no photo analyses available');
-    return {
-      awaitingApproval: false,
-      characterIdMappings: {},  // Empty mappings
-      currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
-    };
-  }
-
-  console.log(`[setCharacterIdCheckpoint] Waiting for user to identify characters in ${state.photoAnalyses.analyses.length} photos`);
-  return {
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.CHARACTER_IDS,
-    currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
-  };
-}
-
-/**
- * Set pre-curation checkpoint (Phase 4f)
- * Called after preprocessEvidence, before curateEvidenceBundle
- * Allows user to review preprocessed evidence before curation begins
- * Skips if preCurationApproved already true (resume case)
- */
-async function setPreCurationCheckpoint(state) {
-  // Skip if already approved (resume after approval)
-  if (state.preCurationApproved) {
-    console.log('[setPreCurationCheckpoint] Skipping - already approved');
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.PRE_CURATION_CHECKPOINT
-    };
-  }
-
-  // Build summary for user review
-  const preprocessedItems = state.preprocessedEvidence?.items || [];
-  const exposedCount = preprocessedItems.filter(i => i.disposition === 'exposed').length;
-  const buriedCount = preprocessedItems.filter(i => i.disposition === 'buried').length;
-
-  console.log(`[setPreCurationCheckpoint] Waiting for user approval: ${preprocessedItems.length} preprocessed items (${exposedCount} exposed, ${buriedCount} buried)`);
-
-  return {
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.PRE_CURATION,
-    currentPhase: PHASES.PRE_CURATION_CHECKPOINT,
-    preCurationSummary: {
-      preprocessedItemCount: preprocessedItems.length,
-      exposedCount,
-      buriedCount,
-      selectedPaperCount: state.selectedPaperEvidence?.length || 0,
-      photoCount: state.finalizedPhotoAnalyses?.length || 0,
-      memoryTokenCount: state.memoryTokens?.length || 0
-    }
-  };
-}
-
-/**
- * Set arc selection approval checkpoint
- * Called after arc evaluation passes or hits revision cap
- * Skips if selectedArcs already exist (resume case)
- */
-async function setArcSelectionCheckpoint(state) {
-  // Skip if arcs already selected (resume after approval)
-  if (state.selectedArcs && state.selectedArcs.length > 0) {
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.ARC_EVALUATION
-    };
-  }
-
-  return {
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.ARC_SELECTION,
-    currentPhase: PHASES.ARC_EVALUATION
-  };
-}
-
-/**
- * Set outline approval checkpoint
- * Called after outline evaluation passes or hits revision cap
- *
- * Detection logic:
- * 1. If contentBundle exists → already past approval, continue
- * 2. If user approved THIS checkpoint (awaitingApproval=false AND approvalType=OUTLINE) → continue
- * 3. Otherwise → wait for approval (set approvalType to mark this checkpoint)
- *
- * Key insight: approvalType identifies WHICH checkpoint is active.
- * After arc approval, approvalType is still ARC_SELECTION, not OUTLINE.
- * Only when user approves the outline checkpoint does awaitingApproval=false WITH approvalType=OUTLINE.
- */
-async function setOutlineCheckpoint(state) {
-  // Skip if content already generated (resume after approval completed)
-  if (state.contentBundle) {
-    console.log('[setOutlineCheckpoint] Skipping - contentBundle already exists');
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.OUTLINE_EVALUATION
-    };
-  }
-
-  // Check if user approved THIS checkpoint
-  // User approval overrides evaluator - if they approved, we continue
-  // (Commit 8.10 fix: removed outlineEval.ready requirement that caused infinite loop)
-  if (state.awaitingApproval === false &&
-      state.approvalType === APPROVAL_TYPES.OUTLINE &&
-      state.outline) {
-    console.log('[setOutlineCheckpoint] User approved outline, continuing to article generation');
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.OUTLINE_EVALUATION
-    };
-  }
-
-  // First time at checkpoint - wait for approval
-  console.log('[setOutlineCheckpoint] Waiting for user approval');
-  return {
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.OUTLINE,
-    currentPhase: PHASES.OUTLINE_EVALUATION
-  };
-}
-
-/**
- * Set article approval checkpoint
- * Called after article evaluation passes or hits revision cap
- *
- * Detection logic:
- * 1. If assembledHtml exists → already past approval, continue
- * 2. If user approved THIS checkpoint (awaitingApproval=false AND approvalType=ARTICLE) → continue
- * 3. Otherwise → wait for approval (set approvalType to mark this checkpoint)
- */
-async function setArticleCheckpoint(state) {
-  // Skip if HTML already assembled (resume after approval completed)
-  if (state.assembledHtml) {
-    console.log('[setArticleCheckpoint] Skipping - assembledHtml already exists');
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.ARTICLE_EVALUATION
-    };
-  }
-
-  // Check if user approved THIS checkpoint
-  // User approval overrides evaluator - if they approved, we continue
-  // (Commit 8.10 fix: removed articleEval.ready requirement that caused infinite loop)
-  if (state.awaitingApproval === false &&
-      state.approvalType === APPROVAL_TYPES.ARTICLE &&
-      state.contentBundle) {
-    console.log('[setArticleCheckpoint] User approved article, continuing to schema validation');
-    return {
-      awaitingApproval: false,
-      currentPhase: PHASES.ARTICLE_EVALUATION
-    };
-  }
-
-  // First time at checkpoint - wait for approval
-  console.log('[setArticleCheckpoint] Waiting for user approval');
-  return {
-    awaitingApproval: true,
-    approvalType: APPROVAL_TYPES.ARTICLE,
-    currentPhase: PHASES.ARTICLE_EVALUATION
-  };
-}
-
-/**
- * Increment arc revision count and clear arcs for re-analysis
+ * Increment arc revision count and preserve/clear arcs for re-analysis
+ * Preserves current arcs in _previousArcs for revision context
  * Clears narrativeArcs so analyzeArcs skip logic doesn't trigger
  */
 async function incrementArcRevision(state) {
-  console.log(`[incrementArcRevision] Incrementing count to ${(state.arcRevisionCount || 0) + 1}, clearing arcs for regeneration`);
+  const newCount = (state.arcRevisionCount || 0) + 1;
+  console.log(`[incrementArcRevision] Incrementing count to ${newCount}, preserving arcs for revision context`);
   return {
-    arcRevisionCount: (state.arcRevisionCount || 0) + 1,
-    narrativeArcs: null, // Clear for regeneration (replaceReducer now handles null)
-    awaitingApproval: false
+    arcRevisionCount: newCount,
+    _previousArcs: state.narrativeArcs, // PRESERVE for revision context
+    narrativeArcs: null // Clear for regeneration (replaceReducer now handles null)
   };
 }
 
 /**
- * Increment outline revision count and clear outline for regeneration
+ * Increment outline revision count and preserve/clear outline for regeneration
+ * Preserves current outline in _previousOutline for revision context
  * Clears outline so generateOutline skip logic doesn't trigger
  */
 async function incrementOutlineRevision(state) {
-  console.log(`[incrementOutlineRevision] Incrementing count to ${(state.outlineRevisionCount || 0) + 1}, clearing outline for regeneration`);
+  const newCount = (state.outlineRevisionCount || 0) + 1;
+  console.log(`[incrementOutlineRevision] Incrementing count to ${newCount}, preserving outline for revision context`);
   return {
-    outlineRevisionCount: (state.outlineRevisionCount || 0) + 1,
-    outline: null, // Clear for regeneration
-    awaitingApproval: false
+    outlineRevisionCount: newCount,
+    _previousOutline: state.outline, // PRESERVE for revision context
+    outline: null // Clear for regeneration
   };
 }
 
 /**
- * Increment article revision count and clear content for regeneration
+ * Increment article revision count and preserve/clear content for regeneration
+ * Preserves current contentBundle in _previousContentBundle for revision context
  * Clears contentBundle and assembledHtml so generateContentBundle skip logic doesn't trigger
  */
 async function incrementArticleRevision(state) {
-  console.log(`[incrementArticleRevision] Incrementing count to ${(state.articleRevisionCount || 0) + 1}, clearing content for regeneration`);
+  const newCount = (state.articleRevisionCount || 0) + 1;
+  console.log(`[incrementArticleRevision] Incrementing count to ${newCount}, preserving content for revision context`);
   return {
-    articleRevisionCount: (state.articleRevisionCount || 0) + 1,
+    articleRevisionCount: newCount,
+    _previousContentBundle: state.contentBundle, // PRESERVE for revision context
     contentBundle: null, // Clear for regeneration
-    assembledHtml: null, // Clear assembled output too
-    awaitingApproval: false
+    assembledHtml: null  // Clear assembled output too
   };
 }
 
@@ -525,28 +230,62 @@ function createGraphBuilder() {
   builder.addNode('finalizeInput', nodes.finalizeInput);
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 1: Data Acquisition
+  // ADD NODES - Phase 1: Data Acquisition (Parallel Branches)
   // ═══════════════════════════════════════════════════════
 
   builder.addNode('initializeSession', nodes.initializeSession);
   builder.addNode('loadDirectorNotes', nodes.loadDirectorNotes);
+
+  // Branch A: Evidence fetching
   builder.addNode('fetchMemoryTokens', nodes.fetchMemoryTokens);
   builder.addNode('fetchPaperEvidence', nodes.fetchPaperEvidence);
-  builder.addNode('setPaperEvidenceCheckpoint', setPaperEvidenceCheckpoint);  // Commit 8.9.4
+
+  // Branch B: Photo processing
   builder.addNode('fetchSessionPhotos', nodes.fetchSessionPhotos);
+  builder.addNode('preprocessPhotos', nodes.preprocessPhotos);
+
+  // Branch C: Whiteboard detection
+  builder.addNode('detectWhiteboard', nodes.detectWhiteboard);
+
+  // NOTE: joinParallelBranches removed - sequential execution doesn't need it
+  // TODO: Re-add when implementing Send() pattern for true parallelization
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 1.6-1.8: Early Processing
+  // ADD NODES - Phase 1.35-1.8: Sequential Checkpoints & Processing
+  // Dedicated checkpoint nodes follow SRP (data separate from checkpoints)
   // ═══════════════════════════════════════════════════════
 
+  // Checkpoint: Paper evidence selection (after parallel join)
+  builder.addNode('checkpointPaperEvidence', nodes.checkpointPaperEvidence);
+
+  // Checkpoint: Await roster (incremental input - Phase 4f)
+  // Pauses for user to provide roster via /approve endpoint
+  builder.addNode('checkpointAwaitRoster', nodes.checkpointAwaitRoster);
+
+  // Photo analysis (pure - no checkpoint, runs in parallel branch)
   builder.addNode('analyzePhotos', nodes.analyzePhotos);
-  builder.addNode('setCharacterIdCheckpoint', setCharacterIdCheckpoint);  // Commit 8.9.5
-  builder.addNode('parseCharacterIds', nodes.parseCharacterIds);          // Commit 8.9.x: parse natural language
-  builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses);  // Commit 8.9.5
+
+  // Checkpoint: Character IDs (after parallel join)
+  builder.addNode('checkpointCharacterIds', nodes.checkpointCharacterIds);
+  builder.addNode('parseCharacterIds', nodes.parseCharacterIds);
+  builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses);
+
+  // Checkpoint: Await full context (incremental input - Phase 4f)
+  // Pauses for user to provide accusation, sessionReport, directorNotes via /approve
+  builder.addNode('checkpointAwaitContext', nodes.checkpointAwaitContext);
+
+  // Tag tokens with exposed/buried disposition (after parseRawInput provides orchestratorParsed)
+  builder.addNode('tagTokenDispositions', nodes.tagTokenDispositions);
+
+  // Evidence preprocessing (pure - no checkpoint)
   builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
-  builder.addNode('setPreCurationCheckpoint', setPreCurationCheckpoint);  // Phase 4f
+
+  // Checkpoint: Pre-curation approval
+  builder.addNode('checkpointPreCuration', nodes.checkpointPreCuration);
+
+  // Evidence curation (has interrupt for evidence-photos checkpoint)
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
-  builder.addNode('processRescuedItems', nodes.processRescuedItems);  // Commit 8.10+: Handle human-rescued paper evidence
+  builder.addNode('processRescuedItems', nodes.processRescuedItems);
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
@@ -561,12 +300,14 @@ function createGraphBuilder() {
   // Validates keyEvidence IDs exist in bundle, characterPlacements use roster names
   builder.addNode('validateArcs', nodes.validateArcStructure);
 
-  // Arc evaluation
+  // Arc evaluation - interrupt() happens here for arc-selection checkpoint
   builder.addNode('evaluateArcs', nodes.evaluateArcs);
 
   // Arc revision handling
-  builder.addNode('setArcSelectionCheckpoint', setArcSelectionCheckpoint);
+  // NOTE: setArcSelectionCheckpoint removed - interrupt() now in evaluateArcs
   builder.addNode('incrementArcRevision', incrementArcRevision);
+  // Revision node - uses buildRevisionContext helper for targeted fixes
+  builder.addNode('reviseArcs', nodes.reviseArcs);
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 2.4: Arc Evidence Packages (Phase 1 Fix)
@@ -582,9 +323,12 @@ function createGraphBuilder() {
 
   builder.addNode('generateOutline', nodes.generateOutline);
   // NOTE: validateOutlineStructure removed in Commit 8.23 - trust Opus evaluators instead
+  // Outline evaluation - interrupt() happens here for outline checkpoint
   builder.addNode('evaluateOutline', nodes.evaluateOutline);
-  builder.addNode('setOutlineCheckpoint', setOutlineCheckpoint);
+  // NOTE: setOutlineCheckpoint removed - interrupt() now in evaluateOutline
   builder.addNode('incrementOutlineRevision', incrementOutlineRevision);
+  // Revision node - uses buildRevisionContext helper for targeted fixes
+  builder.addNode('reviseOutline', nodes.reviseOutline);
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 4: Article Generation
@@ -592,9 +336,12 @@ function createGraphBuilder() {
 
   builder.addNode('generateContentBundle', nodes.generateContentBundle);
   // NOTE: validateArticleContent removed in Commit 8.23 - trust Opus evaluators instead
+  // Article evaluation - interrupt() happens here for article checkpoint
   builder.addNode('evaluateArticle', nodes.evaluateArticle);
-  builder.addNode('setArticleCheckpoint', setArticleCheckpoint);
+  // NOTE: setArticleCheckpoint removed - interrupt() now in evaluateArticle
   builder.addNode('incrementArticleRevision', incrementArticleRevision);
+  // Revision node - uses buildRevisionContext helper for targeted fixes
+  builder.addNode('reviseContentBundle', nodes.reviseContentBundle);
   builder.addNode('validateContentBundle', nodes.validateContentBundle);
 
   // ═══════════════════════════════════════════════════════
@@ -604,100 +351,100 @@ function createGraphBuilder() {
   builder.addNode('assembleHtml', nodes.assembleHtml);
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 0: Input Parsing (Commit 8.9)
-  // Conditional entry: raw input → parse → review → initialize
-  //                   no raw input → skip directly to initialize
+  // ADD EDGES - Entry Point (Simplified Incremental Flow)
+  // Always start with initialization - parseRawInput comes after checkpointAwaitContext
   // ═══════════════════════════════════════════════════════
 
-  builder.addConditionalEdges(START, routeEntryPoint, {
-    parseInput: 'parseRawInput',
-    initialize: 'initializeSession'
-  });
-
-  // Input review checkpoint (after parsing, before proceeding)
-  builder.addConditionalEdges('parseRawInput', routeInputReview, {
-    wait: END,
-    continue: 'finalizeInput'
-  });
-
-  // After input finalized, continue to initialization
-  builder.addEdge('finalizeInput', 'initializeSession');
+  builder.addEdge(START, 'initializeSession');
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 1: Data Acquisition (linear)
+  // ADD EDGES - Phase 1: Data Acquisition (SEQUENTIAL)
+  // NOTE: Parallel branches deferred - LangGraph's addEdge doesn't create
+  // proper fan-in behavior. Each edge triggers independently.
+  // TODO: Implement proper parallelization using Send() pattern
   // ═══════════════════════════════════════════════════════
 
   builder.addEdge('initializeSession', 'loadDirectorNotes');
+
+  // Sequential data fetching (previously parallel branches A, B, C)
+  // Branch A: Evidence fetching
   builder.addEdge('loadDirectorNotes', 'fetchMemoryTokens');
   builder.addEdge('fetchMemoryTokens', 'fetchPaperEvidence');
 
-  // Paper evidence selection checkpoint (Commit 8.9.4)
-  builder.addEdge('fetchPaperEvidence', 'setPaperEvidenceCheckpoint');
-  builder.addConditionalEdges('setPaperEvidenceCheckpoint', routePaperEvidenceSelection, {
-    wait: END,
-    continue: 'fetchSessionPhotos'
-  });
+  // Branch B: Photo processing
+  builder.addEdge('fetchPaperEvidence', 'fetchSessionPhotos');
+  builder.addEdge('fetchSessionPhotos', 'preprocessPhotos');
+  builder.addEdge('preprocessPhotos', 'analyzePhotos');
+
+  // Branch C: Whiteboard detection
+  builder.addEdge('analyzePhotos', 'detectWhiteboard');
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 1.6-1.8: Early Processing
+  // ADD EDGES - Phase 1.35-1.8: Sequential Checkpoints & Processing
+  // Incremental input flow: parseRawInput after checkpointAwaitContext
+  // preprocessEvidence runs AFTER tagTokenDispositions so tokens have correct disposition
   // ═══════════════════════════════════════════════════════
 
-  builder.addEdge('fetchSessionPhotos', 'analyzePhotos');
+  // After data acquisition, proceed to paper evidence checkpoint
+  builder.addEdge('detectWhiteboard', 'checkpointPaperEvidence');
 
-  // Character ID checkpoint after photo analysis (Commit 8.9.5)
-  builder.addEdge('analyzePhotos', 'setCharacterIdCheckpoint');
-  builder.addConditionalEdges('setCharacterIdCheckpoint', routeCharacterIdCheckpoint, {
-    wait: END,
-    continue: 'parseCharacterIds'  // Parse natural language input (Commit 8.9.x)
-  });
+  // Paper evidence selection → await roster (skip preprocessEvidence - runs later after tokens tagged)
+  builder.addEdge('checkpointPaperEvidence', 'checkpointAwaitRoster');
 
-  // Parse natural language character IDs into structured format (Commit 8.9.x)
+  // After roster provided → character ID mapping
+  builder.addEdge('checkpointAwaitRoster', 'checkpointCharacterIds');
+
+  // Character IDs → parsing → finalize analyses
+  builder.addEdge('checkpointCharacterIds', 'parseCharacterIds');
   builder.addEdge('parseCharacterIds', 'finalizePhotoAnalyses');
 
-  // Photo finalization enriches analyses with character IDs (Commit 8.9.5)
-  builder.addEdge('finalizePhotoAnalyses', 'preprocessEvidence');
+  // Photo finalization → await full context (incremental input)
+  builder.addEdge('finalizePhotoAnalyses', 'checkpointAwaitContext');
 
-  // Phase 4f: Pre-curation checkpoint between preprocessing and curation
-  builder.addEdge('preprocessEvidence', 'setPreCurationCheckpoint');
-  builder.addConditionalEdges('setPreCurationCheckpoint', routePreCurationCheckpoint, {
-    wait: END,
-    continue: 'curateEvidenceBundle'
-  });
+  // After full context provided → parse raw input (produces playerFocus, sessionConfig)
+  builder.addEdge('checkpointAwaitContext', 'parseRawInput');
 
-  // Evidence + Photos approval checkpoint
-  builder.addConditionalEdges('curateEvidenceBundle', routeEvidenceApproval, {
-    wait: END,
-    continue: 'processRescuedItems'  // Process any human-rescued items before arc analysis
-  });
+  // Parse raw input → finalize (input-review checkpoint inside parseRawInput)
+  builder.addEdge('parseRawInput', 'finalizeInput');
 
-  // Process rescued items then continue to arc analysis (Commit 8.10+)
+  // Finalize input → tag token dispositions (re-tag with orchestratorParsed)
+  builder.addEdge('finalizeInput', 'tagTokenDispositions');
+
+  // Tag tokens → preprocess evidence (NOW tokens have correct disposition)
+  builder.addEdge('tagTokenDispositions', 'preprocessEvidence');
+
+  // Preprocess evidence → pre-curation checkpoint
+  builder.addEdge('preprocessEvidence', 'checkpointPreCuration');
+
+  // Pre-curation → evidence curation (has interrupt for evidence-photos)
+  builder.addEdge('checkpointPreCuration', 'curateEvidenceBundle');
+
+  // Curation → rescued items → arc analysis
+  builder.addEdge('curateEvidenceBundle', 'processRescuedItems');
   builder.addEdge('processRescuedItems', 'analyzeArcs');
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 2: Arc Analysis (Parallel Specialists - Commit 8.12)
+  // ADD EDGES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
   // ═══════════════════════════════════════════════════════
 
-  // Parallel specialist calls → programmatic validation → LLM evaluation
-  // Commit 8.12: Added validateArcs node between analyzeArcs and evaluateArcs
+  // Arc analysis → validation → evaluation
   builder.addEdge('analyzeArcs', 'validateArcs');
   builder.addEdge('validateArcs', 'evaluateArcs');
 
-  // Arc evaluation routing
+  // Arc evaluation routing (interrupt() in evaluateArcs handles arc-selection checkpoint)
+  // checkpoint: evaluation ready, proceed to arc evidence packages
+  // revise: needs work, loop back to analyzeArcs
+  // error: fatal error, end workflow
   builder.addConditionalEdges('evaluateArcs', routeArcEvaluation, {
-    checkpoint: 'setArcSelectionCheckpoint',
+    checkpoint: 'buildArcEvidencePackages',
     revise: 'incrementArcRevision',
     error: END
   });
 
-  // Revision loop back to orchestrator (Commit 8.8)
-  builder.addEdge('incrementArcRevision', 'analyzeArcs');
-
-  // Arc selection checkpoint
-  // PHASE 1 FIX: Route through buildArcEvidencePackages before outline
-  builder.addConditionalEdges('setArcSelectionCheckpoint', routeArcSelectionApproval, {
-    wait: END,
-    continue: 'buildArcEvidencePackages'
-  });
+  // Revision loop: increment → revise → validate (NOT back to analyzeArcs)
+  // reviseArcs receives previous output + feedback for TARGETED fixes
+  builder.addEdge('incrementArcRevision', 'reviseArcs');
+  builder.addEdge('reviseArcs', 'validateArcs');
 
   // Arc evidence packages → outline generation
   builder.addEdge('buildArcEvidencePackages', 'generateOutline');
@@ -709,21 +456,20 @@ function createGraphBuilder() {
 
   builder.addEdge('generateOutline', 'evaluateOutline');
 
-  // Outline evaluation routing
+  // Outline evaluation routing (interrupt() in evaluateOutline handles outline checkpoint)
+  // checkpoint: evaluation ready, proceed to article generation
+  // revise: needs work, loop back to generateOutline
+  // error: fatal error, end workflow
   builder.addConditionalEdges('evaluateOutline', routeOutlineEvaluation, {
-    checkpoint: 'setOutlineCheckpoint',
+    checkpoint: 'generateContentBundle',
     revise: 'incrementOutlineRevision',
     error: END
   });
 
-  // Revision loop back to outline generation
-  builder.addEdge('incrementOutlineRevision', 'generateOutline');
-
-  // Outline checkpoint
-  builder.addConditionalEdges('setOutlineCheckpoint', routeOutlineApproval, {
-    wait: END,
-    continue: 'generateContentBundle'
-  });
+  // Revision loop: increment → revise → evaluate (NOT back to generateOutline)
+  // reviseOutline receives previous output + feedback for TARGETED fixes
+  builder.addEdge('incrementOutlineRevision', 'reviseOutline');
+  builder.addEdge('reviseOutline', 'evaluateOutline');
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 4: Article Generation
@@ -732,21 +478,20 @@ function createGraphBuilder() {
 
   builder.addEdge('generateContentBundle', 'evaluateArticle');
 
-  // Article evaluation routing
+  // Article evaluation routing (interrupt() in evaluateArticle handles article checkpoint)
+  // checkpoint: evaluation ready, proceed to schema validation
+  // revise: needs work, loop back to generateContentBundle
+  // error: fatal error, end workflow
   builder.addConditionalEdges('evaluateArticle', routeArticleEvaluation, {
-    checkpoint: 'setArticleCheckpoint',
+    checkpoint: 'validateContentBundle',
     revise: 'incrementArticleRevision',
     error: END
   });
 
-  // Revision loop back to article generation
-  builder.addEdge('incrementArticleRevision', 'generateContentBundle');
-
-  // Article checkpoint → schema validation
-  builder.addConditionalEdges('setArticleCheckpoint', routeArticleApproval, {
-    wait: END,
-    continue: 'validateContentBundle'
-  });
+  // Revision loop: increment → revise → evaluate (NOT back to generateContentBundle)
+  // reviseContentBundle receives previous output + feedback for TARGETED fixes
+  builder.addEdge('incrementArticleRevision', 'reviseContentBundle');
+  builder.addEdge('reviseContentBundle', 'evaluateArticle');
 
   // Schema validation routing
   builder.addConditionalEdges('validateContentBundle', routeSchemaValidation, {
@@ -821,28 +566,17 @@ module.exports = {
   // For testing
   _testing: {
     createGraphBuilder,
-    // Routing functions - Entry (Commit 8.9)
-    routeEntryPoint,
-    routeInputReview,
-    // Routing functions - Checkpoints
-    routePaperEvidenceSelection,  // Commit 8.9.4
-    routeCharacterIdCheckpoint,   // Commit 8.9.5
-    routeEvidenceApproval,
+    // Routing functions (kept - these use evaluation/schema logic, not approval flags)
     routeArcEvaluation,
     routeOutlineEvaluation,
     routeArticleEvaluation,
     routeSchemaValidation,
-    routeArcSelectionApproval,
-    routeOutlineApproval,
-    routeArticleApproval,
-    // Checkpoint nodes
-    setPaperEvidenceCheckpoint,   // Commit 8.9.4
-    setCharacterIdCheckpoint,     // Commit 8.9.5
-    setArcSelectionCheckpoint,
-    setOutlineCheckpoint,
-    setArticleCheckpoint,
+    // Revision handlers (kept)
     incrementArcRevision,
     incrementOutlineRevision,
     incrementArticleRevision
+    // NOTE: routeEntryPoint removed - simplified to direct START → initializeSession
+    // NOTE: Approval-based routing and checkpoint nodes removed in interrupt() migration
+    // See checkpoint-helpers.js for new pattern
   }
 };

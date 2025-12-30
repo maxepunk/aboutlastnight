@@ -7,6 +7,11 @@
  * See ARCHITECTURE_DECISIONS.md 8.5.1-8.5.5 for design rationale.
  */
 
+// Mock checkpointInterrupt to prevent GraphInterrupt in unit tests
+// Uses shared mock - see __tests__/mocks/checkpoint-helpers.mock.js
+jest.mock('../../../lib/workflow/checkpoint-helpers',
+  () => require('../../mocks/checkpoint-helpers.mock'));
+
 const {
   preprocessEvidence,
   createMockPreprocessor,
@@ -288,119 +293,7 @@ describe('preprocess-nodes', () => {
       });
     });
 
-    // Phase 4a: Background paper evidence merge tests
-    describe('background paper merge (Phase 4a)', () => {
-      // Mock getBackgroundResultOrWait to return paper results
-      let originalModule;
-
-      beforeEach(() => {
-        // Save original to restore later
-        originalModule = jest.requireActual('../../../lib/background-pipeline-manager');
-      });
-
-      it('merges background paper evidence with token-only preprocessing', async () => {
-        // Create mock preprocessor that will be called twice (once for paper, once for tokens)
-        const mockPreprocessor = {
-          process: jest.fn()
-            .mockResolvedValueOnce({
-              items: [{ id: 'token-1', sourceType: 'memory-token', summary: 'Token summary' }],
-              preprocessedAt: new Date().toISOString(),
-              sessionId: 'merge-test',
-              stats: {
-                totalItems: 1,
-                memoryTokenCount: 1,
-                paperEvidenceCount: 0,
-                batchesProcessed: 1,
-                processingTimeMs: 50
-              }
-            })
-        };
-
-        // Create mock background result for paper evidence
-        const bgPaperResult = {
-          items: [
-            { id: 'paper-1', sourceType: 'paper-evidence', summary: 'Paper summary 1' },
-            { id: 'paper-2', sourceType: 'paper-evidence', summary: 'Paper summary 2' }
-          ],
-          preprocessedAt: new Date().toISOString(),
-          sessionId: 'merge-test',
-          stats: {
-            totalItems: 2,
-            memoryTokenCount: 0,
-            paperEvidenceCount: 2,
-            batchesProcessed: 1,
-            processingTimeMs: 100
-          }
-        };
-
-        // Mock getBackgroundResultOrWait
-        jest.doMock('../../../lib/background-pipeline-manager', () => ({
-          ...originalModule,
-          getBackgroundResultOrWait: jest.fn()
-            .mockResolvedValueOnce(null)  // First call: no full preprocessed result
-            .mockResolvedValueOnce(bgPaperResult)  // Second call: paper result available
-        }));
-
-        // Clear module cache to pick up mock
-        jest.resetModules();
-        const { preprocessEvidence: mockedPreprocess } = require('../../../lib/workflow/nodes/preprocess-nodes');
-
-        const state = {
-          memoryTokens: [{ id: 't1' }],
-          paperEvidence: [{ id: 'p1' }, { id: 'p2' }],
-          sessionId: 'merge-test'
-        };
-        const config = { configurable: { preprocessor: mockPreprocessor } };
-
-        const result = await mockedPreprocess(state, config);
-
-        // Should have merged items
-        expect(result.preprocessedEvidence.items.length).toBe(3); // 2 paper + 1 token
-        expect(result.preprocessedEvidence.stats.paperFromBackground).toBe(true);
-        expect(result.preprocessedEvidence.stats.paperEvidenceCount).toBe(2);
-        expect(result.preprocessedEvidence.stats.memoryTokenCount).toBe(1);
-
-        // Restore original module
-        jest.dontMock('../../../lib/background-pipeline-manager');
-        jest.resetModules();
-      });
-
-      it('includes batchesProcessed in merged stats', async () => {
-        // This test ensures the merged result has consistent stats structure
-        const mockPreprocessor = {
-          process: jest.fn().mockResolvedValue({
-            items: [{ id: 'token-1' }],
-            stats: { memoryTokenCount: 1, batchesProcessed: 1, processingTimeMs: 50 }
-          })
-        };
-
-        const bgPaperResult = {
-          items: [{ id: 'paper-1' }],
-          stats: { paperEvidenceCount: 1, batchesProcessed: 2, processingTimeMs: 100 }
-        };
-
-        jest.doMock('../../../lib/background-pipeline-manager', () => ({
-          ...originalModule,
-          getBackgroundResultOrWait: jest.fn()
-            .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce(bgPaperResult)
-        }));
-
-        jest.resetModules();
-        const { preprocessEvidence: mockedPreprocess } = require('../../../lib/workflow/nodes/preprocess-nodes');
-
-        const state = { memoryTokens: [{ id: 't1' }], sessionId: 'batch-test' };
-        const config = { configurable: { preprocessor: mockPreprocessor } };
-
-        const result = await mockedPreprocess(state, config);
-
-        // Should combine batches from both preprocessing runs
-        expect(result.preprocessedEvidence.stats.batchesProcessed).toBe(3); // 2 + 1
-
-        jest.dontMock('../../../lib/background-pipeline-manager');
-        jest.resetModules();
-      });
-    });
+    // NOTE: Background paper merge tests removed - parallel branches handle this now
   });
 
   describe('createMockPreprocessor', () => {

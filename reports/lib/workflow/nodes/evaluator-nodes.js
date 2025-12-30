@@ -28,9 +28,10 @@
  * See ARCHITECTURE_DECISIONS.md 8.6.4-8.6.5 for design rationale.
  */
 
-const { PHASES, APPROVAL_TYPES, REVISION_CAPS } = require('../state');
+const { PHASES, REVISION_CAPS } = require('../state');
+const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = require('./node-helpers');
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -103,7 +104,7 @@ const QUALITY_CRITERIA = {
       type: 'structural'
     },
     visualDistributionPlan: {
-      description: 'Does outline distribute visuals across sections (not clustered)? Check visualComponentCount and section budgets.',
+      description: 'Are visual components distributed across sections (not clustered in one area)?',
       weight: 0.10,
       type: 'structural'
     },
@@ -158,7 +159,7 @@ const QUALITY_CRITERIA = {
   },
   article: {
     // ═══════════════════════════════════════════════════════════════════════
-    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.60)
+    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.45)
     // ═══════════════════════════════════════════════════════════════════════
     voiceConsistency: {
       description: 'Does article maintain NovaNews first-person participatory voice (I, my, we)?',
@@ -170,11 +171,11 @@ const QUALITY_CRITERIA = {
       weight: 0.15,
       type: 'structural'
     },
-    // Phase 1 Fix: Visual distribution validation
+    // Visual distribution - advisory, not blocking (Commit 8.25)
     visualDistribution: {
-      description: 'Are visual components (evidence cards, photos, pull quotes) distributed across sections, not clustered? Check: no adjacent evidence cards, 3+ prose paragraphs between visuals.',
-      weight: 0.15,
-      type: 'structural'
+      description: 'Are visual components distributed for compelling narrative flow (not clustered)? Goal is a compelling GIFT for players, not quota compliance.',
+      weight: 0.10,
+      type: 'advisory'
     },
     arcThreading: {
       description: 'Do arcs weave through multiple sections (THE STORY → FOLLOW THE MONEY → THE PLAYERS)? Arcs should feel like conversation topics shifting, not chapter breaks.',
@@ -183,7 +184,7 @@ const QUALITY_CRITERIA = {
     },
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.40)
+    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.55)
     // ═══════════════════════════════════════════════════════════════════════
     evidenceIntegration: {
       description: 'Is evidence woven in naturally?',
@@ -192,7 +193,7 @@ const QUALITY_CRITERIA = {
     },
     characterPlacement: {
       description: 'Are all roster members mentioned?',
-      weight: 0.10,
+      weight: 0.15,  // Fixed: was 0.10, advisory weights should sum to 0.55
       type: 'advisory'
     },
     emotionalResonance: {
@@ -388,6 +389,13 @@ The following inputs were approved in earlier phases and CANNOT be modified:
 - evidenceBundle: The evidence is curated and final
 
 Your feedback should focus on how the ARTICLE EXECUTES the outline, not changing the outline.
+
+═══════════════════════════════════════════════════════════════════════════
+EVALUATION GOAL: COMPELLING GIFT FOR PLAYERS
+═══════════════════════════════════════════════════════════════════════════
+The article should feel like a real investigative piece that celebrates the players' gameplay experience.
+Visual distribution serves narrative flow, NOT quota compliance.
+A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
 
 ═══════════════════════════════════════════════════════════════════════════
 STRUCTURAL CRITERIA (MUST PASS - these block if failed)
@@ -643,15 +651,15 @@ function getRevisionCap(phase) {
 }
 
 /**
- * Get approval type for phase
+ * Get checkpoint type for phase
  * @param {string} phase - Phase name
- * @returns {string} Approval type constant
+ * @returns {string} Checkpoint type constant
  */
-function getApprovalType(phase) {
+function getCheckpointType(phase) {
   switch (phase) {
-    case 'arcs': return APPROVAL_TYPES.ARC_SELECTION;
-    case 'outline': return APPROVAL_TYPES.OUTLINE;
-    case 'article': return APPROVAL_TYPES.ARTICLE;
+    case 'arcs': return CHECKPOINT_TYPES.ARC_SELECTION;
+    case 'outline': return CHECKPOINT_TYPES.OUTLINE;
+    case 'article': return CHECKPOINT_TYPES.ARTICLE;
     default: return null;
   }
 }
@@ -700,7 +708,7 @@ function createEvaluator(phase, options = {}) {
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
     const revisionCap = getRevisionCap(phase);
-    const approvalType = getApprovalType(phase);
+    const checkpointType = getCheckpointType(phase);
     const currentRevisions = state[revisionCountField] || 0;
 
     // Skip logic 1: If user has already approved this phase (downstream data exists)
@@ -723,8 +731,7 @@ function createEvaluator(phase, options = {}) {
           skippedReason: 'user-already-approved',
           confidence: 'high'
         },
-        currentPhase: phaseConstant,
-        awaitingApproval: false // Ensure we don't pause
+        currentPhase: phaseConstant
       };
     }
 
@@ -844,8 +851,23 @@ function createEvaluator(phase, options = {}) {
       if (isReady) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Ready for human review (score: ${evaluation.overallScore})`);
 
-        // Note: Don't set awaitingApproval here - that's the checkpoint's responsibility
-        // The router will send us to the checkpoint based on evaluationHistory
+        // Build data for checkpoint based on phase
+        const checkpointData = phase === 'arcs'
+          ? { narrativeArcs: state.narrativeArcs, evaluationHistory: historyEntry }
+          : phase === 'outline'
+          ? { outline: state.outline, evaluationHistory: historyEntry }
+          : { contentBundle: state.contentBundle, evaluationHistory: historyEntry };
+
+        // Build skip condition - check if user has already approved
+        const skipCondition = (
+          (phase === 'arcs' && state.selectedArcs?.length > 0) ||
+          (phase === 'outline' && state.contentBundle) ||
+          (phase === 'article' && state.assembledHtml)
+        ) ? true : null;
+
+        // Interrupt for human approval
+        checkpointInterrupt(checkpointType, checkpointData, skipCondition);
+
         return {
           evaluationHistory: historyEntry,
           currentPhase: phaseConstant
@@ -859,13 +881,31 @@ function createEvaluator(phase, options = {}) {
         // Use shared helper for safe issue formatting
         const issuesText = formatIssuesForMessage(evaluation.issues);
 
-        // Note: Don't set awaitingApproval here - the checkpoint will handle it
+        const escalatedHistoryEntry = {
+          ...historyEntry,
+          escalatedToHuman: true,
+          escalationReason: `Reached revision cap (${revisionCap}) with issues: ${issuesText}`
+        };
+
+        // Build data for escalation checkpoint
+        const checkpointData = phase === 'arcs'
+          ? { narrativeArcs: state.narrativeArcs, evaluationHistory: escalatedHistoryEntry, escalated: true }
+          : phase === 'outline'
+          ? { outline: state.outline, evaluationHistory: escalatedHistoryEntry, escalated: true }
+          : { contentBundle: state.contentBundle, evaluationHistory: escalatedHistoryEntry, escalated: true };
+
+        // Build skip condition - check if user has already approved
+        const skipCondition = (
+          (phase === 'arcs' && state.selectedArcs?.length > 0) ||
+          (phase === 'outline' && state.contentBundle) ||
+          (phase === 'article' && state.assembledHtml)
+        ) ? true : null;
+
+        // Interrupt for human decision (escalation)
+        checkpointInterrupt(checkpointType, checkpointData, skipCondition);
+
         return {
-          evaluationHistory: {
-            ...historyEntry,
-            escalatedToHuman: true,
-            escalationReason: `Reached revision cap (${revisionCap}) with issues: ${issuesText}`
-          },
+          evaluationHistory: escalatedHistoryEntry,
           currentPhase: phaseConstant
         };
       }
@@ -953,7 +993,7 @@ function createMockEvaluator(phase, options = {}) {
   return async function mockEvaluator(state, config) {
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
-    const approvalType = getApprovalType(phase);
+    const checkpointType = getCheckpointType(phase);
     const currentRevisions = state[revisionCountField] || 0;
 
     if (shouldFail) {
@@ -986,11 +1026,11 @@ function createMockEvaluator(phase, options = {}) {
     };
 
     if (ready) {
+      // Mock the checkpoint interrupt for testing
+      // In real evaluators, checkpointInterrupt is called here
       return {
         evaluationHistory: historyEntry,
-        currentPhase: phaseConstant,
-        awaitingApproval: true,
-        approvalType
+        currentPhase: phaseConstant
       };
     }
 
@@ -1034,7 +1074,7 @@ module.exports = {
     safeParseJson,
     getRevisionCountField,
     getRevisionCap,
-    getApprovalType,
+    getCheckpointType,
     getPhaseConstant
   }
 };
@@ -1097,7 +1137,7 @@ if (require.main === module) {
   console.log('Testing evaluateArcs...');
   evaluateArcs(mockState, mockConfig).then(result => {
     console.log('Arcs result:', {
-      ready: result.awaitingApproval,
+      ready: result.evaluationHistory?.ready,
       phase: result.currentPhase
     });
 
@@ -1105,7 +1145,7 @@ if (require.main === module) {
     return evaluateOutline(mockState, mockConfig);
   }).then(result => {
     console.log('Outline result:', {
-      ready: result.awaitingApproval,
+      ready: result.evaluationHistory?.ready,
       needsRevision: result.validationResults?.passed === false,
       revisionCount: result.outlineRevisionCount
     });
@@ -1114,7 +1154,7 @@ if (require.main === module) {
     return evaluateArticle(mockState, mockConfig);
   }).then(result => {
     console.log('Article result:', {
-      ready: result.awaitingApproval,
+      ready: result.evaluationHistory?.ready,
       phase: result.currentPhase
     });
 

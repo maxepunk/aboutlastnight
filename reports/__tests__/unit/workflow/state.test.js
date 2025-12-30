@@ -9,13 +9,15 @@ const {
   ReportStateAnnotation,
   getDefaultState,
   PHASES,
-  APPROVAL_TYPES,
   REVISION_CAPS,
   ROLLBACK_CLEARS,
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS,
   _testing
 } = require('../../../lib/workflow/state');
+
+// Import CHECKPOINT_TYPES from new location (replaced APPROVAL_TYPES)
+const { CHECKPOINT_TYPES } = require('../../../lib/workflow/checkpoint-helpers');
 
 describe('ReportStateAnnotation', () => {
   describe('module exports', () => {
@@ -30,11 +32,6 @@ describe('ReportStateAnnotation', () => {
     it('exports PHASES constant', () => {
       expect(PHASES).toBeDefined();
       expect(typeof PHASES).toBe('object');
-    });
-
-    it('exports APPROVAL_TYPES constant', () => {
-      expect(APPROVAL_TYPES).toBeDefined();
-      expect(typeof APPROVAL_TYPES).toBe('object');
     });
 
     it('exports REVISION_CAPS constant (Commit 8.6)', () => {
@@ -239,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 39 state fields (Phase 1 Fix: added arcEvidencePackages)', () => {
+    it('includes all 45 state fields (includes revision context fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -255,12 +252,19 @@ describe('ReportStateAnnotation', () => {
         'paperEvidence',
         'selectedPaperEvidence',  // Commit 8.9
         'sessionPhotos',
+        // Incremental input (Parallel branch architecture)
+        'roster',
+        'genericPhotoAnalyses',
         // Photo analysis (Commit 8.6)
         'photoAnalyses',
         'characterIdMappings',
         'characterIdsRaw',  // Commit 8.9.x
         // Preprocessed data (Commit 8.5)
         'preprocessedEvidence',
+        // Photo processing (Parallel branch architecture)
+        'whiteboardPhotoPath',
+        'preprocessStats',
+        'whiteboardAnalysis',
         // Pre-curation checkpoint (Phase 4f)
         'preCurationApproved',
         'preCurationSummary',
@@ -292,13 +296,15 @@ describe('ReportStateAnnotation', () => {
         'articleRevisionCount',
         // Error handling
         'errors',
-        // Human approval
-        'awaitingApproval',
-        'approvalType',
+        // NOTE: awaitingApproval/approvalType removed in interrupt() migration
         // Internal temporary state (Commit 8.10+)
         '_rescuedItems',
         '_excludedItemsCache',
-        '_rescueWarnings'
+        '_rescueWarnings',
+        // Revision context (preserves previous output for targeted fixes)
+        '_previousArcs',
+        '_previousOutline',
+        '_previousContentBundle'
       ];
 
       expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort());
@@ -436,15 +442,8 @@ describe('ReportStateAnnotation', () => {
       });
     });
 
-    describe('approval checkpoint defaults', () => {
-      it('awaitingApproval defaults to false', () => {
-        expect(defaultState.awaitingApproval).toBe(false);
-      });
-
-      it('approvalType defaults to null', () => {
-        expect(defaultState.approvalType).toBeNull();
-      });
-    });
+    // NOTE: approval checkpoint defaults tests removed in interrupt() migration
+    // awaitingApproval and approvalType fields no longer exist in state
 
     it('returns a new object each call (not shared reference)', () => {
       const state1 = getDefaultState();
@@ -502,8 +501,8 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 33 phases (Phase 1 Fix: added BUILD_ARC_PACKAGES)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(33);
+    it('defines exactly 38 phases (Parallel branch architecture: added 5 phases)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(38);
     });
 
     it('defines input parsing phases (Commit 8.9)', () => {
@@ -534,51 +533,53 @@ describe('ReportStateAnnotation', () => {
     });
   });
 
-  describe('APPROVAL_TYPES constant', () => {
+  // NOTE: APPROVAL_TYPES removed in interrupt() migration
+  // Checkpoint types now defined in checkpoint-helpers.js as CHECKPOINT_TYPES
+  describe('CHECKPOINT_TYPES (from checkpoint-helpers.js)', () => {
     it('defines ARC_SELECTION type', () => {
-      expect(APPROVAL_TYPES.ARC_SELECTION).toBe('arc-selection');
+      expect(CHECKPOINT_TYPES.ARC_SELECTION).toBe('arc-selection');
     });
 
     it('defines OUTLINE type', () => {
-      expect(APPROVAL_TYPES.OUTLINE).toBe('outline');
+      expect(CHECKPOINT_TYPES.OUTLINE).toBe('outline');
     });
 
-    it('defines EVIDENCE_AND_PHOTOS type (Commit 8.6)', () => {
-      expect(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS).toBe('evidence-and-photos');
+    it('defines EVIDENCE_AND_PHOTOS type', () => {
+      expect(CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS).toBe('evidence-and-photos');
     });
 
-    it('defines CHARACTER_IDS type (Commit 8.6)', () => {
-      expect(APPROVAL_TYPES.CHARACTER_IDS).toBe('character-ids');
+    it('defines CHARACTER_IDS type', () => {
+      expect(CHECKPOINT_TYPES.CHARACTER_IDS).toBe('character-ids');
     });
 
-    it('defines ARTICLE type (Commit 8.6)', () => {
-      expect(APPROVAL_TYPES.ARTICLE).toBe('article');
+    it('defines ARTICLE type', () => {
+      expect(CHECKPOINT_TYPES.ARTICLE).toBe('article');
     });
 
-    it('defines PRE_CURATION type (Phase 4f)', () => {
-      expect(APPROVAL_TYPES.PRE_CURATION).toBe('pre-curation');
+    it('defines PRE_CURATION type', () => {
+      expect(CHECKPOINT_TYPES.PRE_CURATION).toBe('pre-curation');
     });
 
-    it('defines exactly 8 approval types (Phase 4f)', () => {
-      expect(Object.keys(APPROVAL_TYPES)).toHaveLength(8);
+    it('defines exactly 10 checkpoint types (Parallel branch: added AWAIT_ROSTER, AWAIT_FULL_CONTEXT)', () => {
+      expect(Object.keys(CHECKPOINT_TYPES)).toHaveLength(10);
     });
 
-    it('defines input review approval type (Commit 8.9)', () => {
-      expect(APPROVAL_TYPES.INPUT_REVIEW).toBe('input-review');
+    it('defines INPUT_REVIEW type', () => {
+      expect(CHECKPOINT_TYPES.INPUT_REVIEW).toBe('input-review');
     });
 
-    it('defines paper evidence selection approval type (Commit 8.9)', () => {
-      expect(APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION).toBe('paper-evidence-selection');
+    it('defines PAPER_EVIDENCE_SELECTION type', () => {
+      expect(CHECKPOINT_TYPES.PAPER_EVIDENCE_SELECTION).toBe('paper-evidence-selection');
     });
 
-    it('all approval type values are strings', () => {
-      Object.values(APPROVAL_TYPES).forEach(type => {
+    it('all checkpoint type values are strings', () => {
+      Object.values(CHECKPOINT_TYPES).forEach(type => {
         expect(typeof type).toBe('string');
       });
     });
 
-    it('all approval type values are unique', () => {
-      const values = Object.values(APPROVAL_TYPES);
+    it('all checkpoint type values are unique', () => {
+      const values = Object.values(CHECKPOINT_TYPES);
       const uniqueValues = new Set(values);
       expect(uniqueValues.size).toBe(values.length);
     });
@@ -611,14 +612,15 @@ describe('ReportStateAnnotation', () => {
   });
 
   describe('ROLLBACK_CLEARS constant (Phase 4f)', () => {
-    it('defines 8 rollback points', () => {
-      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(8);
+    it('defines 9 rollback points (Parallel branch: added await-roster)', () => {
+      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(9);
     });
 
     it('includes all expected rollback points', () => {
       const expected = [
         'input-review',
         'paper-evidence-selection',
+        'await-roster',  // Parallel branch architecture
         'character-ids',
         'pre-curation',
         'evidence-and-photos',
@@ -753,7 +755,8 @@ describe('ReportStateAnnotation', () => {
     });
 
     it('control fields manage workflow state', () => {
-      const controlFields = ['currentPhase', 'voiceRevisionCount', 'errors', 'awaitingApproval', 'approvalType'];
+      // NOTE: awaitingApproval/approvalType removed in interrupt() migration
+      const controlFields = ['currentPhase', 'voiceRevisionCount', 'errors'];
       const defaultState = getDefaultState();
 
       controlFields.forEach(field => {
@@ -782,7 +785,8 @@ describe('state self-test validation', () => {
       const tokens = state.memoryTokens.length;
       const phase = state.currentPhase;
       const hasErrors = state.errors.length > 0;
-      const isWaiting = state.awaitingApproval;
+      // NOTE: awaitingApproval removed in interrupt() migration
+      // Nodes now use interrupt() from checkpoint-helpers.js
     }).not.toThrow();
   });
 });

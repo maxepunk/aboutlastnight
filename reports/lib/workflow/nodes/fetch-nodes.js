@@ -20,9 +20,8 @@ const path = require('path');
 const { PHASES } = require('../state');
 const { createNotionClient } = require('../../notion-client');
 const { createCachedNotionClient } = require('../../cache');
-const { getBackgroundResultOrWait, RESULT_TYPES } = require('../../background-pipeline-manager');
 const { synthesizePlayerFocus } = require('./node-helpers');
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 
 /**
  * Default data directory for session files
@@ -113,18 +112,24 @@ function tagTokensWithDisposition(tokens, orchestratorParsed) {
 /**
  * Initialize session from config
  *
- * Extracts sessionId and theme from the graph's configurable object.
+ * Extracts sessionId and theme from state or config.configurable.
  * This is the entry point node for the workflow.
  *
- * @param {Object} state - Current state (typically empty/default)
- * @param {Object} config - Graph config with configurable.sessionId and configurable.theme
+ * Supports two invocation patterns:
+ * 1. Server API: sessionId in config.configurable (traditional)
+ * 2. LangSmith Studio: sessionId in state input (Studio passes input to state)
+ *
+ * @param {Object} state - Current state with optional sessionId, theme
+ * @param {Object} config - Graph config with optional configurable.sessionId and configurable.theme
  * @returns {Object} Partial state update with sessionId, theme, currentPhase
  */
 async function initializeSession(state, config) {
-  const { sessionId, theme = 'journalist' } = config?.configurable || {};
+  // Support both Studio (state input) and server API (config.configurable) patterns
+  const sessionId = state?.sessionId || config?.configurable?.sessionId;
+  const theme = state?.theme || config?.configurable?.theme || 'journalist';
 
   if (!sessionId) {
-    throw new Error('sessionId is required in config.configurable');
+    throw new Error('sessionId is required (via state input or config.configurable)');
   }
 
   return {
@@ -186,28 +191,46 @@ async function loadDirectorNotes(state, config) {
 
   console.log('[loadDirectorNotes] Loading from files...');
 
-  // Load director notes
+  // Load director notes (optional for incremental input)
+  let directorNotes = {};
   const notesPath = path.join(sessionPath, 'director-notes.json');
-  const notesContent = await fs.readFile(notesPath, 'utf-8');
-  const directorNotes = JSON.parse(notesContent);
+  try {
+    const notesContent = await fs.readFile(notesPath, 'utf-8');
+    directorNotes = JSON.parse(notesContent);
+  } catch (err) {
+    // File doesn't exist - that's okay for incremental input
+    console.log('[loadDirectorNotes] No director-notes.json found (incremental input mode)');
+  }
 
-  // Load session config
+  // Load session config (optional for incremental input)
+  let sessionConfig = {};
   const configPath = path.join(sessionPath, 'session-config.json');
-  const configContent = await fs.readFile(configPath, 'utf-8');
-  const sessionConfig = JSON.parse(configContent);
+  try {
+    const configContent = await fs.readFile(configPath, 'utf-8');
+    sessionConfig = JSON.parse(configContent);
+  } catch (err) {
+    // File doesn't exist - that's okay for incremental input
+    console.log('[loadDirectorNotes] No session-config.json found (incremental input mode)');
+  }
 
   // Extract player focus (Layer 3 drives narrative per plan)
   // If missing, synthesize from available data (backwards compatibility)
   let playerFocus = directorNotes.playerFocus;
 
   if (!playerFocus || Object.keys(playerFocus).length === 0) {
-    console.log('[loadDirectorNotes] Synthesizing playerFocus from existing data');
-    playerFocus = synthesizePlayerFocus(sessionConfig, directorNotes);
+    // Only synthesize if we have enough data
+    if (Object.keys(sessionConfig).length > 0 || Object.keys(directorNotes).length > 0) {
+      console.log('[loadDirectorNotes] Synthesizing playerFocus from existing data');
+      playerFocus = synthesizePlayerFocus(sessionConfig, directorNotes);
+    } else {
+      console.log('[loadDirectorNotes] No data for playerFocus (incremental input mode)');
+      playerFocus = null;
+    }
   }
 
   return {
-    directorNotes,
-    sessionConfig,
+    directorNotes: Object.keys(directorNotes).length > 0 ? directorNotes : null,
+    sessionConfig: Object.keys(sessionConfig).length > 0 ? sessionConfig : null,
     playerFocus,
     // Store orchestratorParsed for fetchMemoryTokens disposition tagging
     _parsedInput: {
@@ -238,35 +261,6 @@ async function loadDirectorNotes(state, config) {
  * @returns {Object} Partial state update with memoryTokens, currentPhase
  */
 async function fetchMemoryTokens(state, config) {
-  // Check background pipeline for already-tagged tokens (legacy path)
-  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.TOKENS, config);
-  if (bgResult) {
-    console.log(`[fetchMemoryTokens] Using background result (${bgResult.length} tokens)`);
-    return { memoryTokens: bgResult, currentPhase: PHASES.FETCH_EVIDENCE };
-  }
-
-  // Check background pipeline for RAW tokens (new path: background fetches raw, we tag here)
-  // Use shorter timeout since raw tokens should already be available if pipeline ran
-  const rawBgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.RAW_TOKENS, config, 5000);
-  if (rawBgResult) {
-    console.log(`[fetchMemoryTokens] Using raw background result, tagging ${rawBgResult.length} tokens`);
-
-    // Load orchestrator-parsed.json for tagging
-    const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
-    const orchestratorPath = path.join(dataDir, state.sessionId, 'inputs', 'orchestrator-parsed.json');
-    let orchestratorParsed = {};
-    try {
-      const orchestratorContent = await fs.readFile(orchestratorPath, 'utf-8');
-      orchestratorParsed = JSON.parse(orchestratorContent);
-    } catch (err) {
-      console.log(`[fetchMemoryTokens] No orchestrator-parsed.json found for raw tokens`);
-    }
-
-    const { taggedTokens, exposedCount, buriedCount, unknownCount } = tagTokensWithDisposition(rawBgResult, orchestratorParsed);
-    console.log(`[fetchMemoryTokens] Tagged ${taggedTokens.length} tokens: ${exposedCount} exposed, ${buriedCount} buried, ${unknownCount} unknown`);
-    return { memoryTokens: taggedTokens, currentPhase: PHASES.FETCH_EVIDENCE };
-  }
-
   // Skip if already fetched (resume case or pre-populated)
   // Use null check, not truthy/length check:
   // - null/undefined = not yet fetched (run fetch)
@@ -311,46 +305,6 @@ async function fetchMemoryTokens(state, config) {
 
   return {
     memoryTokens: taggedTokens,
-    currentPhase: PHASES.FETCH_EVIDENCE
-  };
-}
-
-/**
- * Fetch raw memory tokens from Notion WITHOUT disposition tagging
- *
- * This is designed for background pipeline use - it fetches tokens immediately
- * without needing orchestrator-parsed.json (which is created by parseRawInput).
- *
- * @param {Object} state - Current state with sessionId, directorNotes
- * @param {Object} config - Graph config with optional configurable.dataDir
- * @returns {Object} Partial state update with memoryTokens (untagged), currentPhase
- */
-async function fetchMemoryTokensRaw(state, config) {
-  // Check background pipeline for RAW_TOKENS first
-  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.RAW_TOKENS, config);
-  if (bgResult) {
-    console.log(`[fetchMemoryTokensRaw] Using background result (${bgResult.length} tokens)`);
-    return { memoryTokens: bgResult, currentPhase: PHASES.FETCH_EVIDENCE };
-  }
-
-  // Skip if already fetched (resume case or pre-populated)
-  if (state.memoryTokens !== null && state.memoryTokens !== undefined) {
-    console.log(`[fetchMemoryTokensRaw] Skipping - already set (${state.memoryTokens.length} tokens)`);
-    return { currentPhase: PHASES.FETCH_EVIDENCE };
-  }
-
-  const client = getNotionClient(config);
-  const tokenIds = state.directorNotes?.scannedTokens || [];
-
-  console.log(`[fetchMemoryTokensRaw] Fetching ${tokenIds.length || 'all'} tokens from Notion...`);
-
-  const result = await client.fetchMemoryTokens(tokenIds);
-  const tokens = result.tokens || [];
-
-  console.log(`[fetchMemoryTokensRaw] Fetched ${tokens.length} raw tokens (no disposition tagging)`);
-
-  return {
-    memoryTokens: tokens,
     currentPhase: PHASES.FETCH_EVIDENCE
   };
 }
@@ -414,45 +368,36 @@ async function tagTokenDispositions(state, config) {
 }
 
 /**
- * Fetch paper evidence from Notion
+ * Fetch paper evidence from Notion (pure data fetch, no checkpoint)
  *
- * Uses NotionClient to fetch all paper evidence documents.
- * Optionally includes file attachments based on config.
+ * Pure data-fetching node for use in parallel branches.
+ * Checkpoint is handled by dedicated checkpointPaperEvidence node.
  *
- * @param {Object} state - Current state (unused for fetch)
+ * @param {Object} state - Current state with sessionId
  * @param {Object} config - Graph config with optional configurable.includeAttachments
  * @returns {Object} Partial state update with paperEvidence, currentPhase
  */
 async function fetchPaperEvidence(state, config) {
-  // Check background pipeline first (DRY - single helper for all nodes)
-  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.PAPER_EVIDENCE, config);
-  if (bgResult) {
-    console.log(`[fetchPaperEvidence] Using background result (${bgResult.length} items)`);
-    return { paperEvidence: bgResult, currentPhase: PHASES.FETCH_PHOTOS };
-  }
-
   // Skip if already fetched (resume case or pre-populated)
-  // Use null check, not truthy/length check:
-  // - null/undefined = not yet fetched (run fetch)
-  // - array (even empty) = already fetched (skip)
   if (state.paperEvidence !== null && state.paperEvidence !== undefined) {
     console.log(`[fetchPaperEvidence] Skipping - already set (${state.paperEvidence.length} items)`);
     return {
-      currentPhase: PHASES.FETCH_PHOTOS
+      currentPhase: PHASES.FETCH_EVIDENCE
     };
   }
 
   const client = getNotionClient(config);
-
-  // Whether to include file attachments (defaults to true for full evidence)
   const includeAttachments = config?.configurable?.includeAttachments ?? true;
 
-  // Fetch evidence from Notion
+  console.log('[fetchPaperEvidence] Fetching paper evidence from Notion...');
   const result = await client.fetchPaperEvidence(includeAttachments);
+  const paperEvidence = result.evidence || [];
+
+  console.log(`[fetchPaperEvidence] Fetched ${paperEvidence.length} items`);
 
   return {
-    paperEvidence: result.evidence || [],
-    currentPhase: PHASES.FETCH_PHOTOS
+    paperEvidence,
+    currentPhase: PHASES.FETCH_EVIDENCE
   };
 }
 
@@ -467,17 +412,7 @@ async function fetchPaperEvidence(state, config) {
  * @returns {Object} Partial state update with sessionPhotos, currentPhase
  */
 async function fetchSessionPhotos(state, config) {
-  // Check background pipeline first (DRY - single helper for all nodes)
-  const bgResult = await getBackgroundResultOrWait(state.sessionId, RESULT_TYPES.PHOTOS, config);
-  if (bgResult) {
-    console.log(`[fetchSessionPhotos] Using background result (${bgResult.length} photos)`);
-    return { sessionPhotos: bgResult, currentPhase: PHASES.ANALYZE_PHOTOS };
-  }
-
   // Skip if already fetched (resume case or pre-populated)
-  // Use null check, not truthy/length check:
-  // - null/undefined = not yet fetched (run fetch)
-  // - array (even empty) = already fetched (skip)
   if (state.sessionPhotos !== null && state.sessionPhotos !== undefined) {
     console.log(`[fetchSessionPhotos] Skipping - already set (${state.sessionPhotos.length} photos)`);
     return {
@@ -485,9 +420,11 @@ async function fetchSessionPhotos(state, config) {
     };
   }
 
-  // Use custom photosPath from sessionConfig if provided, otherwise use default
+  // Use custom photosPath from rawSessionInput or sessionConfig if provided
+  // Priority: rawSessionInput (incremental input) > sessionConfig (file-based) > default
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
-  const photosDir = state.sessionConfig?.photosPath
+  const photosDir = state.rawSessionInput?.photosPath
+    || state.sessionConfig?.photosPath
     || path.join(dataDir, state.sessionId, 'inputs', 'photos');
 
   try {
@@ -580,7 +517,6 @@ module.exports = {
   initializeSession: traceNode(initializeSession, 'initializeSession'),
   loadDirectorNotes: traceNode(loadDirectorNotes, 'loadDirectorNotes'),
   fetchMemoryTokens: traceNode(fetchMemoryTokens, 'fetchMemoryTokens'),
-  fetchMemoryTokensRaw: traceNode(fetchMemoryTokensRaw, 'fetchMemoryTokensRaw'),
   tagTokenDispositions: traceNode(tagTokenDispositions, 'tagTokenDispositions'),
   fetchPaperEvidence: traceNode(fetchPaperEvidence, 'fetchPaperEvidence'),
   fetchSessionPhotos: traceNode(fetchSessionPhotos, 'fetchSessionPhotos'),

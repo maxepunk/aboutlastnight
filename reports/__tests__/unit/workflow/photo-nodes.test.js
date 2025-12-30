@@ -7,6 +7,11 @@
  * See ARCHITECTURE_DECISIONS.md 8.6.3 for design rationale.
  */
 
+// Mock checkpointInterrupt to prevent GraphInterrupt in unit tests
+// Uses shared mock - see __tests__/mocks/checkpoint-helpers.mock.js
+jest.mock('../../../lib/workflow/checkpoint-helpers',
+  () => require('../../mocks/checkpoint-helpers.mock'));
+
 const {
   analyzePhotos,
   createMockPhotoAnalyzer,
@@ -371,6 +376,7 @@ describe('photo-nodes', () => {
         const result = await analyzePhotos(state, config);
 
         // Should still complete with partial results
+        // Parallel branch architecture: analyzePhotos is pure, checkpointCharacterIds handles interrupt
         expect(result.currentPhase).toBe(PHASES.ANALYZE_PHOTOS);
         expect(result.photoAnalyses.analyses.length).toBe(2);
         expect(result.photoAnalyses.stats.analyzedPhotos).toBe(1);
