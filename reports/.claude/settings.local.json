@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch",
+      "WebSearch",
+      "Skill(feature-dev:feature-dev)",
+      "Skill(frontend-design:frontend-design)",
+      "Skill(agent-sdk-dev:new-sdk-app)",
+      "Skill(superpowers:write-plan)",
+      "Skill(superpowers:writing-plans)",
+      "Skill(example-skills:skill-creator)",
+      "Skill(journalist-report)",
+      "Bash(dir:*)",
+      "Bash(node scripts/fetch-paper-evidence.js:*)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__get-library-docs",
+      "Bash(npm test:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "mcp__plugin_context7_context7__query-docs"
+    ]
+  }
+}

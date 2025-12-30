@@ -1,0 +1,33 @@
+{{!--
+  Inline Evidence Card
+
+  Full evidence display placed within article flow.
+  Shows complete quotable content from memory tokens or paper evidence.
+
+  Context:
+    tokenId: string (unique evidence identifier)
+    headline: string (compelling headline for the card)
+    content: string (full quotable evidence text - from fullDescription)
+    owner: string? (character who owns this evidence, e.g., "Rachel Torres")
+    significance: "critical" | "supporting" | "contextual"
+
+  NARRATIVE PURPOSE:
+  Evidence cards are the "receipts" that prove Nova's claims.
+  Use them to:
+  - Anchor accusations with primary source material
+  - Let damning content speak for itself
+  - Create emotional gut-punches at arc climaxes
+
+  NOTE: Nova NEVER reveals sources. No submitter field is used.
+--}}
+<aside class="evidence-card evidence-card--{{significance}}" data-token="{{tokenId}}">
+  <div class="evidence-card__label">{{headline}}</div>
+  <div class="evidence-card__content">
+    {{content}}
+  </div>
+  {{#if owner}}
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">{{owner}}</span>
+  </div>
+  {{/if}}
+</aside>

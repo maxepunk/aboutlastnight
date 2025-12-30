@@ -1,0 +1,30 @@
+{{!--
+  Pull Quote
+
+  Featured quote with large decorative quotation mark.
+  Positioned in sidebar or inline based on placement.
+
+  TWO TYPES:
+  1. Nova's crystallized insight - NO attribution (just styled text)
+  2. Verbatim evidence quote - HAS character name attribution
+
+  Context:
+    text: string (the quote content - MUST be verbatim, not a summary)
+    attribution: string? (character name who said it, or null for Nova's insights)
+    placement: "left" | "right" | "center"
+
+  IMPORTANT: If attribution is "Nova" or absent, no byline is shown.
+  Nova never gets a byline on her own insights - the styling alone signals importance.
+--}}
+<div class="pull-quote {{pullQuotePlacement placement}}">
+  <blockquote class="pull-quote__text">
+    <span class="pull-quote__mark" aria-hidden="true">"</span>
+    {{text}}
+  </blockquote>
+  {{!-- Only show attribution for character quotes, NEVER for Nova's insights --}}
+  {{#if attribution}}
+  {{#unless (eq attribution "Nova")}}
+  <cite class="pull-quote__attribution">— {{attribution}}</cite>
+  {{/unless}}
+  {{/if}}
+</div>

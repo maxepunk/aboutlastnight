@@ -1,0 +1,19 @@
+{{!--
+  Evidence Reference Content Block
+
+  Inline reference to a memory token with optional caption.
+  Links to evidence card in sidebar or expanded view.
+
+  Context:
+    type: "evidence-reference"
+    tokenId: string (the token identifier)
+    caption: string? (optional description)
+--}}
+<span class="evidence-ref" data-token-id="{{tokenId}}">
+  <span class="evidence-ref__icon" aria-hidden="true">◆</span>
+  {{#if caption}}
+  <span class="evidence-ref__caption">{{caption}}</span>
+  {{else}}
+  <span class="evidence-ref__id">{{tokenId}}</span>
+  {{/if}}
+</span>

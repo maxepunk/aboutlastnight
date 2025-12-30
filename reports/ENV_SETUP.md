@@ -8,7 +8,7 @@ Your Notion integration token is now stored in a local `.env` file instead of be
 
 1. **`package.json`** - Added `dotenv` dependency
 2. **`server.js`** - Added `/api/config` endpoint to serve token
-3. **`detlogv3.html`** - Fetches token from backend on page load
+3. **`detlogv3.html`** - Frontend fetches token from backend on page load
 
 ### Files Created
 
@@ -80,7 +80,7 @@ Or use `start-everything.bat` to restart both server and tunnel.
 ### Test 1: Verify Token Loads
 
 1. Restart server: `npm start`
-2. Open browser: `http://localhost:3000`
+2. Open browser: `http://localhost:3001`
 3. **Expected:** Notion token field is already filled in (shows `••••••••`)
 4. **If empty:** Check server logs for errors, verify .env file exists
 
@@ -168,7 +168,7 @@ Then add `API_KEY=your-secret` to `.env` and update frontend to send it.
 **Problem:** Frontend not fetching token from backend
 
 **Check:**
-1. Server is running: `http://localhost:3000/api/config`
+1. Server is running: `http://localhost:3001/api/config`
    - Should return: `{"notionToken":"ntn_..."}`
 2. Browser console for errors (F12 → Console tab)
 3. Try hard refresh: Ctrl+Shift+R
@@ -272,7 +272,7 @@ npm install
 npm start
 
 # Check token endpoint works
-curl http://localhost:3000/api/config
+curl http://localhost:3001/api/config
 
 # View .env contents
 type .env      # Windows

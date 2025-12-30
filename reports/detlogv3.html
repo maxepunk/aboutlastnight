@@ -183,8 +183,8 @@
             return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
         };
 
-        // Loading Overlay Component
-        const LoadingOverlay = () => (
+        // Loading Overlay Component (Commit 8.16: Added progress message prop)
+        const LoadingOverlay = ({ progressMessage }) => (
             <div className="loading-overlay">
                 <div className="glass-panel rounded-2xl p-8 flex flex-col items-center gap-4 max-w-md">
                     <div className="relative">
@@ -195,7 +195,9 @@
                     </div>
                     <div className="text-center">
                         <h3 className="text-xl font-bold text-white mb-2">Processing Report</h3>
-                        <p className="text-sm text-slate-400">Analyzing evidence and synthesizing narrative...</p>
+                        <p className="text-sm text-slate-400">
+                            {progressMessage || 'Analyzing evidence and synthesizing narrative...'}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -1028,6 +1030,7 @@ Now go home. Get some real rest. You've earned it. "`;
             const [hideProps, setHideProps] = useState(true);
             const [isEditingReport, setIsEditingReport] = useState(false);
             const [isGenerating, setIsGenerating] = useState(false);
+            const [progressMessage, setProgressMessage] = useState('');  // SSE progress (Commit 8.16)
 
             // Auth State
             const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1083,6 +1086,50 @@ Now go home. Get some real rest. You've earned it. "`;
             useEffect(() => {
                 if (step === 3 && sessionIds.size === 0) setSessionIds(new Set(defaultStaticIds));
             }, [step, defaultStaticIds]);
+
+            // --- SSE PROGRESS STREAMING (Commit 8.16) ---
+            // Connect to SSE endpoint when generation starts to receive real-time progress
+            // NOTE: For full SSE functionality, frontend must use session-based API with sessionId
+            const SSE_MAX_RETRIES = 5;
+            const sseSessionId = caseMeta.number.replace(/[^a-zA-Z0-9]/g, '') || 'default';
+            useEffect(() => {
+                if (!isGenerating || !isAuthenticated) {
+                    setProgressMessage('');
+                    return;
+                }
+
+                // Connect to SSE endpoint
+                const eventSource = new EventSource(`/api/session/${sseSessionId}/progress`);
+                let sseErrorCount = 0;
+
+                eventSource.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.message) {
+                            setProgressMessage(data.message);
+                        }
+                        sseErrorCount = 0;  // Reset on successful message
+                    } catch (err) {
+                        console.warn('SSE parse error:', err);
+                    }
+                };
+
+                eventSource.onerror = (err) => {
+                    sseErrorCount++;
+                    console.warn(`SSE connection error (${sseErrorCount}):`, err);
+                    if (sseErrorCount >= SSE_MAX_RETRIES) {
+                        console.warn('SSE: Too many errors, closing connection');
+                        eventSource.close();
+                    }
+                    // Otherwise browser will auto-reconnect
+                };
+
+                // Cleanup on unmount or when generation stops
+                return () => {
+                    eventSource.close();
+                    setProgressMessage('');
+                };
+            }, [isGenerating, isAuthenticated, sseSessionId]);
 
             // --- AUTH HANDLERS ---
 
@@ -2018,8 +2065,8 @@ Generate the case report.`;
 
             return (
                 <div className="min-h-screen bg-[#020617] text-slate-200 p-6 flex flex-col font-sans selection:bg-blue-500/30">
-                    {/* Loading Overlay */}
-                    {isGenerating && <LoadingOverlay />}
+                    {/* Loading Overlay with SSE progress (Commit 8.16) */}
+                    {isGenerating && <LoadingOverlay progressMessage={progressMessage} />}
 
                     {/* Header */}
                     <header className="max-w-6xl mx-auto w-full mb-6 flex justify-between items-center">

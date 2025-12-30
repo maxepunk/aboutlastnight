@@ -1,0 +1,131 @@
+{
+  "metadata": {
+    "sessionId": "test-session-001",
+    "theme": "journalist",
+    "generatedAt": "2024-12-23T10:30:00.000Z",
+    "version": "1.0.0"
+  },
+  "headline": {
+    "main": "Nova Labs Funding Trail Leads to Offshore Accounts",
+    "kicker": "EXCLUSIVE INVESTIGATION",
+    "deck": "Documents reveal systematic diversion of research grants through shell companies"
+  },
+  "byline": {
+    "author": "Vera Sterling",
+    "title": "Senior Investigative Reporter",
+    "location": "Fremont, CA",
+    "date": "December 23, 2024"
+  },
+  "sections": [
+    {
+      "id": "intro",
+      "type": "narrative",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "The fluorescent lights of Nova Labs cast long shadows across empty workbenches as I reviewed the final batch of financial records. What started as a routine story about a promising biotech startup had become something far more troubling."
+        },
+        {
+          "type": "paragraph",
+          "text": "Three months of investigation have revealed a pattern of financial irregularities that raise serious questions about how Dr. James Chen managed his company's research funding."
+        }
+      ]
+    },
+    {
+      "id": "evidence-section",
+      "type": "evidence-highlight",
+      "heading": "The Paper Trail",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "The evidence began to accumulate in unexpected places."
+        },
+        {
+          "type": "evidence-reference",
+          "tokenId": "doc001",
+          "caption": "Bank transfer records showing wire transfers to Cayman Islands"
+        },
+        {
+          "type": "quote",
+          "text": "I never authorized those transfers. Someone must have forged my signature.",
+          "attribution": "Dr. James Chen, in written statement to NovaNews"
+        }
+      ]
+    },
+    {
+      "id": "financial-analysis",
+      "type": "investigation-notes",
+      "heading": "Following the Money",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "Our analysis of Nova Labs' financial records revealed several concerning patterns:"
+        },
+        {
+          "type": "list",
+          "ordered": true,
+          "items": [
+            "$2.3 million in 'consulting fees' paid to shell companies",
+            "Research equipment purchases from non-existent vendors",
+            "Salary payments to employees who never existed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "conclusion",
+      "type": "conclusion",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "As this investigation continues, one thing is clear: the truth behind Nova Labs' finances remains partially hidden. But with each document we uncover, the picture becomes clearer."
+        }
+      ]
+    }
+  ],
+  "pullQuotes": [
+    {
+      "type": "verbatim",
+      "text": "The money trail doesn't lie, even when everyone else does.",
+      "attribution": "Source close to the investigation",
+      "placement": "right"
+    }
+  ],
+  "evidenceCards": [
+    {
+      "tokenId": "doc001",
+      "headline": "Wire Transfer Records",
+      "summary": "Bank records showing $500,000 transferred to offshore accounts over 6 months",
+      "significance": "critical"
+    },
+    {
+      "tokenId": "doc002",
+      "headline": "Shell Company Registration",
+      "summary": "Corporate filings linking Nova Labs executives to offshore entities",
+      "significance": "supporting"
+    }
+  ],
+  "financialTracker": {
+    "entries": [
+      {
+        "date": "2024-03-15",
+        "description": "Wire transfer to Cayman Holdings LLC",
+        "amount": "$150,000",
+        "category": "Offshore Transfer"
+      },
+      {
+        "date": "2024-04-22",
+        "description": "Payment to Phoenix Consulting Group",
+        "amount": "$85,000",
+        "category": "Consulting Fees"
+      },
+      {
+        "date": "2024-06-01",
+        "description": "Equipment purchase - Apex Scientific",
+        "amount": "$220,000",
+        "category": "Suspicious Vendor"
+      }
+    ],
+    "totalExposed": "$2,340,000"
+  }
+}

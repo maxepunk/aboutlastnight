@@ -1,0 +1,17 @@
+{{!--
+  Quote Content Block
+
+  Inline quote with attribution. Not a pull quote (those are in sidebar).
+  Uses italic styling with em tag for quoted text.
+
+  Context:
+    type: "quote"
+    text: string (the quote content)
+    attribution: string (who said it / source)
+--}}
+<blockquote class="inline-quote">
+  <p><em>"{{text}}"</em></p>
+  {{#if attribution}}
+  <cite>— {{attribution}}</cite>
+  {{/if}}
+</blockquote>
