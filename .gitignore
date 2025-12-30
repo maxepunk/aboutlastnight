@@ -40,6 +40,8 @@ pnpm-lock.yaml
 reports/data/
 reports/sessionphotos/
 sessionphotos/
+# Note: reports/outputs/sessionphotos/ IS tracked (negated below)
+!reports/outputs/sessionphotos/
 cookies.txt
 reports/cookies.txt
 *cookies.txt
