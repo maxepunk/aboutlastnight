@@ -265,6 +265,23 @@ Do NOT remove them from characterPlacements or flag them as "non-roster characte
 Roster coverage ONLY applies to the actual player roster, not NPCs.
 
 ═══════════════════════════════════════════════════════════════════════════
+NON-ROSTER PCs (Valid for MENTIONS - evidence-based only)
+═══════════════════════════════════════════════════════════════════════════
+Non-roster PCs are valid game characters who were NOT present at this session's investigation.
+Examples: If Sofia, Howie, or others are NOT in the roster, they are non-roster PCs.
+
+Non-roster PCs CAN appear in arc characterPlacements when:
+- They are mentioned in exposed evidence (someone's memory about them)
+- They are referenced in paper evidence documents
+
+They should NOT be flagged as "missing from roster coverage" or as invalid.
+However, their roles must be EVIDENCE-BASED, not OBSERVED:
+- CORRECT: "Sofia: Mentioned in Alex's memory as co-investor"
+- WRONG: "Sofia: Was seen coordinating with Victoria" (Nova didn't see this)
+
+When a non-roster PC appears, add appropriate caveats to indicate evidence-based inference.
+
+═══════════════════════════════════════════════════════════════════════════
 STRUCTURAL CRITERIA (MUST PASS - these block if failed)
 ═══════════════════════════════════════════════════════════════════════════
 ${structuralCriteria}

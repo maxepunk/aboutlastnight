@@ -408,10 +408,12 @@ async function curateEvidenceBundle(state, config) {
     exposed: {
       tokens: exposedTokens,
       // Preserve fullContent from preprocessing (Issue 5 fix)
+      // DRY: Use extractFullContent() helper for paper evidence (Commit 8.xx)
+      // Paper evidence may have content in rawData.description, not fullContent directly
       paperEvidence: includedPaper.map(p => ({
         ...(p.rawData || p),  // Raw fields (name, description, notionId, owners)
         id: p.id,
-        fullContent: p.fullContent,  // PRESERVE preprocessed content
+        fullContent: extractFullContent(p),  // Use helper for fallback chain
         sourceType: 'paper-evidence'
       }))
     },

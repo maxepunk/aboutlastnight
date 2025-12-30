@@ -83,6 +83,33 @@ better than anyone who took the money.
 
 ## Language Failures
 
+### Character Name Violations (CRITICAL)
+
+NEVER invent last names. Use ONLY canonical names from the roster.
+
+**Common Hallucinations to Avoid:**
+
+| WRONG (Hallucinated) | CORRECT (Canonical) |
+|----------------------|---------------------|
+| Victoria Chen | Victoria Kingsley |
+| Alex Chen | Alex Reeves |
+| Sarah Chen | Sarah Blackwood |
+| James Chen | James Whitman |
+
+The LLM tends to default to common last names like "Chen" or "Smith" when uncertain. This is ALWAYS wrong. Every character has a specific canonical last name defined in the roster.
+
+**Rule**: If you're not certain of a character's last name, use ONLY their first name rather than inventing one.
+
+**WRONG:**
+```
+Victoria Chen walked into the room, her eyes scanning for Morgan Chen.
+```
+
+**RIGHT:**
+```
+Victoria Kingsley walked into the room, her eyes scanning for Morgan Reed.
+```
+
 ### Using "Tokens"
 These are stolen memories, not objects.
 

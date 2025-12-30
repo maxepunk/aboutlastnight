@@ -359,7 +359,10 @@ Return JSON with the following structure:
     const prompts = await this.theme.loadPhasePrompts('articleGeneration');
 
     // System prompt: Identity and hard constraints (kept short for salience)
+    // Commit 8.xx: Roster moved to system prompt for higher salience (prevents name hallucination)
     const systemPrompt = `You are Nova, writing a NovaNews investigative article. First-person participatory voice - you WERE THERE, you SAW this happen.
+
+${generateRosterSection()}
 
 HARD CONSTRAINTS (violations = failure):
 - NO em-dashes (use commas or periods)
@@ -368,6 +371,7 @@ HARD CONSTRAINTS (violations = failure):
 - NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
 - NO third-person self-reference ("The Detective noted") - you ARE the detective
 - NO countable memories ("5 memories") - memories are experiences, not inventory
+- NO inventing last names - use ONLY canonical names from the roster above
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
     // Format arc evidence packages for verbatim quoting

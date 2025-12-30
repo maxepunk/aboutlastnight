@@ -168,6 +168,27 @@ function getCanonicalName(firstName, theme = 'journalist') {
   return THEME_CONFIGS[theme]?.canonicalCharacters?.[normalized] || firstName;
 }
 
+/**
+ * Get all playable character first names for a theme (Commit 8.xx)
+ *
+ * Returns only PC names, not NPCs. Used for non-roster PC derivation.
+ * Non-roster PCs = getThemeCharacters(theme) - roster - npcs
+ *
+ * @param {string} theme - Theme name (default: 'journalist')
+ * @returns {string[]} Array of PC first names
+ */
+function getThemeCharacters(theme = 'journalist') {
+  const config = THEME_CONFIGS[theme];
+  if (!config?.canonicalCharacters) return [];
+
+  const npcs = config.npcs || [];
+  const npcSet = new Set(npcs.map(n => n.toLowerCase()));
+
+  // Return first names of characters that aren't NPCs
+  return Object.keys(config.canonicalCharacters)
+    .filter(name => !npcSet.has(name.toLowerCase()));
+}
+
 module.exports = {
   THEME_CONFIGS,
   getThemeNPCs,
@@ -175,5 +196,6 @@ module.exports = {
   isValidTheme,
   getOutlineRules,
   getArticleRules,
-  getCanonicalName
+  getCanonicalName,
+  getThemeCharacters
 };

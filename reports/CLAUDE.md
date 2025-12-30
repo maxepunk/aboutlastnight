@@ -57,20 +57,20 @@ Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6
 → Phase 2: Arc Analysis (single SDK call) → Phase 3: Outline → Phase 4: Article → Phase 5: Assembly
 ```
 
-**Human Checkpoints (9 total - workflow pauses for approval via native `interrupt()`):**
+**Human Checkpoints (10 total - workflow pauses for approval via native `interrupt()`):**
 
 | Checkpoint | Phase | Purpose |
 |------------|-------|---------|
-| `await-roster` | 0.1 | Wait for initial roster input (incremental input flow) |
-| `input-review` | 0.2 | Review AI-parsed session input (roster, accusation, whiteboard) |
 | `paper-evidence-selection` | 1.35 | Select which paper evidence was unlocked during gameplay |
+| `await-roster` | 1.51 | Wait for roster input (incremental input - enables character ID mapping) |
 | `character-ids` | 1.66 | Map characters to photos based on Haiku's visual descriptions |
-| `await-full-context` | 1.7 | Wait for director notes before proceeding (incremental input flow) |
-| `pre-curation` | 1.75 | Review evidence before curation |
+| `await-full-context` | 1.52 | Wait for accusation/sessionReport/directorNotes (incremental input) |
+| `input-review` | 0.2 | Review AI-parsed session input (after await-full-context) |
+| `pre-curation` | 1.75 | Review preprocessed evidence before curation |
 | `evidence-and-photos` | 1.8 | Approve curated three-layer evidence bundle |
-| `arc-selection` | 2.3 | Select which narrative arcs to develop (3-5 recommended) |
-| `outline` | 3.2 | Approve article structure and photo placements |
-| `article` | 4.2 | Final article approval before HTML assembly |
+| `arc-selection` | 2.35 | Select which narrative arcs to develop (3-5 recommended) |
+| `outline` | 3.25 | Approve article structure and photo placements |
+| `article` | 4.25 | Final article approval before HTML assembly |
 
 **Revision Loops:** Arcs (max 2), Outline (max 3), Article (max 3)
 
@@ -158,6 +158,8 @@ Arc analysis uses a **single comprehensive SDK call** (not parallel subagents):
 
 **Why single-call?** Player focus must guide everything. Parallel specialists couldn't share this context efficiently. See `lib/workflow/nodes/arc-specialist-nodes.js`.
 
+**Arc Validation Routing (Commit 8.27):** Before expensive Opus evaluation, `validateArcStructure` performs programmatic checks (roster coverage, accusation arc present, evidence ID validity). Structural failures route directly to revision, skipping evaluation.
+
 **Three-Layer Evidence Model:**
 | Layer | Contains | Journalist Can |
 |-------|----------|----------------|
@@ -196,7 +198,7 @@ Arc analysis uses a **single comprehensive SDK call** (not parallel subagents):
 |--------|-----------------|-----------|
 | AI Calls | `sdkQuery()` makes all Claude requests | Routes between nodes |
 | Structured Output | JSON schemas via `jsonSchema` param | N/A |
-| State Management | N/A | 33+ state fields with reducers |
+| State Management | N/A | 51 state fields with reducers |
 | Checkpointing | N/A | MemorySaver/SqliteSaver |
 | Human Approval | N/A | Native `interrupt()` pattern |
 | Revision Loops | N/A | Conditional edges with caps |

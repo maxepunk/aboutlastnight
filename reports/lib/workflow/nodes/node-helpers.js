@@ -46,6 +46,84 @@ function isKnownNPC(name, npcs = []) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NON-ROSTER PC VALIDATION (Commit 8.xx)
+// Three-category character model: Roster PCs, NPCs, Non-Roster PCs
+// Non-roster PCs = valid game characters NOT in session roster and NOT NPCs
+// They can appear in arcs (evidence-based mentions) but don't count for coverage
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if a character is a non-roster PC
+ *
+ * Non-roster PCs are valid game characters (in canonicalCharacters) who:
+ * - Are NOT in this session's roster (weren't present at investigation)
+ * - Are NOT NPCs (Marcus, Nova, Blake, Valet)
+ *
+ * They CAN appear in arcs because evidence mentions them, but Nova didn't
+ * observe their behavior directly. Their roles must be evidence-based.
+ *
+ * Uses word-boundary matching consistent with isKnownNPC().
+ *
+ * @param {string} name - Character name to check
+ * @param {string[]} roster - Session roster (characters present at investigation)
+ * @param {string[]} allCharacters - All valid PC names from theme config
+ * @param {string[]} npcs - NPC names from theme config
+ * @returns {boolean} True if non-roster PC (valid game character not in roster/npcs)
+ */
+function isNonRosterPC(name, roster = [], allCharacters = [], npcs = []) {
+  if (!name) return false;
+
+  // If it's an NPC, it's not a non-roster PC
+  if (isKnownNPC(name, npcs)) return false;
+
+  // Normalize roster for comparison
+  const rosterLower = new Set(roster.map(n => n.toLowerCase().trim()));
+
+  // Check if name matches any roster member (case-insensitive)
+  const normalizedName = name.toLowerCase().trim();
+  if (rosterLower.has(normalizedName)) return false;
+
+  // Also check word-boundary match against roster (handles "Alex Reeves" vs "Alex")
+  for (const r of roster) {
+    const regex = new RegExp(`\\b${r.toLowerCase().trim()}\\b`, 'i');
+    if (regex.test(name)) return false;
+  }
+
+  // Check if it's a valid game character with word-boundary matching
+  return allCharacters.some(char => {
+    const charLower = char.toLowerCase();
+    // Exact match
+    if (normalizedName === charLower) return true;
+    // Word-boundary match (handles "Sofia Francisco" matching "Sofia")
+    const regex = new RegExp(`\\b${charLower}\\b`, 'i');
+    return regex.test(name);
+  });
+}
+
+/**
+ * Get all non-roster PCs for a session
+ *
+ * Computes: allCharacters - roster - npcs
+ *
+ * Used by arc generation prompts to provide the LLM with the list of
+ * valid non-roster characters that can be mentioned (evidence-based only).
+ *
+ * @param {string[]} roster - Session roster (characters present at investigation)
+ * @param {string[]} allCharacters - All valid PC names from theme config
+ * @param {string[]} npcs - NPC names from theme config
+ * @returns {string[]} Array of non-roster PC first names
+ */
+function getNonRosterPCs(roster = [], allCharacters = [], npcs = []) {
+  const rosterLower = new Set(roster.map(n => n.toLowerCase().trim()));
+  const npcLower = new Set(npcs.map(n => n.toLowerCase().trim()));
+
+  return allCharacters.filter(name => {
+    const nameLower = name.toLowerCase().trim();
+    return !rosterLower.has(nameLower) && !npcLower.has(nameLower);
+  });
+}
+
 /**
  * Safely parse JSON with informative error messages
  *
@@ -580,34 +658,46 @@ function buildValidEvidenceIds(evidenceBundle) {
  * Validate roster name with fuzzy matching
  *
  * Used to validate characterPlacements in arcs reference actual roster members.
- * Returns the canonical roster name if matched, null otherwise.
+ * Returns the ORIGINAL name if a match is found (preserving canonical full names),
+ * or null if no match.
  *
  * Matching order:
- * 1. Exact match (case-insensitive)
- * 2. Substring match with tie-breaking:
+ * 1. Exact match with roster entry (case-insensitive)
+ * 2. Canonical full name match (e.g., "Sarah Blackwood" matches roster "Sarah")
+ * 3. Substring match with tie-breaking:
  *    - Prefer exact length match
  *    - Prefer shortest match (most specific)
- * 3. No match → returns null
+ * 4. No match → returns null
  *
  * Commit 8.12: Added tie-breaking for ambiguous substring matches
- * (e.g., "Taylor" matching both "Taylor" and "Taylor Chase")
+ * Commit 8.xx: Preserves canonical full names (DRY fix with theme-config.js)
  *
  * @param {string} name - Character name from arc characterPlacements
- * @param {string[]} roster - Array of canonical roster names
- * @returns {string|null} Matched roster name or null
+ * @param {string[]} roster - Array of roster names (typically first names)
+ * @param {string} theme - Theme name for canonical lookup (default: 'journalist')
+ * @returns {string|null} Original name (preserved) if valid, or null
  */
-function validateRosterName(name, roster) {
+function validateRosterName(name, roster, theme = 'journalist') {
   if (!name || !Array.isArray(roster) || roster.length === 0) {
     return null;
   }
 
   const normalizedInput = name.toLowerCase().trim();
 
-  // 1. Exact match (case-insensitive)
+  // 1. Exact match with roster entry (case-insensitive)
   const exactMatch = roster.find(r => r.toLowerCase().trim() === normalizedInput);
-  if (exactMatch) return exactMatch;
+  if (exactMatch) return name;  // Return original name (preserves casing)
 
-  // 2. Substring matches with tie-breaking
+  // 2. Check if input IS a canonical full name for any roster entry
+  // Example: input "Sarah Blackwood" should match roster entry "Sarah"
+  for (const rosterName of roster) {
+    const canonical = getCanonicalName(rosterName, theme);
+    if (canonical.toLowerCase().trim() === normalizedInput) {
+      return name;  // Return original name (preserves canonical full name)
+    }
+  }
+
+  // 3. Substring matches with tie-breaking
   const substringMatches = roster.filter(r => {
     const normalizedRoster = r.toLowerCase().trim();
     return normalizedRoster.includes(normalizedInput) ||
@@ -619,7 +709,7 @@ function validateRosterName(name, roster) {
   }
 
   if (substringMatches.length === 1) {
-    return substringMatches[0];  // Single match - use it
+    return name;  // Match found - return original name to preserve formatting
   }
 
   // Multiple matches - apply tie-breaking
@@ -627,12 +717,11 @@ function validateRosterName(name, roster) {
   const exactLengthMatch = substringMatches.find(r =>
     r.toLowerCase().trim().length === normalizedInput.length
   );
-  if (exactLengthMatch) return exactLengthMatch;
+  if (exactLengthMatch) return name;  // Return original name
 
   // Second: prefer shortest match (most specific - "Jon" over "Jonathan")
-  return substringMatches.reduce((shortest, current) =>
-    current.length <= shortest.length ? current : shortest
-  );
+  // Match found - return original name to preserve formatting
+  return name;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -866,6 +955,10 @@ module.exports = {
 
   // NPC validation (Commit 8.17) - NPCs defined in lib/theme-config.js
   isKnownNPC,
+
+  // Non-roster PC validation (Commit 8.xx) - Three-category character model
+  isNonRosterPC,
+  getNonRosterPCs,
 
   // Revision context helper (DRY)
   buildRevisionContext,
