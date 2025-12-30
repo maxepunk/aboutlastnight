@@ -1,0 +1,8 @@
+{
+  "$schema": "https://langchain-ai.github.io/langgraph/cli/schema.json",
+  "graphs": {
+    "report": "./lib/studio/entry.js:graph"
+  },
+  "env": ".env",
+  "dependencies": ["@langchain/langgraph", "@anthropic-ai/claude-agent-sdk", "langsmith"]
+}

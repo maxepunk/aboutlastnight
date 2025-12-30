@@ -59,27 +59,17 @@
     ]
   },
   "whatsMissing": {
-    "buriedMarkers": [
-      {
-        "account": "Meridian Partners LLC",
-        "amount": 150000,
-        "inference": "Connection to Diana's consulting agreement remains unclear"
-      },
-      {
-        "account": "University Alumni Fund",
-        "amount": 50000,
-        "inference": "Blake and Charlie's shared history may have funded initial scheme"
-      }
+    "gaps": [
+      "The funding trail disappears at Meridian Partners LLC - $150K unaccounted for",
+      "Blake and Charlie's shared history through University Alumni Fund remains unexplored"
+    ],
+    "unansweredQuestions": [
+      "What triggered Diana's consulting agreement?",
+      "Who else knew about the scheme before it collapsed?"
     ]
   },
   "closing": {
     "systemicAngle": "Corporate oversight failures enabled this scheme to persist for months",
     "accusationHandling": "Present Blake and Charlie as primary suspects while noting Diana's potential accessory role"
-  },
-  "visualComponentCount": {
-    "evidenceCards": 4,
-    "photos": 2,
-    "pullQuotes": 2,
-    "buriedMarkers": 2
   }
 }

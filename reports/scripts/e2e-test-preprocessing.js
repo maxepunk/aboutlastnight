@@ -113,8 +113,8 @@ async function runPreprocessingTest(sessionData) {
     console.log('\n✅ Pipeline completed successfully!\n');
     console.log('📊 Final State:');
     console.log(`  - currentPhase: ${result.currentPhase}`);
-    console.log(`  - awaitingApproval: ${result.awaitingApproval}`);
-    console.log(`  - approvalType: ${result.approvalType}`);
+    // NOTE: awaitingApproval/approvalType removed in interrupt() migration
+    // Graph pauses are now detected via graph.getState().tasks[0].interrupts
 
     if (result.preprocessedEvidence) {
       console.log('\n📦 Preprocessed Evidence:');

@@ -10,18 +10,22 @@ const session = require('express-session');
 const path = require('path');
 
 // LangGraph workflow modules
-const { MemorySaver } = require('@langchain/langgraph');
+const { MemorySaver, Command } = require('@langchain/langgraph');
 const { createReportGraphWithCheckpointer, RECURSION_LIMIT } = require('./lib/workflow/graph');
 const {
   PHASES,
-  APPROVAL_TYPES,
   ROLLBACK_CLEARS,
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS
 } = require('./lib/workflow/state');
-const { backgroundPipelineManager } = require('./lib/background-pipeline-manager');
+const {
+  CHECKPOINT_TYPES,
+  isGraphInterrupted,
+  getInterruptData,
+  buildInterruptResponse
+} = require('./lib/workflow/checkpoint-helpers');
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
-const { progressEmitter } = require('./lib/progress-emitter');
+const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 
 // Shared checkpointer instance - must persist across API calls for resume to work
@@ -51,41 +55,41 @@ async function getSessionState(sessionId) {
 }
 
 /**
- * Build response data for a specific approval type (DRY helper)
+ * Build response data for a specific checkpoint type (DRY helper)
  * Extracts relevant fields from state based on checkpoint type
- * @param {string} approvalType - The approval type constant
+ * @param {string} checkpointType - The checkpoint type constant
  * @param {object} state - The current state object
  * @returns {object} - Checkpoint-specific data for response
  */
-function getApprovalData(approvalType, state) {
-    switch (approvalType) {
-        case APPROVAL_TYPES.INPUT_REVIEW:
+function getCheckpointData(checkpointType, state) {
+    switch (checkpointType) {
+        case CHECKPOINT_TYPES.INPUT_REVIEW:
             return {
                 parsedInput: state._parsedInput,
                 sessionConfig: state.sessionConfig,
                 directorNotes: state.directorNotes,
                 playerFocus: state.playerFocus
             };
-        case APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION:
+        case CHECKPOINT_TYPES.PAPER_EVIDENCE_SELECTION:
             return { paperEvidence: state.paperEvidence };
-        case APPROVAL_TYPES.CHARACTER_IDS:
+        case CHECKPOINT_TYPES.CHARACTER_IDS:
             return {
                 sessionPhotos: state.sessionPhotos,
                 photoAnalyses: state.photoAnalyses,
                 sessionConfig: state.sessionConfig
             };
-        case APPROVAL_TYPES.EVIDENCE_AND_PHOTOS:
+        case CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS:
             return { evidenceBundle: state.evidenceBundle };
-        case APPROVAL_TYPES.ARC_SELECTION:
+        case CHECKPOINT_TYPES.ARC_SELECTION:
             return { narrativeArcs: state.narrativeArcs };
-        case APPROVAL_TYPES.OUTLINE:
+        case CHECKPOINT_TYPES.OUTLINE:
             return { outline: state.outline };
-        case APPROVAL_TYPES.ARTICLE:
+        case CHECKPOINT_TYPES.ARTICLE:
             return {
                 contentBundle: state.contentBundle,
                 articleHtml: state.assembledHtml
             };
-        case APPROVAL_TYPES.PRE_CURATION:
+        case CHECKPOINT_TYPES.PRE_CURATION:
             return {
                 preCurationSummary: state.preCurationSummary,
                 preprocessedEvidence: state.preprocessedEvidence
@@ -96,46 +100,53 @@ function getApprovalData(approvalType, state) {
 }
 
 /**
- * Build state updates from approval decisions (DRY helper)
- * Used by /api/generate and /api/session/:id/approve endpoints
+ * Build resume payload from approval decisions (DRY helper)
+ * Used by /api/session/:id/approve endpoint with Command({ resume })
  *
- * Only clears awaitingApproval when a VALID approval type is detected.
- * This prevents invalid approval requests from advancing the workflow.
+ * Returns a payload that will be passed to graph.invoke(new Command({ resume: payload }))
+ * The payload becomes the return value of interrupt() in the paused node.
  *
  * @param {object} approvals - Approval decisions from request body
- * @returns {object} - { state: updates to apply, error: validation error or null }
+ * @param {object} currentState - Current graph state values (for merging incremental inputs)
+ * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
  */
-function buildApprovalState(approvals) {
-    const updates = {};
+function buildResumePayload(approvals, currentState = {}) {
+    const resume = {};
+    const stateUpdates = {};
     let error = null;
     let validApprovalDetected = false;
 
     // Input review approval (Commit 8.9)
     if (approvals.inputReview === true) {
         validApprovalDetected = true;
+        resume.approved = true;
         if (approvals.inputEdits) {
-            updates._inputEdits = approvals.inputEdits;
+            stateUpdates._inputEdits = approvals.inputEdits;
         }
     }
 
     // Paper evidence selection (Commit 8.9.4)
     if (approvals.selectedPaperEvidence && Array.isArray(approvals.selectedPaperEvidence)) {
         validApprovalDetected = true;
-        updates.selectedPaperEvidence = approvals.selectedPaperEvidence;
+        stateUpdates.selectedPaperEvidence = approvals.selectedPaperEvidence;
+        resume.selectedPaperEvidence = approvals.selectedPaperEvidence;
     }
 
     // Character ID mappings (Commit 8.9.5, 8.9.x) - two input formats supported
     if (approvals.characterIdsRaw && typeof approvals.characterIdsRaw === 'string') {
         validApprovalDetected = true;
-        updates.characterIdsRaw = approvals.characterIdsRaw;
+        stateUpdates.characterIdsRaw = approvals.characterIdsRaw;
+        resume.characterIdsRaw = approvals.characterIdsRaw;
     } else if (approvals.characterIds && typeof approvals.characterIds === 'object') {
         validApprovalDetected = true;
-        updates.characterIdMappings = approvals.characterIds;
+        stateUpdates.characterIdMappings = approvals.characterIds;
+        resume.characterIdMappings = approvals.characterIds;
     }
 
     // Evidence bundle approval with rescue mechanism (Commit 8.10+)
     if (approvals.evidenceBundle === true) {
         validApprovalDetected = true;
+        resume.approved = true;
         if (approvals.rescuedItems && Array.isArray(approvals.rescuedItems) && approvals.rescuedItems.length > 0) {
             // Validate: filter to non-empty strings only
             const validItems = approvals.rescuedItems.filter(item =>
@@ -143,7 +154,8 @@ function buildApprovalState(approvals) {
             );
 
             if (validItems.length > 0) {
-                updates._rescuedItems = validItems;
+                stateUpdates._rescuedItems = validItems;
+                resume.rescuedItems = validItems;
             }
         }
     }
@@ -154,32 +166,62 @@ function buildApprovalState(approvals) {
             error = 'selectedArcs must be a non-empty array';
         } else {
             validApprovalDetected = true;
-            updates.selectedArcs = approvals.selectedArcs;
+            stateUpdates.selectedArcs = approvals.selectedArcs;
+            resume.selectedArcs = approvals.selectedArcs;
         }
     }
 
     // Outline approval (boolean)
     if (approvals.outline === true) {
         validApprovalDetected = true;
+        resume.approved = true;
     }
 
     // Article approval (boolean) (Commit 8.9.7)
     if (approvals.article === true) {
         validApprovalDetected = true;
+        resume.approved = true;
     }
 
     // Pre-curation approval (Phase 4f)
     if (approvals.preCuration === true) {
         validApprovalDetected = true;
-        updates.preCurationApproved = true;
+        stateUpdates.preCurationApproved = true;
+        resume.preCurationApproved = true;
     }
 
-    // Only clear awaitingApproval if a valid approval type was detected
-    if (validApprovalDetected) {
-        updates.awaitingApproval = false;
+    // Await roster checkpoint (Parallel branch architecture)
+    // User provides roster to enable character ID mapping
+    if (approvals.roster && Array.isArray(approvals.roster)) {
+        validApprovalDetected = true;
+        stateUpdates.roster = approvals.roster;
+        resume.roster = approvals.roster;
     }
 
-    return { state: updates, error };
+    // Await full context checkpoint (Parallel branch architecture)
+    // User provides accusation, sessionReport, directorNotes for input parsing
+    // CRITICAL: Merge with existing rawSessionInput to preserve photosPath from /start
+    if (approvals.fullContext) {
+        const { accusation, sessionReport, directorNotes } = approvals.fullContext;
+        if (accusation && sessionReport && directorNotes) {
+            validApprovalDetected = true;
+            // Merge with existing rawSessionInput to preserve photosPath from /start
+            const existingRawInput = currentState.rawSessionInput || {};
+            stateUpdates.rawSessionInput = {
+                ...existingRawInput,
+                accusation,
+                sessionReport,
+                directorNotes
+            };
+            resume.fullContext = approvals.fullContext;
+        }
+    }
+
+    if (!validApprovalDetected) {
+        error = 'No valid approval detected in request';
+    }
+
+    return { resume, stateUpdates, error };
 }
 
 /**
@@ -187,7 +229,25 @@ function buildApprovalState(approvals) {
  */
 const VALID_THEMES = ['journalist', 'detective'];
 
-const { isClaudeAvailable } = require('./lib/sdk-client');
+/**
+ * Build complete checkpoint data by merging state-based data with interrupt payload
+ *
+ * The interrupt() call only includes data explicitly passed to checkpointInterrupt().
+ * But scripts expect full checkpoint data (e.g., CHARACTER_IDS needs sessionPhotos + sessionConfig).
+ * This helper merges getCheckpointData() results with the interrupt payload.
+ *
+ * @param {Object} interruptData - Data from interrupt() payload (includes type)
+ * @param {Object} state - Current graph state values
+ * @returns {Object} Complete checkpoint data for response
+ */
+function buildCompleteCheckpointData(interruptData, state) {
+    const checkpointType = interruptData?.type;
+    const stateBasedData = getCheckpointData(checkpointType, state);
+    // Merge: state-based data first, then interrupt data (interrupt takes precedence)
+    return { ...stateBasedData, ...interruptData };
+}
+
+const { isClaudeAvailable } = require('./lib/llm');
 
 const app = express();
 const PORT = 3001;
@@ -202,6 +262,14 @@ const SSE_HEARTBEAT_MS = 15000;
 // Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
+
+// Serve session photos at /sessionphotos/{sessionId}/*
+// Maps to data/{sessionId}/photos/* for article photo references
+app.use('/sessionphotos/:sessionId', (req, res, next) => {
+    const { sessionId } = req.params;
+    const photosDir = path.join(__dirname, 'data', sessionId, 'photos');
+    express.static(photosDir)(req, res, next);
+});
 
 // Session middleware for authentication
 app.use(session({
@@ -320,21 +388,26 @@ app.post('/api/auth/logout', (req, res) => {
  *     selectedArcs?: string[] - Selected narrative arc IDs
  *     outline?: boolean - Approve outline
  *
- * Response (on checkpoint):
- *   sessionId, currentPhase, awaitingApproval, approvalType
- *   Plus relevant data for the approval UI:
- *     - INPUT_REVIEW: parsedInput, sessionConfig, directorNotes, playerFocus
- *     - PAPER_EVIDENCE_SELECTION: paperEvidence (Commit 8.9.4)
- *     - CHARACTER_IDS: sessionPhotos, photoAnalyses, sessionConfig (Commit 8.9.5)
- *     - EVIDENCE_AND_PHOTOS: evidenceBundle
- *     - ARC_SELECTION: narrativeArcs
- *     - OUTLINE: outline
+ * Response (on checkpoint - interrupted: true):
+ *   {
+ *     sessionId, interrupted: true, currentPhase,
+ *     checkpoint: { type, ...checkpointData }
+ *   }
+ *   Checkpoint types and their data:
+ *     - input-review: parsedInput, sessionConfig, directorNotes, playerFocus
+ *     - paper-evidence-selection: paperEvidence
+ *     - character-ids: sessionPhotos, photoAnalyses, sessionConfig
+ *     - pre-curation: preCurationSummary, preprocessedEvidence
+ *     - evidence-and-photos: evidenceBundle
+ *     - arc-selection: narrativeArcs
+ *     - outline: outline
+ *     - article: contentBundle, articleHtml
  *
  * Response (on completion):
- *   sessionId, currentPhase: 'complete', assembledHtml, validationResults
+ *   { sessionId, currentPhase: 'complete', assembledHtml, validationResults }
  *
  * Response (on error):
- *   sessionId, currentPhase: 'error', errors[]
+ *   { sessionId, currentPhase: 'error', errors[] }
  */
 app.post('/api/generate', requireAuth, async (req, res) => {
     const { sessionId, theme, rawSessionInput, rollbackTo, stateOverrides, approvals, mode } = req.body;
@@ -418,8 +491,6 @@ app.post('/api/generate', requireAuth, async (req, res) => {
             Object.assign(initialState, counterResets);
             // Reset control flow
             initialState.currentPhase = null;
-            initialState.awaitingApproval = false;
-            initialState.approvalType = null;
             console.log(`[${new Date().toISOString()}] Fresh mode: Cleared ${fieldsToClear.length} fields via ROLLBACK_CLEARS`);
         }
 
@@ -438,10 +509,6 @@ app.post('/api/generate', requireAuth, async (req, res) => {
             const counterResets = ROLLBACK_COUNTER_RESETS[rollbackTo];
             Object.assign(initialState, counterResets);
 
-            // Clear approval state to allow re-entry at checkpoint
-            initialState.awaitingApproval = false;
-            initialState.approvalType = null;
-
             console.log(`[${new Date().toISOString()}] Rollback cleared ${fieldsToClear.length} fields, reset counters:`, Object.keys(counterResets));
         }
 
@@ -459,64 +526,36 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
         // Apply approval decisions using shared helper (DRY - Commit 8.10+)
         if (approvals) {
-            const { state: approvalState, error: validationError } = buildApprovalState(approvals);
+            const { stateUpdates, error: validationError } = buildResumePayload(approvals);
             if (validationError) {
                 return res.status(400).json({ error: validationError });
             }
-            Object.assign(initialState, approvalState);
+            Object.assign(initialState, stateUpdates);
         }
 
         // Run graph until it pauses at checkpoint or completes
         console.log(`[${new Date().toISOString()}] Invoking graph with initialState:`, JSON.stringify(initialState));
         const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
-        console.log(`[${new Date().toISOString()}] Graph completed. Phase: ${result.currentPhase}, awaitingApproval: ${result.awaitingApproval}`);
 
-        // Build response based on current state
+        // Check if graph is interrupted at a checkpoint
+        const graphState = await graph.getState(config);
+        const interrupted = isGraphInterrupted(graphState);
+
+        console.log(`[${new Date().toISOString()}] Graph completed. Phase: ${result.currentPhase}, interrupted: ${interrupted}`);
+
+        // Handle interrupted state (checkpoint pause)
+        if (interrupted) {
+            const interruptData = getInterruptData(graphState);
+            // Merge interrupt payload with state-based checkpoint data for complete response
+            const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
+            return res.json(buildInterruptResponse(sessionId, checkpointData, result.currentPhase));
+        }
+
+        // Build response for non-interrupted states (completion or error)
         const response = {
             sessionId,
-            currentPhase: result.currentPhase,
-            awaitingApproval: result.awaitingApproval || false,
-            approvalType: result.approvalType || null
+            currentPhase: result.currentPhase
         };
-
-        // Include data for approval UI based on approval type
-        if (result.awaitingApproval) {
-            switch (result.approvalType) {
-                case APPROVAL_TYPES.INPUT_REVIEW:
-                    // Return parsed input data for user review (Commit 8.9)
-                    response.parsedInput = result._parsedInput;
-                    response.sessionConfig = result.sessionConfig;
-                    response.directorNotes = result.directorNotes;
-                    response.playerFocus = result.playerFocus;
-                    break;
-                case APPROVAL_TYPES.PAPER_EVIDENCE_SELECTION:
-                    // Return available paper evidence for selection (Commit 8.9.4)
-                    response.paperEvidence = result.paperEvidence;
-                    break;
-                case APPROVAL_TYPES.CHARACTER_IDS:
-                    // Return photo analyses for character identification (Commit 8.9.5)
-                    // User identifies who is in each photo based on Haiku's descriptions
-                    // Roster comes from sessionConfig (DRY - already in pipeline)
-                    response.sessionPhotos = result.sessionPhotos;
-                    response.photoAnalyses = result.photoAnalyses;
-                    response.sessionConfig = result.sessionConfig;  // Contains roster for dropdown
-                    break;
-                case APPROVAL_TYPES.EVIDENCE_AND_PHOTOS:
-                    response.evidenceBundle = result.evidenceBundle;
-                    break;
-                case APPROVAL_TYPES.ARC_SELECTION:
-                    response.narrativeArcs = result.narrativeArcs;
-                    break;
-                case APPROVAL_TYPES.OUTLINE:
-                    response.outline = result.outline;
-                    break;
-                case APPROVAL_TYPES.ARTICLE:
-                    // Return content bundle for article preview (Commit 8.9.7)
-                    response.contentBundle = result.contentBundle;
-                    response.articleHtml = result.assembledHtml;  // May be available for preview
-                    break;
-            }
-        }
 
         // Include final outputs on completion
         if (result.currentPhase === PHASES.COMPLETE) {
@@ -557,23 +596,27 @@ app.get('/api/session/:id', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
 
     try {
-        const session = await getSessionState(sessionId);
+        // Use graph.getState() to properly detect interrupt status
+        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
+        const config = { configurable: { thread_id: sessionId } };
+        const graphState = await graph.getState(config);
 
-        if (!session) {
+        if (!graphState || !graphState.values) {
             return res.status(404).json({ sessionId, exists: false });
         }
 
-        const state = session.state;
+        const state = graphState.values;
+        const interrupted = isGraphInterrupted(graphState);
+        const interruptData = interrupted ? getInterruptData(graphState) : null;
 
         res.json({
             sessionId,
             exists: true,
             checkpoint: {
-                id: session.checkpointId,
-                timestamp: session.timestamp,
+                id: graphState.config?.configurable?.checkpoint_id,
                 currentPhase: state.currentPhase,
-                awaitingApproval: state.awaitingApproval || false,
-                approvalType: state.approvalType || null
+                interrupted,
+                checkpointType: interruptData?.type || null
             },
             counts: {
                 memoryTokens: state.memoryTokens?.length || 0,
@@ -626,17 +669,25 @@ app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
 
     try {
-        const session = await getSessionState(sessionId);
+        // Use graph.getState() to properly detect interrupt status
+        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
+        const config = { configurable: { thread_id: sessionId } };
+        const graphState = await graph.getState(config);
 
-        if (!session) {
+        if (!graphState || !graphState.values) {
             return res.status(404).json({ sessionId, exists: false });
         }
 
+        const interrupted = isGraphInterrupted(graphState);
+        const interruptData = interrupted ? getInterruptData(graphState) : null;
+
         res.json({
             sessionId,
-            approvalType: session.state.approvalType || null,
-            currentPhase: session.state.currentPhase,
-            awaitingApproval: session.state.awaitingApproval || false
+            currentPhase: graphState.values.currentPhase,
+            interrupted,
+            checkpointType: interruptData?.type || null,
+            // Include checkpoint data for UI if interrupted
+            checkpoint: interruptData
         });
 
     } catch (error) {
@@ -868,45 +919,28 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         });
     }
 
-    // Validate required fields
+    // Validate minimal required input for incremental flow
+    // Phase 1: Only sessionId + photosPath required to start
+    // Roster provided at await-roster checkpoint
+    // Full context (accusation, sessionReport, directorNotes) at await-full-context checkpoint
     if (!rawSessionInput) {
         return res.status(400).json({ error: 'rawSessionInput is required' });
     }
 
-    const requiredFields = ['roster', 'accusation', 'sessionReport', 'directorNotes'];
-    const missingFields = requiredFields.filter(f => !rawSessionInput[f]);
-    if (missingFields.length > 0) {
-        return res.status(400).json({
-            error: `rawSessionInput missing required fields: ${missingFields.join(', ')}`
-        });
+    // photosPath is the only required field for incremental start
+    // If not provided, will use default: data/{sessionId}/photos
+    if (!rawSessionInput.photosPath) {
+        rawSessionInput.photosPath = `data/${sessionId}/photos`;
     }
+
+    // Sanitize photosPath - strip surrounding quotes (user may paste path with quotes)
+    rawSessionInput.photosPath = rawSessionInput.photosPath.replace(/^["']|["']$/g, '');
 
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start: theme=${theme}`);
 
     try {
-        // Phase 3: Start EVIDENCE pipeline immediately (context-free preprocessing)
-        // Evidence pipeline only needs sessionId - no playerFocus or sessionConfig required
-        const pipelineConfig = {
-            configurable: {
-                sessionId,
-                theme,
-                dataDir: path.join(__dirname, 'data')
-            }
-        };
-        backgroundPipelineManager.startEvidencePipeline(sessionId, { sessionId }, pipelineConfig);
-        console.log(`[${new Date().toISOString()}] Started evidence pipeline for session ${sessionId}`);
-
-        // Phase 4e: Start PHOTO pipeline at T+0 (not after parseRawInput)
-        // photosPath is available now - reuse sanitizePath from input-nodes.js (DRY)
-        // Photo analysis takes ~60s - starting now hides it behind user think time during checkpoints.
-        const photosPath = sanitizePath(rawSessionInput.photosPath);
-        if (photosPath) {
-            backgroundPipelineManager.startPhotoPipeline(sessionId, {
-                sessionId,
-                sessionConfig: { photosPath }
-            }, pipelineConfig);
-            console.log(`[${new Date().toISOString()}] Started photo pipeline for session ${sessionId}`);
-        }
+        // NOTE: Background pipelines removed - parallel branches in graph handle this now
+        // Evidence and photo fetching run in parallel within the LangGraph workflow
 
         // Use sessionId as thread_id for consistency with /api/session/:id/approve
         // (Commit 8.9.9 - Fix for thread_id mismatch that caused infinite loops)
@@ -931,35 +965,24 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         });
         Object.assign(initialState, ROLLBACK_COUNTER_RESETS['input-review']);
         initialState.currentPhase = null;
-        initialState.awaitingApproval = false;
-        initialState.approvalType = null;
         const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
 
-        // Phase 4e: Fallback photo pipeline start (only if not started at T+0)
-        // If photosPath wasn't in rawSessionInput but is in parsed sessionConfig, start now.
-        // startPhotoPipeline has internal guard preventing duplicate starts.
-        if (result.sessionConfig?.photosPath && !photosPath) {
-            backgroundPipelineManager.startPhotoPipeline(sessionId, {
-                sessionId,
-                sessionConfig: result.sessionConfig
-            }, pipelineConfig);
-            console.log(`[${new Date().toISOString()}] Started photo pipeline for session ${sessionId} (fallback)`);
+        // Check if graph is interrupted at a checkpoint
+        const graphState = await graph.getState(config);
+        const interrupted = isGraphInterrupted(graphState);
+
+        // Build response with new interrupt format
+        if (interrupted) {
+            const interruptData = getInterruptData(graphState);
+            const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
+            return res.json(buildInterruptResponse(sessionId, checkpointData, result.currentPhase));
         }
 
-        // Build response with checkpoint data
-        const response = {
+        // Non-interrupted response (shouldn't happen on fresh start, but handle gracefully)
+        res.json({
             sessionId,
-            currentPhase: result.currentPhase,
-            awaitingApproval: result.awaitingApproval || false,
-            approvalType: result.approvalType || null
-        };
-
-        // Add approval-specific data using DRY helper
-        if (result.awaitingApproval && result.approvalType) {
-            Object.assign(response, getApprovalData(result.approvalType, result));
-        }
-
-        res.json(response);
+            currentPhase: result.currentPhase
+        });
 
     } catch (error) {
         console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start error:`, error);
@@ -974,7 +997,7 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
 
 /**
  * POST /api/session/:id/approve
- * Approve current checkpoint and advance workflow
+ * Approve current checkpoint and advance workflow using Command({ resume })
  */
 app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
@@ -983,23 +1006,32 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve:`, JSON.stringify(approvals));
 
     try {
-        // Check current state first
-        const session = await getSessionState(sessionId);
-        if (!session) {
-            return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
-        }
+        // Create graph and config first (needed for getState)
+        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
+        const config = {
+            configurable: {
+                sessionId,
+                thread_id: sessionId,
+                promptBuilder: sharedPromptBuilder
+            }
+        };
 
-        const state = session.state;
-        if (!state.awaitingApproval) {
+        // Check if graph is interrupted using native LangGraph pattern
+        const graphState = await graph.getState(config);
+        if (!graphState || !isGraphInterrupted(graphState)) {
             return res.status(400).json({
                 sessionId,
-                error: 'Session is not awaiting approval',
-                currentPhase: state.currentPhase
+                error: 'Session is not at a checkpoint',
+                currentPhase: graphState?.values?.currentPhase || null
             });
         }
 
-        // Use buildApprovalState helper (DRY)
-        const { state: approvalState, error: validationError } = buildApprovalState(approvals);
+        // Get theme from state for config
+        const theme = graphState.values?.theme || 'journalist';
+        config.configurable.theme = theme;
+
+        // Build resume payload from approvals (pass current state for incremental input merging)
+        const { resume, stateUpdates, error: validationError } = buildResumePayload(approvals, graphState.values);
         if (validationError) {
             return res.status(400).json({ sessionId, error: validationError });
         }
@@ -1010,56 +1042,57 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         // See POST /api/session/:id/start handler for pipeline triggers
 
         // Return immediately - workflow runs in background
-        const previousPhase = state.currentPhase;
+        const previousPhase = graphState.values?.currentPhase;
         res.json({
             sessionId,
             status: 'processing',
             previousPhase
         });
 
-        // Run workflow in background (non-blocking)
-        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
-        const config = {
-            configurable: {
-                sessionId,
-                theme: state.theme || 'journalist',
-                thread_id: sessionId,
-                promptBuilder: sharedPromptBuilder
-            }
-        };
-
+        // Run workflow in background using Command({ resume }) pattern
         setImmediate(async () => {
             try {
-                const result = await graph.invoke(approvalState, { ...config, recursionLimit: RECURSION_LIMIT });
+                // Resume graph with Command - resume value becomes the return of interrupt()
+                // Also pass stateUpdates for any direct state modifications
+                const command = new Command({ resume, update: stateUpdates });
+                const result = await graph.invoke(command, { ...config, recursionLimit: RECURSION_LIMIT });
 
-                // Build response (same logic as before, now for SSE)
-                const response = {
-                    sessionId,
-                    previousPhase,
-                    currentPhase: result.currentPhase,
-                    awaitingApproval: result.awaitingApproval || false,
-                    approvalType: result.approvalType || null
-                };
+                // Check if graph paused at another checkpoint
+                const newGraphState = await graph.getState(config);
+                const interrupted = isGraphInterrupted(newGraphState);
 
-                // Add approval-specific data using DRY helper
-                if (result.awaitingApproval && result.approvalType) {
-                    Object.assign(response, getApprovalData(result.approvalType, result));
-                }
+                console.log(`[${new Date().toISOString()}] Workflow complete for session ${sessionId}, phase: ${result.currentPhase}, interrupted: ${interrupted}`);
 
-                // Include completion data
-                if (result.currentPhase === PHASES.COMPLETE) {
-                    response.assembledHtml = result.assembledHtml;
-                    response.validationResults = result.validationResults;
-                }
+                // Build SSE response
+                let response;
+                if (interrupted) {
+                    const interruptData = getInterruptData(newGraphState);
+                    const checkpointData = buildCompleteCheckpointData(interruptData, newGraphState.values);
+                    response = {
+                        ...buildInterruptResponse(sessionId, checkpointData, result.currentPhase),
+                        previousPhase
+                    };
+                } else {
+                    response = {
+                        sessionId,
+                        previousPhase,
+                        currentPhase: result.currentPhase
+                    };
 
-                // Include errors
-                if (result.errors?.length > 0) {
-                    response.errors = result.errors;
+                    // Include completion data
+                    if (result.currentPhase === PHASES.COMPLETE) {
+                        response.assembledHtml = result.assembledHtml;
+                        response.validationResults = result.validationResults;
+                    }
+
+                    // Include errors
+                    if (result.errors?.length > 0) {
+                        response.errors = result.errors;
+                    }
                 }
 
                 // Emit completion via SSE
                 progressEmitter.emitComplete(sessionId, response);
-                console.log(`[${new Date().toISOString()}] Workflow complete for session ${sessionId}, phase: ${result.currentPhase}`);
 
             } catch (error) {
                 console.error(`[${new Date().toISOString()}] Background workflow error for session ${sessionId}:`, error);
@@ -1144,10 +1177,6 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
         const counterResets = ROLLBACK_COUNTER_RESETS[rollbackTo];
         Object.assign(initialState, counterResets);
 
-        // Clear approval state
-        initialState.awaitingApproval = false;
-        initialState.approvalType = null;
-
         // Apply overrides
         if (stateOverrides) {
             Object.assign(initialState, stateOverrides);
@@ -1155,22 +1184,28 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
 
         const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
 
-        // Build response with approval data (same pattern as /start and /approve)
-        const response = {
+        // Check if graph is interrupted at a checkpoint
+        const graphState = await graph.getState(config);
+        const interrupted = isGraphInterrupted(graphState);
+
+        // Build response with new interrupt format
+        if (interrupted) {
+            const interruptData = getInterruptData(graphState);
+            const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
+            return res.json({
+                ...buildInterruptResponse(sessionId, checkpointData, result.currentPhase),
+                rolledBackTo: rollbackTo,
+                fieldsCleared: fieldsToClear
+            });
+        }
+
+        // Non-interrupted response
+        res.json({
             sessionId,
             rolledBackTo: rollbackTo,
             currentPhase: result.currentPhase,
-            awaitingApproval: result.awaitingApproval || false,
-            approvalType: result.approvalType || null,
             fieldsCleared: fieldsToClear
-        };
-
-        // Add approval-specific data using DRY helper
-        if (result.awaitingApproval && result.approvalType) {
-            Object.assign(response, getApprovalData(result.approvalType, result));
-        }
-
-        res.json(response);
+        });
 
     } catch (error) {
         console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/rollback error:`, error);
@@ -1216,14 +1251,14 @@ app.get('/api/health', (req, res) => {
 
 /**
  * GET /api/session/:id/background
- * Get background pipeline status for debugging
+ * @deprecated Background pipelines removed - parallel branches in graph handle this now
  */
 app.get('/api/session/:id/background', requireAuth, (req, res) => {
     const { id: sessionId } = req.params;
-    const status = backgroundPipelineManager.getFullStatus(sessionId);
     res.json({
         sessionId,
-        ...status
+        deprecated: true,
+        message: 'Background pipelines removed. Evidence and photo fetching now use native LangGraph parallel branches.'
     });
 });
 

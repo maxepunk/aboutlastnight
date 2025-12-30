@@ -18,7 +18,7 @@
 
 const { PHASES } = require('../state');
 const { createTemplateAssembler } = require('../../template-assembler');
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 
 /**
  * Get TemplateAssembler from config or create default
@@ -102,7 +102,7 @@ function createStubAssembler() {
  * Takes validated ContentBundle and applies theme-specific templates
  * to produce final HTML output using Handlebars templates.
  *
- * @param {Object} state - Current state with contentBundle, theme
+ * @param {Object} state - Current state with contentBundle, theme, sessionId
  * @param {Object} config - Graph config with optional configurable.templateAssembler
  * @returns {Object} Partial state update with assembledHtml, currentPhase
  */
@@ -110,7 +110,9 @@ async function assembleHtml(state, config) {
   const theme = state.theme || config?.configurable?.theme || 'journalist';
   const assembler = getTemplateAssembler(config, theme);
 
-  const html = await assembler.assemble(state.contentBundle);
+  // Pass sessionId for photo path resolution
+  const sessionId = state.sessionId || config?.configurable?.sessionId;
+  const html = await assembler.assemble(state.contentBundle, { sessionId });
 
   return {
     assembledHtml: html,

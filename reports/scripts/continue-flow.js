@@ -63,15 +63,17 @@ async function main() {
       body: JSON.stringify({ sessionId, theme: 'journalist', approvals: {} })
     });
     const statusData = await statusRes.json();
+    // NEW FORMAT: Data is inside checkpoint object
+    const statusCheckpoint = statusData.checkpoint || {};
 
-    if (forceApprovalType === 'paper-evidence-selection' && statusData.paperEvidence) {
-      approvals.selectedPaperEvidence = statusData.paperEvidence;
-      console.log(`  Selecting ALL ${statusData.paperEvidence.length} paper evidence items`);
-    } else if (forceApprovalType === 'arc-selection' && statusData.narrativeArcs) {
-      approvals.selectedArcs = statusData.narrativeArcs.map(arc => arc.id);
-      console.log(`  Selecting ALL ${statusData.narrativeArcs.length} narrative arcs`);
+    if (forceApprovalType === 'paper-evidence-selection' && statusCheckpoint.paperEvidence) {
+      approvals.selectedPaperEvidence = statusCheckpoint.paperEvidence;
+      console.log(`  Selecting ALL ${statusCheckpoint.paperEvidence.length} paper evidence items`);
+    } else if (forceApprovalType === 'arc-selection' && statusCheckpoint.narrativeArcs) {
+      approvals.selectedArcs = statusCheckpoint.narrativeArcs.map(arc => arc.id);
+      console.log(`  Selecting ALL ${statusCheckpoint.narrativeArcs.length} narrative arcs`);
     } else {
-      console.log('  Warning: Could not find items to select. Current state:', statusData.approvalType);
+      console.log('  Warning: Could not find items to select. Current state:', statusCheckpoint.type);
     }
   }
 
@@ -113,12 +115,16 @@ async function main() {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   const data = await res.json();
 
+  // NEW FORMAT: Extract checkpoint data once (DRY)
+  const checkpoint = data.checkpoint || {};
+  const checkpointType = checkpoint.type || null;
+
   console.log(`\nResponse (${elapsed}s):`);
   console.log('  Session ID:', data.sessionId);
   console.log('  Status:', res.status);
   console.log('  Phase:', data.currentPhase);
-  console.log('  Awaiting Approval:', data.awaitingApproval);
-  console.log('  Approval Type:', data.approvalType);
+  console.log('  Interrupted:', data.interrupted || false);
+  console.log('  Checkpoint Type:', checkpointType);
 
   if (data.error) {
     console.log('  Error:', data.error);
@@ -129,36 +135,36 @@ async function main() {
     data.errors.forEach(e => console.log(`  [${e.type}] ${e.message}`));
   }
 
-  // Show relevant data based on checkpoint
-  if (data.approvalType === 'paper-evidence-selection' && data.paperEvidence) {
-    console.log(`\n=== PAPER EVIDENCE (${data.paperEvidence.length} items) ===`);
-    data.paperEvidence.slice(0, 5).forEach((e, i) => {
+  // Show relevant data based on checkpoint (data now in checkpoint object)
+  if (checkpointType === 'paper-evidence-selection' && checkpoint.paperEvidence) {
+    console.log(`\n=== PAPER EVIDENCE (${checkpoint.paperEvidence.length} items) ===`);
+    checkpoint.paperEvidence.slice(0, 5).forEach((e, i) => {
       console.log(`  ${i+1}. ${e.title || e.name || 'Untitled'}`);
     });
-    if (data.paperEvidence.length > 5) {
-      console.log(`  ... and ${data.paperEvidence.length - 5} more`);
+    if (checkpoint.paperEvidence.length > 5) {
+      console.log(`  ... and ${checkpoint.paperEvidence.length - 5} more`);
     }
   }
 
-  if (data.approvalType === 'character-ids' && data.photoAnalyses) {
-    console.log(`\n=== PHOTO ANALYSES (${data.photoAnalyses.analyses?.length || 0} photos) ===`);
-    data.photoAnalyses.analyses?.forEach((a, i) => {
+  if (checkpointType === 'character-ids' && checkpoint.photoAnalyses) {
+    console.log(`\n=== PHOTO ANALYSES (${checkpoint.photoAnalyses.analyses?.length || 0} photos) ===`);
+    checkpoint.photoAnalyses.analyses?.forEach((a, i) => {
       console.log(`\n  Photo ${i+1}: ${a.filename || 'unknown'}`);
       console.log(`    Visual: ${a.visualContent?.substring(0, 80)}...`);
       console.log(`    People: ${a.characterDescriptions?.length || 0} detected`);
     });
   }
 
-  if (data.approvalType === 'evidence-bundle' && data.evidenceBundle) {
+  if (checkpointType === 'evidence-and-photos' && checkpoint.evidenceBundle) {
     console.log('\n=== EVIDENCE BUNDLE ===');
-    console.log(`  Exposed: ${data.evidenceBundle.exposed?.length || 0} items`);
-    console.log(`  Buried: ${data.evidenceBundle.buried?.length || 0} items`);
-    console.log(`  Context: ${data.evidenceBundle.context?.length || 0} items`);
+    console.log(`  Exposed: ${checkpoint.evidenceBundle.exposed?.length || 0} items`);
+    console.log(`  Buried: ${checkpoint.evidenceBundle.buried?.length || 0} items`);
+    console.log(`  Context: ${checkpoint.evidenceBundle.context?.length || 0} items`);
   }
 
-  if (data.approvalType === 'arc-selection' && data.narrativeArcs) {
-    console.log(`\n=== NARRATIVE ARCS (${data.narrativeArcs.length}) ===`);
-    data.narrativeArcs.forEach((arc, i) => {
+  if (checkpointType === 'arc-selection' && checkpoint.narrativeArcs) {
+    console.log(`\n=== NARRATIVE ARCS (${checkpoint.narrativeArcs.length}) ===`);
+    checkpoint.narrativeArcs.forEach((arc, i) => {
       console.log(`\n  ${i+1}. ${arc.title}`);
       console.log(`     Summary: ${arc.summary?.substring(0, 100)}...`);
       console.log(`     Emphasis: ${arc.playerEmphasis}, Relevance: ${arc.storyRelevance}`);

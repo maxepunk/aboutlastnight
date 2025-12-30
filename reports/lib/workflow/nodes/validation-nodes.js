@@ -20,7 +20,7 @@
 
 const { PHASES } = require('../state');
 const { getOutlineRules, getArticleRules } = require('../../theme-config');
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 const { resolveArc } = require('./node-helpers');
 
 // ═══════════════════════════════════════════════════════════════════════════

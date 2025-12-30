@@ -42,24 +42,31 @@ node scripts/e2e-walkthrough.js --session 1225 --approve input-review --step
 # Remote access
 start-everything.bat   # Windows: Start server + Cloudflare tunnel
 cloudflared tunnel run aln-console  # Manual tunnel start
+
+# LangSmith Studio (graph visualization + debugging)
+npx @langchain/langgraph-cli dev    # Start Agent Server, opens Studio in browser
+npx @langchain/langgraph-cli dev --tunnel  # With tunnel (for Safari/remote)
 ```
 
 ## Architecture
 
-### LangGraph Workflow (6 Phases, 25+ Nodes)
+### LangGraph Workflow (6 Phases, 37 Nodes)
 
 ```
 Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
 → Phase 2: Arc Analysis (single SDK call) → Phase 3: Outline → Phase 4: Article → Phase 5: Assembly
 ```
 
-**Human Checkpoints (7 total - workflow pauses for approval):**
+**Human Checkpoints (9 total - workflow pauses for approval via native `interrupt()`):**
 
 | Checkpoint | Phase | Purpose |
 |------------|-------|---------|
+| `await-roster` | 0.1 | Wait for initial roster input (incremental input flow) |
 | `input-review` | 0.2 | Review AI-parsed session input (roster, accusation, whiteboard) |
 | `paper-evidence-selection` | 1.35 | Select which paper evidence was unlocked during gameplay |
 | `character-ids` | 1.66 | Map characters to photos based on Haiku's visual descriptions |
+| `await-full-context` | 1.7 | Wait for director notes before proceeding (incremental input flow) |
+| `pre-curation` | 1.75 | Review evidence before curation |
 | `evidence-and-photos` | 1.8 | Approve curated three-layer evidence bundle |
 | `arc-selection` | 2.3 | Select which narrative arcs to develop (3-5 recommended) |
 | `outline` | 3.2 | Approve article structure and photo placements |
@@ -71,18 +78,32 @@ Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6
 
 ```
 server.js                           # Express server + /api/generate endpoint
-lib/sdk-client.js                   # Claude Agent SDK wrapper with timeouts
+lib/llm/
+├── index.js                        # Public API: traced sdkQuery, createProgressLogger
+└── client.js                       # Raw SDK wrapper with timeouts, progress hooks
+lib/observability/
+├── index.js                        # Public exports: traceNode, progressEmitter
+├── config.js                       # isTracingEnabled(), getProject()
+├── constants.js                    # SDK_MESSAGE_TYPES, SSE_EVENT_TYPES
+├── state-snapshot.js               # extractStateSnapshot for traces
+├── node-tracer.js                  # traceNode() wrapper
+├── llm-tracer.js                   # createTracedSdkQuery() with full visibility
+├── progress-emitter.js             # SSE progress streaming via EventEmitter
+├── progress-bridge.js              # Unified progress/tracing (llm_start/llm_complete)
+└── message-formatter.js            # DRY formatting for console + SSE
 lib/theme-config.js                 # Theme settings, NPC definitions, validation rules (8.17)
 lib/prompt-builder.js               # Prompt assembly for each phase
 lib/workflow/
-├── graph.js                        # LangGraph StateGraph (27 nodes, edges)
+├── graph.js                        # LangGraph StateGraph (37 nodes, edges)
 ├── state.js                        # State annotations, phases, reducers
-├── tracing.js                      # LangSmith observability integration
-├── generation-supervisor.js        # Deprecated - see arc-specialist-nodes.js (8.15)
+├── checkpoint-helpers.js           # Native interrupt() helpers (DRY)
+├── reference-loader.js             # Load reference files for prompts
 └── nodes/
     ├── index.js                    # Node barrel export
+    ├── node-helpers.js             # Shared helper functions for nodes
     ├── input-nodes.js              # Raw input parsing
     ├── fetch-nodes.js              # Notion/filesystem data loading
+    ├── checkpoint-nodes.js         # Dedicated interrupt() checkpoint nodes
     ├── photo-nodes.js              # Haiku vision analysis
     ├── preprocess-nodes.js         # Batch evidence summarization
     ├── arc-specialist-nodes.js     # Single SDK call arc analysis (8.15)
@@ -110,7 +131,7 @@ templates/journalist/
 ### Claude Agent SDK Usage
 
 ```javascript
-const { sdkQuery } = require('./lib/sdk-client');
+const { sdkQuery } = require('./lib/llm');
 
 // Standard call with structured output
 const result = await sdkQuery({
@@ -177,7 +198,7 @@ Arc analysis uses a **single comprehensive SDK call** (not parallel subagents):
 | Structured Output | JSON schemas via `jsonSchema` param | N/A |
 | State Management | N/A | 33+ state fields with reducers |
 | Checkpointing | N/A | MemorySaver/SqliteSaver |
-| Human Approval | N/A | `awaitingApproval` routing |
+| Human Approval | N/A | Native `interrupt()` pattern |
 | Revision Loops | N/A | Conditional edges with caps |
 | Timeouts | AbortController per call | N/A |
 
@@ -199,11 +220,59 @@ LANGSMITH_PROJECT=aln-director-console
 
 **Usage in nodes:**
 ```javascript
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 module.exports = { myNode: traceNode(myNodeImpl, 'myNode') };
 ```
 
 Traces include: execution timing, state snapshots, SDK call inputs/outputs.
+
+### SSE Progress Events
+
+The observability layer emits rich SSE events for full LLM visibility:
+
+| Event Type | Description |
+|------------|-------------|
+| `llm_start` | Emitted when SDK call begins (full prompt, system, schema) |
+| `llm_complete` | Emitted when SDK call finishes (full response, elapsed time) |
+| `progress` | Standard progress updates during execution |
+| `complete` | Workflow finished successfully |
+| `error` | Error occurred |
+
+**Full Visibility Pattern:** No truncation of prompts or responses. SSE streams complete content for debugging and tracing.
+
+### LangSmith Studio
+
+LangSmith Studio is a web-based IDE for visualizing and debugging LangGraph agents. It connects to a local Agent Server.
+
+**Quick Start:**
+```bash
+# Start the Agent Server (auto-opens Studio in browser)
+npx @langchain/langgraph-cli dev
+
+# With tunnel for Safari or remote access
+npx @langchain/langgraph-cli dev --tunnel
+```
+
+**What happens:**
+1. Agent Server starts on `http://localhost:2024`
+2. Browser opens to `https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`
+3. Studio connects to your local graph for visualization and debugging
+
+**Configuration:** `langgraph.json` in project root defines the graph as `./lib/studio/entry.js:graph` (file:export format).
+
+**Requirements:**
+- LangSmith account (free at smith.langchain.com)
+- `LANGSMITH_API_KEY` in `.env`
+- All dependencies installed (`npm install`)
+
+**Studio Features:**
+- Graph topology visualization (all 37 nodes)
+- Interactive execution with state inspection
+- Time-travel debugging through checkpoints
+- Thread and assistant management
+- Prompt iteration tools
+
+**Note:** Safari blocks localhost connections. Use `--tunnel` flag to create a secure Cloudflare tunnel instead.
 
 ## State Management
 
@@ -254,7 +323,7 @@ curl -X POST /api/session/1225/start -d '{"theme":"journalist","rawSessionInput"
 
 # 2. Check current checkpoint
 curl /api/session/1225/checkpoint
-# Returns: {"approvalType":"input-review","currentPhase":"0.2"}
+# Returns: {"interrupted":true,"checkpoint":{"type":"input-review"},"currentPhase":"0.2"}
 
 # 3. Approve checkpoint
 curl -X POST /api/session/1225/approve -d '{"inputReview":true}'
@@ -275,12 +344,20 @@ cp .env.example .env
 
 ## Testing
 
-Jest with SDK mock at `__tests__/mocks/anthropic-sdk.mock.js`. Coverage thresholds: 80% lines/functions/statements, 70% branches.
+Jest with SDK mocks at `__tests__/mocks/`. Coverage thresholds: 80% lines/functions/statements, 70% branches.
+
+**Mock Files:**
+- `anthropic-sdk.mock.js` - External SDK mock for Jest module mapper
+- `llm-client.mock.js` - LLM client factory mock for node testing
+- `checkpoint-helpers.mock.js` - Prevents `interrupt()` from throwing in unit tests
 
 ```javascript
-// Nodes export mock factories for testing
-const { mocks } = require('./lib/workflow/nodes');
-const mockSdk = mocks.createMockSdkClient();
+// Mock checkpoint helpers in unit tests to prevent GraphInterrupt
+jest.mock('../../../lib/workflow/checkpoint-helpers',
+  () => require('../../mocks/checkpoint-helpers.mock'));
+
+// Use LLM client mock for SDK calls
+const { createMockSdkClient } = require('../../mocks/llm-client.mock');
 ```
 
 ## Troubleshooting

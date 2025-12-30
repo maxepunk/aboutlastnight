@@ -82,7 +82,9 @@ const CONTENT_BLOCK_PARTIALS = {
   'paragraph': 'content-blocks/paragraph',
   'quote': 'content-blocks/quote',
   'evidence-reference': 'content-blocks/evidence-reference',
-  'list': 'content-blocks/list'
+  'list': 'content-blocks/list',
+  'photo': 'content-blocks/photo',
+  'evidence-card': 'content-blocks/evidence-card'
 };
 
 // ============================================================================

@@ -27,15 +27,16 @@
  * See ARCHITECTURE_DECISIONS.md 8.12 for design rationale.
  */
 
-const { PHASES, APPROVAL_TYPES } = require('../state');
+const { PHASES } = require('../state');
 const {
   buildValidEvidenceIds,
   validateRosterName,
   getSdkClient,
-  isKnownNPC  // Commit 8.17: NPC validation (accepts NPCs from theme config)
+  isKnownNPC,  // Commit 8.17: NPC validation (accepts NPCs from theme config)
+  buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper (renamed to avoid local shadow)
 } = require('./node-helpers');
 const { getThemeNPCs } = require('../../theme-config');  // Commit 8.17: Theme-configurable NPCs
-const { traceNode } = require('../tracing');
+const { traceNode } = require('../../observability');
 
 // Commit 8.13: Import centralized rules loader for evidence boundaries
 // Commit 8.14: Use full reference content instead of summaries to avoid file reads
@@ -550,8 +551,6 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         architecture: 'player-focus-guided'
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
-      awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.ARC_SELECTION
     };
   }
 
@@ -606,8 +605,6 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         }
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
-      awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.ARC_SELECTION
     };
 
   } catch (error) {
@@ -629,6 +626,217 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
       currentPhase: PHASES.ERROR
     };
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REVISION NODE - Targeted fixes with previous output context
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// This node handles arc revisions by providing the FULL previous output
+// along with specific feedback from the evaluator. This solves the
+// "whack-a-mole" problem where fixing one issue caused regression of
+// previously-correct output.
+//
+// Data flow:
+// 1. incrementArcRevision preserves arcs in _previousArcs, clears narrativeArcs
+// 2. reviseArcs receives _previousArcs + validationResults
+// 3. Uses buildRevisionContext helper (DRY) to format context
+// 4. Makes targeted fixes, returns new arcs, clears _previousArcs
+
+/**
+ * Revise arcs with previous output context for targeted fixes
+ *
+ * Called after incrementArcRevision when evaluator says arcs need work.
+ * Uses the centralized buildRevisionContext helper for DRY formatting.
+ *
+ * Key difference from analyzeArcs: receives PREVIOUS OUTPUT + FEEDBACK
+ * so it can make targeted fixes instead of regenerating from scratch.
+ *
+ * @param {Object} state - Current state with _previousArcs, validationResults
+ * @param {Object} config - Graph config with SDK client
+ * @returns {Object} Partial state update with narrativeArcs, cleared _previousArcs
+ */
+async function reviseArcs(state, config) {
+  const revisionCount = state.arcRevisionCount || 0;
+  console.log(`[reviseArcs] Starting arc revision ${revisionCount}`);
+  const startTime = Date.now();
+
+  // Get previous arcs (preserved by incrementArcRevision)
+  const previousArcs = state._previousArcs;
+  if (!previousArcs || previousArcs.length === 0) {
+    // CRITICAL: This should never happen in normal flow.
+    // If we're here, incrementArcRevision ran with null/empty narrativeArcs.
+    console.error('[reviseArcs] CRITICAL: No previous arcs to revise. This indicates incrementArcRevision ran with null/empty narrativeArcs.');
+    return {
+      narrativeArcs: [],
+      _previousArcs: null,
+      errors: [{
+        phase: PHASES.ARC_SYNTHESIS,
+        type: 'revision-no-previous-output',
+        message: 'Cannot revise: no previous arcs available. Increment node may have run with null narrativeArcs.',
+        timestamp: new Date().toISOString()
+      }],
+      currentPhase: PHASES.ERROR
+    };
+  }
+
+  // Build revision context using centralized helper (DRY)
+  const { contextSection, previousOutputSection } = buildRevisionContextDRY({
+    phase: 'arcs',
+    revisionCount,
+    validationResults: state.validationResults,
+    previousOutput: previousArcs
+  });
+
+  // Get SDK client
+  const sdkClient = getSdkClient(config, 'reviseArcs');
+
+  // Build revision prompt with full context
+  const revisionPrompt = buildArcRevisionPrompt(state, contextSection, previousOutputSection);
+
+  try {
+    const result = await sdkClient({
+      prompt: revisionPrompt,
+      systemPrompt: getArcRevisionSystemPrompt(),
+      model: 'sonnet',  // Same model as generation
+      jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
+      timeoutMs: 5 * 60 * 1000,  // 5 minutes
+      label: `Arc revision ${revisionCount}`
+    });
+
+    const { narrativeArcs, synthesisNotes, rosterCoverageCheck } = result || {};
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[reviseArcs] Complete: ${narrativeArcs?.length || 0} arcs in ${duration}s`);
+
+    // Verify improvements
+    if (narrativeArcs && narrativeArcs.length > 0) {
+      const hasAccusationArc = narrativeArcs.some(arc => arc.arcSource === 'accusation');
+      console.log(`[reviseArcs] Accusation arc present: ${hasAccusationArc}`);
+    }
+
+    return {
+      narrativeArcs: narrativeArcs || [],
+      _previousArcs: null,  // Clear temporary field after use
+      _arcAnalysisCache: {
+        synthesizedAt: new Date().toISOString(),
+        synthesisNotes: synthesisNotes || '',
+        rosterCoverageCheck: rosterCoverageCheck || {},
+        arcCount: narrativeArcs?.length || 0,
+        architecture: 'player-focus-guided-revision',
+        revisionNumber: revisionCount,
+        timing: {
+          total: `${duration}s`
+        }
+      },
+      currentPhase: PHASES.ARC_SYNTHESIS
+    };
+
+  } catch (error) {
+    console.error('[reviseArcs] Error:', error.message);
+
+    return {
+      narrativeArcs: [],
+      _previousArcs: null,  // Clear temporary field
+      _arcAnalysisCache: {
+        synthesizedAt: new Date().toISOString(),
+        _error: error.message,
+        architecture: 'player-focus-guided-revision',
+        revisionNumber: revisionCount
+      },
+      errors: [{
+        phase: PHASES.ARC_SYNTHESIS,
+        type: 'arc-revision-failed',
+        message: error.message,
+        timestamp: new Date().toISOString()
+      }],
+      currentPhase: PHASES.ERROR
+    };
+  }
+}
+
+/**
+ * Get system prompt for arc revision
+ * Focuses on TARGETED FIXES, not regeneration
+ */
+function getArcRevisionSystemPrompt() {
+  return `You are revising narrative arcs for an investigative article about "About Last Night".
+
+CRITICAL REVISION RULES:
+1. You are IMPROVING existing arcs, not generating from scratch
+2. The previous output is provided - PRESERVE everything that's working well
+3. Only modify the specific issues identified in the feedback
+4. If a criterion is scoring ≥80%, do NOT change anything related to it
+5. Maintain the same overall arc structure and organization
+6. Output complete arcs with all required fields
+
+Your goal is TARGETED FIXES that address the evaluator's feedback while preserving all the good work from the previous attempt.
+
+Do NOT:
+- Regenerate arcs from scratch (you lose good content)
+- Change things that weren't flagged as issues
+- Drop arcs that were working well
+- Introduce new problems while fixing old ones
+
+DO:
+- Read the previous output carefully
+- Identify exactly what needs to change
+- Make minimal, surgical fixes
+- Verify your changes address the feedback
+- Return the complete updated arc set`;
+}
+
+/**
+ * Build revision prompt with previous arcs and feedback
+ *
+ * @param {Object} state - Current workflow state
+ * @param {string} contextSection - Formatted revision context from helper
+ * @param {string} previousOutputSection - Formatted previous output from helper
+ * @returns {string} Complete revision prompt
+ */
+function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
+  const playerFocus = state.playerFocus || {};
+  const sessionConfig = state.sessionConfig || {};
+  const evidenceBundle = state.evidenceBundle || {};
+
+  // Extract evidence summary for reference
+  const evidenceSummary = extractEvidenceSummary(evidenceBundle);
+
+  const accusation = playerFocus.accusation || {};
+  const roster = sessionConfig.roster || [];
+
+  return `# Arc Revision Request
+
+${contextSection}
+
+## SESSION CONTEXT (Reference Only - Do NOT regenerate)
+
+### Accusation
+**Accused:** ${JSON.stringify(accusation.accused || [])}
+**Charge:** ${accusation.charge || 'Not specified'}
+**Reasoning:** ${accusation.reasoning || 'Not documented'}
+
+### Roster
+${JSON.stringify(roster)}
+
+### Valid Evidence IDs (for keyEvidence validation)
+${JSON.stringify(evidenceSummary.allEvidenceIds)}
+
+---
+
+${previousOutputSection}
+
+---
+
+## YOUR TASK
+
+1. Review the PREVIOUS ARCS OUTPUT above
+2. Review the ISSUES TO ADDRESS in the revision context
+3. Make TARGETED FIXES to address those specific issues
+4. PRESERVE everything that's working well (high-scoring criteria)
+5. Return the complete updated arc set in the same JSON format
+
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1137,8 +1345,6 @@ async function analyzeArcsWithSubagents(state, config) {
         error: 'No evidence available'
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
-      awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.ARC_SELECTION
     };
   }
 
@@ -1222,8 +1428,6 @@ async function analyzeArcsWithSubagents(state, config) {
         }
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
-      awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.ARC_SELECTION
     };
 
   } catch (error) {
@@ -1610,8 +1814,6 @@ function createMockOrchestrator(options = {}) {
         arcCount: mockArcs.length
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
-      awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.ARC_SELECTION
     };
   };
 }
@@ -1690,8 +1892,6 @@ function createMockSynthesizer(options = {}) {
         arcCount: mockArcs.length
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
-      awaitingApproval: true,
-      approvalType: APPROVAL_TYPES.ARC_SELECTION
     };
   };
 }
@@ -1700,6 +1900,11 @@ module.exports = {
   // Commit 8.15: Player-focus-guided architecture (preferred)
   analyzeArcsPlayerFocusGuided: traceNode(analyzeArcsPlayerFocusGuided, 'analyzeArcsPlayerFocusGuided', {
     stateFields: ['playerFocus', 'evidenceBundle']
+  }),
+
+  // Revision node - uses previous output context for targeted fixes (DRY)
+  reviseArcs: traceNode(reviseArcs, 'reviseArcs', {
+    stateFields: ['_previousArcs', 'validationResults']
   }),
 
   // Commit 8.12: Parallel specialist architecture (legacy, kept for comparison)
@@ -1769,8 +1974,6 @@ if (require.main === module) {
     console.log('Specialist analyses:', Object.keys(result.specialistAnalyses || {}));
     console.log('Arcs synthesized:', result.narrativeArcs?.length);
     console.log('First arc title:', result.narrativeArcs?.[0]?.title);
-    console.log('Awaiting approval:', result.awaitingApproval);
-    console.log('Approval type:', result.approvalType);
     console.log('\nSelf-test complete.');
   }).catch(err => {
     console.error('Self-test failed:', err.message);

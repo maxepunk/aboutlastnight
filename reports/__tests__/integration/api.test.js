@@ -12,7 +12,8 @@
  * Manual HTTP testing with browser supplements these tests.
  */
 
-const { PHASES, APPROVAL_TYPES } = require('../../lib/workflow/state');
+const { PHASES } = require('../../lib/workflow/state');
+const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 
 // Fixtures for mock responses
 const mockEvidenceBundle = require('../fixtures/mock-responses/evidence-bundle.json');
@@ -23,6 +24,9 @@ const mockValidationPassed = require('../fixtures/mock-responses/validation-resu
 /**
  * Simulates the /api/generate endpoint handler logic.
  * This mirrors the handler in server.js for testability.
+ *
+ * NOTE: Updated for interrupt() migration - uses interrupted: true + checkpoint
+ * instead of awaitingApproval/approvalType
  *
  * @param {Object} req - Mock request object with body
  * @param {Object} graph - Mock graph with invoke() function
@@ -56,12 +60,10 @@ async function handleGenerateRequest(req, graph) {
             }
         };
 
-        // Build initial state from approvals
+        // Build initial state from approvals (for resuming)
+        // NOTE: interrupt() migration - no awaitingApproval field needed
         let initialState = {};
         if (approvals) {
-            if (approvals.evidenceBundle === true) {
-                initialState.awaitingApproval = false;
-            }
             if (approvals.selectedArcs && Array.isArray(approvals.selectedArcs)) {
                 if (approvals.selectedArcs.length === 0) {
                     return {
@@ -70,36 +72,37 @@ async function handleGenerateRequest(req, graph) {
                     };
                 }
                 initialState.selectedArcs = approvals.selectedArcs;
-                initialState.awaitingApproval = false;
-            }
-            if (approvals.outline === true) {
-                initialState.awaitingApproval = false;
             }
         }
 
         const result = await graph.invoke(initialState, config);
 
         // Build response based on current state
+        // NOTE: New format uses interrupted: true + checkpoint instead of awaitingApproval/approvalType
         const response = {
             sessionId,
-            currentPhase: result.currentPhase,
-            awaitingApproval: result.awaitingApproval || false,
-            approvalType: result.approvalType || null
+            currentPhase: result.currentPhase
         };
 
-        // Include data for approval UI based on approval type
-        if (result.awaitingApproval) {
-            switch (result.approvalType) {
-                case APPROVAL_TYPES.EVIDENCE_AND_PHOTOS:
+        // Check for interrupt (new pattern)
+        if (result.interrupted && result.checkpoint) {
+            response.interrupted = true;
+            response.checkpoint = result.checkpoint;
+
+            // Include data for approval UI based on checkpoint type
+            switch (result.checkpoint.type) {
+                case CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS:
                     response.evidenceBundle = result.evidenceBundle;
                     break;
-                case APPROVAL_TYPES.ARC_SELECTION:
+                case CHECKPOINT_TYPES.ARC_SELECTION:
                     response.narrativeArcs = result.narrativeArcs;
                     break;
-                case APPROVAL_TYPES.OUTLINE:
+                case CHECKPOINT_TYPES.OUTLINE:
                     response.outline = result.outline;
                     break;
             }
+        } else {
+            response.interrupted = false;
         }
 
         // Include final outputs on completion
@@ -133,7 +136,7 @@ async function handleGenerateRequest(req, graph) {
 }
 
 // ============================================================================
-// Mock Graph Factories
+// Mock Graph Factories - Updated for interrupt() migration
 // ============================================================================
 
 /**
@@ -143,8 +146,7 @@ function createMockCompletedGraph() {
     return {
         invoke: async () => ({
             currentPhase: PHASES.COMPLETE,
-            awaitingApproval: false,
-            approvalType: null,
+            interrupted: false,
             assembledHtml: '<html><body>Test Article</body></html>',
             validationResults: mockValidationPassed
         })
@@ -152,42 +154,42 @@ function createMockCompletedGraph() {
 }
 
 /**
- * Create a mock graph that pauses at evidence approval
+ * Create a mock graph that pauses at evidence approval (interrupt pattern)
  */
 function createMockEvidenceApprovalGraph() {
     return {
         invoke: async () => ({
             currentPhase: PHASES.CURATE_EVIDENCE,
-            awaitingApproval: true,
-            approvalType: APPROVAL_TYPES.EVIDENCE_AND_PHOTOS,
+            interrupted: true,
+            checkpoint: { type: CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS },
             evidenceBundle: mockEvidenceBundle
         })
     };
 }
 
 /**
- * Create a mock graph that pauses at arc selection
+ * Create a mock graph that pauses at arc selection (interrupt pattern)
  */
 function createMockArcSelectionGraph() {
     return {
         invoke: async () => ({
             currentPhase: PHASES.ANALYZE_ARCS,
-            awaitingApproval: true,
-            approvalType: APPROVAL_TYPES.ARC_SELECTION,
+            interrupted: true,
+            checkpoint: { type: CHECKPOINT_TYPES.ARC_SELECTION },
             narrativeArcs: mockArcAnalysis.narrativeArcs
         })
     };
 }
 
 /**
- * Create a mock graph that pauses at outline approval
+ * Create a mock graph that pauses at outline approval (interrupt pattern)
  */
 function createMockOutlineApprovalGraph() {
     return {
         invoke: async () => ({
             currentPhase: PHASES.GENERATE_OUTLINE,
-            awaitingApproval: true,
-            approvalType: APPROVAL_TYPES.OUTLINE,
+            interrupted: true,
+            checkpoint: { type: CHECKPOINT_TYPES.OUTLINE },
             outline: mockOutline
         })
     };
@@ -200,7 +202,7 @@ function createMockErrorGraph(errors = [{ path: '/sections', message: 'validatio
     return {
         invoke: async () => ({
             currentPhase: PHASES.ERROR,
-            awaitingApproval: false,
+            interrupted: false,
             errors
         })
     };
@@ -269,51 +271,51 @@ describe('API /api/generate endpoint', () => {
         });
     });
 
-    describe('approval checkpoint responses', () => {
-        it('returns evidenceBundle when awaiting evidence approval', async () => {
+    describe('approval checkpoint responses (interrupt pattern)', () => {
+        it('returns evidenceBundle when interrupted at evidence checkpoint', async () => {
             const req = { body: { sessionId: 'test-123', theme: 'journalist' } };
             const graph = createMockEvidenceApprovalGraph();
 
             const response = await handleGenerateRequest(req, graph);
 
             expect(response.status).toBe(200);
-            expect(response.json.awaitingApproval).toBe(true);
-            expect(response.json.approvalType).toBe(APPROVAL_TYPES.EVIDENCE_AND_PHOTOS);
+            expect(response.json.interrupted).toBe(true);
+            expect(response.json.checkpoint.type).toBe(CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS);
             expect(response.json.evidenceBundle).toBeDefined();
         });
 
-        it('returns narrativeArcs when awaiting arc selection', async () => {
+        it('returns narrativeArcs when interrupted at arc selection', async () => {
             const req = { body: { sessionId: 'test-123', theme: 'journalist' } };
             const graph = createMockArcSelectionGraph();
 
             const response = await handleGenerateRequest(req, graph);
 
             expect(response.status).toBe(200);
-            expect(response.json.awaitingApproval).toBe(true);
-            expect(response.json.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
+            expect(response.json.interrupted).toBe(true);
+            expect(response.json.checkpoint.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
             expect(response.json.narrativeArcs).toBeDefined();
         });
 
-        it('returns outline when awaiting outline approval', async () => {
+        it('returns outline when interrupted at outline checkpoint', async () => {
             const req = { body: { sessionId: 'test-123', theme: 'journalist' } };
             const graph = createMockOutlineApprovalGraph();
 
             const response = await handleGenerateRequest(req, graph);
 
             expect(response.status).toBe(200);
-            expect(response.json.awaitingApproval).toBe(true);
-            expect(response.json.approvalType).toBe(APPROVAL_TYPES.OUTLINE);
+            expect(response.json.interrupted).toBe(true);
+            expect(response.json.checkpoint.type).toBe(CHECKPOINT_TYPES.OUTLINE);
             expect(response.json.outline).toBeDefined();
         });
 
-        it('does not include unrelated approval data', async () => {
+        it('does not include unrelated checkpoint data', async () => {
             const req = { body: { sessionId: 'test-123', theme: 'journalist' } };
             const graph = createMockEvidenceApprovalGraph();
 
             const response = await handleGenerateRequest(req, graph);
 
             expect(response.json.evidenceBundle).toBeDefined();
-            // Should NOT include other approval data
+            // Should NOT include other checkpoint data
             expect(response.json.narrativeArcs).toBeUndefined();
             expect(response.json.outline).toBeUndefined();
         });
@@ -343,48 +345,27 @@ describe('API /api/generate endpoint', () => {
             expect(response.json.validationResults.passed).toBe(true);
         });
 
-        it('does not include approval fields when complete', async () => {
+        it('does not include interrupt fields when complete', async () => {
             const req = { body: { sessionId: 'test-123', theme: 'journalist' } };
             const graph = createMockCompletedGraph();
 
             const response = await handleGenerateRequest(req, graph);
 
-            expect(response.json.awaitingApproval).toBe(false);
-            expect(response.json.approvalType).toBeNull();
+            expect(response.json.interrupted).toBe(false);
+            expect(response.json.checkpoint).toBeUndefined();
         });
     });
 
-    describe('approval processing', () => {
-        it('sets awaitingApproval to false when evidenceBundle approval is true', async () => {
-            // This test verifies the approval logic in the handler
-            // Create a graph that captures the initial state passed to it
-            let capturedInitialState = null;
-            const graph = {
-                invoke: async (initialState) => {
-                    capturedInitialState = initialState;
-                    return { currentPhase: PHASES.COMPLETE, awaitingApproval: false };
-                }
-            };
-
-            const req = {
-                body: {
-                    sessionId: 'test-123',
-                    theme: 'journalist',
-                    approvals: { evidenceBundle: true }
-                }
-            };
-
-            await handleGenerateRequest(req, graph);
-
-            expect(capturedInitialState.awaitingApproval).toBe(false);
-        });
+    describe('approval processing (interrupt pattern)', () => {
+        // NOTE: interrupt() migration - approvals now use Command({ resume })
+        // These tests verify the handler properly passes approval data to the graph
 
         it('sets selectedArcs in initial state when provided', async () => {
             let capturedInitialState = null;
             const graph = {
                 invoke: async (initialState) => {
                     capturedInitialState = initialState;
-                    return { currentPhase: PHASES.COMPLETE, awaitingApproval: false };
+                    return { currentPhase: PHASES.COMPLETE, interrupted: false };
                 }
             };
 
@@ -399,29 +380,7 @@ describe('API /api/generate endpoint', () => {
             await handleGenerateRequest(req, graph);
 
             expect(capturedInitialState.selectedArcs).toEqual(['The Money Trail', 'Hidden Truth']);
-            expect(capturedInitialState.awaitingApproval).toBe(false);
-        });
-
-        it('sets awaitingApproval to false when outline approval is true', async () => {
-            let capturedInitialState = null;
-            const graph = {
-                invoke: async (initialState) => {
-                    capturedInitialState = initialState;
-                    return { currentPhase: PHASES.COMPLETE, awaitingApproval: false };
-                }
-            };
-
-            const req = {
-                body: {
-                    sessionId: 'test-123',
-                    theme: 'journalist',
-                    approvals: { outline: true }
-                }
-            };
-
-            await handleGenerateRequest(req, graph);
-
-            expect(capturedInitialState.awaitingApproval).toBe(false);
+            // NOTE: awaitingApproval no longer exists in state
         });
 
         it('returns 400 when selectedArcs is empty array', async () => {
@@ -476,7 +435,7 @@ describe('API /api/generate endpoint', () => {
         });
     });
 
-    describe('response structure', () => {
+    describe('response structure (interrupt pattern)', () => {
         it('always includes sessionId in response', async () => {
             const req = { body: { sessionId: 'my-session-id', theme: 'journalist' } };
             const graph = createMockCompletedGraph();
@@ -496,22 +455,28 @@ describe('API /api/generate endpoint', () => {
             expect(typeof response.json.currentPhase).toBe('string');
         });
 
-        it('always includes awaitingApproval boolean in response', async () => {
+        it('always includes interrupted boolean in response', async () => {
             const req = { body: { sessionId: 'test-123', theme: 'journalist' } };
             const graph = createMockCompletedGraph();
 
             const response = await handleGenerateRequest(req, graph);
 
-            expect(typeof response.json.awaitingApproval).toBe('boolean');
+            expect(typeof response.json.interrupted).toBe('boolean');
         });
 
-        it('always includes approvalType in response (null when not awaiting)', async () => {
-            const req = { body: { sessionId: 'test-123', theme: 'journalist' } };
-            const graph = createMockCompletedGraph();
+        it('includes checkpoint only when interrupted', async () => {
+            // When not interrupted
+            const req1 = { body: { sessionId: 'test-123', theme: 'journalist' } };
+            const graph1 = createMockCompletedGraph();
+            const response1 = await handleGenerateRequest(req1, graph1);
+            expect(response1.json.checkpoint).toBeUndefined();
 
-            const response = await handleGenerateRequest(req, graph);
-
-            expect(response.json.approvalType).toBeNull();
+            // When interrupted
+            const req2 = { body: { sessionId: 'test-123', theme: 'journalist' } };
+            const graph2 = createMockArcSelectionGraph();
+            const response2 = await handleGenerateRequest(req2, graph2);
+            expect(response2.json.checkpoint).toBeDefined();
+            expect(response2.json.checkpoint.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
         });
     });
 });

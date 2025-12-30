@@ -26,7 +26,9 @@ const {
     ORCHESTRATOR_OUTPUT_SCHEMA
   }
 } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
-const { PHASES, APPROVAL_TYPES } = require('../../../lib/workflow/state');
+const { PHASES } = require('../../../lib/workflow/state');
+// NOTE: APPROVAL_TYPES removed in interrupt() migration (Commit 8.x)
+// Arc orchestrator no longer sets awaitingApproval/approvalType
 
 describe('arc-specialist-nodes (Commit 8.8)', () => {
   describe('module exports', () => {
@@ -256,19 +258,11 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
 
       expect(result.specialistAnalyses).toBeDefined();
       expect(result.narrativeArcs).toEqual([]);
-      expect(result.awaitingApproval).toBe(true);
+      // NOTE: awaitingApproval check removed - interrupt() migration
     });
 
-    it('sets awaitingApproval and approvalType on success', async () => {
-      // Use mock orchestrator pattern
-      const mockOrchestrator = createMockOrchestrator();
-      const state = { evidenceBundle: {}, sessionId: 'test' };
-
-      const result = await mockOrchestrator(state, {});
-
-      expect(result.awaitingApproval).toBe(true);
-      expect(result.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
-    });
+    // NOTE: 'sets awaitingApproval and approvalType' test removed
+    // interrupt() migration: Nodes no longer set these fields
 
     it('sets currentPhase to ARC_SYNTHESIS', async () => {
       const mockOrchestrator = createMockOrchestrator();
@@ -341,13 +335,8 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
       expect(result._arcAnalysisCache.arcCount).toBe(1);
     });
 
-    it('sets approval state', async () => {
-      const mock = createMockOrchestrator();
-      const result = await mock({}, {});
-
-      expect(result.awaitingApproval).toBe(true);
-      expect(result.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
-    });
+    // NOTE: 'sets approval state' test removed - interrupt() migration
+    // Mock orchestrator no longer returns awaitingApproval/approvalType
   });
 
   describe('deprecated mock factories', () => {
@@ -390,13 +379,8 @@ describe('arc-specialist-nodes (Commit 8.8)', () => {
       expect(result.currentPhase).toBe(PHASES.ARC_SYNTHESIS);
     });
 
-    it('orchestrator sets approval after synthesis', async () => {
-      const mock = createMockOrchestrator();
-      const result = await mock({}, {});
-
-      // Orchestrator combines specialist work + synthesis + approval checkpoint
-      expect(result.awaitingApproval).toBe(true);
-      expect(result.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
-    });
+    // NOTE: 'orchestrator sets approval after synthesis' test removed
+    // interrupt() migration: Nodes no longer set awaitingApproval/approvalType
+    // Interrupt handled via checkpointInterrupt() in evaluator-nodes.js
   });
 });

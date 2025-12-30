@@ -7,6 +7,11 @@
  * See ARCHITECTURE_DECISIONS.md 8.6.4-8.6.5 for design rationale.
  */
 
+// Mock checkpointInterrupt to prevent GraphInterrupt in unit tests
+// Uses shared mock - see __tests__/mocks/checkpoint-helpers.mock.js
+jest.mock('../../../lib/workflow/checkpoint-helpers',
+  () => require('../../mocks/checkpoint-helpers.mock'));
+
 const {
   evaluateArcs,
   evaluateOutline,
@@ -21,11 +26,12 @@ const {
     safeParseJson,
     getRevisionCountField,
     getRevisionCap,
-    getApprovalType,
+    // NOTE: getApprovalType removed in interrupt() migration
     getPhaseConstant
   }
 } = require('../../../lib/workflow/nodes/evaluator-nodes');
-const { PHASES, APPROVAL_TYPES, REVISION_CAPS } = require('../../../lib/workflow/state');
+const { PHASES, REVISION_CAPS } = require('../../../lib/workflow/state');
+const { CHECKPOINT_TYPES } = require('../../../lib/workflow/checkpoint-helpers');
 
 describe('evaluator-nodes', () => {
   describe('module exports', () => {
@@ -331,23 +337,9 @@ describe('evaluator-nodes', () => {
     });
   });
 
-  describe('getApprovalType', () => {
-    it('returns ARC_SELECTION for arcs', () => {
-      expect(getApprovalType('arcs')).toBe(APPROVAL_TYPES.ARC_SELECTION);
-    });
-
-    it('returns OUTLINE for outline', () => {
-      expect(getApprovalType('outline')).toBe(APPROVAL_TYPES.OUTLINE);
-    });
-
-    it('returns ARTICLE for article', () => {
-      expect(getApprovalType('article')).toBe(APPROVAL_TYPES.ARTICLE);
-    });
-
-    it('returns null for unknown phase', () => {
-      expect(getApprovalType('unknown')).toBeNull();
-    });
-  });
+  // NOTE: describe('getApprovalType') removed in interrupt() migration
+  // Function getApprovalType was removed from evaluator-nodes.js
+  // Checkpoint types are now handled via checkpointInterrupt() helper
 
   describe('getPhaseConstant', () => {
     it('returns ARC_EVALUATION for arcs', () => {
@@ -641,7 +633,7 @@ describe('evaluator-nodes', () => {
       const mock = createMockEvaluator('arcs');
       const result = await mock({ arcRevisionCount: 0 }, {});
 
-      expect(result.awaitingApproval).toBe(true);
+      // NOTE: Mock evaluator no longer sets awaitingApproval - checkpoint handles it
       expect(result.evaluationHistory.ready).toBe(true);
     });
 
@@ -649,7 +641,7 @@ describe('evaluator-nodes', () => {
       const mock = createMockEvaluator('arcs', { ready: false, issues: ['Issue 1'] });
       const result = await mock({ arcRevisionCount: 0 }, {});
 
-      expect(result.awaitingApproval).toBeUndefined();
+      // Mock evaluator no longer sets awaitingApproval - checkpoint handles it
       expect(result.arcRevisionCount).toBe(1);
       expect(result.validationResults.passed).toBe(false);
     });
@@ -672,19 +664,8 @@ describe('evaluator-nodes', () => {
       expect(result.evaluationHistory.overallScore).toBe(0.95);
     });
 
-    it('sets correct approval type for phase', async () => {
-      const arcsMock = createMockEvaluator('arcs');
-      const outlineMock = createMockEvaluator('outline');
-      const articleMock = createMockEvaluator('article');
-
-      const arcsResult = await arcsMock({}, {});
-      const outlineResult = await outlineMock({}, {});
-      const articleResult = await articleMock({}, {});
-
-      expect(arcsResult.approvalType).toBe(APPROVAL_TYPES.ARC_SELECTION);
-      expect(outlineResult.approvalType).toBe(APPROVAL_TYPES.OUTLINE);
-      expect(articleResult.approvalType).toBe(APPROVAL_TYPES.ARTICLE);
-    });
+    // NOTE: 'sets correct approval type for phase' test removed
+    // Mock evaluator no longer sets approvalType - checkpoint handles it via checkpointInterrupt()
 
     it('sets correct phase constant', async () => {
       const mock = createMockEvaluator('outline');

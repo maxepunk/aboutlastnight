@@ -7,7 +7,7 @@
  * @module node-helpers
  */
 
-const { sdkQuery, createProgressLogger } = require('../../sdk-client');
+const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -648,6 +648,160 @@ function resolveArcs(arcs, availableArcs) {
     .filter(Boolean);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// REVISION CONTEXT HELPER (DRY)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Centralized helper for building revision context across all revision loops.
+// Addresses the "whack-a-mole" problem where fixing one issue causes regression
+// of previously-correct output. By providing the full previous output + specific
+// feedback, the revision prompt enables TARGETED fixes instead of full regeneration.
+//
+// SOLID: Single Responsibility - this helper only formats revision context
+// SOLID: Open/Closed - extensible for new phases without modification
+// SOLID: Dependency Inversion - nodes depend on this abstraction, not vice versa
+
+/**
+ * Build revision context for any phase (DRY helper)
+ *
+ * This solves the "whack-a-mole" revision problem by providing:
+ * 1. The FULL previous output that was evaluated (not just a summary)
+ * 2. Specific feedback on what needs to change
+ * 3. Criteria scores to understand what's working vs needs work
+ *
+ * The revision prompt should instruct: "Keep everything that's working,
+ * only modify the specific issues identified below."
+ *
+ * @param {Object} options - Revision context options
+ * @param {string} options.phase - Phase name ('arcs', 'outline', 'article')
+ * @param {number} options.revisionCount - Current revision attempt number
+ * @param {Object} options.validationResults - Evaluation results with criteria, issues, etc.
+ * @param {Object|Array} options.previousOutput - The full previous output to improve
+ * @returns {Object} { contextSection, previousOutputSection }
+ *
+ * @example
+ * const { contextSection, previousOutputSection } = buildRevisionContext({
+ *   phase: 'arcs',
+ *   revisionCount: 1,
+ *   validationResults: state.validationResults,
+ *   previousOutput: state._previousArcs
+ * });
+ */
+function buildRevisionContext(options) {
+  const { phase, revisionCount, validationResults, previousOutput } = options;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Build context section (feedback, issues, criteria)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const issues = validationResults?.issues || [];
+  const feedback = validationResults?.revisionGuidance ||
+                   validationResults?.feedback ||
+                   '';
+  const criteria = validationResults?.criteriaScores || {};
+  const confidence = validationResults?.confidence || 0;
+  const ready = validationResults?.ready || false;
+
+  // Format issues as bullet list
+  const issuesList = issues.length > 0
+    ? issues.map(i => {
+        if (typeof i === 'string') return `  - ${i}`;
+        if (i.message) return `  - ${i.message}${i.severity ? ` (${i.severity})` : ''}`;
+        return `  - ${JSON.stringify(i)}`;
+      }).join('\n')
+    : '  (no specific issues listed)';
+
+  // Format criteria scores as bullet list
+  const criteriaList = Object.keys(criteria).length > 0
+    ? Object.entries(criteria)
+        .map(([name, score]) => `  - ${name}: ${typeof score === 'number' ? score.toFixed(2) : score}`)
+        .join('\n')
+    : '  (no criteria scores available)';
+
+  // Identify what's working well (criteria scoring high)
+  const workingWell = Object.entries(criteria)
+    .filter(([_, score]) => typeof score === 'number' && score >= 0.8)
+    .map(([name]) => name);
+
+  const workingWellText = workingWell.length > 0
+    ? `These aspects are working well (PRESERVE THESE): ${workingWell.join(', ')}`
+    : 'Focus on the issues identified below.';
+
+  // Identify what needs improvement (criteria scoring low)
+  const needsWork = Object.entries(criteria)
+    .filter(([_, score]) => typeof score === 'number' && score < 0.7)
+    .map(([name]) => name);
+
+  const needsWorkText = needsWork.length > 0
+    ? `These aspects need improvement: ${needsWork.join(', ')}`
+    : '';
+
+  const contextSection = `
+═══════════════════════════════════════════════════════════════════════════════
+REVISION CONTEXT: ${phase.toUpperCase()} (Attempt ${revisionCount})
+═══════════════════════════════════════════════════════════════════════════════
+
+EVALUATION SUMMARY:
+  Confidence: ${(confidence * 100).toFixed(0)}%
+  Ready: ${ready ? 'YES (but still improving)' : 'NO (must address issues)'}
+
+${workingWellText}
+${needsWorkText}
+
+CRITERIA SCORES:
+${criteriaList}
+
+ISSUES TO ADDRESS:
+${issuesList}
+
+EVALUATOR FEEDBACK:
+${feedback || '(no specific feedback provided)'}
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL REVISION INSTRUCTIONS:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch
+2. Make TARGETED FIXES only for the specific issues identified above
+3. If a criterion is scoring well (≥80%), do NOT change anything related to it
+4. Output the complete revised ${phase} with all original content plus fixes
+5. Maintain consistency with the original structure and organization
+`.trim();
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Build previous output section (the full output to improve)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  let previousOutputText;
+
+  if (previousOutput === null || previousOutput === undefined) {
+    previousOutputText = '(No previous output available - this appears to be the first generation attempt)';
+  } else if (Array.isArray(previousOutput)) {
+    previousOutputText = JSON.stringify(previousOutput, null, 2);
+  } else if (typeof previousOutput === 'object') {
+    previousOutputText = JSON.stringify(previousOutput, null, 2);
+  } else {
+    previousOutputText = String(previousOutput);
+  }
+
+  const previousOutputSection = `
+═══════════════════════════════════════════════════════════════════════════════
+PREVIOUS ${phase.toUpperCase()} OUTPUT (to improve, not regenerate):
+═══════════════════════════════════════════════════════════════════════════════
+
+${previousOutputText}
+
+═══════════════════════════════════════════════════════════════════════════════
+END PREVIOUS OUTPUT
+═══════════════════════════════════════════════════════════════════════════════
+`.trim();
+
+  return {
+    contextSection,
+    previousOutputSection
+  };
+}
+
 module.exports = {
   safeParseJson,
   getSdkClient,
@@ -673,6 +827,9 @@ module.exports = {
 
   // NPC validation (Commit 8.17) - NPCs defined in lib/theme-config.js
   isKnownNPC,
+
+  // Revision context helper (DRY)
+  buildRevisionContext,
 
   // Re-export batching utilities from preprocessor for convenience
   createBatches,

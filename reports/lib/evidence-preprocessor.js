@@ -18,7 +18,7 @@
  *
  * Usage:
  *   const { createEvidencePreprocessor } = require('./evidence-preprocessor');
- *   const { sdkQuery } = require('./sdk-client');
+ *   const { sdkQuery } = require('./llm');
  *   const preprocessor = createEvidencePreprocessor({ sdkClient: sdkQuery });
  *   const result = await preprocessor.process({
  *     memoryTokens: [...],

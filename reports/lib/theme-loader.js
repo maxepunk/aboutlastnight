@@ -26,7 +26,7 @@ const PHASE_REQUIREMENTS = {
     'section-rules',
     'editorial-design',
     'narrative-structure',
-    'formatting',
+    // 'formatting' removed - describes ContentBundle format, not Outline format (Fix 7.3)
     'evidence-boundaries'
   ],
   articleGeneration: [

@@ -6,6 +6,7 @@
 
   Context:
     filename: string (photo filename in photos/ directory)
+    src: string (full path to photo, transformed by template-assembler)
     caption: string (figcaption text)
     characters: string[]? (character names visible in photo)
     placement: "inline" | "sidebar" (determines styling)
@@ -18,7 +19,7 @@
 --}}
 <figure class="article-photo article-photo--{{placement}}">
   <img
-    src="photos/{{filename}}"
+    src="{{src}}"
     alt="{{caption}}"
     loading="lazy"
     class="article-photo__image"

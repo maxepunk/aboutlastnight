@@ -145,6 +145,38 @@
                     }
                   },
                   "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["type", "filename"],
+                  "properties": {
+                    "type": { "const": "photo" },
+                    "filename": { "type": "string", "description": "Photo filename" },
+                    "caption": { "type": "string", "description": "Photo caption" },
+                    "characters": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Character names visible in photo"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["type", "tokenId", "headline", "content"],
+                  "properties": {
+                    "type": { "const": "evidence-card" },
+                    "tokenId": { "type": "string" },
+                    "headline": { "type": "string" },
+                    "content": { "type": "string", "description": "Full quotable evidence text" },
+                    "owner": { "type": "string", "description": "Evidence owner name" },
+                    "significance": {
+                      "type": "string",
+                      "enum": ["critical", "supporting", "contextual"],
+                      "default": "supporting"
+                    }
+                  },
+                  "additionalProperties": false
                 }
               ]
             }
@@ -173,18 +205,27 @@
     },
     "evidenceCards": {
       "type": "array",
-      "description": "Key evidence items for sidebar display",
+      "description": "Key evidence items for sidebar and inline display",
       "items": {
         "type": "object",
         "required": ["tokenId", "headline"],
         "properties": {
-          "tokenId": { "type": "string" },
-          "headline": { "type": "string" },
-          "summary": { "type": "string" },
+          "tokenId": { "type": "string", "description": "Unique evidence identifier" },
+          "headline": { "type": "string", "description": "Compelling headline for the evidence card" },
+          "content": { "type": "string", "description": "Full quotable text from the evidence (fullDescription)" },
+          "summary": { "type": "string", "description": "Brief summary for sidebar display" },
+          "owner": { "type": "string", "description": "Character who owns this evidence (e.g., 'Rachel Torres')" },
           "significance": {
             "type": "string",
             "enum": ["critical", "supporting", "contextual"],
-            "default": "supporting"
+            "default": "supporting",
+            "description": "How important this evidence is to the narrative"
+          },
+          "placement": {
+            "type": "string",
+            "enum": ["sidebar", "inline"],
+            "default": "sidebar",
+            "description": "Where this evidence card should appear"
           }
         },
         "additionalProperties": false

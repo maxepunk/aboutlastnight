@@ -28,15 +28,21 @@ async function main() {
   });
   const state = await stateRes.json();
 
+  // NEW FORMAT: Extract checkpoint data (DRY)
+  const checkpoint = state.checkpoint || {};
+  const checkpointType = checkpoint.type || null;
+
   console.log('=== WORKFLOW STATE ===');
   console.log('Phase:', state.currentPhase);
-  console.log('Awaiting Approval:', state.awaitingApproval);
-  console.log('Approval Type:', state.approvalType);
+  console.log('Interrupted:', state.interrupted || false);
+  console.log('Checkpoint Type:', checkpointType);
   console.log('Arc Revision Count:', state.arcRevisionCount);
 
   console.log('\n=== ARCS ===');
-  if (state.narrativeArcs) {
-    state.narrativeArcs.forEach((arc, i) => {
+  // Arcs may be in checkpoint (at arc-selection) or state (for debugging)
+  const arcs = checkpoint.narrativeArcs || state.narrativeArcs;
+  if (arcs) {
+    arcs.forEach((arc, i) => {
       console.log(`\nArc ${i+1}: ${arc.name || arc.title || 'Untitled'}`);
       console.log(`  Emphasis: ${arc.playerEmphasis || 'N/A'}`);
       if (arc.summary) {
