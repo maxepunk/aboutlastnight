@@ -1,0 +1,7 @@
+{
+  "result": "Generated content",
+  "structured_output": {
+    "html": "<!DOCTYPE html><html><head><title>Test</title></head><body>Content</body></html>",
+    "voice_self_check": "Voice maintained throughout"
+  }
+}

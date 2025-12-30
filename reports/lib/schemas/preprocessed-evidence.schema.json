@@ -1,0 +1,144 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "preprocessed-evidence",
+  "title": "Preprocessed Evidence Bundle",
+  "description": "Universal schema for batch-summarized evidence items. Theme-agnostic format used as input to theme-specific curation nodes.",
+  "type": "object",
+  "required": ["items", "preprocessedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "description": "Array of preprocessed evidence items with summaries and classifications",
+      "items": {
+        "type": "object",
+        "required": ["id", "sourceType", "summary", "significance"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Original Notion page ID for the evidence item"
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": ["memory-token", "paper-evidence"],
+            "description": "Whether this item came from memory tokens or paper evidence database"
+          },
+          "originalType": {
+            "type": "string",
+            "description": "Original type from Notion (e.g., 'Memory Token Video', 'Prop', 'Document')"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 150,
+            "description": "Concise summary of what this evidence reveals (max 150 chars)"
+          },
+          "significance": {
+            "type": "string",
+            "enum": ["critical", "supporting", "contextual", "background"],
+            "description": "How important this evidence is to the narrative"
+          },
+          "characterRefs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Names of characters referenced in or connected to this evidence"
+          },
+          "ownerLogline": {
+            "type": "string",
+            "description": "Logline of the character who owns this token (from rich relation resolution)"
+          },
+          "timelineRef": {
+            "type": "string",
+            "description": "Timeline period this evidence relates to (e.g., '2009-2010', '2026')"
+          },
+          "timelineContext": {
+            "type": "object",
+            "description": "Rich timeline context from relation resolution",
+            "properties": {
+              "name": { "type": "string" },
+              "year": { "type": "string" },
+              "period": { "type": "string" }
+            }
+          },
+          "narrativeRelevance": {
+            "type": "boolean",
+            "description": "Whether this evidence directly advances the main investigation narrative"
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Categorical tags for grouping (e.g., 'financial', 'relationship', 'timeline')"
+          },
+          "groupCluster": {
+            "type": "string",
+            "description": "Suggested grouping with related evidence (e.g., 'Marcus-Victoria dealings')"
+          },
+          "sfFields": {
+            "type": "object",
+            "description": "Parsed SF_ fields from the original evidence (structured data)",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "preprocessedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp when preprocessing completed"
+    },
+    "sessionId": {
+      "type": "string",
+      "description": "Session ID this preprocessing was performed for"
+    },
+    "playerFocus": {
+      "type": "object",
+      "description": "The player focus context used during preprocessing (from director notes)",
+      "properties": {
+        "primaryInvestigation": { "type": "string" },
+        "emotionalHook": { "type": "string" },
+        "openQuestions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "description": "Processing statistics for monitoring and debugging",
+      "additionalProperties": false,
+      "required": ["totalItems", "processingTimeMs", "significanceCounts"],
+      "properties": {
+        "totalItems": {
+          "type": "integer",
+          "description": "Total number of items processed"
+        },
+        "memoryTokenCount": {
+          "type": "integer",
+          "description": "Number of memory tokens processed"
+        },
+        "paperEvidenceCount": {
+          "type": "integer",
+          "description": "Number of paper evidence items processed"
+        },
+        "batchesProcessed": {
+          "type": "integer",
+          "description": "Number of batches that were processed"
+        },
+        "processingTimeMs": {
+          "type": "integer",
+          "description": "Total processing time in milliseconds"
+        },
+        "significanceCounts": {
+          "type": "object",
+          "description": "Count of items by significance level",
+          "properties": {
+            "critical": { "type": "integer" },
+            "supporting": { "type": "integer" },
+            "contextual": { "type": "integer" },
+            "background": { "type": "integer" }
+          }
+        }
+      }
+    }
+  }
+}

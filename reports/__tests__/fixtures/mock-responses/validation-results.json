@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "issues": [],
+  "voice_score": 4,
+  "voice_notes": "Strong first-person participatory voice maintained throughout. Occasional slight distance in the financial analysis section that could be strengthened.",
+  "roster_coverage": {
+    "featured": ["Blake", "Charlie"],
+    "mentioned": ["Diana", "Elena", "Alex"],
+    "missing": []
+  },
+  "systemic_critique_present": true,
+  "blake_handled_correctly": true
+}

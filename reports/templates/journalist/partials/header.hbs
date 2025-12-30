@@ -1,0 +1,43 @@
+{{!--
+  NovaNews Article Header
+
+  Displays the headline hierarchy (kicker → main → deck),
+  byline with author/title/location, and article metadata.
+
+  Context:
+    headline: { main, kicker?, deck? }
+    byline: { author, title?, location?, date? }
+    metadata: { sessionId, generatedAt, version? }
+--}}
+<header class="nn-article__header">
+  {{!-- Kicker: Small crimson uppercase text above headline --}}
+  {{#if headline.kicker}}
+  <div class="nn-article__kicker">{{headline.kicker}}</div>
+  {{/if}}
+
+  {{!-- Main Headline: Large Zilla Slab --}}
+  <h1 class="nn-article__headline">{{headline.main}}</h1>
+
+  {{!-- Deck (subheadline): Optional longer description --}}
+  {{#if headline.deck}}
+  <p class="nn-article__deck">{{headline.deck}}</p>
+  {{/if}}
+
+  {{!-- Article Metadata: Byline + Date + Article ID --}}
+  <div class="nn-article__meta">
+    {{#if byline.author}}
+    <span class="nn-article__byline">
+      {{byline.author}}{{#if byline.title}} | {{byline.title}}{{/if}}
+    </span>
+    <span class="nn-article__divider">·</span>
+    {{/if}}
+
+    <time class="nn-article__date" datetime="{{formatDatetime metadata.generatedAt}}">
+      February 22, 2027
+    </time>
+
+    <span class="nn-article__divider">·</span>
+
+    <span class="nn-article__id">Article {{articleId metadata}}</span>
+  </div>
+</header>

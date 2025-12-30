@@ -1,0 +1,54 @@
+{
+  "observations": {
+    "behaviorPatterns": [
+      "Blake and Charlie met privately during the second act",
+      "Elena was observed taking photos of financial documents",
+      "Alex appeared nervous whenever Blake was mentioned"
+    ],
+    "suspiciousCorrelations": [
+      "Blake's account activity spiked after Charlie's arrival",
+      "Diana's timeline conflicts with her alibi"
+    ],
+    "notableMoments": [
+      "Charlie's phone buzzed exactly when the power went out",
+      "Blake left the room immediately after the accusation"
+    ]
+  },
+  "whiteboard": {
+    "title": "THE BLACKWOOD INVESTIGATION",
+    "knownAttendees": [
+      { "name": "Alex R.", "notes": "financial advisor, access to accounts" },
+      { "name": "Blake M.", "notes": "CFO, controls fund transfers" },
+      { "name": "Charlie D.", "notes": "external auditor, arrived late" },
+      { "name": "Diana K.", "notes": "legal counsel, drafted contracts" },
+      { "name": "Elena S.", "notes": "journalist, investigating fraud" }
+    ],
+    "suspects": [
+      "Blake (primary)",
+      "Charlie (accomplice)",
+      "Diana (possible)"
+    ],
+    "evidenceConnections": [
+      "Blake approved Charlie's audit contract",
+      "Funds transferred to offshore account match Charlie's signature",
+      "Diana notarized backdated documents"
+    ],
+    "factsEstablished": [
+      "Missing funds: $2.3 million",
+      "Audit trail shows irregular entries from October",
+      "Blake and Charlie attended same university"
+    ],
+    "keyPhrases": ["shell company", "backdated contracts", "offshore transfers"]
+  },
+  "accusationContext": {
+    "accused": ["Blake", "Charlie"],
+    "reasoning": "Group traced the money trail through their connected accounts",
+    "alternativeSuspects": ["Diana (accessory)"]
+  },
+  "scannedTokens": ["blk001", "chr001", "dia001"],
+  "playerFocus": {
+    "primaryInvestigation": "Financial fraud trail",
+    "emotionalHook": "Blake's betrayal of trust",
+    "openQuestions": ["Where did the money go?", "Who else knew?"]
+  }
+}

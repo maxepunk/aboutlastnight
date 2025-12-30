@@ -5,7 +5,13 @@
       "Skill(example-skills:frontend-design)",
       "Skill(about-last-night-notion-skill)",
       "Bash(claude --version:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Skill(feature-dev:feature-dev)",
+      "Bash(dir \"%USERPROFILE%\\\\.claude\\\\plugins\")",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__get-library-docs",
+      "Bash(npm test:*)",
+      "Skill(agent-sdk-dev:new-sdk-app)"
     ],
     "deny": [],
     "ask": []

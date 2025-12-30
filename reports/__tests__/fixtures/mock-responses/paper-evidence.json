@@ -1,0 +1,49 @@
+{
+  "evidence": [
+    {
+      "notionId": "page-ev-001",
+      "name": "Offshore Account Statement",
+      "basicType": "Document",
+      "description": "Bank statement from Cayman Islands showing $2.3M deposit on October 15th. Account holder listed as 'Blackwood Holdings LLC'. Routing numbers trace to shell company in Delaware.",
+      "narrativeThreads": ["Funding & Espionage"],
+      "owners": ["Blake M.", "Charlie D."],
+      "containers": ["Evidence Lockbox A"]
+    },
+    {
+      "notionId": "page-ev-002",
+      "name": "Backdated Consulting Agreement",
+      "basicType": "Document",
+      "description": "Consulting agreement between Blackwood Corp and Meridian Partners LLC. Date shows July 15 but paper analysis suggests printed in October. Contains suspicious non-compete clause.",
+      "narrativeThreads": ["Funding & Espionage"],
+      "owners": ["Diana K."],
+      "containers": ["Legal Files Cabinet"],
+      "files": [
+        {
+          "name": "consulting_agreement_scan.pdf",
+          "type": "file",
+          "url": "https://example.notion.com/files/agreement.pdf"
+        }
+      ]
+    },
+    {
+      "notionId": "page-ev-003",
+      "name": "Internal Email Thread",
+      "basicType": "Clue",
+      "description": "Printed email chain between Blake and Charlie discussing 'the arrangement' and 'cleaning up the trail'. Timestamps match the missing funds transfer window.",
+      "narrativeThreads": ["Funding & Espionage", "Marriage Troubles"],
+      "owners": ["Blake M.", "Charlie D."],
+      "containers": ["Shredder Basket"]
+    },
+    {
+      "notionId": "page-ev-004",
+      "name": "Security Badge Access Log",
+      "basicType": "Prop",
+      "description": "Printout showing Blake's badge used at 2:15 AM on October 14th to access secure file room. Only person in building at that hour.",
+      "narrativeThreads": ["Funding & Espionage"],
+      "owners": ["Blake M."],
+      "containers": ["Security Desk"]
+    }
+  ],
+  "fetchedAt": "2025-01-15T20:35:00.000Z",
+  "totalCount": 4
+}

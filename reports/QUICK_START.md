@@ -17,11 +17,11 @@ See `AUTH_SETUP.md` for full authentication documentation.
 **Double-click:** `start-everything.bat`
 
 This opens two windows:
-- **Window 1:** Server running on localhost:3000
+- **Window 1:** Server running on localhost:3001
 - **Window 2:** Cloudflare Tunnel
 
 **Your URLs:**
-- Local: `http://localhost:3000`
+- Local: `http://localhost:3001`
 - Remote: `https://console.aboutlastnightgame.com`
 
 **To stop:** Close both windows or press Ctrl+C in each
@@ -58,7 +58,7 @@ cd C:\Users\spide\Documents\claudecode\aboutlastnight\reports
 npm start
 ```
 
-Visit: `http://localhost:3000`
+Visit: `http://localhost:3001`
 
 ---
 
@@ -66,7 +66,7 @@ Visit: `http://localhost:3000`
 
 ### Step 1: Login
 
-1. Visit `https://console.aboutlastnightgame.com` (or `http://localhost:3000`)
+1. Visit `https://console.aboutlastnightgame.com` (or `http://localhost:3001`)
 2. Enter password: `@LN-c0nn3ct`
 3. Click "Access Console"
 
@@ -204,7 +204,7 @@ Restart server.
 
 **Check:**
 1. Server terminal - is it running?
-2. Try localhost first: `http://localhost:3000`
+2. Try localhost first: `http://localhost:3001`
 3. If localhost works, tunnel might be down
 
 **Solution:**
@@ -232,10 +232,10 @@ cloudflared tunnel list
 cloudflared tunnel info aln-console
 
 # Check if server responds
-curl http://localhost:3000
+curl http://localhost:3001
 
 # Check auth endpoint
-curl http://localhost:3000/api/auth/check
+curl http://localhost:3001/api/auth/check
 
 # View .env contents
 type .env
@@ -251,8 +251,8 @@ notepad .env
 **Server files:**
 ```
 C:\Users\spide\Documents\claudecode\aboutlastnight\reports\
-├── server.js         - Backend
-├── detlogv3.html     - Frontend
+├── server.js         - Express server
+├── detlogv3.html     - Frontend (legacy, pending refactor)
 ├── .env              - Your secrets (NOT in git)
 └── start-*.bat       - Startup scripts
 ```
@@ -328,10 +328,9 @@ Logs appear in the server terminal window as events happen.
 
 ## Related Documentation
 
-- **README.md** - Complete project documentation
+- **CLAUDE.md** - Complete project documentation (primary reference)
 - **AUTH_SETUP.md** - Authentication details and security options
 - **SETUP_CHECKLIST_CLOUDFLARE.md** - Cloudflare tunnel configuration
-- **CONCURRENT_BATCHING.md** - Technical architecture of analysis system
 - **ENV_SETUP.md** - Environment variables guide
 
 ---

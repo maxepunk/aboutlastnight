@@ -1,0 +1,33 @@
+{
+  "name": "testing-full",
+  "description": "Full testing mode - select all available items at each checkpoint",
+  "checkpoints": {
+    "input-review": {
+      "strategy": "approve"
+    },
+    "paper-evidence-selection": {
+      "strategy": "select-all",
+      "notes": "Include all paper evidence"
+    },
+    "character-ids": {
+      "strategy": "skip",
+      "notes": "Skip character mapping - requires human judgment"
+    },
+    "pre-curation": {
+      "strategy": "approve"
+    },
+    "evidence-and-photos": {
+      "strategy": "approve"
+    },
+    "arc-selection": {
+      "strategy": "select-all",
+      "notes": "Select all available arcs for comprehensive article"
+    },
+    "outline": {
+      "strategy": "approve"
+    },
+    "article": {
+      "strategy": "approve"
+    }
+  }
+}

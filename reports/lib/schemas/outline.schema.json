@@ -1,0 +1,300 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "outline",
+  "title": "ArticleOutline",
+  "description": "Structured outline for NovaNews article generation with arc interweaving. SDK-compliant with strict validation.",
+  "type": "object",
+  "required": ["lede", "theStory", "followTheMoney", "thePlayers", "whatsMissing", "closing"],
+  "additionalProperties": false,
+  "properties": {
+    "lede": {
+      "type": "object",
+      "description": "Opening hook that establishes the central mystery",
+      "required": ["hook", "keyTension", "primaryArc"],
+      "additionalProperties": false,
+      "properties": {
+        "hook": {
+          "type": "string",
+          "description": "Opening hook text that draws the reader in"
+        },
+        "keyTension": {
+          "type": "string",
+          "description": "Central conflict or mystery driving the article"
+        },
+        "primaryArc": {
+          "type": "string",
+          "description": "Which narrative arc drives the hook"
+        },
+        "selectedEvidence": {
+          "type": "array",
+          "description": "Optional evidence IDs that support the hook",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "theStory": {
+      "type": "object",
+      "description": "Main narrative section weaving selected arcs together",
+      "required": ["arcInterweaving", "arcs"],
+      "additionalProperties": false,
+      "properties": {
+        "arcInterweaving": {
+          "type": "object",
+          "description": "Plan for how arcs intercut (not sequential chapters)",
+          "required": ["interleavingPlan", "convergencePoint"],
+          "additionalProperties": false,
+          "properties": {
+            "interleavingPlan": {
+              "type": "string",
+              "description": "Description of how arcs will be intercut"
+            },
+            "callbackOpportunities": {
+              "type": "array",
+              "description": "Details planted in one arc that pay off in another",
+              "items": {
+                "type": "object",
+                "required": ["plantIn", "payoffIn", "detail"],
+                "additionalProperties": false,
+                "properties": {
+                  "plantIn": { "type": "string", "description": "Arc where detail is planted" },
+                  "payoffIn": { "type": "string", "description": "Arc where detail pays off" },
+                  "detail": { "type": "string", "description": "What is planted and how it pays off" }
+                }
+              }
+            },
+            "convergencePoint": {
+              "type": "string",
+              "description": "Where all arcs meet (paragraph/section location)"
+            }
+          }
+        },
+        "arcs": {
+          "type": "array",
+          "description": "Individual arc development plans",
+          "items": {
+            "type": "object",
+            "required": ["name", "paragraphCount"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Arc identifier/name"
+              },
+              "paragraphCount": {
+                "type": "integer",
+                "description": "Estimated number of paragraphs for this arc"
+              },
+              "evidenceCards": {
+                "type": "array",
+                "description": "Evidence cards to include in this arc",
+                "items": {
+                  "type": "object",
+                  "required": ["tokenId", "placement", "loopFunction"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "tokenId": { "type": "string", "description": "Evidence token ID" },
+                    "placement": { "type": "string", "description": "Where in arc to place (e.g., 'after para 1')" },
+                    "loopFunction": {
+                      "type": "string",
+                      "enum": ["CLOSER", "OPENER"],
+                      "description": "CLOSER proves what was hinted, OPENER raises new question"
+                    }
+                  }
+                }
+              },
+              "photoPlacement": {
+                "type": ["object", "null"],
+                "description": "Optional photo placement within arc",
+                "additionalProperties": false,
+                "properties": {
+                  "filename": { "type": "string", "description": "Photo filename" },
+                  "afterParagraph": { "type": "integer", "description": "Place photo after this paragraph number" },
+                  "purpose": {
+                    "type": "string",
+                    "enum": ["breathing", "humanize", "bridge"],
+                    "description": "Purpose: breathing room, humanize before revelation, or cross-arc bridge"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "followTheMoney": {
+      "type": "object",
+      "description": "Financial analysis section connecting arcs to money trails",
+      "required": ["arcConnections"],
+      "additionalProperties": false,
+      "properties": {
+        "arcConnections": {
+          "type": "array",
+          "description": "How each arc continues through financial lens",
+          "items": {
+            "type": "object",
+            "required": ["arcName", "financialAngle"],
+            "additionalProperties": false,
+            "properties": {
+              "arcName": { "type": "string" },
+              "financialAngle": { "type": "string", "description": "How this arc's financial thread continues" }
+            }
+          }
+        },
+        "shellAccounts": {
+          "type": "array",
+          "description": "Shell accounts discovered in the investigation",
+          "items": {
+            "type": "object",
+            "required": ["name", "total", "inference"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "description": "Account name" },
+              "total": { "type": ["number", "string"], "description": "Total amount" },
+              "inference": { "type": "string", "description": "What this account tells us" },
+              "relatedArc": { "type": "string", "description": "Which arc this account relates to" }
+            }
+          }
+        },
+        "photoPlacement": {
+          "type": ["object", "null"],
+          "description": "Optional photo placement",
+          "additionalProperties": false,
+          "properties": {
+            "filename": { "type": "string" },
+            "afterParagraph": { "type": "integer" },
+            "purpose": { "type": "string" }
+          }
+        }
+      }
+    },
+    "thePlayers": {
+      "type": "object",
+      "description": "Character profiles section connecting arcs to key players",
+      "required": ["arcConnections"],
+      "additionalProperties": false,
+      "properties": {
+        "arcConnections": {
+          "type": "array",
+          "description": "How each arc advances through character revelation",
+          "items": {
+            "type": "object",
+            "required": ["arcName", "characterAngle"],
+            "additionalProperties": false,
+            "properties": {
+              "arcName": { "type": "string" },
+              "characterAngle": { "type": "string", "description": "How this arc advances through character revelation" }
+            }
+          }
+        },
+        "exposed": {
+          "type": "array",
+          "description": "Character names whose evidence was exposed",
+          "items": { "type": "string" }
+        },
+        "buried": {
+          "type": "array",
+          "description": "Character names whose evidence was buried",
+          "items": { "type": "string" }
+        },
+        "pullQuotes": {
+          "type": "array",
+          "description": "Pull quotes planned for this section",
+          "items": {
+            "type": "object",
+            "required": ["type", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["verbatim", "insight", "crystallization"],
+                "description": "verbatim = exact quote with attribution, insight/crystallization = journalist's observation without attribution"
+              },
+              "text": { "type": "string", "description": "Quote text" },
+              "attribution": {
+                "type": ["string", "null"],
+                "description": "Character name for verbatim quotes, null for crystallization"
+              },
+              "advancesArc": {
+                "type": "string",
+                "description": "Which arc this quote advances"
+              }
+            }
+          }
+        },
+        "characterHighlights": {
+          "type": "object",
+          "description": "Key character moments to highlight",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "whatsMissing": {
+      "type": "object",
+      "description": "Open questions section connecting arcs to unresolved mysteries",
+      "required": ["arcConnections"],
+      "additionalProperties": false,
+      "properties": {
+        "arcConnections": {
+          "type": "array",
+          "description": "What gap in each arc creates tension",
+          "items": {
+            "type": "object",
+            "required": ["arcName", "openQuestion"],
+            "additionalProperties": false,
+            "properties": {
+              "arcName": { "type": "string" },
+              "openQuestion": { "type": "string", "description": "What gap in this arc creates tension" }
+            }
+          }
+        },
+        "knownUnknowns": {
+          "type": "array",
+          "description": "Questions Nova explicitly noticed but couldn't answer (NOT buried evidence IDs)",
+          "items": { "type": "string" }
+        },
+        "narrativePurpose": {
+          "type": "string",
+          "description": "How these gaps create tension and pull the reader forward"
+        },
+        "buriedItems": {
+          "type": "array",
+          "description": "References to buried evidence items",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "closing": {
+      "type": "object",
+      "description": "Conclusion section with arc resolutions and final thoughts",
+      "required": ["arcResolutions"],
+      "additionalProperties": false,
+      "properties": {
+        "arcResolutions": {
+          "type": "array",
+          "description": "How each arc concludes or haunts",
+          "items": {
+            "type": "object",
+            "required": ["arcName", "resolution"],
+            "additionalProperties": false,
+            "properties": {
+              "arcName": { "type": "string" },
+              "resolution": { "type": "string", "description": "How this arc concludes or haunts" }
+            }
+          }
+        },
+        "systemicAngle": {
+          "type": "string",
+          "description": "What broader systemic point to make"
+        },
+        "accusationHandling": {
+          "type": "string",
+          "description": "How to present the players' accusation"
+        },
+        "finalLine": {
+          "type": "string",
+          "description": "The closing line of the article"
+        }
+      }
+    }
+  }
+}

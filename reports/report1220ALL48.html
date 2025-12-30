@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Report MC-2025-1218 - About Last Night</title>
+<style>
+    /* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+    /* Reset */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Base - Dark precinct aesthetic */
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background-color: #0a0a0a;
+        color: rgba(240, 240, 235, 0.9);
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+
+    /* Report container - like a file folder */
+    .report-container {
+        border: 2px solid rgba(60, 60, 60, 0.8);
+        border-top: 8px solid rgba(80, 80, 80, 0.9);
+        background:
+            linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+        padding: 50px 45px;
+        box-shadow:
+            0 0 40px rgba(0, 0, 0, 0.9),
+            inset 0 0 100px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    /* Watermark Classification Stamp */
+    .report-container::before {
+        content: 'INVESTIGATION ONGOING';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-25deg);
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8rem;
+        color: rgba(204, 0, 0, 0.08);
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Top-corner classification stamp */
+    .report-container::after {
+        content: 'INVESTIGATION ONGOING';
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        color: #cc0000;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        opacity: 0.4;
+        font-size: 0.85rem;
+        border: 2px solid #cc0000;
+        padding: 4px 12px;
+        transform: rotate(3deg);
+        z-index: 10;
+    }
+
+    /* All content above watermark */
+    .report-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Official Case Header - Bebas Neue stamp style */
+    h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        text-align: center;
+        border-bottom: 3px double #cc0000;
+        margin-bottom: 35px;
+        font-size: 2.8rem;
+        color: #cc0000;
+        text-shadow: 0 0 25px rgba(204, 0, 0, 0.6);
+        letter-spacing: 0.15em;
+        padding-bottom: 15px;
+        text-transform: uppercase;
+    }
+
+    /* Section headers - Official stamps */
+    h2 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #cc0000;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 35px;
+        margin-bottom: 18px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(204, 0, 0, 0.4);
+        text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+    }
+
+    /* Subsection headers */
+    h3 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.3rem;
+        color: rgba(255, 200, 100, 0.95);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        padding-bottom: 5px;
+    }
+
+    /* Form-style metadata box */
+    .meta-data {
+        background-color: rgba(30, 30, 28, 0.95);
+        padding: 22px 25px;
+        margin-bottom: 35px;
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        border-left: 5px solid #cc0000;
+        font-size: 0.95rem;
+        line-height: 2;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .meta-data strong {
+        font-family: 'Courier Prime', monospace;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+
+    /* Body text - typed report style */
+    p {
+        margin-bottom: 16px;
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        color: rgba(235, 235, 230, 0.92);
+        line-height: 1.75;
+    }
+
+    /* Evidence sections */
+    .evidence-item {
+        margin-bottom: 22px;
+        padding-left: 22px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-left: 4px solid rgba(204, 0, 0, 0.4);
+        background: rgba(25, 25, 23, 0.5);
+        transition: all 0.3s;
+    }
+
+    .evidence-item:hover {
+        border-left-color: #cc0000;
+        background: rgba(35, 25, 25, 0.6);
+        transform: translateX(6px);
+    }
+
+    /* Detective's notes */
+    .note {
+        font-style: italic;
+        color: rgba(255, 240, 200, 0.85);
+        background: rgba(30, 25, 20, 0.9);
+        padding: 22px 25px;
+        border-left: 4px solid rgba(255, 200, 100, 0.6);
+        border-top: 1px solid rgba(255, 200, 100, 0.3);
+        border-bottom: 1px solid rgba(255, 200, 100, 0.3);
+        margin-top: 35px;
+        font-family: 'Courier Prime', monospace;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bold emphasis in typed text */
+    strong {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 700;
+        font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lists in evidence */
+    ul {
+        list-style-type: square;
+        margin-left: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    li {
+        margin-bottom: 12px;
+        color: rgba(235, 235, 230, 0.88);
+        line-height: 1.7;
+    }
+
+    /* Section breaks */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(100, 100, 100, 0.3);
+        margin: 40px 0;
+        opacity: 0.5;
+    }
+
+    /* Nested paragraphs in note divs */
+    .note p {
+        margin-bottom: 16px;
+    }
+
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Print/photocopy effect - very subtle noise */
+    @media screen {
+        .report-container {
+            background-image:
+                linear-gradient(rgba(18, 18, 16, 0.97), rgba(15, 15, 13, 0.97)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="report-container">
+
+    <h1>Official Case Report</h1>
+
+    <div class="meta-data">
+        <strong>CASE ID:</strong> MC-2025-1218<br>
+        <strong>DATE:</strong> 2025-11-24<br>
+        <strong>LOCATION:</strong> Abandoned Warehouse (Venue of most recent 'Blackwood Rave')<br>
+        <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+        <strong>STATUS:</strong> INVESTIGATION ONGOING
+    </div>
+
+    <h2>Executive Summary</h2>
+<p><strong>Marcus Blackwood</strong> is dead. Found at dawn in an abandoned warehouse—the venue for his final "Blackwood Rave." What started as a party ended as a mass memory extraction event, with every attendee dosed and their memories locked into tokens. Thanks to this investigation, all forty-eight memory extractions were recovered and turned in as evidence. The picture they paint is damning: corporate theft, political bribery, pharmaceutical crimes, and a web of manipulation spanning nearly two decades. Marcus didn't just have enemies. He manufactured them.</p>
+
+<h2>Evidence Locker</h2>
+
+<div class="evidence-item">
+<strong>The Intellectual Property Empire Built on Sand:</strong> Cross-referencing recovered memories reveals Marcus Blackwood's entire corporate legacy was stolen goods. <strong>Alex Reeves</strong>'s extraction shows the original BizAI algorithm was fundamentally flawed—rebuilt from Alex's own work, then claimed as Marcus's genius. <strong>Derek Thorn</strong>'s memory confirms witnessing this theft firsthand. <strong>Leila Bishara</strong>'s memories document Marcus stealing her proprietary memory indexing code from Oracle Ledger, then leveraging that same stolen technology against her. <strong>Sofia Francisco</strong>'s research memory reveals the ugly truth: Marcus's "breakthrough AI" required manual fixes for 87% of inputs. The man was a fraud wearing a visionary's mask.
+</div>
+
+<div class="evidence-item">
+<strong>Political Corruption and Blackmail Networks:</strong> <strong>Jamie "Volt" Woods</strong> captured the smoking gun—Marcus handing a cash envelope to a DC official at 2:02AM. <strong>Diana Nilsson</strong>'s extraction places her overhearing <strong>Morgan Reed</strong> threaten Marcus with bribery receipts and Senator Walsh testimony. Morgan's own memories show encrypted whistleblower evidence arriving about Marcus's illegal memory experiments. <strong>Victoria Kingsley</strong>'s strategic discussions regarding Marcus's criminal liability confirm the board knew—and planned accordingly. The extraction from <strong>Taylor Chase</strong> seals it: Marcus demanded meetings with world leaders while referencing "the suppressed Ashe situation" to ensure silence.
+</div>
+
+<div class="evidence-item">
+<strong>The Pharmaceutical Conspiracy:</strong> <strong>Oliver Sterling</strong>'s memory reveals Marcus blackmailed him into neural organoid research involving Psychotrophin-3B. <strong>Derek Thorn</strong>'s earliest extraction—a 2022 BBQ where Oliver mentioned a "fascinating new compound"—marks the genesis. Marcus's own memories document his commercialization proposal for Derek's drug in 2026. <strong>Flip</strong> overheard Marcus discussing untested extraction protocols with an unknown associate. <strong>Jamie Woods</strong>'s 4:18PM extraction captures a stranger threatening Marcus with "lethal consequences." Someone knew what he was planning.
+</div>
+
+<div class="evidence-item">
+<strong>Domestic Destruction and Personal Betrayal:</strong> <strong>Sarah Blackwood</strong> sacrificed her Facebook career to support Marcus's startup. Her reward: a Black Market recruitment offer to betray him—suggesting even criminal organizations saw her as a potential asset against her husband. <strong>Rachel Torres</strong>'s audio memo details Marcus's criminal dealings, while her coordination with Diana on divorce strategy weaponized paternity tests and shell company evidence. <strong>Jessicah Kane</strong>'s heated 9:20PM confrontation about "the baby" and her later moment of solidarity with Sarah paint a picture of women united against a common enemy. <strong>Flip</strong>'s 2018 memory shows Marcus turning a vulnerable loan request into years of ongoing leverage.
+</div>
+
+<h2>Memory Analysis</h2>
+<p>Forty-eight memory tokens recovered. Every single one turned in. The extraction technology—developed in part through <strong>Howie Sullivan</strong>'s research on collaborative adaptive systems and <strong>Skyler Iyer</strong>'s biological robotics schema—was weaponized by Marcus to create a controlled amnesia event. His own experimental notes confirm the protocol: memories return to owners upon token expiration. He meant to hold them hostage.</p>
+
+<ul>
+<li><strong>Marcus Blackwood, 3:52AM:</strong> Executing chaotic memory token locking on drugged attendees—the crime in progress.</li>
+<li><strong>James Whitman, 4:36AM:</strong> Witnessing Marcus entering the secret room before losing consciousness—last moments before the blackout.</li>
+<li><strong>Victoria Kingsley, 2027-02-15:</strong> Planning to replace Marcus with Alex as NeurAI CEO—the coup that never landed.</li>
+<li><strong>Ashe Motoko, 2020:</strong> Forced into NDA settlement, silenced after defamation suit—years of suppression finally exposed.</li>
+<li><strong>Tori Zhang, 9:43PM:</strong> Preparing her Synesthesia Engine pitch for Victoria—ambition walking into a trap.</li>
+</ul>
+
+<h2>Suspect Network</h2>
+<p><strong>Victoria Kingsley</strong> and <strong>Morgan Reed</strong> operated as shadow architects—Victoria funding the operation while Morgan gathered leverage. Their conspiracy discussions now constitute evidence of foreknowledge.</p>
+
+<p><strong>Alex Reeves</strong> physically assaulted Marcus at 11:32PM over stolen equity. The rage was real, the motive was documented, but Victoria's job offer suggests Alex was being positioned as replacement, not revenge.</p>
+
+<p><strong>Oliver Sterling</strong> and <strong>Derek Thorn</strong> provided the pharmaceutical backbone—one coerced through blackmail, the other a willing collaborator in compound development.</p>
+
+<p><strong>Ashe Motoko</strong> and <strong>Kai Andersen</strong> represent Marcus's pattern of exploitation—Ashe silenced through legal suppression, Kai insulted and used for unpaid labor. <strong>Taylor Chase</strong> confessed to orchestrating Ashe's termination, making them an accessory to the cover-up.</p>
+
+<h2>Outstanding Questions</h2>
+<ul>
+<li>Who was the stranger threatening Marcus with "lethal consequences" at 4:18PM—and did they follow through?</li>
+<li>What happened in the secret room James witnessed Marcus entering at 4:36AM?</li>
+<li>The $840 million AI training deal Sofia discovered—who else knew, and where did those funds flow?</li>
+<li>Why did the Black Market approach Sarah specifically for recruitment?</li>
+</ul>
+
+<h2>Final Assessment</h2>
+
+<div class="note">
+<p>Every token recovered. Every memory preserved. That doesn't happen often—and it doesn't happen by accident. This group understood what was at stake: not just their own missing time, but the evidence needed to dismantle Marcus Blackwood's empire of stolen ideas, pharmaceutical manipulation, and political corruption.</p>
+
+<p>The Stanford Four—Marcus, Derek, Diana, and that original circle of idealism Sofia captured at the 2009 glow rave—became something unrecognizable. Howie Sullivan watched it happen, reflecting on Silicon Valley corruption patterns as the party descended. He was right. Dreams die hard in this city, and Marcus made sure everyone's dreams died serving his.</p>
+
+<p>Twenty people touched by one man's gravity. Sarah, James, Alex, Victoria, Ashe, Derek, Diana, Rachel, Taylor, Morgan, Jessicah, Flip, Oliver, Skyler, Tori, Howie, Jamie, Kai, Leila, Sofia. All of them players in a game Marcus thought he controlled. He was wrong.</p>
+
+<p><strong>Case Status:</strong> Primary subject deceased. Evidence sufficient for prosecution of surviving conspirators. The Black Market investigation continues.</p>
+
+<p><strong>— Detective Anondono</strong><br>
+Memory Crimes Division<br>
+Case MC-2025-1218<br>
+Filed: 2025-11-24</p>
+</div>
+
+</div>
+
+</body>
+</html>
