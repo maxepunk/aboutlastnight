@@ -560,11 +560,22 @@ const ReportStateAnnotation = Annotation.Root({
   _previousContentBundle: Annotation({
     reducer: replaceReducer,
     default: () => null
+  }),
+
+  /**
+   * Arc validation results from validateArcStructure (Commit 8.xx)
+   * Set by: validateArcStructure in arc-specialist-nodes.js
+   * Consumed by: routeArcValidation in graph.js for routing decision
+   * Contains: { inputCount, outputCount, structuralPassed, missingRoster, nonRosterPCs, ... }
+   */
+  _arcValidation: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   })
 });
 
 /**
- * Get default state with all fields initialized (50 fields after revision context)
+ * Get default state with all fields initialized (51 fields after _arcValidation)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -641,7 +652,9 @@ function getDefaultState() {
     // Revision context (preserves previous output for targeted fixes)
     _previousArcs: null,
     _previousOutline: null,
-    _previousContentBundle: null
+    _previousContentBundle: null,
+    // Arc validation routing (Commit 8.xx)
+    _arcValidation: null
   };
 }
 

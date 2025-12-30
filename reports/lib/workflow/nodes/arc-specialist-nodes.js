@@ -33,18 +33,17 @@ const {
   validateRosterName,
   getSdkClient,
   isKnownNPC,  // Commit 8.17: NPC validation (accepts NPCs from theme config)
+  isNonRosterPC,  // Commit 8.xx: Non-roster PC validation (three-category model)
+  getNonRosterPCs,  // Commit 8.xx: Get all non-roster PCs for a session
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper (renamed to avoid local shadow)
 } = require('./node-helpers');
-const { getThemeNPCs } = require('../../theme-config');  // Commit 8.17: Theme-configurable NPCs
+const { getThemeNPCs, getThemeCharacters, getCanonicalName } = require('../../theme-config');  // Commit 8.17+: Theme-configurable NPCs and character list
 const { traceNode } = require('../../observability');
 
 // Commit 8.13: Import centralized rules loader for evidence boundaries
 // Commit 8.14: Use full reference content instead of summaries to avoid file reads
-const {
-  loadReferenceRules,
-  getEvidenceBoundariesSummary,
-  getAntiPatternsSummary
-} = require('../reference-loader');
+// Commit 8.xx: Removed unused loadReferenceRules, getEvidenceBoundariesSummary, getAntiPatternsSummary
+// (used only by deleted parallel specialist architecture)
 
 // Commit 8.28: Import split-call architecture
 const {
@@ -53,17 +52,11 @@ const {
   CORE_ARC_SCHEMA,
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
-  // Commit 8.15: Legacy player-focus-guided (deprecated, kept for reviseArcs)
+  // Commit 8.15: Player-focus-guided (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
-  PLAYER_FOCUS_GUIDED_SCHEMA,
-  // Commit 8.12: Legacy parallel architecture (kept for comparison)
-  SPECIALIST_AGENT_NAMES,
-  getSpecialistAgents,
-  ORCHESTRATOR_SYSTEM_PROMPT,
-  ORCHESTRATOR_OUTPUT_SCHEMA,
-  SYNTHESIS_SYSTEM_PROMPT,
-  SYNTHESIS_OUTPUT_SCHEMA,
-  SPECIALIST_OUTPUT_SCHEMAS
+  PLAYER_FOCUS_GUIDED_SCHEMA
+  // Commit 8.xx: Removed legacy parallel architecture imports
+  // (SPECIALIST_AGENT_NAMES, getSpecialistAgents, ORCHESTRATOR_*, SYNTHESIS_*, SPECIALIST_*)
 } = require('../../sdk-client/subagents');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -161,6 +154,12 @@ function buildCoreArcPrompt(state) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
 
+  // Commit 8.xx: Compute non-roster PCs for three-category character guidance
+  const theme = state.theme || 'journalist';
+  const themeNPCs = getThemeNPCs(theme);
+  const themeCharacters = getThemeCharacters(theme);
+  const nonRosterPCs = getNonRosterPCs(context.roster, themeCharacters, themeNPCs);
+
   // Output format at TOP for recency bias
   const outputFormat = buildOutputFormatSection(`{
   "narrativeArcs": [
@@ -184,8 +183,7 @@ function buildCoreArcPrompt(state) {
       }
     }
   ],
-  "synthesisNotes": "How you addressed player conclusions and what patterns emerged",
-  "rosterCoverageCheck": { "RosterName": ["arc-id-1", "arc-id-2"] }
+  "synthesisNotes": "How you addressed player conclusions and what patterns emerged"
 }`);
 
   return `# Core Arc Generation
@@ -219,6 +217,21 @@ ${context.primaryInvestigation}
 
 ### Session Roster (ALL characters who need placement)
 ${JSON.stringify(context.roster)}
+
+### Character Categories for characterPlacements
+
+**ROSTER PCs** (MUST have placements - Nova observed them):
+${JSON.stringify(context.roster)}
+
+**NPCs** (valid in placements, don't count for coverage):
+Marcus, Nova, Blake, Valet
+
+**NON-ROSTER PCs** (can mention from evidence only):
+${nonRosterPCs.length > 0 ? nonRosterPCs.join(', ') : '(none this session)'}
+${nonRosterPCs.length > 0 ? `- These are valid game characters not playing this session
+- CAN be mentioned if they appear in evidence
+- Roles must be evidence-based: "Mentioned in X's memory"
+- Add caveats when using: "Based on memory evidence only"` : ''}
 
 ---
 
@@ -407,7 +420,6 @@ Also provide an **interweavingPlan** with:
  * @returns {Promise<Object>} Core arcs result containing:
  *   - narrativeArcs: Array of arc objects (3-5 typically)
  *   - synthesisNotes: String describing synthesis approach
- *   - rosterCoverageCheck: Object mapping roster names to coverage
  * @throws {Error} If SDK call fails or result structure is invalid
  */
 async function generateCoreArcs(state, config) {
@@ -426,6 +438,7 @@ async function generateCoreArcs(state, config) {
       model: 'sonnet',
       jsonSchema: CORE_ARC_SCHEMA,
       timeoutMs: 3 * 60 * 1000,  // 3 minutes (reduced from 5)
+      disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
       label: 'Core arc generation (Call 1)'
     });
 
@@ -503,7 +516,6 @@ async function enrichWithInterweaving(coreArcs, roster, config) {
  * @param {Object} coreResult - Result from generateCoreArcs containing:
  *   - narrativeArcs: Array of arc objects with id, title, summary, etc.
  *   - synthesisNotes: String describing synthesis approach
- *   - rosterCoverageCheck: Object mapping roster names to coverage
  * @param {Object|null} interweavingResult - Result from enrichWithInterweaving (null on failure)
  * @returns {Object} Merged result with all arc fields including interweaving metadata
  * @throws {Error} If coreResult is invalid or narrativeArcs is not an array
@@ -515,7 +527,7 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
     throw new Error('mergeArcsWithInterweaving: coreResult is required');
   }
 
-  const { narrativeArcs, synthesisNotes, rosterCoverageCheck } = coreResult;
+  const { narrativeArcs, synthesisNotes } = coreResult;
 
   // H1: Validate narrativeArcs is an array before calling .map()
   if (!Array.isArray(narrativeArcs)) {
@@ -532,7 +544,6 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
         interweaving: createDefaultInterweaving()
       })),
       synthesisNotes,
-      rosterCoverageCheck,
       interweavingPlan: createDefaultInterweavingPlan(),
       _interweavingFailed: true
     };
@@ -565,136 +576,13 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
   return {
     narrativeArcs: mergedArcs,
     synthesisNotes,
-    rosterCoverageCheck,
     interweavingPlan: interweavingResult.interweavingPlan || createDefaultInterweavingPlan()
   };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LEGACY HELPER FUNCTIONS
+// SHARED HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Build orchestrator prompt with all evidence and context
- * @param {Object} state - Current state with evidence, player focus, etc.
- * @returns {string} User prompt for orchestrator
- */
-function buildOrchestratorPrompt(state) {
-  const evidenceBundle = state.evidenceBundle || {};
-  const photoAnalyses = state.photoAnalyses || { analyses: [] };
-  const preprocessedEvidence = state.preprocessedEvidence || { items: [] };
-  const playerFocus = state.playerFocus || {};
-  const sessionConfig = state.sessionConfig || {};
-  const directorNotes = state.directorNotes || {};
-
-  // Flatten evidence bundle structure
-  // Curator returns: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } }
-  const exposedData = evidenceBundle.exposed || {};
-  const buriedData = evidenceBundle.buried || {};
-  const exposedItems = [
-    ...(Array.isArray(exposedData.tokens) ? exposedData.tokens : []),
-    ...(Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence : [])
-  ];
-  const buriedItems = [
-    ...(Array.isArray(buriedData.transactions) ? buriedData.transactions : []),
-    ...(Array.isArray(buriedData.relationships) ? buriedData.relationships : [])
-  ];
-
-  // Build context about what players focused on (Layer 3 drives)
-  // NOTE: synthesizePlayerFocus produces "whiteboardContext" and "accusation" keys
-  const wbCtx = playerFocus.whiteboardContext || {};
-  const whiteboardContext = (wbCtx.suspectsExplored?.length > 0 || wbCtx.connections?.length > 0)
-    ? `\n\nWHITEBOARD (Player Conclusions):
-Suspects Explored: ${JSON.stringify(wbCtx.suspectsExplored || [])}
-Connections Found: ${JSON.stringify(wbCtx.connections || [])}
-Notes: ${JSON.stringify(wbCtx.notes || [])}
-Names Identified: ${JSON.stringify(wbCtx.namesFound || [])}`
-    : '';
-
-  // NOTE: synthesizePlayerFocus uses "accusation" not "accusationContext"
-  const accusation = playerFocus.accusation || {};
-  const accusationContext = (accusation.accused?.length > 0 || accusation.charge)
-    ? `\n\nFINAL ACCUSATION:
-Accused: ${JSON.stringify(accusation.accused || [])}
-Charge: ${accusation.charge || 'Unknown'}
-Reasoning: ${accusation.reasoning || 'Not provided'}`
-    : '';
-
-  const rosterContext = sessionConfig.roster
-    ? `\n\nROSTER (Characters in this session):
-${sessionConfig.roster.join(', ')}`
-    : '';
-
-  const observationsContext = directorNotes.observations
-    ? `\n\nDIRECTOR OBSERVATIONS:
-Behavior Patterns: ${JSON.stringify(directorNotes.observations.behaviorPatterns || [])}
-Suspicious Correlations: ${JSON.stringify(directorNotes.observations.suspiciousCorrelations || [])}
-Notable Moments: ${JSON.stringify(directorNotes.observations.notableMoments || [])}`
-    : '';
-
-  return `Analyze the following evidence and coordinate your specialist subagents to create narrative arcs.
-
-PRIMARY INVESTIGATION (what players focused on):
-${playerFocus.primaryInvestigation || 'General investigation'}
-
-EMOTIONAL HOOK:
-${playerFocus.emotionalHook || 'Standard mystery'}
-
-OPEN QUESTIONS (from players):
-${JSON.stringify(playerFocus.openQuestions || [], null, 2)}
-${whiteboardContext}
-${accusationContext}
-${rosterContext}
-${observationsContext}
-
-═══════════════════════════════════════════════════════════════════════════
-EVIDENCE BUNDLE (Three-Layer Model)
-═══════════════════════════════════════════════════════════════════════════
-
-EXPOSED EVIDENCE (Layer 1 - ${exposedItems.length} items freely available):
-${JSON.stringify(exposedItems.slice(0, 15), null, 2)}
-${exposedItems.length > 15 ? `... and ${exposedItems.length - 15} more exposed items` : ''}
-
-BURIED EVIDENCE (Layer 2 - ${buriedItems.length} items required investigation):
-${JSON.stringify(buriedItems.slice(0, 10), null, 2)}
-${buriedItems.length > 10 ? `... and ${buriedItems.length - 10} more buried items` : ''}
-
-CONTEXT (Curator notes and investigation gaps):
-${JSON.stringify(evidenceBundle.context || {}, null, 2)}
-
-═══════════════════════════════════════════════════════════════════════════
-PHOTO ANALYSES (Visual evidence from session)
-═══════════════════════════════════════════════════════════════════════════
-
-${JSON.stringify(photoAnalyses.analyses?.slice(0, 10) || [], null, 2)}
-${photoAnalyses.analyses?.length > 10 ? `... and ${photoAnalyses.analyses.length - 10} more photos` : ''}
-
-═══════════════════════════════════════════════════════════════════════════
-PREPROCESSED EVIDENCE SUMMARIES
-═══════════════════════════════════════════════════════════════════════════
-
-${JSON.stringify(preprocessedEvidence.items?.slice(0, 20) || [], null, 2)}
-${preprocessedEvidence.items?.length > 20 ? `... and ${preprocessedEvidence.items.length - 20} more items` : ''}
-
-═══════════════════════════════════════════════════════════════════════════
-INSTRUCTIONS
-═══════════════════════════════════════════════════════════════════════════
-
-Use the Task tool to invoke these specialist agents (they load reference docs automatically):
-
-1. Task(subagent_type="${SPECIALIST_AGENT_NAMES.financial}") - analyze financial patterns
-2. Task(subagent_type="${SPECIALIST_AGENT_NAMES.behavioral}") - analyze behavioral patterns
-3. Task(subagent_type="${SPECIALIST_AGENT_NAMES.victimization}") - analyze targeting patterns
-
-After collecting specialist analyses, synthesize into 3-5 narrative arcs.
-
-Remember:
-- Layer 3 (player focus/whiteboard) DRIVES narrative priority
-- Every roster member must have a placement
-- Cross-reference specialist findings for stronger arcs
-- Specialists will load character-voice.md, evidence-boundaries.md, anti-patterns.md
-${buildArcRevisionContext(state)}`;
-}
 
 /**
  * Build arc-specific revision context from evaluator feedback
@@ -744,41 +632,9 @@ ${scoresText || '  Not available'}
 
 Focus on addressing the specific issues above. Do not just regenerate - IMPROVE.`;
 }
-
-/**
- * Create empty analysis result for error cases
- * @param {string} sessionId - Session identifier
- * @returns {Object} Empty analysis structure
- */
-function createEmptyAnalysisResult(sessionId) {
-  return {
-    specialistAnalyses: {
-      financial: { accountPatterns: [], timingClusters: [], suspiciousFlows: [], financialConnections: [] },
-      behavioral: { characterDynamics: [], behaviorCorrelations: [], zeroFootprintCharacters: [], behavioralInsights: [] },
-      victimization: { victims: [], operators: [], selfBurialPatterns: [], targetingInsights: [] }
-    },
-    narrativeArcs: [],
-    synthesisNotes: 'Empty result - no analysis performed',
-    analyzedAt: new Date().toISOString(),
-    sessionId
-  };
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// PLAYER-FOCUS-GUIDED ARCHITECTURE (Commit 8.15)
+// PLAYER-FOCUS-GUIDED PROMPT (for revision flow)
 // ═══════════════════════════════════════════════════════════════════════════
-//
-// New architecture: Single comprehensive call with player focus FIRST.
-// Replaces parallel specialists + synthesis with unified player-driven analysis.
-//
-// Key changes from 8.12 parallel architecture:
-// - Player conclusions (accusation/whiteboard) FIRST in prompt - drives arc generation
-// - Single SDK call instead of 4 (3 specialists + synthesis)
-// - New arc fields: arcSource, evidenceStrength, caveats, unansweredQuestions
-// - Speculative arcs allowed with explicit caveats
-// - Three-lens analysis embedded in single call
-//
-// See plan file for design rationale.
 
 /**
  * Build player-focus-guided comprehensive prompt for arc analysis
@@ -998,8 +854,7 @@ Return valid JSON:
       }
     }
   ],
-  "synthesisNotes": "How you addressed player conclusions and what patterns emerged",
-  "rosterCoverageCheck": { "RosterName": ["arc-id-1", "arc-id-2"] }
+  "synthesisNotes": "How you addressed player conclusions and what patterns emerged"
 }
 ${buildArcRevisionContext(state)}`;
 }
@@ -1106,7 +961,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // MERGE: Combine results from both calls
     // ═══════════════════════════════════════════════════════════════════════
     const mergedResult = mergeArcsWithInterweaving(coreResult, interweavingResult);
-    const { narrativeArcs, synthesisNotes, rosterCoverageCheck, interweavingPlan } = mergedResult;
+    const { narrativeArcs, synthesisNotes, interweavingPlan } = mergedResult;
 
     const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[analyzeArcsPlayerFocusGuided] Complete: ${narrativeArcs?.length || 0} arcs in ${totalDuration}s (Call1: ${call1Duration}s, Call2: ${call2Duration}s)`);
@@ -1131,7 +986,6 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
-        rosterCoverageCheck: rosterCoverageCheck || {},
         interweavingPlan: interweavingPlan || {},
         arcCount: narrativeArcs?.length || 0,
         architecture: 'split-call',
@@ -1242,7 +1096,7 @@ async function reviseArcs(state, config) {
       label: `Arc revision ${revisionCount}`
     });
 
-    const { narrativeArcs, synthesisNotes, rosterCoverageCheck } = result || {};
+    const { narrativeArcs, synthesisNotes } = result || {};
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseArcs] Complete: ${narrativeArcs?.length || 0} arcs in ${duration}s`);
@@ -1259,7 +1113,6 @@ async function reviseArcs(state, config) {
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
-        rosterCoverageCheck: rosterCoverageCheck || {},
         arcCount: narrativeArcs?.length || 0,
         architecture: 'player-focus-guided-revision',
         revisionNumber: revisionCount,
@@ -1378,18 +1231,8 @@ Remember: You are IMPROVING, not regenerating. The previous work was valuable - 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PARALLEL SPECIALIST ARCHITECTURE (Commit 8.12) - LEGACY
+// EVIDENCE SUMMARY EXTRACTION
 // ═══════════════════════════════════════════════════════════════════════════
-//
-// Replaced Task tool subagent invocation with direct parallel SDK calls.
-// Key differences from previous orchestrator pattern:
-// - All specialists run concurrently via Promise.all()
-// - No evidence truncation - full data passed to each specialist
-// - Evidence IDs list included for strict validation in synthesis
-// - Synthesis call has all specialist findings + context
-//
-// NOTE: This architecture is kept for comparison. New player-focus-guided
-// architecture in buildPlayerFocusGuidedPrompt() is preferred.
 
 /**
  * Extract evidence summary with ALL IDs for specialist prompts
@@ -1442,552 +1285,17 @@ function extractEvidenceSummary(evidenceBundle) {
   };
 }
 
-/**
- * Build financial specialist prompt with complete evidence data
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Extracted evidence summary
- * @param {Object} rules - Full reference rules from loadReferenceRules()
- * @returns {string} Financial specialist prompt
- */
-function buildFinancialPrompt(state, evidenceSummary, rules) {
-  const playerFocus = state.playerFocus || {};
-  const directorNotes = state.directorNotes || {};
-
-  // Commit 8.14: Inject full evidence boundaries (no file reads needed)
-  const evidenceBoundaries = rules?.evidenceBoundaries || getEvidenceBoundariesSummary();
-
-  return `Analyze the financial patterns in this session evidence.
-
-## REFERENCE: Evidence Boundaries
-${evidenceBoundaries}
-
-PLAYER FOCUS:
-${playerFocus.primaryInvestigation || 'General investigation'}
-Accused: ${JSON.stringify(playerFocus.accusation?.accused || [])}
-
-ROSTER:
-${JSON.stringify(state.sessionConfig?.roster || [])}
-
-DIRECTOR OBSERVATIONS (Financial relevance):
-${JSON.stringify(directorNotes.observations?.suspiciousCorrelations || [])}
-
-BURIED TRANSACTIONS (${evidenceSummary.buriedTransactions.length} items):
-${JSON.stringify(evidenceSummary.buriedTransactions, null, 2)}
-
-EXPOSED EVIDENCE IDs (for referencing):
-${JSON.stringify(evidenceSummary.allEvidenceIds)}
-
-CRITICAL: For buried transactions, you CAN report account names, amounts, and timing patterns.
-You CANNOT report whose memories went to which accounts (that's Layer 2 private).
-
-Analyze transaction patterns, account naming conventions, timing clusters, and financial coordination.
-Return JSON with: accountPatterns, timingClusters, suspiciousFlows, financialConnections, summary`;
-}
-
-/**
- * Build behavioral specialist prompt with complete evidence data
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Extracted evidence summary
- * @param {Object} rules - Full reference rules from loadReferenceRules()
- * @returns {string} Behavioral specialist prompt
- */
-function buildBehavioralPrompt(state, evidenceSummary, rules) {
-  const playerFocus = state.playerFocus || {};
-  const directorNotes = state.directorNotes || {};
-
-  // Commit 8.14: Inject full evidence boundaries (no file reads needed)
-  const evidenceBoundaries = rules?.evidenceBoundaries || getEvidenceBoundariesSummary();
-
-  return `Analyze the behavioral patterns in this session evidence.
-
-## REFERENCE: Evidence Boundaries
-${evidenceBoundaries}
-
-PLAYER FOCUS:
-${playerFocus.primaryInvestigation || 'General investigation'}
-Accused: ${JSON.stringify(playerFocus.accusation?.accused || [])}
-
-ROSTER:
-${JSON.stringify(state.sessionConfig?.roster || [])}
-
-DIRECTOR OBSERVATIONS (PRIMARY AUTHORITY - ground truth):
-Behavior Patterns: ${JSON.stringify(directorNotes.observations?.behaviorPatterns || [])}
-Notable Moments: ${JSON.stringify(directorNotes.observations?.notableMoments || [])}
-Suspicious Correlations: ${JSON.stringify(directorNotes.observations?.suspiciousCorrelations || [])}
-
-WHITEBOARD (Supporting Context - NOT the authority):
-${JSON.stringify(playerFocus.whiteboardContext || {})}
-
-EXPOSED EVIDENCE (${evidenceSummary.exposedTokens.length + evidenceSummary.exposedPaper.length} items):
-${JSON.stringify([...evidenceSummary.exposedTokens, ...evidenceSummary.exposedPaper], null, 2)}
-
-CRITICAL: Use director observations as ground truth for behavioral claims.
-Accusation is PRIMARY for arc prioritization. Whiteboard is SUPPORTING context only.
-
-Analyze character dynamics, behavior-transaction correlations, zero-footprint characters, and suspicious patterns.
-Return JSON with: characterDynamics, behaviorCorrelations, zeroFootprintCharacters, behavioralInsights, rosterCoverage`;
-}
-
-/**
- * Build victimization specialist prompt with complete evidence data
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Extracted evidence summary
- * @param {Object} rules - Full reference rules from loadReferenceRules()
- * @returns {string} Victimization specialist prompt
- */
-function buildVictimizationPrompt(state, evidenceSummary, rules) {
-  const playerFocus = state.playerFocus || {};
-  const directorNotes = state.directorNotes || {};
-
-  // Commit 8.14: Inject full evidence boundaries (no file reads needed)
-  const evidenceBoundaries = rules?.evidenceBoundaries || getEvidenceBoundariesSummary();
-
-  return `Analyze the victimization patterns in this session evidence.
-
-## REFERENCE: Evidence Boundaries
-${evidenceBoundaries}
-
-PLAYER FOCUS:
-${playerFocus.primaryInvestigation || 'General investigation'}
-Accused: ${JSON.stringify(playerFocus.accusation?.accused || [])}
-
-ROSTER:
-${JSON.stringify(state.sessionConfig?.roster || [])}
-
-DIRECTOR OBSERVATIONS (Valet activity):
-${JSON.stringify(directorNotes.observations?.suspiciousCorrelations || [])}
-
-EXPOSED TOKENS (Token owners - potential victims):
-${JSON.stringify(evidenceSummary.exposedTokens, null, 2)}
-
-BURIED TRANSACTIONS (Operator activity):
-${JSON.stringify(evidenceSummary.buriedTransactions, null, 2)}
-
-CRITICAL: You CAN identify who was OBSERVED at Valet (from director notes).
-You CANNOT claim to know whose memories were buried to which accounts.
-Token OWNER (whose memory) is different from transaction OPERATOR (who sold).
-
-Analyze victim identification, operator identification, self-burial patterns, and targeting relationships.
-Return JSON with: victims, operators, selfBurialPatterns, targetingInsights, victimizationSummary`;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// RETRY LOGIC (Commit 8.14)
+// LEGACY PARALLEL SPECIALIST ARCHITECTURE REMOVED (Commit 8.xx)
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Call a specialist with retry logic
- * Retries once on failure with 2s backoff
- *
- * @param {Function} fn - Async function to call
- * @param {string} label - Label for logging
- * @param {number} maxRetries - Maximum retry attempts (default 1)
- * @returns {Promise<Object>} Specialist result or error object
- */
-async function callWithRetry(fn, label, maxRetries = 1) {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await fn();
-
-      // If success (no _error), return immediately
-      if (!result._error) {
-        if (attempt > 0) {
-          console.log(`[${label}] Succeeded on retry attempt ${attempt}`);
-        }
-        return result;
-      }
-
-      // If error but more retries available, try again
-      if (attempt < maxRetries) {
-        console.log(`[${label}] Attempt ${attempt + 1} failed: ${result._error}, retrying in 2s...`);
-        await new Promise(r => setTimeout(r, 2000)); // 2s backoff
-      } else {
-        // Final attempt failed
-        return result;
-      }
-    } catch (error) {
-      if (attempt < maxRetries) {
-        console.log(`[${label}] Attempt ${attempt + 1} threw: ${error.message}, retrying in 2s...`);
-        await new Promise(r => setTimeout(r, 2000));
-      } else {
-        return { _error: error.message };
-      }
-    }
-  }
-  return { _error: 'Max retries exceeded' };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SPECIALIST CALLERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Call financial specialist via direct SDK call
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Extracted evidence summary
- * @param {Function} sdkClient - SDK query function
- * @param {Object} rules - Full reference rules from loadReferenceRules()
- * @returns {Promise<Object>} Financial specialist findings
- */
-async function callFinancialSpecialist(state, evidenceSummary, sdkClient, rules) {
-  const specialists = getSpecialistAgents();
-  const financialSpec = specialists[SPECIALIST_AGENT_NAMES.financial];
-
-  try {
-    const result = await sdkClient({
-      prompt: buildFinancialPrompt(state, evidenceSummary, rules),
-      systemPrompt: financialSpec.prompt,
-      model: 'sonnet',
-      jsonSchema: SPECIALIST_OUTPUT_SCHEMAS.financial,
-      timeoutMs: 2.5 * 60 * 1000,  // 2.5 minutes (Commit 8.14: +30s buffer after removing file reads)
-      label: 'Financial specialist'
-    });
-
-    return result || { accountPatterns: [], summary: 'No result' };
-  } catch (error) {
-    console.error('[callFinancialSpecialist] Error:', error.message);
-    return { accountPatterns: [], summary: `Error: ${error.message}`, _error: error.message };
-  }
-}
-
-/**
- * Call behavioral specialist via direct SDK call
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Extracted evidence summary
- * @param {Function} sdkClient - SDK query function
- * @param {Object} rules - Full reference rules from loadReferenceRules()
- * @returns {Promise<Object>} Behavioral specialist findings
- */
-async function callBehavioralSpecialist(state, evidenceSummary, sdkClient, rules) {
-  const specialists = getSpecialistAgents();
-  const behavioralSpec = specialists[SPECIALIST_AGENT_NAMES.behavioral];
-
-  try {
-    const result = await sdkClient({
-      prompt: buildBehavioralPrompt(state, evidenceSummary, rules),
-      systemPrompt: behavioralSpec.prompt,
-      model: 'sonnet',
-      jsonSchema: SPECIALIST_OUTPUT_SCHEMAS.behavioral,
-      timeoutMs: 3.5 * 60 * 1000,  // 3.5 minutes (Commit 8.14: +30s buffer after removing file reads)
-      label: 'Behavioral specialist'
-    });
-
-    return result || { characterDynamics: [], behavioralInsights: [] };
-  } catch (error) {
-    console.error('[callBehavioralSpecialist] Error:', error.message);
-    return { characterDynamics: [], behavioralInsights: [], _error: error.message };
-  }
-}
-
-/**
- * Call victimization specialist via direct SDK call
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Extracted evidence summary
- * @param {Function} sdkClient - SDK query function
- * @param {Object} rules - Full reference rules from loadReferenceRules()
- * @returns {Promise<Object>} Victimization specialist findings
- */
-async function callVictimizationSpecialist(state, evidenceSummary, sdkClient, rules) {
-  const specialists = getSpecialistAgents();
-  const victimSpec = specialists[SPECIALIST_AGENT_NAMES.victimization];
-
-  try {
-    const result = await sdkClient({
-      prompt: buildVictimizationPrompt(state, evidenceSummary, rules),
-      systemPrompt: victimSpec.prompt,
-      model: 'sonnet',
-      jsonSchema: SPECIALIST_OUTPUT_SCHEMAS.victimization,
-      timeoutMs: 2.5 * 60 * 1000,  // 2.5 minutes (Commit 8.14: +30s buffer after removing file reads)
-      label: 'Victimization specialist'
-    });
-
-    return result || { victims: [], victimizationSummary: 'No result' };
-  } catch (error) {
-    console.error('[callVictimizationSpecialist] Error:', error.message);
-    return { victims: [], victimizationSummary: `Error: ${error.message}`, _error: error.message };
-  }
-}
-
-/**
- * Build synthesis prompt with all specialist findings and context
- * @param {Object} specialistFindings - Combined findings from all specialists
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Evidence summary with ID list
- * @returns {string} Synthesis prompt
- */
-function buildSynthesisPrompt(specialistFindings, state, evidenceSummary) {
-  const playerFocus = state.playerFocus || {};
-  const roster = state.sessionConfig?.roster || [];
-
-  return `Synthesize these specialist findings into 3-5 narrative arcs for the investigative article.
-
-═══════════════════════════════════════════════════════════════════════════
-EVIDENCE BOUNDARIES (MUST FOLLOW)
-═══════════════════════════════════════════════════════════════════════════
-
-${getEvidenceBoundariesSummary()}
-
-${getAntiPatternsSummary()}
-
-═══════════════════════════════════════════════════════════════════════════
-PLAYER FOCUS (Layer 3 Priority Hierarchy)
-═══════════════════════════════════════════════════════════════════════════
-
-ACCUSATION (PRIMARY - drives arc prioritization):
-Accused: ${JSON.stringify(playerFocus.accusation?.accused || [])}
-Charge: ${playerFocus.accusation?.charge || 'Unknown'}
-Reasoning: ${playerFocus.accusation?.reasoning || 'Not provided'}
-
-Primary Investigation: ${playerFocus.primaryInvestigation || 'General investigation'}
-
-Whiteboard Context (SUPPORTING - NOT the authority):
-${JSON.stringify(playerFocus.whiteboardContext || {}, null, 2)}
-
-═══════════════════════════════════════════════════════════════════════════
-ROSTER (Character names that MUST be used in characterPlacements)
-═══════════════════════════════════════════════════════════════════════════
-
-${JSON.stringify(roster)}
-
-CRITICAL: characterPlacements MUST ONLY use names from this roster list.
-Do not invent character names from evidence content.
-
-═══════════════════════════════════════════════════════════════════════════
-VALID EVIDENCE IDs (keyEvidence MUST use these exact IDs)
-═══════════════════════════════════════════════════════════════════════════
-
-${JSON.stringify(evidenceSummary.allEvidenceIds)}
-
-CRITICAL: keyEvidence arrays MUST contain IDs from this list.
-Invalid IDs will be removed during validation.
-
-═══════════════════════════════════════════════════════════════════════════
-FINANCIAL SPECIALIST FINDINGS
-═══════════════════════════════════════════════════════════════════════════
-
-${JSON.stringify(specialistFindings.financial, null, 2)}
-
-═══════════════════════════════════════════════════════════════════════════
-BEHAVIORAL SPECIALIST FINDINGS
-═══════════════════════════════════════════════════════════════════════════
-
-${JSON.stringify(specialistFindings.behavioral, null, 2)}
-
-═══════════════════════════════════════════════════════════════════════════
-VICTIMIZATION SPECIALIST FINDINGS
-═══════════════════════════════════════════════════════════════════════════
-
-${JSON.stringify(specialistFindings.victimization, null, 2)}
-
-═══════════════════════════════════════════════════════════════════════════
-INSTRUCTIONS
-═══════════════════════════════════════════════════════════════════════════
-
-Create 3-5 narrative arcs that:
-1. Prioritize what players focused on (Layer 3 drives - whiteboard/accusation)
-2. Cross-reference findings across all three specialist domains
-3. Use ONLY roster names in characterPlacements
-4. Use ONLY valid evidence IDs in keyEvidence
-5. Ensure every roster member has a role across arcs
-${buildArcRevisionContext(state)}`;
-}
-
-/**
- * Synthesize specialist findings into narrative arcs
- * @param {Object} specialistFindings - Combined findings from all specialists
- * @param {Object} state - Current workflow state
- * @param {Object} evidenceSummary - Evidence summary with ID list
- * @param {Function} sdkClient - SDK query function
- * @returns {Promise<Object>} Synthesized arcs
- */
-async function synthesizeArcs(specialistFindings, state, evidenceSummary, sdkClient) {
-  try {
-    const result = await sdkClient({
-      prompt: buildSynthesisPrompt(specialistFindings, state, evidenceSummary),
-      systemPrompt: SYNTHESIS_SYSTEM_PROMPT,
-      model: 'sonnet',
-      jsonSchema: SYNTHESIS_OUTPUT_SCHEMA,
-      timeoutMs: 3 * 60 * 1000,  // 3 minutes for synthesis
-      label: 'Arc synthesis'
-    });
-
-    return result || { narrativeArcs: [], synthesisNotes: 'No result' };
-  } catch (error) {
-    console.error('[synthesizeArcs] Error:', error.message);
-    return { narrativeArcs: [], synthesisNotes: `Error: ${error.message}`, _error: error.message };
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MAIN ORCHESTRATOR NODE
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Analyze arcs with parallel specialists
- *
- * Commit 8.12: PARALLEL SPECIALIST ARCHITECTURE
- *
- * Replaces orchestrator + Task tool pattern with:
- * - 3 parallel SDK calls (financial, behavioral, victimization)
- * - 1 synthesis call to combine findings into arcs
- *
- * Performance: ~3.5 minutes (down from 10+ minutes)
- * - Specialists: ~1.5 minutes (parallel)
- * - Synthesis: ~2 minutes
- *
- * Skip logic: If narrativeArcs already exist with content, skip processing.
- *
- * @param {Object} state - Current state with evidence, player focus, etc.
- * @param {Object} config - Graph config with SDK client
- * @returns {Object} Partial state update with specialistAnalyses, narrativeArcs
- */
-async function analyzeArcsWithSubagents(state, config) {
-  console.log('[analyzeArcsWithSubagents] Starting parallel arc analysis (Commit 8.12)');
-  const startTime = Date.now();
-
-  // Debug: Log key input data to verify prompt assembly
-  const pf = state.playerFocus || {};
-  const wbCtx = pf.whiteboardContext || {};
-  const acc = pf.accusation || {};
-  // Flatten evidence bundle for counting
-  const exposedData = state.evidenceBundle?.exposed || {};
-  const buriedData = state.evidenceBundle?.buried || {};
-  const exposedCount = (Array.isArray(exposedData.tokens) ? exposedData.tokens.length : 0) +
-                       (Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence.length : 0);
-  const buriedCount = (Array.isArray(buriedData.transactions) ? buriedData.transactions.length : 0) +
-                      (Array.isArray(buriedData.relationships) ? buriedData.relationships.length : 0);
-  console.log(`[analyzeArcsWithSubagents] Input data check:`);
-  console.log(`  - primaryInvestigation: ${pf.primaryInvestigation || 'MISSING'}`);
-  console.log(`  - accusation.accused: ${JSON.stringify(acc.accused || [])}`);
-  console.log(`  - whiteboardContext.suspectsExplored: ${JSON.stringify(wbCtx.suspectsExplored || [])}`);
-  console.log(`  - directorObservations.behaviorPatterns: ${(pf.directorObservations?.behaviorPatterns || []).length} items`);
-  console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
-  console.log(`  - roster: ${JSON.stringify(state.sessionConfig?.roster || [])}`);
-
-  // Skip if arcs already exist (resume case)
-  if (state.narrativeArcs && state.narrativeArcs.length > 0) {
-    console.log('[analyzeArcsWithSubagents] Skipping - narrativeArcs already exist');
-    return {
-      currentPhase: PHASES.ARC_SYNTHESIS
-    };
-  }
-
-  // Skip if no evidence to analyze
-  if (!state.evidenceBundle && !state.preprocessedEvidence) {
-    console.log('[analyzeArcsWithSubagents] Skipping - no evidence available');
-    return {
-      specialistAnalyses: createEmptyAnalysisResult(state.sessionId).specialistAnalyses,
-      narrativeArcs: [],
-      _arcAnalysisCache: {
-        synthesizedAt: new Date().toISOString(),
-        error: 'No evidence available'
-      },
-      currentPhase: PHASES.ARC_SYNTHESIS,
-    };
-  }
-
-  // Get SDK client (supports mock injection for testing)
-  const sdkClient = getSdkClient(config, 'analyzeArcsWithSubagents');
-
-  // Extract evidence summary with ALL IDs (no truncation)
-  const evidenceSummary = extractEvidenceSummary(state.evidenceBundle);
-  console.log(`[analyzeArcsWithSubagents] Evidence summary: ${evidenceSummary.allEvidenceIds.length} total IDs`);
-
-  // Commit 8.14: Pre-load reference rules once (avoids specialists reading files)
-  const rules = await loadReferenceRules();
-  console.log(`[analyzeArcsWithSubagents] Reference rules loaded: ${rules.evidenceBoundaries ? 'OK' : 'FALLBACK'}`);
-
-  try {
-    // ═══════════════════════════════════════════════════════════════════════
-    // PHASE 1: Call specialists in PARALLEL
-    // ═══════════════════════════════════════════════════════════════════════
-    console.log('[analyzeArcsWithSubagents] Phase 1: Calling 3 specialists in parallel');
-    const specialistStartTime = Date.now();
-
-    // Commit 8.14: Wrap specialist calls with retry logic (1 retry with 2s backoff)
-    const [financial, behavioral, victimization] = await Promise.all([
-      callWithRetry(
-        () => callFinancialSpecialist(state, evidenceSummary, sdkClient, rules),
-        'Financial'
-      ),
-      callWithRetry(
-        () => callBehavioralSpecialist(state, evidenceSummary, sdkClient, rules),
-        'Behavioral'
-      ),
-      callWithRetry(
-        () => callVictimizationSpecialist(state, evidenceSummary, sdkClient, rules),
-        'Victimization'
-      )
-    ]);
-
-    const specialistDuration = ((Date.now() - specialistStartTime) / 1000).toFixed(1);
-    console.log(`[analyzeArcsWithSubagents] Phase 1 complete: ${specialistDuration}s`);
-    console.log(`  - Financial: ${financial._error ? 'ERROR' : 'OK'}`);
-    console.log(`  - Behavioral: ${behavioral._error ? 'ERROR' : 'OK'}`);
-    console.log(`  - Victimization: ${victimization._error ? 'ERROR' : 'OK'}`);
-
-    // Fail fast if too many specialists errored (2+ out of 3)
-    const errorCount = [financial._error, behavioral._error, victimization._error].filter(Boolean).length;
-    if (errorCount >= 2) {
-      throw new Error(`Too many specialist failures (${errorCount}/3): synthesis would produce low-quality arcs`);
-    }
-
-    const specialistFindings = { financial, behavioral, victimization };
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // PHASE 2: Synthesize findings into arcs
-    // ═══════════════════════════════════════════════════════════════════════
-    console.log('[analyzeArcsWithSubagents] Phase 2: Synthesizing into narrative arcs');
-    const synthesisStartTime = Date.now();
-
-    const synthesisResult = await synthesizeArcs(specialistFindings, state, evidenceSummary, sdkClient);
-
-    const synthesisDuration = ((Date.now() - synthesisStartTime) / 1000).toFixed(1);
-    console.log(`[analyzeArcsWithSubagents] Phase 2 complete: ${synthesisDuration}s`);
-
-    const { narrativeArcs, synthesisNotes } = synthesisResult;
-
-    const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[analyzeArcsWithSubagents] Complete: ${narrativeArcs?.length || 0} arcs in ${totalDuration}s`);
-
-    return {
-      specialistAnalyses: specialistFindings,
-      narrativeArcs: narrativeArcs || [],
-      _arcAnalysisCache: {
-        synthesizedAt: new Date().toISOString(),
-        specialistDomains: Object.keys(specialistFindings),
-        synthesisNotes: synthesisNotes || '',
-        arcCount: narrativeArcs?.length || 0,
-        architecture: 'parallel-specialists',
-        timing: {
-          specialists: `${specialistDuration}s`,
-          synthesis: `${synthesisDuration}s`,
-          total: `${totalDuration}s`
-        }
-      },
-      currentPhase: PHASES.ARC_SYNTHESIS,
-    };
-
-  } catch (error) {
-    console.error('[analyzeArcsWithSubagents] Error:', error.message);
-
-    return {
-      specialistAnalyses: createEmptyAnalysisResult(state.sessionId).specialistAnalyses,
-      narrativeArcs: [],
-      _arcAnalysisCache: {
-        synthesizedAt: new Date().toISOString(),
-        _error: error.message
-      },
-      errors: [{
-        phase: PHASES.ARC_SYNTHESIS,
-        type: 'parallel-specialists-failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
-      }],
-      currentPhase: PHASES.ERROR
-    };
-  }
-}
+//
+// The following functions were removed as part of legacy cleanup:
+// - callWithRetry, callFinancialSpecialist, callBehavioralSpecialist, callVictimizationSpecialist
+// - buildSynthesisPrompt, synthesizeArcs, analyzeArcsWithSubagents
+//
+// Current architecture uses single-call player-focus-guided analysis.
+// See analyzeArcsPlayerFocusGuided() above.
+//
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PROGRAMMATIC VALIDATION NODE (Commit 8.12, updated 8.15)
@@ -2037,7 +1345,7 @@ function buildValidationRevisionGuidance(issues, missingRoster) {
  * Commit 8.12: Programmatic validation for strict evidence/roster matching.
  * Commit 8.15: Added arcSource, evidenceStrength, and accusation arc validation.
  *
- * Runs AFTER analyzeArcsWithSubagents/analyzeArcsPlayerFocusGuided to:
+ * Runs AFTER analyzeArcsPlayerFocusGuided to:
  * - Validate keyEvidence IDs exist in evidence bundle
  * - Validate characterPlacements use roster names
  * - Warn on contradictory character roles
@@ -2061,6 +1369,11 @@ function validateArcStructure(state, config) {
   const theme = state.theme || config?.configurable?.theme || 'journalist';
   const themeNPCs = getThemeNPCs(theme);
   console.log(`[validateArcStructure] Theme "${theme}" NPCs: ${themeNPCs.join(', ') || '(none)'}`);
+
+  // Commit 8.xx: Get all valid game characters for non-roster PC detection
+  const themeCharacters = getThemeCharacters(theme);
+  const nonRosterPCs = getNonRosterPCs(roster, themeCharacters, themeNPCs);
+  console.log(`[validateArcStructure] Non-roster PCs: ${nonRosterPCs.join(', ') || '(none)'}`);
 
   // Build valid evidence ID set using helper from node-helpers
   const validIds = buildValidEvidenceIds(state.evidenceBundle);
@@ -2129,14 +1442,16 @@ function validateArcStructure(state, config) {
     const placementRoles = {};  // Track roles for coherence check
 
     Object.entries(arc.characterPlacements || {}).forEach(([name, role]) => {
-      // Use fuzzy matching helper
-      const matchedName = validateRosterName(name, roster);
+      // Use fuzzy matching helper (Commit 8.xx: now preserves canonical full names)
+      const matchedName = validateRosterName(name, roster, theme);
 
       if (matchedName) {
-        // Roster member - preserve original casing from roster
+        // Roster member or canonical full name - preserve as-is
         validatedPlacements[matchedName] = role;
         placementRoles[matchedName.toLowerCase()] = role;
 
+        // Note: since validateRosterName now returns the input name unchanged,
+        // this "correction" logging will rarely trigger (only for case normalization)
         if (matchedName.toLowerCase() !== name.toLowerCase()) {
           issues.push(`Character "${name}" corrected to roster name "${matchedName}"`);
           totalCharactersCorrected++;
@@ -2146,8 +1461,18 @@ function validateArcStructure(state, config) {
         // NPCs are valid in characterPlacements but don't count toward roster coverage
         validatedPlacements[name] = role;
         // Don't add to placementRoles - NPCs don't affect roster coverage checks
+      } else if (isNonRosterPC(name, roster, themeCharacters, themeNPCs)) {
+        // Commit 8.xx: Non-roster PC - valid game character not playing this session
+        // They appear in evidence about them but Nova didn't observe their behavior
+        // Valid in characterPlacements (evidence-based mentions) but don't count for coverage
+        validatedPlacements[name] = role;
+        // Track non-roster PC for logging/debugging
+        arc._nonRosterPCs = arc._nonRosterPCs || [];
+        arc._nonRosterPCs.push(name);
+        issues.push(`Character "${name}" is non-roster PC (evidence-based mention - valid)`);
+        // Don't add to placementRoles - non-roster PCs don't affect roster coverage checks
       } else {
-        issues.push(`Removed non-roster character: ${name}`);
+        issues.push(`Removed unknown character: ${name}`);
         totalCharactersRemoved++;
       }
     });
@@ -2265,13 +1590,30 @@ function validateArcStructure(state, config) {
 
   // ═══════════════════════════════════════════════════════════════════════
   // 7. Check roster coverage across all arcs (Commit 8.27)
+  // Commit 8.xx: Accept both first names AND canonical full names for coverage
   // ═══════════════════════════════════════════════════════════════════════
+
+  // Build mapping from canonical names to roster entries
+  // e.g., "sarah blackwood" → "sarah", "sarah" → "sarah"
+  const canonicalToRoster = new Map();
+  roster.forEach(rosterName => {
+    const nameLower = rosterName.toLowerCase();
+    canonicalToRoster.set(nameLower, nameLower);
+    const canonical = getCanonicalName(rosterName, theme);
+    if (canonical.toLowerCase() !== nameLower) {
+      canonicalToRoster.set(canonical.toLowerCase(), nameLower);
+    }
+  });
+
   const coveredRoster = new Set();
   viableArcs.forEach(arc => {
     Object.keys(arc.characterPlacements || {}).forEach(name => {
-      // Only count roster members, not NPCs
-      if (rosterLower.has(name.toLowerCase())) {
-        coveredRoster.add(name.toLowerCase());
+      // Check if name is a roster member OR a canonical full name
+      const nameLower = name.toLowerCase();
+      const mappedRoster = canonicalToRoster.get(nameLower);
+      if (mappedRoster) {
+        // Both "Sarah" and "Sarah Blackwood" add "sarah" to coverage
+        coveredRoster.add(mappedRoster);
       }
     });
   });
@@ -2345,6 +1687,7 @@ function validateArcStructure(state, config) {
   console.log(`  - Evidence strengths: ${JSON.stringify(evidenceStrengthCounts)}`);
   console.log(`  - Accusation arc present: ${hasAccusationArc}`);
   console.log(`  - Roster coverage: ${(rosterCoverage * 100).toFixed(0)}% (${missingRoster.length} missing)`);
+  console.log(`  - Non-roster PCs in arcs: ${nonRosterPCs.length > 0 ? nonRosterPCs.join(', ') : '(none)'}`);
   console.log(`  - Structural passed: ${structuralPassed}`);
 
   return {
@@ -2360,6 +1703,7 @@ function validateArcStructure(state, config) {
       hasAccusationArc,
       rosterCoverage,
       missingRoster,
+      nonRosterPCs,  // Commit 8.xx: Valid game characters not in roster (evidence-based mentions)
       structuralPassed,  // Commit 8.27: gates routing to evaluator vs revision
       validatedAt: new Date().toISOString()
     },
@@ -2389,7 +1733,6 @@ function createMockOrchestrator(options = {}) {
   return async (state, config) => {
     if (shouldFail) {
       return {
-        specialistAnalyses: createEmptyAnalysisResult(state.sessionId).specialistAnalyses,
         narrativeArcs: [],
         _arcAnalysisCache: { _error: errorMessage },
         errors: [{
@@ -2448,83 +1791,8 @@ function createMockOrchestrator(options = {}) {
   };
 }
 
-/**
- * Legacy mock factories for backwards compatibility
- * @deprecated Use createMockOrchestrator instead
- */
-function createMockSpecialist(domain, options = {}) {
-  console.warn('[DEPRECATED] createMockSpecialist - use createMockOrchestrator');
-  const { findings = {}, shouldFail = false, errorMessage = 'Mock error' } = options;
-
-  return async (state, config) => {
-    if (shouldFail) {
-      return {
-        specialistAnalyses: { [domain]: { _error: errorMessage } },
-        errors: [{
-          phase: PHASES.ARC_SPECIALISTS,
-          type: `${domain}-specialist-failed`,
-          message: errorMessage,
-          timestamp: new Date().toISOString()
-        }],
-        currentPhase: PHASES.ARC_SPECIALISTS
-      };
-    }
-
-    const defaultFindings = {
-      financial: { accountPatterns: [], timingClusters: [], suspiciousFlows: [], financialConnections: [] },
-      behavioral: { characterDynamics: [], behaviorCorrelations: [], zeroFootprintCharacters: [], behavioralInsights: [] },
-      victimization: { victims: [], operators: [], selfBurialPatterns: [], targetingInsights: [] }
-    };
-
-    return {
-      specialistAnalyses: { [domain]: findings[domain] || defaultFindings[domain] },
-      currentPhase: PHASES.ARC_SPECIALISTS
-    };
-  };
-}
-
-function createMockSynthesizer(options = {}) {
-  console.warn('[DEPRECATED] createMockSynthesizer - use createMockOrchestrator');
-  const { arcs = null, shouldFail = false, errorMessage = 'Mock synthesis error' } = options;
-
-  return async (state, config) => {
-    if (shouldFail) {
-      return {
-        narrativeArcs: [],
-        _arcAnalysisCache: { _error: errorMessage },
-        errors: [{
-          phase: PHASES.ARC_SYNTHESIS,
-          type: 'arc-synthesis-failed',
-          message: errorMessage,
-          timestamp: new Date().toISOString()
-        }],
-        currentPhase: PHASES.ERROR
-      };
-    }
-
-    const mockArcs = arcs || [
-      {
-        title: 'Mock Arc 1',
-        summary: 'A mock narrative arc for testing',
-        keyEvidence: ['evidence-1'],
-        characterPlacements: {},
-        emotionalHook: 'Mock emotional hook',
-        playerEmphasis: 'high',
-        storyRelevance: 'critical'
-      }
-    ];
-
-    return {
-      narrativeArcs: mockArcs,
-      _arcAnalysisCache: {
-        synthesizedAt: new Date().toISOString(),
-        specialistDomains: Object.keys(state.specialistAnalyses || {}),
-        arcCount: mockArcs.length
-      },
-      currentPhase: PHASES.ARC_SYNTHESIS,
-    };
-  };
-}
+// Commit 8.xx: Removed deprecated createMockSpecialist and createMockSynthesizer
+// Use createMockOrchestrator instead
 
 module.exports = {
   // Commit 8.15: Player-focus-guided architecture (preferred)
@@ -2537,9 +1805,6 @@ module.exports = {
     stateFields: ['_previousArcs', 'validationResults']
   }),
 
-  // Commit 8.12: Parallel specialist architecture (legacy, kept for comparison)
-  analyzeArcsWithSubagents,
-
   // Programmatic validation node
   validateArcStructure: traceNode(validateArcStructure, 'validateArcStructure', {
     stateFields: ['narrativeArcs']
@@ -2547,11 +1812,6 @@ module.exports = {
 
   // Mock factory (Commit 8.8)
   createMockOrchestrator,
-
-  // Legacy exports for backwards compatibility
-  // These are deprecated but kept to avoid breaking tests during migration
-  createMockSpecialist,
-  createMockSynthesizer,
 
   // Export for testing
   _testing: {
@@ -2564,32 +1824,17 @@ module.exports = {
     createDefaultInterweaving,
     createDefaultInterweavingPlan,
     extractPlayerFocusContext,
+    extractEvidenceSummary,  // Used by current code
     buildOutputFormatSection,
     CORE_ARC_SYSTEM_PROMPT,
     CORE_ARC_SCHEMA,
     INTERWEAVING_SYSTEM_PROMPT,
     INTERWEAVING_SCHEMA,
 
-    // Commit 8.15: Player-focus-guided (deprecated - kept for revision flow)
+    // Commit 8.15: Player-focus-guided (used by revision flow)
     buildPlayerFocusGuidedPrompt,
     PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
-    PLAYER_FOCUS_GUIDED_SCHEMA,
-
-    // Commit 8.12: Legacy parallel architecture
-    buildOrchestratorPrompt,
-    createEmptyAnalysisResult,
-    extractEvidenceSummary,
-    buildFinancialPrompt,
-    buildBehavioralPrompt,
-    buildVictimizationPrompt,
-    buildSynthesisPrompt,
-    SPECIALIST_AGENT_NAMES,
-    getSpecialistAgents,
-    ORCHESTRATOR_SYSTEM_PROMPT,
-    ORCHESTRATOR_OUTPUT_SCHEMA,
-    SYNTHESIS_SYSTEM_PROMPT,
-    SYNTHESIS_OUTPUT_SCHEMA,
-    SPECIALIST_OUTPUT_SCHEMAS
+    PLAYER_FOCUS_GUIDED_SCHEMA
   }
 };
 

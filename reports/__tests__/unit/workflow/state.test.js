@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 50 state fields (includes revision context fields)', () => {
+    it('includes all 51 state fields (includes revision context fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -310,7 +310,9 @@ describe('ReportStateAnnotation', () => {
         // Revision context (preserves previous output for targeted fixes)
         '_previousArcs',
         '_previousOutline',
-        '_previousContentBundle'
+        '_previousContentBundle',
+        // Arc validation routing (Commit 8.xx)
+        '_arcValidation'
       ];
 
       expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort());

@@ -9,7 +9,7 @@
  * - Fetch Nodes: Data fetching from files/APIs (initializeSession, loadDirectorNotes, etc.)
  * - Photo Nodes: Photo analysis with Haiku vision (analyzePhotos) - Commit 8.6
  * - Preprocess Nodes: Batch evidence preprocessing (preprocessEvidence) - Commit 8.5
- * - Arc Specialist Nodes: Orchestrated subagent analysis (analyzeArcsWithSubagents) - Commit 8.8
+ * - Arc Specialist Nodes: Player-focus-guided arc analysis (analyzeArcsPlayerFocusGuided) - Commit 8.15
  * - Evaluator Nodes: Per-phase quality evaluation (arcs, outline, article) - Commit 8.6
  * - AI Nodes: Claude-powered processing (curateEvidenceBundle, generateOutline, etc.)
  * - Template Nodes: HTML assembly (assembleHtml)
@@ -120,9 +120,7 @@ module.exports = {
     createMockPreprocessor: preprocessNodes.createMockPreprocessor,
     // Commit 8.8: New orchestrator mock replaces individual specialist mocks
     createMockOrchestrator: arcSpecialistNodes.createMockOrchestrator,
-    // @deprecated - use createMockOrchestrator (kept for backwards compatibility)
-    createMockSpecialist: arcSpecialistNodes.createMockSpecialist,
-    createMockSynthesizer: arcSpecialistNodes.createMockSynthesizer,
+    // Commit 8.xx: Removed deprecated createMockSpecialist, createMockSynthesizer
     createMockEvaluator: evaluatorNodes.createMockEvaluator,
     createMockSdkClient: aiNodes.createMockSdkClient,
     createMockClaudeClient: aiNodes.createMockClaudeClient, // @deprecated - use createMockSdkClient

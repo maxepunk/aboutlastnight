@@ -612,7 +612,6 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
       }
     },
     synthesisNotes: { type: 'string' },
-    rosterCoverageCheck: { type: 'object' },
     // Commit 8.24: Interweaving plan for outline generation
     interweavingPlan: {
       type: 'object',
@@ -756,8 +755,7 @@ const CORE_ARC_SCHEMA = {
         ]
       }
     },
-    synthesisNotes: { type: 'string' },
-    rosterCoverageCheck: { type: 'object' }
+    synthesisNotes: { type: 'string' }
   },
   required: ['narrativeArcs', 'synthesisNotes']
 };
@@ -997,33 +995,24 @@ module.exports = {
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
 
-  // Commit 8.15: Player-focus-guided architecture (DEPRECATED - use split-call)
-  // Kept for backwards compatibility during migration
+  // Commit 8.15: Player-focus-guided architecture (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
   PLAYER_FOCUS_GUIDED_SCHEMA,
 
-  // Commit 8.11: Factory function with absolute paths
-  getSpecialistAgents,
-  SPECIALIST_AGENT_NAMES,
-  ORCHESTRATOR_SYSTEM_PROMPT,
-  ORCHESTRATOR_OUTPUT_SCHEMA,
-
-  // Commit 8.12: Parallel specialist architecture (legacy)
-  SYNTHESIS_SYSTEM_PROMPT,
-  SYNTHESIS_OUTPUT_SCHEMA,
-  SPECIALIST_OUTPUT_SCHEMAS,
+  // Commit 8.xx: Removed legacy parallel specialist architecture exports:
+  // - getSpecialistAgents, SPECIALIST_AGENT_NAMES
+  // - ORCHESTRATOR_SYSTEM_PROMPT, ORCHESTRATOR_OUTPUT_SCHEMA
+  // - SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_OUTPUT_SCHEMA, SPECIALIST_OUTPUT_SCHEMAS
 
   // Testing exports
   _testing: {
-    SPECIALIST_AGENT_NAMES,
-    getSpecialistAgents,
     normalizePath,  // Exported for testing path normalization
     // Commit 8.28: Split-call schemas
     CORE_ARC_SYSTEM_PROMPT,
     CORE_ARC_SCHEMA,
     INTERWEAVING_SYSTEM_PROMPT,
     INTERWEAVING_SCHEMA,
-    // Legacy (deprecated)
+    // Commit 8.15: Revision flow
     PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
     PLAYER_FOCUS_GUIDED_SCHEMA
   }
