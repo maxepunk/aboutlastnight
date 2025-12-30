@@ -765,7 +765,10 @@ async function buildArcEvidencePackages(state, config) {
       }
 
       // Extract full content using the new fullContent field or fallback chain
+      // Priority: fullContent > fullDescription (memory tokens) > content > description > summary
       const fullContent = item.fullContent ||
+                         item.fullDescription ||
+                         item.rawData?.fullDescription ||
                          item.content ||
                          item.rawData?.content ||
                          item.rawData?.description ||
