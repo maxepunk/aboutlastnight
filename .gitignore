@@ -40,7 +40,6 @@ pnpm-lock.yaml
 reports/data/
 reports/sessionphotos/
 sessionphotos/
-reports/.claude/
 cookies.txt
 reports/cookies.txt
 *cookies.txt

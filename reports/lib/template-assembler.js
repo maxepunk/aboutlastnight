@@ -230,8 +230,8 @@ class TemplateAssembler {
    */
   async buildContext(contentBundle, sessionId) {
     // Calculate photos base path for session-specific photo serving
-    // If sessionId is provided, use /sessionphotos/{sessionId}/ instead of photos/
-    const photosBasePath = sessionId ? `/sessionphotos/${sessionId}/` : 'photos/';
+    // Use relative path (no leading /) for standalone HTML compatibility (GitHub Pages, file://)
+    const photosBasePath = sessionId ? `sessionphotos/${sessionId}/` : 'photos/';
 
     // Load inline CSS if enabled
     let inlineCss = null;

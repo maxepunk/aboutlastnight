@@ -6,6 +6,44 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
+const { getThemeConfig } = require('./theme-config');
+
+/**
+ * Generate canonical character roster section from theme config
+ * DRY: Single source of truth is theme-config.js canonicalCharacters
+ *
+ * @param {string} theme - Theme name (e.g., 'journalist')
+ * @returns {string} Formatted roster section for prompts
+ */
+function generateRosterSection(theme = 'journalist') {
+  const config = getThemeConfig(theme);
+  const characters = config?.canonicalCharacters || {};
+
+  const lines = Object.entries(characters)
+    .map(([first, full]) => `- ${first} → ${full}`)
+    .join('\n');
+
+  return `CANONICAL CHARACTER ROSTER:
+Use ONLY these full names in ALL article text. NEVER invent different last names:
+${lines}`;
+}
+
+/**
+ * Wrap prompt content with XML tags for AI cross-referencing
+ *
+ * Uses XML tags for consistency with Claude's training and token efficiency.
+ * Cross-references use tag names: "See <narrative-structure> Section 8"
+ *
+ * @param {string} filename - The prompt file name (e.g., 'narrative-structure')
+ * @param {string} content - The prompt file content
+ * @returns {string} XML-wrapped content
+ */
+function labelPromptSection(filename, content) {
+  if (!content || !content.trim()) return '';
+  return `<${filename}>
+${content.trim()}
+</${filename}>`;
+}
 
 class PromptBuilder {
   /**
@@ -30,10 +68,8 @@ class PromptBuilder {
     const prompts = await this.theme.loadPhasePrompts('arcAnalysis');
 
     const systemPrompt = `You are analyzing narrative arcs for a NovaNews investigative article.
-
-${prompts['character-voice']}
-
-${prompts['evidence-boundaries']}`;
+${labelPromptSection('character-voice', prompts['character-voice'])}
+${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
     const userPrompt = `Analyze the following evidence for narrative arcs.
 
@@ -48,9 +84,7 @@ ${JSON.stringify(sessionData.directorNotes?.whiteboard || {}, null, 2)}
 
 EVIDENCE BUNDLE:
 ${JSON.stringify(sessionData.evidenceBundle, null, 2)}
-
-${prompts['narrative-structure']}
-
+${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 Return JSON with the following structure:
 {
   "narrativeArcs": [
@@ -96,10 +130,8 @@ Return JSON with the following structure:
     const prompts = await this.theme.loadPhasePrompts('outlineGeneration');
 
     const systemPrompt = `You are creating an article outline for a NovaNews investigative piece.
-
-${prompts['section-rules']}
-
-${prompts['editorial-design']}`;
+${labelPromptSection('section-rules', prompts['section-rules'])}
+${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
 
     // Commit 8.15: Extract arc-specific fields for outline guidance
     const arcsWithMetadata = (arcAnalysis.narrativeArcs || []).map(arc => ({
@@ -119,10 +151,7 @@ ${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
 
 HERO IMAGE: ${heroImage}
 
-═══════════════════════════════════════════════════════════════════════════
-ARC METADATA (Commit 8.15 - use these for framing)
-═══════════════════════════════════════════════════════════════════════════
-
+<arc-metadata>
 ${JSON.stringify(arcsWithMetadata, null, 2)}
 
 USING ARC METADATA IN THE OUTLINE:
@@ -146,67 +175,49 @@ USING ARC METADATA IN THE OUTLINE:
 4. **unansweredQuestions** create narrative tension in "What's Missing"
    - These become hooks for the reader
    - Nova can explicitly say "I don't know why..."
+</arc-metadata>
 
-═══════════════════════════════════════════════════════════════════════════
-ARC INTERWEAVING (Critical for Compulsive Readability)
-═══════════════════════════════════════════════════════════════════════════
+<arc-interweaving>
+See <arc-flow> for complete interweaving philosophy. Key points:
+- Arcs are THREADS, not CHAPTERS
+- Plan callback opportunities (details planted in Arc A that pay off in Arc C)
+- All arcs must converge at a specific point in THE STORY
+</arc-interweaving>
 
-Arcs are THREADS, not CHAPTERS. Plan them as intercut narratives:
+<visual-rules>
+See <narrative-structure> Section 8 for complete visual component rules.
 
-- Arc A paragraph → Arc B paragraph → Arc A continues → Arc C reveals
-- Later paragraphs should RECONTEXTUALIZE earlier ones ("wait, so THAT'S why...")
-- Plant details in Arc A that pay off in Arc C
-- If you can shuffle arc paragraphs without breaking the narrative, you've failed
-
-**Callback opportunities:** For each arc, identify what detail can be planted that pays off later.
-
-═══════════════════════════════════════════════════════════════════════════
-VISUAL COMPONENT RULES
-═══════════════════════════════════════════════════════════════════════════
-
-**Pull Quotes (Two Types - CRITICAL):**
-1. Nova's crystallized insight = NO attribution (just styled text)
-2. Verbatim evidence quote = Character name attribution (e.g., "— Victoria Chen")
-
-Pull quotes must be VERBATIM text from evidence, NOT summaries.
-- WRONG: "$163 million. That's what Skyler threatened to withdraw."
-- RIGHT: "Pull your funding and I'll pull your secrets into the light." — Skyler Chen
+**Pull Quotes (Key Points):**
+- VERBATIM: Exact quote from evidence WITH character attribution
+- CRYSTALLIZATION: Journalist insight, NO attribution (NEVER "— Nova")
 
 **Photo Placement:**
 - Humanize BEFORE damning revelation about that character
-- Provide breathing room after intense sequences
-- Cross-arc bridge: same character in different arc contexts
-- ONLY use filenames from AVAILABLE PHOTOS below (do not invent paths)
+- ONLY use filenames from AVAILABLE PHOTOS below
+</visual-rules>
 
-═══════════════════════════════════════════════════════════════════════════
-VISUAL COMPONENT PRINCIPLES
-═══════════════════════════════════════════════════════════════════════════
-
+<visual-principles>
 **Each component must EARN its place:**
 - Evidence cards: CLOSE or OPEN a narrative loop (not just illustrate)
 - Photos: Create emotional beats (humanize before revelation, breathe after intensity)
 - Pull quotes: Crystallize powerful moments (verbatim, not summaries)
 
-**Anti-Clustering (REQUIRED):**
-- No two evidence cards adjacent (prose between)
-- No photo immediately after evidence card (breaks pacing)
-- Distribute across sections, don't cluster in one
+**Anti-Clustering:** See <narrative-structure> Visual Rhythm Rules (rules 6-8)
 
 **Section Appropriateness:**
 - LEDE: Pure prose hook (hero image optional)
 - THE STORY: Primary home for evidence cards and photos
 - FOLLOW THE MONEY: Financial tracker required, evidence cards optional
 - THE PLAYERS: Pull quotes for standout moments
-- WHAT'S MISSING: Prose-driven (no photos - maintains mystery)
-- CLOSING: Reflection (no evidence cards - resolution, not revelation)
+- WHAT'S MISSING: Prose-driven (photos optional for emotional beats)
+- CLOSING: Evidence cards optional, pull quotes for final crystallization
 
 **Quality Over Quantity:**
 A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
 The goal is a compelling GIFT for players, not quota compliance.
+</visual-principles>
 
-═══════════════════════════════════════════════════════════════════════════
-AVAILABLE PHOTOS (Commit 8.24 - use these EXACT filenames)
-═══════════════════════════════════════════════════════════════════════════
+<available-photos>
 
 ${availablePhotos.length > 0 ? availablePhotos.map((p, i) => `${i + 1}. ${p.filename}
    Characters: ${p.characters.slice(0, 3).join('; ') || 'Unknown'}
@@ -219,17 +230,17 @@ Do NOT use paths like "character-photos/victoria.png" - these files do not exist
 - Every card must CLOSE or OPEN a loop (not just illustrate)
 - CLOSER: proves what was hinted
 - OPENER: raises new question while answering old
+</available-photos>
 
-═══════════════════════════════════════════════════════════════════════════
-PER-ARC EVIDENCE PACKAGES (Phase 1 Fix: Full content for quoting)
-═══════════════════════════════════════════════════════════════════════════
+<arc-evidence>
 
 ${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
 ### ${pkg.arcId} - ${pkg.arcTitle}
 
 **Evidence Items (${pkg.evidenceItems?.length || 0} items):**
-${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type} - "${(item.fullContent || item.summary || '').substring(0, 150)}..."
-  Quotable: ${(item.quotableExcerpts || []).slice(0, 2).map(q => `"${q.substring(0, 60)}..."`).join(' | ') || 'None extracted'}`).join('\n')}
+${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type}
+  Full Content: "${item.fullContent || item.summary || ''}"
+  Quotable: ${(item.quotableExcerpts || []).slice(0, 2).map(q => `"${q}"`).join(' | ') || 'None extracted'}`).join('\n')}
 
 **Arc-Relevant Photos (${pkg.photos?.length || 0} photos):**
 ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown characters'}`).join('\n') || 'No arc-specific photos'}
@@ -239,26 +250,20 @@ ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'U
 1. For pull quotes, use **quotableExcerpts** - these are pre-extracted verbatim text
 2. For evidence cards, use **evidenceItems** with their **fullContent**
 3. For photo placement, use **arc-relevant photos** that feature arc characters
+</arc-evidence>
 
-═══════════════════════════════════════════════════════════════════════════
-FULL ARC ANALYSIS (for complete context)
-═══════════════════════════════════════════════════════════════════════════
-
+<arc-analysis>
 ${JSON.stringify(arcAnalysis, null, 2)}
 
 EVIDENCE BUNDLE (for evidence card selection):
 ${JSON.stringify(evidenceBundle, null, 2)}
+${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
+${labelPromptSection('arc-flow', prompts['arc-flow'])}
+${labelPromptSection('formatting', prompts['formatting'])}
+${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
+</arc-analysis>
 
-${prompts['narrative-structure']}
-
-${prompts['formatting']}
-
-${prompts['evidence-boundaries']}
-
-═══════════════════════════════════════════════════════════════════════════
-ARC-SECTION FLOW (Phase 1 Fix: Arcs flow THROUGH all sections)
-═══════════════════════════════════════════════════════════════════════════
-
+<arc-section-flow>
 CRITICAL: Arcs are THREADS that weave through the entire article, not chapters isolated to THE STORY.
 
 Each arc should appear in multiple sections with different focus:
@@ -270,6 +275,7 @@ Each arc should appear in multiple sections with different focus:
 - CLOSING: Arc resolution or haunting continuation
 
 Every section (except LEDE) must have "arcConnections" showing which arcs it advances.
+</arc-section-flow>
 
 Return JSON with the following structure:
 {
@@ -346,9 +352,10 @@ Return JSON with the following structure:
    * @param {Object} evidenceBundle - Full evidence bundle for quoting
    * @param {string} template - HTML template content
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent (Phase 1 Fix)
+   * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = []) {
+  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null) {
     const prompts = await this.theme.loadPhasePrompts('articleGeneration');
 
     // System prompt: Identity and hard constraints (kept short for salience)
@@ -361,9 +368,7 @@ HARD CONSTRAINTS (violations = failure):
 - NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
 - NO third-person self-reference ("The Detective noted") - you ARE the detective
 - NO countable memories ("5 memories") - memories are experiences, not inventory
-- NO vague attributions ("From my notes") - use "- Nova" or character name
-
-${prompts['evidence-boundaries']}`;
+${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
     // Format arc evidence packages for verbatim quoting
     const arcEvidenceSection = arcEvidencePackages.length > 0 ? `
@@ -378,7 +383,7 @@ ${(pkg.evidenceItems || []).flatMap(item =>
 
 FULL EVIDENCE (for context and additional quoting):
 ${(pkg.evidenceItems || []).map(item =>
-  `${item.id} (${item.type}): "${(item.fullContent || item.summary || '').substring(0, 300)}..."`
+  `${item.id} (${item.type}): "${item.fullContent || item.summary || ''}"`
 ).join('\n')}
 
 ARC PHOTOS:
@@ -391,6 +396,13 @@ ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'U
 APPROVED OUTLINE:
 ${JSON.stringify(outline, null, 2)}
 
+HERO IMAGE (CRITICAL - do NOT duplicate):
+Filename: ${heroImage || 'Use first available photo from outline'}
+This image is the HERO IMAGE at the top of the article.
+- Use this exact filename in the "heroImage" field
+- Do NOT include this filename in the "photos" array (it would cause duplication)
+- Inline photos must use DIFFERENT photos from the session
+
 EVIDENCE BUNDLE (quote ONLY from exposed evidence):
 ${JSON.stringify(evidenceBundle, null, 2)}
 ${arcEvidenceSection}
@@ -401,13 +413,13 @@ ${template}
 </TEMPLATE>
 
 <RULES>
-${prompts['section-rules']}
+${labelPromptSection('section-rules', prompts['section-rules'])}
+${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
+${labelPromptSection('arc-flow', prompts['arc-flow'])}
+${labelPromptSection('formatting', prompts['formatting'])}
+${labelPromptSection('editorial-design', prompts['editorial-design'])}
 
-${prompts['narrative-structure']}
-
-${prompts['formatting']}
-
-${prompts['editorial-design']}
+${generateRosterSection()}
 </RULES>
 
 <ARC_FLOW>
@@ -432,32 +444,70 @@ PRINCIPLES:
 - Photos: Create emotional beats (humanize before revelation, breathe after intensity)
 - Pull quotes: Crystallize powerful moments (verbatim, not summaries)
 
-ANTI-CLUSTERING:
-- No two evidence cards adjacent (prose between)
-- No photo immediately after evidence card (breaks pacing)
-- Distribute across sections, don't cluster in one
+ANTI-CLUSTERING: See <narrative-structure> Visual Rhythm Rules (rules 6-8)
 
-SECTION APPROPRIATENESS:
-- LEDE: Pure prose hook (hero image optional)
-- THE STORY: Primary home for evidence cards and photos
-- FOLLOW THE MONEY: Financial tracker required
-- THE PLAYERS: Pull quotes for standout moments
-- WHAT'S MISSING: Prose-driven (no photos)
-- CLOSING: Reflection (no evidence cards)
+SECTION APPROPRIATENESS (authoritative):
+| Section          | Evidence Cards | Photos    | Pull Quotes |
+|------------------|----------------|-----------|-------------|
+| LEDE             | No             | Hero only | No          |
+| THE STORY        | Yes            | Yes       | Yes         |
+| FOLLOW THE MONEY | Optional       | Optional  | Yes         |
+| THE PLAYERS      | Optional       | Yes       | Yes         |
+| WHAT'S MISSING   | No             | Yes       | Optional    |
+| CLOSING          | Optional       | Optional  | Yes (1 max) |
 
 Quality over quantity. A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
 </VISUAL_DISTRIBUTION>
 
+<VISUAL_COMPONENT_TYPES>
+CRITICAL: Understand the difference between evidence-card and evidence-reference.
+
+EVIDENCE-CARD (inline, full display):
+- Goes in sections[].content[] array
+- type: "evidence-card"
+- REQUIRES: tokenId, headline, content (VERBATIM from arcEvidencePackages.evidenceItems[].fullContent), owner, significance
+- SHOWS: Full evidence as styled card in article body
+- USE FOR: Narrative climax moments, proving claims, CLOSING or OPENING a loop
+
+EVIDENCE-REFERENCE (link only):
+- Goes in sections[].content[] array
+- type: "evidence-reference"
+- REQUIRES: tokenId only (plus optional caption)
+- SHOWS: Small diamond icon linking to sidebar
+- USE FOR: Brief mentions, sidebar navigation ONLY
+
+IF YOU WANT EVIDENCE DISPLAYED INLINE: You MUST use "evidence-card" type.
+Using "evidence-reference" will NOT display content - it only creates a link.
+
+EVIDENCE-CARD INLINE EXAMPLE:
+{
+  "id": "the-story",
+  "type": "narrative",
+  "content": [
+    {"type": "paragraph", "text": "I watched them circle each other, Victoria's composure finally cracking..."},
+    {"type": "evidence-card", "tokenId": "jav042", "headline": "The Moment of Truth", "content": "JAV042 - 12:17AM - [Full verbatim text from arcEvidencePackages.evidenceItems[].fullContent - do NOT truncate or summarize]", "owner": "Jamie Woods", "significance": "critical"},
+    {"type": "paragraph", "text": "After that, nothing was the same between them..."}
+  ]
+}
+
+PULL QUOTES (2 types):
+- VERBATIM: Exact quote from evidence WITH character attribution ("— Victoria Kingsley")
+- CRYSTALLIZATION: Journalist insight, NO attribution (NEVER "— Nova")
+
+MINIMUM REQUIREMENTS:
+- At least 3 evidence-card blocks across sections (in sections[].content[], NOT just evidenceCards[])
+- At least 2 pull quotes distributed across 2+ sections
+- No two evidence-cards adjacent (separate with prose)
+</VISUAL_COMPONENT_TYPES>
+
 <ANTI_PATTERNS>
-${prompts['anti-patterns']}
+${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 </ANTI_PATTERNS>
 
 <VOICE_CHECKPOINT>
 Before generating, internalize Nova's voice:
-${prompts['character-voice']}
-
-${prompts['writing-principles']}
-
+${labelPromptSection('character-voice', prompts['character-voice'])}
+${labelPromptSection('writing-principles', prompts['writing-principles'])}
 Ask yourself: "Am I writing AS Nova who experienced this, or ABOUT events Nova observed?"
 The answer must be AS Nova. Every sentence should feel like it's coming from someone who was in that room.
 </VOICE_CHECKPOINT>
@@ -479,7 +529,9 @@ STRUCTURE:
 2. "evidenceCards" - Array of evidence card content:
    - "tokenId": ID matching evidence-reference blocks
    - "headline": Card headline (compelling, not just descriptive)
-   - "summary": Brief context
+   - "content": VERBATIM full text - COPY EXACTLY from arcEvidencePackages fullContent, include tokenId/timestamp prefix
+   - "summary": Brief 100-char summary for sidebar display
+   - "owner": Character canonical full name
    - "significance": "critical" | "supporting" | "contextual"
 
    CRITICAL: Cards are VISUAL COMPONENTS for compulsive readability:
@@ -487,12 +539,35 @@ STRUCTURE:
    - The prose BEFORE sets up tension, prose AFTER draws implications
    - Distribute across sections per the outline - NOT all in THE STORY
 
+   EVIDENCE CARD DUAL FIELDS:
+   - "content" = VERBATIM memory text for BODY inline cards
+     * COPY EXACTLY from arcEvidencePackages evidenceItems[].fullContent
+     * Include tokenId prefix and timestamp (e.g., "JAV042 - 12:17AM - ...")
+     * Do NOT paraphrase or summarize
+
+   - "summary" = Brief 100-char summary for SIDEBAR mini-cards
+     * Write your own concise summary
+     * Keep under 100 characters
+
+   Template rendering:
+   - Body cards: content-blocks/evidence-card.hbs uses {{content}}
+   - Sidebar cards: sidebar/evidence-card.hbs uses {{summary}}
+
+   EVIDENCE PLACEMENT (Commit 8.26):
+   - evidenceCards[] = Both sidebar AND body cards (same array, dual fields)
+   - evidence-reference in sections = References to inline body cards
+   - Body evidence MUST be a SUBSET of evidenceCards (same tokenIds)
+   - Sidebar: 5-8 cards as navigation/reference
+   - Body: Reference only cards already in evidenceCards array
+
 3. "pullQuotes" - Featured quotes for sidebar (distribute across 2+ sections)
 
 4. "photos" - Session photos with placement:
-   - "filename": EXACT filename from available photos
+   - "filename": EXACT filename from available photos (do NOT include hero image here)
    - "caption": Caption text
-   - "sectionId": Which section it appears in
+   - "characters": Array of character names visible
+   - "placement": "inline" or "sidebar"
+   - "afterSection": Section ID after which photo appears
 
 5. "financialTracker" - Shell account entries (required for FOLLOW THE MONEY)
 
@@ -570,7 +645,7 @@ ${articleContent}
 </ARTICLE_TO_REVISE>
 
 <ANTI_PATTERNS_REFERENCE>
-${prompts['anti-patterns']}
+${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 </ANTI_PATTERNS_REFERENCE>
 
 <REVISION_INSTRUCTION>
@@ -605,13 +680,11 @@ Return JSON with:
     const systemPrompt = `You are validating a NovaNews article against anti-patterns and voice requirements.
 
 ANTI-PATTERNS CHECKLIST:
-${prompts['anti-patterns']}
-
+${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 VOICE REQUIREMENTS:
-${prompts['character-voice']}
-
+${labelPromptSection('character-voice', prompts['character-voice'])}
 EVIDENCE BOUNDARIES:
-${prompts['evidence-boundaries']}`;
+${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
     const userPrompt = `Validate this article against all anti-patterns.
 

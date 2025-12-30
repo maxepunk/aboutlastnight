@@ -561,6 +561,8 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         if (result.currentPhase === PHASES.COMPLETE) {
             response.assembledHtml = result.assembledHtml;
             response.validationResults = result.validationResults;
+            response.outputPath = result.outputPath;
+            response.photosCopied = result.photosCopied;
         }
 
         // Include errors if present
@@ -1083,6 +1085,8 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                     if (result.currentPhase === PHASES.COMPLETE) {
                         response.assembledHtml = result.assembledHtml;
                         response.validationResults = result.validationResults;
+                        response.outputPath = result.outputPath;
+                        response.photosCopied = result.photosCopied;
                     }
 
                     // Include errors

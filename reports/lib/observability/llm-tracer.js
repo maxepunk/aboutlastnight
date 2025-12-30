@@ -1,15 +1,14 @@
 /**
  * LLM Tracer - Full visibility into Claude Agent SDK calls
  *
- * Instead of wrapping the function externally (which only sees options),
- * this instruments the actual SDK call to capture full prompt/response content
- * for LangSmith visibility.
+ * CRITICAL FIX: Uses STATIC names instead of dynamic functions.
  *
- * This provides:
- * - Actual prompt content in trace inputs
- * - Actual response content in trace outputs
- * - Token usage and costs
- * - Model and configuration details
+ * The issue was that traceable's `name` function is called during trace
+ * initialization, potentially BEFORE the wrapped function receives its arguments.
+ * This caused "name is required" errors when the name function couldn't
+ * extract label/model from undefined opts.
+ *
+ * Solution: Use static names and put dynamic context in metadata instead.
  *
  * @module observability/llm-tracer
  */
@@ -18,14 +17,15 @@ const { traceable } = require('langsmith/traceable');
 const { isTracingEnabled, getProject } = require('./config');
 
 /**
- * Truncate text for trace metadata (prevent massive traces)
+ * Truncate text for trace metadata
+ * Aggressive truncation to stay well under LangSmith's 26MB limit
  *
  * @param {string|Object} text - Text or object to truncate
  * @param {number} maxLength - Maximum length
  * @returns {string|null} Truncated text
  */
 function truncate(text, maxLength = 2000) {
-  if (!text) return null;
+  if (text === null || text === undefined) return null;
   if (typeof text !== 'string') {
     try {
       text = JSON.stringify(text);
@@ -38,13 +38,22 @@ function truncate(text, maxLength = 2000) {
 }
 
 /**
+ * Safely extract options from potentially malformed input
+ *
+ * @param {*} opts - Options (could be anything)
+ * @returns {Object} Safe options object
+ */
+function safeOptions(opts) {
+  if (opts === null || opts === undefined) return {};
+  if (typeof opts !== 'object' || Array.isArray(opts)) return {};
+  return opts;
+}
+
+/**
  * Create a traced SDK query function with full prompt/response visibility
  *
- * Unlike the old traceLLMCall which wrapped externally, this captures:
- * - Full prompt content (truncated for safety)
- * - Full response content
- * - Schema information
- * - Model details
+ * Uses STATIC name to avoid "name is required" errors.
+ * Dynamic context (label, model) is captured in metadata instead.
  *
  * @param {Function} sdkQueryFn - The raw SDK query implementation
  * @returns {Function} Traced SDK query function
@@ -56,51 +65,50 @@ function createTracedSdkQuery(sdkQueryFn) {
 
   return traceable(
     async function tracedSdkQuery(options) {
-      const { prompt, systemPrompt, model, label, jsonSchema } = options;
-      const startTime = Date.now();
-
-      try {
-        // Call the underlying SDK query
-        const result = await sdkQueryFn(options);
-
-        // Return result (traceable captures it automatically)
-        return result;
-      } catch (error) {
-        // Error is automatically captured by traceable
-        throw error;
-      }
+      const result = await sdkQueryFn(options);
+      return result;
     },
     {
-      // FIX: Use optional chaining to prevent undefined
-      name: (opts) => `claude-${opts?.label || opts?.model || 'query'}`,
+      // CRITICAL FIX: Use STATIC name to avoid timing issues
+      // The label and model are captured in metadata for context
+      name: 'claude-sdk-query',
       run_type: 'llm',
-      // Capture inputs for trace
-      process_inputs: (opts) => ({
-        prompt: truncate(opts?.prompt, 10000),
-        systemPrompt: truncate(opts?.systemPrompt, 2000),
-        model: opts?.model || 'sonnet',
-        label: opts?.label,
-        hasSchema: !!opts?.jsonSchema,
-        schemaName: opts?.jsonSchema?.title || opts?.jsonSchema?.$id
-      }),
-      // Capture metadata
-      metadata: (opts) => ({
-        model: opts?.model || 'sonnet',
-        hasAgents: !!opts?.agents,
-        agentNames: opts?.agents ? Object.keys(opts.agents) : [],
-        disableTools: opts?.disableTools,
-        timeout: opts?.timeoutMs,
-        project: getProject()
-      })
+
+      // Filter inputs to prevent massive traces
+      // LangSmith limit is 26MB per field
+      process_inputs: (opts) => {
+        const safe = safeOptions(opts);
+        return {
+          prompt: truncate(safe.prompt, 4000),
+          systemPrompt: truncate(safe.systemPrompt, 1000),
+          model: safe.model || 'sonnet',
+          label: safe.label || null,
+          hasSchema: !!safe.jsonSchema,
+          schemaName: safe.jsonSchema?.title || safe.jsonSchema?.$id || null
+        };
+      },
+
+      // Capture dynamic context in metadata
+      metadata: (opts) => {
+        const safe = safeOptions(opts);
+        return {
+          // Dynamic identifiers that would have been in name
+          label: safe.label || null,
+          model: safe.model || 'sonnet',
+          // Additional context
+          hasAgents: !!safe.agents,
+          agentNames: safe.agents ? Object.keys(safe.agents) : [],
+          disableTools: safe.disableTools || false,
+          timeout: safe.timeoutMs || null,
+          project: getProject()
+        };
+      }
     }
   );
 }
 
 /**
  * Legacy traceLLMCall wrapper for backwards compatibility
- *
- * This maintains the same signature as the old tracing.js traceLLMCall
- * but with enhanced visibility.
  *
  * @param {Function} llmFn - Async LLM function
  * @param {string} name - Call name for traces
@@ -111,34 +119,43 @@ function traceLLMCall(llmFn, name = 'claude-sdk-query') {
     return llmFn;
   }
 
+  // Validate name is a non-empty string
+  const safeName = (typeof name === 'string' && name.trim())
+    ? name.trim()
+    : 'claude-sdk-query';
+
   return traceable(
     llmFn,
     {
-      // FIX: Ensure name is always defined
-      name: name || 'claude-sdk-query',
+      // Static name (validated above)
+      name: safeName,
       run_type: 'llm',
-      // FIX: Use process_inputs instead of inputs, with truncation
-      process_inputs: (options) => ({
-        prompt: truncate(options?.prompt, 10000),
-        systemPrompt: truncate(options?.systemPrompt, 2000),
-        model: options?.model || 'sonnet',
-        label: options?.label,
-        hasSchema: !!options?.jsonSchema
-      }),
-      metadata: (options) => ({
-        model: options?.model || 'sonnet',
-        label: options?.label,
-        hasSchema: !!options?.jsonSchema,
-        hasAgents: !!options?.agents,
-        timeoutMs: options?.timeoutMs
-      })
+      process_inputs: (opts) => {
+        const safe = safeOptions(opts);
+        return {
+          prompt: truncate(safe.prompt, 4000),
+          systemPrompt: truncate(safe.systemPrompt, 1000),
+          model: safe.model || 'sonnet',
+          label: safe.label || null,
+          hasSchema: !!safe.jsonSchema
+        };
+      },
+      metadata: (opts) => {
+        const safe = safeOptions(opts);
+        return {
+          model: safe.model || 'sonnet',
+          label: safe.label || null,
+          hasSchema: !!safe.jsonSchema,
+          hasAgents: !!safe.agents,
+          timeoutMs: safe.timeoutMs || null
+        };
+      }
     }
   );
 }
 
 /**
  * Create a traced version of a batch processing function
- * Used for parallel SDK calls (photo analysis, evidence preprocessing)
  *
  * @param {Function} batchFn - Async batch function
  * @param {string} name - Batch operation name
@@ -149,13 +166,16 @@ function traceBatch(batchFn, name) {
     return batchFn;
   }
 
+  // Validate name
+  const safeName = (typeof name === 'string' && name.trim())
+    ? name.trim()
+    : 'batch-operation';
+
   return traceable(
     batchFn,
     {
-      // FIX: Ensure name is always defined
-      name: name || 'batch-operation',
+      name: safeName,
       run_type: 'chain',
-      // FIX: Use process_inputs to avoid capturing large arrays
       process_inputs: (items) => ({
         batchSize: Array.isArray(items) ? items.length : 'unknown',
         itemType: Array.isArray(items) && items[0] ? typeof items[0] : 'unknown'
@@ -171,5 +191,6 @@ module.exports = {
   createTracedSdkQuery,
   traceLLMCall,
   traceBatch,
-  truncate
+  truncate,
+  safeOptions
 };

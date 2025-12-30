@@ -71,6 +71,37 @@ const THEME_CONFIGS = {
       ],
       // Minimum roster coverage (advisory)
       minRosterMentions: 1  // Each roster member should be mentioned at least once
+    },
+
+    // Canonical character names (Commit 8.26)
+    // Maps first names to full canonical names for consistent attribution
+    // Source: docs/PIPELINE_DEEP_DIVE.md character roster
+    canonicalCharacters: {
+      // 20 Playable Characters (PCs)
+      'Sarah': 'Sarah Blackwood',
+      'Alex': 'Alex Reeves',
+      'James': 'James Whitman',
+      'Victoria': 'Victoria Kingsley',
+      'Derek': 'Derek Thorne',
+      'Ashe': 'Ashe Motoko',
+      'Diana': 'Diana Nilsson',
+      'Jessicah': 'Jessicah Kane',
+      'Morgan': 'Morgan Reed',
+      'Flip': 'Flip',  // No known last name
+      'Taylor': 'Taylor Chase',
+      'Leila': 'Leila Bishara',
+      'Rachel': 'Rachel Torres',
+      'Howie': 'Howie Sullivan',
+      'Kai': 'Kai Andersen',
+      'Jamie': 'Jamie "Volt" Woods',
+      'Sofia': 'Sofia Francisco',
+      'Oliver': 'Oliver Sterling',
+      'Skyler': 'Skyler Iyer',
+      'Tori': 'Tori Zhang',
+      // 3 NPCs
+      'Marcus': 'Marcus Blackwood',
+      'Nova': 'Nova',
+      'Blake': 'Blake'
     }
   }
 };
@@ -120,11 +151,29 @@ function getArticleRules(theme) {
   return THEME_CONFIGS[theme]?.articleRules || {};
 }
 
+/**
+ * Get canonical full name for a character first name (Commit 8.26)
+ *
+ * Used by extractOwnerName() in node-helpers.js to ensure consistent
+ * character attribution across the pipeline.
+ *
+ * @param {string} firstName - First name (e.g., 'Victoria')
+ * @param {string} theme - Theme name (default: 'journalist')
+ * @returns {string} Full canonical name (e.g., 'Victoria Kingsley') or firstName if not found
+ */
+function getCanonicalName(firstName, theme = 'journalist') {
+  if (!firstName) return firstName;
+  // Normalize to title case for lookup
+  const normalized = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+  return THEME_CONFIGS[theme]?.canonicalCharacters?.[normalized] || firstName;
+}
+
 module.exports = {
   THEME_CONFIGS,
   getThemeNPCs,
   getThemeConfig,
   isValidTheme,
   getOutlineRules,
-  getArticleRules
+  getArticleRules,
+  getCanonicalName
 };

@@ -27,26 +27,47 @@ function traceNode(nodeFn, name, options = {}) {
 
   const { stateFields = [] } = options;
 
+  // CRITICAL FIX: Ensure name is ALWAYS a valid non-empty string
+  // This prevents LangSmith "name is required" errors
+  const safeName = (name && typeof name === 'string' && name.trim())
+    ? name.trim()
+    : 'unnamed-node';
+
   return traceable(
     async function tracedNode(state, config) {
       return await nodeFn(state, config);
     },
     {
-      // FIX: Ensure name is always defined
-      name: name || 'unnamed-node',
+      // Use the pre-validated safe name (not a function that could fail)
+      name: safeName,
       run_type: 'chain',
+
       // CRITICAL FIX: Filter inputs to prevent sending 50MB+ state objects to LangSmith
       // Without this, traceable captures ALL function arguments (entire state)
       // LangSmith limit is 26MB per field
-      // The errors were: "field size 54148295 exceeds maximum allowed size of 26214400 bytes"
-      process_inputs: (state) => ({
-        // Only send the lightweight snapshot, not the full state
-        stateSnapshot: extractStateSnapshot(state, stateFields)
-      }),
-      metadata: (state) => ({
-        node: name,
-        ...extractStateSnapshot(state, stateFields)
-      })
+      process_inputs: (state) => {
+        try {
+          const snapshot = extractStateSnapshot(state, stateFields);
+          return { stateSnapshot: snapshot };
+        } catch (err) {
+          // If extraction fails, return minimal info
+          return {
+            stateSnapshot: { error: 'Failed to extract snapshot', message: err.message }
+          };
+        }
+      },
+
+      // Metadata also uses snapshot to avoid large objects
+      metadata: (state) => {
+        try {
+          return {
+            node: safeName,
+            ...extractStateSnapshot(state, stateFields)
+          };
+        } catch (err) {
+          return { node: safeName, error: 'Failed to extract metadata' };
+        }
+      }
     }
   );
 }

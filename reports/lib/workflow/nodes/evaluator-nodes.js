@@ -29,7 +29,10 @@
  */
 
 const { PHASES, REVISION_CAPS } = require('../state');
-const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
+// NOTE: CHECKPOINT_TYPES still imported for getCheckpointType (used in routing)
+// checkpointInterrupt removed in Commit 8.26 (SRP - moved to checkpoint-nodes.js)
+const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
+const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 
@@ -708,17 +711,17 @@ function createEvaluator(phase, options = {}) {
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
     const revisionCap = getRevisionCap(phase);
-    const checkpointType = getCheckpointType(phase);
+    // NOTE: checkpointType removed in Commit 8.26 (SRP - checkpoints moved to checkpoint-nodes.js)
     const currentRevisions = state[revisionCountField] || 0;
 
-    // Skip logic 1: If user has already approved this phase (downstream data exists)
+    // Skip logic 1: If user has already approved this phase (checkpoint approval flag set)
     // For arcs: selectedArcs means user approved arc selection
-    // For outline: contentBundle means user approved outline and article was generated
-    // For article: assembledHtml means user approved article
+    // For outline: outlineApproved means user approved outline at checkpoint
+    // For article: articleApproved means user approved article at checkpoint
     const hasUserApproved = (
       (phase === 'arcs' && state.selectedArcs && state.selectedArcs.length > 0) ||
-      (phase === 'outline' && state.contentBundle) ||
-      (phase === 'article' && state.assembledHtml)
+      (phase === 'outline' && state.outlineApproved === true) ||
+      (phase === 'article' && state.articleApproved === true)
     );
     if (hasUserApproved) {
       console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - user already approved (downstream data exists)`);
@@ -851,23 +854,8 @@ function createEvaluator(phase, options = {}) {
       if (isReady) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Ready for human review (score: ${evaluation.overallScore})`);
 
-        // Build data for checkpoint based on phase
-        const checkpointData = phase === 'arcs'
-          ? { narrativeArcs: state.narrativeArcs, evaluationHistory: historyEntry }
-          : phase === 'outline'
-          ? { outline: state.outline, evaluationHistory: historyEntry }
-          : { contentBundle: state.contentBundle, evaluationHistory: historyEntry };
-
-        // Build skip condition - check if user has already approved
-        const skipCondition = (
-          (phase === 'arcs' && state.selectedArcs?.length > 0) ||
-          (phase === 'outline' && state.contentBundle) ||
-          (phase === 'article' && state.assembledHtml)
-        ) ? true : null;
-
-        // Interrupt for human approval
-        checkpointInterrupt(checkpointType, checkpointData, skipCondition);
-
+        // Commit 8.26 (SRP): Checkpoint logic moved to dedicated checkpoint nodes
+        // Evaluator just returns evaluationHistory; graph routes to checkpoint node
         return {
           evaluationHistory: historyEntry,
           currentPhase: phaseConstant
@@ -887,23 +875,8 @@ function createEvaluator(phase, options = {}) {
           escalationReason: `Reached revision cap (${revisionCap}) with issues: ${issuesText}`
         };
 
-        // Build data for escalation checkpoint
-        const checkpointData = phase === 'arcs'
-          ? { narrativeArcs: state.narrativeArcs, evaluationHistory: escalatedHistoryEntry, escalated: true }
-          : phase === 'outline'
-          ? { outline: state.outline, evaluationHistory: escalatedHistoryEntry, escalated: true }
-          : { contentBundle: state.contentBundle, evaluationHistory: escalatedHistoryEntry, escalated: true };
-
-        // Build skip condition - check if user has already approved
-        const skipCondition = (
-          (phase === 'arcs' && state.selectedArcs?.length > 0) ||
-          (phase === 'outline' && state.contentBundle) ||
-          (phase === 'article' && state.assembledHtml)
-        ) ? true : null;
-
-        // Interrupt for human decision (escalation)
-        checkpointInterrupt(checkpointType, checkpointData, skipCondition);
-
+        // Commit 8.26 (SRP): Checkpoint logic moved to dedicated checkpoint nodes
+        // Evaluator just returns escalated evaluationHistory; graph routes to checkpoint node
         return {
           evaluationHistory: escalatedHistoryEntry,
           currentPhase: phaseConstant
@@ -927,6 +900,11 @@ function createEvaluator(phase, options = {}) {
       };
 
     } catch (error) {
+      // GraphInterrupt is intentional - let it propagate to LangGraph executor
+      if (error instanceof GraphInterrupt) {
+        throw error;
+      }
+
       console.error(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Error:`, error.message);
 
       return {

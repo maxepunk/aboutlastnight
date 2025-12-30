@@ -5,7 +5,7 @@
  * Uses native LangGraph interrupt() for human checkpoints with DEDICATED
  * checkpoint nodes (SRP - separate data from checkpoints).
  *
- * Graph Flow (27+ nodes):
+ * Graph Flow (30+ nodes - Commit 8.26: SRP checkpoint separation):
  *
  * PHASE 0: Input Parsing (conditional entry)
  * START → [conditional] → parseRawInput OR initializeSession
@@ -29,14 +29,17 @@
  * → curateEvidenceBundle [interrupt: evidence-photos] → processRescuedItems
  *
  * PHASE 2: Arc Analysis (Player-Focus-Guided)
- * → analyzeArcs → validateArcs → evaluateArcs [interrupt: arc-selection]
- * → [revision loop] → buildArcEvidencePackages
+ * → analyzeArcs → validateArcs → evaluateArcs
+ * → checkpointArcSelection [interrupt: arc-selection] → buildArcEvidencePackages
+ * → [revision loop]
  *
  * PHASE 3: Outline Generation
- * → generateOutline → evaluateOutline [interrupt: outline] → [revision loop]
+ * → generateOutline → evaluateOutline
+ * → checkpointOutline [interrupt: outline] → [revision loop]
  *
  * PHASE 4: Article Generation
- * → generateContentBundle → evaluateArticle [interrupt: article] → [revision loop]
+ * → generateContentBundle → evaluateArticle
+ * → checkpointArticle [interrupt: article] → [revision loop]
  * → validateContentBundle
  *
  * PHASE 5: Assembly
@@ -150,6 +153,38 @@ function routeArticleEvaluation(state) {
 function routeSchemaValidation(state) {
   const hasErrors = state.errors && state.errors.some(e => e.type === 'schema-validation');
   return hasErrors ? 'error' : 'continue';
+}
+
+/**
+ * Route function for arc validation results (Commit 8.27)
+ * Routes based on programmatic structural checks BEFORE expensive evaluation.
+ * Returns 'evaluate' if structural checks pass, 'revise' if they fail.
+ *
+ * @param {Object} state - Current graph state with _arcValidation
+ * @returns {string} 'evaluate' or 'revise'
+ */
+function routeArcValidation(state) {
+  const validation = state._arcValidation;
+
+  // Default to evaluate if no validation data
+  if (!validation) {
+    console.log('[routeArcValidation] No validation data, proceeding to evaluation');
+    return 'evaluate';
+  }
+
+  if (validation.structuralPassed === false) {
+    // Check revision cap before routing to revise
+    const atCap = (state.arcRevisionCount || 0) >= REVISION_CAPS.ARCS;
+    if (atCap) {
+      console.log('[routeArcValidation] Structural issues but at revision cap, proceeding to evaluation');
+      return 'evaluate';  // Let evaluator handle escalation
+    }
+    console.log(`[routeArcValidation] Structural issues detected (${validation.missingRoster?.length || 0} missing roster), routing to revision`);
+    return 'revise';
+  }
+
+  console.log('[routeArcValidation] Structural checks passed, proceeding to evaluation');
+  return 'evaluate';
 }
 
 // NOTE: routeArcSelectionApproval, routeOutlineApproval, routeArticleApproval
@@ -300,8 +335,11 @@ function createGraphBuilder() {
   // Validates keyEvidence IDs exist in bundle, characterPlacements use roster names
   builder.addNode('validateArcs', nodes.validateArcStructure);
 
-  // Arc evaluation - interrupt() happens here for arc-selection checkpoint
+  // Arc evaluation (no interrupt - SRP: checkpoint separate)
   builder.addNode('evaluateArcs', nodes.evaluateArcs);
+
+  // Arc selection checkpoint - interrupt() here (Commit 8.26: SRP separation)
+  builder.addNode('checkpointArcSelection', nodes.checkpointArcSelection);
 
   // Arc revision handling
   // NOTE: setArcSelectionCheckpoint removed - interrupt() now in evaluateArcs
@@ -323,8 +361,11 @@ function createGraphBuilder() {
 
   builder.addNode('generateOutline', nodes.generateOutline);
   // NOTE: validateOutlineStructure removed in Commit 8.23 - trust Opus evaluators instead
-  // Outline evaluation - interrupt() happens here for outline checkpoint
+  // Outline evaluation (no interrupt - SRP: checkpoint separate)
   builder.addNode('evaluateOutline', nodes.evaluateOutline);
+
+  // Outline checkpoint - interrupt() here (Commit 8.26: SRP separation)
+  builder.addNode('checkpointOutline', nodes.checkpointOutline);
   // NOTE: setOutlineCheckpoint removed - interrupt() now in evaluateOutline
   builder.addNode('incrementOutlineRevision', incrementOutlineRevision);
   // Revision node - uses buildRevisionContext helper for targeted fixes
@@ -336,8 +377,11 @@ function createGraphBuilder() {
 
   builder.addNode('generateContentBundle', nodes.generateContentBundle);
   // NOTE: validateArticleContent removed in Commit 8.23 - trust Opus evaluators instead
-  // Article evaluation - interrupt() happens here for article checkpoint
+  // Article evaluation (no interrupt - SRP: checkpoint separate)
   builder.addNode('evaluateArticle', nodes.evaluateArticle);
+
+  // Article checkpoint - interrupt() here (Commit 8.26: SRP separation)
+  builder.addNode('checkpointArticle', nodes.checkpointArticle);
   // NOTE: setArticleCheckpoint removed - interrupt() now in evaluateArticle
   builder.addNode('incrementArticleRevision', incrementArticleRevision);
   // Revision node - uses buildRevisionContext helper for targeted fixes
@@ -427,19 +471,29 @@ function createGraphBuilder() {
   // ADD EDGES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
   // ═══════════════════════════════════════════════════════
 
-  // Arc analysis → validation → evaluation
+  // Arc analysis → validation → [conditional routing]
   builder.addEdge('analyzeArcs', 'validateArcs');
-  builder.addEdge('validateArcs', 'evaluateArcs');
 
-  // Arc evaluation routing (interrupt() in evaluateArcs handles arc-selection checkpoint)
-  // checkpoint: evaluation ready, proceed to arc evidence packages
-  // revise: needs work, loop back to analyzeArcs
+  // Arc validation routing (Commit 8.27: short-circuit expensive evaluator for structural issues)
+  // evaluate: structural checks passed, proceed to Opus evaluation for quality judgment
+  // revise: structural issues detected (missing roster, no accusation arc), immediate revision
+  builder.addConditionalEdges('validateArcs', routeArcValidation, {
+    evaluate: 'evaluateArcs',
+    revise: 'incrementArcRevision'  // Skip expensive evaluation, go directly to revision
+  });
+
+  // Arc evaluation routing (Commit 8.26: SRP - checkpoint separate from evaluation)
+  // checkpoint: evaluation ready, proceed to checkpoint node for human approval
+  // revise: needs work, loop back for revision
   // error: fatal error, end workflow
   builder.addConditionalEdges('evaluateArcs', routeArcEvaluation, {
-    checkpoint: 'buildArcEvidencePackages',
+    checkpoint: 'checkpointArcSelection',  // Route to checkpoint node, not directly to next phase
     revise: 'incrementArcRevision',
     error: END
   });
+
+  // Checkpoint → next phase (after human approval)
+  builder.addEdge('checkpointArcSelection', 'buildArcEvidencePackages');
 
   // Revision loop: increment → revise → validate (NOT back to analyzeArcs)
   // reviseArcs receives previous output + feedback for TARGETED fixes
@@ -456,15 +510,18 @@ function createGraphBuilder() {
 
   builder.addEdge('generateOutline', 'evaluateOutline');
 
-  // Outline evaluation routing (interrupt() in evaluateOutline handles outline checkpoint)
-  // checkpoint: evaluation ready, proceed to article generation
-  // revise: needs work, loop back to generateOutline
+  // Outline evaluation routing (Commit 8.26: SRP - checkpoint separate from evaluation)
+  // checkpoint: evaluation ready, proceed to checkpoint node for human approval
+  // revise: needs work, loop back for revision
   // error: fatal error, end workflow
   builder.addConditionalEdges('evaluateOutline', routeOutlineEvaluation, {
-    checkpoint: 'generateContentBundle',
+    checkpoint: 'checkpointOutline',  // Route to checkpoint node, not directly to next phase
     revise: 'incrementOutlineRevision',
     error: END
   });
+
+  // Checkpoint → next phase (after human approval)
+  builder.addEdge('checkpointOutline', 'generateContentBundle');
 
   // Revision loop: increment → revise → evaluate (NOT back to generateOutline)
   // reviseOutline receives previous output + feedback for TARGETED fixes
@@ -478,15 +535,18 @@ function createGraphBuilder() {
 
   builder.addEdge('generateContentBundle', 'evaluateArticle');
 
-  // Article evaluation routing (interrupt() in evaluateArticle handles article checkpoint)
-  // checkpoint: evaluation ready, proceed to schema validation
-  // revise: needs work, loop back to generateContentBundle
+  // Article evaluation routing (Commit 8.26: SRP - checkpoint separate from evaluation)
+  // checkpoint: evaluation ready, proceed to checkpoint node for human approval
+  // revise: needs work, loop back for revision
   // error: fatal error, end workflow
   builder.addConditionalEdges('evaluateArticle', routeArticleEvaluation, {
-    checkpoint: 'validateContentBundle',
+    checkpoint: 'checkpointArticle',  // Route to checkpoint node, not directly to next phase
     revise: 'incrementArticleRevision',
     error: END
   });
+
+  // Checkpoint → next phase (after human approval)
+  builder.addEdge('checkpointArticle', 'validateContentBundle');
 
   // Revision loop: increment → revise → evaluate (NOT back to generateContentBundle)
   // reviseContentBundle receives previous output + feedback for TARGETED fixes

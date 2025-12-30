@@ -16,6 +16,8 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { PHASES } = require('../state');
 const { createTemplateAssembler } = require('../../template-assembler');
 const { traceNode } = require('../../observability');
@@ -101,10 +103,11 @@ function createStubAssembler() {
  *
  * Takes validated ContentBundle and applies theme-specific templates
  * to produce final HTML output using Handlebars templates.
+ * Also copies session photos and saves HTML to outputs directory.
  *
  * @param {Object} state - Current state with contentBundle, theme, sessionId
  * @param {Object} config - Graph config with optional configurable.templateAssembler
- * @returns {Object} Partial state update with assembledHtml, currentPhase
+ * @returns {Object} Partial state update with assembledHtml, outputPath, currentPhase
  */
 async function assembleHtml(state, config) {
   const theme = state.theme || config?.configurable?.theme || 'journalist';
@@ -114,8 +117,44 @@ async function assembleHtml(state, config) {
   const sessionId = state.sessionId || config?.configurable?.sessionId;
   const html = await assembler.assemble(state.contentBundle, { sessionId });
 
+  // Determine base directory (configurable for testing)
+  const baseDir = config?.configurable?.baseDir || path.join(__dirname, '..', '..', '..');
+  const outputDir = path.join(baseDir, 'outputs');
+
+  // Ensure outputs directory exists
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  // Copy session photos to outputs/sessionphotos/{sessionId}/
+  let photosCopied = 0;
+  if (sessionId) {
+    const sourcePhotosDir = path.join(baseDir, 'data', sessionId, 'photos');
+    const destPhotosDir = path.join(outputDir, 'sessionphotos', sessionId);
+
+    if (fs.existsSync(sourcePhotosDir)) {
+      fs.mkdirSync(destPhotosDir, { recursive: true });
+      const photos = fs.readdirSync(sourcePhotosDir);
+      for (const photo of photos) {
+        fs.copyFileSync(
+          path.join(sourcePhotosDir, photo),
+          path.join(destPhotosDir, photo)
+        );
+      }
+      photosCopied = photos.length;
+      console.log(`[assembleHtml] Copied ${photosCopied} photos to ${destPhotosDir}`);
+    }
+  }
+
+  // Save HTML to outputs/report-{sessionId}.html
+  const outputPath = path.join(outputDir, `report-${sessionId}.html`);
+  fs.writeFileSync(outputPath, html);
+  console.log(`[assembleHtml] Saved HTML to ${outputPath}`);
+
   return {
     assembledHtml: html,
+    outputPath,
+    photosCopied,
     currentPhase: PHASES.COMPLETE  // Final phase - signals pipeline completion
   };
 }

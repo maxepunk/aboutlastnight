@@ -257,6 +257,134 @@ async function joinParallelBranches(state, config) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// EVALUATION CHECKPOINT NODES
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// These checkpoint nodes separate the interrupt logic from expensive evaluation.
+// Evaluator nodes now ONLY evaluate and return evaluationHistory.
+// These checkpoint nodes ONLY call interrupt() - no computation.
+//
+// This follows Single Responsibility Principle (SRP) and prevents the bug where
+// evaluationHistory was lost when checkpointInterrupt() threw before return.
+
+/**
+ * Arc Selection Checkpoint
+ *
+ * Pauses for user to select which narrative arcs to include in the article.
+ * Requires: state.narrativeArcs (from evaluateArcs with ready=true)
+ *
+ * @param {Object} state - Current state with narrativeArcs
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with selectedArcs
+ */
+async function checkpointArcSelection(state, config) {
+  // Skip if already have selection (resume case)
+  const skipCondition = state.selectedArcs?.length > 0
+    ? state.selectedArcs
+    : null;
+
+  const resumeValue = checkpointInterrupt(
+    CHECKPOINT_TYPES.ARC_SELECTION,
+    {
+      narrativeArcs: state.narrativeArcs,
+      evaluationHistory: state.evaluationHistory
+    },
+    skipCondition
+  );
+
+  // If resumed with selection, capture it in state return
+  if (resumeValue?.selectedArcs && !skipCondition) {
+    console.log(`[checkpointArcSelection] Captured selection from resume: ${resumeValue.selectedArcs.length} arcs`);
+    return {
+      selectedArcs: resumeValue.selectedArcs,
+      currentPhase: PHASES.ARC_SELECTION
+    };
+  }
+
+  return {
+    currentPhase: PHASES.ARC_SELECTION
+  };
+}
+
+/**
+ * Outline Checkpoint
+ *
+ * Pauses for user to approve the article outline.
+ * Requires: state.outline (from evaluateOutline with ready=true)
+ *
+ * @param {Object} state - Current state with outline
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with outlineApproved
+ */
+async function checkpointOutline(state, config) {
+  // Skip if already approved (resume case)
+  const skipCondition = state.outlineApproved === true
+    ? true
+    : null;
+
+  const resumeValue = checkpointInterrupt(
+    CHECKPOINT_TYPES.OUTLINE,
+    {
+      outline: state.outline,
+      evaluationHistory: state.evaluationHistory
+    },
+    skipCondition
+  );
+
+  // If resumed with approval, capture it in state return
+  if (resumeValue?.outline === true && !skipCondition) {
+    console.log(`[checkpointOutline] Captured approval from resume`);
+    return {
+      outlineApproved: true,
+      currentPhase: PHASES.OUTLINE_CHECKPOINT
+    };
+  }
+
+  return {
+    currentPhase: PHASES.OUTLINE_CHECKPOINT
+  };
+}
+
+/**
+ * Article Checkpoint
+ *
+ * Pauses for user to approve the final article content.
+ * Requires: state.contentBundle (from evaluateArticle with ready=true)
+ *
+ * @param {Object} state - Current state with contentBundle
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with articleApproved
+ */
+async function checkpointArticle(state, config) {
+  // Skip if already approved (resume case)
+  const skipCondition = state.articleApproved === true
+    ? true
+    : null;
+
+  const resumeValue = checkpointInterrupt(
+    CHECKPOINT_TYPES.ARTICLE,
+    {
+      contentBundle: state.contentBundle,
+      evaluationHistory: state.evaluationHistory
+    },
+    skipCondition
+  );
+
+  // If resumed with approval, capture it in state return
+  if (resumeValue?.article === true && !skipCondition) {
+    console.log(`[checkpointArticle] Captured approval from resume`);
+    return {
+      articleApproved: true,
+      currentPhase: PHASES.ARTICLE_CHECKPOINT
+    };
+  }
+
+  return {
+    currentPhase: PHASES.ARTICLE_CHECKPOINT
+  };
+}
+
 module.exports = {
   // Checkpoint nodes (wrapped with LangSmith tracing)
   checkpointPaperEvidence: traceNode(checkpointPaperEvidence, 'checkpointPaperEvidence', {
@@ -280,6 +408,17 @@ module.exports = {
     stateFields: ['memoryTokens', 'paperEvidence', 'sessionPhotos', 'whiteboardPhotoPath']
   }),
 
+  // Evaluation checkpoint nodes (SRP: separate from expensive evaluation)
+  checkpointArcSelection: traceNode(checkpointArcSelection, 'checkpointArcSelection', {
+    stateFields: ['narrativeArcs', 'selectedArcs', 'evaluationHistory']
+  }),
+  checkpointOutline: traceNode(checkpointOutline, 'checkpointOutline', {
+    stateFields: ['outline', 'outlineApproved', 'evaluationHistory']
+  }),
+  checkpointArticle: traceNode(checkpointArticle, 'checkpointArticle', {
+    stateFields: ['contentBundle', 'articleApproved', 'evaluationHistory']
+  }),
+
   // Export for testing
   _testing: {
     checkpointPaperEvidence,
@@ -287,6 +426,9 @@ module.exports = {
     checkpointPreCuration,
     checkpointAwaitRoster,
     checkpointAwaitContext,
-    joinParallelBranches
+    joinParallelBranches,
+    checkpointArcSelection,
+    checkpointOutline,
+    checkpointArticle
   }
 };

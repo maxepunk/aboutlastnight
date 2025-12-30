@@ -3451,16 +3451,15 @@ async function runWalkthrough() {
     if (currentData.currentPhase === 'complete') {
       header('Pipeline Complete!');
 
+      // Server handles HTML saving and photo copying - just log the result
+      if (currentData.outputPath) {
+        console.log(color(`HTML saved to: ${currentData.outputPath}`, 'green'));
+      }
+      if (currentData.photosCopied !== undefined) {
+        console.log(color(`Photos copied: ${currentData.photosCopied}`, 'cyan'));
+      }
       if (currentData.assembledHtml) {
-        // Save HTML to file
-        const outputDir = path.join(__dirname, '..', 'outputs');
-        if (!fs.existsSync(outputDir)) {
-          fs.mkdirSync(outputDir, { recursive: true });
-        }
-        const outputPath = path.join(outputDir, `report-${sessionId}-${Date.now()}.html`);
-        fs.writeFileSync(outputPath, currentData.assembledHtml);
-        console.log(color(`HTML saved to: ${outputPath}`, 'green'));
-        console.log(`Length: ${currentData.assembledHtml.length} characters`);
+        console.log(`HTML length: ${currentData.assembledHtml.length} characters`);
       }
 
       if (currentData.validationResults) {

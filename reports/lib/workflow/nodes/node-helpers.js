@@ -9,6 +9,7 @@
 
 const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
+const { getCanonicalName } = require('../../theme-config');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NPC VALIDATION
@@ -209,6 +210,38 @@ function ensureArray(value) {
 }
 
 /**
+ * Extract full content from evidence item with comprehensive fallback chain
+ *
+ * DRY extraction from routeTokensByDisposition and buildArcEvidencePackages.
+ * Used to ensure evidence cards and pull quotes have verbatim content available.
+ *
+ * Fallback priority:
+ * 1. fullContent (preprocessed field)
+ * 2. fullDescription (memory tokens from Notion)
+ * 3. rawData.fullDescription (nested memory token data)
+ * 4. content (paper evidence)
+ * 5. rawData.content (nested paper evidence data)
+ * 6. rawData.description (legacy field)
+ * 7. description (legacy field)
+ * 8. summary (last resort)
+ *
+ * @param {Object} item - Evidence item (token or paper evidence)
+ * @returns {string} Full content string (never null/undefined)
+ */
+function extractFullContent(item) {
+  if (!item) return '';
+  return item.fullContent ||
+         item.fullDescription ||
+         item.rawData?.fullDescription ||
+         item.content ||
+         item.rawData?.content ||
+         item.rawData?.description ||
+         item.description ||
+         item.summary ||
+         '';
+}
+
+/**
  * Synthesize playerFocus from session config and director notes
  *
  * SINGLE SOURCE OF TRUTH for playerFocus structure.
@@ -324,11 +357,10 @@ function routeTokensByDisposition(tokens) {
         sourceType: 'memory-token',
         owner: t.ownerLogline,
         summary: t.summary,
-        // PHASE 1 FIX: Use preprocessed fullContent for verbatim quoting
-        // Fallback chain: fullDescription (memory tokens) > fullContent > content > description > summary
-        fullContent: t.fullContent || t.fullDescription || t.rawData?.fullDescription || t.rawData?.content || t.rawData?.description || t.summary || '',
+        // DRY: Use extractFullContent() helper for verbatim quoting
+        fullContent: extractFullContent(t),
         // Legacy content field kept for backwards compatibility
-        content: t.fullDescription || t.rawData?.fullDescription || t.rawData?.content || t.rawData?.description || t.summary || '',
+        content: extractFullContent(t),
         characterRefs: t.characterRefs ?? [],
         narrativeTimeline: t.narrativeTimelineContext,
         tags: t.tags ?? [],
@@ -353,14 +385,20 @@ function routeTokensByDisposition(tokens) {
 /**
  * Extract owner name from logline for compact summaries
  *
+ * Commit 8.26: Now returns canonical full name (e.g., "Alex Reeves" instead of "Alex")
+ * to ensure consistent character attribution across the pipeline.
+ *
  * @param {string} ownerLogline - e.g., "Alex's memory of..." or "ALEX: ..."
- * @returns {string} Just the name (e.g., "Alex")
+ * @param {string} theme - Theme name for canonical lookup (default: 'journalist')
+ * @returns {string} Canonical full name (e.g., "Alex Reeves") or first name if not found
  */
-function extractOwnerName(ownerLogline) {
+function extractOwnerName(ownerLogline, theme = 'journalist') {
   if (!ownerLogline) return 'Unknown';
-  // Extract name from "Alex's memory of..." or "ALEX: ..."
+  // Extract first name from "Alex's memory of..." or "ALEX: ..."
   const match = ownerLogline.match(/^(\w+)/);
-  return match ? match[1] : ownerLogline.substring(0, 20);
+  const firstName = match ? match[1] : ownerLogline.substring(0, 20);
+  // Map to canonical full name using theme-config
+  return getCanonicalName(firstName, theme);
 }
 
 /**
@@ -531,7 +569,7 @@ function buildValidEvidenceIds(evidenceBundle) {
 
   // NOTE: Buried transactions and relationships are intentionally EXCLUDED from valid IDs
   // They are Layer 2 evidence - can be discussed in analysisNotes but NOT cited in keyEvidence
-  // This matches the prompt guidance in buildPlayerFocusGuidedPrompt() and the evaluator's check
+  // This matches the prompt guidance in buildCoreArcPrompt() and the evaluator's check
   // See: evidenceIdValidity criterion in evaluator-nodes.js
 
   console.log(`[buildValidEvidenceIds] Extracted ${ids.size} valid evidence IDs`);
@@ -809,6 +847,7 @@ module.exports = {
   validateRequiredFields,
   formatIssuesForMessage,
   ensureArray,
+  extractFullContent,
   synthesizePlayerFocus,
 
   // Evidence curation helpers (Commit 8.11+)

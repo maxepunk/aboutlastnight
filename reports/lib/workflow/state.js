@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (45 total - includes revision context):
+ * State Fields (50 total - includes revision context):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus
@@ -19,7 +19,7 @@
  *   - Preprocessed Data: preprocessedEvidence (Commit 8.5)
  *   - Curated Data: evidenceBundle
  *   - Arc Specialists (8.6): specialistAnalyses
- *   - Analysis: narrativeArcs, selectedArcs, _arcAnalysisCache
+ *   - Analysis: narrativeArcs, selectedArcs, heroImage, _arcAnalysisCache
  *   - Evaluation (8.6): evaluationHistory
  *   - Generation: outline, contentBundle
  *   - Supervisor (8.6): supervisorNarrativeCompass
@@ -280,6 +280,24 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Outline checkpoint approval flag (Commit 8.26 - SRP checkpoint separation)
+   * Set to true when user approves outline at checkpoint
+   */
+  outlineApproved: Annotation({
+    reducer: replaceReducer,
+    default: () => false
+  }),
+
+  /**
+   * Article checkpoint approval flag (Commit 8.26 - SRP checkpoint separation)
+   * Set to true when user approves article at checkpoint
+   */
+  articleApproved: Annotation({
+    reducer: replaceReducer,
+    default: () => false
+  }),
+
+  /**
    * Summary of preprocessed data for user review (Phase 4f)
    * Contains counts of exposed/buried items, photos, etc.
    */
@@ -329,6 +347,16 @@ const ReportStateAnnotation = Annotation.Root({
   selectedArcs: Annotation({
     reducer: replaceReducer,
     default: () => []
+  }),
+
+  /**
+   * Confirmed hero image filename for article generation
+   * Set by generateOutline, consumed by generateContentBundle
+   * Single source of truth - prevents duplicate hero/inline photos
+   */
+  heroImage: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   }),
 
   /**
@@ -409,6 +437,18 @@ const ReportStateAnnotation = Annotation.Root({
   validationResults: Annotation({
     reducer: replaceReducer,
     default: () => null
+  }),
+
+  /** Path to saved HTML output file */
+  outputPath: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /** Number of photos copied to output directory */
+  photosCopied: Annotation({
+    reducer: replaceReducer,
+    default: () => 0
   }),
 
   // ═══════════════════════════════════════════════════════
@@ -524,7 +564,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (45 fields after revision context)
+ * Get default state with all fields initialized (50 fields after revision context)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -560,6 +600,9 @@ function getDefaultState() {
     // Pre-curation checkpoint (Phase 4f)
     preCurationApproved: false,
     preCurationSummary: null,
+    // Checkpoint approvals (Commit 8.26 - SRP separation)
+    outlineApproved: false,
+    articleApproved: false,
     // Curated data
     evidenceBundle: null,
     // Arc specialists (Commit 8.6)
@@ -567,6 +610,7 @@ function getDefaultState() {
     // Analysis results
     narrativeArcs: [],
     selectedArcs: [],
+    heroImage: null,  // Confirmed hero image filename for article generation
     arcEvidencePackages: [],  // Phase 1 Fix: per-arc evidence with fullContent
     _arcAnalysisCache: null,
     // Evaluation (Commit 8.6)
@@ -579,6 +623,8 @@ function getDefaultState() {
     // Final outputs
     assembledHtml: null,
     validationResults: null,
+    outputPath: null,
+    photosCopied: 0,
     // Control flow
     currentPhase: 'init',
     voiceRevisionCount: 0,  // @deprecated
@@ -641,17 +687,20 @@ const PHASES = {
   ARC_SPECIALISTS: '2.1',           // Parallel domain specialists (financial, behavioral, victimization)
   ARC_SYNTHESIS: '2.2',             // Synthesizer combines specialist outputs
   ARC_EVALUATION: '2.3',            // Evaluator checks arcs
+  ARC_SELECTION: '2.35',            // Checkpoint: user selects arcs (Commit 8.26 - SRP separation)
   BUILD_ARC_PACKAGES: '2.4',        // Phase 1 Fix: Build per-arc evidence packages after selection
   ANALYZE_ARCS: '2',                // @deprecated - use sub-phases
 
   // Outline sub-phases (Commit 8.6)
   OUTLINE_GENERATION: '3.1',
   OUTLINE_EVALUATION: '3.2',
+  OUTLINE_CHECKPOINT: '3.25',       // Checkpoint: user approves outline (Commit 8.26 - SRP separation)
   GENERATE_OUTLINE: '3',            // @deprecated - use sub-phases
 
   // Article sub-phases (Commit 8.6)
   ARTICLE_GENERATION: '4.1',
   ARTICLE_EVALUATION: '4.2',
+  ARTICLE_CHECKPOINT: '4.25',       // Checkpoint: user approves article (Commit 8.26 - SRP separation)
   GENERATE_CONTENT: '4',            // @deprecated - use sub-phases
   VALIDATE_SCHEMA: '4.3',           // Moved from 4.1
   REVISE_CONTENT: '4.4',            // Moved from 4.2
@@ -702,7 +751,7 @@ const ROLLBACK_CLEARS = {
     // Arc analysis
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
     // Generation
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
     // Evaluation history
     'evaluationHistory'
   ],
@@ -713,7 +762,7 @@ const ROLLBACK_CLEARS = {
     'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -723,7 +772,7 @@ const ROLLBACK_CLEARS = {
     'characterIdMappings',
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -733,7 +782,7 @@ const ROLLBACK_CLEARS = {
     // Note: photoAnalyses preserved - only mappings need re-entry
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -743,7 +792,7 @@ const ROLLBACK_CLEARS = {
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -751,27 +800,27 @@ const ROLLBACK_CLEARS = {
   'evidence-and-photos': [
     'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
   // Phase 2.3: Arc selection - most common rollback point
   'arc-selection': [
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'outline', 'contentBundle',
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved',
     'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
   // Phase 3.2: Outline
   'outline': [
-    'outline', 'contentBundle', 'assembledHtml', 'validationResults'
+    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults'
     // Note: evaluationHistory preserved - may contain useful arc evals
   ],
 
   // Phase 4.2: Article
   'article': [
-    'contentBundle', 'assembledHtml', 'validationResults'
+    'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults'
   ]
 };
 
@@ -820,7 +869,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 37 (after interrupt() migration)
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 50
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

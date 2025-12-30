@@ -46,8 +46,14 @@ const {
   getAntiPatternsSummary
 } = require('../reference-loader');
 
-// Commit 8.15: Import player-focus-guided architecture
+// Commit 8.28: Import split-call architecture
 const {
+  // Commit 8.28: Split-call architecture (preferred)
+  CORE_ARC_SYSTEM_PROMPT,
+  CORE_ARC_SCHEMA,
+  INTERWEAVING_SYSTEM_PROMPT,
+  INTERWEAVING_SCHEMA,
+  // Commit 8.15: Legacy player-focus-guided (deprecated, kept for reviseArcs)
   PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
   PLAYER_FOCUS_GUIDED_SCHEMA,
   // Commit 8.12: Legacy parallel architecture (kept for comparison)
@@ -62,6 +68,510 @@ const {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DRY HELPERS (Commit 8.28)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Extract player focus context from state (DRY helper)
+ *
+ * Commit 8.28: Shared extraction used by both core arc and revision prompts
+ *
+ * @param {Object} state - Current workflow state
+ * @returns {Object} Player focus context with accusation, whiteboard, observations, roster
+ */
+function extractPlayerFocusContext(state) {
+  const playerFocus = state.playerFocus || {};
+  const directorNotes = state.directorNotes || {};
+  const sessionConfig = state.sessionConfig || {};
+
+  return {
+    accusation: playerFocus.accusation || {},
+    whiteboard: playerFocus.whiteboardContext || {},
+    observations: directorNotes.observations || {},
+    roster: sessionConfig.roster || [],
+    primaryInvestigation: playerFocus.primaryInvestigation || 'General investigation'
+  };
+}
+
+/**
+ * Build output format section for prompts (DRY helper)
+ *
+ * Commit 8.28: Placed at TOP of prompts for recency bias
+ * This ensures the model remembers the wrapper structure
+ *
+ * @param {string} schemaDescription - Human-readable description of expected output structure
+ * @returns {string} Formatted output section
+ */
+function buildOutputFormatSection(schemaDescription) {
+  return `## OUTPUT FORMAT (CRITICAL - Follow exactly)
+
+Return valid JSON matching this structure:
+${schemaDescription}
+
+CRITICAL: Your response MUST be a valid JSON object with the wrapper structure shown above.
+Do NOT return a raw array - always use the object wrapper with "narrativeArcs" key.`;
+}
+
+/**
+ * Create default interweaving for graceful degradation
+ *
+ * Commit 8.28: Fallback when Call 2 (interweaving enrichment) fails
+ *
+ * @returns {Object} Empty interweaving structure
+ */
+function createDefaultInterweaving() {
+  return {
+    sharedCharacters: [],
+    bridgeOpportunities: [],
+    callbackSeeds: [],
+    convergenceRole: ''
+  };
+}
+
+/**
+ * Create default interweaving plan for graceful degradation
+ *
+ * @returns {Object} Empty interweaving plan
+ */
+function createDefaultInterweavingPlan() {
+  return {
+    suggestedOrder: [],
+    convergencePoint: '',
+    keyCallbacks: []
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPLIT-CALL PROMPT BUILDERS (Commit 8.28)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build prompt for core arc generation (Call 1)
+ *
+ * Commit 8.28: OUTPUT FORMAT at TOP for recency bias
+ * Excludes interweaving rules to reduce complexity
+ *
+ * @param {Object} state - Current workflow state
+ * @returns {string} Prompt for core arc generation
+ */
+function buildCoreArcPrompt(state) {
+  const context = extractPlayerFocusContext(state);
+  const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
+
+  // Output format at TOP for recency bias
+  const outputFormat = buildOutputFormatSection(`{
+  "narrativeArcs": [
+    {
+      "id": "arc-[descriptive-slug]",
+      "title": "Compelling arc title",
+      "summary": "2-3 sentences describing this narrative thread",
+      "arcSource": "accusation" | "whiteboard" | "observation" | "discovered",
+      "keyEvidence": ["exact-id-1", "exact-id-2"],
+      "characterPlacements": { "RosterName": "Role in this arc" },
+      "evidenceStrength": "strong" | "moderate" | "weak" | "speculative",
+      "caveats": ["What complicates this arc"],
+      "unansweredQuestions": ["What gaps exist"],
+      "emotionalHook": "What makes this compelling",
+      "playerEmphasis": "high" | "medium" | "low",
+      "storyRelevance": "critical" | "supporting" | "contextual",
+      "analysisNotes": {
+        "financial": "Relevant transaction patterns",
+        "behavioral": "Relevant director observations",
+        "victimization": "Relevant targeting patterns"
+      }
+    }
+  ],
+  "synthesisNotes": "How you addressed player conclusions and what patterns emerged",
+  "rosterCoverageCheck": { "RosterName": ["arc-id-1", "arc-id-2"] }
+}`);
+
+  return `# Core Arc Generation
+
+${outputFormat}
+
+---
+
+## SECTION 1: WHAT PLAYERS CONCLUDED (PRIMARY - Your arcs must address this)
+
+### The Accusation (REQUIRED ARC)
+**Accused:** ${JSON.stringify(context.accusation.accused || [])}
+**Charge:** ${context.accusation.charge || 'Not specified'}
+**Players' Reasoning:** ${context.accusation.reasoning || 'Not documented'}
+
+You MUST generate an arc that addresses this accusation. Even if evidence is weak, include this arc and mark it appropriately with evidenceStrength="speculative" if needed.
+
+### Whiteboard Connections (Players drew these during investigation)
+**Suspects Explored:** ${JSON.stringify(context.whiteboard.suspectsExplored || [])}
+**Connections Found:** ${JSON.stringify(context.whiteboard.connections || [])}
+**Notes Captured:** ${JSON.stringify(context.whiteboard.notes || [])}
+**Names Identified:** ${JSON.stringify(context.whiteboard.namesFound || [])}
+
+### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
+**Behavior Patterns:** ${JSON.stringify(context.observations.behaviorPatterns || [])}
+**Suspicious Correlations:** ${JSON.stringify(context.observations.suspiciousCorrelations || [])}
+**Notable Moments:** ${JSON.stringify(context.observations.notableMoments || [])}
+
+### Primary Investigation Focus
+${context.primaryInvestigation}
+
+### Session Roster (ALL characters who need placement)
+${JSON.stringify(context.roster)}
+
+---
+
+## SECTION 2: ARC GENERATION RULES
+
+Generate 3-5 narrative arcs following this priority:
+
+### Priority 1: ACCUSATION ARC (Required)
+- Must directly address the accusation above
+- arcSource: "accusation"
+- Include even if evidenceStrength is "speculative"
+- If evidence is thin, use caveats to acknowledge uncertainty
+
+### Priority 2: WHITEBOARD/OBSERVATION ARCS (1-3 arcs)
+- Generated from significant whiteboard connections or director observations
+- arcSource: "whiteboard" or "observation"
+- Should have at least "weak" evidenceStrength
+
+### Priority 3: DISCOVERED ARC (Optional, max 1)
+- Only if evidence strongly supports something players completely missed
+- arcSource: "discovered"
+- Must have evidenceStrength "strong" or "moderate"
+
+---
+
+## SECTION 3: EVIDENCE BOUNDARIES
+
+### Layer 1 - EXPOSED (Full Reportability)
+- CAN quote full memory contents, describe what memory reveals
+- CAN draw conclusions from content, name who exposed each memory
+
+### Layer 2 - BURIED (Observable Only)
+- CAN report: shell account names, dollar amounts, timing patterns
+- CANNOT report: whose memories went to which accounts, content of buried memories
+
+### Layer 3 - DIRECTOR NOTES (Priority Hierarchy)
+1. ACCUSATION = PRIMARY (what players concluded)
+2. DIRECTOR OBSERVATIONS = GROUND TRUTH
+3. WHITEBOARD = SUPPORTING CONTEXT
+
+### Anti-Patterns
+- Never use "token" (say "memory")
+- Never use em-dashes
+- Never claim to know buried content
+
+---
+
+## SECTION 4: EVIDENCE BUNDLE
+
+### Exposed Tokens (${evidenceSummary.exposedTokens.length} items - Layer 1)
+${JSON.stringify(evidenceSummary.exposedTokens, null, 2)}
+
+### Paper Evidence (${evidenceSummary.exposedPaper.length} items - Layer 1)
+${JSON.stringify(evidenceSummary.exposedPaper, null, 2)}
+
+### Buried Transactions (${evidenceSummary.buriedTransactions.length} items - Layer 2 CONTEXT ONLY)
+${JSON.stringify(evidenceSummary.buriedTransactions, null, 2)}
+
+### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
+${JSON.stringify(evidenceSummary.allEvidenceIds)}
+
+CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
+
+---
+
+## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
+
+For each arc, analyze through all three lenses and document in analysisNotes:
+
+### Financial Lens
+- Transaction patterns that support this arc
+- Account naming that suggests involvement
+
+### Behavioral Lens
+- Director observations that support this arc
+- Character dynamics relevant to this arc
+
+### Victimization Lens
+- Targeting patterns that support this arc
+- Victim/operator relationships
+${buildArcRevisionContext(state)}`;
+}
+
+/**
+ * Build prompt for interweaving enrichment (Call 2)
+ *
+ * Commit 8.28: Compact prompt with just arcs + roster
+ * No evidence needed - interweaving is about arc relationships
+ *
+ * @param {Array} coreArcs - Generated arcs from Call 1 (required, non-empty)
+ * @param {Array} roster - Character roster (defaults to empty array if invalid)
+ * @returns {string} Prompt for interweaving enrichment
+ * @throws {Error} If coreArcs is not a non-empty array
+ */
+function buildInterweavingPrompt(coreArcs, roster) {
+  // M2: Input validation
+  if (!Array.isArray(coreArcs) || coreArcs.length === 0) {
+    throw new Error('buildInterweavingPrompt: coreArcs must be a non-empty array');
+  }
+  if (!Array.isArray(roster)) {
+    console.warn('[buildInterweavingPrompt] roster is not an array, using empty array');
+    roster = [];
+  }
+
+  // Compact arc representation - only fields needed for interweaving
+  const compactArcs = coreArcs.map(arc => ({
+    id: arc.id,
+    title: arc.title,
+    summary: arc.summary,
+    arcSource: arc.arcSource,
+    characterPlacements: arc.characterPlacements
+  }));
+
+  return `# Interweaving Enrichment
+
+Analyze the following narrative arcs and identify how they can interweave for compulsive readability.
+
+## GENERATED ARCS
+
+${JSON.stringify(compactArcs, null, 2)}
+
+## ROSTER (for identifying shared characters)
+
+${JSON.stringify(roster)}
+
+## YOUR TASK
+
+For each arc, provide:
+
+1. **sharedCharacters** - Which characters in this arc also appear in OTHER arcs?
+   These are natural bridge points for transitions.
+
+2. **bridgeOpportunities** - How can this arc connect to others?
+   - shared_character: Same person appears in different context
+   - causal_chain: This arc explains WHY another happened
+   - temporal: Events overlap in time
+   - contradiction: This arc recontextualizes another
+
+3. **callbackSeeds** - What details in this arc could pay off later?
+   Example: "Victoria's confident smile" planted early, pays off when we learn she knew all along.
+
+4. **convergenceRole** - How does this arc contribute to the central event (murder/accusation)?
+
+Also provide an **interweavingPlan** with:
+- suggestedOrder: Optimal arc sequence for maximum payoff
+- convergencePoint: Where all threads meet
+- keyCallbacks: Specific [plant → payoff] opportunities
+
+## OUTPUT FORMAT
+
+{
+  "arcInterweaving": [
+    {
+      "arcId": "arc-id-from-above",
+      "interweaving": {
+        "sharedCharacters": ["Character1", "Character2"],
+        "bridgeOpportunities": [
+          { "toArc": "other-arc-id", "bridgeType": "shared_character", "bridgeDetail": "..." }
+        ],
+        "callbackSeeds": ["Detail that can pay off later"],
+        "convergenceRole": "How this arc connects to the murder/accusation"
+      }
+    }
+  ],
+  "interweavingPlan": {
+    "suggestedOrder": ["arc-id-1", "arc-id-2", ...],
+    "convergencePoint": "The murder revelation / accusation climax",
+    "keyCallbacks": [
+      { "plantIn": "arc-id-1", "payoffIn": "arc-id-3", "detail": "Specific callback opportunity" }
+    ]
+  }
+}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPLIT-CALL SDK HELPERS (Commit 8.28)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate core arcs (Call 1 of split-call pattern)
+ *
+ * Commit 8.28: First SDK call with simplified schema
+ *
+ * @param {Object} state - Current workflow state
+ * @param {Object} config - Graph config with SDK client
+ * @returns {Promise<Object>} Core arcs result containing:
+ *   - narrativeArcs: Array of arc objects (3-5 typically)
+ *   - synthesisNotes: String describing synthesis approach
+ *   - rosterCoverageCheck: Object mapping roster names to coverage
+ * @throws {Error} If SDK call fails or result structure is invalid
+ */
+async function generateCoreArcs(state, config) {
+  console.log('[generateCoreArcs] Starting Call 1: Core arc generation');
+  const startTime = Date.now();
+
+  const sdkClient = getSdkClient(config, 'generateCoreArcs');
+  const prompt = buildCoreArcPrompt(state);
+
+  console.log(`[generateCoreArcs] Prompt built: ${prompt.length} characters`);
+
+  try {
+    const result = await sdkClient({
+      prompt,
+      systemPrompt: CORE_ARC_SYSTEM_PROMPT,
+      model: 'sonnet',
+      jsonSchema: CORE_ARC_SCHEMA,
+      timeoutMs: 3 * 60 * 1000,  // 3 minutes (reduced from 5)
+      label: 'Core arc generation (Call 1)'
+    });
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    // H2: Validate result structure before returning
+    if (!result || !Array.isArray(result.narrativeArcs)) {
+      console.error('[generateCoreArcs] Invalid result structure:', JSON.stringify(result, null, 2).slice(0, 500));
+      throw new Error('Core arc generation returned invalid structure: narrativeArcs must be an array');
+    }
+
+    if (result.narrativeArcs.length === 0) {
+      console.warn('[generateCoreArcs] Warning: No arcs generated - this may indicate prompt issues');
+    }
+
+    console.log(`[generateCoreArcs] Complete: ${result.narrativeArcs.length} arcs in ${duration}s`);
+
+    return result;
+  } catch (error) {
+    console.error('[generateCoreArcs] Error:', error.message);
+    throw error;  // Let caller handle error routing
+  }
+}
+
+/**
+ * Enrich arcs with interweaving metadata (Call 2 of split-call pattern)
+ *
+ * Commit 8.28: Second SDK call with compact prompt
+ * Uses graceful degradation - returns null on failure instead of throwing.
+ *
+ * @param {Array} coreArcs - Generated arcs from Call 1 (must be non-empty)
+ * @param {Array} roster - Character roster for identifying shared characters
+ * @param {Object} config - Graph config with SDK client
+ * @returns {Promise<Object|null>} Interweaving result on success containing:
+ *   - arcInterweaving: Array of { arcId, interweaving } objects
+ *   - interweavingPlan: { suggestedOrder, convergencePoint, keyCallbacks }
+ *   Returns null on failure (graceful degradation - caller should use defaults)
+ */
+async function enrichWithInterweaving(coreArcs, roster, config) {
+  console.log('[enrichWithInterweaving] Starting Call 2: Interweaving enrichment');
+  const startTime = Date.now();
+
+  const sdkClient = getSdkClient(config, 'enrichWithInterweaving');
+  const prompt = buildInterweavingPrompt(coreArcs, roster);
+
+  console.log(`[enrichWithInterweaving] Prompt built: ${prompt.length} characters`);
+
+  try {
+    const result = await sdkClient({
+      prompt,
+      systemPrompt: INTERWEAVING_SYSTEM_PROMPT,
+      model: 'sonnet',
+      jsonSchema: INTERWEAVING_SCHEMA,
+      timeoutMs: 2 * 60 * 1000,  // 2 minutes
+      label: 'Interweaving enrichment (Call 2)'
+    });
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[enrichWithInterweaving] Complete: ${result?.arcInterweaving?.length || 0} arcs enriched in ${duration}s`);
+
+    return result;
+  } catch (error) {
+    // Graceful degradation - log but don't throw
+    console.error('[enrichWithInterweaving] Error (graceful degradation):', error.message);
+    return null;
+  }
+}
+
+/**
+ * Merge core arcs with interweaving metadata
+ *
+ * Commit 8.28: Combines results from both calls
+ * Handles graceful degradation when Call 2 fails
+ *
+ * @param {Object} coreResult - Result from generateCoreArcs containing:
+ *   - narrativeArcs: Array of arc objects with id, title, summary, etc.
+ *   - synthesisNotes: String describing synthesis approach
+ *   - rosterCoverageCheck: Object mapping roster names to coverage
+ * @param {Object|null} interweavingResult - Result from enrichWithInterweaving (null on failure)
+ * @returns {Object} Merged result with all arc fields including interweaving metadata
+ * @throws {Error} If coreResult is invalid or narrativeArcs is not an array
+ */
+function mergeArcsWithInterweaving(coreResult, interweavingResult) {
+  // H1: Defensive checks for coreResult
+  if (!coreResult || typeof coreResult !== 'object') {
+    console.error('[mergeArcsWithInterweaving] Invalid coreResult:', coreResult);
+    throw new Error('mergeArcsWithInterweaving: coreResult is required');
+  }
+
+  const { narrativeArcs, synthesisNotes, rosterCoverageCheck } = coreResult;
+
+  // H1: Validate narrativeArcs is an array before calling .map()
+  if (!Array.isArray(narrativeArcs)) {
+    console.error('[mergeArcsWithInterweaving] narrativeArcs is not an array:', narrativeArcs);
+    throw new Error('mergeArcsWithInterweaving: narrativeArcs must be an array');
+  }
+
+  // If interweaving failed, use defaults
+  if (!interweavingResult) {
+    console.log('[mergeArcsWithInterweaving] Using default interweaving (Call 2 failed)');
+    return {
+      narrativeArcs: narrativeArcs.map(arc => ({
+        ...arc,
+        interweaving: createDefaultInterweaving()
+      })),
+      synthesisNotes,
+      rosterCoverageCheck,
+      interweavingPlan: createDefaultInterweavingPlan(),
+      _interweavingFailed: true
+    };
+  }
+
+  // Build lookup map for interweaving by arc ID
+  const interMap = new Map(
+    (interweavingResult.arcInterweaving || []).map(item => [item.arcId, item.interweaving])
+  );
+
+  // M1: Detect and warn about arc ID mismatches
+  const coreIds = new Set(narrativeArcs.map(arc => arc.id));
+  const interIds = new Set(interMap.keys());
+  const missingInter = [...coreIds].filter(id => !interIds.has(id));
+  const orphanedInter = [...interIds].filter(id => !coreIds.has(id));
+
+  if (missingInter.length > 0 || orphanedInter.length > 0) {
+    console.warn('[mergeArcsWithInterweaving] Arc ID mismatch detected:',
+      missingInter.length > 0 ? `Missing interweaving for: ${missingInter.join(', ')}` : '',
+      orphanedInter.length > 0 ? `Orphaned interweaving for: ${orphanedInter.join(', ')}` : ''
+    );
+  }
+
+  // Merge interweaving into arcs
+  const mergedArcs = narrativeArcs.map(arc => ({
+    ...arc,
+    interweaving: interMap.get(arc.id) || createDefaultInterweaving()
+  }));
+
+  return {
+    narrativeArcs: mergedArcs,
+    synthesisNotes,
+    rosterCoverageCheck,
+    interweavingPlan: interweavingResult.interweavingPlan || createDefaultInterweavingPlan()
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGACY HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -183,15 +693,21 @@ Remember:
 - Every roster member must have a placement
 - Cross-reference specialist findings for stronger arcs
 - Specialists will load character-voice.md, evidence-boundaries.md, anti-patterns.md
-${buildRevisionContext(state)}`;
+${buildArcRevisionContext(state)}`;
 }
 
 /**
- * Build revision context from evaluator feedback
- * @param {Object} state - State with validationResults and revision count
- * @returns {string} Revision guidance section or empty string
+ * Build arc-specific revision context from evaluator feedback
+ *
+ * H3: Renamed from buildRevisionContext to avoid confusion with the DRY
+ * buildRevisionContext imported from node-helpers.js (aliased as buildRevisionContextDRY).
+ * This local version takes state directly and is used for embedding revision
+ * guidance in arc-related prompts.
+ *
+ * @param {Object} state - State with validationResults and arcRevisionCount
+ * @returns {string} Revision guidance section or empty string for first attempt
  */
-function buildRevisionContext(state) {
+function buildArcRevisionContext(state) {
   const revisionCount = state.arcRevisionCount || 0;
   const validationResults = state.validationResults;
 
@@ -268,6 +784,9 @@ function createEmptyAnalysisResult(sessionId) {
  * Build player-focus-guided comprehensive prompt for arc analysis
  *
  * Commit 8.15: NEW ARCHITECTURE - Player conclusions drive arc generation
+ *
+ * @deprecated Commit 8.28: Use buildCoreArcPrompt() instead for new arc generation.
+ * This function is kept for backwards compatibility with the revision flow.
  *
  * Prompt structure (order matters - player focus FIRST):
  * 1. PLAYER CONCLUSIONS (PRIMARY) - accusation, whiteboard, observations, roster
@@ -482,7 +1001,7 @@ Return valid JSON:
   "synthesisNotes": "How you addressed player conclusions and what patterns emerged",
   "rosterCoverageCheck": { "RosterName": ["arc-id-1", "arc-id-2"] }
 }
-${buildRevisionContext(state)}`;
+${buildArcRevisionContext(state)}`;
 }
 
 /**
@@ -507,7 +1026,7 @@ ${buildRevisionContext(state)}`;
  * @returns {Object} Partial state update with narrativeArcs
  */
 async function analyzeArcsPlayerFocusGuided(state, config) {
-  console.log('[analyzeArcsPlayerFocusGuided] Starting player-focus-guided analysis (Commit 8.15)');
+  console.log('[analyzeArcsPlayerFocusGuided] Starting split-call analysis (Commit 8.28)');
   const startTime = Date.now();
 
   // Debug: Log key input data to verify prompt assembly
@@ -548,34 +1067,49 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         error: 'No evidence available',
-        architecture: 'player-focus-guided'
+        architecture: 'split-call'
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
     };
   }
 
-  // Get SDK client (supports mock injection for testing)
-  const sdkClient = getSdkClient(config, 'analyzeArcsPlayerFocusGuided');
-
   try {
-    // Build the comprehensive player-focus-guided prompt
-    const prompt = buildPlayerFocusGuidedPrompt(state);
-    console.log(`[analyzeArcsPlayerFocusGuided] Prompt built: ${prompt.length} characters`);
+    // ═══════════════════════════════════════════════════════════════════════
+    // CALL 1: Core Arc Generation (3 min timeout)
+    // ═══════════════════════════════════════════════════════════════════════
+    const call1Start = Date.now();
+    const coreResult = await generateCoreArcs(state, config);
+    const call1Duration = ((Date.now() - call1Start) / 1000).toFixed(1);
 
-    // Single SDK call with 5-minute timeout
-    const result = await sdkClient({
-      prompt,
-      systemPrompt: PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
-      model: 'sonnet',
-      jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
-      timeoutMs: 5 * 60 * 1000,  // 5 minutes
-      label: 'Player-focus-guided arc analysis'
-    });
+    // Validate we got arcs
+    if (!coreResult || !coreResult.narrativeArcs || coreResult.narrativeArcs.length === 0) {
+      throw new Error('Call 1 returned no arcs');
+    }
 
-    const { narrativeArcs, synthesisNotes, rosterCoverageCheck } = result || {};
+    console.log(`[analyzeArcsPlayerFocusGuided] Call 1 complete: ${coreResult.narrativeArcs.length} arcs in ${call1Duration}s`);
 
-    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[analyzeArcsPlayerFocusGuided] Complete: ${narrativeArcs?.length || 0} arcs in ${duration}s`);
+    // ═══════════════════════════════════════════════════════════════════════
+    // CALL 2: Interweaving Enrichment (2 min timeout, graceful degradation)
+    // ═══════════════════════════════════════════════════════════════════════
+    const call2Start = Date.now();
+    const roster = state.sessionConfig?.roster || [];
+    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config);
+    const call2Duration = ((Date.now() - call2Start) / 1000).toFixed(1);
+
+    if (interweavingResult) {
+      console.log(`[analyzeArcsPlayerFocusGuided] Call 2 complete: interweaving added in ${call2Duration}s`);
+    } else {
+      console.log(`[analyzeArcsPlayerFocusGuided] Call 2 failed: using default interweaving (${call2Duration}s)`);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MERGE: Combine results from both calls
+    // ═══════════════════════════════════════════════════════════════════════
+    const mergedResult = mergeArcsWithInterweaving(coreResult, interweavingResult);
+    const { narrativeArcs, synthesisNotes, rosterCoverageCheck, interweavingPlan } = mergedResult;
+
+    const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[analyzeArcsPlayerFocusGuided] Complete: ${narrativeArcs?.length || 0} arcs in ${totalDuration}s (Call1: ${call1Duration}s, Call2: ${call2Duration}s)`);
 
     // Log arc sources for verification
     if (narrativeArcs && narrativeArcs.length > 0) {
@@ -598,10 +1132,14 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
         rosterCoverageCheck: rosterCoverageCheck || {},
+        interweavingPlan: interweavingPlan || {},
         arcCount: narrativeArcs?.length || 0,
-        architecture: 'player-focus-guided',
+        architecture: 'split-call',
+        interweavingFailed: mergedResult._interweavingFailed || false,
         timing: {
-          total: `${duration}s`
+          call1: `${call1Duration}s`,
+          call2: `${call2Duration}s`,
+          total: `${totalDuration}s`
         }
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
@@ -615,11 +1153,11 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         _error: error.message,
-        architecture: 'player-focus-guided'
+        architecture: 'split-call'
       },
       errors: [{
         phase: PHASES.ARC_SYNTHESIS,
-        type: 'player-focus-guided-failed',
+        type: 'split-call-failed',
         message: error.message,
         timestamp: new Date().toISOString()
       }],
@@ -1251,7 +1789,7 @@ Create 3-5 narrative arcs that:
 3. Use ONLY roster names in characterPlacements
 4. Use ONLY valid evidence IDs in keyEvidence
 5. Ensure every roster member has a role across arcs
-${buildRevisionContext(state)}`;
+${buildArcRevisionContext(state)}`;
 }
 
 /**
@@ -1468,6 +2006,30 @@ async function analyzeArcsWithSubagents(state, config) {
 // Valid enum values for new fields
 const VALID_ARC_SOURCES = ['accusation', 'whiteboard', 'observation', 'discovered'];
 const VALID_EVIDENCE_STRENGTHS = ['strong', 'moderate', 'weak', 'speculative'];
+
+/**
+ * Build revision guidance string for programmatic validation failures
+ * Commit 8.27: Short-circuit expensive evaluator for obvious structural issues
+ *
+ * @param {Array} issues - Array of structural issues with type/message/severity
+ * @param {Array} missingRoster - Array of roster member names not covered in arcs
+ * @returns {string} Formatted guidance for revision node
+ */
+function buildValidationRevisionGuidance(issues, missingRoster) {
+  const lines = ['PROGRAMMATIC VALIDATION FAILED - Fix these structural issues:'];
+
+  issues.forEach(issue => {
+    lines.push(`\n• ${issue.message}`);
+  });
+
+  if (missingRoster.length > 0) {
+    lines.push(`\nMissing roster members that MUST appear in characterPlacements:`);
+    missingRoster.forEach(name => lines.push(`  - ${name}`));
+    lines.push(`\nEnsure each missing member appears in at least one arc's characterPlacements.`);
+  }
+
+  return lines.join('\n');
+}
 
 /**
  * Validate arc structure programmatically
@@ -1701,6 +2263,66 @@ function validateArcStructure(state, config) {
     console.warn(`[validateArcStructure] STRUCTURAL ISSUE: No accusation arc present`);
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // 7. Check roster coverage across all arcs (Commit 8.27)
+  // ═══════════════════════════════════════════════════════════════════════
+  const coveredRoster = new Set();
+  viableArcs.forEach(arc => {
+    Object.keys(arc.characterPlacements || {}).forEach(name => {
+      // Only count roster members, not NPCs
+      if (rosterLower.has(name.toLowerCase())) {
+        coveredRoster.add(name.toLowerCase());
+      }
+    });
+  });
+
+  const missingRoster = roster.filter(name => !coveredRoster.has(name.toLowerCase()));
+  const rosterCoverage = roster.length > 0 ? coveredRoster.size / roster.length : 1;
+
+  if (missingRoster.length > 0) {
+    console.warn(`[validateArcStructure] STRUCTURAL ISSUE: Missing roster members: ${missingRoster.join(', ')}`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 8. Determine structural pass/fail (Commit 8.27: gates evaluator vs revision)
+  // ═══════════════════════════════════════════════════════════════════════
+  const structuralIssues = [];
+
+  if (missingRoster.length > 0) {
+    structuralIssues.push({
+      type: 'missing-roster-coverage',
+      message: `Missing roster members: ${missingRoster.join(', ')}`,
+      severity: 'structural'
+    });
+  }
+
+  if (!hasAccusationArc) {
+    structuralIssues.push({
+      type: 'no-accusation-arc',
+      message: 'No accusation arc present - must include arc based on player accusation',
+      severity: 'structural'
+    });
+  }
+
+  const structuralPassed = structuralIssues.length === 0;
+
+  // Build validationResults for revision node (same format as evaluator)
+  const validationFeedback = structuralPassed ? null : {
+    ready: false,
+    structuralPassed: false,
+    issues: structuralIssues,
+    revisionGuidance: buildValidationRevisionGuidance(structuralIssues, missingRoster),
+    criteriaScores: {
+      rosterCoverage: rosterCoverage,
+      accusationArcPresent: hasAccusationArc ? 1.0 : 0.0
+    },
+    source: 'programmatic-validation'
+  };
+
+  if (!structuralPassed) {
+    console.log(`[validateArcStructure] Structural validation FAILED: ${structuralIssues.length} issues`);
+  }
+
   // Count arc sources for logging
   const arcSourceCounts = {};
   viableArcs.forEach(arc => {
@@ -1722,6 +2344,8 @@ function validateArcStructure(state, config) {
   console.log(`  - Arc sources: ${JSON.stringify(arcSourceCounts)}`);
   console.log(`  - Evidence strengths: ${JSON.stringify(evidenceStrengthCounts)}`);
   console.log(`  - Accusation arc present: ${hasAccusationArc}`);
+  console.log(`  - Roster coverage: ${(rosterCoverage * 100).toFixed(0)}% (${missingRoster.length} missing)`);
+  console.log(`  - Structural passed: ${structuralPassed}`);
 
   return {
     narrativeArcs: viableArcs,
@@ -1734,8 +2358,14 @@ function validateArcStructure(state, config) {
       arcSourceCounts,
       evidenceStrengthCounts,
       hasAccusationArc,
+      rosterCoverage,
+      missingRoster,
+      structuralPassed,  // Commit 8.27: gates routing to evaluator vs revision
       validatedAt: new Date().toISOString()
-    }
+    },
+    // Commit 8.27: Only set validationResults if structural issues detected
+    // This enables revision node to receive feedback without expensive evaluator
+    ...(validationFeedback && { validationResults: validationFeedback })
   };
 }
 
@@ -1925,7 +2555,22 @@ module.exports = {
 
   // Export for testing
   _testing: {
-    // Commit 8.15: Player-focus-guided
+    // Commit 8.28: Split-call architecture
+    buildCoreArcPrompt,
+    buildInterweavingPrompt,
+    generateCoreArcs,
+    enrichWithInterweaving,
+    mergeArcsWithInterweaving,
+    createDefaultInterweaving,
+    createDefaultInterweavingPlan,
+    extractPlayerFocusContext,
+    buildOutputFormatSection,
+    CORE_ARC_SYSTEM_PROMPT,
+    CORE_ARC_SCHEMA,
+    INTERWEAVING_SYSTEM_PROMPT,
+    INTERWEAVING_SCHEMA,
+
+    // Commit 8.15: Player-focus-guided (deprecated - kept for revision flow)
     buildPlayerFocusGuidedPrompt,
     PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
     PLAYER_FOCUS_GUIDED_SCHEMA,

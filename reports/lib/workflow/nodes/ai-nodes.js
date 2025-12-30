@@ -33,6 +33,7 @@ const {
   safeParseJson,
   getSdkClient,
   ensureArray,
+  extractFullContent,
   routeTokensByDisposition,
   buildExposedTokenSummaries,
   buildCurationReport,
@@ -406,7 +407,13 @@ async function curateEvidenceBundle(state, config) {
   const evidenceBundle = {
     exposed: {
       tokens: exposedTokens,
-      paperEvidence: includedPaper.map(p => p.rawData || p)
+      // Preserve fullContent from preprocessing (Issue 5 fix)
+      paperEvidence: includedPaper.map(p => ({
+        ...(p.rawData || p),  // Raw fields (name, description, notionId, owners)
+        id: p.id,
+        fullContent: p.fullContent,  // PRESERVE preprocessed content
+        sourceType: 'paper-evidence'
+      }))
     },
     buried: {
       transactions: buriedTransactions,
@@ -764,16 +771,8 @@ async function buildArcEvidencePackages(state, config) {
         return null;
       }
 
-      // Extract full content using the new fullContent field or fallback chain
-      // Priority: fullContent > fullDescription (memory tokens) > content > description > summary
-      const fullContent = item.fullContent ||
-                         item.fullDescription ||
-                         item.rawData?.fullDescription ||
-                         item.content ||
-                         item.rawData?.content ||
-                         item.rawData?.description ||
-                         item.summary ||
-                         '';
+      // DRY: Use extractFullContent() helper for verbatim content
+      const fullContent = extractFullContent(item);
 
       return {
         id: evidenceId,
@@ -855,21 +854,32 @@ async function generateOutline(state, config) {
     heroImageSuggestion: null
   };
 
-  // Use first photo as hero image or default
-  const heroImage = state.sessionPhotos?.[0]?.filename || 'evidence-board.png';
+  // Helper to extract filename from photo (handles string path or object)
+  const getPhotoFilename = (photo) =>
+    typeof photo === 'string' ? photo.split(/[/\\]/).pop() : photo?.filename;
+
+  // Select hero image: prefer arc analysis suggestion, fallback to first photo
+  // FIX: Previously hardcoded to first photo, ignoring arc analysis (Commit 8.26)
+  const arcSuggestion = arcAnalysis?.heroImageSuggestion;
+  const heroImage = arcSuggestion?.filename
+    || getPhotoFilename(state.sessionPhotos?.[0])
+    || 'evidence-board.png';
 
   // Build available photos list with analyses for outline generation (Commit 8.24)
-  const availablePhotos = (state.sessionPhotos || []).map((photoPath, i) => {
-    // Get just the filename from the full path
-    const filename = typeof photoPath === 'string' ? photoPath.split(/[/\\]/).pop() : (photoPath.filename || `photo-${i}.jpg`);
-    const analysis = state.photoAnalyses?.analyses?.[i] || {};
-    return {
-      filename,
-      fullPath: photoPath,
-      characters: analysis.characterDescriptions?.map(c => typeof c === 'string' ? c : c.description) || [],
-      visualContent: analysis.visualContent || ''
-    };
-  });
+  // FIX: Filter out hero to prevent duplicate usage (Commit 8.26)
+  const availablePhotos = (state.sessionPhotos || [])
+    .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
+    .map((photoPath, i) => {
+      // Get just the filename from the full path
+      const filename = getPhotoFilename(photoPath) || `photo-${i}.jpg`;
+      const analysis = state.photoAnalyses?.analyses?.[i] || {};
+      return {
+        filename,
+        fullPath: photoPath,
+        characters: analysis.characterDescriptions?.map(c => typeof c === 'string' ? c : c.description) || [],
+        visualContent: analysis.visualContent || ''
+      };
+    });
 
   // PHASE 1 FIX: Pass arcEvidencePackages with full content and enriched photos
   const arcEvidencePackages = state.arcEvidencePackages || [];
@@ -893,6 +903,7 @@ async function generateOutline(state, config) {
 
   return {
     outline,
+    heroImage,  // Persist resolved hero image for article generation
     currentPhase: PHASES.GENERATE_OUTLINE
   };
 }
@@ -1107,11 +1118,23 @@ async function generateContentBundle(state, config) {
   // PHASE 1 FIX: Pass arcEvidencePackages with fullContent for verbatim quoting
   const arcEvidencePackages = state.arcEvidencePackages || [];
 
+  // Phase 3.2: Pre-generation logging - verify fullContent availability
+  console.log(`[generateContentBundle] Pre-generation: arcEvidencePackages summary:`);
+  arcEvidencePackages.forEach(pkg => {
+    const itemCount = pkg.evidenceItems?.length || 0;
+    const withFullContent = (pkg.evidenceItems || []).filter(item => item.fullContent && item.fullContent.length > 0).length;
+    console.log(`  Arc "${pkg.arcTitle || pkg.arcId}": ${itemCount} items, ${withFullContent} with fullContent`);
+    if (withFullContent < itemCount) {
+      console.warn(`    ⚠ ${itemCount - withFullContent} items missing fullContent - evidence cards may not render`);
+    }
+  });
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     state.outline || {},
     state.evidenceBundle || {},
     template,
-    arcEvidencePackages  // NEW: per-arc curated evidence with fullContent and photos
+    arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
+    state.heroImage  // Hero image filename (prevents duplicate in photos array)
   );
 
   // Get JSON schema for structured output
@@ -1127,6 +1150,23 @@ async function generateContentBundle(state, config) {
     jsonSchema: contentBundleSchema,
     disableTools: true
   });
+
+  // Phase 3.2: Post-generation logging - verify visual component counts
+  const inlineEvidenceCards = (generatedContent.sections || []).flatMap(s =>
+    (s.content || []).filter(c => c.type === 'evidence-card')
+  );
+  const pullQuoteCount = (generatedContent.pullQuotes || []).length;
+  const sidebarCardCount = (generatedContent.evidenceCards || []).length;
+  console.log(`[generateContentBundle] Post-generation: Visual components generated:`);
+  console.log(`  Inline evidence-cards: ${inlineEvidenceCards.length} (minimum 3 required)`);
+  console.log(`  Sidebar evidence cards: ${sidebarCardCount}`);
+  console.log(`  Pull quotes: ${pullQuoteCount} (minimum 2 required)`);
+  if (inlineEvidenceCards.length < 3) {
+    console.warn(`  ⚠ INSUFFICIENT inline evidence-cards - validation will trigger revision loop`);
+  }
+  if (pullQuoteCount < 2) {
+    console.warn(`  ⚠ INSUFFICIENT pull quotes - validation will trigger revision loop`);
+  }
 
   // Extract ContentBundle from response (may include voice_self_check)
   // State values take precedence over generated values for metadata
