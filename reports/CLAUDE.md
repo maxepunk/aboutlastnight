@@ -50,12 +50,15 @@ npx @langchain/langgraph-cli dev --tunnel  # With tunnel (for Safari/remote)
 
 ## Architecture
 
-### LangGraph Workflow (6 Phases, 37 Nodes)
+### LangGraph Workflow (6 Phases, 40 Nodes)
 
 ```
 Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
-→ Phase 2: Arc Analysis (single SDK call) → Phase 3: Outline → Phase 4: Article → Phase 5: Assembly
+→ Phase 2: Arc Analysis (player-focus-guided) → Phase 2.4: Evidence Packaging
+→ Phase 3: Outline → Phase 4: Article → Phase 5: Assembly
 ```
+
+*See lib/workflow/graph.js for complete node list*
 
 **Human Checkpoints (10 total - workflow pauses for approval via native `interrupt()`):**
 
@@ -148,15 +151,24 @@ const result = await sdkQuery({
 
 **Model Timeouts:** Haiku 2min, Sonnet 5min, Opus 10min
 
-### Arc Analysis Architecture (Commit 8.15)
+### Arc Analysis Architecture (Commit 8.15+)
 
-Arc analysis uses a **single comprehensive SDK call** (not parallel subagents):
+Arc analysis uses **player-focus-guided split-call architecture**:
 - Player conclusions (accusation + whiteboard) drive arc identification
 - Director observations provide ground truth weighting
 - Three-lens analysis (financial/behavioral/victimization) embedded in prompt
 - Returns 3-5 narrative arcs with evidence mapping
+- `disableTools: true` flag prevents unnecessary tool invocations (pure analytical task)
 
-**Why single-call?** Player focus must guide everything. Parallel specialists couldn't share this context efficiently. See `lib/workflow/nodes/arc-specialist-nodes.js`.
+**Architecture Evolution**: See `lib/workflow/nodes/arc-specialist-nodes.js` header for history (8.12 parallel → 8.15 single → 8.28 split).
+
+**Three-Category Character Model** (Commit 4193772):
+- **Roster PCs**: Must appear in arcs (coverage validation)
+- **NPCs**: Valid but don't count (Marcus, Nova, Blake/Valet)
+- **Non-Roster PCs**: Evidence-based mentions only (valid game characters not in session)
+- **Canonical Name Preservation**: Accepts both "Sarah" and "Sarah Blackwood" as valid
+
+For details, see `PIPELINE_DEEP_DIVE.md#three-category-character-model`.
 
 **Arc Validation Routing (Commit 8.27):** Before expensive Opus evaluation, `validateArcStructure` performs programmatic checks (roster coverage, accusation arc present, evidence ID validity). Structural failures route directly to revision, skipping evaluation.
 
@@ -176,8 +188,13 @@ Arc analysis uses a **single comprehensive SDK call** (not parallel subagents):
 
 **Prompt Assembly (PromptBuilder):**
 - `lib/prompt-builder.js` assembles complete prompts
-- Combines: loaded rules + session context + structural framing
+- Uses **XML tag format** for prompt sections (Commit ba3f534)
+- `labelPromptSection()` wraps content in `<tag>content</tag>` format
+- Token savings: ~560 tokens per article generation
+- Cross-references: "See `<arc-flow>` Section 3" format
 - Methods: `buildArcAnalysisPrompt()`, `buildOutlinePrompt()`, `buildArticlePrompt()`
+
+For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 
 | Phase | Required Prompts |
 |-------|-----------------|
@@ -210,6 +227,12 @@ State → Node extracts context → PromptBuilder assembles prompt
 → sdkQuery() calls Claude → Returns structured output → Node updates state
 → LangGraph routes to next node (or checkpoint)
 ```
+
+**Data Wiring (Commit 6ffeef8):**
+- Memory tokens use `fullDescription` field (rich second-person narrative)
+- Fallback chain: `fullDescription` → `content` → `description` → `summary`
+- `extractFullContent()` helper ensures full quotable content (not summaries)
+- Fixed in 3 locations: preprocessor, token routing, arc evidence packages
 
 ### LangSmith Tracing
 
@@ -415,27 +438,12 @@ The `/journalist-report` skill in `.claude/skills/journalist-report/` enables ar
 
 ## Session Data Directory Structure
 
-```
-data/{sessionId}/
-├── inputs/                         # User-provided and AI-parsed inputs
-│   ├── session-config.json         # Roster, accusation, journalist name
-│   ├── director-notes.json         # Observations + whiteboard content
-│   ├── selected-paper-evidence.json # Items unlocked this session
-│   ├── character-ids.json          # Photo-to-character mappings
-│   └── orchestrator-parsed.json    # Parsed raw input (cache)
-├── fetched/                        # Raw data from external sources
-│   ├── tokens.json                 # Memory tokens from Notion
-│   └── paper-evidence.json         # Props/Documents from Notion
-├── analysis/                       # AI-generated intermediate outputs
-│   ├── image-analyses-combined.json
-│   ├── evidence-bundle.json        # Curated three-layer bundle
-│   ├── arc-analysis.json           # Narrative arc candidates
-│   └── article-outline.json        # Approved structure
-├── summaries/                      # Checkpoint-friendly summaries
-│   ├── evidence-summary.json
-│   ├── arc-summary.json
-│   └── outline-summary.json
-└── output/                         # Final deliverables
-    ├── article.html
-    └── article-metadata.json
-```
+| Directory | Purpose | Key Files |
+|-----------|---------|-----------|
+| `inputs/` | User-provided and AI-parsed inputs | session-config.json, director-notes.json, character-ids.json |
+| `fetched/` | Raw data from external sources | tokens.json, paper-evidence.json |
+| `analysis/` | AI-generated intermediate outputs | evidence-bundle.json, arc-analysis.json, article-outline.json |
+| `summaries/` | Checkpoint-friendly summaries | evidence-summary.json, arc-summary.json, outline-summary.json |
+| `output/` | Final deliverables | article.html, article-metadata.json |
+
+For complete directory structure and file descriptions, see `PIPELINE_DEEP_DIVE.md#session-data-directory-structure`.
