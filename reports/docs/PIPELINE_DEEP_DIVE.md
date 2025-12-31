@@ -206,8 +206,9 @@ Nova's article is NOT just a factual record. It reflects:
             │
             ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│              PHASE 2: ARC ANALYSIS (Single SDK Call)                        │
+│              PHASE 2: ARC ANALYSIS (Player-Focus-Guided)                    │
 │  Player conclusions (accusation + whiteboard) drive arc generation          │
+│  Architecture: Split-call (core arcs + enrichment) - See Section 10         │
 │  OUTPUT: narrativeArcs (3-5 arcs with arcSource, evidenceStrength)          │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
@@ -346,9 +347,11 @@ Nova's article is NOT just a factual record. It reflects:
 
 ### Phase 2: Arc Analysis
 
-**Node**: `analyzeArcsPlayerFocusGuided` (in `lib/workflow/nodes/arc-specialist-nodes.js`)
+**Node**: `analyzeArcs` (graph name) - implemented by `analyzeArcsPlayerFocusGuided` function
+**File**: `lib/workflow/nodes/arc-specialist-nodes.js`
 
-**Architecture** (Commit 8.15): Single comprehensive SDK call where player conclusions drive everything.
+**Architecture** (Commit 8.15+): Player-focus-guided split-call approach where player conclusions drive everything.
+*Note: See arc-specialist-nodes.js header comments for architecture evolution (8.12 parallel → 8.15 single → 8.28 split)*
 
 **Prompt Structure** (recency bias - rules LAST):
 
@@ -388,11 +391,19 @@ SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
 }
 ```
 
-**Checkpoint**: `arc-selection` (2.3) - Select 3-5 arcs for article
+**Checkpoint**: `arc-selection` (2.35) - Select 3-5 arcs for article
+
+### Phase 2.4: Arc Evidence Packaging
+
+**Node**: `buildArcEvidencePackages` (in `lib/workflow/nodes/ai-nodes.js`)
+
+**Purpose**: Creates per-arc evidence packages with full quotable content for outline generation.
+
+**Output**: `arcEvidencePackages` - Evidence grouped by selected arc with full text for quoting.
 
 ### Phase 3: Outline Generation
 
-**Nodes**: `buildArcEvidencePackages`, `generateOutline` (in `lib/workflow/nodes/ai-nodes.js`)
+**Node**: `generateOutline` (in `lib/workflow/nodes/ai-nodes.js`)
 
 **Article Structure** (NovaNews investigative journalism):
 
@@ -520,6 +531,49 @@ KNOWN NPCs (Valid despite NOT being on roster)
 Do NOT flag these as "missing from roster coverage".
 ```
 
+### XML Tag Format Migration (Commit ba3f534)
+
+**Change**: Migrated from box-drawing characters to pure XML tags for prompt sections.
+
+**Before** (box-drawing format):
+```
+═══════════════════════════════════════════════════════════════════════════
+FROM: narrative-structure.md
+═══════════════════════════════════════════════════════════════════════════
+${content}
+═══════════════════════════════════════════════════════════════════════════
+END: narrative-structure.md
+═══════════════════════════════════════════════════════════════════════════
+```
+
+**After** (XML format):
+```
+<narrative-structure>
+${content}
+</narrative-structure>
+```
+
+**Implementation** (`lib/prompt-builder.js:41-47`):
+```javascript
+function labelPromptSection(filename, content) {
+  if (!content || !content.trim()) return '';
+  return `<${filename}>
+${content.trim()}
+</${filename}>`;
+}
+```
+
+**Benefits**:
+- **Token savings**: ~560 tokens per article generation (~120 chars × 12 usages)
+- **Claude-native parsing**: XML aligns with model training data
+- **Clear boundaries**: Opening/closing tags eliminate ambiguity
+- **Cross-referencing**: Tag names enable natural references (e.g., "See `<arc-flow>` Section 3")
+- **DRY enforcement**: Single source of truth prevents rule drift
+
+**Cross-Reference System**:
+- In code: `See <narrative-structure> Section 8 for visual rhythm rules`
+- In markdown docs: `` See `<narrative-structure>` Section 8 `` (backtick-wrapped)
+
 ---
 
 ## Evaluation & Revision Architecture
@@ -590,14 +644,140 @@ Generate → Evaluate → [structuralPassed?]
 
 This short-circuits the expensive Opus evaluator call when issues can be detected programmatically.
 
+### Three-Category Character Model (Commit 4193772)
+
+**Architecture**: Characters are classified into three mutually exclusive categories for validation:
+
+| Category | Definition | Coverage Rule | Example |
+|----------|-----------|---------------|---------|
+| **Roster PCs** | Characters present at investigation | MUST appear in arcs | "Sarah", "Alex", "Victoria" |
+| **NPCs** | Non-player game characters | Valid but don't count | "Marcus", "Nova", "Blake", "Valet" |
+| **Non-Roster PCs** | Valid game characters NOT in session | Evidence-based mentions only | "Sofia" (if not playing) |
+
+**Why This Matters**:
+- **Prevents false negatives**: "Sofia" appearing in evidence doesn't break validation
+- **Prevents false positives**: NPCs like "Marcus" don't count toward roster coverage
+- **Prevents hallucinations**: Unknown names are still rejected
+
+**Implementation** (`lib/workflow/nodes/node-helpers.js:74-125`):
+```javascript
+function isNonRosterPC(name, roster = [], allCharacters = [], npcs = []) {
+  // If it's an NPC, it's not a non-roster PC
+  if (isKnownNPC(name, npcs)) return false;
+
+  // Check if name matches any roster member
+  if (rosterLower.has(normalizedName)) return false;
+
+  // Check if it's a valid game character
+  return allCharacters.some(char => {
+    const regex = new RegExp(`\\b${char.toLowerCase()}\\b`, 'i');
+    return regex.test(name);
+  });
+}
+```
+
+**Validation Integration**: When validating character placements in arcs, the system:
+1. Checks roster first (exact match or canonical name)
+2. Checks NPCs second (valid but don't count for coverage)
+3. Checks non-roster PCs third (valid game characters with evidence-based roles)
+4. Rejects unknown names (potential hallucinations)
+
+### Canonical Name Preservation (Commit 4193772)
+
+**Problem**: LLM hallucinates last names ("Victoria Chen") when it doesn't know the canonical full name.
+
+**Solution**: Accept BOTH first names AND canonical full names as valid.
+
+**validateRosterName** (`node-helpers.js:680-720`):
+- Input "Sarah Blackwood" → Returns "Sarah Blackwood" (preserves canonical)
+- Input "Sarah" → Returns "Sarah" (preserves first name)
+- Both map to same roster entry for coverage calculation
+
+**Roster Coverage Calculation**:
+```javascript
+// Build mapping: both "sarah" and "sarah blackwood" → "sarah"
+const canonicalToRoster = new Map();
+roster.forEach(rosterName => {
+  const nameLower = rosterName.toLowerCase();
+  canonicalToRoster.set(nameLower, nameLower);
+  const canonical = getCanonicalName(rosterName, theme);
+  if (canonical.toLowerCase() !== nameLower) {
+    canonicalToRoster.set(canonical.toLowerCase(), nameLower);
+  }
+});
+```
+
+**Character Name Anti-Patterns** (added to `anti-patterns.md`):
+- NEVER invent last names
+- Use ONLY canonical names from roster
+- Common hallucinations to avoid: "Victoria Chen" (should be "Victoria Kingsley")
+
+### disableTools Flag (Commit 4193772)
+
+**Why Added**: Arc generation is purely analytical - it doesn't need file access or tool execution.
+
+**Implementation** (`arc-specialist-nodes.js:441`):
+```javascript
+const result = await sdkClient({
+  prompt,
+  model: 'sonnet',
+  jsonSchema: CORE_ARC_SCHEMA,
+  timeoutMs: 3 * 60 * 1000,
+  disableTools: true,  // Pure structured output, no tool access needed
+  label: 'Core arc generation'
+});
+```
+
+**Benefits**:
+- Prevents unnecessary tool invocations
+- Improves performance (reduces context and latency)
+- Ensures deterministic output (no file-read variations)
+- Keeps timeout realistic (3 minutes without tool overhead)
+
+### fullDescription Priority Chain (Commit 6ffeef8)
+
+**Problem**: Memory tokens have `fullDescription` (rich second-person narrative) but fallback chains only looked for `content`, `description`, etc. Articles received summaries instead of quotable content.
+
+**Solution**: Add `fullDescription` to fallback chains in 3 locations.
+
+**Priority Order**:
+```javascript
+1. fullContent       → Preprocessed field (if set by earlier processing)
+2. fullDescription   → Memory tokens (rich Notion content)
+3. rawData.fullDescription → Nested memory token data
+4. content           → Paper evidence primary field
+5. rawData.content   → Nested paper evidence data
+6. description       → Legacy/alternate field
+7. summary           → Last resort (150 chars, AI-generated)
+```
+
+**extractFullContent() Helper** (`node-helpers.js:309-320`):
+```javascript
+function extractFullContent(item) {
+  return item.fullContent ||
+         item.fullDescription ||        // Memory tokens
+         item.rawData?.fullDescription ||
+         item.content ||                // Paper evidence
+         item.rawData?.content ||
+         item.description ||
+         item.summary ||
+         '';
+}
+```
+
+**Fixed Locations**:
+- `evidence-preprocessor.js:328` - Batch processing
+- `node-helpers.js:439` - Token routing to exposed layer
+- `ai-nodes.js:777` - Arc evidence packages
+
 ### Hybrid Evidence Curation (Commit 8.11)
 
-**Before**: Single Opus call for 100+ items, ~9.5 minutes, frequent timeouts
+**Before**: Single Opus call for 100+ items, ~9.5 minutes (measured), frequent timeouts
 
 **After**:
-- Token routing: Programmatic (~10ms)
-- Paper scoring: Batched Sonnet (~30s)
-- Total: ~45 seconds with higher reliability
+- Token routing: Programmatic (~10ms, estimated)
+- Paper scoring: Batched Sonnet (~30s, measured)
+- Total: ~45 seconds with higher reliability (measured)
 
 ### LangGraph Checkpoints
 
@@ -614,6 +794,28 @@ interrupt({
 ```
 
 State persists via `MemorySaver` (in-memory) or `SqliteSaver` (persistent).
+
+### Temporal Framework (Added to writing-principles.md)
+
+**Critical Distinction**: The article covers TWO distinct time periods that must never be conflated.
+
+| Time Period | When | Source | Voice | What Happened |
+|-------------|------|--------|-------|---------------|
+| **Party Night** | Feb 21/22, 2027 (overnight) | Memory tokens | "That night..." / "The memory shows..." | Marcus's party, events leading to death |
+| **Investigation Day** | Feb 22, 2027 (daytime) | Director observations, transactions | "During the investigation..." / "I watched..." | Players investigating, exposing/burying memories |
+
+**Anti-Pattern: Temporal Conflation**
+
+**WRONG**: "Kai searched for Ashe. At 11:49 PM, Kai ran to the Valet."
+- Conflates party night searching (memory content) with investigation day transaction (burial timing)
+
+**RIGHT**: "That night, Kai's memory shows them searching for Ashe. During the investigation, at 11:49 PM, Kai ran to the Valet."
+- Clearly separates memory content (party) from memory disposition (investigation)
+
+**Why This Matters**:
+- Memory tokens describe what happened at the party (second-person narrative)
+- Burial/exposure transactions show what players did during investigation (third-person observed)
+- Mixing these creates impossible timelines and breaks reader immersion
 
 ---
 
@@ -664,6 +866,64 @@ State persists via `MemorySaver` (in-memory) or `SqliteSaver` (persistent).
 
 **Fix**: Check `character-ids` checkpoint approval and photo-to-arc mapping.
 
+### "fullDescription not appearing in articles" (Commit 6ffeef8)
+
+**Symptom**: Evidence cards show token IDs ("ALR001") or short summaries instead of rich quotable content.
+
+**Check**:
+1. Is `fullDescription` present in memory tokens from Notion?
+2. Are fallback chains using `extractFullContent()` helper?
+3. Check three locations:
+   - `evidence-preprocessor.js:328`
+   - `node-helpers.js:439`
+   - `ai-nodes.js:777`
+
+**Fix**: Ensure `fullDescription` is prioritized in fallback chain BEFORE `content`, `description`, `summary`.
+
+**Correct priority**:
+```javascript
+item.fullDescription || item.rawData?.fullDescription || item.content || item.summary
+```
+
+### "Character name hallucinations" (Commit 4193772)
+
+**Symptom**: Article uses incorrect last names ("Victoria Chen" instead of "Victoria Kingsley").
+
+**Check**:
+1. Are canonical names provided in arc generation prompt?
+2. Is `validateRosterName()` preserving canonical full names?
+3. Check `anti-patterns.md` includes character name violations section
+
+**Fix**:
+- Ensure prompts include roster with canonical names (from `theme-config.js`)
+- Validation should accept both "Victoria" AND "Victoria Kingsley"
+- Anti-patterns should list common hallucinations
+
+**Common hallucinations**:
+- "Victoria Chen" → should be "Victoria Kingsley"
+- "Alex Chen" → should be "Alex Reeves"
+- "Sarah Chen" → should be "Sarah Blackwood"
+
+### "Temporal conflation in article" (Added to writing-principles.md)
+
+**Symptom**: Article mixes party night events with investigation day actions in same sentence.
+
+**Example of problem**:
+> "Kai searched for Ashe. At 11:49 PM, Kai ran to the Valet."
+
+**Check**:
+1. Is temporal framework section in `writing-principles.md`?
+2. Are prompts loaded with recency bias (rules LAST)?
+3. Is anti-patterns checker flagging temporal mixing?
+
+**Fix**:
+- Party night events: "That night..." or "The memory shows..."
+- Investigation day actions: "During the investigation..." or "I watched..."
+- Never mix memory content timestamps with transaction timestamps
+
+**Correct version**:
+> "That night, Kai's memory shows them searching for Ashe. During the investigation, at 11:49 PM, Kai ran to the Valet."
+
 ---
 
 ## File Reference
@@ -710,5 +970,7 @@ data/{sessionId}/
 
 ---
 
-*Last updated: 2025-12-30*
-*Based on codebase analysis including Commits 8.11 (hybrid curation), 8.15 (player-focus arcs), 8.24 (momentum criteria), 8.25 (outline schema), 8.26 (SRP checkpoints), 8.27 (arc validation routing)*
+*Last updated: 2025-12-31*
+*Based on codebase analysis including Commits 8.11 (hybrid curation), 8.15 (player-focus arcs), 8.24 (momentum criteria), 8.25 (outline schema), 8.26 (SRP checkpoints), 8.27 (arc validation routing), ba3f534 (XML migration), 4193772 (arc architecture), 6ffeef8 (data wiring)*
+
+*Graph: 40 nodes total (see lib/workflow/graph.js for complete node list)*
