@@ -14,6 +14,8 @@ Generates journalist-style investigative articles by:
 
 **Production URL:** `https://console.aboutlastnightgame.com` (via Cloudflare Tunnel)
 
+**Deep Dive:** For business context, game mechanics, phase-by-phase breakdown, and detailed debugging scenarios, see `docs/PIPELINE_DEEP_DIVE.md`.
+
 ## Common Commands
 
 ```bash
@@ -62,6 +64,8 @@ Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6
 
 **Human Checkpoints (10 total - workflow pauses for approval via native `interrupt()`):**
 
+For data flow at each checkpoint, see `PIPELINE_DEEP_DIVE.md#phase-by-phase-breakdown`.
+
 | Checkpoint | Phase | Purpose |
 |------------|-------|---------|
 | `paper-evidence-selection` | 1.35 | Select which paper evidence was unlocked during gameplay |
@@ -75,7 +79,7 @@ Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6
 | `outline` | 3.25 | Approve article structure and photo placements |
 | `article` | 4.25 | Final article approval before HTML assembly |
 
-**Revision Loops:** Arcs (max 2), Outline (max 3), Article (max 3)
+**Revision Loops:** Arcs (max 2), Outline (max 3), Article (max 3). See `PIPELINE_DEEP_DIVE.md#evaluation--revision-architecture` for structural vs advisory criteria.
 
 ### Key Files
 
@@ -179,6 +183,8 @@ For details, see `PIPELINE_DEEP_DIVE.md#three-category-character-model`.
 | **BURIED** | Transaction data ONLY (amounts, accounts) | Report patterns, NOT content |
 | **DIRECTOR** | Observations + whiteboard | Shape emphasis and focus |
 
+For detailed rules on what Nova can/cannot do with each layer, see `PIPELINE_DEEP_DIVE.md#three-layer-evidence-model`.
+
 ### Prompt Architecture
 
 **Prompt Loading (ThemeLoader):**
@@ -267,47 +273,20 @@ The observability layer emits rich SSE events for full LLM visibility:
 
 ### LangSmith Studio
 
-LangSmith Studio is a web-based IDE for visualizing and debugging LangGraph agents. It connects to a local Agent Server.
+Web-based IDE for visualizing and debugging the LangGraph workflow.
 
-**Quick Start:**
-```bash
-# Start the Agent Server (auto-opens Studio in browser)
-npx @langchain/langgraph-cli dev
+**Quick Start:** `npx @langchain/langgraph-cli dev` (opens browser automatically)
+**With Tunnel:** `npx @langchain/langgraph-cli dev --tunnel` (for Safari/remote)
 
-# With tunnel for Safari or remote access
-npx @langchain/langgraph-cli dev --tunnel
-```
+**Requirements:** LangSmith account + `LANGSMITH_API_KEY` in `.env`
+**Config:** `langgraph.json` defines graph as `./lib/studio/entry.js:graph`
 
-**What happens:**
-1. Agent Server starts on `http://localhost:2024`
-2. Browser opens to `https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`
-3. Studio connects to your local graph for visualization and debugging
-
-**Configuration:** `langgraph.json` in project root defines the graph as `./lib/studio/entry.js:graph` (file:export format).
-
-**Requirements:**
-- LangSmith account (free at smith.langchain.com)
-- `LANGSMITH_API_KEY` in `.env`
-- All dependencies installed (`npm install`)
-
-**Studio Features:**
-- Graph topology visualization (all 37 nodes)
-- Interactive execution with state inspection
-- Time-travel debugging through checkpoints
-- Thread and assistant management
-- Prompt iteration tools
-
-**Note:** Safari blocks localhost connections. Use `--tunnel` flag to create a secure Cloudflare tunnel instead.
+**Features:** Graph visualization (40 nodes), state inspection, time-travel debugging, prompt iteration
 
 ## State Management
 
-**Reducers in `lib/workflow/state.js`:**
-- `replaceReducer` - Standard replace (most fields)
-- `appendReducer` - Array accumulation (errors)
-- `appendSingleReducer` - Add single item (evaluationHistory)
-- `mergeReducer` - Shallow merge objects
-
-**Rollback System:** API accepts `rollbackTo` parameter to clear state from checkpoint forward and regenerate.
+**Reducers** (`lib/workflow/state.js`): replace (default), append (arrays), appendSingle (single item), merge (objects)
+**Rollback**: API accepts `rollbackTo` parameter to regenerate from checkpoint
 
 ## API Reference
 
@@ -328,34 +307,16 @@ npx @langchain/langgraph-cli dev --tunnel
 }
 ```
 
-### Session State REST Endpoints (Commit 8.9.7+)
+### Session State REST Endpoints
 
-These endpoints enable step-by-step pipeline control:
+**Step-by-step Pipeline Control:**
+- `/api/session/:id/start` (POST) - Start new session
+- `/api/session/:id/approve` (POST) - Submit checkpoint approval
+- `/api/session/:id/rollback` (POST) - Roll back to checkpoint
+- `/api/session/:id/state` (GET) - Get current state
+- `/api/session/:id/checkpoint` (GET) - Get checkpoint info
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/session/:id/start` | POST | Start new session with raw input |
-| `/api/session/:id/approve` | POST | Submit approval for current checkpoint |
-| `/api/session/:id/rollback` | POST | Roll back to specific checkpoint |
-| `/api/session/:id/state` | GET | Get current session state |
-| `/api/session/:id/state/:field` | GET | Get specific state field |
-| `/api/session/:id/checkpoint` | GET | Get current checkpoint info |
-
-**Example: Step-by-step API flow**
-```bash
-# 1. Start session
-curl -X POST /api/session/1225/start -d '{"theme":"journalist","rawSessionInput":{...}}'
-
-# 2. Check current checkpoint
-curl /api/session/1225/checkpoint
-# Returns: {"interrupted":true,"checkpoint":{"type":"input-review"},"currentPhase":"0.2"}
-
-# 3. Approve checkpoint
-curl -X POST /api/session/1225/approve -d '{"inputReview":true}'
-
-# 4. Rollback if needed
-curl -X POST /api/session/1225/rollback -d '{"rollbackTo":"arc-selection"}'
-```
+See API documentation or `server.js` for usage examples.
 
 ## Environment Setup
 
@@ -369,72 +330,34 @@ cp .env.example .env
 
 ## Testing
 
-Jest with SDK mocks at `__tests__/mocks/`. Coverage thresholds: 80% lines/functions/statements, 70% branches.
+**Framework:** Jest with SDK mocks at `__tests__/mocks/`
+**Coverage:** 80% lines/functions/statements, 70% branches
+**Mocks:** anthropic-sdk.mock.js, llm-client.mock.js, checkpoint-helpers.mock.js
 
-**Mock Files:**
-- `anthropic-sdk.mock.js` - External SDK mock for Jest module mapper
-- `llm-client.mock.js` - LLM client factory mock for node testing
-- `checkpoint-helpers.mock.js` - Prevents `interrupt()` from throwing in unit tests
-
-```javascript
-// Mock checkpoint helpers in unit tests to prevent GraphInterrupt
-jest.mock('../../../lib/workflow/checkpoint-helpers',
-  () => require('../../mocks/checkpoint-helpers.mock'));
-
-// Use LLM client mock for SDK calls
-const { createMockSdkClient } = require('../../mocks/llm-client.mock');
-```
+See test files for mock usage examples.
 
 ## Troubleshooting
 
-**"Claude Agent SDK not available"**
-```bash
-claude /login     # Re-authenticate
-npm install       # Ensure SDK installed
-```
+**SDK not available:** `claude /login` then `npm install`
+**Workflow errors:** Check logs for missing input files, expired Notion token, or SDK timeouts
+**Resume behavior:** State persists via `MemorySaver` checkpointer
 
-**Workflow errors:** Check phase-specific logs. Common issues:
-- Missing `data/{sessionId}/inputs/` files
-- Notion API token expired
-- SDK timeout (increase via `timeoutMs`)
-
-**Resume behavior:** Graph uses `MemorySaver` checkpointer. State persists in memory across API calls via shared checkpointer instance.
+See `PIPELINE_DEEP_DIVE.md#common-debugging-scenarios` for detailed debugging guides.
 
 ## Emailer
 
-```bash
-# Send follow-up emails to attendees
-python emailer/send_followup_emails_smart.py --date MMDD --test
-python emailer/send_followup_emails_smart.py --date 1218 --send
-```
-
-See `emailer/SETUP_GUIDE.md` for Gmail app password configuration.
+**Send follow-up emails:** `python emailer/send_followup_emails_smart.py --date MMDD --send`
+**Setup:** See `emailer/SETUP_GUIDE.md`
 
 ## Journalist Skill (Direct Claude Code Usage)
 
-The `/journalist-report` skill in `.claude/skills/journalist-report/` enables article generation directly through Claude Code without the server.
+**Location:** `.claude/skills/journalist-report/`
+**Purpose:** Article generation via Claude Code without server
 
-**Custom Subagents** (defined in `.claude/agents/`):
+**Custom Subagents:** image-analyzer, evidence-curator, arc-analyzer, outline-generator, article-generator, article-validator
+**Reference Files:** writing-principles.md, anti-patterns.md, evidence-boundaries.md, schemas.md
 
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| `journalist-image-analyzer` | Sonnet | Visual analysis of session photos & Notion documents |
-| `journalist-evidence-curator` | Sonnet | Build three-layer evidence bundle from raw data |
-| `journalist-arc-analyzer` | Opus | Director observations drive arc selection |
-| `journalist-outline-generator` | Sonnet | Create outline with evidence/photo placements |
-| `journalist-article-generator` | Opus | Generate final HTML with Nova's voice |
-| `journalist-article-validator` | Sonnet | Anti-pattern detection, voice scoring |
-
-**Note:** The following specialist agents exist for direct skill use but are NOT invoked by the server workflow (Commit 8.15 moved to single SDK call):
-- `journalist-financial-specialist` - Transaction patterns, account analysis
-- `journalist-behavioral-specialist` - Character dynamics, zero-footprint analysis
-- `journalist-victimization-specialist` - Targeting patterns, operator/victim analysis
-
-**Key Reference Files:**
-- `references/prompts/writing-principles.md` - Nova's voice and style
-- `references/prompts/anti-patterns.md` - What to avoid (em-dashes, game mechanics)
-- `references/prompts/evidence-boundaries.md` - Three-layer privacy model
-- `references/schemas.md` - JSON structures for intermediate outputs
+See `.claude/agents/` directory for complete subagent definitions.
 
 ## Session Data Directory Structure
 
@@ -446,4 +369,4 @@ The `/journalist-report` skill in `.claude/skills/journalist-report/` enables ar
 | `summaries/` | Checkpoint-friendly summaries | evidence-summary.json, arc-summary.json, outline-summary.json |
 | `output/` | Final deliverables | article.html, article-metadata.json |
 
-For complete directory structure and file descriptions, see `PIPELINE_DEEP_DIVE.md#session-data-directory-structure`.
+For complete directory structure and file descriptions, see `PIPELINE_DEEP_DIVE.md#data-directory-structure`.
