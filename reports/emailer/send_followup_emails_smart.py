@@ -27,7 +27,7 @@ SENDER_NAME = "Max & Shuai"             # Display name
 REPLY_TO_EMAIL = "about.last.night@gmail.com"   # UPDATE: Where replies should go (can be same as SENDER_EMAIL)
 
 # URLs
-CASE_FILE_BASE = "https://aboutlastnightgame.com/reports/"
+CASE_FILE_BASE = "https://aboutlastnightgame.com/reports/outputs/"
 FEEDBACK_BASE = "https://aboutlastnightgame.com/feedback.html"
 TEMPLATE_FILE = "about_last_night_followup_template.html"
 
@@ -76,27 +76,33 @@ def get_session_info() -> Tuple[str, str]:
     print("\n" + "="*60)
     print("SESSION INFORMATION")
     print("="*60)
-    
+
     while True:
-        session_date = input("\nEnter session date (MMDD format, e.g., 1204 for Dec 4): ").strip()
-        
+        session_date = input("\nEnter session date (MMDDYY format, e.g., 122725 for Dec 27, 2025): ").strip()
+
         # Validate format
-        if not re.match(r'^\d{4}$', session_date):
-            print("  ❌ Please use MMDD format (4 digits)")
+        if not re.match(r'^\d{6}$', session_date):
+            print("  ❌ Please use MMDDYY format (6 digits)")
             continue
-        
+
         # Validate month
         month = int(session_date[:2])
         if month < 1 or month > 12:
             print("  ❌ Invalid month (must be 01-12)")
             continue
-        
+
         # Validate day
-        day = int(session_date[2:])
+        day = int(session_date[2:4])
         if day < 1 or day > 31:
             print("  ❌ Invalid day (must be 01-31)")
             continue
-        
+
+        # Validate year
+        year = int(session_date[4:6])
+        if year < 25 or year > 30:  # 2025-2030 range
+            print("  ❌ Invalid year (must be 25-30 for 2025-2030)")
+            continue
+
         break
     
     # Check if multiple sessions that day
@@ -170,8 +176,10 @@ def personalize_email(template: str, recipient: Dict, session_date: str, report_
     """Replace placeholders with recipient-specific data"""
     email = template
     email = email.replace("{{PLAYER_NAME}}", recipient['name'].split()[0])  # First name only
-    email = email.replace("{{CASE_FILE_URL}}", f"{CASE_FILE_BASE}report{report_id}.html")
-    email = email.replace("{{FEEDBACK_FORM_URL}}", f"{FEEDBACK_BASE}?date={session_date}")
+    email = email.replace("{{CASE_FILE_URL}}", f"{CASE_FILE_BASE}report-{report_id}.html")
+    # Extract MMDD from MMDDYY for feedback form (first 4 digits)
+    feedback_date = session_date[:4]
+    email = email.replace("{{FEEDBACK_FORM_URL}}", f"{FEEDBACK_BASE}?date={feedback_date}")
     return email
 
 def create_email_message(recipient: Dict, html_content: str) -> MIMEMultipart:
