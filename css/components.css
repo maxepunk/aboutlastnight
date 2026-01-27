@@ -108,10 +108,11 @@
 }
 
 .corrupt {
-    color: #cc0000;
+    color: rgba(255, 50, 50, 1);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
+    text-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
 }
 
 /* Evidence Items */
