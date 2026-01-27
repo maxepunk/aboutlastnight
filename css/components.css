@@ -706,3 +706,63 @@
         transform: translateX(-50%) translateY(0);
     }
 }
+
+/* ═══════════════════════════════════════════════════════ */
+/* Testimonials                                             */
+/* ═══════════════════════════════════════════════════════ */
+
+.testimonial {
+    max-width: 800px;
+    margin: 4rem auto;
+    padding: 2rem 3rem;
+    text-align: center;
+    position: relative;
+    border-left: 3px solid rgba(204, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.testimonial p {
+    font-size: 1.2rem;
+    line-height: 1.8;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+    position: relative;
+}
+
+.testimonial p::before {
+    content: '"';
+    font-size: 3rem;
+    color: rgba(204, 0, 0, 0.6);
+    position: absolute;
+    left: -2rem;
+    top: -0.5rem;
+    font-family: Georgia, serif;
+}
+
+.testimonial p::after {
+    content: '"';
+    font-size: 3rem;
+    color: rgba(204, 0, 0, 0.6);
+    position: absolute;
+    right: -2rem;
+    bottom: -1.5rem;
+    font-family: Georgia, serif;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .testimonial {
+        padding: 1.5rem 2rem;
+        margin: 3rem 1rem;
+    }
+
+    .testimonial p {
+        font-size: 1.1rem;
+    }
+
+    .testimonial p::before,
+    .testimonial p::after {
+        font-size: 2rem;
+    }
+}
