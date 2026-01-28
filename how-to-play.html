@@ -366,63 +366,41 @@
 
             <p><strong>Decide Their Fate</strong> — Memory tokens are your currency. Once you know the contents of one, you get to decide what to do:</p>
 
-            <div class="decision-cards">
-                        <div class="decision-card expose" onclick="toggleCard(this)">
-                            <div class="card-title">EXPOSE</div>
-                            <div class="card-description">
-                                Turn the memory in as evidence. Everyone will see what happened.
-                            </div>
-                            <div class="expand-hint">Click to see evidence types ↓</div>
-                            <div class="card-details">
-                                <div class="card-details-content">
-                                    <div class="detail-item">
-                                        <strong>Evidence types:</strong>
-                                        <ul>
-                                            <li><strong>Anonymous tip:</strong> Nobody needs to know you were the one to expose this memory</li>
-                                            <li><strong>Take credit:</strong> The public will know you were the source for this piece of evidence</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+        <div class="faq-grid" style="margin: 2rem 0;">
+            <div class="faq-item">
+                <h3 class="faq-question">EXPOSE</h3>
+                <div class="faq-answer">
+                    <p>Turn the memory in as evidence. Everyone will see what happened.</p>
+                    <p><strong>Evidence types:</strong></p>
+                    <p>• <strong>Anonymous tip:</strong> Nobody needs to know you were the one to expose this memory</p>
+                    <p>• <strong>Take credit:</strong> The public will know you were the source for this piece of evidence</p>
+                </div>
+            </div>
 
-                        <div class="decision-card bury" onclick="toggleCard(this)">
-                            <div class="card-title">BURY</div>
-                            <div class="card-description">
-                                Sell the memory for profit. The contents will be secret forever. $$ will be wired to your account.
-                            </div>
-                            <div class="expand-hint">Click to see account types ↓</div>
-                            <div class="card-details">
-                                <div class="card-details-content">
-                                    <div class="detail-item">
-                                        <strong>Shell account</strong>
-                                        <ul>
-                                            <li>ANONYMOUS offshore account</li>
-                                            <li>You CHOOSE the ACCOUNT NAME</li>
-                                            <li>Shell accounts MAY be SHARED by MULTIPLE individuals</li>
-                                            <li>LIMITED availability</li>
-                                        </ul>
-                                    </div>
-                                    <div class="detail-item">
-                                        <strong>Personal account</strong>
-                                        <ul>
-                                            <li>YOUR personal account</li>
-                                            <li>Transactions CAN be TRACED BACK to you</li>
-                                            <li>The CONTENTS of your sale remains SECRET</li>
-                                            <li>May NOT be shared</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            <div class="faq-item">
+                <h3 class="faq-question">BURY</h3>
+                <div class="faq-answer">
+                    <p>Sell the memory for profit. The contents will be secret forever. $$ will be wired to your account.</p>
+                    <p><strong>Shell account:</strong></p>
+                    <p>• ANONYMOUS offshore account</p>
+                    <p>• You CHOOSE the ACCOUNT NAME</p>
+                    <p>• Shell accounts MAY be SHARED by MULTIPLE individuals</p>
+                    <p>• LIMITED availability</p>
+                    <p><strong>Personal account:</strong></p>
+                    <p>• YOUR personal account</p>
+                    <p>• Transactions CAN be TRACED BACK to you</p>
+                    <p>• The CONTENTS of your sale remains SECRET</p>
+                    <p>• May NOT be shared</p>
+                </div>
+            </div>
 
-                        <div class="decision-card trade" onclick="toggleCard(this)">
-                            <div class="card-title">TRADE</div>
-                            <div class="card-description">
-                                Leverage the memory to get something you need out of another player OR return it to its rightful owner.
-                            </div>
-                        </div>
-                    </div>
+            <div class="faq-item">
+                <h3 class="faq-question">TRADE</h3>
+                <div class="faq-answer">
+                    <p>Leverage the memory to get something you need out of another player OR return it to its rightful owner.</p>
+                </div>
+            </div>
+        </div>
 
                     <div class="callout-box">
                         <strong>Memory Token Valuation</strong>
@@ -502,36 +480,5 @@
     <script src="js/utils.js"></script>
     <script src="js/interactions.js"></script>
 
-    <script>
-        function toggleCard(card) {
-            // Toggle expanded state
-            card.classList.toggle('expanded');
-
-            // Optional: Close other cards when one is opened (accordion behavior)
-            // Uncomment if you want only one card open at a time
-            /*
-            const allCards = document.querySelectorAll('.decision-card');
-            allCards.forEach(otherCard => {
-                if (otherCard !== card) {
-                    otherCard.classList.remove('expanded');
-                }
-            });
-            */
-        }
-
-        // Track analytics for card interactions
-        document.querySelectorAll('.decision-card').forEach(card => {
-            card.addEventListener('click', function() {
-                const cardType = this.classList.contains('expose') ? 'expose' :
-                               this.classList.contains('bury') ? 'bury' : 'trade';
-                if (window.gtag) {
-                    gtag('event', 'card_interaction', {
-                        'event_category': 'how_to_play',
-                        'event_label': cardType
-                    });
-                }
-            });
-        });
-    </script>
 </body>
 </html>
