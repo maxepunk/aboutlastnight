@@ -613,3 +613,26 @@
         font-size: 2rem;
     }
 }
+
+/* ═══════════════════════════════════════════════════════ */
+/* Callout Paragraph                                        */
+/* Same styling as .explanation-section p:first-of-type     */
+/* Use for highlighted info boxes anywhere on the page      */
+/* ═══════════════════════════════════════════════════════ */
+
+.callout-p {
+    font-size: 1.4rem;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.95);
+    margin-bottom: 2.5rem;
+    border-left: 4px solid #cc0000;
+    padding-left: 2rem;
+    background: rgba(204, 0, 0, 0.08);
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    line-height: 1.8;
+}
+
+.callout-p::before {
+    display: none;
+}
