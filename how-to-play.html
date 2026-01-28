@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Play | About Last Night...</title>
+    <meta name="description" content="Learn how to play About Last Night - gameplay mechanics, character setup, and what to expect during your investigation.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.svg">
+
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZMWN885FWB"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-ZMWN885FWB');
+    </script>
+
+    <style>
+        /* Page-specific styles */
+        .how-to-play-hero {
+            min-height: 40vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(rgba(0,0,0,0.9), rgba(0,0,0,0.95)), url('images/ALN-noirdrugwall.jpg') center/cover fixed;
+            position: relative;
+            padding: 4rem 2rem;
+        }
+
+        .how-to-play-hero-content {
+            text-align: center;
+            max-width: 800px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .back-link {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            color: rgba(204, 0, 0, 0.9);
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            transition: color 0.3s ease;
+            z-index: 10;
+        }
+
+        .back-link:hover {
+            color: rgba(204, 0, 0, 1);
+            text-shadow: 0 0 10px rgba(204, 0, 0, 0.5);
+        }
+
+        .gameplay-section {
+            padding: 5rem 2rem;
+            background: linear-gradient(rgba(10, 10, 10, 0.95), rgba(10, 10, 10, 0.98));
+            position: relative;
+        }
+
+        .gameplay-section.with-bg {
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        .gameplay-section.character-bg {
+            background: linear-gradient(rgba(10, 10, 10, 0.88), rgba(10, 10, 10, 0.92)), url('images/ALN-marcusisdead.jpg') center/cover fixed;
+        }
+
+        .gameplay-section.game-bg {
+            background: linear-gradient(rgba(15, 15, 15, 0.90), rgba(15, 15, 15, 0.93)), url('images/ALN-puzzlingtogether.jpg') center/cover fixed;
+        }
+
+        .gameplay-section.morning-bg {
+            background: linear-gradient(rgba(10, 10, 10, 0.92), rgba(10, 10, 10, 0.95)), url('images/ALN-noirdrugwall.jpg') center/cover fixed;
+        }
+
+        .gameplay-content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .section-heading {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3rem;
+            margin-bottom: 2rem;
+            color: #cc0000;
+            text-shadow: 0 0 30px rgba(204, 0, 0, 0.6);
+            letter-spacing: 0.05em;
+        }
+
+        .section-heading.purple {
+            color: rgba(139, 0, 255, 0.9);
+            text-shadow: 0 0 20px rgba(139, 0, 255, 0.5);
+        }
+
+        .gameplay-flow {
+            margin: 3rem 0;
+        }
+
+        .flow-step {
+            margin-bottom: 3rem;
+        }
+
+        .flow-step h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            color: rgba(139, 0, 255, 0.9);
+            margin-bottom: 1rem;
+            text-shadow: 0 0 20px rgba(139, 0, 255, 0.5);
+        }
+
+        .flow-step p {
+            font-size: 1.2rem;
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 1.5rem;
+        }
+
+        .decision-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0 3rem 0;
+        }
+
+        .decision-card {
+            background: linear-gradient(135deg, rgba(20, 20, 20, 0.9), rgba(30, 30, 30, 0.9));
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .decision-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--card-accent);
+            opacity: 0.7;
+        }
+
+        .decision-card.expose {
+            --card-accent: rgba(204, 0, 0, 0.9);
+        }
+
+        .decision-card.bury {
+            --card-accent: rgba(0, 204, 102, 0.9);
+        }
+
+        .decision-card.trade {
+            --card-accent: rgba(139, 0, 255, 0.9);
+        }
+
+        .decision-card:hover {
+            border-color: var(--card-accent);
+            box-shadow: 0 0 30px rgba(139, 0, 255, 0.3);
+            transform: translateY(-4px);
+        }
+
+        .decision-card.expanded {
+            border-color: var(--card-accent);
+            box-shadow: 0 0 40px rgba(139, 0, 255, 0.4);
+        }
+
+        .card-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            color: var(--card-accent);
+            margin-bottom: 1rem;
+            letter-spacing: 0.05em;
+        }
+
+        .card-description {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 1rem;
+        }
+
+        .card-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .decision-card.expanded .card-details {
+            max-height: 800px;
+        }
+
+        .card-details-content {
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 1rem;
+        }
+
+        .detail-item {
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-item strong {
+            display: block;
+            color: var(--card-accent);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .detail-item ul {
+            list-style: none;
+            padding-left: 1rem;
+            margin: 0.5rem 0;
+        }
+
+        .detail-item li {
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 0.3rem;
+        }
+
+        .detail-item li::before {
+            content: '▸ ';
+            color: var(--card-accent);
+            margin-right: 0.5rem;
+        }
+
+        .callout-box {
+            background: linear-gradient(135deg, rgba(139, 0, 255, 0.1), rgba(204, 0, 0, 0.1));
+            border-left: 4px solid rgba(139, 0, 255, 0.6);
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 4px;
+        }
+
+        .callout-box strong {
+            color: rgba(139, 0, 255, 0.9);
+            font-size: 1.1rem;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .callout-box p {
+            margin: 0;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .closing-section {
+            padding: 4rem 2rem;
+            background: linear-gradient(rgba(10, 10, 10, 0.98), rgba(5, 5, 5, 1));
+            text-align: center;
+        }
+
+        .closing-content {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .main-link {
+            display: inline-block;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5rem;
+            color: rgba(204, 0, 0, 0.9);
+            text-decoration: none;
+            margin-bottom: 2rem;
+            padding: 1rem 2rem;
+            border: 2px solid rgba(204, 0, 0, 0.5);
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .main-link:hover {
+            background: rgba(204, 0, 0, 0.1);
+            border-color: rgba(204, 0, 0, 0.9);
+            box-shadow: 0 0 20px rgba(204, 0, 0, 0.3);
+        }
+
+        .contact-info {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 2rem;
+        }
+
+        .contact-info a {
+            color: rgba(139, 0, 255, 0.9);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .contact-info a:hover {
+            color: rgba(139, 0, 255, 1);
+            text-shadow: 0 0 10px rgba(139, 0, 255, 0.5);
+        }
+
+        .expand-hint {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+
+        .decision-card.expanded .expand-hint {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Scanning Effects -->
+    <div class="scanline" aria-hidden="true"></div>
+    <div class="scanline scanline-secondary" aria-hidden="true"></div>
+
+    <!-- Back Link -->
+    <a href="feb2025.html" class="back-link">← Back to Main Site</a>
+
+    <!-- Hero Section -->
+    <section class="how-to-play-hero">
+        <div class="how-to-play-hero-content">
+            <div class="corrupted-header">
+                <span class="glitch">CASE FILE: GAMEPLAY PROTOCOL</span>
+            </div>
+            <h1 style="font-family: 'Bebas Neue', sans-serif; font-size: 4rem; color: #cc0000; margin: 2rem 0 1rem 0; text-shadow: 0 0 40px rgba(204, 0, 0, 0.6);">How to Play About Last Night</h1>
+            <p style="font-size: 1.3rem; color: rgba(255, 255, 255, 0.7); letter-spacing: 0.05em;">Everything you need to know before entering the investigation</p>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Section 1: Your Character -->
+    <section class="gameplay-section with-bg character-bg">
+        <div class="gameplay-content">
+            <h2 class="section-heading">Meet Your Character</h2>
+
+            <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                You'll receive a character sheet — your name, some memory fragments you still recall, maybe the name of someone you remember knowing. You don't know everything about who you are yet. Neither does anyone else.
+            </p>
+
+            <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85);">
+                This is your starting point. What you learn from here is up to you.
+            </p>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Section 2: The Game -->
+    <section class="gameplay-section with-bg game-bg">
+        <div class="gameplay-content">
+            <h2 class="section-heading purple">The Game</h2>
+
+            <div class="gameplay-flow">
+                <div class="flow-step">
+                    <h3>Unlock Memories</h3>
+                    <p>Marcus' 'lockdown protocol' has left evidence and extracted memories locked up all around the warehouse. Puzzle through how to get past the locks.</p>
+                </div>
+
+                <div class="flow-step">
+                    <h3>Scan Their Contents</h3>
+                    <p>Read the contents of the extracted memories using one of Marcus' memory display scanner prototypes.</p>
+                </div>
+
+                <div class="flow-step">
+                    <h3>Decide Their Fate</h3>
+                    <p style="margin-bottom: 2rem;">Memory tokens are your currency. Once you know the contents of one, you get to decide what to do:</p>
+
+                    <div class="decision-cards">
+                        <div class="decision-card expose" onclick="toggleCard(this)">
+                            <div class="card-title">EXPOSE</div>
+                            <div class="card-description">
+                                Turn the memory in as evidence. Everyone will see what happened.
+                            </div>
+                            <div class="expand-hint">Click to see evidence types ↓</div>
+                            <div class="card-details">
+                                <div class="card-details-content">
+                                    <div class="detail-item">
+                                        <strong>Evidence types:</strong>
+                                        <ul>
+                                            <li><strong>Anonymous tip:</strong> Nobody needs to know you were the one to expose this memory</li>
+                                            <li><strong>Take credit:</strong> The public will know you were the source for this piece of evidence</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="decision-card bury" onclick="toggleCard(this)">
+                            <div class="card-title">BURY</div>
+                            <div class="card-description">
+                                Sell the memory for profit. The contents will be secret forever. $$ will be wired to your account.
+                            </div>
+                            <div class="expand-hint">Click to see account types ↓</div>
+                            <div class="card-details">
+                                <div class="card-details-content">
+                                    <div class="detail-item">
+                                        <strong>Shell account</strong>
+                                        <ul>
+                                            <li>ANONYMOUS offshore account</li>
+                                            <li>You CHOOSE the ACCOUNT NAME</li>
+                                            <li>Shell accounts MAY be SHARED by MULTIPLE individuals</li>
+                                            <li>LIMITED availability</li>
+                                        </ul>
+                                    </div>
+                                    <div class="detail-item">
+                                        <strong>Personal account</strong>
+                                        <ul>
+                                            <li>YOUR personal account</li>
+                                            <li>Transactions CAN be TRACED BACK to you</li>
+                                            <li>The CONTENTS of your sale remains SECRET</li>
+                                            <li>May NOT be shared</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="decision-card trade" onclick="toggleCard(this)">
+                            <div class="card-title">TRADE</div>
+                            <div class="card-description">
+                                Leverage the memory to get something you need out of another player OR return it to its rightful owner.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="callout-box">
+                        <strong>Memory Token Valuation</strong>
+                        <p>Payment for each token varies based on its value to NeurAI. NeurAI prefers <strong>Technical &gt; Business &gt; Personal</strong> memories. Some memory-sets award <strong>2-5x bonus payments</strong> for EACH MEMORY if sold as a set.</p>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                        That's the loop. But you're not alone in it.
+                    </p>
+
+                    <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                        Others are unlocking memories too — about themselves, about you, about what really happened to Marcus. Not to mention, some puzzles require you to get information only others have access to.
+                    </p>
+
+                    <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                        What is found, what is shared, what is hidden... all of that <span style="color: rgba(204, 0, 0, 0.9); font-weight: 700;">is</span> the game.
+                    </p>
+                </div>
+
+                <div class="flow-step">
+                    <h3>Negotiate</h3>
+
+                    <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                        What's the story YOU want the world to find out About Last Night?
+                    </p>
+
+                    <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                        Want Justice? Profit? Secrecy? The choice is yours–but the group must get their story straight before the cops arrive.
+                    </p>
+
+                    <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                        Well, that and the incentives offered by NPCs: Expose your alibi to the public, embarrassing as it may be, and you're off the hook. Bury the right secrets, and you may become the next face of NeurAI...
+                    </p>
+
+                    <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85);">
+                        The clock is always running.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Section 3: The Morning After -->
+    <section class="gameplay-section with-bg morning-bg">
+        <div class="gameplay-content">
+            <h2 class="section-heading purple">The Morning After</h2>
+
+            <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85); margin-bottom: 1.5rem;">
+                You leave, hopefully before the cops bust your unofficial investigation and take you in for questioning... But the story doesn't end.
+            </p>
+
+            <p style="font-size: 1.2rem; line-height: 1.8; color: rgba(255, 255, 255, 0.85);">
+                After the game, you'll receive a personalized Nova News report showing how your choices shaped the official story. You'll also catch narrative pieces you may have missed during your session.
+            </p>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Closing Section -->
+    <section class="closing-section">
+        <div class="closing-content">
+            <a href="feb2025.html" class="main-link">← Back to Main Site</a>
+
+            <div class="contact-info">
+                <p><strong>Got more questions?</strong></p>
+                <p>Email us at <a href="mailto:aboutlastnightgame@gmail.com">aboutlastnightgame@gmail.com</a></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- JavaScript -->
+    <script src="js/utils.js"></script>
+    <script src="js/interactions.js"></script>
+
+    <script>
+        function toggleCard(card) {
+            // Toggle expanded state
+            card.classList.toggle('expanded');
+
+            // Optional: Close other cards when one is opened (accordion behavior)
+            // Uncomment if you want only one card open at a time
+            /*
+            const allCards = document.querySelectorAll('.decision-card');
+            allCards.forEach(otherCard => {
+                if (otherCard !== card) {
+                    otherCard.classList.remove('expanded');
+                }
+            });
+            */
+        }
+
+        // Track analytics for card interactions
+        document.querySelectorAll('.decision-card').forEach(card => {
+            card.addEventListener('click', function() {
+                const cardType = this.classList.contains('expose') ? 'expose' :
+                               this.classList.contains('bury') ? 'bury' : 'trade';
+                if (window.gtag) {
+                    gtag('event', 'card_interaction', {
+                        'event_category': 'how_to_play',
+                        'event_label': cardType
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
