@@ -405,6 +405,23 @@
     display: none;
 }
 
+/* Game steps - uniform styling, override first-of-type callout */
+.explanation-section p.game-step {
+    font-size: 1.2rem;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.88);
+    margin-bottom: 1.8rem;
+    border-left: none;
+    background: none;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 1.5rem;
+}
+
+.explanation-section p.game-step::before {
+    display: block;
+}
+
 .explanation-section em {
     color: rgba(204, 0, 0, 0.9);
     font-style: italic;
@@ -436,5 +453,10 @@
 
     .explanation-section p:first-of-type {
         font-size: 1.25rem;
+    }
+
+    .explanation-section p.game-step {
+        font-size: 1.1rem;
+        padding-left: 1.2rem;
     }
 }
