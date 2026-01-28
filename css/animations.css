@@ -18,6 +18,11 @@
 }
 
 /* Glitch Text Effect */
+.glitch {
+    animation: glitchText 15s ease-in-out infinite;
+    animation-delay: 2s;
+}
+
 @keyframes glitchText {
     0%, 89%, 100% {
         text-shadow:
@@ -119,12 +124,11 @@
 /* Reduced Motion Support Enhanced */
 @media (prefers-reduced-motion: reduce) {
     .accordion-content,
-    .process-content,
-    .evidence-content,
     .credentials,
     .faq-answer,
     .accordion-trigger::after,
-    .booking-bar.sticky {
+    .booking-bar.sticky,
+    .glitch {
         transition: none !important;
         animation: none !important;
     }

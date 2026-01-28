@@ -77,10 +77,172 @@ h1 {
     font-style: italic;
 }
 
+/* ═══════════════════════════════════════════════════════ */
+/* Section Typography                                       */
+/* ═══════════════════════════════════════════════════════ */
+
+/* Unified section header - all major section titles */
+.section-header {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    text-align: center;
+    color: #cc0000;
+    margin-bottom: 2rem;
+    text-shadow: 0 0 20px rgba(204, 0, 0, 0.5);
+    letter-spacing: 0.05em;
+}
+
+/* Section intro - subtitle text below headers */
+.section-intro {
+    text-align: center;
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 3rem;
+}
+
+/* Section prompt - small italic callout (e.g., "Still have questions?") */
+.section-prompt {
+    font-size: 1.2rem;
+    color: #cc0000;
+    margin-bottom: 0.5rem;
+    font-style: italic;
+    text-align: center;
+}
+
+/* Short dramatic narrative lines (trailer-style) */
+.story-beat {
+    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.9);
+    max-width: 800px;
+    margin: 0 auto 1rem;
+    text-align: center;
+}
+
+/* Final story beat variant - dimmer, smaller for transitions */
+.story-beat--fade {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.7);
+    max-width: 600px;
+}
+
+/* Choice separator ("or" between options) */
+.choice-separator {
+    text-align: center;
+    display: block;
+    font-size: 1.5rem;
+    color: rgba(204, 0, 0, 0.7);
+    font-style: italic;
+}
+
+/* Thematic case badge */
+.case-badge {
+    color: rgba(204, 0, 0, 0.7);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    margin-right: 1rem;
+}
+
+/* CTA wrapper - centers call-to-action elements */
+.cta-wrapper {
+    text-align: center;
+    margin-top: 3rem;
+}
+
+/* CTA prompt - text before a call-to-action button */
+.cta-prompt {
+    font-size: 1.3rem;
+    color: rgba(204, 0, 0, 0.9);
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+/* In-content CTA link (purple accent) */
+.cta-inline {
+    color: rgba(139, 0, 255, 0.9);
+    text-decoration: none;
+    font-size: 1.2rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.cta-inline:hover {
+    color: rgba(139, 0, 255, 1);
+    text-shadow: 0 0 10px rgba(139, 0, 255, 0.5);
+}
+
+/* Inline link within body text (red accent) */
+.link-inline {
+    color: rgba(204, 0, 0, 0.9);
+    text-decoration: underline;
+}
+
+.link-inline:hover {
+    color: #cc0000;
+}
+
+/* Utility: Always-visible FAQ answer (no accordion) */
+.faq-answer--visible {
+    max-height: none;
+    opacity: 1;
+}
+
+/* Stats bar - horizontal display of key metrics */
+.stats-bar {
+    text-align: center;
+    border-left: none;
+    border: 1px solid rgba(204, 0, 0, 0.3);
+    margin-top: 3rem;
+}
+
+.stats-bar .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    color: #cc0000;
+}
+
+/* Accent color for special callouts */
+.accent-green {
+    color: rgba(0, 204, 102, 0.8);
+}
+
+/* Spacing utilities */
+.mt-3 { margin-top: 3rem; }
+.mb-3 { margin-bottom: 3rem; }
+
+/* Section header variant - smaller for subsections */
+.section-header--sm {
+    font-size: 2rem;
+    margin-top: 3rem;
+}
+
+/* Mobile Responsive - Section Typography */
+@media (max-width: 768px) {
+    .section-header {
+        font-size: 2.2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .story-beat {
+        font-size: 1.3rem;
+    }
+
+    .story-beat--fade {
+        font-size: 1.1rem;
+    }
+
+    .section-intro {
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+    }
+
+    .cta-prompt {
+        font-size: 1.1rem;
+    }
+}
+
 /* No-Script Styles */
 .no-js .accordion-content,
-.no-js .process-content,
-.no-js .evidence-content,
 .no-js .credentials,
 .no-js .faq-answer {
     max-height: none;

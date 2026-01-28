@@ -115,56 +115,6 @@
     text-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
 }
 
-/* Evidence Items */
-.evidence-item {
-    background: rgba(10, 10, 10, 0.9);
-    border: 1px solid rgba(204, 0, 0, 0.2);
-    padding: 2rem;
-    position: relative;
-    cursor: pointer;
-    transition: all 0.3s;
-    overflow: hidden;
-}
-
-.evidence-item:before {
-    content: 'EVIDENCE';
-    position: absolute;
-    top: 0;
-    right: 0;
-    background: #cc0000;
-    padding: 0.3rem 1rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
-    font-weight: 700;
-}
-
-.evidence-item:hover {
-    border-color: #cc0000;
-    transform: scale(1.05);
-    background: rgba(30, 0, 0, 0.9);
-    box-shadow:
-        0 0 30px rgba(204, 0, 0, 0.5),
-        inset 0 0 30px rgba(204, 0, 0, 0.1);
-}
-
-.evidence-item h3 {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2rem;
-    margin-bottom: 1rem;
-    color: rgba(255, 255, 255, 0.9);
-    transition: all 0.3s;
-}
-
-.evidence-item:hover h3 {
-    color: #cc0000;
-    animation: glitchText 0.5s;
-}
-
-.evidence-item p {
-    color: rgba(255, 255, 255, 0.7);
-    line-height: 1.6;
-}
-
 /* Personnel Files */
 .personnel-file {
     background: rgba(20, 20, 20, 0.9);
@@ -209,43 +159,6 @@
     color: rgba(255, 255, 255, 0.85);
     line-height: 1.8;
     font-size: 1.1rem;
-}
-
-/* Process Steps */
-.process-step {
-    text-align: center;
-    padding: 2rem;
-    background: rgba(10, 10, 10, 0.9);
-    border: 1px solid rgba(204, 0, 0, 0.2);
-    transition: all 0.3s;
-    position: relative;
-}
-
-.process-step:hover {
-    border-color: #cc0000;
-    transform: translateY(-5px);
-    background: rgba(30, 0, 0, 0.9);
-    box-shadow: 0 10px 30px rgba(204, 0, 0, 0.3);
-}
-
-.step-number {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 3rem;
-    color: #cc0000;
-    opacity: 0.5;
-    margin-bottom: 1rem;
-}
-
-.process-step h3 {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.8rem;
-    color: #fff;
-    margin-bottom: 1rem;
-}
-
-.process-step p {
-    color: rgba(255, 255, 255, 0.7);
-    line-height: 1.6;
 }
 
 /* FAQ Items */
@@ -471,73 +384,6 @@
     z-index: 1000;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     animation: slideDown 0.3s ease;
-}
-
-/* Process Steps Accordion Specific */
-.process-step {
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.process-step.accordion-trigger {
-    position: relative;
-    padding-right: 40px;
-}
-
-.process-step .process-content {
-    max-height: 0;
-    overflow: hidden;
-    opacity: 0;
-    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
-    margin-top: 0;
-}
-
-.process-step.expanded .process-content {
-    max-height: 500px;
-    opacity: 1;
-    margin-top: 1rem;
-}
-
-/* Evidence Section Accordion */
-.evidence-item {
-    cursor: pointer;
-}
-
-.evidence-item.accordion-trigger:before {
-    content: 'EVIDENCE';
-    position: absolute;
-    top: 0;
-    right: 0;
-    background: #cc0000;
-    padding: 0.3rem 1rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
-    z-index: 1;
-}
-
-.evidence-item.accordion-trigger:hover:before {
-    content: 'EVIDENCE';
-    position: absolute;
-    top: 0;
-    right: 0;
-    background: #cc0000;
-    padding: 0.3rem 1rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
-    z-index: 1;
-}
-
-.evidence-item .evidence-content {
-    max-height: 0;
-    overflow: hidden;
-    opacity: 0;
-    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
-}
-
-.evidence-item.expanded .evidence-content {
-    max-height: 500px;
-    opacity: 1;
-    margin-top: 1rem;
 }
 
 /* Creator Profiles Accordion */
