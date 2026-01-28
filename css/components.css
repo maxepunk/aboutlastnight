@@ -196,6 +196,16 @@
     display: none;
 }
 
+.faq-answer p:first-of-type {
+    font-size: 1rem;
+    border-left: none;
+    padding-left: 0;
+    background: none;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0.5rem;
+}
+
 /* Form Elements */
 .form-group {
     margin-bottom: 2rem;
