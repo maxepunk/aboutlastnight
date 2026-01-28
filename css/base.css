@@ -11,6 +11,17 @@
     box-sizing: border-box;
 }
 
+/* Global Link Styles */
+a {
+    color: #cc0000;
+    text-decoration: underline;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: #ff3333;
+}
+
 /* Body and Typography */
 body {
     font-family: 'Barlow', sans-serif;

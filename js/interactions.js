@@ -328,6 +328,10 @@ function initAccordions() {
         }
 
         item.addEventListener('click', (e) => {
+            // Allow links inside FAQ answers to work normally
+            if (e.target.closest('a')) {
+                return;
+            }
             e.preventDefault();
             toggleAccordion(item, item.parentElement);
         });
