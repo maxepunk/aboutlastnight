@@ -64,10 +64,10 @@
     <div class="booking-bar" id="booking-bar">
         <div class="booking-content">
             <div class="booking-dates">
-                <span style="color: rgba(204, 0, 0, 0.7); font-weight: 700; letter-spacing: 0.15em; margin-right: 1rem;">CASE #ALN-2025</span>
+                <span class="case-badge">CASE #ALN-2025</span>
                 <span class="preview-dates">STATUS: LIMITED ENGAGEMENT • ACCEPTING INVESTIGATORS</span>
                 <span class="divider">•</span><br>
-                <span class="main-run-line">Dec 4, 2025 - Jan 1, 2026 ($75/person) <span style="color: rgba(0, 204, 102, 0.7);">• Run Extended!</span></span>
+                <span class="main-run-line">Dec 4, 2025 - Jan 1, 2026 ($75/person) <span class="accent-green">• Run Extended!</span></span>
             </div>
             <a href="#submit-evidence" class="booking-cta">Claim Your Identity</a>
         </div>
@@ -77,7 +77,7 @@
     <!-- Narrative Section with Crime Board BG -->
     <section id="narrative" class="narrative fade-in-section">
         <div class="narrative-content">
-            <h2>Fragmented Memories</h2>
+            <h2 class="section-header">Fragmented Memories</h2>
             
             <div class="memory-block">
                 You remember the party. Sort of. A warehouse rave in Fremont, thrown by VC darling Marcus Blackwood.
@@ -95,9 +95,7 @@
                 2-hours to piece together the truth. 5-20 players caught in the same web. What cost would you bear to uncover the truth about last night?
             </div>
             
-            <p style="text-align: center; margin-top: 3rem; font-size: 1.3rem; color: rgba(204, 0, 0, 0.9); font-style: italic;">
-                But how did it begin? Think back to the party...
-            </p>
+            <p class="section-prompt mt-3">But how did it begin? Think back to the party...</p>
         </div>
     </section>
 
@@ -107,14 +105,10 @@
     <section class="party-scene fade-in-section">
         <div class="party-overlay"></div>
         <div class="party-content">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; margin-bottom: 1rem; text-shadow: 0 0 30px rgba(139, 0, 255, 0.8);">What Happened Last Night</h2>
-            <p style="font-size: 1.5rem; color: rgba(255, 255, 255, 0.9); max-width: 800px; margin: 0 auto 2rem;">
-                Marcus Blackwood's underground party. NeurAI's CEO playing host to Silicon Valley's shadow players. The warehouse. The music. Sarah was there. You were there.
-            </p>
-            <p style="font-size: 1.2rem; color: rgba(255, 255, 255, 0.7); max-width: 600px; margin: 0 auto;">
-                Now he's dead, and everyone's memories are up for sale.
-            </p>
-            <div style="text-align: center; margin-top: 3rem;">
+            <h2 class="section-header">What Happened Last Night</h2>
+            <p class="story-beat">Marcus Blackwood's underground party. NeurAI's CEO playing host to Silicon Valley's shadow players. The warehouse. The music. Sarah was there. You were there.</p>
+            <p class="story-beat story-beat--fade">Now he's dead, and everyone's memories are up for sale.</p>
+            <div class="cta-wrapper">
                 <a href="#investigation" class="cta-primary">Learn What You Did</a>
             </div>
         </div>
@@ -123,13 +117,13 @@
     <div class="section-divider"></div>
 
     <!-- Investigation Bridge -->
-    <section id="investigation" class="warehouse-scene fade-in-section">
-        <div class="warehouse-overlay"></div>
-        <div class="warehouse-text">
-            <h2>The Investigation Begins</h2>
-            <p style="font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 2rem;">That was then. This is now.</p>
-            <p style="font-size: 1.1rem; color: rgba(255, 255, 255, 0.6); max-width: 600px; margin: 0 auto;">20 suspects. 120 minutes. Your memories are the evidence.</p>
-            <div style="text-align: center; margin-top: 2rem;">
+    <section id="investigation" class="party-scene fade-in-section">
+        <div class="party-overlay"></div>
+        <div class="party-content">
+            <h2 class="section-header">The Investigation Begins</h2>
+            <p class="story-beat">That was then. This is now.</p>
+            <p class="story-beat story-beat--fade">20 suspects. 120 minutes. Your memories are the evidence.</p>
+            <div class="cta-wrapper">
                 <a href="#how-it-works" class="cta-primary">See How To Solve This</a>
             </div>
         </div>
@@ -138,77 +132,60 @@
     <div class="section-divider"></div>
 
     <!-- How It Works Section -->
-    <section id="how-it-works" class="how-it-works fade-in-section">
+    <section id="how-it-works" class="faq-section fade-in-section">
         <div class="container">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">How You'll Find The Truth</h2>
-            <p style="text-align: center; font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 3rem;">
-                Four steps. 120 minutes. Every choice matters.
-            </p>
-            
-            <div class="process-grid">
-                <div class="process-step">
-                    <div class="step-number">01</div>
-                    <h3>Gather Your Suspects</h3>
-                    <p>5-20 players enter together. You might know some. Others are strangers with their own agendas.</p>
+            <h2 class="section-header">How You'll Find The Truth</h2>
+            <p class="section-intro">Four steps. 120 minutes. Every choice matters.</p>
+
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <h3 class="faq-question"><span class="case-badge">01</span> Gather Your Suspects</h3>
+                    <p class="faq-answer faq-answer--visible">5-20 players enter together. You might know some. Others are strangers with their own agendas.</p>
                 </div>
-                
-                <div class="process-step">
-                    <div class="step-number">02</div>
-                    <h3>Receive Your Identity</h3>
-                    <p>You're not just a player. You're a character with a past, connections, and secrets worth protecting.</p>
+
+                <div class="faq-item">
+                    <h3 class="faq-question"><span class="case-badge">02</span> Receive Your Identity</h3>
+                    <p class="faq-answer faq-answer--visible">You're not just a player. You're a character with a past, connections, and secrets worth protecting.</p>
                 </div>
-                
-                <div class="process-step">
-                    <div class="step-number">03</div>
-                    <h3>Recover Your Memories</h3>
-                    <p>Solve physical puzzles scattered throughout the space. Each unlocks memory fragments from last night.</p>
+
+                <div class="faq-item">
+                    <h3 class="faq-question"><span class="case-badge">03</span> Recover Your Memories</h3>
+                    <p class="faq-answer faq-answer--visible">Solve physical puzzles scattered throughout the space. Each unlocks memory fragments from last night.</p>
                 </div>
-                
-                <div class="process-step">
-                    <div class="step-number">04</div>
-                    <h3>Trade, Betray, or Trust</h3>
-                    <p>Your memories have value to others. Negotiate, trade, or hoard them. Every choice changes the outcome.</p>
+
+                <div class="faq-item">
+                    <h3 class="faq-question"><span class="case-badge">04</span> Trade, Betray, or Trust</h3>
+                    <p class="faq-answer faq-answer--visible">Your memories have value to others. Negotiate, trade, or hoard them. Every choice changes the outcome.</p>
                 </div>
             </div>
-            
-            <div class="experience-stats">
-                <div class="stat">
-                    <span class="stat-number">2</span>
-                    <span class="stat-label">Hours</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-number">5-20</span>
-                    <span class="stat-label">Players</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-number">∞</span>
-                    <span class="stat-label">Outcomes</span>
-                </div>
+
+            <div class="memory-block stats-bar">
+                <span class="stat-value">2 Hours</span> •
+                <span class="stat-value">5-20 Players</span> •
+                <span class="stat-value">∞ Outcomes</span>
             </div>
-            
+
             <!-- Merged Evidence Mechanics -->
-            <div style="margin-top: 4rem; padding-top: 3rem; border-top: 1px solid rgba(204, 0, 0, 0.3);">
-                <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 2rem; text-align: center; color: #fff; margin-bottom: 2rem;">The Evidence You'll Uncover</h3>
-                
-                <div class="evidence-grid">
-                    <div class="evidence-item" style="background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(204, 0, 0, 0.2); padding: 1.5rem;">
-                        <h4 style="color: #cc0000; margin-bottom: 0.5rem;">Physical Puzzles</h4>
-                        <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem;">Unlock memory fragments hidden throughout the space. Each solution reveals another piece of last night's events.</p>
-                    </div>
-                    
-                    <div class="evidence-item" style="background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(204, 0, 0, 0.2); padding: 1.5rem;">
-                        <h4 style="color: #cc0000; margin-bottom: 0.5rem;">Memory Trading</h4>
-                        <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem;">Your recovered memories have value. Trade for power, sell for advantage, or use as leverage.</p>
-                    </div>
-                    
-                    <div class="evidence-item" style="background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(204, 0, 0, 0.2); padding: 1.5rem;">
-                        <h4 style="color: #cc0000; margin-bottom: 0.5rem;">Social Deduction</h4>
-                        <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem;">Observe. Deduce. Manipulate. The truth is whatever you can prove to the others.</p>
-                    </div>
+            <h3 class="section-header section-header--sm">The Evidence You'll Uncover</h3>
+
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <h3 class="faq-question">Physical Puzzles</h3>
+                    <p class="faq-answer faq-answer--visible">Unlock memory fragments hidden throughout the space. Each solution reveals another piece of last night's events.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3 class="faq-question">Memory Trading</h3>
+                    <p class="faq-answer faq-answer--visible">Your recovered memories have value. Trade for power, sell for advantage, or use as leverage.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3 class="faq-question">Social Deduction</h3>
+                    <p class="faq-answer faq-answer--visible">Observe. Deduce. Manipulate. The truth is whatever you can prove to the others.</p>
                 </div>
             </div>
-            
-            <div style="text-align: center; margin-top: 3rem;">
+
+            <div class="cta-wrapper">
                 <a href="#submit-evidence" class="cta-primary">I Need To Remember</a>
             </div>
         </div>
@@ -226,7 +203,7 @@
     <!-- Creators Section -->
     <section class="creators">
         <div class="file-cabinet">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 3rem;">Who Would Create This?</h2>
+            <h2 class="section-header">Who Would Create This?</h2>
 
             <div class="personnel-file">
                 <h3>Shuai Chen</h3>
@@ -250,9 +227,9 @@
                     Silicon Valley's hub for innovative gaming experiences. Partnering to bring this groundbreaking fusion of escape room mechanics and immersive theater to life in their transformed warehouse space.
                 </p>
             </div>
-            <div style="text-align: center; margin-top: 3rem;">
-                <h2 style="font-size: 1.2rem; color: #cc0000; margin-bottom: 0.5rem; font-style: italic;">Still have questions?</h2>
-            <!--UNNECESSARY CONTENT, REFERENCE IF ESSENTIAL INTEL IS MOVED-->  
+            <div class="cta-wrapper">
+                <p class="section-prompt">Still have questions?</p>
+            <!--UNNECESSARY CONTENT, REFERENCE IF ESSENTIAL INTEL IS MOVED-->
              <!----    <a href="#faq" class="cta-primary">Get The Essential Intel</a>  -->
             </div>
         </div>
@@ -271,10 +248,8 @@
     <!-- FAQ Section -->
     <section id="faq" class="faq-section">
         <div class="container">
-            <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 3rem; text-align: center; color: #cc0000; margin-bottom: 1rem;">Before You Enter: Essential Intel</h2>
-            <p style="text-align: center; font-size: 1.3rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 3rem;">
-                Real answers to real questions.
-            </p>
+            <h2 class="section-header">Before You Enter: Essential Intel</h2>
+            <p class="section-intro">Real answers to real questions.</p>
 
             <div class="faq-grid">
                 <div class="faq-item">
@@ -314,7 +289,7 @@ Contact us for corporate packages</p>
                 </div>                 
                 <div class="faq-item">
                     <h3 class="faq-question">When and where?</h3>
-                    <p class="faq-answer"><strong>This is a limited-run pop-up experience running through January 1, 2026.</strong> <em style="color: rgba(0, 204, 102, 0.8);">Extended by popular demand!</em><br>
+                    <p class="faq-answer"><strong>This is a limited-run pop-up experience running through January 1, 2026.</strong> <em class="accent-green">Extended by popular demand!</em><br>
                     <br>
                     Off the Couch Games in Fremont, CA<br>
                     555 Mowry Avenue, Fremont, CA 94536<br>
@@ -365,9 +340,9 @@ Contact us for corporate packages</p>
                 </div>
             </div>
             
-            <div style="text-align: center; margin-top: 3rem;">
-                <p style="font-size: 1.3rem; color: rgba(204, 0, 0, 0.9); font-weight: 600;">No more questions. Time to remember.</p>
-                <a href="#submit-evidence" class="cta-primary" style="margin-top: 1rem;">Begin Memory Recovery</a>
+            <div class="cta-wrapper">
+                <p class="cta-prompt">No more questions. Time to remember.</p>
+                <a href="#submit-evidence" class="cta-primary">Begin Memory Recovery</a>
             </div>
         </div>
     </section>
@@ -387,11 +362,9 @@ Contact us for corporate packages</p>
                 <span class="glitch"><b><u>NEURAI INC. - INVESTIGATION SCHEDULING TERMINAL</u></b></span>
             </div>
 
-            <p style="text-align: center; font-size: 1.3rem; color: rgba(204, 0, 0, 0.9); margin-bottom: 1rem; font-weight: 600;">
-                Select your entry point into the investigation.
-            </p>
+            <p class="cta-prompt">Select your entry point into the investigation.</p>
 
-            <p class="system-note" style="margin-bottom: 3rem;">
+            <p class="system-note mb-3">
                 Time slots are limited • Memory corruption is irreversible • Case sessions fill rapidly
             </p>
 
@@ -411,9 +384,7 @@ Contact us for corporate packages</p>
     <footer class="footer">
         <p class="case-details">CASE FILE: ABOUT LAST NIGHT</p>
         <p class="location-detail">In partnership with Off the Couch Games | Fremont, California</p>
-        <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 2rem;">
-            A Patchwork Adventures × StoryPunk Production
-        </p>
+        <p class="footer-credit">A Patchwork Adventures × StoryPunk Production</p>
     </footer>
     <!-- END CONTENT SECTION: FOOTER -->
 
