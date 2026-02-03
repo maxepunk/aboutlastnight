@@ -1,0 +1,331 @@
+/* ═══════════════════════════════════════════════════════════
+   PRESS PAGE STYLES
+   Extends base site styles for press/media page
+   ═══════════════════════════════════════════════════════════ */
+
+/* Header */
+.press-header {
+    padding: 4rem 2rem 2rem;
+    text-align: center;
+    background: linear-gradient(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.95));
+}
+
+.press-header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3rem, 8vw, 5rem);
+    color: #cc0000;
+    margin-bottom: 0.5rem;
+}
+
+.press-header .subtitle {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.2rem;
+}
+
+.back-link {
+    display: inline-block;
+    color: rgba(204, 0, 0, 0.9);
+    text-decoration: none;
+    margin-bottom: 2rem;
+    transition: color 0.3s ease;
+}
+
+.back-link:hover {
+    color: #ff3333;
+}
+
+/* Key Facts Grid */
+.key-facts {
+    padding: 4rem 2rem;
+    background: rgba(10, 10, 10, 0.95);
+}
+
+.facts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.fact-item {
+    background: rgba(20, 20, 20, 0.8);
+    border-left: 3px solid #cc0000;
+    padding: 1rem 1.5rem;
+}
+
+.fact-label {
+    display: block;
+    color: #cc0000;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+}
+
+.fact-value {
+    display: block;
+    color: #fff;
+    font-size: 1rem;
+}
+
+.fact-value a {
+    color: rgba(204, 0, 0, 0.9);
+}
+
+/* Photo Gallery */
+.photo-gallery {
+    padding: 4rem 2rem;
+    background: linear-gradient(rgba(5, 5, 5, 0.95), rgba(10, 10, 10, 0.98));
+}
+
+.gallery-category {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 3rem 0 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(204, 0, 0, 0.3);
+}
+
+.gallery-category:first-of-type {
+    margin-top: 2rem;
+}
+
+.download-all {
+    display: inline-block;
+    margin: 1rem 0 2rem;
+}
+
+.photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 2rem;
+}
+
+.press-photo {
+    background: rgba(20, 20, 20, 0.9);
+    border: 1px solid rgba(204, 0, 0, 0.2);
+    overflow: hidden;
+    transition: border-color 0.3s ease;
+}
+
+.press-photo:hover {
+    border-color: rgba(204, 0, 0, 0.5);
+}
+
+.press-photo img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+}
+
+.photo-caption {
+    padding: 1rem;
+    color: #fff;
+    font-weight: 500;
+}
+
+.photo-credit {
+    padding: 0 1rem 1rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.photo-download {
+    display: block;
+    padding: 0.75rem 1rem;
+    background: rgba(204, 0, 0, 0.1);
+    color: #cc0000;
+    text-decoration: none;
+    text-align: center;
+    font-size: 0.9rem;
+    border-top: 1px solid rgba(204, 0, 0, 0.2);
+    transition: background 0.3s ease;
+}
+
+.photo-download:hover {
+    background: rgba(204, 0, 0, 0.2);
+}
+
+/* Press Release */
+.press-release {
+    padding: 4rem 2rem;
+    background: rgba(10, 10, 10, 0.95);
+}
+
+.release-content {
+    max-width: 700px;
+    margin: 2rem auto 0;
+    background: rgba(20, 20, 20, 0.8);
+    padding: 2rem;
+    border-left: 3px solid #cc0000;
+}
+
+.release-date {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.release-headline {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    color: #fff;
+    margin: 1rem 0 0.5rem;
+}
+
+.release-subhead {
+    color: rgba(255, 255, 255, 0.7);
+    font-style: italic;
+    margin-bottom: 1.5rem;
+}
+
+.release-content p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+}
+
+.release-boilerplate {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(204, 0, 0, 0.2);
+}
+
+.release-contact {
+    margin-top: 1.5rem;
+}
+
+.release-end {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 2rem;
+}
+
+/* About Section */
+.about-section {
+    padding: 4rem 2rem;
+    background: linear-gradient(rgba(5, 5, 5, 0.95), rgba(10, 10, 10, 0.98));
+}
+
+.about-content {
+    max-width: 700px;
+    margin: 2rem auto;
+}
+
+.about-content p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+}
+
+.subsection-header {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 3rem 0 1.5rem;
+    text-align: center;
+}
+
+.creator-bio {
+    max-width: 700px;
+    margin: 0 auto 2rem;
+    background: rgba(20, 20, 20, 0.8);
+    padding: 1.5rem 2rem;
+    border-left: 3px solid #cc0000;
+}
+
+.creator-bio h4 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    color: #cc0000;
+    margin-bottom: 0.25rem;
+}
+
+.creator-title {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.creator-bio p:last-child {
+    margin-bottom: 0;
+    line-height: 1.6;
+}
+
+/* Press Contact */
+.press-contact {
+    padding: 4rem 2rem;
+    background: rgba(10, 10, 10, 0.95);
+    text-align: center;
+}
+
+.contact-card {
+    display: inline-block;
+    background: rgba(20, 20, 20, 0.9);
+    border: 1px solid rgba(204, 0, 0, 0.3);
+    padding: 2rem 3rem;
+    margin-top: 1.5rem;
+}
+
+.contact-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    color: #cc0000;
+    margin-bottom: 0.25rem;
+}
+
+.contact-role {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.contact-email a {
+    color: #fff;
+    text-decoration: none;
+}
+
+.contact-email a:hover {
+    color: #cc0000;
+}
+
+.contact-phone {
+    color: rgba(255, 255, 255, 0.8);
+    margin-top: 0.5rem;
+}
+
+/* Footer */
+.press-footer {
+    padding: 2rem;
+    background: #000;
+    text-align: center;
+    border-top: 1px solid rgba(204, 0, 0, 0.2);
+}
+
+.press-footer p {
+    margin: 0.5rem 0;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9rem;
+}
+
+.press-footer a {
+    color: rgba(204, 0, 0, 0.9);
+    text-decoration: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .photo-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .facts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .contact-card {
+        padding: 1.5rem;
+    }
+}
