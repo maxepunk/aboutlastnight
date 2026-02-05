@@ -176,6 +176,21 @@
     margin-top: 2rem;
 }
 
+.footer-links {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+}
+
+.footer-links a {
+    color: rgba(255, 255, 255, 0.4);
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.footer-links a:hover {
+    color: rgba(204, 0, 0, 0.8);
+}
+
 /* Booking Bar */
 .booking-bar {
     position: sticky;
