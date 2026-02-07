@@ -23,7 +23,7 @@ const { interrupt } = require('@langchain/langgraph');
  * Checkpoint type identifiers
  *
  * These match the old APPROVAL_TYPES values for API compatibility.
- * Scripts (e2e-walkthrough.js, continue-flow.js) depend on these names.
+ * Scripts (e2e-walkthrough.js) depend on these names.
  */
 const CHECKPOINT_TYPES = {
   INPUT_REVIEW: 'input-review',
