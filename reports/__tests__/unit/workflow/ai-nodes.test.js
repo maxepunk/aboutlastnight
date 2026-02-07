@@ -26,11 +26,10 @@ const {
   validateContentBundle,
   validateArticle,
   reviseContentBundle,
-  createMockSdkClient,
-  createMockClaudeClient,  // Backward compat alias
   createMockPromptBuilder,
   _testing
 } = require('../../../lib/workflow/nodes/ai-nodes');
+const { createMockSdkClient, createMockClaudeClient } = require('../../mocks/llm-client.mock');
 const { PHASES } = require('../../../lib/workflow/state');
 // NOTE: APPROVAL_TYPES removed in interrupt() migration
 // AI nodes no longer set awaitingApproval/approvalType - that's checkpoint-helpers' job
@@ -72,15 +71,6 @@ describe('ai-nodes', () => {
 
     it('exports reviseContentBundle function', () => {
       expect(typeof reviseContentBundle).toBe('function');
-    });
-
-    it('exports createMockSdkClient factory', () => {
-      expect(typeof createMockSdkClient).toBe('function');
-    });
-
-    it('exports createMockClaudeClient as backward compat alias', () => {
-      expect(typeof createMockClaudeClient).toBe('function');
-      expect(createMockClaudeClient).toBe(createMockSdkClient);
     });
 
     it('exports createMockPromptBuilder factory', () => {

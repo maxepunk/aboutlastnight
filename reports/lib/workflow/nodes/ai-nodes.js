@@ -43,8 +43,6 @@ const {
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper
 } = require('./node-helpers');
 const { traceNode } = require('../../observability');
-// Import consolidated mock from test mocks (avoids duplication)
-const { createMockSdkClient, createMockClaudeClient } = require('../../../__tests__/mocks/llm-client.mock');
 
 /**
  * Get PromptBuilder from config or create default
@@ -1526,69 +1524,6 @@ function createMockPromptBuilder() {
   };
 }
 
-// Default fixture generators for mock client
-function getDefaultEvidenceBundle() {
-  return {
-    exposed: { tokens: [], paperEvidence: [] },
-    buried: { transactions: [], relationships: [] },
-    context: { timeline: {}, playerFocus: {}, sessionMetadata: {} },
-    curatorNotes: { layerRationale: 'Default test bundle', characterCoverage: {} }
-  };
-}
-
-function getDefaultArcAnalysis() {
-  return {
-    narrativeArcs: [
-      { name: 'Test Arc', playerEmphasis: 'HIGH', evidenceTokens: [], charactersFeatured: [], summary: 'Test' }
-    ],
-    characterPlacementOpportunities: {},
-    rosterCoverage: { featured: [], mentioned: [], needsPlacement: [] },
-    heroImageSuggestion: null
-  };
-}
-
-function getDefaultOutline() {
-  return {
-    lede: { hook: 'Test hook', keyTension: 'Test tension' },
-    theStory: { arcs: [] },
-    followTheMoney: { shellAccounts: [] },
-    thePlayers: { exposed: [], buried: [], pullQuotes: [] },
-    whatsMissing: { gaps: [], unansweredQuestions: [] },
-    closing: { systemicAngle: 'Test angle', accusationHandling: 'Test handling' }
-  };
-}
-
-function getDefaultContentBundle() {
-  return {
-    metadata: {
-      sessionId: 'test-session',
-      theme: 'journalist',
-      generatedAt: new Date().toISOString()
-    },
-    headline: { main: 'Test Headline for Validation' },
-    sections: [{ id: 'test', type: 'narrative', content: [{ type: 'paragraph', text: 'Test content' }] }]
-  };
-}
-
-function getDefaultValidationResults() {
-  return {
-    passed: true,
-    issues: [],
-    voice_score: 4,
-    voice_notes: 'Test validation passed',
-    roster_coverage: { featured: [], mentioned: [], missing: [] },
-    systemic_critique_present: true,
-    blake_handled_correctly: true
-  };
-}
-
-function getDefaultRevision() {
-  return {
-    contentBundle: getDefaultContentBundle(),
-    fixes_applied: ['Test fix applied']
-  };
-}
-
 module.exports = {
   // Node functions (wrapped with LangSmith tracing)
   curateEvidenceBundle: traceNode(curateEvidenceBundle, 'curateEvidenceBundle', {
@@ -1614,8 +1549,6 @@ module.exports = {
   reviseContentBundle: traceNode(reviseContentBundle, 'reviseContentBundle'),
 
   // Testing utilities
-  createMockSdkClient,
-  createMockClaudeClient,  // Backward compatibility alias
   createMockPromptBuilder,
 
   // Internal functions for testing
@@ -1624,12 +1557,6 @@ module.exports = {
     getSdkClient,
     getPromptBuilder,
     scorePaperEvidence,  // Batched Sonnet scoring (Commit 8.11)
-    getSchemaValidator,
-    getDefaultEvidenceBundle,
-    getDefaultArcAnalysis,
-    getDefaultOutline,
-    getDefaultContentBundle,
-    getDefaultValidationResults,
-    getDefaultRevision
+    getSchemaValidator
   }
 };

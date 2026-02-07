@@ -33,6 +33,7 @@ const {
 const { PHASES, REVISION_CAPS, getDefaultState } = require('../../lib/workflow/state');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 const { mocks } = require('../../lib/workflow/nodes');
+const { createMockSdkClient } = require('../mocks/llm-client.mock');
 
 // Fixtures data directory for session files
 const FIXTURES_DATA_DIR = path.join(__dirname, '..', 'fixtures', 'sessions');
@@ -166,7 +167,7 @@ describe('workflow integration', () => {
   describe('approval checkpoints', () => {
     // Create config with all mocks for full pipeline
     function createMockConfig(sessionId = 'test-session', fixtures = {}) {
-      const sdkClient = mocks.createMockSdkClient({
+      const sdkClient = createMockSdkClient({
         evidenceBundle: fixtures.evidenceBundle || mockEvidenceBundle,
         arcAnalysis: fixtures.arcAnalysis || mockArcAnalysis,
         outline: fixtures.outline || mockOutline,
@@ -258,7 +259,7 @@ describe('workflow integration', () => {
     // Create config that auto-approves everything
     function createAutoApproveConfig(sessionId = 'test-session') {
       // Mock Claude client that returns validation passed
-      const sdkClient = mocks.createMockSdkClient({
+      const sdkClient = createMockSdkClient({
         evidenceBundle: mockEvidenceBundle,
         arcAnalysis: mockArcAnalysis,
         outline: mockOutline,
@@ -391,7 +392,7 @@ describe('workflow integration', () => {
   describe('revision loops', () => {
     function createEvaluatorMockConfig(sessionId = 'test-session', evalResults = {}) {
       // Mock Claude client that returns specific evaluation results
-      const sdkClient = mocks.createMockSdkClient({
+      const sdkClient = createMockSdkClient({
         evidenceBundle: mockEvidenceBundle,
         arcAnalysis: mockArcAnalysis,
         outline: mockOutline,
@@ -467,7 +468,7 @@ describe('workflow integration', () => {
           sessionId: 'test-session',
           theme: 'journalist',
           dataDir: FIXTURES_DATA_DIR,
-          sdkClient: mocks.createMockSdkClient({
+          sdkClient: createMockSdkClient({
             contentBundle: mockContentBundle
           }),
           promptBuilder: mocks.createMockPromptBuilder(),
@@ -538,7 +539,7 @@ describe('workflow integration', () => {
           sessionId: 'test-session',
           theme: 'journalist',
           dataDir: FIXTURES_DATA_DIR,
-          sdkClient: mocks.createMockSdkClient({
+          sdkClient: createMockSdkClient({
             evidenceBundle: mockEvidenceBundle,
             arcAnalysis: mockArcAnalysis,
             outline: mockOutline,
@@ -603,7 +604,7 @@ describe('workflow integration', () => {
           sessionId: 'test-session',
           theme: 'detective',
           dataDir: FIXTURES_DATA_DIR,
-          sdkClient: mocks.createMockSdkClient({
+          sdkClient: createMockSdkClient({
             evidenceBundle: mockEvidenceBundle,
             arcAnalysis: mockArcAnalysis,
             outline: mockOutline,
