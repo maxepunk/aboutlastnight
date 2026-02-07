@@ -84,7 +84,8 @@ For data flow at each checkpoint, see `PIPELINE_DEEP_DIVE.md#phase-by-phase-brea
 ### Key Files
 
 ```
-server.js                           # Express server + /api/generate endpoint
+server.js                           # Express server + session REST API
+lib/api-helpers.js                  # Shared API helpers (rollback, graph config, error responses)
 lib/llm/
 ├── index.js                        # Public API: traced sdkQuery, createProgressLogger
 └── client.js                       # Raw SDK wrapper with timeouts, progress hooks
@@ -290,33 +291,19 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 
 ## API Reference
 
-### Main Generation Endpoint
-
-**POST /api/generate** (protected)
-```json
-{
-  "sessionId": "1221",
-  "theme": "journalist",
-  "rawSessionInput": { "roster": "...", "accusation": "...", ... },
-  "rollbackTo": "arc-selection",  // Optional: regenerate from checkpoint
-  "stateOverrides": { "playerFocus": {...} },  // Optional: inject state
-  "approvals": {
-    "selectedArcs": ["arc-id-1", "arc-id-2"],
-    "outline": true
-  }
-}
-```
-
-### Session State REST Endpoints
+### Session REST API
 
 **Step-by-step Pipeline Control:**
-- `/api/session/:id/start` (POST) - Start new session
+- `/api/session/:id/start` (POST) - Start new session with raw input
+- `/api/session/:id/resume` (POST) - Resume existing workflow (re-invoke at current state)
 - `/api/session/:id/approve` (POST) - Submit checkpoint approval
 - `/api/session/:id/rollback` (POST) - Roll back to checkpoint
 - `/api/session/:id/state` (GET) - Get current state
 - `/api/session/:id/checkpoint` (GET) - Get checkpoint info
 
-See API documentation or `server.js` for usage examples.
+**Legacy:** `/api/generate` (POST) - Deprecated. Use `/start` or `/resume` instead.
+
+See `server.js` for detailed usage and request/response shapes.
 
 ## Environment Setup
 
