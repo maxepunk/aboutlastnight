@@ -3408,17 +3408,13 @@ async function runWalkthrough() {
     }
     currentData = data;
   } else {
-    // Use /generate for resume
-    console.log(color(`\n─── Resuming Session via /generate ───`, 'dim'));
-    const requestBody = {
-      sessionId,
-      theme: DEFAULT_THEME,
-      mode: 'resume'
-    };
+    // Use /resume for existing sessions
+    console.log(color(`\n─── Resuming Session via /resume ───`, 'dim'));
+    const requestBody = {};
     if (stateOverrides) {
       requestBody.stateOverrides = stateOverrides;
     }
-    const { status, data, error, durationMs } = await apiCall('/api/generate', requestBody, 'POST', sessionId);
+    const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/resume`, requestBody, 'POST', sessionId);
 
     if (!VERBOSE) {
       console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
