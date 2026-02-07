@@ -27,6 +27,7 @@ const {
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
+const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require('./lib/api-helpers');
 
 // Shared checkpointer instance - must persist across API calls for resume to work
 const sharedCheckpointer = new MemorySaver();
@@ -454,27 +455,12 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         }
     }
 
-    // Always use sessionId as thread_id for consistent session continuity
-    // This allows both fresh and resume modes to be resumable via /api/session/:id/approve
-    // (Commit 8.9.9 - Fixed thread_id mismatch that caused OUTLINE infinite loop)
-    const threadId = sessionId;
-
     console.log(`[${new Date().toISOString()}] /api/generate: sessionId=${sessionId}, theme=${theme}, mode=${mode || 'resume'}, rollbackTo=${rollbackTo || 'none'}, hasRawInput=${!!rawSessionInput}, hasOverrides=${!!stateOverrides}, approvals=${JSON.stringify(approvals || {})}`);
 
     try {
-        // Use shared checkpointer to persist state across API calls
-        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
-
-        // Build config for graph execution
-        // sessionId = our logical session ID, thread_id = checkpointer key
-        const config = {
-            configurable: {
-                sessionId,
-                theme,
-                thread_id: threadId,
-                promptBuilder: sharedPromptBuilder
-            }
-        };
+        const { graph, config } = createGraphAndConfig(sessionId, theme, {
+            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+        });
 
         // Build initial state from rollback, overrides, rawSessionInput, and approvals
         let initialState = {};
@@ -484,34 +470,16 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         // This replaces the old timestamped thread_id approach that caused mismatches
         // with /api/session/:id/approve endpoint
         if (mode === 'fresh') {
-            const fieldsToClear = ROLLBACK_CLEARS['input-review'];
-            fieldsToClear.forEach(field => {
-                initialState[field] = null;
-            });
-            // Reset all revision counters
-            const counterResets = ROLLBACK_COUNTER_RESETS['input-review'];
-            Object.assign(initialState, counterResets);
-            // Reset control flow
-            initialState.currentPhase = null;
-            console.log(`[${new Date().toISOString()}] Fresh mode: Cleared ${fieldsToClear.length} fields via ROLLBACK_CLEARS`);
+            Object.assign(initialState, buildRollbackState('input-review'));
+            console.log(`[${new Date().toISOString()}] Fresh mode: Cleared ${ROLLBACK_CLEARS['input-review'].length} fields via buildRollbackState`);
         }
 
         // Apply rollback if specified (Commit 8.9.3)
         // This clears state from the rollback point forward, triggering regeneration
         if (rollbackTo) {
             console.log(`[${new Date().toISOString()}] Applying rollback to '${rollbackTo}'`);
-
-            // Clear fields from this checkpoint forward
-            const fieldsToClear = ROLLBACK_CLEARS[rollbackTo];
-            fieldsToClear.forEach(field => {
-                initialState[field] = null;
-            });
-
-            // Reset revision counters for fresh attempts
-            const counterResets = ROLLBACK_COUNTER_RESETS[rollbackTo];
-            Object.assign(initialState, counterResets);
-
-            console.log(`[${new Date().toISOString()}] Rollback cleared ${fieldsToClear.length} fields, reset counters:`, Object.keys(counterResets));
+            Object.assign(initialState, buildRollbackState(rollbackTo));
+            console.log(`[${new Date().toISOString()}] Rollback cleared ${ROLLBACK_CLEARS[rollbackTo].length} fields, reset counters:`, Object.keys(ROLLBACK_COUNTER_RESETS[rollbackTo]));
         }
 
         // Apply state overrides after rollback (Commit 8.9.3)
@@ -943,32 +911,12 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start: theme=${theme}`);
 
     try {
-        // NOTE: Background pipelines removed - parallel branches in graph handle this now
-        // Evidence and photo fetching run in parallel within the LangGraph workflow
-
-        // Use sessionId as thread_id for consistency with /api/session/:id/approve
-        // (Commit 8.9.9 - Fix for thread_id mismatch that caused infinite loops)
-        const threadId = sessionId;
-
-        // Use shared graph
-        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
-        const config = {
-            configurable: {
-                sessionId,
-                theme,
-                thread_id: threadId,
-                promptBuilder: sharedPromptBuilder
-            }
-        };
-
-        // Clear all state fields for fresh start using ROLLBACK_CLEARS pattern
-        const initialState = { rawSessionInput };
-        const fieldsToClear = ROLLBACK_CLEARS['input-review'];
-        fieldsToClear.forEach(field => {
-            initialState[field] = null;
+        const { graph, config } = createGraphAndConfig(sessionId, theme, {
+            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
         });
-        Object.assign(initialState, ROLLBACK_COUNTER_RESETS['input-review']);
-        initialState.currentPhase = null;
+
+        // Clear all state fields for fresh start
+        const initialState = { rawSessionInput, ...buildRollbackState('input-review') };
         const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
 
         // Check if graph is interrupted at a checkpoint
@@ -1010,15 +958,10 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve:`, JSON.stringify(approvals));
 
     try {
-        // Create graph and config first (needed for getState)
-        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
-        const config = {
-            configurable: {
-                sessionId,
-                thread_id: sessionId,
-                promptBuilder: sharedPromptBuilder
-            }
-        };
+        // Create graph and config (theme resolved from state below)
+        const { graph, config } = createGraphAndConfig(sessionId, 'journalist', {
+            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+        });
 
         // Check if graph is interrupted using native LangGraph pattern
         const graphState = await graph.getState(config);
@@ -1030,7 +973,7 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
             });
         }
 
-        // Get theme from state for config
+        // Resolve theme from state
         const theme = graphState.values?.theme || 'journalist';
         config.configurable.theme = theme;
 
@@ -1159,29 +1102,12 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
         }
 
-        // Use theme from session state (not hardcoded)
-        const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
-        const config = {
-            configurable: {
-                sessionId,
-                theme: session.state.theme || 'journalist',
-                thread_id: sessionId,
-                promptBuilder: sharedPromptBuilder
-            }
-        };
-
-        // Build rollback state
-        let initialState = {};
-
-        // Clear fields from this checkpoint forward
-        const fieldsToClear = ROLLBACK_CLEARS[rollbackTo];
-        fieldsToClear.forEach(field => {
-            initialState[field] = null;
+        const { graph, config } = createGraphAndConfig(sessionId, session.state.theme || 'journalist', {
+            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
         });
 
-        // Reset revision counters
-        const counterResets = ROLLBACK_COUNTER_RESETS[rollbackTo];
-        Object.assign(initialState, counterResets);
+        // Build rollback state
+        let initialState = buildRollbackState(rollbackTo);
 
         // Apply overrides
         if (stateOverrides) {
@@ -1201,7 +1127,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             return res.json({
                 ...buildInterruptResponse(sessionId, checkpointData, result.currentPhase),
                 rolledBackTo: rollbackTo,
-                fieldsCleared: fieldsToClear
+                fieldsCleared: ROLLBACK_CLEARS[rollbackTo]
             });
         }
 
@@ -1210,7 +1136,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             sessionId,
             rolledBackTo: rollbackTo,
             currentPhase: result.currentPhase,
-            fieldsCleared: fieldsToClear
+            fieldsCleared: ROLLBACK_CLEARS[rollbackTo]
         });
 
     } catch (error) {
