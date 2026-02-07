@@ -756,123 +756,42 @@ app.get('/api/session/:id/state/:field', requireAuth, async (req, res) => {
     }
 });
 
-/**
- * GET /api/session/:id/evidence
- * Get evidence bundle (available after Phase 1.8)
- */
-app.get('/api/session/:id/evidence', requireAuth, async (req, res) => {
-    const { id: sessionId } = req.params;
+// Table-driven resource GET endpoints (Phase 2 - replaces 4 near-identical handlers)
+const RESOURCE_ENDPOINTS = [
+    { path: 'evidence', minPhase: 1.8,
+      fields: state => ({ evidenceBundle: state.evidenceBundle || null }),
+      check: state => !!state.evidenceBundle },
+    { path: 'arcs', minPhase: 2.3,
+      fields: state => ({ narrativeArcs: state.narrativeArcs || null, selectedArcs: state.selectedArcs || null }),
+      check: state => !!state.narrativeArcs },
+    { path: 'outline', minPhase: 3.2,
+      fields: state => ({ outline: state.outline || null }),
+      check: state => !!state.outline },
+    { path: 'article', minPhase: 4.2,
+      fields: state => ({ contentBundle: state.contentBundle || null, articleHtml: state.assembledHtml || null }),
+      check: state => !!state.contentBundle }
+];
 
-    try {
-        const session = await getSessionState(sessionId);
-
-        if (!session) {
-            return res.status(404).json({ sessionId, exists: false });
+for (const endpoint of RESOURCE_ENDPOINTS) {
+    app.get(`/api/session/:id/${endpoint.path}`, requireAuth, async (req, res) => {
+        const { id: sessionId } = req.params;
+        try {
+            const session = await getSessionState(sessionId);
+            if (!session) {
+                return res.status(404).json({ sessionId, exists: false });
+            }
+            const state = session.state;
+            const phaseNum = parseFloat(state.currentPhase || '0');
+            res.json({
+                sessionId,
+                available: phaseNum >= endpoint.minPhase && endpoint.check(state),
+                ...endpoint.fields(state)
+            });
+        } catch (error) {
+            sendErrorResponse(res, sessionId, error, `GET /api/session/${sessionId}/${endpoint.path}`);
         }
-
-        const state = session.state;
-        const phaseNum = parseFloat(state.currentPhase || '0');
-
-        res.json({
-            sessionId,
-            available: phaseNum >= 1.8 && !!state.evidenceBundle,
-            evidenceBundle: state.evidenceBundle || null
-        });
-
-    } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/evidence error:`, error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * GET /api/session/:id/arcs
- * Get narrative arcs (available after Phase 2.3)
- */
-app.get('/api/session/:id/arcs', requireAuth, async (req, res) => {
-    const { id: sessionId } = req.params;
-
-    try {
-        const session = await getSessionState(sessionId);
-
-        if (!session) {
-            return res.status(404).json({ sessionId, exists: false });
-        }
-
-        const state = session.state;
-        const phaseNum = parseFloat(state.currentPhase || '0');
-
-        res.json({
-            sessionId,
-            available: phaseNum >= 2.3 && !!state.narrativeArcs,
-            narrativeArcs: state.narrativeArcs || null,
-            selectedArcs: state.selectedArcs || null
-        });
-
-    } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/arcs error:`, error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * GET /api/session/:id/outline
- * Get article outline (available after Phase 3.2)
- */
-app.get('/api/session/:id/outline', requireAuth, async (req, res) => {
-    const { id: sessionId } = req.params;
-
-    try {
-        const session = await getSessionState(sessionId);
-
-        if (!session) {
-            return res.status(404).json({ sessionId, exists: false });
-        }
-
-        const state = session.state;
-        const phaseNum = parseFloat(state.currentPhase || '0');
-
-        res.json({
-            sessionId,
-            available: phaseNum >= 3.2 && !!state.outline,
-            outline: state.outline || null
-        });
-
-    } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/outline error:`, error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * GET /api/session/:id/article
- * Get generated article (available after Phase 4.2)
- */
-app.get('/api/session/:id/article', requireAuth, async (req, res) => {
-    const { id: sessionId } = req.params;
-
-    try {
-        const session = await getSessionState(sessionId);
-
-        if (!session) {
-            return res.status(404).json({ sessionId, exists: false });
-        }
-
-        const state = session.state;
-        const phaseNum = parseFloat(state.currentPhase || '0');
-
-        res.json({
-            sessionId,
-            available: phaseNum >= 4.2 && !!state.contentBundle,
-            contentBundle: state.contentBundle || null,
-            articleHtml: state.assembledHtml || null
-        });
-
-    } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/article error:`, error);
-        res.status(500).json({ error: error.message });
-    }
-});
+    });
+}
 
 // ===== SESSION ACTION ENDPOINTS (8.9.7) =====
 
