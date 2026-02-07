@@ -1831,8 +1831,7 @@ module.exports = {
     INTERWEAVING_SYSTEM_PROMPT,
     INTERWEAVING_SCHEMA,
 
-    // Commit 8.15: Player-focus-guided (used by revision flow)
-    buildPlayerFocusGuidedPrompt,
+    // Commit 8.15: Player-focus-guided schema (used by revision flow)
     PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
     PLAYER_FOCUS_GUIDED_SCHEMA
   }

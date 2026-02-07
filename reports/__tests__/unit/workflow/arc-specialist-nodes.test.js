@@ -18,7 +18,6 @@ const {
     extractPlayerFocusContext,
     buildOutputFormatSection,
     CORE_ARC_SCHEMA,
-    buildPlayerFocusGuidedPrompt,
     PLAYER_FOCUS_GUIDED_SCHEMA
   }
 } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
@@ -39,8 +38,7 @@ describe('arc-specialist-nodes', () => {
       expect(CORE_ARC_SCHEMA).toBeDefined();
     });
 
-    it('exports player-focus-guided helpers for revision flow', () => {
-      expect(typeof buildPlayerFocusGuidedPrompt).toBe('function');
+    it('exports player-focus-guided schema for revision flow', () => {
       expect(PLAYER_FOCUS_GUIDED_SCHEMA).toBeDefined();
     });
   });
