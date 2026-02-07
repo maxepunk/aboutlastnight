@@ -123,13 +123,14 @@ async function handleGenerateRequest(req, graph) {
         return { status: 200, json: response };
 
     } catch (error) {
+        console.error(`handleGenerateRequest error:`, error);
         return {
             status: 500,
             json: {
                 sessionId,
                 currentPhase: PHASES.ERROR,
-                error: error.message,
-                details: 'Report generation failed. Check server logs.'
+                error: 'Internal server error',
+                details: 'POST /api/generate. Check server logs.'
             }
         };
     }
@@ -409,7 +410,7 @@ describe('API /api/generate endpoint', () => {
 
             expect(response.status).toBe(500);
             expect(response.json.currentPhase).toBe(PHASES.ERROR);
-            expect(response.json.error).toBe('Graph execution failed');
+            expect(response.json.error).toBe('Internal server error');
             expect(response.json.sessionId).toBe('test-123');
         });
 
@@ -431,7 +432,7 @@ describe('API /api/generate endpoint', () => {
 
             const response = await handleGenerateRequest(req, graph);
 
-            expect(response.json.details).toBe('Report generation failed. Check server logs.');
+            expect(response.json.details).toBe('POST /api/generate. Check server logs.');
         });
     });
 

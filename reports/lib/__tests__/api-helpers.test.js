@@ -95,6 +95,10 @@ describe('buildRollbackState', () => {
       expect(expectedKeys).toContain(key);
     }
   });
+
+  test('throws on invalid rollback point', () => {
+    expect(() => buildRollbackState('nonexistent')).toThrow("Invalid rollback point: 'nonexistent'");
+  });
 });
 
 // ═══════════════════════════════════════════════════════

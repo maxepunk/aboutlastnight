@@ -20,6 +20,9 @@ const { ROLLBACK_CLEARS, ROLLBACK_COUNTER_RESETS, PHASES } = require('./workflow
  * @returns {object} State object with cleared fields and reset counters
  */
 function buildRollbackState(rollbackPoint = 'input-review') {
+  if (!ROLLBACK_CLEARS[rollbackPoint]) {
+    throw new Error(`Invalid rollback point: '${rollbackPoint}'`);
+  }
   const state = {};
   ROLLBACK_CLEARS[rollbackPoint].forEach(field => { state[field] = null; });
   Object.assign(state, ROLLBACK_COUNTER_RESETS[rollbackPoint]);

@@ -586,7 +586,7 @@ async function loadSessionInput(sessionId) {
   const dataDir = path.join(__dirname, '..', 'data', sessionId, 'inputs');
   const photosDir = path.join(__dirname, '..', 'data', sessionId, 'photos');
 
-  // RESUME MODE: Just return sessionId, use /generate to continue existing session
+  // RESUME MODE: Just return sessionId, use /resume to continue existing session
   if (RESUME_MODE) {
     console.log(color(`  → Resume mode: will continue existing session`, 'dim'));
     return { sessionId, fromFiles: true };
@@ -3388,7 +3388,7 @@ async function runWalkthrough() {
   const maxIterations = 20; // Safety limit
   let currentData = null;
 
-  // Initial request - use /start for new sessions, /generate for resume
+  // Initial request - use /start for new sessions, /resume for existing
   if (inputData.rawSessionInput && !RESUME_MODE) {
     // Use /start endpoint for new sessions
     console.log(color(`\n─── Starting Session via /start ───`, 'dim'));
