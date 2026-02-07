@@ -83,13 +83,11 @@ module.exports = {
   // AI nodes (from ai-nodes.js)
   curateEvidenceBundle: aiNodes.curateEvidenceBundle,
   processRescuedItems: aiNodes.processRescuedItems,  // Commit 8.10+: Handle human-rescued paper evidence
-  analyzeNarrativeArcs: aiNodes.analyzeNarrativeArcs, // @deprecated - use arc specialists
   buildArcEvidencePackages: aiNodes.buildArcEvidencePackages, // Phase 1 Fix: Extract per-arc evidence with fullContent
   generateOutline: aiNodes.generateOutline,
   reviseOutline: aiNodes.reviseOutline,  // Revision node with previous output context (DRY)
   generateContentBundle: aiNodes.generateContentBundle,
   validateContentBundle: aiNodes.validateContentBundle,
-  validateArticle: aiNodes.validateArticle, // @deprecated - use evaluateArticle
   reviseContentBundle: aiNodes.reviseContentBundle,
 
   // Template nodes (from template-nodes.js)
@@ -122,8 +120,6 @@ module.exports = {
     createMockOrchestrator: arcSpecialistNodes.createMockOrchestrator,
     // Commit 8.xx: Removed deprecated createMockSpecialist, createMockSynthesizer
     createMockEvaluator: evaluatorNodes.createMockEvaluator,
-    createMockSdkClient: aiNodes.createMockSdkClient,
-    createMockClaudeClient: aiNodes.createMockClaudeClient, // @deprecated - use createMockSdkClient
     createMockPromptBuilder: aiNodes.createMockPromptBuilder,
     createMockTemplateAssembler: templateNodes.createMockTemplateAssembler
   }
