@@ -547,13 +547,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         res.json(response);
 
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] /api/generate error:`, error);
-        res.status(500).json({
-            sessionId,
-            currentPhase: PHASES.ERROR,
-            error: error.message,
-            details: 'Report generation failed. Check server logs.'
-        });
+        sendErrorResponse(res, sessionId, error, `POST /api/generate for session ${sessionId}`);
     }
 });
 
@@ -601,8 +595,7 @@ app.get('/api/session/:id', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId} error:`, error);
-        res.status(500).json({ error: error.message });
+        sendErrorResponse(res, sessionId, error, `GET /api/session/${sessionId}`);
     }
 });
 
@@ -628,8 +621,7 @@ app.get('/api/session/:id/state', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/state error:`, error);
-        res.status(500).json({ error: error.message });
+        sendErrorResponse(res, sessionId, error, `GET /api/session/${sessionId}/state`);
     }
 });
 
@@ -663,8 +655,7 @@ app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/checkpoint error:`, error);
-        res.status(500).json({ error: error.message });
+        sendErrorResponse(res, sessionId, error, `GET /api/session/${sessionId}/checkpoint`);
     }
 });
 
@@ -751,8 +742,7 @@ app.get('/api/session/:id/state/:field', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] GET /api/session/${sessionId}/state/${field} error:`, error);
-        res.status(500).json({ error: error.message });
+        sendErrorResponse(res, sessionId, error, `GET /api/session/${sessionId}/state/${field}`);
     }
 });
 
@@ -856,13 +846,7 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start error:`, error);
-        res.status(500).json({
-            sessionId,
-            currentPhase: PHASES.ERROR,
-            error: error.message,
-            details: 'Session start failed. Check server logs.'
-        });
+        sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/start`);
     }
 });
 
@@ -967,7 +951,7 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                 progressEmitter.emitComplete(sessionId, {
                     sessionId,
                     currentPhase: PHASES.ERROR,
-                    error: error.message,
+                    error: 'Internal server error',
                     details: 'Approval operation failed. Check server logs.'
                 });
             }
@@ -981,16 +965,11 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         progressEmitter.emitComplete(sessionId, {
             sessionId,
             currentPhase: PHASES.ERROR,
-            error: error.message,
+            error: 'Internal server error',
             details: 'Approval operation failed. Check server logs.'
         });
 
-        res.status(500).json({
-            sessionId,
-            currentPhase: PHASES.ERROR,
-            error: error.message,
-            details: 'Approval operation failed. Check server logs.'
-        });
+        sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/approve`);
     }
 });
 
@@ -1059,13 +1038,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/rollback error:`, error);
-        res.status(500).json({
-            sessionId,
-            currentPhase: PHASES.ERROR,
-            error: error.message,
-            details: 'Rollback operation failed. Check server logs.'
-        });
+        sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/rollback`);
     }
 });
 
