@@ -455,7 +455,10 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         }
     }
 
+    // DEPRECATED: Use /api/session/:id/start (fresh) or /api/session/:id/resume (resume) instead
+    console.warn(`[DEPRECATED] /api/generate called for session ${sessionId}. Use /api/session/:id/start or /api/session/:id/resume.`);
     console.log(`[${new Date().toISOString()}] /api/generate: sessionId=${sessionId}, theme=${theme}, mode=${mode || 'resume'}, rollbackTo=${rollbackTo || 'none'}, hasRawInput=${!!rawSessionInput}, hasOverrides=${!!stateOverrides}, approvals=${JSON.stringify(approvals || {})}`);
+    res.setHeader('Deprecation', 'true');
 
     try {
         const { graph, config } = createGraphAndConfig(sessionId, theme, {
@@ -1042,6 +1045,60 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
     }
 });
 
+/**
+ * POST /api/session/:id/resume
+ * Resume existing workflow (re-invoke graph at current state)
+ * Replaces /api/generate's resume mode
+ */
+app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+    const { stateOverrides } = req.body;
+
+    console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/resume`);
+
+    try {
+        const session = await getSessionState(sessionId);
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
+        }
+
+        const theme = session.state.theme || 'journalist';
+        const { graph, config } = createGraphAndConfig(sessionId, theme, {
+            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+        });
+
+        let initialState = {};
+        if (stateOverrides) {
+            Object.assign(initialState, stateOverrides);
+        }
+
+        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
+        const graphState = await graph.getState(config);
+        const interrupted = isGraphInterrupted(graphState);
+
+        if (interrupted) {
+            const interruptData = getInterruptData(graphState);
+            const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
+            return res.json(buildInterruptResponse(sessionId, checkpointData, result.currentPhase));
+        }
+
+        const response = { sessionId, currentPhase: result.currentPhase };
+        if (result.currentPhase === PHASES.COMPLETE) {
+            response.assembledHtml = result.assembledHtml;
+            response.validationResults = result.validationResults;
+            response.outputPath = result.outputPath;
+            response.photosCopied = result.photosCopied;
+        }
+        if (result.errors?.length > 0) {
+            response.errors = result.errors;
+        }
+
+        res.json(response);
+    } catch (error) {
+        sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/resume`);
+    }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({
@@ -1049,7 +1106,7 @@ app.get('/api/health', (req, res) => {
         message: 'Server running',
         timestamp: new Date().toISOString(),
         endpoints: {
-            generate: '/api/generate (POST)',
+            generate: '/api/generate (POST) [DEPRECATED]',
             config: '/api/config (GET)',
             auth: {
                 login: '/api/auth/login (POST)',
@@ -1067,22 +1124,9 @@ app.get('/api/health', (req, res) => {
                 start: '/api/session/:id/start (POST)',
                 approve: '/api/session/:id/approve (POST)',
                 rollback: '/api/session/:id/rollback (POST)',
-                background: '/api/session/:id/background (GET)'
+                resume: '/api/session/:id/resume (POST)'
             }
         }
-    });
-});
-
-/**
- * GET /api/session/:id/background
- * @deprecated Background pipelines removed - parallel branches in graph handle this now
- */
-app.get('/api/session/:id/background', requireAuth, (req, res) => {
-    const { id: sessionId } = req.params;
-    res.json({
-        sessionId,
-        deprecated: true,
-        message: 'Background pipelines removed. Evidence and photo fetching now use native LangGraph parallel branches.'
     });
 });
 
@@ -1093,7 +1137,9 @@ app.get('/api/config', requireAuth, (req, res) => {
     });
 });
 
-// Serve frontend
+// NOTE: detlogv3.html report generation is broken — it sends {systemPrompt, userPrompt, model}
+// to /api/generate which requires {sessionId, theme, ...} and returns 400.
+// Kept as landing page until Phase 4 (detective theme via LangGraph). See roadmap.
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'detlogv3.html'));
 });
