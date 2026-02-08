@@ -117,7 +117,7 @@ a:hover {
   padding: var(--space-lg);
 }
 
-.glass-panel:hover {
+.glass-panel--interactive:hover {
   background: var(--bg-panel-hover);
 }
 
@@ -335,7 +335,8 @@ textarea.input {
   margin-bottom: var(--space-xl);
 }
 
-.login-panel form {
+/* The <form> IS the .login-panel (not nested inside it) */
+.login-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);

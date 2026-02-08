@@ -21,19 +21,19 @@ function truncate(str, maxLen = 80) {
  * @param {{label: string, color: string}} props
  */
 function Badge({ label, color }) {
-  const style = {
-    display: 'inline-block',
-    padding: '2px 8px',
-    borderRadius: '10px',
-    fontSize: '11px',
-    fontFamily: 'var(--font-mono)',
-    fontWeight: 600,
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
-    color: '#fff',
-    backgroundColor: color || 'var(--accent-amber)'
+  // Map CSS variable colors to badge modifier classes
+  const colorClassMap = {
+    'var(--accent-amber)': 'badge--amber',
+    'var(--accent-cyan)': 'badge--cyan',
+    'var(--accent-green)': 'badge--green',
+    'var(--accent-red)': 'badge--red',
+    'var(--layer-exposed)': 'badge--green',
+    'var(--layer-buried)': 'badge--red',
+    'var(--layer-context)': 'badge--cyan',
+    'var(--layer-excluded)': 'badge--amber'
   };
-  return React.createElement('span', { style }, label);
+  const colorClass = colorClassMap[color] || 'badge--amber';
+  return React.createElement('span', { className: 'badge ' + colorClass }, label);
 }
 
 /**
