@@ -12,6 +12,13 @@ const { useAppState, ACTIONS: APP_ACTIONS, LoginOverlay, SessionStart } = window
 const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
 const { CHECKPOINT_LABELS } = window.Console.utils;
 
+// Checkpoint type -> specific component mapping (Batch 3B.3)
+const CHECKPOINT_COMPONENTS = {
+  'input-review': window.Console.checkpoints && window.Console.checkpoints.InputReview,
+  'paper-evidence-selection': window.Console.checkpoints && window.Console.checkpoints.PaperEvidence,
+  'pre-curation': window.Console.checkpoints && window.Console.checkpoints.PreCuration
+};
+
 function App() {
   const [state, dispatch] = useAppState();
   const sseRef = React.useRef(null);
@@ -223,37 +230,46 @@ function App() {
         onRollback: handleRollback
       }),
 
-      // Checkpoint shell wrapping generic content
+      // Checkpoint shell wrapping checkpoint-specific or generic content
       React.createElement(CheckpointShell, {
         type: state.checkpointType,
         phase: state.phase,
         data: state.checkpointData
       },
-        // Generic checkpoint content (replaced by specific components in later batches)
-        React.createElement('p', { className: 'text-muted mb-lg text-sm' },
-          'Checkpoint components will be added in subsequent batches. For now, you can approve with the button below.'
-        ),
-        React.createElement('div', { className: 'flex gap-md' },
-          React.createElement('button', {
-            className: 'btn btn-primary',
-            onClick: () => {
-              // Payloads for each checkpoint type. Data-input checkpoints
-              // (await-roster, character-ids, await-full-context) use custom
-              // UI with specific payloads — added in Batch 3B.4.
-              const payloads = {
-                'input-review': { inputReview: true },
-                'paper-evidence-selection': { selectedPaperEvidence: state.checkpointData.paperEvidence || [] },
-                'pre-curation': { preCuration: true },
-                'evidence-and-photos': { evidenceBundle: true },
-                'arc-selection': { selectedArcs: (state.checkpointData.narrativeArcs || []).map(a => a.id || a.title) },
-                'outline': { outline: true },
-                'article': { article: true }
-              };
-              const payload = payloads[state.checkpointType] || { approved: true };
-              handleApprove(payload);
-            }
-          }, 'Approve')
-        )
+        // Render specific component if available, otherwise generic fallback
+        CHECKPOINT_COMPONENTS[state.checkpointType]
+          ? React.createElement(CHECKPOINT_COMPONENTS[state.checkpointType], {
+              data: state.checkpointData,
+              onApprove: handleApprove,
+              onReject: handleReject
+            })
+          : React.createElement(React.Fragment, null,
+              // Generic checkpoint content (replaced by specific components in later batches)
+              React.createElement('p', { className: 'text-muted mb-lg text-sm' },
+                'Checkpoint component not yet available. You can approve with the button below.'
+              ),
+              React.createElement('div', { className: 'flex gap-md' },
+                React.createElement('button', {
+                  className: 'btn btn-primary',
+                  onClick: () => {
+                    // Payloads for each checkpoint type. Data-input checkpoints
+                    // (await-roster, character-ids, await-full-context) use custom
+                    // UI with specific payloads — added in Batch 3B.4.
+                    const payloads = {
+                      'input-review': { inputReview: true },
+                      'paper-evidence-selection': { selectedPaperEvidence: state.checkpointData.paperEvidence || [] },
+                      'pre-curation': { preCuration: true },
+                      'evidence-and-photos': { evidenceBundle: true },
+                      'arc-selection': { selectedArcs: (state.checkpointData.narrativeArcs || []).map(a => a.id || a.title) },
+                      'outline': { outline: true },
+                      'article': { article: true }
+                    };
+                    const payload = payloads[state.checkpointType] || { approved: true };
+                    handleApprove(payload);
+                  }
+                }, 'Approve')
+              )
+            )
       )
     );
   } else {
