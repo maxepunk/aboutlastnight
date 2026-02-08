@@ -78,11 +78,17 @@ function App() {
               dispatch({
                 type: APP_ACTIONS.SSE_LLM_START,
                 label: event.data.label || event.data.context || 'Processing',
-                model: event.data.model || 'unknown'
+                model: event.data.model || 'unknown',
+                prompt: event.data.prompt || null,
+                systemPrompt: event.data.systemPrompt || null
               });
               break;
             case 'llm_complete':
-              dispatch({ type: APP_ACTIONS.SSE_LLM_COMPLETE });
+              dispatch({
+                type: APP_ACTIONS.SSE_LLM_COMPLETE,
+                response: event.data.response || null,
+                elapsed: event.data.elapsed || null
+              });
               break;
             case 'complete':
               // Close SSE connection
@@ -169,20 +175,20 @@ function App() {
     content = React.createElement(ProgressStream, {
       processing: state.processing,
       llmActivity: state.llmActivity,
+      lastLlmActivity: state.lastLlmActivity,
       progressMessages: state.progressMessages
     });
   } else if (state.completedResult) {
     // Complete: show placeholder (CompletionView added in Batch 3B.7)
-    content = React.createElement('div', { className: 'glass-panel fade-in', style: { textAlign: 'center', padding: '60px 24px' } },
-      React.createElement('h2', { style: { color: 'var(--accent-green)', marginBottom: '16px' } }, 'Workflow Complete'),
+    content = React.createElement('div', { className: 'glass-panel fade-in text-center p-xl' },
+      React.createElement('h2', { className: 'text-accent-green mb-md' }, 'Workflow Complete'),
       React.createElement('p', { className: 'text-secondary' }, 'Session ' + state.sessionId + ' finished successfully.'),
       state.completedResult.outputPath &&
-        React.createElement('p', { className: 'text-muted', style: { marginTop: '8px' } },
+        React.createElement('p', { className: 'text-muted mt-sm' },
           'Output: ' + state.completedResult.outputPath
         ),
       React.createElement('button', {
-        className: 'btn btn-secondary',
-        style: { marginTop: '24px' },
+        className: 'btn btn-secondary mt-lg',
         onClick: () => dispatch({ type: APP_ACTIONS.LOGOUT })
       }, 'New Session')
     );
@@ -224,13 +230,16 @@ function App() {
         data: state.checkpointData
       },
         // Generic checkpoint content (replaced by specific components in later batches)
-        React.createElement('p', { className: 'text-muted', style: { marginBottom: '24px', fontSize: '0.85rem' } },
+        React.createElement('p', { className: 'text-muted mb-lg text-sm' },
           'Checkpoint components will be added in subsequent batches. For now, you can approve with the button below.'
         ),
-        React.createElement('div', { style: { display: 'flex', gap: '12px' } },
+        React.createElement('div', { className: 'flex gap-md' },
           React.createElement('button', {
             className: 'btn btn-primary',
             onClick: () => {
+              // Payloads for each checkpoint type. Data-input checkpoints
+              // (await-roster, character-ids, await-full-context) use custom
+              // UI with specific payloads — added in Batch 3B.4.
               const payloads = {
                 'input-review': { inputReview: true },
                 'paper-evidence-selection': { selectedPaperEvidence: state.checkpointData.paperEvidence || [] },
@@ -255,7 +264,7 @@ function App() {
   return React.createElement(React.Fragment, null,
     // Header (only when session is active)
     state.sessionId && React.createElement('header', { className: 'console-header' },
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center' } },
+      React.createElement('div', { className: 'flex items-center' },
         React.createElement('span', { className: 'console-header__title' }, 'ALN Console'),
         React.createElement('span', { className: 'console-header__session' },
           'Session: ' + state.sessionId
@@ -263,8 +272,7 @@ function App() {
       ),
       React.createElement('div', { className: 'console-header__actions' },
         state.phase && React.createElement('span', {
-          className: 'text-muted',
-          style: { fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }
+          className: 'text-muted console-header__phase-label'
         }, 'Phase: ' + state.phase),
         React.createElement('button', {
           className: 'btn btn-ghost btn-sm',

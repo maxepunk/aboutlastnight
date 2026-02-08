@@ -19,7 +19,8 @@ const initialState = {
   processing: false,
   sseConnected: false,
   progressMessages: [],
-  llmActivity: null,       // { label, model, startTime } or null
+  llmActivity: null,       // { label, model, startTime, prompt, systemPrompt, response } or null
+  lastLlmActivity: null,   // Last completed LLM call (with response) for panel display
   // Revision tracking (client-side cache for diff display)
   revisionCache: { outline: null, article: null },
   // Errors
@@ -90,12 +91,24 @@ function reducer(state, action) {
         llmActivity: {
           label: action.label,
           model: action.model,
-          startTime: Date.now()
+          startTime: Date.now(),
+          prompt: action.prompt || null,
+          systemPrompt: action.systemPrompt || null,
+          response: null
         }
       };
 
     case ACTIONS.SSE_LLM_COMPLETE:
-      return { ...state, llmActivity: null };
+      return {
+        ...state,
+        // Preserve last LLM activity with response for the collapsible panel
+        lastLlmActivity: state.llmActivity ? {
+          ...state.llmActivity,
+          response: action.response || null,
+          completedElapsed: action.elapsed || null
+        } : state.lastLlmActivity,
+        llmActivity: null
+      };
 
     case ACTIONS.SSE_COMPLETE:
       return { ...state, processing: false, sseConnected: false };
