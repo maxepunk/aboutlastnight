@@ -284,6 +284,56 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 
 **Features:** Graph visualization (40 nodes), state inspection, time-travel debugging, prompt iteration
 
+## Console Frontend
+
+**Access:** `http://localhost:3001/console` (local) or `https://console.aboutlastnightgame.com/console` (production)
+
+**Stack:** React 18 + Babel standalone via CDN. Zero build process — edit JS/CSS and refresh.
+
+**Architecture:** Single-page app with `useReducer` state machine. Each `.js` file is a `<script type="text/babel">` tag with its own Babel scope. Components register on `window.Console` namespace.
+
+### Console File Structure
+
+```
+console/
+├── index.html                      # SPA shell, CDN scripts, 22 script tags in load order
+├── api.js                          # REST client + SSE-before-POST pattern
+├── state.js                        # useReducer: 18 actions, initialState, RESET_SESSION
+├── utils.js                        # Badge, CollapsibleSection, JsonViewer, safeStringify, etc.
+├── app.js                          # Root: auth gate, checkpoint routing, rollback flow
+├── console.css                     # All styles (~1800 lines, BEM naming, noir theme)
+└── components/
+    ├── LoginOverlay.js             # Auth overlay
+    ├── SessionStart.js             # Session ID + start/resume
+    ├── ProgressStream.js           # SSE progress + LLM activity display
+    ├── PipelineProgress.js         # 10-step checkpoint stepper
+    ├── CheckpointShell.js          # Shared checkpoint wrapper
+    ├── RevisionDiff.js             # Shallow diff for revision loops
+    ├── RollbackPanel.js            # Rollback confirmation modal
+    ├── CompletionView.js           # Success screen with report link
+    └── checkpoints/
+        ├── InputReview.js          # Parsed session input display
+        ├── PaperEvidence.js        # Selectable paper evidence list
+        ├── PreCuration.js          # Evidence preprocessing summary
+        ├── AwaitRoster.js          # Tag-style roster name input
+        ├── CharacterIds.js         # Photo gallery + character mapping
+        ├── AwaitFullContext.js      # Accusation/report/notes collection
+        ├── EvidenceBundle.js       # Three-layer evidence display + rescue
+        ├── ArcSelection.js         # Arc card grid with selection
+        ├── Outline.js              # Article outline + approve/edit/reject
+        └── Article.js              # Content bundle + HTML preview iframe
+```
+
+### Modifying Checkpoint Components
+
+Each checkpoint component follows the same pattern:
+1. Registers on `window.Console.checkpoints`
+2. Receives `{ data, onApprove, onReject, dispatch, revisionCache }` props
+3. Renders checkpoint-specific UI from `data`
+4. Calls `onApprove(payload)` or `onReject(payload)` with checkpoint-specific payload
+
+**Conventions:** `const` not `var`, direct destructured imports (no aliasing), `safeStringify` instead of `JSON.stringify`, CSS utility classes over inline styles, aria-labels on interactive elements, functional state updaters for Set manipulation, `useEffect` reset on data change.
+
 ## State Management
 
 **Reducers** (`lib/workflow/state.js`): replace (default), append (arrays), appendSingle (single item), merge (objects)
