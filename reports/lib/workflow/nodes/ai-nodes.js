@@ -950,6 +950,7 @@ async function reviseOutline(state, config) {
     return {
       outline: null,
       _previousOutline: null,
+      _outlineFeedback: null,  // Clear human feedback after consumption
       errors: [{
         phase: PHASES.GENERATE_OUTLINE,
         type: 'revision-no-previous-output',
@@ -965,7 +966,8 @@ async function reviseOutline(state, config) {
     phase: 'outline',
     revisionCount,
     validationResults: state.validationResults,
-    previousOutput: previousOutline
+    previousOutput: previousOutline,
+    humanFeedback: state._outlineFeedback || null
   });
 
   // Get SDK client and prompt builder
@@ -992,6 +994,7 @@ async function reviseOutline(state, config) {
     return {
       outline: result || {},
       _previousOutline: null,  // Clear temporary field after use
+      _outlineFeedback: null,  // Clear human feedback after consumption
       currentPhase: PHASES.GENERATE_OUTLINE
     };
 
@@ -1001,6 +1004,7 @@ async function reviseOutline(state, config) {
     return {
       outline: null,
       _previousOutline: null,  // Clear temporary field
+      _outlineFeedback: null,  // Clear human feedback after consumption
       errors: [{
         phase: PHASES.GENERATE_OUTLINE,
         type: 'outline-revision-failed',
@@ -1318,6 +1322,7 @@ async function reviseContentBundle(state, config) {
     return {
       contentBundle: null,
       _previousContentBundle: null,
+      _articleFeedback: null,  // Clear human feedback after consumption
       errors: [{
         phase: PHASES.GENERATE_CONTENT,
         type: 'revision-no-previous-output',
@@ -1333,7 +1338,8 @@ async function reviseContentBundle(state, config) {
     phase: 'article',
     revisionCount,
     validationResults: state.validationResults,
-    previousOutput: previousContentBundle
+    previousOutput: previousContentBundle,
+    humanFeedback: state._articleFeedback || null
   });
 
   const sdk = getSdkClient(config, 'reviseContent');
@@ -1372,6 +1378,7 @@ async function reviseContentBundle(state, config) {
         ]
       },
       _previousContentBundle: null,  // Clear temporary field after use
+      _articleFeedback: null,  // Clear human feedback after consumption
       currentPhase: PHASES.GENERATE_CONTENT
     };
 
@@ -1381,6 +1388,7 @@ async function reviseContentBundle(state, config) {
     return {
       contentBundle: null,
       _previousContentBundle: null,  // Clear temporary field
+      _articleFeedback: null,  // Clear human feedback after consumption
       errors: [{
         phase: PHASES.GENERATE_CONTENT,
         type: 'article-revision-failed',
