@@ -141,6 +141,30 @@ function routeArticleEvaluation(state) {
   return 'revise';
 }
 
+/**
+ * Route function after outline human checkpoint
+ * Approve → forward to content generation
+ * Reject → revision loop (outlineApproved stays false)
+ * @param {Object} state - Current graph state
+ * @returns {string} 'forward' or 'revise'
+ */
+function routeAfterOutlineCheckpoint(state) {
+  if (state.outlineApproved) return 'forward';
+  return 'revise';
+}
+
+/**
+ * Route function after article human checkpoint
+ * Approve → forward to validation
+ * Reject → revision loop (articleApproved stays false)
+ * @param {Object} state - Current graph state
+ * @returns {string} 'forward' or 'revise'
+ */
+function routeAfterArticleCheckpoint(state) {
+  if (state.articleApproved) return 'forward';
+  return 'revise';
+}
+
 // NOTE: routeOutlineValidation and routeArticleValidation removed in Commit 8.23
 // Programmatic validation was too brittle (checked form, not substance)
 // Trust Opus evaluators for quality judgment instead
@@ -520,8 +544,11 @@ function createGraphBuilder() {
     error: END
   });
 
-  // Checkpoint → next phase (after human approval)
-  builder.addEdge('checkpointOutline', 'generateContentBundle');
+  // Checkpoint → conditional: approve forwards, reject enters revision loop
+  builder.addConditionalEdges('checkpointOutline', routeAfterOutlineCheckpoint, {
+    forward: 'generateContentBundle',
+    revise: 'incrementOutlineRevision'
+  });
 
   // Revision loop: increment → revise → evaluate (NOT back to generateOutline)
   // reviseOutline receives previous output + feedback for TARGETED fixes
@@ -545,8 +572,11 @@ function createGraphBuilder() {
     error: END
   });
 
-  // Checkpoint → next phase (after human approval)
-  builder.addEdge('checkpointArticle', 'validateContentBundle');
+  // Checkpoint → conditional: approve forwards, reject enters revision loop
+  builder.addConditionalEdges('checkpointArticle', routeAfterArticleCheckpoint, {
+    forward: 'validateContentBundle',
+    revise: 'incrementArticleRevision'
+  });
 
   // Revision loop: increment → revise → evaluate (NOT back to generateContentBundle)
   // reviseContentBundle receives previous output + feedback for TARGETED fixes
@@ -626,11 +656,14 @@ module.exports = {
   // For testing
   _testing: {
     createGraphBuilder,
-    // Routing functions (kept - these use evaluation/schema logic, not approval flags)
+    // Routing functions - evaluation-based (evaluation/schema logic)
     routeArcEvaluation,
     routeOutlineEvaluation,
     routeArticleEvaluation,
     routeSchemaValidation,
+    // Routing functions - checkpoint-based (human approval routing)
+    routeAfterOutlineCheckpoint,
+    routeAfterArticleCheckpoint,
     // Revision handlers (kept)
     incrementArcRevision,
     incrementOutlineRevision,
