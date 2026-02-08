@@ -172,16 +172,32 @@ function buildResumePayload(approvals, currentState = {}) {
         }
     }
 
-    // Outline approval (boolean)
+    // Outline: approve, approve-with-edits, or reject-with-feedback
     if (approvals.outline === true) {
         validApprovalDetected = true;
         resume.approved = true;
+        if (approvals.outlineEdits && typeof approvals.outlineEdits === 'object') {
+            stateUpdates.outline = approvals.outlineEdits;
+        }
+    } else if (approvals.outline === false && typeof approvals.outlineFeedback === 'string' && approvals.outlineFeedback.trim()) {
+        validApprovalDetected = true;
+        resume.approved = false;
+        resume.feedback = approvals.outlineFeedback.trim();
+        stateUpdates._outlineFeedback = approvals.outlineFeedback.trim();
     }
 
-    // Article approval (boolean) (Commit 8.9.7)
+    // Article: approve, approve-with-edits, or reject-with-feedback
     if (approvals.article === true) {
         validApprovalDetected = true;
         resume.approved = true;
+        if (approvals.articleEdits && typeof approvals.articleEdits === 'object') {
+            stateUpdates.contentBundle = approvals.articleEdits;
+        }
+    } else if (approvals.article === false && typeof approvals.articleFeedback === 'string' && approvals.articleFeedback.trim()) {
+        validApprovalDetected = true;
+        resume.approved = false;
+        resume.feedback = approvals.articleFeedback.trim();
+        stateUpdates._articleFeedback = approvals.articleFeedback.trim();
     }
 
     // Pre-curation approval (Phase 4f)
