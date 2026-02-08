@@ -10,6 +10,7 @@ window.Console = window.Console || {};
 const { api: appApi } = window.Console;
 const { useAppState, ACTIONS: APP_ACTIONS, LoginOverlay, SessionStart } = window.Console;
 const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
+const { RollbackPanel, CompletionView } = window.Console;
 const { CHECKPOINT_LABELS } = window.Console.utils;
 
 // Checkpoint type -> specific component mapping (Batch 3B.3 + 3B.4 + 3B.5 + 3B.6)
@@ -28,6 +29,7 @@ const CHECKPOINT_COMPONENTS = {
 
 function App() {
   const [state, dispatch] = useAppState();
+  const [rollbackTarget, setRollbackTarget] = React.useState(null);
   const sseRef = React.useRef(null);
 
   // Cleanup EventSource on unmount
@@ -171,6 +173,34 @@ function App() {
     return handleApprove(payload);
   };
 
+  /**
+   * Handle rollback confirmation from RollbackPanel modal
+   * Calls API, dispatches result, closes modal
+   */
+  const handleRollbackConfirm = async (target, overrides) => {
+    setRollbackTarget(null);
+    if (!state.sessionId) return;
+    dispatch({ type: APP_ACTIONS.PROCESSING_START });
+    try {
+      const result = await appApi.rollback(state.sessionId, target, overrides);
+      if (result.error) {
+        dispatch({ type: APP_ACTIONS.SET_ERROR, message: result.error });
+      } else if (result.interrupted && result.checkpoint) {
+        dispatch({
+          type: APP_ACTIONS.CHECKPOINT_RECEIVED,
+          checkpointType: result.checkpoint.type,
+          data: result.checkpoint,
+          phase: result.currentPhase
+        });
+      }
+    } catch (err) {
+      dispatch({
+        type: APP_ACTIONS.SET_ERROR,
+        message: 'Rollback failed: ' + (err.message || 'Unknown error')
+      });
+    }
+  };
+
   // ── Render ──
 
   // Not authenticated: show login overlay
@@ -193,48 +223,19 @@ function App() {
       progressMessages: state.progressMessages
     });
   } else if (state.completedResult) {
-    // Complete: show placeholder (CompletionView added in Batch 3B.7)
-    content = React.createElement('div', { className: 'glass-panel fade-in text-center p-xl' },
-      React.createElement('h2', { className: 'text-accent-green mb-md' }, 'Workflow Complete'),
-      React.createElement('p', { className: 'text-secondary' }, 'Session ' + state.sessionId + ' finished successfully.'),
-      state.completedResult.outputPath &&
-        React.createElement('p', { className: 'text-muted mt-sm' },
-          'Output: ' + state.completedResult.outputPath
-        ),
-      React.createElement('button', {
-        className: 'btn btn-secondary mt-lg',
-        onClick: () => dispatch({ type: APP_ACTIONS.LOGOUT })
-      }, 'New Session')
-    );
+    // Complete: show CompletionView
+    content = React.createElement(CompletionView, {
+      result: { ...state.completedResult, sessionId: state.sessionId },
+      onNewSession: () => dispatch({ type: APP_ACTIONS.RESET_SESSION })
+    });
   } else if (state.checkpointType) {
     // At checkpoint: render PipelineProgress + CheckpointShell with generic content
     // (Checkpoint-specific components added in Batches 3B.3-3B.6)
-    const handleRollback = async (rollbackTo) => {
-      if (!state.sessionId) return;
-      dispatch({ type: APP_ACTIONS.PROCESSING_START });
-      try {
-        const result = await appApi.rollback(state.sessionId, rollbackTo);
-        if (result.error) {
-          dispatch({ type: APP_ACTIONS.SET_ERROR, message: result.error });
-        } else if (result.interrupted && result.checkpoint) {
-          dispatch({
-            type: APP_ACTIONS.CHECKPOINT_RECEIVED,
-            checkpointType: result.checkpoint.type,
-            data: result.checkpoint,
-            phase: result.currentPhase
-          });
-        }
-      } catch (err) {
-        dispatch({ type: APP_ACTIONS.SET_ERROR, message: 'Rollback failed: ' + (err.message || 'Unknown error') });
-      }
-    };
-
     content = React.createElement(React.Fragment, null,
       // Pipeline progress stepper
-      // TODO(3B.7): Pass completedCheckpoints from server state for accuracy after rollback
       React.createElement(PipelineProgress, {
         currentCheckpoint: state.checkpointType,
-        onRollback: handleRollback
+        onRollback: (target) => setRollbackTarget(target)
       }),
 
       // Checkpoint shell wrapping checkpoint-specific or generic content
@@ -306,14 +307,22 @@ function App() {
       )
     ),
 
-    // Error banner
+    // Error banner (fixed position)
     state.error && React.createElement('div', { className: 'error-banner' },
       React.createElement('span', { className: 'error-banner__message' }, state.error),
       React.createElement('button', {
         className: 'error-banner__dismiss',
-        onClick: () => dispatch({ type: APP_ACTIONS.CLEAR_ERROR })
+        onClick: () => dispatch({ type: APP_ACTIONS.CLEAR_ERROR }),
+        'aria-label': 'Dismiss error'
       }, '\u2715')
     ),
+
+    // Rollback confirmation modal
+    rollbackTarget && React.createElement(RollbackPanel, {
+      targetCheckpoint: rollbackTarget,
+      onConfirm: handleRollbackConfirm,
+      onCancel: () => setRollbackTarget(null)
+    }),
 
     // Main content
     React.createElement('main', { className: 'console-main' }, content)

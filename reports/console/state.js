@@ -43,6 +43,7 @@ const ACTIONS = {
   SSE_ERROR: 'SSE_ERROR',
   WORKFLOW_COMPLETE: 'WORKFLOW_COMPLETE',
   CACHE_REVISION: 'CACHE_REVISION',
+  RESET_SESSION: 'RESET_SESSION',
   SET_ERROR: 'SET_ERROR',
   CLEAR_ERROR: 'CLEAR_ERROR'
 };
@@ -54,6 +55,9 @@ function reducer(state, action) {
 
     case ACTIONS.LOGOUT:
       return { ...initialState };
+
+    case ACTIONS.RESET_SESSION:
+      return { ...initialState, authenticated: true };
 
     case ACTIONS.SET_SESSION:
       return { ...state, sessionId: action.sessionId };
