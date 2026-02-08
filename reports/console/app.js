@@ -12,7 +12,7 @@ const { useAppState, ACTIONS: APP_ACTIONS, LoginOverlay, SessionStart } = window
 const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
 const { CHECKPOINT_LABELS } = window.Console.utils;
 
-// Checkpoint type -> specific component mapping (Batch 3B.3 + 3B.4 + 3B.5)
+// Checkpoint type -> specific component mapping (Batch 3B.3 + 3B.4 + 3B.5 + 3B.6)
 const CHECKPOINT_COMPONENTS = {
   'input-review': window.Console.checkpoints && window.Console.checkpoints.InputReview,
   'paper-evidence-selection': window.Console.checkpoints && window.Console.checkpoints.PaperEvidence,
@@ -21,7 +21,9 @@ const CHECKPOINT_COMPONENTS = {
   'character-ids': window.Console.checkpoints && window.Console.checkpoints.CharacterIds,
   'await-full-context': window.Console.checkpoints && window.Console.checkpoints.AwaitFullContext,
   'evidence-and-photos': window.Console.checkpoints && window.Console.checkpoints.EvidenceBundle,
-  'arc-selection': window.Console.checkpoints && window.Console.checkpoints.ArcSelection
+  'arc-selection': window.Console.checkpoints && window.Console.checkpoints.ArcSelection,
+  'outline': window.Console.checkpoints && window.Console.checkpoints.Outline,
+  'article': window.Console.checkpoints && window.Console.checkpoints.Article
 };
 
 function App() {
@@ -246,7 +248,9 @@ function App() {
           ? React.createElement(CHECKPOINT_COMPONENTS[state.checkpointType], {
               data: state.checkpointData,
               onApprove: handleApprove,
-              onReject: handleReject
+              onReject: handleReject,
+              dispatch: dispatch,
+              revisionCache: state.revisionCache
             })
           : React.createElement(React.Fragment, null,
               // Generic checkpoint content (replaced by specific components in later batches)
