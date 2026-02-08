@@ -804,6 +804,7 @@ function resolveArcs(arcs, availableArcs) {
  * @param {number} options.revisionCount - Current revision attempt number
  * @param {Object} options.validationResults - Evaluation results with criteria, issues, etc.
  * @param {Object|Array} options.previousOutput - The full previous output to improve
+ * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
  * @returns {Object} { contextSection, previousOutputSection }
  *
  * @example
