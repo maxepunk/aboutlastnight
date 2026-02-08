@@ -12,11 +12,14 @@ const { useAppState, ACTIONS: APP_ACTIONS, LoginOverlay, SessionStart } = window
 const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
 const { CHECKPOINT_LABELS } = window.Console.utils;
 
-// Checkpoint type -> specific component mapping (Batch 3B.3)
+// Checkpoint type -> specific component mapping (Batch 3B.3 + 3B.4)
 const CHECKPOINT_COMPONENTS = {
   'input-review': window.Console.checkpoints && window.Console.checkpoints.InputReview,
   'paper-evidence-selection': window.Console.checkpoints && window.Console.checkpoints.PaperEvidence,
-  'pre-curation': window.Console.checkpoints && window.Console.checkpoints.PreCuration
+  'pre-curation': window.Console.checkpoints && window.Console.checkpoints.PreCuration,
+  'await-roster': window.Console.checkpoints && window.Console.checkpoints.AwaitRoster,
+  'character-ids': window.Console.checkpoints && window.Console.checkpoints.CharacterIds,
+  'await-full-context': window.Console.checkpoints && window.Console.checkpoints.AwaitFullContext
 };
 
 function App() {
