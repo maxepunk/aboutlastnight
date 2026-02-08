@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (50 total - includes revision context):
+ * State Fields (53 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus
@@ -563,6 +563,26 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Human feedback for outline rejection (triggers revision loop)
+   * Set by server approval handler, consumed by reviseOutline
+   * Cleared after revision completes — follows _previousOutline pattern
+   */
+  _outlineFeedback: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Human feedback for article rejection (triggers revision loop)
+   * Set by server approval handler, consumed by reviseContentBundle
+   * Cleared after revision completes — follows _previousContentBundle pattern
+   */
+  _articleFeedback: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
    * Arc validation results from validateArcStructure (Commit 8.xx)
    * Set by: validateArcStructure in arc-specialist-nodes.js
    * Consumed by: routeArcValidation in graph.js for routing decision
@@ -575,7 +595,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (51 fields after _arcValidation)
+ * Get default state with all fields initialized (53 fields after human feedback additions)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -654,7 +674,10 @@ function getDefaultState() {
     _previousOutline: null,
     _previousContentBundle: null,
     // Arc validation routing (Commit 8.xx)
-    _arcValidation: null
+    _arcValidation: null,
+    // Human rejection feedback (consumed by revision nodes, cleared after use)
+    _outlineFeedback: null,
+    _articleFeedback: null
   };
 }
 
@@ -764,7 +787,8 @@ const ROLLBACK_CLEARS = {
     // Arc analysis
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
     // Generation
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     // Evaluation history
     'evaluationHistory'
   ],
@@ -775,7 +799,8 @@ const ROLLBACK_CLEARS = {
     'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -785,7 +810,8 @@ const ROLLBACK_CLEARS = {
     'characterIdMappings',
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -795,7 +821,8 @@ const ROLLBACK_CLEARS = {
     // Note: photoAnalyses preserved - only mappings need re-entry
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -805,7 +832,8 @@ const ROLLBACK_CLEARS = {
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
@@ -813,27 +841,30 @@ const ROLLBACK_CLEARS = {
   'evidence-and-photos': [
     'evidenceBundle',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
   // Phase 2.3: Arc selection - most common rollback point
   'arc-selection': [
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback',
     'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
   // Phase 3.2: Outline
   'outline': [
-    'heroImage', 'outline', 'outlineApproved', 'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults'
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults'
     // Note: evaluationHistory preserved - may contain useful arc evals
   ],
 
   // Phase 4.2: Article
   'article': [
-    'contentBundle', 'articleApproved', 'assembledHtml', 'validationResults'
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults'
   ]
 };
 

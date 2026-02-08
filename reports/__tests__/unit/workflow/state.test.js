@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 51 state fields (includes revision context fields)', () => {
+    it('includes all 53 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -312,7 +312,10 @@ describe('ReportStateAnnotation', () => {
         '_previousOutline',
         '_previousContentBundle',
         // Arc validation routing (Commit 8.xx)
-        '_arcValidation'
+        '_arcValidation',
+        // Human rejection feedback (consumed by revision nodes, cleared after use)
+        '_outlineFeedback',
+        '_articleFeedback'
       ];
 
       expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort());
@@ -707,6 +710,30 @@ describe('ReportStateAnnotation', () => {
     it('can be used for validation', () => {
       expect(VALID_ROLLBACK_POINTS.includes('arc-selection')).toBe(true);
       expect(VALID_ROLLBACK_POINTS.includes('invalid-point')).toBe(false);
+    });
+  });
+
+  describe('human feedback state fields', () => {
+    test('getDefaultState includes _outlineFeedback as null', () => {
+      const state = getDefaultState();
+      expect(state._outlineFeedback).toBeNull();
+    });
+
+    test('getDefaultState includes _articleFeedback as null', () => {
+      const state = getDefaultState();
+      expect(state._articleFeedback).toBeNull();
+    });
+
+    test('ROLLBACK_CLEARS outline includes _outlineFeedback', () => {
+      expect(ROLLBACK_CLEARS['outline']).toContain('_outlineFeedback');
+    });
+
+    test('ROLLBACK_CLEARS outline includes _articleFeedback', () => {
+      expect(ROLLBACK_CLEARS['outline']).toContain('_articleFeedback');
+    });
+
+    test('ROLLBACK_CLEARS article includes _articleFeedback', () => {
+      expect(ROLLBACK_CLEARS['article']).toContain('_articleFeedback');
     });
   });
 
