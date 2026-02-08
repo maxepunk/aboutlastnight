@@ -815,7 +815,7 @@ function resolveArcs(arcs, availableArcs) {
  * });
  */
 function buildRevisionContext(options) {
-  const { phase, revisionCount, validationResults, previousOutput } = options;
+  const { phase, revisionCount, validationResults, previousOutput, humanFeedback } = options;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Build context section (feedback, issues, criteria)
@@ -884,7 +884,12 @@ ${issuesList}
 EVALUATOR FEEDBACK:
 ${feedback || '(no specific feedback provided)'}
 
-═══════════════════════════════════════════════════════════════════════════════
+${humanFeedback ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
+${humanFeedback}
+
+NOTE: The human reviewer has explicitly requested these changes.
+Address human feedback FIRST, then address any remaining evaluator issues.
+` : ''}═══════════════════════════════════════════════════════════════════════════════
 CRITICAL REVISION INSTRUCTIONS:
 ═══════════════════════════════════════════════════════════════════════════════
 

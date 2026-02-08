@@ -29,7 +29,12 @@ const CHECKPOINT_TYPES = {
  * Prevents GraphInterrupt from being thrown in unit tests
  */
 const checkpointInterrupt = jest.fn((type, data, skipCondition) => {
-  return skipCondition || data;
+  if (skipCondition) return skipCondition;
+  // Outline and article checkpoints need approved:true for conditional routing
+  if (type === 'outline' || type === 'article') {
+    return { approved: true };
+  }
+  return data;
 });
 
 /**
