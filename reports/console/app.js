@@ -122,8 +122,12 @@ function App() {
         }
       );
 
-      // Track EventSource for cleanup on unmount
-      sseRef.current = eventSource;
+      // Track EventSource for cleanup on unmount.
+      // Note: complete/error callbacks may have already closed it and set ref to null,
+      // so only set if it hasn't been cleared yet.
+      if (!sseRef.current) {
+        sseRef.current = eventSource;
+      }
 
       // Check for immediate POST errors
       if (response.error) {

@@ -46,6 +46,8 @@ function SessionStart({ dispatch }) {
           phase: result.currentPhase
         });
       }
+      setLoading(false);
+      setStatus('');
     } catch (err) {
       setStatus('Connection failed. Is the server running?');
       setLoading(false);

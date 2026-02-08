@@ -75,10 +75,12 @@ const api = {
   async approve(sessionId, payload, onProgress) {
     // Step 1: Connect SSE first, wait for connected event (with timeout)
     const { eventSource, connected } = api.connectSSE(sessionId, onProgress);
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('SSE connection timeout after 10s')), 10000)
-    );
-    await Promise.race([connected, timeout]).catch((err) => {
+    let timerId;
+    const timeout = new Promise((_, reject) => {
+      timerId = setTimeout(() => reject(new Error('SSE connection timeout after 10s')), 10000);
+    });
+    await Promise.race([connected, timeout]).then(() => clearTimeout(timerId)).catch((err) => {
+      clearTimeout(timerId);
       eventSource.close();
       throw err;
     });
@@ -159,9 +161,11 @@ const api = {
    */
   connectSSE(sessionId, onProgress) {
     const eventSource = new EventSource(`/api/session/${sessionId}/progress`);
-    let resolveConnected;
-    const connected = new Promise((resolve) => {
+    let resolveConnected, rejectConnected;
+    let isConnected = false;
+    const connected = new Promise((resolve, reject) => {
       resolveConnected = resolve;
+      rejectConnected = reject;
     });
 
     eventSource.onmessage = (event) => {
@@ -171,6 +175,7 @@ const api = {
 
         switch (type) {
           case 'connected':
+            isConnected = true;
             resolveConnected();
             if (onProgress) onProgress({ type: 'connected', data });
             break;
@@ -193,7 +198,10 @@ const api = {
 
     eventSource.onerror = (err) => {
       console.error('[SSE] Connection error:', err);
-      resolveConnected(); // Resolve to prevent hanging if error fires before 'connected'
+      if (!isConnected) {
+        // Reject so approve() won't POST against a dead SSE connection
+        rejectConnected(new Error('SSE connection failed'));
+      }
       if (onProgress) {
         onProgress({ type: 'error', data: { message: 'SSE connection lost' } });
       }
