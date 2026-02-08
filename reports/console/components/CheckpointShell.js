@@ -8,10 +8,10 @@
 
 window.Console = window.Console || {};
 
-const { CHECKPOINT_LABELS: SHELL_LABELS, CollapsibleSection: ShellCollapsible } = window.Console.utils;
+const { CHECKPOINT_LABELS, CollapsibleSection, safeStringify } = window.Console.utils;
 
 function CheckpointShell({ type, phase, data, children }) {
-  const label = SHELL_LABELS[type] || type;
+  const label = CHECKPOINT_LABELS[type] || type;
 
   return React.createElement('div', { className: 'checkpoint-shell glass-panel fade-in' },
 
@@ -25,11 +25,11 @@ function CheckpointShell({ type, phase, data, children }) {
     React.createElement('div', { className: 'checkpoint-shell__content' }, children),
 
     // Raw JSON viewer
-    React.createElement(ShellCollapsible, {
+    React.createElement(CollapsibleSection, {
       title: 'View Raw JSON',
       defaultOpen: false
     },
-      React.createElement('pre', null, JSON.stringify(data, null, 2))
+      React.createElement('pre', null, safeStringify(data))
     )
   );
 }

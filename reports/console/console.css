@@ -294,6 +294,11 @@ textarea.input {
   gap: var(--space-md);
 }
 
+.console-header__phase-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
 /* ── Main Content ── */
 .console-main {
   max-width: 960px;
@@ -514,13 +519,19 @@ textarea.input {
 .text-left { text-align: left; }
 .text-muted { color: var(--text-muted); }
 .text-secondary { color: var(--text-secondary); }
+.text-sm { font-size: 0.85rem; }
+.text-xs { font-size: 0.8rem; }
+.text-accent-green { color: var(--accent-green); }
 .mt-sm { margin-top: var(--space-sm); }
 .mt-md { margin-top: var(--space-md); }
 .mt-lg { margin-top: var(--space-lg); }
+.mb-sm { margin-bottom: var(--space-sm); }
 .mb-md { margin-bottom: var(--space-md); }
 .mb-lg { margin-bottom: var(--space-lg); }
+.p-xl { padding: var(--space-xl) var(--space-lg); }
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
+.items-center { align-items: center; }
 .gap-sm { gap: var(--space-sm); }
 .gap-md { gap: var(--space-md); }
 
@@ -630,7 +641,20 @@ textarea.input {
   color: var(--text-secondary);
 }
 
-.progress-llm-panel pre {
+.progress-llm-panel__heading {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: var(--accent-amber);
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+
+.progress-llm-panel__heading:first-child {
+  margin-top: 0;
+}
+
+.progress-llm-panel__content {
   font-size: 0.75rem;
   max-height: 300px;
 }
@@ -739,10 +763,6 @@ textarea.input {
 }
 
 /* ── Checkpoint Shell ── */
-.checkpoint-shell {
-  /* Inherits glass-panel styling */
-}
-
 .checkpoint-header {
   display: flex;
   align-items: center;

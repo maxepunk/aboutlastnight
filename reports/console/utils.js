@@ -58,6 +58,20 @@ function CollapsibleSection({ title, defaultOpen = false, children }) {
 }
 
 /**
+ * Safe JSON.stringify with try/catch for circular references or BigInts
+ * @param {any} obj
+ * @param {number} indent
+ * @returns {string}
+ */
+function safeStringify(obj, indent = 2) {
+  try {
+    return JSON.stringify(obj, null, indent);
+  } catch {
+    return String(obj);
+  }
+}
+
+/**
  * Collapsible JSON viewer
  * @param {{data: any, label?: string}} props
  */
@@ -67,7 +81,7 @@ function JsonViewer({ data, label }) {
     defaultOpen: false
   },
     React.createElement('pre', { className: 'json-viewer' },
-      JSON.stringify(data, null, 2)
+      safeStringify(data)
     )
   );
 }
@@ -109,6 +123,7 @@ const CHECKPOINT_LABELS = {
 
 window.Console.utils = {
   truncate,
+  safeStringify,
   Badge,
   CollapsibleSection,
   JsonViewer,
