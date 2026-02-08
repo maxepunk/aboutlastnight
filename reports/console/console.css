@@ -1185,6 +1185,174 @@ textarea.input {
   padding: var(--space-xs) 0;
 }
 
+/* ── Evidence Layer Sections ── */
+.evidence-layer {
+  padding: var(--space-md);
+  padding-left: var(--space-lg);
+  border-left: 3px solid rgba(212, 168, 83, 0.2);
+  border-radius: var(--radius-md);
+  background: rgba(10, 14, 22, 0.3);
+  margin-bottom: var(--space-md);
+}
+
+.evidence-layer--exposed {
+  border-left-color: var(--layer-exposed);
+}
+
+.evidence-layer--buried {
+  border-left-color: var(--layer-buried);
+}
+
+.evidence-layer--context {
+  border-left-color: var(--layer-context);
+}
+
+.evidence-layer--excluded {
+  border-left-color: var(--layer-excluded);
+}
+
+.evidence-layer__title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* ── Arc Cards Grid ── */
+.arc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-md);
+}
+
+.arc-card {
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid rgba(212, 168, 83, 0.1);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.arc-card:hover {
+  border-color: rgba(212, 168, 83, 0.25);
+}
+
+.arc-card--selected {
+  border-color: rgba(78, 205, 196, 0.4);
+  background: rgba(78, 205, 196, 0.03);
+}
+
+.arc-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.arc-card__title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.arc-card__meta {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.arc-card__hook {
+  border-left: 2px solid rgba(212, 168, 83, 0.2);
+  padding-left: var(--space-sm);
+  font-style: italic;
+}
+
+.arc-card__section {
+  padding-top: var(--space-xs);
+}
+
+.arc-card__moments {
+  list-style: disc;
+  padding-left: var(--space-lg);
+  margin: 0;
+}
+
+.arc-card__moments li {
+  margin-bottom: 2px;
+}
+
+/* ── Arc Evaluation Score Bar ── */
+.arc-card__eval {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.arc-card__score-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.arc-card__score-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width var(--transition-normal);
+}
+
+.arc-card__score-fill--high {
+  background: var(--accent-green);
+}
+
+.arc-card__score-fill--medium {
+  background: var(--accent-amber);
+}
+
+.arc-card__score-fill--low {
+  background: var(--accent-red);
+}
+
+/* ── Character Placement Tags ── */
+.character-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px var(--space-sm);
+  background: rgba(78, 205, 196, 0.08);
+  border: 1px solid rgba(78, 205, 196, 0.2);
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.character-tag__name {
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.character-tag__role {
+  color: var(--text-muted);
+}
+
+.character-tag__role::before {
+  content: ':';
+  margin: 0 2px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .console-main {
@@ -1218,6 +1386,10 @@ textarea.input {
   }
 
   .photo-gallery {
+    grid-template-columns: 1fr;
+  }
+
+  .arc-grid {
     grid-template-columns: 1fr;
   }
 
