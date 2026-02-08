@@ -9,6 +9,7 @@ window.Console = window.Console || {};
 
 const { api: appApi } = window.Console;
 const { useAppState, ACTIONS: APP_ACTIONS, LoginOverlay, SessionStart } = window.Console;
+const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
 const { CHECKPOINT_LABELS } = window.Console.utils;
 
 function App() {
@@ -123,11 +124,8 @@ function App() {
       );
 
       // Track EventSource for cleanup on unmount.
-      // Note: complete/error callbacks may have already closed it and set ref to null,
-      // so only set if it hasn't been cleared yet.
-      if (!sseRef.current) {
-        sseRef.current = eventSource;
-      }
+      // EventSource.close() is idempotent, so double-close on unmount is safe.
+      sseRef.current = eventSource;
 
       // Check for immediate POST errors
       if (response.error) {
@@ -145,8 +143,9 @@ function App() {
   };
 
   /**
-   * Handle reject (for outline/article checkpoints)
-   * Same flow as approve but with different payload
+   * Handle reject (for outline/article checkpoints in Batch 3B.6)
+   * Same SSE-before-POST flow as approve — the payload shape determines
+   * whether the server treats it as approval or rejection.
    */
   const handleReject = async (payload) => {
     return handleApprove(payload);
@@ -166,16 +165,12 @@ function App() {
     // No session: show session start
     content = React.createElement(SessionStart, { dispatch });
   } else if (state.processing) {
-    // Processing: show placeholder (ProgressStream added in Batch 3B.2)
-    content = React.createElement('div', { className: 'glass-panel fade-in', style: { textAlign: 'center', padding: '60px 24px' } },
-      React.createElement('div', { className: 'pulse', style: { fontSize: '2rem', marginBottom: '16px' } }, '\u29D7'),
-      React.createElement('h3', { style: { color: 'var(--accent-amber)', marginBottom: '8px' } }, 'Processing'),
-      React.createElement('p', { className: 'text-secondary' }, 'Workflow is running...'),
-      state.progressMessages.length > 0 &&
-        React.createElement('p', { className: 'text-muted', style: { marginTop: '16px', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' } },
-          state.progressMessages[state.progressMessages.length - 1]
-        )
-    );
+    // Processing: show ProgressStream with real-time SSE data
+    content = React.createElement(ProgressStream, {
+      processing: state.processing,
+      llmActivity: state.llmActivity,
+      progressMessages: state.progressMessages
+    });
   } else if (state.completedResult) {
     // Complete: show placeholder (CompletionView added in Batch 3B.7)
     content = React.createElement('div', { className: 'glass-panel fade-in', style: { textAlign: 'center', padding: '60px 24px' } },
@@ -192,46 +187,64 @@ function App() {
       }, 'New Session')
     );
   } else if (state.checkpointType) {
-    // At checkpoint: show placeholder (checkpoint components added in Batches 3B.3-3B.6)
-    const label = CHECKPOINT_LABELS[state.checkpointType] || state.checkpointType;
-    content = React.createElement('div', { className: 'glass-panel fade-in' },
-      React.createElement('h3', { style: { color: 'var(--accent-amber)', marginBottom: '12px' } },
-        'Checkpoint: ' + label
-      ),
-      React.createElement('p', { className: 'text-secondary', style: { marginBottom: '16px' } },
-        'Phase: ' + (state.phase || 'unknown')
-      ),
-      React.createElement('p', { className: 'text-muted', style: { marginBottom: '24px', fontSize: '0.85rem' } },
-        'Checkpoint components will be added in subsequent batches. For now, you can approve with the button below.'
-      ),
-      // Generic approve button (replaced by specific checkpoint components later)
-      React.createElement('div', { style: { display: 'flex', gap: '12px' } },
-        React.createElement('button', {
-          className: 'btn btn-primary',
-          onClick: () => {
-            // Build a generic approval payload based on checkpoint type
-            const payloads = {
-              'input-review': { inputReview: true },
-              'paper-evidence-selection': { selectedPaperEvidence: state.checkpointData.paperEvidence || [] },
-              'pre-curation': { preCuration: true },
-              'evidence-and-photos': { evidenceBundle: true },
-              'arc-selection': { selectedArcs: (state.checkpointData.narrativeArcs || []).map(a => a.id || a.title) },
-              'outline': { outline: true },
-              'article': { article: true }
-            };
-            const payload = payloads[state.checkpointType] || { approved: true };
-            handleApprove(payload);
-          }
-        }, 'Approve')
-      ),
-      // Raw JSON viewer for debugging
-      React.createElement('details', { style: { marginTop: '24px' } },
-        React.createElement('summary', {
-          style: { cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }
-        }, 'View Raw Checkpoint Data'),
-        React.createElement('pre', {
-          style: { marginTop: '8px', fontSize: '0.75rem', maxHeight: '400px', overflow: 'auto' }
-        }, JSON.stringify(state.checkpointData, null, 2))
+    // At checkpoint: render PipelineProgress + CheckpointShell with generic content
+    // (Checkpoint-specific components added in Batches 3B.3-3B.6)
+    const handleRollback = async (rollbackTo) => {
+      if (!state.sessionId) return;
+      dispatch({ type: APP_ACTIONS.PROCESSING_START });
+      try {
+        const result = await appApi.rollback(state.sessionId, rollbackTo);
+        if (result.error) {
+          dispatch({ type: APP_ACTIONS.SET_ERROR, message: result.error });
+        } else if (result.interrupted && result.checkpoint) {
+          dispatch({
+            type: APP_ACTIONS.CHECKPOINT_RECEIVED,
+            checkpointType: result.checkpoint.type,
+            data: result.checkpoint,
+            phase: result.currentPhase
+          });
+        }
+      } catch (err) {
+        dispatch({ type: APP_ACTIONS.SET_ERROR, message: 'Rollback failed: ' + (err.message || 'Unknown error') });
+      }
+    };
+
+    content = React.createElement(React.Fragment, null,
+      // Pipeline progress stepper
+      // TODO(3B.7): Pass completedCheckpoints from server state for accuracy after rollback
+      React.createElement(PipelineProgress, {
+        currentCheckpoint: state.checkpointType,
+        onRollback: handleRollback
+      }),
+
+      // Checkpoint shell wrapping generic content
+      React.createElement(CheckpointShell, {
+        type: state.checkpointType,
+        phase: state.phase,
+        data: state.checkpointData
+      },
+        // Generic checkpoint content (replaced by specific components in later batches)
+        React.createElement('p', { className: 'text-muted', style: { marginBottom: '24px', fontSize: '0.85rem' } },
+          'Checkpoint components will be added in subsequent batches. For now, you can approve with the button below.'
+        ),
+        React.createElement('div', { style: { display: 'flex', gap: '12px' } },
+          React.createElement('button', {
+            className: 'btn btn-primary',
+            onClick: () => {
+              const payloads = {
+                'input-review': { inputReview: true },
+                'paper-evidence-selection': { selectedPaperEvidence: state.checkpointData.paperEvidence || [] },
+                'pre-curation': { preCuration: true },
+                'evidence-and-photos': { evidenceBundle: true },
+                'arc-selection': { selectedArcs: (state.checkpointData.narrativeArcs || []).map(a => a.id || a.title) },
+                'outline': { outline: true },
+                'article': { article: true }
+              };
+              const payload = payloads[state.checkpointType] || { approved: true };
+              handleApprove(payload);
+            }
+          }, 'Approve')
+        )
       )
     );
   } else {
