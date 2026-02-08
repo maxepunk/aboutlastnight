@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ALN Director Console</title>
+  <link rel="stylesheet" href="console.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Code+Pro:wght@400;600&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- Load order defines dependency graph -->
+  <script type="text/babel" src="api.js"></script>
+  <script type="text/babel" src="state.js"></script>
+  <script type="text/babel" src="utils.js"></script>
+  <script type="text/babel" src="components/LoginOverlay.js"></script>
+  <script type="text/babel" src="components/SessionStart.js"></script>
+  <script type="text/babel" src="app.js"></script>
+</body>
+</html>
