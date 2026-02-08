@@ -332,11 +332,19 @@ async function checkpointOutline(state, config) {
     skipCondition
   );
 
-  // If resumed with approval, capture it in state return
-  if (resumeValue?.outline === true && !skipCondition) {
-    console.log(`[checkpointOutline] Captured approval from resume`);
+  // Approve (with or without edits — edits applied via Command update before this runs)
+  if (resumeValue?.approved === true && !skipCondition) {
+    console.log(`[checkpointOutline] Approved by human`);
     return {
       outlineApproved: true,
+      currentPhase: PHASES.OUTLINE_CHECKPOINT
+    };
+  }
+
+  // Reject with feedback — routing function sends to revision loop
+  if (resumeValue?.approved === false && resumeValue?.feedback) {
+    console.log(`[checkpointOutline] Rejected by human with feedback`);
+    return {
       currentPhase: PHASES.OUTLINE_CHECKPOINT
     };
   }
@@ -371,11 +379,19 @@ async function checkpointArticle(state, config) {
     skipCondition
   );
 
-  // If resumed with approval, capture it in state return
-  if (resumeValue?.article === true && !skipCondition) {
-    console.log(`[checkpointArticle] Captured approval from resume`);
+  // Approve (with or without edits — edits applied via Command update before this runs)
+  if (resumeValue?.approved === true && !skipCondition) {
+    console.log(`[checkpointArticle] Approved by human`);
     return {
       articleApproved: true,
+      currentPhase: PHASES.ARTICLE_CHECKPOINT
+    };
+  }
+
+  // Reject with feedback — routing function sends to revision loop
+  if (resumeValue?.approved === false && resumeValue?.feedback) {
+    console.log(`[checkpointArticle] Rejected by human with feedback`);
+    return {
       currentPhase: PHASES.ARTICLE_CHECKPOINT
     };
   }
