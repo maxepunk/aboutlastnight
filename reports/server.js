@@ -282,6 +282,10 @@ const SSE_HEARTBEAT_MS = 15000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
 
+// Serve console SPA
+app.use('/console', express.static(path.join(__dirname, 'console')));
+app.get('/console/*', (req, res) => res.sendFile(path.join(__dirname, 'console', 'index.html')));
+
 // Serve session photos at /sessionphotos/{sessionId}/*
 // Maps to data/{sessionId}/photos/* for article photo references
 app.use('/sessionphotos/:sessionId', (req, res, next) => {
