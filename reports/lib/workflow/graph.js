@@ -165,6 +165,18 @@ function routeAfterArticleCheckpoint(state) {
   return 'revise';
 }
 
+/**
+ * Route function after arc selection human checkpoint
+ * Approve (selectedArcs populated) → forward to evidence packaging
+ * Reject (no selectedArcs) → revision loop for arc regeneration
+ * @param {Object} state - Current graph state
+ * @returns {string} 'forward' or 'revise'
+ */
+function routeAfterArcCheckpoint(state) {
+  if (state.selectedArcs?.length > 0) return 'forward';
+  return 'revise';
+}
+
 // NOTE: routeOutlineValidation and routeArticleValidation removed in Commit 8.23
 // Programmatic validation was too brittle (checked form, not substance)
 // Trust Opus evaluators for quality judgment instead
@@ -516,8 +528,11 @@ function createGraphBuilder() {
     error: END
   });
 
-  // Checkpoint → next phase (after human approval)
-  builder.addEdge('checkpointArcSelection', 'buildArcEvidencePackages');
+  // Checkpoint → conditional: approve forwards, reject enters revision loop
+  builder.addConditionalEdges('checkpointArcSelection', routeAfterArcCheckpoint, {
+    forward: 'buildArcEvidencePackages',
+    revise: 'incrementArcRevision'
+  });
 
   // Revision loop: increment → revise → validate (NOT back to analyzeArcs)
   // reviseArcs receives previous output + feedback for TARGETED fixes

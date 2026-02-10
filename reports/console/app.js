@@ -248,6 +248,7 @@ function App() {
         CHECKPOINT_COMPONENTS[state.checkpointType]
           ? React.createElement(CHECKPOINT_COMPONENTS[state.checkpointType], {
               data: state.checkpointData,
+              sessionId: state.sessionId,
               onApprove: handleApprove,
               onReject: handleReject,
               dispatch: dispatch,

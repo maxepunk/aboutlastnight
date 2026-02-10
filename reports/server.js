@@ -8,6 +8,7 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
 
 // LangGraph workflow modules
 const { MemorySaver, Command } = require('@langchain/langgraph');
@@ -16,7 +17,8 @@ const {
   PHASES,
   ROLLBACK_CLEARS,
   ROLLBACK_COUNTER_RESETS,
-  VALID_ROLLBACK_POINTS
+  VALID_ROLLBACK_POINTS,
+  REVISION_CAPS
 } = require('./lib/workflow/state');
 const {
   CHECKPOINT_TYPES,
@@ -82,13 +84,27 @@ function getCheckpointData(checkpointType, state) {
         case CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS:
             return { evidenceBundle: state.evidenceBundle };
         case CHECKPOINT_TYPES.ARC_SELECTION:
-            return { narrativeArcs: state.narrativeArcs };
+            return {
+                narrativeArcs: state.narrativeArcs,
+                revisionCount: state.arcRevisionCount || 0,
+                maxRevisions: REVISION_CAPS.ARCS,
+                previousFeedback: state._arcFeedback || null
+            };
         case CHECKPOINT_TYPES.OUTLINE:
-            return { outline: state.outline };
+            return {
+                outline: state.outline,
+                revisionCount: state.outlineRevisionCount || 0,
+                maxRevisions: REVISION_CAPS.OUTLINE,
+                previousFeedback: state._outlineFeedback || null
+            };
         case CHECKPOINT_TYPES.ARTICLE:
             return {
                 contentBundle: state.contentBundle,
-                articleHtml: state.assembledHtml
+                articleHtml: state.assembledHtml,
+                sessionId: state.sessionId,
+                revisionCount: state.articleRevisionCount || 0,
+                maxRevisions: REVISION_CAPS.ARTICLE,
+                previousFeedback: state._articleFeedback || null
             };
         case CHECKPOINT_TYPES.PRE_CURATION:
             return {
@@ -161,15 +177,18 @@ function buildResumePayload(approvals, currentState = {}) {
         }
     }
 
-    // Arc selection with validation
-    if (approvals.selectedArcs) {
-        if (!Array.isArray(approvals.selectedArcs) || approvals.selectedArcs.length === 0) {
-            error = 'selectedArcs must be a non-empty array';
-        } else {
-            validApprovalDetected = true;
-            stateUpdates.selectedArcs = approvals.selectedArcs;
-            resume.selectedArcs = approvals.selectedArcs;
-        }
+    // Arc selection: approve with selection, or reject-with-feedback
+    if (Array.isArray(approvals.selectedArcs) && approvals.selectedArcs.length > 0) {
+        validApprovalDetected = true;
+        stateUpdates.selectedArcs = approvals.selectedArcs;
+        resume.selectedArcs = approvals.selectedArcs;
+    } else if (approvals.selectedArcs === false && typeof approvals.arcFeedback === 'string' && approvals.arcFeedback.trim()) {
+        validApprovalDetected = true;
+        resume.approved = false;
+        resume.feedback = approvals.arcFeedback.trim();
+        stateUpdates._arcFeedback = approvals.arcFeedback.trim();
+    } else if (approvals.selectedArcs && !Array.isArray(approvals.selectedArcs)) {
+        error = 'selectedArcs must be an array or false (for rejection)';
     }
 
     // Outline: approve, approve-with-edits, or reject-with-feedback
@@ -1154,6 +1173,56 @@ app.get('/api/health', (req, res) => {
 app.get('/api/config', requireAuth, (req, res) => {
     res.json({
         notionToken: process.env.NOTION_TOKEN || ''
+    });
+});
+
+// Browse local filesystem for directory/file selection (local dev tool)
+app.get('/api/browse', requireAuth, async (req, res) => {
+    const projectRoot = path.resolve(__dirname);
+    const rawDir = req.query.dir || projectRoot;
+    const targetDir = path.resolve(sanitizePath(rawDir));
+
+    try {
+        const stat = await fs.promises.stat(targetDir);
+        if (!stat.isDirectory()) {
+            return res.status(400).json({ error: 'Not a directory' });
+        }
+
+        const dirents = await fs.promises.readdir(targetDir, { withFileTypes: true });
+        const entries = dirents
+            .filter(d => !d.name.startsWith('.'))
+            .map(d => ({
+                name: d.name,
+                type: d.isDirectory() ? 'directory' : 'file',
+                path: path.join(targetDir, d.name)
+            }))
+            .sort((a, b) => {
+                if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+
+        const parsed = path.parse(targetDir);
+        res.json({
+            path: targetDir,
+            parent: parsed.dir || null,
+            entries
+        });
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            return res.status(404).json({ error: 'Directory not found' });
+        }
+        sendErrorResponse(res, null, err, 'GET /api/browse');
+    }
+});
+
+// Serve individual files by absolute path (for photo thumbnails in console)
+app.get('/api/file', requireAuth, (req, res) => {
+    const filePath = sanitizePath(req.query.path || '');
+    if (!filePath) return res.status(400).json({ error: 'Missing path parameter' });
+    res.sendFile(path.resolve(filePath), (err) => {
+        if (err && !res.headersSent) {
+            res.status(err.status || 404).json({ error: 'File not found' });
+        }
     });
 });
 

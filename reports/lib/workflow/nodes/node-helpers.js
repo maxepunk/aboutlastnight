@@ -454,7 +454,7 @@ function routeTokensByDisposition(tokens) {
         time: t.sessionTransactionTime
       });
     }
-    // 'unknown' tokens are excluded (not added to either array)
+    // All tokens are now either 'exposed' or 'buried' — no unknown disposition
   }
 
   return { exposed, buried };

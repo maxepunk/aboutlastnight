@@ -293,11 +293,19 @@ async function checkpointArcSelection(state, config) {
     skipCondition
   );
 
-  // If resumed with selection, capture it in state return
+  // Approve: resumed with arc selection
   if (resumeValue?.selectedArcs && !skipCondition) {
-    console.log(`[checkpointArcSelection] Captured selection from resume: ${resumeValue.selectedArcs.length} arcs`);
+    console.log(`[checkpointArcSelection] Approved with ${resumeValue.selectedArcs.length} arcs selected`);
     return {
       selectedArcs: resumeValue.selectedArcs,
+      currentPhase: PHASES.ARC_SELECTION
+    };
+  }
+
+  // Reject with feedback — routing function sends to revision loop
+  if (resumeValue?.approved === false && resumeValue?.feedback) {
+    console.log(`[checkpointArcSelection] Rejected by human with feedback`);
+    return {
       currentPhase: PHASES.ARC_SELECTION
     };
   }

@@ -1,7 +1,8 @@
 /**
  * CharacterIds Checkpoint Component
- * Photo gallery with character descriptions, plus input modes
- * (skip, natural text, JSON) for character-to-photo mapping.
+ * Per-photo character identification with thumbnails.
+ * Shows AI analysis (read-only) alongside user input fields.
+ * Submits combined AI + user descriptions as characterIdsRaw.
  * Exports to window.Console.checkpoints.CharacterIds
  */
 
@@ -15,25 +16,13 @@ function CharacterIds({ data, onApprove }) {
   const photoAnalyses = (data && data.photoAnalyses && data.photoAnalyses.analyses) || [];
   const roster = (data && data.sessionConfig && data.sessionConfig.roster) || [];
 
-  const [inputMode, setInputMode] = React.useState('skip');
-  const [naturalText, setNaturalText] = React.useState('');
-  const [jsonText, setJsonText] = React.useState('');
-  const [jsonError, setJsonError] = React.useState('');
+  // Per-photo user descriptions keyed by index
+  const [descriptions, setDescriptions] = React.useState({});
+  // Track which cards are expanded (show full AI analysis)
+  const [expanded, setExpanded] = React.useState({});
 
-  function handleSubmit() {
-    if (inputMode === 'skip') {
-      onApprove({ characterIds: {} });
-    } else if (inputMode === 'natural') {
-      onApprove({ characterIdsRaw: naturalText });
-    } else if (inputMode === 'json') {
-      try {
-        const parsed = JSON.parse(jsonText);
-        setJsonError('');
-        onApprove({ characterIds: parsed });
-      } catch (err) {
-        setJsonError('Invalid JSON: ' + err.message);
-      }
-    }
+  function getDisplayName(filepath) {
+    return (filepath || '').split('/').pop().split('\\').pop();
   }
 
   function getScoreClass(score) {
@@ -49,12 +38,60 @@ function CharacterIds({ data, onApprove }) {
     return 'var(--text-muted)';
   }
 
-  const isSubmitDisabled = (inputMode === 'natural' && !naturalText.trim()) ||
-    (inputMode === 'json' && !!jsonError);
+  function toggleExpanded(index) {
+    setExpanded(function (prev) {
+      var next = Object.assign({}, prev);
+      next[index] = !prev[index];
+      return next;
+    });
+  }
+
+  function updateDescription(index, value) {
+    setDescriptions(function (prev) {
+      var next = Object.assign({}, prev);
+      next[index] = value;
+      return next;
+    });
+  }
+
+  function buildPayload() {
+    // Concatenate per-photo blocks with AI context + user input
+    var blocks = [];
+    photoAnalyses.forEach(function (photo, i) {
+      var filename = getDisplayName(sessionPhotos[i]) || 'Photo ' + (i + 1);
+      var userText = (descriptions[i] || '').trim();
+      var aiVisual = (photo.visualContent || '').trim();
+      var charDescs = (photo.characterDescriptions || [])
+        .map(function (d) {
+          return '[' + (d.description || 'unknown') + ', role: ' + (d.role || 'UNKNOWN') + ']';
+        })
+        .join(', ');
+
+      var lines = ['Photo ' + filename + ':'];
+      if (aiVisual) lines.push('  AI Description: ' + aiVisual);
+      if (charDescs) lines.push('  Character Descriptions: ' + charDescs);
+      if (userText) lines.push('  User Input: ' + userText);
+      blocks.push(lines.join('\n'));
+    });
+    return blocks.join('\n');
+  }
+
+  function handleSubmit() {
+    var payload = buildPayload();
+    onApprove({ characterIdsRaw: payload });
+  }
+
+  function handleSkip() {
+    onApprove({ characterIds: {} });
+  }
+
+  var hasAnyInput = Object.keys(descriptions).some(function (k) {
+    return (descriptions[k] || '').trim().length > 0;
+  });
 
   return React.createElement('div', { className: 'flex flex-col gap-md' },
 
-    // Roster sidebar
+    // Roster reference bar
     roster.length > 0 && React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Session Roster'),
       React.createElement('div', { className: 'tag-list' },
@@ -64,147 +101,138 @@ function CharacterIds({ data, onApprove }) {
       )
     ),
 
-    // Photo gallery
-    photoAnalyses.length > 0 && React.createElement('div', { className: 'checkpoint-section' },
-      React.createElement('h4', { className: 'checkpoint-section__title' },
-        'Photo Analyses (' + photoAnalyses.length + ')'
-      ),
-      React.createElement('div', { className: 'photo-gallery' },
-        photoAnalyses.map(function (photo, i) {
-          const filename = sessionPhotos[i] || 'Photo ' + (i + 1);
-          // Extract just the filename from path
-          const displayName = filename.split('/').pop().split('\\').pop();
-          const score = photo.relevanceScore || 0;
-          const visual = photo.visualContent || '';
-          const charDescs = photo.characterDescriptions || [];
-          const caption = photo.suggestedCaption || '';
+    // Photo cards
+    photoAnalyses.length > 0 && React.createElement('div', { className: 'flex flex-col gap-md' },
+      photoAnalyses.map(function (photo, i) {
+        var filepath = sessionPhotos[i] || '';
+        var displayName = getDisplayName(filepath) || 'Photo ' + (i + 1);
+        var score = photo.relevanceScore || 0;
+        var visual = photo.visualContent || '';
+        var charDescs = photo.characterDescriptions || [];
+        var caption = photo.suggestedCaption || '';
+        var isExpanded = !!expanded[i];
+        var thumbUrl = filepath
+          ? '/api/file?path=' + encodeURIComponent(filepath)
+          : null;
 
-          return React.createElement('div', { key: 'photo-' + i, className: 'photo-card' },
-            // Header: filename + relevance
-            React.createElement('div', { className: 'photo-card__header' },
-              React.createElement('span', { className: 'text-sm' }, displayName),
-              React.createElement('span', { className: 'photo-card__score ' + getScoreClass(score) },
-                score + '/10'
-              )
-            ),
+        return React.createElement('div', {
+          key: 'photo-' + i,
+          className: 'photo-card'
+        },
+          // Card body: thumbnail + content
+          React.createElement('div', { className: 'photo-card__body' },
 
-            // Visual content
-            visual && React.createElement('p', { className: 'text-sm text-secondary mb-sm' },
-              truncate(visual, 120)
-            ),
-
-            // Character descriptions
-            charDescs.length > 0 && React.createElement('div', { className: 'flex flex-col gap-sm' },
-              charDescs.map(function (desc, j) {
-                return React.createElement('div', {
-                  key: 'char-' + i + '-' + j,
-                  className: 'character-desc'
-                },
-                  React.createElement('div', { className: 'character-desc__role' },
-                    React.createElement(Badge, { label: desc.role || 'UNKNOWN', color: getRoleColor(desc.role) })
-                  ),
-                  desc.description && React.createElement('span', { className: 'text-xs text-secondary' },
-                    truncate(desc.description, 100)
-                  ),
-                  desc.physicalMarkers && React.createElement('span', { className: 'text-xs text-muted' },
-                    'Markers: ' + truncate(desc.physicalMarkers, 80)
-                  )
-                );
+            // Thumbnail
+            thumbUrl && React.createElement('div', {
+              className: 'photo-card__thumb-wrap',
+              onClick: function () { toggleExpanded(i); }
+            },
+              React.createElement('img', {
+                src: thumbUrl,
+                alt: displayName,
+                className: 'photo-card__thumbnail'
               })
             ),
 
-            // Caption
-            caption && React.createElement('p', { className: 'text-xs text-muted mt-sm' },
-              'Caption: ' + truncate(caption, 80)
+            // Right side: header, AI analysis, user input
+            React.createElement('div', { className: 'photo-card__content' },
+
+              // Header: filename + score
+              React.createElement('div', {
+                className: 'photo-card__header',
+                onClick: function () { toggleExpanded(i); },
+                style: { cursor: 'pointer' }
+              },
+                React.createElement('span', { className: 'text-sm' }, displayName),
+                React.createElement('span', {
+                  className: 'photo-card__score ' + getScoreClass(score)
+                }, score + '/10'),
+                React.createElement('span', {
+                  className: 'text-xs text-muted',
+                  style: { marginLeft: 'auto' }
+                }, isExpanded ? '\u25B2' : '\u25BC')
+              ),
+
+              // AI Analysis (read-only) — always show summary, expand for full
+              React.createElement('div', { className: 'photo-card__ai-section' },
+                React.createElement('span', {
+                  className: 'photo-card__ai-label'
+                }, 'AI Analysis'),
+
+                // Visual content
+                visual && React.createElement('p', { className: 'text-xs text-secondary' },
+                  isExpanded ? visual : truncate(visual, 100)
+                ),
+
+                // Character descriptions (always visible — key reference)
+                charDescs.length > 0 && React.createElement('div', {
+                  className: 'flex flex-col gap-sm mt-xs'
+                },
+                  charDescs.map(function (desc, j) {
+                    return React.createElement('div', {
+                      key: 'char-' + i + '-' + j,
+                      className: 'character-desc'
+                    },
+                      React.createElement('div', { className: 'character-desc__role' },
+                        React.createElement(Badge, {
+                          label: desc.role || 'UNKNOWN',
+                          color: getRoleColor(desc.role)
+                        })
+                      ),
+                      desc.description && React.createElement('span', {
+                        className: 'text-xs text-secondary'
+                      }, isExpanded ? desc.description : truncate(desc.description, 80)),
+                      isExpanded && desc.physicalMarkers && React.createElement('span', {
+                        className: 'text-xs text-muted'
+                      }, 'Markers: ' + desc.physicalMarkers)
+                    );
+                  })
+                ),
+
+                // Caption (expanded only)
+                isExpanded && caption && React.createElement('p', {
+                  className: 'text-xs text-muted mt-xs'
+                }, 'Caption: ' + caption)
+              ),
+
+              // User input (separate field)
+              React.createElement('div', { className: 'photo-card__user-section mt-sm' },
+                React.createElement('label', {
+                  className: 'photo-card__user-label',
+                  htmlFor: 'char-input-' + i
+                }, 'Your Description'),
+                React.createElement('textarea', {
+                  id: 'char-input-' + i,
+                  className: 'input text-sm photo-card__input',
+                  rows: 2,
+                  value: descriptions[i] || '',
+                  onChange: function (e) { updateDescription(i, e.target.value); },
+                  placeholder: 'e.g., ' + (roster.length > 0
+                    ? roster[0] + ' is the person in red, ' + (roster[1] || '...') + ' is behind them...'
+                    : 'Sarah is in the red dress, Marcus is behind her...')
+                })
+              )
             )
-          );
-        })
-      )
+          )
+        );
+      })
     ),
 
-    // Input mode selection
-    React.createElement('div', { className: 'checkpoint-section' },
-      React.createElement('h4', { className: 'checkpoint-section__title' }, 'Character Mapping'),
-      React.createElement('p', { className: 'text-xs text-muted mb-sm' },
-        'Map players to photos, or skip if no mapping is needed.'
-      ),
-      React.createElement('div', { className: 'input-mode' },
-        // Skip option
-        React.createElement('label', {
-          className: 'input-mode__option' + (inputMode === 'skip' ? ' input-mode__option--active' : '')
-        },
-          React.createElement('input', {
-            type: 'radio',
-            name: 'charIdMode',
-            value: 'skip',
-            checked: inputMode === 'skip',
-            onChange: function () { setInputMode('skip'); }
-          }),
-          React.createElement('span', null, 'Skip'),
-          React.createElement('span', { className: 'text-xs text-muted' }, 'No character mapping needed')
-        ),
-        // Natural text option
-        React.createElement('label', {
-          className: 'input-mode__option' + (inputMode === 'natural' ? ' input-mode__option--active' : '')
-        },
-          React.createElement('input', {
-            type: 'radio',
-            name: 'charIdMode',
-            value: 'natural',
-            checked: inputMode === 'natural',
-            onChange: function () { setInputMode('natural'); }
-          }),
-          React.createElement('span', null, 'Natural Text'),
-          React.createElement('span', { className: 'text-xs text-muted' }, 'Describe mappings in plain English')
-        ),
-        // JSON option
-        React.createElement('label', {
-          className: 'input-mode__option' + (inputMode === 'json' ? ' input-mode__option--active' : '')
-        },
-          React.createElement('input', {
-            type: 'radio',
-            name: 'charIdMode',
-            value: 'json',
-            checked: inputMode === 'json',
-            onChange: function () { setInputMode('json'); setJsonError(''); }
-          }),
-          React.createElement('span', null, 'JSON'),
-          React.createElement('span', { className: 'text-xs text-muted' }, 'Structured key-value mappings')
-        )
-      ),
+    // No photos fallback
+    photoAnalyses.length === 0 && React.createElement('p', {
+      className: 'text-muted text-sm'
+    }, 'No photo analyses available.'),
 
-      // Input areas based on mode
-      inputMode === 'natural' && React.createElement('div', { className: 'form-group mt-md' },
-        React.createElement('label', { className: 'form-group__label' }, 'Character Descriptions'),
-        React.createElement('textarea', {
-          className: 'input',
-          rows: 5,
-          value: naturalText,
-          onChange: function (e) { setNaturalText(e.target.value); },
-          placeholder: 'e.g., Alice is the woman in the red dress in photo 3, Bob is the tall man with glasses in photo 1...'
-        })
-      ),
-
-      inputMode === 'json' && React.createElement('div', { className: 'form-group mt-md' },
-        React.createElement('label', { className: 'form-group__label' }, 'JSON Mapping'),
-        React.createElement('textarea', {
-          className: 'input input-mono',
-          rows: 8,
-          value: jsonText,
-          onChange: function (e) { setJsonText(e.target.value); setJsonError(''); },
-          placeholder: '{\n  "photo-1": "Alice",\n  "photo-3": "Bob"\n}'
-        }),
-        jsonError && React.createElement('span', { className: 'validation-error' }, jsonError)
-      )
-    ),
-
-    // Submit button
+    // Global actions
     React.createElement('div', { className: 'flex gap-md mt-md' },
       React.createElement('button', {
         className: 'btn btn-primary',
-        disabled: isSubmitDisabled,
         onClick: handleSubmit
-      }, inputMode === 'skip' ? 'Skip Character IDs' : 'Submit Character IDs')
+      }, 'Submit Character IDs'),
+      React.createElement('button', {
+        className: 'btn btn-ghost',
+        onClick: handleSkip
+      }, 'Skip')
     )
   );
 }

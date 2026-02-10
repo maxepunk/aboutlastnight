@@ -39,9 +39,9 @@ class ProgressEmitter extends EventEmitter {
   emitComplete(sessionId, result) {
     if (!sessionId) return;
     this.emit(`progress:${sessionId}`, {
-      type: 'complete',
       timestamp: new Date().toISOString(),
-      result
+      ...result,
+      type: 'complete'  // Must be last to override any 'type' in result
     });
   }
 
