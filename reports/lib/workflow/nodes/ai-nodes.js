@@ -858,17 +858,28 @@ async function generateOutline(state, config) {
   const getPhotoFilename = (photo) =>
     typeof photo === 'string' ? photo.split(/[/\\]/).pop() : photo?.filename;
 
-  // Select hero image: prefer arc analysis suggestion, fallback to first photo
+  // Whiteboard is Layer 3 (director) data — exclude from article photos entirely
+  const whiteboardFilename = state.whiteboardPhotoPath
+    ? getPhotoFilename(state.whiteboardPhotoPath)
+    : null;
+
+  // Select hero image: prefer arc analysis suggestion, fallback to first non-whiteboard photo
   // FIX: Previously hardcoded to first photo, ignoring arc analysis (Commit 8.26)
+  // FIX: Skip whiteboard when selecting fallback hero
   const arcSuggestion = arcAnalysis?.heroImageSuggestion;
+  const fallbackHeroPhoto = (state.sessionPhotos || []).find(
+    photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename
+  );
   const heroImage = arcSuggestion?.filename
-    || getPhotoFilename(state.sessionPhotos?.[0])
+    || getPhotoFilename(fallbackHeroPhoto)
     || 'evidence-board.png';
 
   // Build available photos list with analyses for outline generation (Commit 8.24)
   // FIX: Filter out hero to prevent duplicate usage (Commit 8.26)
+  // FIX: Filter out whiteboard — director-layer evidence, not article content
   const availablePhotos = (state.sessionPhotos || [])
     .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
+    .filter(photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)  // Exclude whiteboard
     .map((photoPath, i) => {
       // Get just the filename from the full path
       const filename = getPhotoFilename(photoPath) || `photo-${i}.jpg`;

@@ -42,7 +42,7 @@ TERMINOLOGY:
 - OWNER = Whose POV the memory was captured from (e.g., "Alex's memory of...")
 - OPERATOR = Who found/unlocked the token and chose to expose or bury it
 
-Each memory token has a "disposition" field: 'exposed', 'buried', or 'unknown'.
+Each memory token has a "disposition" field: 'exposed' or 'buried'.
 
 FOR EXPOSED TOKENS (disposition: 'exposed'):
 - You CAN reference the OWNER (whose POV the memory shows)
@@ -104,7 +104,7 @@ const ITEM_SCHEMA = {
     id: { type: 'string' },
     sourceType: { type: 'string', enum: ['memory-token', 'paper-evidence'] },
     originalType: { type: 'string' },
-    disposition: { type: 'string', enum: ['exposed', 'buried', 'unknown'] },
+    disposition: { type: 'string', enum: ['exposed', 'buried'] },
     summary: { type: 'string', maxLength: 150 },
     // PHASE 1 FIX: Preserve full content for verbatim quoting in article generation
     // Summary is for curation decisions; fullContent is for actual quotes
@@ -198,7 +198,7 @@ function createEvidencePreprocessor(options = {}) {
         id: token.tokenId || token.notionId || token.id, // tokenId is primary (matches orchestrator-parsed)
         sourceType: 'memory-token',
         originalType: token.type || 'Memory Token',
-        disposition: token.disposition || 'unknown', // exposed | buried | unknown
+        disposition: token.disposition || 'buried', // exposed | buried
         rawData: token,
         ownerLogline: token.owner?.logline || null,
         timelineContext: token.timeline || null,
@@ -292,7 +292,7 @@ async function processBatch(batch, sdkClient, batchIndex) {
       id: item.id,
       sourceType: item.sourceType,
       originalType: item.originalType,
-      disposition: item.disposition || 'unknown', // CRITICAL for evidence boundary enforcement
+      disposition: item.disposition || 'buried', // CRITICAL for evidence boundary enforcement
       ownerLogline: item.ownerLogline,
       timelineContext: item.timelineContext,
       sfFields: item.sfFields,
@@ -337,7 +337,7 @@ async function processBatch(batch, sdkClient, batchIndex) {
           ...item,
           // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
           // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
-          disposition: original.disposition || item.disposition || 'unknown',
+          disposition: original.disposition || item.disposition || 'buried',
           // PHASE 1 FIX: Preserve full content for article generation quotes
           fullContent: rawFullContent,
           ownerLogline: item.ownerLogline || original.ownerLogline,
@@ -376,7 +376,7 @@ async function processBatch(batch, sdkClient, batchIndex) {
         id: item.id,
         sourceType: item.sourceType,
         originalType: item.originalType,
-        disposition: item.disposition || 'unknown', // Preserve disposition
+        disposition: item.disposition || 'buried', // Preserve disposition
         summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
         // PHASE 1 FIX: Preserve full content for article generation quotes
         fullContent: rawFullContent,

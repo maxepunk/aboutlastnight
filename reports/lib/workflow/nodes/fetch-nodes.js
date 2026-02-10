@@ -99,14 +99,15 @@ function tagTokensWithDisposition(tokens, orchestratorParsed) {
       };
     }
 
-    return { ...token, disposition: 'unknown' };
+    // Tokens not in either list were never submitted — Nova can't access them,
+    // so they are effectively buried (no content, no transaction data)
+    return { ...token, disposition: 'buried' };
   });
 
   const exposedCount = taggedTokens.filter(t => t.disposition === 'exposed').length;
   const buriedCount = taggedTokens.filter(t => t.disposition === 'buried').length;
-  const unknownCount = taggedTokens.filter(t => t.disposition === 'unknown').length;
 
-  return { taggedTokens, exposedCount, buriedCount, unknownCount };
+  return { taggedTokens, exposedCount, buriedCount, unknownCount: 0 };
 }
 
 /**
@@ -282,12 +283,29 @@ async function fetchMemoryTokens(state, config) {
   const tokens = result.tokens || [];
 
   // ─────────────────────────────────────────────────────
+  // PERSIST: Save raw fetched tokens to disk for debugging and resume
+  // ─────────────────────────────────────────────────────
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  if (state.sessionId) {
+    try {
+      const fetchedDir = path.join(dataDir, state.sessionId, 'fetched');
+      await fs.mkdir(fetchedDir, { recursive: true });
+      await fs.writeFile(
+        path.join(fetchedDir, 'tokens.json'),
+        JSON.stringify({ tokens, fetchedAt: result.fetchedAt, totalCount: result.totalCount }, null, 2)
+      );
+      console.log(`[fetchMemoryTokens] Saved ${tokens.length} tokens to fetched/tokens.json`);
+    } catch (err) {
+      console.warn(`[fetchMemoryTokens] Failed to save tokens to disk: ${err.message}`);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────
   // EVIDENCE BOUNDARY: Tag each token with disposition
   // ─────────────────────────────────────────────────────
 
   // Load orchestrator-parsed.json directly from files
   // Files are the source of truth (LangGraph doesn't persist _parsedInput)
-  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
   const orchestratorPath = path.join(dataDir, state.sessionId, 'inputs', 'orchestrator-parsed.json');
   let orchestratorParsed = {};
   try {
@@ -330,11 +348,8 @@ async function tagTokenDispositions(state, config) {
     return {};
   }
 
-  // Skip if ALL tokens already have disposition (non-unknown)
-  // Using .every() ensures we don't skip when only some tokens are tagged
-  const allTagged = state.memoryTokens.every(t =>
-    t.disposition && t.disposition !== 'unknown'
-  );
+  // Skip if ALL tokens already have a disposition set
+  const allTagged = state.memoryTokens.every(t => t.disposition);
   if (allTagged) {
     console.log('[tagTokenDispositions] All tokens already tagged, skipping');
     return {};
@@ -350,13 +365,13 @@ async function tagTokenDispositions(state, config) {
     orchestratorParsed = JSON.parse(content);
     console.log(`[tagTokenDispositions] Loaded orchestrator-parsed: ${orchestratorParsed.exposedTokens?.length || 0} exposed, ${orchestratorParsed.buriedTokens?.length || 0} buried`);
   } catch (err) {
-    console.log('[tagTokenDispositions] No orchestrator-parsed.json found, all tokens will be unknown');
-    // Tag all as unknown and return
-    const unknownTokens = state.memoryTokens.map(token => ({
+    console.log('[tagTokenDispositions] No orchestrator-parsed.json found, all tokens default to buried');
+    // No session report means Nova has no access — treat all as buried
+    const buriedTokens = state.memoryTokens.map(token => ({
       ...token,
-      disposition: 'unknown'
+      disposition: 'buried'
     }));
-    return { memoryTokens: unknownTokens };
+    return { memoryTokens: buriedTokens };
   }
 
   // Use shared helper for tagging
@@ -394,6 +409,22 @@ async function fetchPaperEvidence(state, config) {
   const paperEvidence = result.evidence || [];
 
   console.log(`[fetchPaperEvidence] Fetched ${paperEvidence.length} items`);
+
+  // Persist to disk for debugging and resume
+  if (state.sessionId) {
+    const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+    try {
+      const fetchedDir = path.join(dataDir, state.sessionId, 'fetched');
+      await fs.mkdir(fetchedDir, { recursive: true });
+      await fs.writeFile(
+        path.join(fetchedDir, 'paper-evidence.json'),
+        JSON.stringify({ evidence: paperEvidence, fetchedAt: result.fetchedAt, totalCount: result.totalCount }, null, 2)
+      );
+      console.log(`[fetchPaperEvidence] Saved ${paperEvidence.length} items to fetched/paper-evidence.json`);
+    } catch (err) {
+      console.warn(`[fetchPaperEvidence] Failed to save paper evidence to disk: ${err.message}`);
+    }
+  }
 
   return {
     paperEvidence,

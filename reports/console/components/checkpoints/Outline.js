@@ -81,10 +81,12 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache }) {
       React.createElement('h4', { className: 'outline-section__title' }, 'LEDE'),
       React.createElement('div', { className: 'outline-section__content' },
         lede.hook && React.createElement('p', { className: 'text-sm mb-sm' },
-          React.createElement('strong', null, 'Hook: '), lede.hook
+          React.createElement('strong', null, 'Hook: '),
+          typeof lede.hook === 'string' ? lede.hook : safeStringify(lede.hook)
         ),
         lede.keyTension && React.createElement('p', { className: 'text-sm mb-sm' },
-          React.createElement('strong', null, 'Key Tension: '), lede.keyTension
+          React.createElement('strong', null, 'Key Tension: '),
+          typeof lede.keyTension === 'string' ? lede.keyTension : safeStringify(lede.keyTension)
         ),
         lede.selectedEvidence && React.createElement('p', { className: 'text-xs text-muted' },
           'Evidence: ' + (Array.isArray(lede.selectedEvidence) ? lede.selectedEvidence.join(', ') : lede.selectedEvidence)
@@ -112,7 +114,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache }) {
             ),
             arc.keyPoints && React.createElement('ul', { className: 'checkpoint-section__list text-xs text-secondary' },
               (Array.isArray(arc.keyPoints) ? arc.keyPoints : [arc.keyPoints]).map(function (point, j) {
-                return React.createElement('li', { key: 'kp-' + j }, point);
+                return React.createElement('li', { key: 'kp-' + j },
+                  typeof point === 'string' ? point : safeStringify(point)
+                );
               })
             ),
             arc.evidenceCards && React.createElement('div', { className: 'tag-list mt-sm' },
@@ -130,7 +134,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache }) {
           );
         }),
         theStory.arcInterweaving && React.createElement('p', { className: 'text-xs text-muted mt-sm' },
-          React.createElement('strong', null, 'Arc Interweaving: '), theStory.arcInterweaving
+          React.createElement('strong', null, 'Arc Interweaving: '),
+          typeof theStory.arcInterweaving === 'string' ? theStory.arcInterweaving : safeStringify(theStory.arcInterweaving)
         )
       )
     );
@@ -173,10 +178,11 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache }) {
           typeof resolutions === 'string' ? resolutions : safeStringify(resolutions)
         ),
         closing.systemicAngle && React.createElement('p', { className: 'text-sm mb-sm' },
-          React.createElement('strong', null, 'Systemic Angle: '), closing.systemicAngle
+          React.createElement('strong', null, 'Systemic Angle: '),
+          typeof closing.systemicAngle === 'string' ? closing.systemicAngle : safeStringify(closing.systemicAngle)
         ),
         closing.finalLine && React.createElement('p', { className: 'text-sm text-secondary text-italic' },
-          closing.finalLine
+          typeof closing.finalLine === 'string' ? closing.finalLine : safeStringify(closing.finalLine)
         )
       )
     );

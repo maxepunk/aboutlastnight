@@ -1062,6 +1062,7 @@ async function reviseArcs(state, config) {
     return {
       narrativeArcs: [],
       _previousArcs: null,
+      _arcFeedback: null,
       errors: [{
         phase: PHASES.ARC_SYNTHESIS,
         type: 'revision-no-previous-output',
@@ -1077,7 +1078,8 @@ async function reviseArcs(state, config) {
     phase: 'arcs',
     revisionCount,
     validationResults: state.validationResults,
-    previousOutput: previousArcs
+    previousOutput: previousArcs,
+    humanFeedback: state._arcFeedback || null
   });
 
   // Get SDK client
@@ -1110,6 +1112,7 @@ async function reviseArcs(state, config) {
     return {
       narrativeArcs: narrativeArcs || [],
       _previousArcs: null,  // Clear temporary field after use
+      _arcFeedback: null,   // Clear human feedback after consumption
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
@@ -1129,6 +1132,7 @@ async function reviseArcs(state, config) {
     return {
       narrativeArcs: [],
       _previousArcs: null,  // Clear temporary field
+      _arcFeedback: null,   // Clear human feedback after consumption
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         _error: error.message,

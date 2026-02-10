@@ -583,6 +583,16 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Human feedback for arc selection rejection (triggers revision loop)
+   * Set by server approval handler, consumed by reviseArcs
+   * Cleared after revision completes — follows _outlineFeedback pattern
+   */
+  _arcFeedback: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
    * Arc validation results from validateArcStructure (Commit 8.xx)
    * Set by: validateArcStructure in arc-specialist-nodes.js
    * Consumed by: routeArcValidation in graph.js for routing decision
@@ -677,7 +687,8 @@ function getDefaultState() {
     _arcValidation: null,
     // Human rejection feedback (consumed by revision nodes, cleared after use)
     _outlineFeedback: null,
-    _articleFeedback: null
+    _articleFeedback: null,
+    _arcFeedback: null
   };
 }
 
@@ -785,7 +796,7 @@ const ROLLBACK_CLEARS = {
     // Preprocessing and curation
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
     // Arc analysis
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // Generation
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -798,7 +809,7 @@ const ROLLBACK_CLEARS = {
     'selectedPaperEvidence',
     'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -809,7 +820,7 @@ const ROLLBACK_CLEARS = {
     'whiteboardAnalysis',
     'characterIdMappings',
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -820,7 +831,7 @@ const ROLLBACK_CLEARS = {
     'characterIdMappings',
     // Note: photoAnalyses preserved - only mappings need re-entry
     'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -831,7 +842,7 @@ const ROLLBACK_CLEARS = {
     'preCurationApproved',
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -840,7 +851,7 @@ const ROLLBACK_CLEARS = {
   // Phase 1.8: Evidence and photos approval
   'evidence-and-photos': [
     'evidenceBundle',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -848,7 +859,7 @@ const ROLLBACK_CLEARS = {
 
   // Phase 2.3: Arc selection - most common rollback point
   'arc-selection': [
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache',
+    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback',
     'assembledHtml', 'validationResults',

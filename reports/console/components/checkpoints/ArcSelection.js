@@ -4,6 +4,7 @@
  * Each card shows title, evidence strength, source, tone, hook,
  * key moments, evidence breakdown, character placements, financial
  * connections, thematic links, and evaluation score.
+ * Supports approve with selection and reject-with-feedback for revision.
  * Exports to window.Console.checkpoints.ArcSelection
  */
 
@@ -11,13 +12,18 @@ window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, truncate } = window.Console.utils;
+const { RevisionDiff } = window.Console;
 
-function ArcSelection({ data, onApprove }) {
+function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
   const arcs = (data && data.narrativeArcs) || [];
+  const previousFeedback = (data && data.previousFeedback) || null;
+  const revisionCount = (data && data.revisionCount) || 0;
+  const maxRevisions = (data && data.maxRevisions) || 2;
+  const previousArcs = (revisionCache && revisionCache.arcs) || null;
 
   // Selected arc IDs
   const [selectedArcs, setSelectedArcs] = React.useState(function () {
-    const initial = new Set();
+    var initial = new Set();
     arcs.forEach(function (arc) {
       initial.add(arc.id || arc.title);
     });
@@ -27,21 +33,27 @@ function ArcSelection({ data, onApprove }) {
   // Track which cards are expanded (for key moments overflow)
   const [expandedCards, setExpandedCards] = React.useState(new Set());
 
-  // Reset selection when arcs change (e.g., after rollback)
+  // Action mode: 'view' (default) or 'reject'
+  const [mode, setMode] = React.useState('view');
+  const [feedbackText, setFeedbackText] = React.useState('');
+
+  // Reset selection when arcs change (e.g., after rollback or revision)
   // Use serialized IDs (not just length) to detect same-count data swaps
   const arcIdKey = arcs.map(function (arc) { return arc.id || arc.title; }).join(',');
   React.useEffect(function () {
-    const all = new Set();
+    var all = new Set();
     arcs.forEach(function (arc) {
       all.add(arc.id || arc.title);
     });
     setSelectedArcs(all);
     setExpandedCards(new Set());
+    setMode('view');
+    setFeedbackText('');
   }, [arcIdKey]);
 
   function toggleArc(arcId) {
     setSelectedArcs(function (prev) {
-      const next = new Set(prev);
+      var next = new Set(prev);
       if (next.has(arcId)) {
         next.delete(arcId);
       } else {
@@ -53,7 +65,7 @@ function ArcSelection({ data, onApprove }) {
 
   function toggleExpanded(arcId) {
     setExpandedCards(function (prev) {
-      const next = new Set(prev);
+      var next = new Set(prev);
       if (next.has(arcId)) {
         next.delete(arcId);
       } else {
@@ -67,15 +79,35 @@ function ArcSelection({ data, onApprove }) {
     onApprove({ selectedArcs: Array.from(selectedArcs) });
   }
 
+  function handleModeChange(newMode) {
+    if (newMode === mode) {
+      setMode('view');
+      return;
+    }
+    setMode(newMode);
+    if (newMode === 'reject') {
+      setFeedbackText('');
+    }
+  }
+
+  function handleReject() {
+    if (!feedbackText.trim()) return;
+    // Cache current arcs for diff on next revision
+    if (dispatch) {
+      dispatch({ type: 'CACHE_REVISION', contentType: 'arcs', data: arcs });
+    }
+    onReject({ selectedArcs: false, arcFeedback: feedbackText.trim() });
+  }
+
   function getStrengthColor(strength) {
-    const upper = (strength || '').toUpperCase();
+    var upper = (strength || '').toUpperCase();
     if (upper === 'HIGH') return 'var(--accent-green)';
     if (upper === 'MEDIUM') return 'var(--accent-amber)';
     return 'var(--accent-red)';
   }
 
   function getStrengthBarClass(strength) {
-    const upper = (strength || '').toUpperCase();
+    var upper = (strength || '').toUpperCase();
     if (upper === 'HIGH') return 'arc-card__score-fill--high';
     if (upper === 'MEDIUM') return 'arc-card__score-fill--medium';
     return 'arc-card__score-fill--low';
@@ -97,6 +129,15 @@ function ArcSelection({ data, onApprove }) {
 
   return React.createElement('div', { className: 'flex flex-col gap-md' },
 
+    // Revision diff (if this is a revision)
+    React.createElement(RevisionDiff, {
+      previous: previousArcs,
+      current: arcs,
+      revisionCount: revisionCount,
+      maxRevisions: maxRevisions,
+      previousFeedback: previousFeedback
+    }),
+
     // Hint text
     React.createElement('p', { className: 'text-sm text-muted' },
       'Select 3\u20135 arcs to develop. ' + selectedArcs.size + ' of ' + arcs.length + ' selected.'
@@ -105,34 +146,34 @@ function ArcSelection({ data, onApprove }) {
     // Arc cards grid
     React.createElement('div', { className: 'arc-grid' },
       arcs.map(function (arc) {
-        const arcId = arc.id || arc.title;
-        const isSelected = selectedArcs.has(arcId);
-        const isExpanded = expandedCards.has(arcId);
-        const keyMoments = arc.keyMoments || [];
-        const evidence = arc.evidence || [];
-        const placements = arc.characterPlacements || {};
-        const financials = arc.financialConnections || [];
-        const thematic = arc.thematicLinks || [];
-        const evalHistory = arc.evaluationHistory || {};
+        var arcId = arc.id || arc.title;
+        var isSelected = selectedArcs.has(arcId);
+        var isExpanded = expandedCards.has(arcId);
+        var keyMoments = arc.keyMoments || [];
+        var evidence = arc.evidence || [];
+        var placements = arc.characterPlacements || {};
+        var financials = arc.financialConnections || [];
+        var thematic = arc.thematicLinks || [];
+        var evalHistory = arc.evaluationHistory || {};
 
         // Evidence breakdown
-        const exposedEvidence = evidence.filter(function (e) { return e.layer === 'exposed'; }).length;
-        const buriedEvidence = evidence.filter(function (e) { return e.layer === 'buried'; }).length;
+        var exposedEvidence = evidence.filter(function (e) { return e.layer === 'exposed'; }).length;
+        var buriedEvidence = evidence.filter(function (e) { return e.layer === 'buried'; }).length;
 
         // Key moments: normalize to strings
-        const momentStrings = keyMoments.map(function (m) {
+        var momentStrings = keyMoments.map(function (m) {
           return typeof m === 'string' ? m : (m.description || '');
         });
-        const previewMoments = momentStrings.slice(0, 3);
-        const hasMoreMoments = momentStrings.length > 3;
+        var previewMoments = momentStrings.slice(0, 3);
+        var hasMoreMoments = momentStrings.length > 3;
 
         // Financial connections: normalize to strings
-        const financialStrings = financials.map(function (f) {
+        var financialStrings = financials.map(function (f) {
           return typeof f === 'string' ? f : (f.description || '');
         });
 
         // Character placement entries
-        const placementEntries = Object.entries(placements);
+        var placementEntries = Object.entries(placements);
 
         return React.createElement('div', {
           key: arcId + '-' + arcs.indexOf(arc),
@@ -277,17 +318,42 @@ function ArcSelection({ data, onApprove }) {
     ),
 
     // Validation hint
-    !isValid && React.createElement('p', { className: 'validation-error' },
+    !isValid && mode !== 'reject' && React.createElement('p', { className: 'validation-error' },
       'Select at least 1 arc to continue.'
     ),
 
-    // Submit button
-    React.createElement('div', { className: 'flex gap-md mt-md' },
+    // Action mode buttons
+    React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
-        className: 'btn btn-primary',
+        className: 'action-modes__btn' + (mode === 'view' ? ' action-modes__btn--active' : '') + ' btn btn-primary',
         disabled: !isValid,
-        onClick: handleSubmit
-      }, 'Approve Selection (' + selectedArcs.size + ' arc' + (selectedArcs.size !== 1 ? 's' : '') + ')')
+        onClick: handleSubmit,
+        'aria-label': 'Approve arc selection'
+      }, 'Approve Selection (' + selectedArcs.size + ' arc' + (selectedArcs.size !== 1 ? 's' : '') + ')'),
+      React.createElement('button', {
+        className: 'action-modes__btn' + (mode === 'reject' ? ' action-modes__btn--active' : '') + ' btn btn-danger',
+        onClick: function () { handleModeChange('reject'); },
+        'aria-label': 'Reject arcs with feedback for revision'
+      }, 'Reject')
+    ),
+
+    // Reject mode
+    mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
+      React.createElement('label', { className: 'form-group__label' }, 'Feedback for arc revision'),
+      React.createElement('textarea', {
+        className: 'input feedback-area',
+        value: feedbackText,
+        onChange: function (e) { setFeedbackText(e.target.value); },
+        rows: 4,
+        placeholder: 'Describe what needs to change about the arcs...',
+        'aria-label': 'Rejection feedback for arcs'
+      }),
+      React.createElement('button', {
+        className: 'btn btn-danger',
+        onClick: handleReject,
+        disabled: !feedbackText.trim(),
+        'aria-label': 'Submit rejection with feedback'
+      }, 'Submit Rejection')
     )
   );
 }

@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 53 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 54 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -315,7 +315,8 @@ describe('ReportStateAnnotation', () => {
         '_arcValidation',
         // Human rejection feedback (consumed by revision nodes, cleared after use)
         '_outlineFeedback',
-        '_articleFeedback'
+        '_articleFeedback',
+        '_arcFeedback'
       ];
 
       expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort());

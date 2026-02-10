@@ -339,6 +339,7 @@ class CachedNotionClient {
   _getTokenFilter() {
     return {
       or: [
+        { property: 'Basic Type', select: { equals: 'Memory Token' } },
         { property: 'Basic Type', select: { equals: 'Memory Token Video' } },
         { property: 'Basic Type', select: { equals: 'Memory Token Image' } },
         { property: 'Basic Type', select: { equals: 'Memory Token Audio' } }
