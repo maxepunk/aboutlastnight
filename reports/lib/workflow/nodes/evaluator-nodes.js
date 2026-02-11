@@ -160,17 +160,32 @@ const QUALITY_CRITERIA = {
       type: 'advisory'
     }
   },
-  article: {
+  // Article criteria use getArticleCriteria(theme) for theme-aware descriptions
+  article: null  // Populated by getArticleCriteria() at evaluation time
+};
+
+/**
+ * Get theme-aware article evaluation criteria
+ * @param {string} theme - 'journalist' or 'detective'
+ * @returns {Object} Article quality criteria
+ */
+function getArticleCriteria(theme = 'journalist') {
+  const isDetective = theme === 'detective';
+  return {
     // ═══════════════════════════════════════════════════════════════════════
     // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.45)
     // ═══════════════════════════════════════════════════════════════════════
     voiceConsistency: {
-      description: 'Does article maintain NovaNews first-person participatory voice (I, my, we)?',
+      description: isDetective
+        ? 'Does report maintain third-person investigative detective voice (professional, analytical)?'
+        : 'Does article maintain NovaNews first-person participatory voice (I, my, we)?',
       weight: 0.20,
       type: 'structural'
     },
     antiPatterns: {
-      description: 'Are anti-patterns avoided? (em-dash, token terminology, game mechanics)',
+      description: isDetective
+        ? 'Are anti-patterns avoided? (token terminology, game mechanics, character sheet references)'
+        : 'Are anti-patterns avoided? (em-dash, token terminology, game mechanics)',
       weight: 0.15,
       type: 'structural'
     },
@@ -181,7 +196,9 @@ const QUALITY_CRITERIA = {
       type: 'advisory'
     },
     arcThreading: {
-      description: 'Do arcs weave through multiple sections (THE STORY → FOLLOW THE MONEY → THE PLAYERS)? Arcs should feel like conversation topics shifting, not chapter breaks.',
+      description: isDetective
+        ? 'Does each section answer a DIFFERENT QUESTION about the same underlying facts? Sections should be analytically distinct, not repetitive.'
+        : 'Do arcs weave through multiple sections (THE STORY → FOLLOW THE MONEY → THE PLAYERS)? Arcs should feel like conversation topics shifting, not chapter breaks.',
       weight: 0.10,
       type: 'structural'
     },
@@ -204,8 +221,8 @@ const QUALITY_CRITERIA = {
       weight: 0.15,
       type: 'advisory'
     }
-  }
-};
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -217,9 +234,10 @@ const QUALITY_CRITERIA = {
  * Build system prompt for evaluation
  * @param {string} phase - Phase name (arcs, outline, article)
  * @param {Object} criteria - Quality criteria for phase
+ * @param {string} theme - Theme name ('journalist' or 'detective')
  * @returns {string} System prompt
  */
-function buildEvaluationSystemPrompt(phase, criteria) {
+function buildEvaluationSystemPrompt(phase, criteria, theme = 'journalist') {
   // Commit 8.15: Separate structural vs advisory criteria in prompt
   const structuralCriteria = Object.entries(criteria)
     .filter(([_, { type }]) => type === 'structural')
@@ -435,13 +453,19 @@ EVALUATION RULES:
 5. Content is NOT READY only if a STRUCTURAL criterion fails
 
 CRITICAL CHECKS:
-- voiceConsistency: Article MUST use first-person participatory voice ("I", "my", "we")
-- antiPatterns: Article MUST NOT contain em-dashes (—), "token", "Act 1/2/3", game terminology
+${theme === 'detective'
+  ? `- voiceConsistency: Report MUST use third-person investigative voice ("The investigation revealed", "Evidence indicates")
+- antiPatterns: Report MUST NOT contain "token", "Act 1/2/3", game terminology, "character sheet"`
+  : `- voiceConsistency: Article MUST use first-person participatory voice ("I", "my", "we")
+- antiPatterns: Article MUST NOT contain em-dashes (—), "token", "Act 1/2/3", game terminology`}
 
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC lines with voice issues
 - SPECIFIC anti-patterns found with line locations
-- CONCRETE fixes (not "improve voice" but "change 'The investigation revealed' to 'I discovered'")
+- CONCRETE fixes ${theme === 'detective'
+  ? '(not "improve voice" but "change \'I discovered\' to \'The investigation revealed\'")'
+  : '(not "improve voice" but "change \'The investigation revealed\' to \'I discovered\'")'}
+
 
 OUTPUT FORMAT (JSON):
 {
@@ -712,9 +736,9 @@ function getPhaseConstant(phase) {
  */
 function createEvaluator(phase, options = {}) {
   const { model = 'haiku' } = options;
-  const criteria = QUALITY_CRITERIA[phase];
 
-  if (!criteria) {
+  // For non-article phases, criteria are static
+  if (phase !== 'article' && !QUALITY_CRITERIA[phase]) {
     throw new Error(`No quality criteria defined for phase: ${phase}`);
   }
 
@@ -725,6 +749,11 @@ function createEvaluator(phase, options = {}) {
    * @returns {Object} Partial state update
    */
   return async function evaluatePhase(state, config) {
+    // Resolve criteria: article criteria are theme-aware, others are static
+    const theme = state.theme || 'journalist';
+    const criteria = phase === 'article'
+      ? getArticleCriteria(theme)
+      : QUALITY_CRITERIA[phase];
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
     const revisionCap = getRevisionCap(phase);
@@ -795,7 +824,7 @@ function createEvaluator(phase, options = {}) {
     }
 
     const sdk = getSdkClient(config, `evaluate-${phase}`);
-    const systemPrompt = buildEvaluationSystemPrompt(phase, criteria);
+    const systemPrompt = buildEvaluationSystemPrompt(phase, criteria, theme);
     const prompt = buildEvaluationUserPrompt(phase, state);
 
     try {
@@ -1063,6 +1092,7 @@ module.exports = {
   // Export for testing
   _testing: {
     QUALITY_CRITERIA,
+    getArticleCriteria,
     getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,

@@ -49,10 +49,13 @@ const { traceNode } = require('../../observability');
  * Supports dependency injection for testing
  *
  * @param {Object} config - Graph config with optional configurable.promptBuilder
+ * @param {Object} state - Graph state with optional theme field
  * @returns {Object} PromptBuilder instance
  */
-function getPromptBuilder(config) {
-  return config?.configurable?.promptBuilder || createPromptBuilder();
+function getPromptBuilder(config, state) {
+  if (config?.configurable?.promptBuilder) return config.configurable.promptBuilder;
+  const theme = state?.theme || 'journalist';
+  return createPromptBuilder({ theme });
 }
 
 /**
@@ -652,7 +655,7 @@ async function analyzeNarrativeArcs(state, config) {
   }
 
   const sdk = getSdkClient(config, 'analyzeArcs');
-  const promptBuilder = getPromptBuilder(config);
+  const promptBuilder = getPromptBuilder(config, state);
 
   // Build session data for prompt builder
   const sessionData = {
@@ -844,7 +847,7 @@ async function generateOutline(state, config) {
   }
 
   const sdk = getSdkClient(config, 'generateOutline');
-  const promptBuilder = getPromptBuilder(config);
+  const promptBuilder = getPromptBuilder(config, state);
 
   // Get arc analysis from cache or reconstruct from narrativeArcs
   const arcAnalysis = state._arcAnalysisCache || {
@@ -983,7 +986,7 @@ async function reviseOutline(state, config) {
 
   // Get SDK client and prompt builder
   const sdk = getSdkClient(config, 'reviseOutline');
-  const promptBuilder = getPromptBuilder(config);
+  const promptBuilder = getPromptBuilder(config, state);
 
   // Build revision prompt
   const revisionPrompt = buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
@@ -1122,7 +1125,7 @@ async function generateContentBundle(state, config) {
   }
 
   const sdk = getSdkClient(config, 'generateContent');
-  const promptBuilder = getPromptBuilder(config);
+  const promptBuilder = getPromptBuilder(config, state);
 
   // Load template for context (optional - article generation can proceed without it)
   const template = await promptBuilder.theme.loadTemplate().catch(err => {
@@ -1249,7 +1252,7 @@ async function validateContentBundle(state, config) {
  */
 async function validateArticle(state, config) {
   const sdk = getSdkClient(config, 'validateArticle');
-  const promptBuilder = getPromptBuilder(config);
+  const promptBuilder = getPromptBuilder(config, state);
 
   // Get roster for coverage check
   const roster = state.sessionConfig?.roster?.map(p => p.name) || [];
@@ -1354,7 +1357,7 @@ async function reviseContentBundle(state, config) {
   });
 
   const sdk = getSdkClient(config, 'reviseContent');
-  const promptBuilder = getPromptBuilder(config);
+  const promptBuilder = getPromptBuilder(config, state);
 
   // Build revision prompt with full context
   const revisionPrompt = buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);

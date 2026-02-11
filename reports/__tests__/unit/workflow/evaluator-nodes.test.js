@@ -20,6 +20,7 @@ const {
   createMockEvaluator,
   _testing: {
     QUALITY_CRITERIA,
+    getArticleCriteria,
     getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,
@@ -85,17 +86,28 @@ describe('evaluator-nodes', () => {
       expect(QUALITY_CRITERIA.outline.wordBudget).toBeDefined();
     });
 
-    it('defines criteria for article phase', () => {
-      expect(QUALITY_CRITERIA.article).toBeDefined();
-      expect(QUALITY_CRITERIA.article.voiceConsistency).toBeDefined();
-      expect(QUALITY_CRITERIA.article.antiPatterns).toBeDefined();
-      expect(QUALITY_CRITERIA.article.evidenceIntegration).toBeDefined();
-      expect(QUALITY_CRITERIA.article.characterPlacement).toBeDefined();
-      expect(QUALITY_CRITERIA.article.emotionalResonance).toBeDefined();
+    it('defines criteria for article phase via getArticleCriteria', () => {
+      const articleCriteria = getArticleCriteria();
+      expect(articleCriteria).toBeDefined();
+      expect(articleCriteria.voiceConsistency).toBeDefined();
+      expect(articleCriteria.antiPatterns).toBeDefined();
+      expect(articleCriteria.evidenceIntegration).toBeDefined();
+      expect(articleCriteria.characterPlacement).toBeDefined();
+      expect(articleCriteria.emotionalResonance).toBeDefined();
+    });
+
+    it('returns detective-specific criteria for detective theme', () => {
+      const detectiveCriteria = getArticleCriteria('detective');
+      expect(detectiveCriteria.voiceConsistency.description).toContain('third-person');
+      expect(detectiveCriteria.voiceConsistency.description).not.toContain('NovaNews');
+      expect(detectiveCriteria.antiPatterns.description).toContain('character sheet');
+      expect(detectiveCriteria.arcThreading.description).toContain('DIFFERENT QUESTION');
     });
 
     it('all criteria have description and weight', () => {
-      Object.entries(QUALITY_CRITERIA).forEach(([phase, criteria]) => {
+      // Merge static criteria with dynamic article criteria for full validation
+      const allCriteria = { ...QUALITY_CRITERIA, article: getArticleCriteria() };
+      Object.entries(allCriteria).forEach(([phase, criteria]) => {
         Object.entries(criteria).forEach(([name, criterion]) => {
           expect(criterion.description).toBeDefined();
           expect(typeof criterion.weight).toBe('number');
@@ -106,7 +118,8 @@ describe('evaluator-nodes', () => {
     });
 
     it('weights sum to approximately 1.0 for each phase', () => {
-      Object.entries(QUALITY_CRITERIA).forEach(([phase, criteria]) => {
+      const allCriteria = { ...QUALITY_CRITERIA, article: getArticleCriteria() };
+      Object.entries(allCriteria).forEach(([phase, criteria]) => {
         const totalWeight = Object.values(criteria).reduce((sum, c) => sum + c.weight, 0);
         expect(totalWeight).toBeCloseTo(1.0, 1);
       });
@@ -155,7 +168,7 @@ describe('evaluator-nodes', () => {
     });
 
     it('includes output format', () => {
-      const prompt = buildEvaluationSystemPrompt('article', QUALITY_CRITERIA.article);
+      const prompt = buildEvaluationSystemPrompt('article', getArticleCriteria());
 
       expect(prompt).toContain('OUTPUT FORMAT');
       expect(prompt).toContain('ready');
@@ -169,7 +182,7 @@ describe('evaluator-nodes', () => {
     });
 
     it('emphasizes human always makes final decision', () => {
-      const prompt = buildEvaluationSystemPrompt('article', QUALITY_CRITERIA.article);
+      const prompt = buildEvaluationSystemPrompt('article', getArticleCriteria());
       expect(prompt).toContain('Human always makes final decision');
     });
   });
