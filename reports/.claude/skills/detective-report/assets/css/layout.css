@@ -1,0 +1,70 @@
+/**
+ * Detective Case Report - Layout
+ *
+ * Report container with file-folder aesthetic,
+ * watermark classification stamp, z-index layering.
+ * Ported from detlogv3.html REPORT_TEMPLATE CSS.
+ */
+
+/* Report container - like a file folder */
+.report-container {
+  border: 2px solid var(--det-border);
+  border-top: 8px solid var(--det-border-top);
+  background:
+    linear-gradient(var(--det-bg-container), var(--det-bg-container-alt)),
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+  padding: var(--det-padding-container);
+  box-shadow:
+    var(--det-shadow-container),
+    var(--det-shadow-container-inset);
+  position: relative;
+}
+
+/* Watermark Classification Stamp */
+.report-container::before {
+  content: 'CLASSIFIED';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-25deg);
+  font-family: var(--det-font-header);
+  font-size: var(--det-text-watermark);
+  color: var(--det-accent-red-stamp);
+  font-weight: 700;
+  letter-spacing: var(--det-tracking-watermark);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Top-corner classification stamp */
+.report-container::after {
+  content: 'OPEN CASE';
+  position: absolute;
+  top: 15px;
+  right: 25px;
+  font-family: var(--det-font-header);
+  color: var(--det-accent-red);
+  font-weight: 700;
+  letter-spacing: var(--det-tracking-stamp);
+  opacity: 0.4;
+  font-size: var(--det-text-sm);
+  border: 2px solid var(--det-accent-red);
+  padding: 4px 12px;
+  transform: rotate(3deg);
+  z-index: 10;
+}
+
+/* All content above watermark */
+.report-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Print/photocopy effect - very subtle noise */
+@media screen {
+  .report-container {
+    background-image:
+      linear-gradient(var(--det-bg-container), var(--det-bg-container-alt)),
+      url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.03"/></svg>');
+  }
+}

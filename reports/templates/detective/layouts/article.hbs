@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Case Report {{metadata.sessionId}} - About Last Night</title>
+    <meta name="description" content="Official Case Report - Detective Anondono, Memory Crimes Division">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    {{#if inlineCss}}
+    <style>{{{inlineCss}}}</style>
+    {{else}}
+    {{#each css.files}}
+    <link rel="stylesheet" href="{{../css.basePath}}{{this}}">
+    {{/each}}
+    {{/if}}
+</head>
+<body>
+
+<div class="report-container">
+
+    {{> header}}
+
+    {{#each sections}}
+    <section class="report-section report-section--{{type}}" id="{{id}}">
+        {{#if heading}}
+        <h2>{{heading}}</h2>
+        {{/if}}
+        {{#each content}}
+        {{{renderContentBlock this}}}
+        {{/each}}
+    </section>
+    {{/each}}
+
+    {{#if hasPhotos}}
+    {{#each photos}}
+    {{#if (eq placement "inline")}}
+    {{!-- Photos rendered inline via content blocks --}}
+    {{/if}}
+    {{/each}}
+    {{/if}}
+
+</div>
+
+{{#if inlineJs}}
+<script>{{{inlineJs}}}</script>
+{{else}}
+{{#each js.files}}
+<script src="{{../js.basePath}}{{this}}"></script>
+{{/each}}
+{{/if}}
+
+</body>
+</html>

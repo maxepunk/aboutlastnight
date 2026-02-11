@@ -1,0 +1,106 @@
+/**
+ * Detective Case Report - Base Styles
+ *
+ * Reset, typography, body text.
+ * Ported from detlogv3.html REPORT_TEMPLATE CSS.
+ */
+
+/* Import Fonts: Bebas Neue (official stamps/headers) + Courier Prime (typewriter) */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&display=swap');
+
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Base - Dark precinct aesthetic */
+body {
+  font-family: var(--det-font-body);
+  background-color: var(--det-bg-deep);
+  color: var(--det-text-primary);
+  padding: var(--det-padding-body);
+  max-width: var(--det-max-width);
+  margin: 0 auto;
+  line-height: var(--det-leading-body);
+  font-size: var(--det-text-base);
+}
+
+/* Official Case Header - Bebas Neue stamp style */
+h1 {
+  font-family: var(--det-font-header);
+  text-align: center;
+  border-bottom: 3px double var(--det-accent-red);
+  margin-bottom: 35px;
+  font-size: var(--det-text-h1);
+  color: var(--det-accent-red);
+  text-shadow: 0 0 25px var(--det-accent-red-glow);
+  letter-spacing: var(--det-tracking-h1);
+  padding-bottom: 15px;
+  text-transform: uppercase;
+}
+
+/* Section headers - Official stamps */
+h2 {
+  font-family: var(--det-font-header);
+  font-size: var(--det-text-h2);
+  color: var(--det-accent-red);
+  text-transform: uppercase;
+  letter-spacing: var(--det-tracking-h2);
+  margin-top: 35px;
+  margin-bottom: 18px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--det-accent-red-border);
+  text-shadow: 0 0 15px rgba(204, 0, 0, 0.5);
+}
+
+/* Subsection headers */
+h3 {
+  font-family: var(--det-font-header);
+  font-size: var(--det-text-h3);
+  color: var(--det-accent-gold);
+  text-transform: uppercase;
+  letter-spacing: var(--det-tracking-h3);
+  margin-top: 25px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--det-accent-gold-dim);
+  padding-bottom: 5px;
+}
+
+/* Body text - typed report style */
+p {
+  margin-bottom: 16px;
+  font-family: var(--det-font-body);
+  color: var(--det-text-body);
+  line-height: var(--det-leading-paragraph);
+}
+
+/* Bold emphasis in typed text */
+strong {
+  color: var(--det-text-strong);
+  font-weight: 700;
+  font-family: var(--det-font-body);
+}
+
+/* Lists in evidence */
+ul {
+  list-style-type: square;
+  margin-left: 25px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+}
+
+li {
+  margin-bottom: 12px;
+  color: var(--det-text-list);
+  line-height: var(--det-leading-body);
+}
+
+/* Section breaks */
+hr {
+  border: none;
+  border-top: 1px solid var(--det-border-hr);
+  margin: 40px 0;
+  opacity: 0.5;
+}

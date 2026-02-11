@@ -1,0 +1,128 @@
+/**
+ * Detective Case Report - Components
+ *
+ * Evidence items, detective notes, metadata box.
+ * Ported from detlogv3.html REPORT_TEMPLATE CSS.
+ */
+
+/* Form-style metadata box */
+.meta-data {
+  background-color: var(--det-bg-elevated);
+  padding: 22px 25px;
+  margin-bottom: 35px;
+  border: 1px solid var(--det-border-meta);
+  border-left: 5px solid var(--det-accent-red);
+  font-size: var(--det-text-meta);
+  line-height: var(--det-leading-meta);
+  font-family: var(--det-font-body);
+  box-shadow: var(--det-shadow-meta-inset);
+}
+
+.meta-data strong {
+  font-family: var(--det-font-body);
+  font-weight: 700;
+  color: var(--det-text-meta-label);
+  text-transform: uppercase;
+  font-size: var(--det-text-sm);
+  letter-spacing: var(--det-tracking-meta);
+}
+
+/* Evidence sections */
+.evidence-item {
+  margin-bottom: 22px;
+  padding-left: 22px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-left: 4px solid var(--det-accent-red-border);
+  background: var(--det-bg-evidence);
+  transition: var(--det-transition-base);
+}
+
+.evidence-item:hover {
+  border-left-color: var(--det-accent-red);
+  background: var(--det-bg-evidence-hover);
+  transform: translateX(6px);
+}
+
+/* Detective's notes */
+.note {
+  font-style: italic;
+  color: var(--det-text-note);
+  background: var(--det-bg-note);
+  padding: 22px 25px;
+  border-left: 4px solid var(--det-accent-gold-border);
+  border-top: 1px solid var(--det-accent-gold-dim);
+  border-bottom: 1px solid var(--det-accent-gold-dim);
+  margin-top: 35px;
+  font-family: var(--det-font-body);
+  box-shadow: var(--det-shadow-note-inset);
+}
+
+/* Nested paragraphs in note divs */
+.note p {
+  margin-bottom: 16px;
+}
+
+.note p:last-child {
+  margin-bottom: 0;
+}
+
+/* Evidence reference inline markers */
+.evidence-ref {
+  color: var(--det-accent-red);
+  cursor: help;
+  font-size: var(--det-text-sm);
+  vertical-align: super;
+}
+
+.evidence-ref__icon {
+  margin-right: 2px;
+}
+
+/* Article photos */
+.article-photo {
+  margin: 24px 0;
+}
+
+.article-photo img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--det-border);
+}
+
+.article-photo__caption {
+  font-size: var(--det-text-sm);
+  color: var(--det-text-meta-label);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Inline quotes */
+.inline-quote {
+  border-left: 3px solid var(--det-accent-gold-border);
+  padding: 12px 20px;
+  margin: 20px 0;
+  font-style: italic;
+  color: var(--det-text-note);
+}
+
+.inline-quote cite {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--det-text-sm);
+  color: var(--det-text-meta-label);
+  font-style: normal;
+}
+
+/* Content lists */
+.content-list {
+  margin-left: 25px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+}
+
+.content-list li {
+  margin-bottom: 12px;
+  color: var(--det-text-list);
+  line-height: var(--det-leading-body);
+}

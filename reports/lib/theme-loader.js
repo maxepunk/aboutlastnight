@@ -177,6 +177,8 @@ class ThemeLoader {
 
   /**
    * Load CSS files for the template
+   * Discovers .css files from the assets/css directory (theme-agnostic).
+   * Files are loaded in alphabetical order for deterministic output.
    * @returns {Promise<Object>} - Map of CSS filename to content
    */
   async loadStyles() {
@@ -184,7 +186,8 @@ class ThemeLoader {
 
     if (!this.cache.has(cacheKey)) {
       const cssPath = path.join(this.assetsPath, 'css');
-      const cssFiles = ['variables.css', 'base.css', 'layout.css', 'components.css', 'sidebar.css'];
+      const entries = await fs.readdir(cssPath);
+      const cssFiles = entries.filter(f => f.endsWith('.css')).sort();
 
       const styles = {};
       for (const file of cssFiles) {
@@ -274,15 +277,21 @@ class ThemeLoader {
   }
 }
 
-// Factory function for creating loader with default skill path
-function createThemeLoader(customPath = null) {
-  // Path resolves from lib/ -> reports/.claude/skills/journalist-report
+// Factory function for creating loader with default or theme-specific skill path
+function createThemeLoader(options = null) {
+  // Legacy: support direct string argument (custom path)
+  if (typeof options === 'string') {
+    return new ThemeLoader(options);
+  }
+
+  const { theme = 'journalist', customPath = null } = options || {};
+
   const skillPath = customPath || path.resolve(
     __dirname,      // lib/
     '..',           // reports/
     '.claude',
     'skills',
-    'journalist-report'
+    `${theme}-report`
   );
   return new ThemeLoader(skillPath);
 }
