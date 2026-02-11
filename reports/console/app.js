@@ -213,7 +213,7 @@ function App() {
 
   if (!state.sessionId) {
     // No session: show session start
-    content = React.createElement(SessionStart, { dispatch });
+    content = React.createElement(SessionStart, { dispatch, theme: state.theme });
   } else if (state.processing) {
     // Processing: show ProgressStream with real-time SSE data
     content = React.createElement(ProgressStream, {
@@ -285,7 +285,7 @@ function App() {
     );
   } else {
     // Fallback: show session start
-    content = React.createElement(SessionStart, { dispatch });
+    content = React.createElement(SessionStart, { dispatch, theme: state.theme });
   }
 
   return React.createElement(React.Fragment, null,
@@ -295,7 +295,10 @@ function App() {
         React.createElement('span', { className: 'console-header__title' }, 'ALN Console'),
         React.createElement('span', { className: 'console-header__session' },
           'Session: ' + state.sessionId
-        )
+        ),
+        state.theme === 'detective' && React.createElement('span', {
+          className: 'badge badge--warning ml-sm'
+        }, 'Detective')
       ),
       React.createElement('div', { className: 'console-header__actions' },
         state.phase && React.createElement('span', {
