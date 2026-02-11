@@ -120,26 +120,22 @@ describe('createGraphAndConfig', () => {
     expect(result).toHaveProperty('config');
   });
 
-  test('config.configurable includes sessionId, theme, thread_id, promptBuilder', () => {
-    const promptBuilder = { mockPromptBuilder: true };
+  test('config.configurable includes sessionId, theme, thread_id (no promptBuilder)', () => {
     const result = createGraphAndConfig('1221', 'journalist', {
-      checkpointer: {},
-      promptBuilder
+      checkpointer: {}
     });
 
     expect(result.config.configurable).toEqual({
       sessionId: '1221',
       theme: 'journalist',
-      thread_id: '1221',
-      promptBuilder
+      thread_id: '1221'
     });
   });
 
   test('calls createReportGraphWithCheckpointer with provided checkpointer', () => {
     const checkpointer = { mockCheckpointer: true };
     createGraphAndConfig('1221', 'journalist', {
-      checkpointer,
-      promptBuilder: {}
+      checkpointer
     });
 
     expect(createReportGraphWithCheckpointer).toHaveBeenCalledWith(checkpointer);

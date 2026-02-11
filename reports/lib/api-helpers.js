@@ -33,21 +33,24 @@ function buildRollbackState(rollbackPoint = 'input-review') {
 /**
  * Create a LangGraph instance and config object for write endpoints.
  *
+ * NOTE: promptBuilder is intentionally NOT injected via config.
+ * AI nodes create per-theme PromptBuilder instances from state.theme,
+ * ensuring detective sessions get detective prompts (not the shared journalist one).
+ * The shared promptBuilder in server.js is only used for startup validation.
+ *
  * @param {string} sessionId - Session identifier
  * @param {string} [theme='journalist'] - Report theme
  * @param {object} options - Shared server instances
  * @param {object} options.checkpointer - MemorySaver checkpointer
- * @param {object} options.promptBuilder - Shared prompt builder
  * @returns {{ graph: object, config: object }} Graph instance and execution config
  */
-function createGraphAndConfig(sessionId, theme = 'journalist', { checkpointer, promptBuilder }) {
+function createGraphAndConfig(sessionId, theme = 'journalist', { checkpointer }) {
   const graph = createReportGraphWithCheckpointer(checkpointer);
   const config = {
     configurable: {
       sessionId,
       theme,
-      thread_id: sessionId,
-      promptBuilder
+      thread_id: sessionId
     }
   };
   return { graph, config };
