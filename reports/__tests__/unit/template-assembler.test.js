@@ -218,6 +218,94 @@ describe('createTemplateAssembler', () => {
   });
 });
 
+describe('detective theme', () => {
+  let assembler;
+
+  beforeAll(async () => {
+    assembler = new TemplateAssembler('detective');
+    await assembler.initialize();
+  });
+
+  it('initializes with detective templates', () => {
+    expect(assembler.initialized).toBe(true);
+    expect(assembler.theme).toBe('detective');
+  });
+
+  it('registers detective partials', () => {
+    const partials = assembler.getRegisteredPartials();
+    expect(partials).toContain('header');
+    expect(partials).toContain('content-blocks/paragraph');
+    expect(partials).toContain('content-blocks/evidence-card');
+    expect(partials).toContain('content-blocks/quote');
+    expect(partials).toContain('content-blocks/list');
+    expect(partials).toContain('content-blocks/photo');
+  });
+
+  it('assembles detective report from ContentBundle', async () => {
+    const detectiveBundle = {
+      headline: { main: 'Case #1221' },
+      metadata: { theme: 'detective', sessionId: '1221' },
+      sections: [
+        {
+          id: 'executiveSummary',
+          type: 'narrative',
+          heading: 'Executive Summary',
+          content: [
+            { type: 'paragraph', text: 'Marcus Blackwood is dead.' }
+          ]
+        }
+      ],
+      evidenceCards: [],
+      pullQuotes: [],
+      photos: [],
+      financialTracker: null
+    };
+
+    const html = await assembler.assemble(detectiveBundle, { skipValidation: true });
+
+    expect(html).toContain('Marcus Blackwood is dead.');
+    expect(html).toContain('Case Report 1221'); // Title uses sessionId
+    expect(html).toContain('report-container');
+    expect(html).toContain('Det. Anondono');
+    expect(html).not.toContain('NovaNews');
+    expect(html).not.toContain('Nova<span>News</span>');
+  });
+
+  it('includes detective inline CSS with --det- variables', async () => {
+    const detectiveBundle = {
+      headline: { main: 'Test' },
+      metadata: { theme: 'detective' },
+      sections: [],
+      evidenceCards: [],
+      pullQuotes: [],
+      photos: [],
+      financialTracker: null
+    };
+
+    const html = await assembler.assemble(detectiveBundle, { skipValidation: true });
+
+    expect(html).toContain('<style>');
+    expect(html).toContain('--det-'); // Detective CSS variables prefix
+  });
+
+  it('includes inline JS', async () => {
+    const detectiveBundle = {
+      headline: { main: 'Test' },
+      metadata: { theme: 'detective' },
+      sections: [],
+      evidenceCards: [],
+      pullQuotes: [],
+      photos: [],
+      financialTracker: null
+    };
+
+    const html = await assembler.assemble(detectiveBundle, { skipValidation: true });
+
+    expect(html).toContain('<script>');
+    expect(html).toContain('EvidenceItems');
+  });
+});
+
 describe('_testing exports', () => {
   it('exports DEFAULT_TEMPLATE_DIR', () => {
     expect(_testing.DEFAULT_TEMPLATE_DIR).toBeDefined();

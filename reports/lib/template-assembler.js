@@ -107,7 +107,7 @@ class TemplateAssembler {
     this.validator = new SchemaValidator();
 
     // ThemeLoader for CSS/JS (needed if inlining assets)
-    this.themeLoader = options.themeLoader || ((this.inlineCss || this.inlineJs) ? createThemeLoader() : null);
+    this.themeLoader = options.themeLoader || ((this.inlineCss || this.inlineJs) ? createThemeLoader({ theme }) : null);
   }
 
   /**

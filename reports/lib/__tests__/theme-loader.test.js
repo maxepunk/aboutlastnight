@@ -14,7 +14,8 @@ const {
 jest.mock('fs', () => ({
   promises: {
     access: jest.fn(),
-    readFile: jest.fn()
+    readFile: jest.fn(),
+    readdir: jest.fn()
   }
 }));
 
@@ -245,7 +246,10 @@ describe('ThemeLoader', () => {
   });
 
   describe('loadStyles', () => {
-    it('should load all CSS files', async () => {
+    it('should load all CSS files discovered in directory', async () => {
+      fs.readdir.mockResolvedValue([
+        'variables.css', 'base.css', 'layout.css', 'components.css', 'sidebar.css'
+      ]);
       fs.readFile.mockImplementation((filePath) => {
         const name = path.basename(filePath);
         return Promise.resolve(`/* ${name} */`);
@@ -260,14 +264,45 @@ describe('ThemeLoader', () => {
       expect(result['sidebar.css']).toBe('/* sidebar.css */');
     });
 
+    it('should handle themes with fewer CSS files', async () => {
+      fs.readdir.mockResolvedValue([
+        'variables.css', 'base.css', 'layout.css', 'components.css'
+      ]);
+      fs.readFile.mockImplementation((filePath) => {
+        const name = path.basename(filePath);
+        return Promise.resolve(`/* ${name} */`);
+      });
+
+      const result = await loader.loadStyles();
+
+      expect(Object.keys(result)).toHaveLength(4);
+      expect(result['sidebar.css']).toBeUndefined();
+    });
+
+    it('should only load .css files from directory', async () => {
+      fs.readdir.mockResolvedValue([
+        'base.css', 'README.md', 'layout.css', '.gitkeep'
+      ]);
+      fs.readFile.mockResolvedValue('/* css */');
+
+      const result = await loader.loadStyles();
+
+      expect(Object.keys(result)).toHaveLength(2);
+      expect(fs.readFile).toHaveBeenCalledTimes(2);
+    });
+
     it('should cache styles', async () => {
+      fs.readdir.mockResolvedValue([
+        'variables.css', 'base.css', 'layout.css', 'components.css', 'sidebar.css'
+      ]);
       fs.readFile.mockResolvedValue('/* css */');
 
       await loader.loadStyles();
       await loader.loadStyles();
 
-      // 5 CSS files, only loaded once
+      // 5 CSS files, only loaded once (readdir called once)
       expect(fs.readFile).toHaveBeenCalledTimes(5);
+      expect(fs.readdir).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -386,7 +421,7 @@ describe('ThemeLoader', () => {
   });
 
   describe('createThemeLoader factory', () => {
-    it('should create loader with custom path', () => {
+    it('should create loader with custom path (legacy string arg)', () => {
       const customLoader = createThemeLoader('/custom/path');
       expect(customLoader.skillPath).toBe('/custom/path');
     });
@@ -399,6 +434,21 @@ describe('ThemeLoader', () => {
     it('should create loader with default path when no arg', () => {
       const defaultLoader = createThemeLoader();
       expect(defaultLoader.skillPath).toContain('journalist-report');
+    });
+
+    it('should create loader with journalist theme via options', () => {
+      const loader = createThemeLoader({ theme: 'journalist' });
+      expect(loader.skillPath).toContain('journalist-report');
+    });
+
+    it('should create loader with detective theme via options', () => {
+      const loader = createThemeLoader({ theme: 'detective' });
+      expect(loader.skillPath).toContain('detective-report');
+    });
+
+    it('should use customPath over theme when both provided', () => {
+      const loader = createThemeLoader({ theme: 'detective', customPath: '/override/path' });
+      expect(loader.skillPath).toBe('/override/path');
     });
   });
 

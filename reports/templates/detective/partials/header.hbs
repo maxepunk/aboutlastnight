@@ -1,0 +1,9 @@
+<h1>Official Case Report</h1>
+
+<div class="meta-data">
+    <strong>CASE ID:</strong> {{metadata.sessionId}}<br>
+    <strong>DATE:</strong> {{#if metadata.date}}{{metadata.date}}{{else}}{{formatDate metadata.generatedAt "long"}}{{/if}}<br>
+    <strong>LOCATION:</strong> Off the Couch Games, Fremont, CA<br>
+    <strong>REPORTING OFFICER:</strong> Det. Anondono<br>
+    <strong>STATUS:</strong> {{#if metadata.status}}{{metadata.status}}{{else}}Filed{{/if}}
+</div>

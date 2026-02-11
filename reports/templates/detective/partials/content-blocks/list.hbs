@@ -1,0 +1,13 @@
+{{#if ordered}}
+<ol class="content-list content-list--ordered">
+{{else}}
+<ul class="content-list">
+{{/if}}
+    {{#each items}}
+    <li>{{{this}}}</li>
+    {{/each}}
+{{#if ordered}}
+</ol>
+{{else}}
+</ul>
+{{/if}}

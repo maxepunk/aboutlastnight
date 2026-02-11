@@ -1,0 +1,92 @@
+/**
+ * Detective Case Report Design Tokens
+ *
+ * Dark precinct aesthetic: red accents, monospace typewriter,
+ * cream text on near-black backgrounds.
+ * Ported from proven detlogv3.html REPORT_TEMPLATE CSS.
+ */
+
+:root {
+  /* ============================================
+     COLOR PALETTE - Dark Precinct
+     ============================================ */
+
+  /* Backgrounds - Near black */
+  --det-bg-deep: #0a0a0a;
+  --det-bg-container: rgba(18, 18, 16, 0.97);
+  --det-bg-container-alt: rgba(15, 15, 13, 0.97);
+  --det-bg-elevated: rgba(30, 30, 28, 0.95);
+  --det-bg-evidence: rgba(25, 25, 23, 0.5);
+  --det-bg-evidence-hover: rgba(35, 25, 25, 0.6);
+  --det-bg-note: rgba(30, 25, 20, 0.9);
+
+  /* Text hierarchy */
+  --det-text-primary: rgba(240, 240, 235, 0.9);
+  --det-text-body: rgba(235, 235, 230, 0.92);
+  --det-text-list: rgba(235, 235, 230, 0.88);
+  --det-text-strong: rgba(255, 255, 255, 0.95);
+  --det-text-meta-label: rgba(255, 255, 255, 0.6);
+  --det-text-note: rgba(255, 240, 200, 0.85);
+
+  /* Accent colors */
+  --det-accent-red: #cc0000;
+  --det-accent-red-glow: rgba(204, 0, 0, 0.6);
+  --det-accent-red-border: rgba(204, 0, 0, 0.4);
+  --det-accent-red-stamp: rgba(204, 0, 0, 0.08);
+  --det-accent-gold: rgba(255, 200, 100, 0.95);
+  --det-accent-gold-border: rgba(255, 200, 100, 0.6);
+  --det-accent-gold-dim: rgba(255, 200, 100, 0.3);
+
+  /* Borders and dividers */
+  --det-border: rgba(60, 60, 60, 0.8);
+  --det-border-top: rgba(80, 80, 80, 0.9);
+  --det-border-meta: rgba(100, 100, 100, 0.4);
+  --det-border-hr: rgba(100, 100, 100, 0.3);
+
+  /* ============================================
+     TYPOGRAPHY
+     ============================================ */
+
+  --det-font-header: 'Bebas Neue', sans-serif;
+  --det-font-body: 'Courier Prime', 'Courier New', monospace;
+
+  /* Type scale */
+  --det-text-sm: 0.85rem;
+  --det-text-base: 15px;
+  --det-text-meta: 0.95rem;
+  --det-text-h3: 1.3rem;
+  --det-text-h2: 1.8rem;
+  --det-text-h1: 2.8rem;
+  --det-text-watermark: 8rem;
+
+  /* Line heights */
+  --det-leading-body: 1.7;
+  --det-leading-paragraph: 1.75;
+  --det-leading-meta: 2;
+
+  /* Letter spacing */
+  --det-tracking-h1: 0.15em;
+  --det-tracking-h2: 0.12em;
+  --det-tracking-h3: 0.1em;
+  --det-tracking-meta: 0.05em;
+  --det-tracking-stamp: 0.25em;
+  --det-tracking-watermark: 0.3em;
+
+  /* ============================================
+     LAYOUT
+     ============================================ */
+
+  --det-max-width: 900px;
+  --det-padding-body: 20px;
+  --det-padding-container: 50px 45px;
+
+  /* ============================================
+     EFFECTS
+     ============================================ */
+
+  --det-shadow-container: 0 0 40px rgba(0, 0, 0, 0.9);
+  --det-shadow-container-inset: inset 0 0 100px rgba(0, 0, 0, 0.3);
+  --det-shadow-meta-inset: inset 0 0 20px rgba(0, 0, 0, 0.5);
+  --det-shadow-note-inset: inset 0 0 15px rgba(0, 0, 0, 0.4);
+  --det-transition-base: all 0.3s;
+}
