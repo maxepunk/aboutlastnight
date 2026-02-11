@@ -501,7 +501,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
     try {
         const { graph, config } = createGraphAndConfig(sessionId, theme, {
-            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+            checkpointer: sharedCheckpointer
         });
 
         // Build initial state from rollback, overrides, rawSessionInput, and approvals
@@ -863,7 +863,7 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
 
     try {
         const { graph, config } = createGraphAndConfig(sessionId, theme, {
-            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+            checkpointer: sharedCheckpointer
         });
 
         // Clear all state fields for fresh start
@@ -905,7 +905,7 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
     try {
         // Create graph and config (theme resolved from state below)
         const { graph, config } = createGraphAndConfig(sessionId, 'journalist', {
-            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+            checkpointer: sharedCheckpointer
         });
 
         // Check if graph is interrupted using native LangGraph pattern
@@ -1043,7 +1043,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
         }
 
         const { graph, config } = createGraphAndConfig(sessionId, session.state.theme || 'journalist', {
-            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+            checkpointer: sharedCheckpointer
         });
 
         // Build rollback state
@@ -1103,7 +1103,7 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
 
         const theme = session.state.theme || 'journalist';
         const { graph, config } = createGraphAndConfig(sessionId, theme, {
-            checkpointer: sharedCheckpointer, promptBuilder: sharedPromptBuilder
+            checkpointer: sharedCheckpointer
         });
 
         let initialState = {};

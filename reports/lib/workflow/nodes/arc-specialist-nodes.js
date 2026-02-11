@@ -220,11 +220,11 @@ ${JSON.stringify(context.roster)}
 
 ### Character Categories for characterPlacements
 
-**ROSTER PCs** (MUST have placements - Nova observed them):
+**ROSTER PCs** (MUST have placements - ${theme === 'journalist' ? 'Nova observed them' : 'present at the investigation'}):
 ${JSON.stringify(context.roster)}
 
 **NPCs** (valid in placements, don't count for coverage):
-Marcus, Nova, Blake, Valet
+${themeNPCs.join(', ')}
 
 **NON-ROSTER PCs** (can mention from evidence only):
 ${nonRosterPCs.length > 0 ? nonRosterPCs.join(', ') : '(none this session)'}
@@ -659,6 +659,7 @@ function buildPlayerFocusGuidedPrompt(state) {
   const playerFocus = state.playerFocus || {};
   const sessionConfig = state.sessionConfig || {};
   const directorNotes = state.directorNotes || {};
+  const theme = state.theme || 'journalist';
 
   // Extract evidence summary
   const evidenceSummary = extractEvidenceSummary(evidenceBundle);
@@ -746,7 +747,7 @@ Generate 3-5 narrative arcs following this priority:
 **unansweredQuestions** - What evidence gaps exist?
 - Example: "Why did ChaseT go silent after 10:30 PM?"
 - These create narrative tension
-- Nova can acknowledge what she doesn't know
+- ${theme === 'journalist' ? "Nova can acknowledge what she doesn't know" : 'The investigation can acknowledge gaps in evidence'}
 
 **analysisNotes** - How each lens supports/contradicts:
 - financial: Transaction patterns relevant to this arc
