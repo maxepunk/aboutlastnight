@@ -78,6 +78,7 @@ const ROLLBACK_TO = getArgValue('--rollback');
 const APPROVE_TYPE = getArgValue('--approve');  // Approve specific checkpoint type
 const APPROVE_FILE = getArgValue('--approve-file');  // Custom approval payload JSON file
 const PROFILE_NAME = getArgValue('--profile');  // Auto-approval profile name
+const THEME = getArgValue('--theme') || DEFAULT_THEME;  // Report theme (journalist|detective)
 
 // Colors for terminal output
 const colors = {
@@ -495,6 +496,7 @@ ${color('OPTIONS:', 'cyan')}
   --step             Run one checkpoint, display data, exit (non-interactive)
   --approve <type>   Approve the current checkpoint and advance to next
   --approve-file <f> Use custom JSON payload for approval (with --approve)
+  --theme <theme>    Report theme: journalist (default) or detective
   --verbose, -v      Show full request/response JSON
   --help, -h         Show this help message
 
@@ -523,6 +525,9 @@ ${color('EXAMPLES:', 'cyan')}
 
   # Auto-approve with testing-full profile (select all items)
   node scripts/e2e-walkthrough.js --session 1221 --auto --profile testing-full
+
+  # Detective theme (case report instead of NovaNews article)
+  node scripts/e2e-walkthrough.js --session 1221 --theme detective
 
   # Step-by-step collaborative mode (non-interactive):
   # 1. Start fresh, show first checkpoint:
@@ -3302,7 +3307,7 @@ async function runWalkthrough() {
   console.log(`Mode: ${AUTO_MODE ? color('AUTO', 'yellow') : color('INTERACTIVE', 'green')}`);
   console.log(`Resume: ${RESUME_MODE ? color('YES', 'yellow') : 'NO (new session)'}`);
   console.log(`Server: ${API_BASE}`);
-  console.log(`Theme: ${DEFAULT_THEME}`);
+  console.log(`Theme: ${THEME}`);
   if (VERBOSE) console.log(color('Verbose mode enabled', 'dim'));
 
   // Load auto-approval profile when in AUTO_MODE
@@ -3393,7 +3398,7 @@ async function runWalkthrough() {
     // Use /start endpoint for new sessions
     console.log(color(`\n─── Starting Session via /start ───`, 'dim'));
     const startBody = {
-      theme: DEFAULT_THEME,
+      theme: THEME,
       rawSessionInput: inputData.rawSessionInput
     };
     const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/start`, startBody, 'POST', sessionId);
