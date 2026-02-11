@@ -9,7 +9,9 @@ const {
   getThemeConfig,
   isValidTheme,
   getOutlineRules,
-  getArticleRules
+  getArticleRules,
+  getCanonicalName,
+  getThemeCharacters
 } = require('../theme-config');
 
 describe('theme-config', () => {
@@ -150,6 +152,76 @@ describe('theme-config', () => {
     it('should return empty object for unknown theme', () => {
       const rules = getArticleRules('unknown');
       expect(rules).toEqual({});
+    });
+  });
+
+  describe('detective theme', () => {
+    it('isValidTheme returns true for detective', () => {
+      expect(isValidTheme('detective')).toBe(true);
+    });
+
+    it('getThemeNPCs returns detective NPCs', () => {
+      const npcs = getThemeNPCs('detective');
+      expect(npcs).toContain('Marcus');
+      expect(npcs).toContain('Blake');
+      expect(npcs).toContain('Valet');
+      // Detective Anondono is the narrator, not an NPC in arcs
+      expect(npcs).not.toContain('Anondono');
+    });
+
+    it('getThemeConfig returns detective config with all required keys', () => {
+      const config = getThemeConfig('detective');
+      expect(config).not.toBeNull();
+      expect(config.npcs).toBeDefined();
+      expect(config.outlineRules).toBeDefined();
+      expect(config.articleRules).toBeDefined();
+      expect(config.canonicalCharacters).toBeDefined();
+    });
+
+    it('detective outlineRules has correct required sections', () => {
+      const rules = getOutlineRules('detective');
+      expect(rules.requiredSections).toEqual(
+        expect.arrayContaining(['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'])
+      );
+    });
+
+    it('detective articleRules bans game mechanics but not em-dashes', () => {
+      const rules = getArticleRules('detective');
+      // Detective voice allows em-dashes (used in noir style)
+      const patternNames = rules.bannedPatterns.map(p => p.name);
+      expect(patternNames).not.toContain('em-dash');
+      // Still bans game mechanics
+      expect(patternNames).toContain('token-term');
+    });
+
+    it('detective requiredVoiceMarkers are third-person investigative', () => {
+      const rules = getArticleRules('detective');
+      // Detective uses third-person investigative, not first-person participatory
+      expect(rules.requiredVoiceMarkers).not.toContain('I ');
+      expect(rules.requiredVoiceMarkers).toEqual(
+        expect.arrayContaining(['the investigation', 'evidence'])
+      );
+    });
+
+    it('detective canonicalCharacters matches journalist PCs (same game)', () => {
+      const detective = getThemeConfig('detective');
+      const journalist = getThemeConfig('journalist');
+      // Extract PC names only (exclude NPCs)
+      const journalistPCs = Object.keys(journalist.canonicalCharacters)
+        .filter(name => !['Marcus', 'Nova', 'Blake'].includes(name));
+      const detectivePCs = Object.keys(detective.canonicalCharacters)
+        .filter(name => !['Marcus', 'Blake'].includes(name));
+      expect(detectivePCs.sort()).toEqual(journalistPCs.sort());
+    });
+
+    it('getCanonicalName works with detective theme', () => {
+      expect(getCanonicalName('Sarah', 'detective')).toBe('Sarah Blackwood');
+      expect(getCanonicalName('Victoria', 'detective')).toBe('Victoria Kingsley');
+    });
+
+    it('detective does not include Nova as NPC', () => {
+      const npcs = getThemeNPCs('detective');
+      expect(npcs).not.toContain('Nova');
     });
   });
 

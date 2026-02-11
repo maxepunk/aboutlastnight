@@ -390,14 +390,97 @@ describe('PromptBuilder', () => {
       expect(builder).toBeInstanceOf(PromptBuilder);
     });
 
-    it('should pass custom path to ThemeLoader', () => {
+    it('should pass custom path to ThemeLoader (legacy string)', () => {
       createPromptBuilder('/custom/skill/path');
       expect(createThemeLoader).toHaveBeenCalledWith('/custom/skill/path');
     });
 
-    it('should pass null when no path specified', () => {
+    it('should pass journalist options when no arg specified', () => {
       createPromptBuilder();
-      expect(createThemeLoader).toHaveBeenCalledWith(null);
+      expect(createThemeLoader).toHaveBeenCalledWith({ theme: 'journalist', customPath: undefined });
+    });
+
+    it('should pass theme options to ThemeLoader', () => {
+      createPromptBuilder({ theme: 'detective' });
+      expect(createThemeLoader).toHaveBeenCalledWith({ theme: 'detective', customPath: undefined });
+    });
+
+    it('should set themeName on builder when theme option given', () => {
+      const b = createPromptBuilder({ theme: 'detective' });
+      expect(b.themeName).toBe('detective');
+    });
+
+    it('should default themeName to journalist', () => {
+      const b = createPromptBuilder();
+      expect(b.themeName).toBe('journalist');
+    });
+  });
+
+  describe('detective theme prompts', () => {
+    let detectiveBuilder;
+
+    beforeEach(() => {
+      detectiveBuilder = new PromptBuilder(mockThemeLoader, 'detective');
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': 'Detective Anondono voice...',
+        'writing-principles': 'Synthesize evidence...',
+        'evidence-boundaries': 'Factual accuracy...',
+        'section-rules': 'Evidence Locker...',
+        'narrative-structure': 'Closure for players...',
+        'formatting': 'Strong tags for names...',
+        'anti-patterns': 'Section differentiation...',
+        'editorial-design': 'Single column...',
+        'arc-flow': 'Linear thematic...'
+      });
+    });
+
+    it('buildArcAnalysisPrompt uses detective framing', async () => {
+      const { systemPrompt } = await detectiveBuilder.buildArcAnalysisPrompt({
+        roster: ['Alex', 'Victoria'],
+        accusation: 'Victoria',
+        directorNotes: { observations: {} },
+        evidenceBundle: { exposed: {}, buried: {} }
+      });
+      expect(systemPrompt).not.toContain('NovaNews');
+      expect(systemPrompt).toContain('detective');
+    });
+
+    it('buildOutlinePrompt uses detective framing', async () => {
+      const { systemPrompt } = await detectiveBuilder.buildOutlinePrompt(
+        { narrativeArcs: [] }, ['Arc 1'], 'hero.png', {}
+      );
+      expect(systemPrompt).not.toContain('NovaNews');
+      expect(systemPrompt).toContain('Detective Anondono');
+    });
+
+    it('buildArticlePrompt uses detective voice, not Nova', async () => {
+      const { systemPrompt } = await detectiveBuilder.buildArticlePrompt(
+        {}, {}, '', [], null
+      );
+      expect(systemPrompt).not.toContain('You are Nova');
+      expect(systemPrompt).not.toContain('Hunter S. Thompson');
+      expect(systemPrompt).toContain('Detective');
+    });
+
+    it('buildRevisionPrompt uses detective framing', async () => {
+      const { systemPrompt } = await detectiveBuilder.buildRevisionPrompt('content', 'check');
+      expect(systemPrompt).not.toContain('Nova');
+      expect(systemPrompt).toContain('Detective Anondono');
+    });
+
+    it('buildValidationPrompt uses detective framing', async () => {
+      const { systemPrompt } = await detectiveBuilder.buildValidationPrompt('<html></html>', ['Alex']);
+      expect(systemPrompt).not.toContain('NovaNews');
+      expect(systemPrompt).toContain('detective');
+    });
+
+    it('detective article prompt includes detective constraints', async () => {
+      const { systemPrompt } = await detectiveBuilder.buildArticlePrompt(
+        {}, {}, '', [], null
+      );
+      expect(systemPrompt).toContain('SYNTHESIZE');
+      expect(systemPrompt).toContain('750 words');
+      expect(systemPrompt).not.toContain('em-dashes');
     });
   });
 

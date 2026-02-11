@@ -45,12 +45,92 @@ ${content.trim()}
 </${filename}>`;
 }
 
+// Theme-specific system prompt framing
+const THEME_SYSTEM_PROMPTS = {
+  journalist: {
+    arcAnalysis: 'You are analyzing narrative arcs for a NovaNews investigative article.',
+    outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
+    articleGeneration: `You are Nova, writing a NovaNews investigative article. First-person participatory voice - you WERE THERE, you SAW this happen.`,
+    revision: `You are Nova, revising your investigative article to fix voice issues you identified.`,
+    validation: 'You are validating a NovaNews article against anti-patterns and voice requirements.'
+  },
+  detective: {
+    arcAnalysis: 'You are analyzing narrative threads for a detective investigation case report. Identify thematic clusters from the evidence that can be synthesized into a coherent case file.',
+    outlineGeneration: 'You are planning the structure of Detective Anondono\'s case report. Each section answers a DIFFERENT QUESTION about the same underlying facts.',
+    articleGeneration: `You are a cynical, seasoned Detective in a near-future noir setting. You are writing an official Case Report.
+
+TONE: Professional, analytical, with a distinct noir flair. Economical with words. Every sentence earns its place.
+FORMAT: HTML (body content only, NO <html>, <head>, or <body> tags).`,
+    revision: 'You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only.',
+    validation: 'You are validating a detective case report against anti-patterns and section differentiation requirements.'
+  }
+};
+
+// Theme-specific hard constraints and voice guidance
+const THEME_CONSTRAINTS = {
+  journalist: {
+    hardConstraints: `HARD CONSTRAINTS (violations = failure):
+- NO em-dashes (use commas or periods)
+- NO "tokens" - say "extracted memories" or "memories"
+- NO game mechanics ("transactions", "buried", "first-buried bonus", "guests")
+- NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
+- NO third-person self-reference ("The Detective noted") - you ARE the detective
+- NO countable memories ("5 memories") - memories are experiences, not inventory
+- NO inventing last names - use ONLY canonical names from the roster above`,
+    voiceCheckpoint: `Before generating, internalize Nova's voice:`,
+    voiceQuestion: 'Ask yourself: "Am I writing AS Nova who experienced this, or ABOUT events Nova observed?"\nThe answer must be AS Nova. Every sentence should feel like it\'s coming from someone who was in that room.',
+    revisionVoice: `VOICE INFLUENCES TO EMBODY:
+- Hunter S. Thompson: Participatory, in-the-muck, part of the chaos
+- Kara Swisher: Directness, calling out BS, no corporate spin
+- Casey Newton: Tech fluency, accessible explanations
+- Heather Cox Richardson: Connects to bigger patterns
+- Marisa Kabas: Moral clarity without preaching
+
+VOICE MECHANICS:
+- First-person participatory: "I watched", "I saw", "I was there"
+- NOT observer mode: "The group decided", "They concluded", "It was noted"
+- Transform: "The group came to a conclusion" -> "I watched them reach their conclusion"
+- Transform: "From my notes that night" -> remove attribution or use "- Nova"
+- Transform: "guests" -> "people" or "those present" or "partygoers"
+- Sentence rhythm: Short punchy, then longer building, then short again`
+  },
+  detective: {
+    hardConstraints: `CRITICAL WRITING PRINCIPLES:
+- SYNTHESIZE evidence into thematic groups—do NOT list every item individually
+- Tell the STORY of what happened—do NOT catalog facts
+- Each report must feel BESPOKE to this specific case—reference unique details
+- Avoid repetition—each fact appears ONCE in the most impactful location
+- TARGET LENGTH: 750 words (+-50 words acceptable)
+
+FACTUAL ACCURACY (CRITICAL - NEVER VIOLATE):
+- Only state facts EXPLICITLY supported by the evidence provided
+- Do NOT infer group memberships, relationships, or details unless directly stated
+- If evidence is ambiguous or incomplete, acknowledge uncertainty
+
+EVIDENCE REFERENCING (CRITICAL):
+- Call them "memory extractions", "recovered memories", or "scanned memories"
+- NEVER use "Memory Token", token codes, database names, RFID codes, or item IDs
+- NEVER reference "character sheets" as sources—present as background knowledge
+- NO inventing last names - use ONLY canonical names from the roster above`,
+    voiceCheckpoint: 'Before generating, internalize Detective Anondono\'s voice:',
+    voiceQuestion: 'Ask yourself: "Am I writing a professional case report that synthesizes evidence, or am I just listing facts?"\nThe answer must be synthesis. Every section answers a different question about the same underlying facts.',
+    revisionVoice: `DETECTIVE VOICE:
+- Third-person investigative: "The investigation revealed..." not "I saw..."
+- Professional noir: world-weary but precise, economical with words
+- In-world always: never reference game mechanics
+- Section differentiation: each section answers a DIFFERENT question
+- Name formatting: ALL names in <strong> tags, evidence in <em> tags`
+  }
+};
+
 class PromptBuilder {
   /**
    * @param {ThemeLoader} themeLoader - Initialized ThemeLoader instance
+   * @param {string} themeName - Theme name (default: 'journalist')
    */
-  constructor(themeLoader) {
+  constructor(themeLoader, themeName = 'journalist') {
     this.theme = themeLoader;
+    this.themeName = themeName;
   }
 
   /**
@@ -67,7 +147,7 @@ class PromptBuilder {
   async buildArcAnalysisPrompt(sessionData) {
     const prompts = await this.theme.loadPhasePrompts('arcAnalysis');
 
-    const systemPrompt = `You are analyzing narrative arcs for a NovaNews investigative article.
+    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].arcAnalysis}
 ${labelPromptSection('character-voice', prompts['character-voice'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
@@ -129,7 +209,7 @@ Return JSON with the following structure:
   async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos = [], arcEvidencePackages = []) {
     const prompts = await this.theme.loadPhasePrompts('outlineGeneration');
 
-    const systemPrompt = `You are creating an article outline for a NovaNews investigative piece.
+    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
 ${labelPromptSection('section-rules', prompts['section-rules'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
 
@@ -359,19 +439,13 @@ Return JSON with the following structure:
     const prompts = await this.theme.loadPhasePrompts('articleGeneration');
 
     // System prompt: Identity and hard constraints (kept short for salience)
-    // Commit 8.xx: Roster moved to system prompt for higher salience (prevents name hallucination)
-    const systemPrompt = `You are Nova, writing a NovaNews investigative article. First-person participatory voice - you WERE THERE, you SAW this happen.
+    // Roster in system prompt for higher salience (prevents name hallucination)
+    const constraints = THEME_CONSTRAINTS[this.themeName];
+    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
 
-${generateRosterSection()}
+${generateRosterSection(this.themeName)}
 
-HARD CONSTRAINTS (violations = failure):
-- NO em-dashes (use commas or periods)
-- NO "tokens" - say "extracted memories" or "memories"
-- NO game mechanics ("transactions", "buried", "first-buried bonus", "guests")
-- NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
-- NO third-person self-reference ("The Detective noted") - you ARE the detective
-- NO countable memories ("5 memories") - memories are experiences, not inventory
-- NO inventing last names - use ONLY canonical names from the roster above
+${constraints.hardConstraints}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
     // Format arc evidence packages for verbatim quoting
@@ -509,11 +583,10 @@ ${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 </ANTI_PATTERNS>
 
 <VOICE_CHECKPOINT>
-Before generating, internalize Nova's voice:
+${constraints.voiceCheckpoint}
 ${labelPromptSection('character-voice', prompts['character-voice'])}
 ${labelPromptSection('writing-principles', prompts['writing-principles'])}
-Ask yourself: "Am I writing AS Nova who experienced this, or ABOUT events Nova observed?"
-The answer must be AS Nova. Every sentence should feel like it's coming from someone who was in that room.
+${constraints.voiceQuestion}
 </VOICE_CHECKPOINT>
 
 <GENERATION_INSTRUCTION>
@@ -617,28 +690,15 @@ STRUCTURE:
   async buildRevisionPrompt(articleContent, voiceSelfCheck) {
     const prompts = await this.theme.loadPhasePrompts('articleGeneration');
 
-    const systemPrompt = `You are Nova, revising your investigative article to fix voice issues you identified.
+    const revisionConstraints = THEME_CONSTRAINTS[this.themeName];
+    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].revision}
 
 REVISION RULES:
 - Make TARGETED fixes only - do not rewrite sections that are working
 - Preserve structure: sections, evidence cards, photos, pull quotes, financial tracker
 - Focus on the specific issues you identified in your self-check
-- Every fix should make the voice MORE participatory, not less
 
-VOICE INFLUENCES TO EMBODY:
-- Hunter S. Thompson: Participatory, in-the-muck, part of the chaos
-- Kara Swisher: Directness, calling out BS, no corporate spin
-- Casey Newton: Tech fluency, accessible explanations
-- Heather Cox Richardson: Connects to bigger patterns
-- Marisa Kabas: Moral clarity without preaching
-
-VOICE MECHANICS:
-- First-person participatory: "I watched", "I saw", "I was there"
-- NOT observer mode: "The group decided", "They concluded", "It was noted"
-- Transform: "The group came to a conclusion" -> "I watched them reach their conclusion"
-- Transform: "From my notes that night" -> remove attribution or use "- Nova"
-- Transform: "guests" -> "people" or "those present" or "partygoers"
-- Sentence rhythm: Short punchy, then longer building, then short again`;
+${revisionConstraints.revisionVoice}`;
 
     const userPrompt = `<YOUR_SELF_CHECK>
 ${voiceSelfCheck}
@@ -681,7 +741,7 @@ Return JSON with:
   async buildValidationPrompt(articleHtml, roster) {
     const prompts = await this.theme.loadPhasePrompts('validation');
 
-    const systemPrompt = `You are validating a NovaNews article against anti-patterns and voice requirements.
+    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].validation}
 
 ANTI-PATTERNS CHECKLIST:
 ${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
@@ -745,12 +805,19 @@ Return JSON:
 
 /**
  * Factory function to create PromptBuilder with default ThemeLoader
- * @param {string} customSkillPath - Optional custom path to skill directory
+ * @param {string|Object|null} options - Custom path (string, legacy) or { theme, customSkillPath }
  * @returns {PromptBuilder}
  */
-function createPromptBuilder(customSkillPath = null) {
-  const themeLoader = createThemeLoader(customSkillPath);
-  return new PromptBuilder(themeLoader);
+function createPromptBuilder(options = null) {
+  // Legacy: support direct string argument (custom skill path)
+  if (typeof options === 'string') {
+    const themeLoader = createThemeLoader(options);
+    return new PromptBuilder(themeLoader, 'journalist');
+  }
+
+  const { theme = 'journalist', customSkillPath } = options || {};
+  const themeLoader = createThemeLoader({ theme, customPath: customSkillPath });
+  return new PromptBuilder(themeLoader, theme);
 }
 
 module.exports = {

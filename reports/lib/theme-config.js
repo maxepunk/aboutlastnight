@@ -103,6 +103,81 @@ const THEME_CONFIGS = {
       'Nova': 'Nova',
       'Blake': 'Blake'
     }
+  },
+
+  detective: {
+    // NPCs for the detective investigation theme
+    // Same game universe, different narrator (Detective Anondono)
+    npcs: [
+      'Marcus',   // The murder victim
+      'Blake',    // The valet NPC
+      'Valet',    // Alias for Blake
+    ],
+
+    // Outline structure rules for detective case report
+    outlineRules: {
+      requiredSections: ['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'],
+      optionalSections: ['memoryAnalysis'],
+      wordBudgets: {
+        executiveSummary: { min: 50, max: 150 },
+        evidenceLocker: { min: 150, max: 400 },
+        memoryAnalysis: { min: 80, max: 200 },
+        suspectNetwork: { min: 80, max: 200 },
+        outstandingQuestions: { min: 40, max: 120 },
+        finalAssessment: { min: 80, max: 200 }
+      }
+    },
+
+    // Article content rules for detective case report
+    articleRules: {
+      // Detective voice is third-person investigative
+      requiredVoiceMarkers: ['the investigation', 'evidence'],
+      bannedPatterns: [
+        // Game mechanics terminology (shared with journalist)
+        { pattern: 'token', name: 'token-term', caseSensitive: false, description: 'Game mechanic - use "extracted memory"' },
+        { pattern: 'Act \\d', name: 'game-mechanics', isRegex: true, description: 'Game structure references' },
+        { pattern: 'script beat', name: 'script-beat', caseSensitive: false, description: 'Game structure terminology' },
+        { pattern: 'final call', name: 'final-call', caseSensitive: false, description: 'Game structure terminology' },
+        { pattern: 'token scan', name: 'token-scan', caseSensitive: false, description: 'Game mechanic terminology' },
+        { pattern: 'orchestrator', name: 'orchestrator', caseSensitive: false, description: 'Game mechanic terminology' },
+        { pattern: 'unlock', name: 'unlock', caseSensitive: false, description: 'Game mechanic terminology' },
+        // Meta terminology
+        { pattern: 'buried memory', name: 'buried-memory', caseSensitive: false, description: 'Meta terminology' },
+        { pattern: 'First burial', name: 'first-burial', caseSensitive: false, description: 'Meta terminology' },
+        // Character sheet references (detective must present naturally)
+        { pattern: 'character sheet', name: 'character-sheet', caseSensitive: false, description: 'Meta - present character info naturally' }
+      ],
+      minRosterMentions: 1
+    },
+
+    // Same 20 PCs + different NPCs (no Nova, Marcus is still NPC)
+    canonicalCharacters: {
+      // 20 Playable Characters (PCs)
+      'Sarah': 'Sarah Blackwood',
+      'Alex': 'Alex Reeves',
+      'James': 'James Whitman',
+      'Victoria': 'Victoria Kingsley',
+      'Derek': 'Derek Thorne',
+      'Ashe': 'Ashe Motoko',
+      'Diana': 'Diana Nilsson',
+      'Jessicah': 'Jessicah Kane',
+      'Morgan': 'Morgan Reed',
+      'Flip': 'Flip',
+      'Taylor': 'Taylor Chase',
+      'Leila': 'Leila Bishara',
+      'Rachel': 'Rachel Torres',
+      'Howie': 'Howie Sullivan',
+      'Kai': 'Kai Andersen',
+      'Jamie': 'Jamie "Volt" Woods',
+      'Sofia': 'Sofia Francisco',
+      'Oliver': 'Oliver Sterling',
+      'Skyler': 'Skyler Iyer',
+      'Tori': 'Tori Zhang',
+      // NPCs
+      'Marcus': 'Marcus Blackwood',
+      'Blake': 'Blake'
+      // NOTE: No 'Nova' — detective theme narrator is Anondono, not an NPC
+    }
   }
 };
 
