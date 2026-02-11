@@ -51,12 +51,12 @@ const api = {
    * @param {object} rawInput - Raw session input (photosPath required)
    * @returns {Promise<object>} Checkpoint or phase response
    */
-  async startSession(sessionId, rawInput) {
+  async startSession(sessionId, rawInput, theme = 'journalist') {
     const res = await fetch(`/api/session/${sessionId}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ theme: 'journalist', rawSessionInput: rawInput })
+      body: JSON.stringify({ theme, rawSessionInput: rawInput })
     });
     return res.json();
   },

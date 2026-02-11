@@ -11,6 +11,7 @@ const initialState = {
   authenticated: false,
   // Session
   sessionId: null,
+  theme: 'journalist',  // 'journalist' | 'detective'
   phase: null,
   // Checkpoint
   checkpointType: null,
@@ -44,6 +45,7 @@ const ACTIONS = {
   WORKFLOW_COMPLETE: 'WORKFLOW_COMPLETE',
   CACHE_REVISION: 'CACHE_REVISION',
   RESET_SESSION: 'RESET_SESSION',
+  SET_THEME: 'SET_THEME',
   SET_ERROR: 'SET_ERROR',
   CLEAR_ERROR: 'CLEAR_ERROR'
 };
@@ -61,6 +63,9 @@ function reducer(state, action) {
 
     case ACTIONS.SET_SESSION:
       return { ...state, sessionId: action.sessionId };
+
+    case ACTIONS.SET_THEME:
+      return { ...state, theme: action.theme };
 
     case ACTIONS.CHECKPOINT_RECEIVED:
       return {

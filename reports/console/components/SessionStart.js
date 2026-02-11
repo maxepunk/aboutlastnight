@@ -13,7 +13,7 @@ const { ACTIONS: SESSION_ACTIONS } = window.Console;
 const { CollapsibleSection } = window.Console.utils;
 const { FileBrowser } = window.Console;
 
-function SessionStart({ dispatch }) {
+function SessionStart({ dispatch, theme }) {
   const [sessionId, setSessionId] = React.useState('');
   const [photosPath, setPhotosPath] = React.useState('');
   const [whiteboardPath, setWhiteboardPath] = React.useState('');
@@ -76,7 +76,7 @@ function SessionStart({ dispatch }) {
     setStatus('Starting fresh session...');
 
     try {
-      const result = await sessionApi.startSession(sessionId, buildRawInput());
+      const result = await sessionApi.startSession(sessionId, buildRawInput(), theme);
 
       if (result.error) {
         setStatus('Error: ' + result.error);
@@ -170,6 +170,33 @@ function SessionStart({ dispatch }) {
     React.createElement('h2', { className: 'session-start__title' }, 'Session'),
     React.createElement('p', { className: 'session-start__subtitle' },
       'Enter a 4-digit session ID (MMDD format) to start or resume a workflow.'
+    ),
+
+    // Theme selector
+    React.createElement('div', { className: 'theme-selector' },
+      React.createElement('label', { className: 'form-label' }, 'Report Theme'),
+      React.createElement('div', { className: 'theme-toggle' },
+        React.createElement('button', {
+          className: 'theme-option' + (theme === 'journalist' ? ' active' : ''),
+          onClick: () => dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: 'journalist' }),
+          disabled: loading,
+          type: 'button',
+          'aria-pressed': theme === 'journalist'
+        },
+          React.createElement('span', { className: 'theme-option__name' }, 'NovaNews Article'),
+          React.createElement('span', { className: 'theme-option__desc' }, 'First-person investigative journalism (~3000 words)')
+        ),
+        React.createElement('button', {
+          className: 'theme-option' + (theme === 'detective' ? ' active' : ''),
+          onClick: () => dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: 'detective' }),
+          disabled: loading,
+          type: 'button',
+          'aria-pressed': theme === 'detective'
+        },
+          React.createElement('span', { className: 'theme-option__name' }, 'Detective Case Report'),
+          React.createElement('span', { className: 'theme-option__desc' }, 'Official case file by Det. Anondono (~750 words)')
+        )
+      )
     ),
 
     // Session ID
