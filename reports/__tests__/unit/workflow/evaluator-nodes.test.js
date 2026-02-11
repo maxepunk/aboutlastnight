@@ -21,6 +21,7 @@ const {
   _testing: {
     QUALITY_CRITERIA,
     getArticleCriteria,
+    getNpcDescriptions,
     getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,
@@ -184,6 +185,66 @@ describe('evaluator-nodes', () => {
     it('emphasizes human always makes final decision', () => {
       const prompt = buildEvaluationSystemPrompt('article', getArticleCriteria());
       expect(prompt).toContain('Human always makes final decision');
+    });
+
+    it('includes journalist NPCs (with Nova) for journalist theme', () => {
+      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'journalist');
+      expect(prompt).toContain('Marcus');
+      expect(prompt).toContain('Nova');
+      expect(prompt).toContain('Blake');
+    });
+
+    it('excludes Nova from detective theme NPC list', () => {
+      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'detective');
+      expect(prompt).toContain('Marcus');
+      expect(prompt).toContain('Blake');
+      expect(prompt).not.toContain('Nova');
+    });
+
+    it('uses theme-aware non-roster PC example for journalist', () => {
+      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'journalist');
+      expect(prompt).toContain("Nova didn't see this");
+    });
+
+    it('uses theme-aware non-roster PC example for detective', () => {
+      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'detective');
+      expect(prompt).toContain('the investigation did not observe this');
+      expect(prompt).not.toContain("Nova didn't see this");
+    });
+
+    it('uses theme-aware critical checks for detective article evaluation', () => {
+      const prompt = buildEvaluationSystemPrompt('article', getArticleCriteria('detective'), 'detective');
+      expect(prompt).toContain('third-person investigative voice');
+      expect(prompt).toContain('character sheet');
+      expect(prompt).not.toContain('em-dashes');
+    });
+  });
+
+  describe('getNpcDescriptions', () => {
+    it('returns Marcus, Nova, Blake for journalist', () => {
+      const desc = getNpcDescriptions('journalist');
+      expect(desc).toContain('Marcus');
+      expect(desc).toContain('Nova');
+      expect(desc).toContain('Blake');
+    });
+
+    it('returns Marcus, Blake but not Nova for detective', () => {
+      const desc = getNpcDescriptions('detective');
+      expect(desc).toContain('Marcus');
+      expect(desc).toContain('Blake');
+      expect(desc).not.toContain('Nova');
+    });
+
+    it('does not duplicate Blake/Valet entry', () => {
+      const desc = getNpcDescriptions('journalist');
+      const blakeMatches = desc.match(/Blake/g);
+      // Blake appears once in the "Blake / Valet" description
+      expect(blakeMatches.length).toBe(1);
+    });
+
+    it('returns empty string for unknown theme', () => {
+      const desc = getNpcDescriptions('nonexistent');
+      expect(desc).toBe('');
     });
   });
 
