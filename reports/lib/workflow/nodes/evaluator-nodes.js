@@ -35,6 +35,7 @@ const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = require('./node-helpers');
 const { traceNode } = require('../../observability');
+const { getThemeNPCs } = require('../../theme-config');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -231,6 +232,36 @@ function getArticleCriteria(theme = 'journalist') {
 // getSdkClient imported from node-helpers.js
 
 /**
+ * NPC descriptions for evaluation prompts, keyed by NPC name
+ * Maps each known NPC to its narrative role for evaluator guidance
+ */
+const NPC_DESCRIPTIONS = {
+  'Marcus': 'Marcus (the murder victim) - should appear in most arcs as the central victim',
+  'Nova': 'Nova (the journalist narrator) - may appear as the article\'s narrator/voice',
+  'Blake': 'Blake / Valet (NPC character) - may appear in relevant arcs',
+  'Valet': null  // Alias for Blake, skip in descriptions
+};
+
+/**
+ * Build NPC description list for evaluation prompts
+ * @param {string} theme - Theme name ('journalist' or 'detective')
+ * @returns {string} Formatted NPC descriptions for prompt injection
+ */
+function getNpcDescriptions(theme) {
+  const npcs = getThemeNPCs(theme);
+  const seen = new Set();
+  return npcs
+    .filter(name => {
+      const desc = NPC_DESCRIPTIONS[name];
+      if (!desc || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    })
+    .map(name => `- ${NPC_DESCRIPTIONS[name]}`)
+    .join('\n');
+}
+
+/**
  * Build system prompt for evaluation
  * @param {string} phase - Phase name (arcs, outline, article)
  * @param {Object} criteria - Quality criteria for phase
@@ -274,9 +305,7 @@ Do NOT suggest adding new evidence, changing the roster, or modifying player con
 KNOWN NPCs (Valid in characterPlacements despite NOT being on roster)
 ═══════════════════════════════════════════════════════════════════════════
 The following NPCs are valid in arc characterPlacements:
-- Marcus (the murder victim) - should appear in most arcs as the central victim
-- Nova (the journalist narrator) - may appear as the article's narrator/voice
-- Blake / Valet (NPC character) - may appear in relevant arcs
+${getNpcDescriptions(theme)}
 
 These are NOT roster members and should NOT be flagged as missing from roster coverage.
 Do NOT remove them from characterPlacements or flag them as "non-roster characters".
@@ -295,7 +324,7 @@ Non-roster PCs CAN appear in arc characterPlacements when:
 They should NOT be flagged as "missing from roster coverage" or as invalid.
 However, their roles must be EVIDENCE-BASED, not OBSERVED:
 - CORRECT: "Sofia: Mentioned in Alex's memory as co-investor"
-- WRONG: "Sofia: Was seen coordinating with Victoria" (Nova didn't see this)
+- WRONG: "Sofia: Was seen coordinating with Victoria" (${theme === 'detective' ? 'the investigation did not observe this' : "Nova didn't see this"})
 
 When a non-roster PC appears, add appropriate caveats to indicate evidence-based inference.
 
@@ -1093,6 +1122,7 @@ module.exports = {
   _testing: {
     QUALITY_CRITERIA,
     getArticleCriteria,
+    getNpcDescriptions,
     getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,
