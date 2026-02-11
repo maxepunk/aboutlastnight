@@ -4,7 +4,7 @@
  * DRY pattern: All AI nodes (specialists, synthesis, evaluators) import rules
  * from this single source. Cached to avoid repeated file reads.
  *
- * Reference files location: .claude/skills/journalist-report/references/prompts/
+ * Reference files location: .claude/skills/{theme}-report/references/prompts/
  *
  * Files loaded:
  * - evidence-boundaries.md: Three-layer model rules (exposed/buried/director)
@@ -17,32 +17,44 @@
 const fs = require('fs').promises;
 const path = require('path');
 
-// References are in the skill directory
-const REFERENCES_DIR = path.join(__dirname, '../../.claude/skills/journalist-report/references/prompts');
+/**
+ * Get references directory for a given theme
+ * @param {string} theme - 'journalist' or 'detective'
+ * @returns {string} Absolute path to references/prompts directory
+ */
+function getReferencesDir(theme = 'journalist') {
+  return path.join(__dirname, '../../.claude/skills', `${theme}-report`, 'references/prompts');
+}
 
-// Cache for loaded rules (avoid repeated file reads)
-let cachedRules = null;
+// Legacy constant for backwards compatibility (journalist theme)
+const REFERENCES_DIR = getReferencesDir('journalist');
+
+// Cache for loaded rules per theme (avoid repeated file reads)
+const cachedRulesMap = new Map();
 
 /**
  * Load all reference rules from files
- * Caches results for subsequent calls
+ * Caches results per theme for subsequent calls
  *
+ * @param {string} theme - 'journalist' or 'detective'
  * @returns {Promise<{evidenceBoundaries: string, antiPatterns: string, writingPrinciples: string}>}
  */
-async function loadReferenceRules() {
-  if (cachedRules) return cachedRules;
+async function loadReferenceRules(theme = 'journalist') {
+  if (cachedRulesMap.has(theme)) return cachedRulesMap.get(theme);
 
+  const dir = getReferencesDir(theme);
   try {
     const [evidenceBoundaries, antiPatterns, writingPrinciples] = await Promise.all([
-      fs.readFile(path.join(REFERENCES_DIR, 'evidence-boundaries.md'), 'utf-8'),
-      fs.readFile(path.join(REFERENCES_DIR, 'anti-patterns.md'), 'utf-8'),
-      fs.readFile(path.join(REFERENCES_DIR, 'writing-principles.md'), 'utf-8')
+      fs.readFile(path.join(dir, 'evidence-boundaries.md'), 'utf-8'),
+      fs.readFile(path.join(dir, 'anti-patterns.md'), 'utf-8'),
+      fs.readFile(path.join(dir, 'writing-principles.md'), 'utf-8')
     ]);
 
-    cachedRules = { evidenceBoundaries, antiPatterns, writingPrinciples };
-    return cachedRules;
+    const rules = { evidenceBoundaries, antiPatterns, writingPrinciples };
+    cachedRulesMap.set(theme, rules);
+    return rules;
   } catch (error) {
-    console.warn(`[reference-loader] Failed to load reference files: ${error.message}`);
+    console.warn(`[reference-loader] Failed to load reference files for theme "${theme}": ${error.message}`);
     // Return empty strings to allow graceful degradation
     return { evidenceBoundaries: '', antiPatterns: '', writingPrinciples: '' };
   }
@@ -52,7 +64,7 @@ async function loadReferenceRules() {
  * Clear cached rules (for testing)
  */
 function clearCache() {
-  cachedRules = null;
+  cachedRulesMap.clear();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -175,9 +187,10 @@ module.exports = {
   getWritingPrinciplesSummary,
   getCombinedRulesSummary,
 
-  // Export path for testing
+  // Export for testing
   _testing: {
-    REFERENCES_DIR
+    REFERENCES_DIR,
+    getReferencesDir
   }
 };
 
