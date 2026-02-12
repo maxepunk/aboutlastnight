@@ -263,8 +263,9 @@ function buildResumePayload(approvals, currentState = {}) {
 /**
  * Valid theme values for validation
  */
-// NOTE: 'detective' theme accepted by API but not yet implemented in LangGraph pipeline.
-// All workflow nodes default to 'journalist'. See Phase 4 roadmap for detective implementation.
+// Both themes fully supported by LangGraph pipeline.
+// 'journalist' = NovaNews investigative article (first-person, ~3000 words)
+// 'detective' = Detective Anondono case file (third-person, ~750 words)
 const VALID_THEMES = ['journalist', 'detective'];
 
 /**

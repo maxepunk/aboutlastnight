@@ -129,11 +129,17 @@ lib/schemas/
 
 ```
 templates/journalist/
-├── layouts/article.hbs         # Main article layout
+├── layouts/article.hbs         # Main article layout (multi-column with sidebar)
 └── partials/
     ├── header.hbs, navigation.hbs
     ├── content-blocks/         # paragraph, quote, list, evidence-reference
     └── sidebar/                # financial-tracker, evidence-card, pull-quote
+
+templates/detective/
+├── layouts/article.hbs         # Single-column case report layout
+└── partials/
+    ├── header.hbs              # Case metadata box
+    └── content-blocks/         # paragraph, evidence-card, quote, list, photo
 ```
 
 ### Claude Agent SDK Usage
@@ -186,15 +192,38 @@ For details, see `PIPELINE_DEEP_DIVE.md#three-category-character-model`.
 
 For detailed rules on what Nova can/cannot do with each layer, see `PIPELINE_DEEP_DIVE.md#three-layer-evidence-model`.
 
+### Theme System
+
+The pipeline supports multiple report themes via `state.theme`. Each theme produces a different article style with its own voice, structure, and visual design.
+
+| Theme | Output | Voice | Length | Narrator |
+|-------|--------|-------|--------|----------|
+| `journalist` | NovaNews investigative article | First-person participatory | ~3000 words | Nova |
+| `detective` | Detective case file | Third-person investigative | ~750 words | Det. Anondono |
+
+**Theme-aware layers:**
+- `lib/theme-config.js` — NPCs, outline rules, article rules, canonical characters per theme
+- `lib/theme-loader.js` — Resolves prompt files from `.claude/skills/{theme}-report/references/prompts/`
+- `lib/prompt-builder.js` — Builds system prompts with theme-specific voice, constraints, sections
+- `templates/{theme}/` — Handlebars templates (layouts, partials, content blocks)
+- `.claude/skills/{theme}-report/assets/` — CSS variables, layout, components, JS per theme
+- `lib/workflow/nodes/evaluator-nodes.js` — Theme-aware quality criteria and NPC lists
+
+**Adding a new theme (4 steps):**
+1. Add config entry to `THEME_CONFIGS` in `lib/theme-config.js` (NPCs, rules, characters)
+2. Create prompt files in `.claude/skills/{theme}-report/references/prompts/` (11 markdown files)
+3. Create templates in `templates/{theme}/` (layouts + partials) and assets in `.claude/skills/{theme}-report/assets/`
+4. Add theme framing to `PromptBuilder` methods in `lib/prompt-builder.js`
+
 ### Prompt Architecture
 
 **Prompt Loading (ThemeLoader):**
-- Prompts stored in `.claude/skills/journalist-report/references/prompts/`
-- 11 markdown files define rules (not templates)
+- Prompts stored in `.claude/skills/{theme}-report/references/prompts/`
+- 11 markdown files per theme define rules (not templates)
 - Cached at startup, loaded per-phase via `lib/theme-loader.js`
 
 **Prompt Assembly (PromptBuilder):**
-- `lib/prompt-builder.js` assembles complete prompts
+- `lib/prompt-builder.js` assembles complete prompts per theme
 - Uses **XML tag format** for prompt sections (Commit ba3f534)
 - `labelPromptSection()` wraps content in `<tag>content</tag>` format
 - Token savings: ~560 tokens per article generation
