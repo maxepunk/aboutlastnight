@@ -27,7 +27,12 @@ This document provides a comprehensive understanding of the post-game report gen
 - Players must investigate what happened using discovered memories and evidence
 - At the end, players must collectively decide on a story to tell authorities
 
-**The Report** is a post-game gift: Nova (an NPC journalist who was at the party) sends players her investigative article about their investigation together.
+**The Report** is a post-game gift delivered via the pipeline's theme system:
+
+- **Journalist theme** (`state.theme = 'journalist'`): Nova, an NPC journalist at the party, writes an investigative article (~3000 words, first-person participatory voice, NovaNews branding).
+- **Detective theme** (`state.theme = 'detective'`): Detective Anondono files an official case report (~750 words, third-person investigative voice, single-column case file format).
+
+Both themes share the same 40-node LangGraph pipeline and 10 checkpoints. Theme-specific behavior is handled by `theme-config.js` (NPCs, rules), `prompt-builder.js` (voice/constraints), `theme-loader.js` (prompt files from `.claude/skills/{theme}-report/`), and `templates/{theme}/` (Handlebars layouts).
 
 ---
 
