@@ -28,6 +28,7 @@ const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers
 const { SchemaValidator } = require('../../schema-validator');
 const { createPromptBuilder } = require('../../prompt-builder');
 const outlineSchema = require('../../schemas/outline.schema.json');
+const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 const {
   safeParseJson,
@@ -907,12 +908,15 @@ async function generateOutline(state, config) {
     arcEvidencePackages  // NEW: per-arc curated evidence with fullContent and photos
   );
 
+  const theme = config?.configurable?.theme || 'journalist';
+  const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
+
   const outline = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
     disableTools: true,
-    jsonSchema: outlineSchema  // Extracted to lib/schemas/outline.schema.json (Commit 8.25)
+    jsonSchema: activeOutlineSchema
   });
 
   return {
@@ -991,12 +995,15 @@ async function reviseOutline(state, config) {
   // Build revision prompt
   const revisionPrompt = buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
 
+  const theme = config?.configurable?.theme || 'journalist';
+  const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
+
   try {
     const result = await sdk({
       prompt: revisionPrompt,
       systemPrompt: getOutlineRevisionSystemPrompt(),
       model: 'opus',  // Same as generateOutline
-      jsonSchema: outlineSchema,
+      jsonSchema: activeOutlineSchema,
       timeoutMs: 5 * 60 * 1000,  // 5 minutes
       disableTools: true,
       label: `Outline revision ${revisionCount}`

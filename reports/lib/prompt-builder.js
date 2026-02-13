@@ -224,7 +224,116 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
       analysisNotes: arc.analysisNotes || {}  // Financial/behavioral/victimization insights
     }));
 
-    const userPrompt = `Generate an article outline using these selected arcs.
+    let userPrompt;
+
+    if (this.themeName === 'detective') {
+      userPrompt = `Generate a case report outline using these selected narrative threads.
+
+SELECTED THREADS (in order of significance):
+${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
+
+<arc-metadata>
+${JSON.stringify(arcsWithMetadata, null, 2)}
+
+USING THREAD METADATA IN THE OUTLINE:
+
+1. **arcSource** determines framing:
+   - "accusation": The suspects concluded this. Frame as "The group accused..."
+   - "whiteboard": Investigation thread explored by subjects. Frame as lead.
+   - "observation": Observed behavioral pattern. Frame as investigative finding.
+   - "discovered": Evidence pattern subjects missed. Frame as detective's insight.
+
+2. **evidenceStrength** determines confidence:
+   - "strong": State findings with authority
+   - "moderate": Use "evidence suggests", "indicators point to"
+   - "weak": Use "warrants further investigation", "inconclusive"
+   - "speculative": Use "subjects believed..." with noted uncertainty
+
+3. **caveats** become investigative complications
+   - Each caveat is a gap in the evidence chain
+
+4. **unansweredQuestions** feed OUTSTANDING QUESTIONS section
+   - These represent genuine investigative gaps
+</arc-metadata>
+
+<evidence-context>
+
+${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
+### ${pkg.arcId} - ${pkg.arcTitle}
+
+**Evidence Items (${pkg.evidenceItems?.length || 0} items):**
+${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type}
+  Content: "${item.fullContent || item.summary || ''}"`).join('\n')}
+`).join('\n') : 'No arc evidence packages available - using evidence bundle directly'}
+</evidence-context>
+
+<arc-analysis>
+${JSON.stringify(arcAnalysis, null, 2)}
+
+EVIDENCE BUNDLE:
+${JSON.stringify(evidenceBundle, null, 2)}
+${labelPromptSection('section-rules', prompts['section-rules'])}
+${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
+</arc-analysis>
+
+<section-guidance>
+CRITICAL: This is a CASE REPORT, not a narrative article. Each section answers a DIFFERENT QUESTION:
+
+- EXECUTIVE SUMMARY: What happened? (Hook + factual overview + top findings)
+- EVIDENCE LOCKER: What does the evidence show? (Thematically grouped, synthesized—NOT listed)
+- MEMORY ANALYSIS (optional): What do the memory extraction patterns reveal?
+- SUSPECT NETWORK: Who are the key players and how do they connect?
+- OUTSTANDING QUESTIONS: What remains unknown?
+- FINAL ASSESSMENT: What is the detective's conclusion?
+
+SECTION DIFFERENTIATION is critical. If a fact appears in one section, it should NOT repeat in another.
+The report should feel BESPOKE to this specific case—reference unique details, not generic observations.
+
+TARGET LENGTH: ~750 words total. Be economical. Every sentence earns its place.
+</section-guidance>
+
+Return JSON with the following structure:
+{
+  "executiveSummary": {
+    "hook": "Opening line establishing case tension",
+    "caseOverview": "Brief factual summary of the case",
+    "primaryFindings": ["Top finding 1", "Top finding 2", "Top finding 3"]
+  },
+  "evidenceLocker": {
+    "evidenceGroups": [
+      {
+        "theme": "Thematic grouping (e.g., 'Financial Irregularities')",
+        "evidenceIds": ["evidence-id-1", "evidence-id-2"],
+        "synthesis": "What this group reveals together"
+      }
+    ]
+  },
+  "memoryAnalysis": {
+    "focus": "What memory extraction patterns reveal",
+    "keyPatterns": ["Notable pattern 1"],
+    "significance": "Why these patterns matter"
+  },
+  "suspectNetwork": {
+    "keyRelationships": [
+      {"characters": ["Name1", "Name2"], "nature": "Relationship description"}
+    ],
+    "assessments": [
+      {"name": "Character", "role": "Their role in events", "suspicionLevel": "high|moderate|low"}
+    ]
+  },
+  "outstandingQuestions": {
+    "questions": ["Unanswered question 1", "Unanswered question 2"],
+    "investigativeGaps": "Summary of what remains unknown"
+  },
+  "finalAssessment": {
+    "accusationHandling": "How the group's accusation relates to evidence",
+    "verdict": "Detective's overall assessment",
+    "closingLine": "Final noir closing line"
+  }
+}`;
+    } else {
+      // Journalist (NovaNews article) outline prompt
+      userPrompt = `Generate an article outline using these selected arcs.
 
 SELECTED ARCS (in order of appearance):
 ${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
@@ -414,6 +523,7 @@ Return JSON with the following structure:
     "accusationHandling": "How to present the accusation"
   }
 }`;
+    }
 
     return { systemPrompt, userPrompt };
   }

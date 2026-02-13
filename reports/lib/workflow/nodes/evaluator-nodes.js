@@ -87,10 +87,65 @@ const QUALITY_CRITERIA = {
       type: 'advisory'
     }
   },
-  outline: {
-    // ═══════════════════════════════════════════════════════════════════════
+  // Outline criteria use getOutlineCriteria(theme) for theme-aware descriptions
+  outline: null,  // Populated by getOutlineCriteria() at evaluation time
+  // Article criteria use getArticleCriteria(theme) for theme-aware descriptions
+  article: null  // Populated by getArticleCriteria() at evaluation time
+};
+
+/**
+ * Get theme-aware outline evaluation criteria
+ * @param {string} theme - 'journalist' or 'detective'
+ * @returns {Object} Outline quality criteria
+ */
+function getOutlineCriteria(theme = 'journalist') {
+  const isDetective = theme === 'detective';
+
+  if (isDetective) {
+    return {
+      // STRUCTURAL CRITERIA - Block if failed
+      arcCoverage: {
+        description: 'Does outline address all selected narrative threads?',
+        weight: 0.25,
+        type: 'structural'
+      },
+      requiredSections: {
+        description: 'Are all required sections present (executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment)?',
+        weight: 0.25,
+        type: 'structural'
+      },
+      sectionDifferentiation: {
+        description: 'Does each section answer a DIFFERENT question about the case? No fact should repeat across sections.',
+        weight: 0.20,
+        type: 'structural'
+      },
+      // ADVISORY CRITERIA - Warn but don't block
+      sectionBalance: {
+        description: 'Are sections appropriately weighted within the ~750 word budget?',
+        weight: 0.10,
+        type: 'advisory'
+      },
+      flowLogic: {
+        description: 'Does the report flow logically from summary through evidence to assessment?',
+        weight: 0.05,
+        type: 'advisory'
+      },
+      evidenceSynthesis: {
+        description: 'Is evidence grouped thematically and synthesized (not listed individually)?',
+        weight: 0.10,
+        type: 'advisory'
+      },
+      wordBudget: {
+        description: 'Are section word budgets reasonable for a ~750 word report?',
+        weight: 0.05,
+        type: 'advisory'
+      }
+    };
+  }
+
+  // Journalist outline criteria
+  return {
     // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.70)
-    // ═══════════════════════════════════════════════════════════════════════
     arcCoverage: {
       description: 'Does outline address all selected arcs?',
       weight: 0.20,
@@ -101,7 +156,6 @@ const QUALITY_CRITERIA = {
       weight: 0.20,
       type: 'structural'
     },
-    // Phase 1 Fix: Arc-section flow validation
     arcSectionFlow: {
       description: 'Do arcs flow THROUGH multiple sections (not isolated to THE STORY)? Check: arcConnections in followTheMoney, thePlayers, whatsMissing, closing.',
       weight: 0.20,
@@ -112,10 +166,7 @@ const QUALITY_CRITERIA = {
       weight: 0.10,
       type: 'structural'
     },
-
-    // ═══════════════════════════════════════════════════════════════════════
     // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.30)
-    // ═══════════════════════════════════════════════════════════════════════
     sectionBalance: {
       description: 'Are sections appropriately weighted?',
       weight: 0.05,
@@ -136,10 +187,7 @@ const QUALITY_CRITERIA = {
       weight: 0.05,
       type: 'advisory'
     },
-
-    // ═══════════════════════════════════════════════════════════════════════
     // MOMENTUM CRITERIA - Compulsive Readability (Commit 8.24)
-    // ═══════════════════════════════════════════════════════════════════════
     loopArchitecture: {
       description: 'Does each arc open AND close loops? Are there cognitive gaps that pull readers forward?',
       weight: 0.025,
@@ -160,10 +208,8 @@ const QUALITY_CRITERIA = {
       weight: 0.025,
       type: 'advisory'
     }
-  },
-  // Article criteria use getArticleCriteria(theme) for theme-aware descriptions
-  article: null  // Populated by getArticleCriteria() at evaluation time
-};
+  };
+}
 
 /**
  * Get theme-aware article evaluation criteria
@@ -379,17 +425,27 @@ Remember: STRUCTURAL issues block. ADVISORY issues are warnings for human consid
 
   // Commit 8.21: Use structural/advisory distinction for outline and article phases too
   if (phase === 'outline') {
-    return `You are the OUTLINE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
+    const isDetectiveOutline = theme === 'detective';
+    const outlineType = isDetectiveOutline ? 'case report' : 'article';
+    const criticalChecks = isDetectiveOutline
+      ? `CRITICAL CHECKS:
+- arcCoverage: Every selected thread should be addressed in the outline
+- requiredSections: executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment MUST exist
+- sectionDifferentiation: Each section must answer a DIFFERENT question (no repeated facts)`
+      : `CRITICAL CHECKS:
+- arcCoverage: Every selected arc should be referenced in theStory section
+- requiredSections: lede, theStory, thePlayers, closing MUST exist`;
 
-Your task is to evaluate if the article outline is ready for human review.
+    return `You are the OUTLINE Evaluator for an investigative ${outlineType} about "About Last Night" - a crime thriller game.
+
+Your task is to evaluate if the ${outlineType} outline is ready for human review.
 
 ═══════════════════════════════════════════════════════════════════════════
 IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)
 ═══════════════════════════════════════════════════════════════════════════
 The following inputs were approved in earlier phases and CANNOT be modified:
-- selectedArcs: The arcs chosen for this article are final
-- photoAnalyses: The photo descriptions are ground truth
-- evidenceBundle: The evidence is curated and locked
+- selectedArcs: The arcs chosen for this ${outlineType} are final
+${isDetectiveOutline ? '' : '- photoAnalyses: The photo descriptions are ground truth\n'}- evidenceBundle: The evidence is curated and locked
 
 Your feedback should focus on how the OUTLINE USES these inputs, not changing the inputs.
 
@@ -410,9 +466,7 @@ EVALUATION RULES:
 4. Content is READY if ALL structural criteria pass
 5. Content is NOT READY only if a STRUCTURAL criterion fails
 
-CRITICAL CHECKS:
-- arcCoverage: Every selected arc should be referenced in theStory section
-- requiredSections: lede, theStory, thePlayers, closing MUST exist
+${criticalChecks}
 
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC arc titles that are missing coverage
@@ -766,8 +820,8 @@ function getPhaseConstant(phase) {
 function createEvaluator(phase, options = {}) {
   const { model = 'haiku' } = options;
 
-  // For non-article phases, criteria are static
-  if (phase !== 'article' && !QUALITY_CRITERIA[phase]) {
+  // Validate: arcs must have static criteria; outline and article are resolved at runtime
+  if (phase !== 'article' && phase !== 'outline' && !QUALITY_CRITERIA[phase]) {
     throw new Error(`No quality criteria defined for phase: ${phase}`);
   }
 
@@ -778,11 +832,16 @@ function createEvaluator(phase, options = {}) {
    * @returns {Object} Partial state update
    */
   return async function evaluatePhase(state, config) {
-    // Resolve criteria: article criteria are theme-aware, others are static
+    // Resolve criteria: outline and article criteria are theme-aware, arcs are static
     const theme = state.theme || 'journalist';
-    const criteria = phase === 'article'
-      ? getArticleCriteria(theme)
-      : QUALITY_CRITERIA[phase];
+    let criteria;
+    if (phase === 'article') {
+      criteria = getArticleCriteria(theme);
+    } else if (phase === 'outline') {
+      criteria = getOutlineCriteria(theme);
+    } else {
+      criteria = QUALITY_CRITERIA[phase];
+    }
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
     const revisionCap = getRevisionCap(phase);
@@ -1121,6 +1180,7 @@ module.exports = {
   // Export for testing
   _testing: {
     QUALITY_CRITERIA,
+    getOutlineCriteria,
     getArticleCriteria,
     getNpcDescriptions,
     getSdkClient,

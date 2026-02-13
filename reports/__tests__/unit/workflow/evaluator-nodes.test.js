@@ -20,6 +20,7 @@ const {
   createMockEvaluator,
   _testing: {
     QUALITY_CRITERIA,
+    getOutlineCriteria,
     getArticleCriteria,
     getNpcDescriptions,
     getSdkClient,
@@ -78,13 +79,25 @@ describe('evaluator-nodes', () => {
       expect(QUALITY_CRITERIA.arcs.evidenceConfidenceBalance).toBeDefined();
     });
 
-    it('defines criteria for outline phase', () => {
-      expect(QUALITY_CRITERIA.outline).toBeDefined();
-      expect(QUALITY_CRITERIA.outline.arcCoverage).toBeDefined();
-      expect(QUALITY_CRITERIA.outline.sectionBalance).toBeDefined();
-      expect(QUALITY_CRITERIA.outline.flowLogic).toBeDefined();
-      expect(QUALITY_CRITERIA.outline.photoPlacement).toBeDefined();
-      expect(QUALITY_CRITERIA.outline.wordBudget).toBeDefined();
+    it('defines criteria for outline phase via getOutlineCriteria', () => {
+      const outlineCriteria = getOutlineCriteria();
+      expect(outlineCriteria).toBeDefined();
+      expect(outlineCriteria.arcCoverage).toBeDefined();
+      expect(outlineCriteria.sectionBalance).toBeDefined();
+      expect(outlineCriteria.flowLogic).toBeDefined();
+      expect(outlineCriteria.photoPlacement).toBeDefined();
+      expect(outlineCriteria.wordBudget).toBeDefined();
+    });
+
+    it('returns detective-specific criteria for detective outline', () => {
+      const detectiveOutline = getOutlineCriteria('detective');
+      expect(detectiveOutline.requiredSections.description).toContain('executiveSummary');
+      expect(detectiveOutline.requiredSections.description).not.toContain('lede');
+      expect(detectiveOutline.sectionDifferentiation).toBeDefined();
+      expect(detectiveOutline.sectionDifferentiation.description).toContain('DIFFERENT question');
+      // Detective does not have journalist-specific criteria
+      expect(detectiveOutline.photoPlacement).toBeUndefined();
+      expect(detectiveOutline.arcInterweaving).toBeUndefined();
     });
 
     it('defines criteria for article phase via getArticleCriteria', () => {
@@ -106,9 +119,10 @@ describe('evaluator-nodes', () => {
     });
 
     it('all criteria have description and weight', () => {
-      // Merge static criteria with dynamic article criteria for full validation
-      const allCriteria = { ...QUALITY_CRITERIA, article: getArticleCriteria() };
+      // Merge static criteria with dynamic outline/article criteria for full validation
+      const allCriteria = { ...QUALITY_CRITERIA, outline: getOutlineCriteria(), article: getArticleCriteria() };
       Object.entries(allCriteria).forEach(([phase, criteria]) => {
+        if (!criteria) return; // Skip null entries
         Object.entries(criteria).forEach(([name, criterion]) => {
           expect(criterion.description).toBeDefined();
           expect(typeof criterion.weight).toBe('number');
@@ -119,8 +133,9 @@ describe('evaluator-nodes', () => {
     });
 
     it('weights sum to approximately 1.0 for each phase', () => {
-      const allCriteria = { ...QUALITY_CRITERIA, article: getArticleCriteria() };
+      const allCriteria = { ...QUALITY_CRITERIA, outline: getOutlineCriteria(), article: getArticleCriteria() };
       Object.entries(allCriteria).forEach(([phase, criteria]) => {
+        if (!criteria) return; // Skip null entries
         const totalWeight = Object.values(criteria).reduce((sum, c) => sum + c.weight, 0);
         expect(totalWeight).toBeCloseTo(1.0, 1);
       });
@@ -160,7 +175,7 @@ describe('evaluator-nodes', () => {
     });
 
     it('includes evaluation rules', () => {
-      const prompt = buildEvaluationSystemPrompt('outline', QUALITY_CRITERIA.outline);
+      const prompt = buildEvaluationSystemPrompt('outline', getOutlineCriteria());
 
       // Commit 8.21: Now uses structural/advisory criteria (0.8 threshold for structural)
       expect(prompt).toContain('score >= 0.8');
