@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "detective-outline",
+  "title": "DetectiveCaseOutline",
+  "description": "Structured outline for Detective Anondono case report (~750 words). SDK-compliant with strict validation.",
+  "type": "object",
+  "required": ["executiveSummary", "evidenceLocker", "suspectNetwork", "outstandingQuestions", "finalAssessment"],
+  "additionalProperties": false,
+  "properties": {
+    "executiveSummary": {
+      "type": "object",
+      "description": "Opening section establishing the case and key findings (50-150 words in final report)",
+      "required": ["hook", "caseOverview", "primaryFindings"],
+      "additionalProperties": false,
+      "properties": {
+        "hook": {
+          "type": "string",
+          "description": "Opening line that establishes the case's central tension"
+        },
+        "caseOverview": {
+          "type": "string",
+          "description": "Brief factual summary: who, what, when, where"
+        },
+        "primaryFindings": {
+          "type": "array",
+          "description": "Top 2-3 findings the investigation uncovered",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "evidenceLocker": {
+      "type": "object",
+      "description": "Thematically grouped evidence synthesis (150-400 words in final report)",
+      "required": ["evidenceGroups"],
+      "additionalProperties": false,
+      "properties": {
+        "evidenceGroups": {
+          "type": "array",
+          "description": "Evidence organized by thematic clusters, not listed individually",
+          "items": {
+            "type": "object",
+            "required": ["theme", "evidenceIds", "synthesis"],
+            "additionalProperties": false,
+            "properties": {
+              "theme": { "type": "string", "description": "Thematic grouping name (e.g., 'Financial Irregularities')" },
+              "evidenceIds": {
+                "type": "array",
+                "description": "Evidence item IDs in this group",
+                "items": { "type": "string" }
+              },
+              "synthesis": { "type": "string", "description": "What this group of evidence reveals together" }
+            }
+          }
+        }
+      }
+    },
+    "memoryAnalysis": {
+      "type": "object",
+      "description": "Optional section analyzing memory extraction patterns (80-200 words in final report)",
+      "required": ["focus", "significance"],
+      "additionalProperties": false,
+      "properties": {
+        "focus": {
+          "type": "string",
+          "description": "What the memory extraction patterns reveal about the case"
+        },
+        "keyPatterns": {
+          "type": "array",
+          "description": "Notable patterns in recovered memories",
+          "items": { "type": "string" }
+        },
+        "significance": {
+          "type": "string",
+          "description": "Why these memory patterns matter to the case"
+        }
+      }
+    },
+    "suspectNetwork": {
+      "type": "object",
+      "description": "Relationships and suspect assessments (80-200 words in final report)",
+      "required": ["assessments"],
+      "additionalProperties": false,
+      "properties": {
+        "keyRelationships": {
+          "type": "array",
+          "description": "Key relationships relevant to the case",
+          "items": {
+            "type": "object",
+            "required": ["characters", "nature"],
+            "additionalProperties": false,
+            "properties": {
+              "characters": {
+                "type": "array",
+                "description": "Character names in this relationship",
+                "items": { "type": "string" }
+              },
+              "nature": { "type": "string", "description": "Nature of the relationship and its relevance" }
+            }
+          }
+        },
+        "assessments": {
+          "type": "array",
+          "description": "Per-suspect assessment of involvement",
+          "items": {
+            "type": "object",
+            "required": ["name", "role"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "description": "Character name" },
+              "role": { "type": "string", "description": "Their role in events based on evidence" },
+              "suspicionLevel": {
+                "type": "string",
+                "enum": ["high", "moderate", "low"],
+                "description": "Assessment of involvement level"
+              }
+            }
+          }
+        }
+      }
+    },
+    "outstandingQuestions": {
+      "type": "object",
+      "description": "Open questions and investigative gaps (40-120 words in final report)",
+      "required": ["questions"],
+      "additionalProperties": false,
+      "properties": {
+        "questions": {
+          "type": "array",
+          "description": "Key unanswered questions from the investigation",
+          "items": { "type": "string" }
+        },
+        "investigativeGaps": {
+          "type": "string",
+          "description": "Summary of what remains unknown and why it matters"
+        }
+      }
+    },
+    "finalAssessment": {
+      "type": "object",
+      "description": "Detective's concluding assessment (80-200 words in final report)",
+      "required": ["verdict", "closingLine"],
+      "additionalProperties": false,
+      "properties": {
+        "accusationHandling": {
+          "type": "string",
+          "description": "How the group's accusation is addressed in context of evidence"
+        },
+        "verdict": {
+          "type": "string",
+          "description": "Detective's overall assessment of the case"
+        },
+        "closingLine": {
+          "type": "string",
+          "description": "Final noir-style closing line of the report"
+        }
+      }
+    }
+  }
+}

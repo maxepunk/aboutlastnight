@@ -16,6 +16,7 @@ const addFormats = require('ajv-formats');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 const preprocessedEvidenceSchema = require('./schemas/preprocessed-evidence.schema.json');
 const outlineSchema = require('./schemas/outline.schema.json');
+const detectiveOutlineSchema = require('./schemas/detective-outline.schema.json');
 
 class SchemaValidator {
   /**
@@ -40,6 +41,7 @@ class SchemaValidator {
     this.registerSchema('content-bundle', contentBundleSchema);
     this.registerSchema('preprocessed-evidence', preprocessedEvidenceSchema);
     this.registerSchema('outline', outlineSchema);
+    this.registerSchema('detective-outline', detectiveOutlineSchema);
   }
 
   /**
