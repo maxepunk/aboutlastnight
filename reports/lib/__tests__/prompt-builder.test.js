@@ -297,6 +297,34 @@ describe('PromptBuilder', () => {
 
       expect(userPrompt).toContain('No em-dashes');
     });
+
+    it('journalist prompt includes LEDE, THE STORY, FOLLOW THE MONEY sections', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
+        mockOutline, mockEvidenceBundle, mockTemplate
+      );
+
+      expect(userPrompt).toContain('LEDE');
+      expect(userPrompt).toContain('THE STORY');
+      expect(userPrompt).toContain('FOLLOW THE MONEY');
+    });
+
+    it('journalist prompt includes pullQuotes and financialTracker', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
+        mockOutline, mockEvidenceBundle, mockTemplate
+      );
+
+      expect(userPrompt).toContain('pullQuotes');
+      expect(userPrompt).toContain('financialTracker');
+    });
+
+    it('journalist prompt includes VISUAL_DISTRIBUTION and ARC_FLOW', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
+        mockOutline, mockEvidenceBundle, mockTemplate
+      );
+
+      expect(userPrompt).toContain('VISUAL_DISTRIBUTION');
+      expect(userPrompt).toContain('ARC_FLOW');
+    });
   });
 
   describe('buildValidationPrompt', () => {
@@ -481,6 +509,120 @@ describe('PromptBuilder', () => {
       expect(systemPrompt).toContain('SYNTHESIZE');
       expect(systemPrompt).toContain('750 words');
       expect(systemPrompt).not.toContain('em-dashes');
+    });
+
+    describe('buildArticlePrompt detective user prompt', () => {
+      const mockOutline = { executiveSummary: { hook: 'Case opened...' } };
+      const mockEvidence = { exposed: { tokens: [] } };
+      const mockTemplate = '<html>detective-template</html>';
+
+      it('detective user prompt does NOT include journalist sections', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        // These are journalist-specific structural concepts
+        expect(userPrompt).not.toContain('FOLLOW THE MONEY');
+        expect(userPrompt).not.toContain('THE PLAYERS');
+        expect(userPrompt).not.toContain('VISUAL_DISTRIBUTION');
+        expect(userPrompt).not.toContain('ARC_FLOW');
+        // pullQuotes/financialTracker appear as schema fields in journalist but only as exclusion warnings in detective
+        expect(userPrompt).not.toContain('"pullQuotes"');
+        expect(userPrompt).not.toContain('"financialTracker"');
+      });
+
+      it('detective user prompt includes detective section IDs', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('executive-summary');
+        expect(userPrompt).toContain('evidence-locker');
+        expect(userPrompt).toContain('suspect-network');
+        expect(userPrompt).toContain('final-assessment');
+      });
+
+      it('detective user prompt includes SECTION_GUIDANCE', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('SECTION_GUIDANCE');
+        expect(userPrompt).toContain('EXECUTIVE SUMMARY');
+        expect(userPrompt).toContain('EVIDENCE LOCKER');
+        expect(userPrompt).toContain('OUTSTANDING QUESTIONS');
+        expect(userPrompt).toContain('FINAL ASSESSMENT');
+      });
+
+      it('detective user prompt includes DATA_CONTEXT with outline and evidence', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('DATA_CONTEXT');
+        expect(userPrompt).toContain('Case opened');
+        expect(userPrompt).toContain('TEMPLATE');
+        expect(userPrompt).toContain('detective-template');
+      });
+
+      it('detective user prompt includes voice checkpoint with detective constraints', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('VOICE_CHECKPOINT');
+        expect(userPrompt).toContain('Detective Anondono');
+      });
+
+      it('detective user prompt references Detective Anondono as author', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('Detective Anondono');
+        expect(userPrompt).toContain('Lead Investigator');
+      });
+
+      it('detective user prompt explicitly excludes pullQuotes, evidenceCards, financialTracker', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('Do NOT include pullQuotes');
+        expect(userPrompt).toContain('evidenceCards');
+        expect(userPrompt).toContain('financialTracker');
+      });
+
+      it('detective user prompt specifies ~750 word target', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('750 words');
+      });
+
+      it('detective user prompt includes ANTI_PATTERNS', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('ANTI_PATTERNS');
+        expect(userPrompt).toContain('Section differentiation');
+      });
+
+      it('detective user prompt includes RULES section with prompt references', async () => {
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, [], null
+        );
+        expect(userPrompt).toContain('RULES');
+        expect(userPrompt).toContain('Evidence Locker');   // section-rules
+        expect(userPrompt).toContain('Closure for players'); // narrative-structure
+      });
+
+      it('detective user prompt includes arc evidence when provided', async () => {
+        const arcEvidence = [{
+          arcId: 'financial-trail',
+          arcTitle: 'Financial Trail',
+          evidenceItems: [{ id: 'tok1', type: 'memory', fullContent: 'Money moved...', quotableExcerpts: ['follow the money'] }],
+          photos: []
+        }];
+        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
+          mockOutline, mockEvidence, mockTemplate, arcEvidence, null
+        );
+        expect(userPrompt).toContain('financial-trail');
+        expect(userPrompt).toContain('Money moved');
+      });
     });
   });
 
