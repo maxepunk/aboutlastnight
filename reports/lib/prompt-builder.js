@@ -580,7 +580,109 @@ ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'U
 ` : '';
 
     // User prompt: Data first, then template, then RULES LAST (recency bias)
-    const userPrompt = `<DATA_CONTEXT>
+    // Branch by theme — detective gets simplified case report prompt, journalist gets full article prompt
+    let userPrompt;
+
+    if (this.themeName === 'detective') {
+      userPrompt = `<DATA_CONTEXT>
+APPROVED OUTLINE:
+${JSON.stringify(outline, null, 2)}
+
+HERO IMAGE:
+Filename: ${heroImage || 'Use first available photo from outline'}
+- Use this exact filename in the "heroImage" field
+- Do NOT include this filename in the "photos" array
+
+EVIDENCE BUNDLE:
+${JSON.stringify(evidenceBundle, null, 2)}
+${arcEvidenceSection}
+</DATA_CONTEXT>
+
+<TEMPLATE>
+${template}
+</TEMPLATE>
+
+<RULES>
+${labelPromptSection('section-rules', prompts['section-rules'])}
+${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
+${labelPromptSection('formatting', prompts['formatting'])}
+${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
+
+${generateRosterSection(this.themeName)}
+</RULES>
+
+<SECTION_GUIDANCE>
+CRITICAL: This is a CASE REPORT. Each section answers a DIFFERENT QUESTION about the same underlying facts.
+
+- EXECUTIVE SUMMARY: What happened? (Hook + factual overview + top findings)
+- EVIDENCE LOCKER: What does the evidence show? (Thematically grouped, synthesized — NOT listed individually)
+- MEMORY ANALYSIS (optional): What do the memory extraction patterns reveal?
+- SUSPECT NETWORK: Who are the key players and how do they connect?
+- OUTSTANDING QUESTIONS: What remains unknown or unresolved?
+- FINAL ASSESSMENT: What is the detective's conclusion?
+
+SECTION DIFFERENTIATION is critical. If a fact appears in one section, it should NOT repeat in another.
+The report should feel BESPOKE to this specific case — reference unique details, not generic observations.
+</SECTION_GUIDANCE>
+
+<ANTI_PATTERNS>
+${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
+</ANTI_PATTERNS>
+
+<VOICE_CHECKPOINT>
+${constraints.voiceCheckpoint}
+${labelPromptSection('character-voice', prompts['character-voice'])}
+${labelPromptSection('writing-principles', prompts['writing-principles'])}
+${constraints.voiceQuestion}
+</VOICE_CHECKPOINT>
+
+<GENERATION_INSTRUCTION>
+Generate structured case report content as JSON matching the ContentBundle schema.
+
+STRUCTURE:
+1. "sections" - Array of report sections, each with:
+   - "id": Section identifier (executive-summary, evidence-locker, memory-analysis, suspect-network, outstanding-questions, final-assessment)
+   - "type": Section type for styling (case-summary, evidence-highlight, narrative, investigation-notes, conclusion)
+   - "heading": Section heading
+   - "content": Array of content blocks:
+     * {"type": "paragraph", "text": "..."} - Prose text
+     * {"type": "quote", "text": "...", "attribution": "..."} - Inline quotes
+     * {"type": "evidence-reference", "tokenId": "xxx", "caption": "..."} - Evidence reference
+     * {"type": "list", "items": [...], "ordered": false} - Lists
+
+2. "headline" - Report headline with:
+   - "main": Case report title
+   - "kicker": Optional subtitle
+   - "deck": Brief summary line
+
+3. "byline" - Author information:
+   - "author": "Detective Anondono"
+   - "title": "Lead Investigator"
+
+4. "photos" - Session photos with placement:
+   - "filename": EXACT filename from available photos (do NOT include hero image here)
+   - "caption": Caption text
+   - "characters": Array of character names visible
+   - "placement": "inline" or "sidebar"
+   - "afterSection": Section ID after which photo appears
+
+5. "heroImage" - Hero image filename (same as HERO IMAGE above)
+
+6. "voice_self_check" - Self-assessment:
+   - Is the tone professional and analytical with noir flair?
+   - Does each section answer a DIFFERENT question?
+   - Are names in <strong> tags, evidence in <em> tags?
+   - Is the report ~750 words?
+   - Are facts synthesized (not cataloged)?
+   - No game mechanics language?
+
+Do NOT include pullQuotes, evidenceCards, or financialTracker — these are journalist-specific components.
+
+TARGET LENGTH: ~750 words (+-50 words acceptable). Be economical. Every sentence earns its place.
+</GENERATION_INSTRUCTION>`;
+    } else {
+      // Journalist (NovaNews article) prompt — full article with visual components
+      userPrompt = `<DATA_CONTEXT>
 APPROVED OUTLINE:
 ${JSON.stringify(outline, null, 2)}
 
@@ -782,6 +884,7 @@ STRUCTURE:
    - Any game mechanics language?
    - Any generic praise or vague attribution?
 </GENERATION_INSTRUCTION>`;
+    }
 
     return { systemPrompt, userPrompt };
   }
