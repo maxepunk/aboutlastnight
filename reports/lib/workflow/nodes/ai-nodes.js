@@ -1010,7 +1010,11 @@ async function reviseOutline(state, config) {
     });
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[reviseOutline] Complete: ${result?.theStory?.arcs?.length || 0} arcs in ${duration}s`);
+    const outlineTheme = config?.configurable?.theme || state?.theme || 'journalist';
+    const arcCount = outlineTheme === 'detective'
+      ? result?.evidenceLocker?.evidenceGroups?.length || 0
+      : result?.theStory?.arcs?.length || 0;
+    console.log(`[reviseOutline] Complete: ${arcCount} ${outlineTheme === 'detective' ? 'evidence groups' : 'arcs'} in ${duration}s`);
 
     return {
       outline: result || {},
@@ -1176,21 +1180,29 @@ async function generateContentBundle(state, config) {
     disableTools: true
   });
 
-  // Phase 3.2: Post-generation logging - verify visual component counts
+  // Phase 3.2: Post-generation logging — theme-aware visual component checks
+  const { getThemeConfig } = require('../../theme-config');
+  const articleTheme = config?.configurable?.theme || state.theme || 'journalist';
+  const themeDisplay = getThemeConfig(articleTheme)?.display?.postGenValidation || {};
+  const minPullQuotes = themeDisplay.minPullQuotes ?? 2;
+  const minInlineCards = themeDisplay.minInlineEvidenceCards ?? 3;
+
   const inlineEvidenceCards = (generatedContent.sections || []).flatMap(s =>
     (s.content || []).filter(c => c.type === 'evidence-card')
   );
   const pullQuoteCount = (generatedContent.pullQuotes || []).length;
   const sidebarCardCount = (generatedContent.evidenceCards || []).length;
+
   console.log(`[generateContentBundle] Post-generation: Visual components generated:`);
-  console.log(`  Inline evidence-cards: ${inlineEvidenceCards.length} (minimum 3 required)`);
+  console.log(`  Inline evidence-cards: ${inlineEvidenceCards.length}${minInlineCards > 0 ? ` (minimum ${minInlineCards} required)` : ''}`);
   console.log(`  Sidebar evidence cards: ${sidebarCardCount}`);
-  console.log(`  Pull quotes: ${pullQuoteCount} (minimum 2 required)`);
-  if (inlineEvidenceCards.length < 3) {
-    console.warn(`  ⚠ INSUFFICIENT inline evidence-cards - validation will trigger revision loop`);
+  console.log(`  Pull quotes: ${pullQuoteCount}${minPullQuotes > 0 ? ` (minimum ${minPullQuotes} required)` : ''}`);
+
+  if (minInlineCards > 0 && inlineEvidenceCards.length < minInlineCards) {
+    console.warn(`  ⚠ INSUFFICIENT inline evidence-cards — validation will trigger revision loop`);
   }
-  if (pullQuoteCount < 2) {
-    console.warn(`  ⚠ INSUFFICIENT pull quotes - validation will trigger revision loop`);
+  if (minPullQuotes > 0 && pullQuoteCount < minPullQuotes) {
+    console.warn(`  ⚠ INSUFFICIENT pull quotes — validation will trigger revision loop`);
   }
 
   // Extract ContentBundle from response (may include voice_self_check)
