@@ -913,6 +913,21 @@ REVISION RULES:
 
 ${revisionConstraints.revisionVoice}`;
 
+    const revisionChecklist = this.themeName === 'detective'
+      ? `Fix the issues you identified in your self-check. Also check for:
+- Any game mechanics terminology ("tokens", "character sheets", "Act 1/2/3")
+- Repeated facts across sections (each section must answer a DIFFERENT question)
+- Names missing <strong> tags or evidence missing <em> tags
+- Any first-person voice that slipped in ("I saw", "I discovered")
+- Section headings that don't clearly signal different analytical angles`
+      : `Fix the issues you identified in your self-check. Also check for:
+- "guests" -> "people" or "those present" or "partygoers"
+- "From my notes that night" -> "- Nova" or remove
+- Any remaining passive/observer voice patterns
+- Any em-dashes that slipped through
+- Generic praise or vague attributions
+- Game mechanics language ("tokens", "transactions", "buried bonus")`;
+
     const userPrompt = `<YOUR_SELF_CHECK>
 ${voiceSelfCheck}
 </YOUR_SELF_CHECK>
@@ -926,13 +941,7 @@ ${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 </ANTI_PATTERNS_REFERENCE>
 
 <REVISION_INSTRUCTION>
-Fix the issues you identified in your self-check. Also check for:
-- "guests" -> "people" or "those present" or "partygoers"
-- "From my notes that night" -> "- Nova" or remove
-- Any remaining passive/observer voice patterns
-- Any em-dashes that slipped through
-- Generic praise or vague attributions
-- Game mechanics language ("tokens", "transactions", "buried bonus")
+${revisionChecklist}
 
 Return JSON with:
 1. "contentBundle" - Revised ContentBundle (if input was JSON) with all sections, evidenceCards, pullQuotes, photos preserved
@@ -963,15 +972,16 @@ ${labelPromptSection('character-voice', prompts['character-voice'])}
 EVIDENCE BOUNDARIES:
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
-    const userPrompt = `Validate this article against all anti-patterns.
-
-CHARACTER ROSTER (all must be mentioned):
-${roster.join(', ')}
-
-ARTICLE HTML:
-${articleHtml}
-
-Check for:
+    const validationChecklist = this.themeName === 'detective'
+      ? `Check for:
+1. Game mechanics language ("token", "Act 3", "final call", "character sheet")
+2. First-person voice (should be third-person investigative)
+3. Repeated facts appearing in multiple sections (section differentiation)
+4. Missing roster members
+5. Names not in <strong> tags
+6. Evidence artifacts not in <em> tags
+7. Report exceeds ~800 words (target ~750)`
+      : `Check for:
 1. Em-dashes (— or --)
 2. "token/tokens" instead of "extracted memory"
 3. Game mechanics language ("Act 3", "final call", "first burial", "guest/guests")
@@ -979,9 +989,31 @@ Check for:
 5. Passive/neutral voice (should be participatory)
 6. Missing roster members
 7. Blake condemned (should be suspicious but nuanced)
-8. Missing systemic critique in CLOSING
+8. Missing systemic critique in CLOSING`;
 
-Return JSON:
+    const validationReturnFormat = this.themeName === 'detective'
+      ? `Return JSON:
+{
+  "passed": true|false,
+  "issues": [
+    {
+      "type": "game_mechanics|first_person_voice|fact_repetition|missing_character|formatting",
+      "line": 123,
+      "text": "the problematic text",
+      "fix": "suggested fix"
+    }
+  ],
+  "voice_score": 1-5,
+  "voice_notes": "assessment of voice consistency",
+  "roster_coverage": {
+    "featured": ["names"],
+    "mentioned": ["names"],
+    "missing": ["names"]
+  },
+  "section_differentiation": true|false,
+  "word_count_acceptable": true|false
+}`
+      : `Return JSON:
 {
   "passed": true|false,
   "issues": [
@@ -1002,6 +1034,18 @@ Return JSON:
   "systemic_critique_present": true|false,
   "blake_handled_correctly": true|false
 }`;
+
+    const userPrompt = `Validate this article against all anti-patterns.
+
+CHARACTER ROSTER (all must be mentioned):
+${roster.join(', ')}
+
+ARTICLE HTML:
+${articleHtml}
+
+${validationChecklist}
+
+${validationReturnFormat}`;
 
     return { systemPrompt, userPrompt };
   }
