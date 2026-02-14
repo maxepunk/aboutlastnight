@@ -192,26 +192,33 @@ function contentBlockPartial(contentType) {
 
 /**
  * Generate article ID from session metadata
- * Format: NNA-{MMDD}-{HH} (NovaNews Article - Month Day - Hour)
+ * Format: {PREFIX}-{MMDD}-{HH}
+ * Prefix from theme-config.js display.articleIdPrefix (NNA for journalist, DCR for detective)
  *
- * @param {Object} metadata - ContentBundle metadata
+ * @param {Object} metadata - ContentBundle metadata (must include .theme for non-default prefix)
  * @returns {string} Article ID
  */
 function articleId(metadata) {
+  // Lazy-require to avoid circular dependency (template-helpers loaded early)
+  const { getThemeConfig } = require('./theme-config');
+  const theme = (metadata && metadata.theme) || 'journalist';
+  const config = getThemeConfig(theme);
+  const prefix = (config && config.display && config.display.articleIdPrefix) || 'NNA';
+
   if (!metadata || !metadata.generatedAt) {
-    return 'NNA-0000-00';
+    return `${prefix}-0000-00`;
   }
 
   const date = parseDate(metadata.generatedAt);
   if (!date) {
-    return 'NNA-0000-00';
+    return `${prefix}-0000-00`;
   }
 
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const hour = String(date.getHours()).padStart(2, '0');
 
-  return `NNA-${month}${day}-${hour}`;
+  return `${prefix}-${month}${day}-${hour}`;
 }
 
 // ============================================================================
