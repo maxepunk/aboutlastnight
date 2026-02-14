@@ -105,8 +105,8 @@ const THEME_CONFIGS = {
     },
 
     // Display constants for template rendering and post-generation validation
-    // Used by template-nodes.js (articleIdPrefix), ai-nodes.js (crystallizationLabel),
-    // and validation-nodes.js (postGenValidation)
+    // Used by template-helpers.js (articleIdPrefix), Article.js (crystallizationLabel),
+    // and ai-nodes.js (postGenValidation)
     display: {
       articleIdPrefix: 'NNA',           // NovaNews Article
       crystallizationLabel: "Nova's Insight",
