@@ -583,8 +583,12 @@ function GalleryPhotoEditor({ photo, idx, onSave, onCancel }) {
 
 // ── Main Article Component ──
 
-function Article({ data, sessionId: propSessionId, onApprove, onReject, dispatch, revisionCache }) {
+function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, dispatch, revisionCache }) {
   const contentBundle = (data && data.contentBundle) || {};
+
+  // Theme detection: prop > metadata > fallback
+  const isDetective = theme === 'detective' ||
+    (!theme && contentBundle.metadata && contentBundle.metadata.theme === 'detective');
   const assembledHtml = (data && data.assembledHtml) || (data && data.articleHtml) || '';
   const evaluationHistory = (data && data.evaluationHistory) || {};
   const previousArticle = (revisionCache && revisionCache.article) || null;
@@ -947,7 +951,7 @@ function Article({ data, sessionId: propSessionId, onApprove, onReject, dispatch
       className: 'pull-quote ' + (isVerbatim ? 'pull-quote--verbatim' : 'pull-quote--crystallization') + ' article-block--editable'
     },
       editBtn(function () { startSidebarEdit('pullQuotes', idx); }),
-      !isVerbatim && React.createElement('span', { className: 'pull-quote__type-label' }, "Nova's Insight"),
+      !isVerbatim && React.createElement('span', { className: 'pull-quote__type-label' }, isDetective ? "Detective's Note" : "Nova's Insight"),
       React.createElement('p', { className: 'pull-quote__text' },
         '\u201C' + (currentPq.text || '') + '\u201D'
       ),
@@ -1258,24 +1262,24 @@ function Article({ data, sessionId: propSessionId, onApprove, onReject, dispatch
       );
     }),
 
-    // Pull quotes (always visible, with type distinction)
-    currentPullQuotes.length > 0 && React.createElement('div', { className: 'outline-section' },
+    // Pull quotes (journalist theme only — detective reports don't use pull quotes)
+    !isDetective && currentPullQuotes.length > 0 && React.createElement('div', { className: 'outline-section' },
       React.createElement('h4', { className: 'outline-section__title' }, 'PULL QUOTES (' + currentPullQuotes.length + ')'),
       currentPullQuotes.map(function (pq, i) {
         return renderPullQuote(pq, i);
       })
     ),
 
-    // Evidence cards (always visible, rich display)
-    currentEvidenceCards.length > 0 && React.createElement('div', { className: 'outline-section' },
+    // Evidence cards (journalist theme only)
+    !isDetective && currentEvidenceCards.length > 0 && React.createElement('div', { className: 'outline-section' },
       React.createElement('h4', { className: 'outline-section__title' }, 'EVIDENCE CARDS (' + currentEvidenceCards.length + ')'),
       currentEvidenceCards.map(function (card, i) {
         return renderSidebarEvidenceCard(card, i);
       })
     ),
 
-    // Financial tracker (table format)
-    renderFinancialTracker(getCurrentBundle().financialTracker || financialTracker),
+    // Financial tracker (journalist theme only)
+    !isDetective && renderFinancialTracker(getCurrentBundle().financialTracker || financialTracker),
 
     // Photos gallery
     sessionId && renderPhotosGallery(),
