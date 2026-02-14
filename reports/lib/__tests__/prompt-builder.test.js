@@ -626,6 +626,73 @@ describe('PromptBuilder', () => {
     });
   });
 
+  // Helper factory for theme-branching tests (returns a stub ThemeLoader
+  // that resolves with all prompt keys the methods might request)
+  function createStubThemeLoader() {
+    return {
+      loadPhasePrompts: jest.fn().mockResolvedValue({
+        'character-voice': 'voice stub',
+        'writing-principles': 'principles stub',
+        'evidence-boundaries': 'boundaries stub',
+        'section-rules': 'rules stub',
+        'narrative-structure': 'structure stub',
+        'formatting': 'formatting stub',
+        'anti-patterns': 'anti-patterns stub',
+        'editorial-design': 'design stub',
+        'arc-flow': 'flow stub'
+      }),
+      loadTemplate: jest.fn(),
+      validate: jest.fn()
+    };
+  }
+
+  describe('PromptBuilder.buildRevisionPrompt (theme branching)', () => {
+    it('journalist revision references Nova and em-dashes', async () => {
+      const pb = new PromptBuilder(createStubThemeLoader(), 'journalist');
+      const { userPrompt } = await pb.buildRevisionPrompt('content', 'check');
+      expect(userPrompt).toContain('Nova');
+      expect(userPrompt).toContain('em-dashes');
+    });
+
+    it('detective revision does NOT reference Nova or em-dashes', async () => {
+      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
+      const { userPrompt } = await pb.buildRevisionPrompt('content', 'check');
+      expect(userPrompt).not.toContain('Nova');
+      expect(userPrompt).not.toContain('em-dashes');
+    });
+
+    it('detective revision checks for section differentiation', async () => {
+      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
+      const { userPrompt } = await pb.buildRevisionPrompt('content', 'check');
+      expect(userPrompt).toContain('section');
+      expect(userPrompt).toContain('<strong>');
+    });
+  });
+
+  describe('PromptBuilder.buildValidationPrompt (theme branching)', () => {
+    it('journalist validation checks for em-dashes and participatory voice', async () => {
+      const pb = new PromptBuilder(createStubThemeLoader(), 'journalist');
+      const { userPrompt } = await pb.buildValidationPrompt('<html></html>', ['Alex']);
+      expect(userPrompt).toContain('Em-dashes');
+      expect(userPrompt).toContain('Passive/neutral voice');
+      expect(userPrompt).toContain('blake_handled_correctly');
+    });
+
+    it('detective validation does NOT check for em-dashes', async () => {
+      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
+      const { userPrompt } = await pb.buildValidationPrompt('<html></html>', ['Alex']);
+      expect(userPrompt).not.toContain('Em-dashes');
+      expect(userPrompt).not.toContain('blake_handled_correctly');
+    });
+
+    it('detective validation checks for section differentiation', async () => {
+      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
+      const { userPrompt } = await pb.buildValidationPrompt('<html></html>', ['Alex']);
+      expect(userPrompt).toContain('section differentiation');
+      expect(userPrompt).toContain('section_differentiation');
+    });
+  });
+
   describe('module exports', () => {
     it('should export PromptBuilder class', () => {
       expect(PromptBuilder).toBeDefined();
