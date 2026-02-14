@@ -102,6 +102,18 @@ const THEME_CONFIGS = {
       'Marcus': 'Marcus Blackwood',
       'Nova': 'Nova',
       'Blake': 'Blake'
+    },
+
+    // Display constants for template rendering and post-generation validation
+    // Used by template-nodes.js (articleIdPrefix), ai-nodes.js (crystallizationLabel),
+    // and validation-nodes.js (postGenValidation)
+    display: {
+      articleIdPrefix: 'NNA',           // NovaNews Article
+      crystallizationLabel: "Nova's Insight",
+      postGenValidation: {
+        minPullQuotes: 2,
+        minInlineEvidenceCards: 3
+      }
     }
   },
 
@@ -177,6 +189,17 @@ const THEME_CONFIGS = {
       'Marcus': 'Marcus Blackwood',
       'Blake': 'Blake'
       // NOTE: No 'Nova' — detective theme narrator is Anondono, not an NPC
+    },
+
+    // Display constants for template rendering and post-generation validation
+    // Detective case reports use different ID prefix and no minimum pull quote/evidence card requirements
+    display: {
+      articleIdPrefix: 'DCR',           // Detective Case Report
+      crystallizationLabel: "Detective's Note",
+      postGenValidation: {
+        minPullQuotes: 0,
+        minInlineEvidenceCards: 0
+      }
     }
   }
 };

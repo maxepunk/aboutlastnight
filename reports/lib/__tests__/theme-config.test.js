@@ -225,6 +225,40 @@ describe('theme-config', () => {
     });
   });
 
+  describe('display config', () => {
+    it('journalist has articleIdPrefix NNA', () => {
+      const config = getThemeConfig('journalist');
+      expect(config.display.articleIdPrefix).toBe('NNA');
+    });
+
+    it('detective has articleIdPrefix DCR', () => {
+      const config = getThemeConfig('detective');
+      expect(config.display.articleIdPrefix).toBe('DCR');
+    });
+
+    it('journalist has crystallizationLabel', () => {
+      const config = getThemeConfig('journalist');
+      expect(config.display.crystallizationLabel).toBe("Nova's Insight");
+    });
+
+    it('detective has crystallizationLabel', () => {
+      const config = getThemeConfig('detective');
+      expect(config.display.crystallizationLabel).toBe("Detective's Note");
+    });
+
+    it('journalist has postGenValidation rules', () => {
+      const config = getThemeConfig('journalist');
+      expect(config.display.postGenValidation.minPullQuotes).toBe(2);
+      expect(config.display.postGenValidation.minInlineEvidenceCards).toBe(3);
+    });
+
+    it('detective has no postGenValidation minimums', () => {
+      const config = getThemeConfig('detective');
+      expect(config.display.postGenValidation.minPullQuotes).toBe(0);
+      expect(config.display.postGenValidation.minInlineEvidenceCards).toBe(0);
+    });
+  });
+
   describe('module exports', () => {
     it('should export all required functions', () => {
       expect(typeof getThemeNPCs).toBe('function');
