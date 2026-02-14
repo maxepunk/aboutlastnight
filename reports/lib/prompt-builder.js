@@ -908,7 +908,7 @@ STRUCTURE:
 
 REVISION RULES:
 - Make TARGETED fixes only - do not rewrite sections that are working
-- Preserve structure: sections, evidence cards, photos, pull quotes, financial tracker
+- Preserve structure: ${this.themeName === 'detective' ? 'sections, photos' : 'sections, evidence cards, photos, pull quotes, financial tracker'}
 - Focus on the specific issues you identified in your self-check
 
 ${revisionConstraints.revisionVoice}`;
@@ -944,7 +944,7 @@ ${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 ${revisionChecklist}
 
 Return JSON with:
-1. "contentBundle" - Revised ContentBundle (if input was JSON) with all sections, evidenceCards, pullQuotes, photos preserved
+1. "contentBundle" - Revised ContentBundle (if input was JSON) with all ${this.themeName === 'detective' ? 'sections and photos' : 'sections, evidenceCards, pullQuotes, photos'} preserved
 2. "html" - Revised HTML (if input was HTML)
 3. "fixes_applied" - List of specific fixes you made (be specific about what changed and which voice influence guided each fix)
 </REVISION_INSTRUCTION>`;
