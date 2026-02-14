@@ -137,14 +137,25 @@ describe('template-helpers', () => {
   });
 
   describe('articleId', () => {
-    it('generates correct format from metadata', () => {
-      const metadata = { generatedAt: '2024-12-23T14:30:00Z' };
+    it('generates NNA format for journalist theme', () => {
+      const metadata = { generatedAt: '2024-12-23T14:30:00Z', theme: 'journalist' };
       const result = articleId(metadata);
-      // Format: NNA-MMDD-HH
       expect(result).toMatch(/^NNA-\d{4}-\d{2}$/);
     });
 
-    it('returns default for null metadata', () => {
+    it('generates DCR format for detective theme', () => {
+      const metadata = { generatedAt: '2024-12-23T14:30:00Z', theme: 'detective' };
+      const result = articleId(metadata);
+      expect(result).toMatch(/^DCR-\d{4}-\d{2}$/);
+    });
+
+    it('defaults to NNA when no theme in metadata', () => {
+      const metadata = { generatedAt: '2024-12-23T14:30:00Z' };
+      const result = articleId(metadata);
+      expect(result).toMatch(/^NNA-\d{4}-\d{2}$/);
+    });
+
+    it('returns theme-appropriate default for null metadata', () => {
       expect(articleId(null)).toBe('NNA-0000-00');
       expect(articleId({})).toBe('NNA-0000-00');
     });
