@@ -661,11 +661,20 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('em-dashes');
     });
 
-    it('detective revision checks for section differentiation', async () => {
+    it('detective revision checks for section differentiation and formatting', async () => {
       const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
       const { userPrompt } = await pb.buildRevisionPrompt('content', 'check');
-      expect(userPrompt).toContain('section');
+      expect(userPrompt).toContain('Repeated facts across sections');
+      expect(userPrompt).toContain('first-person voice that slipped in');
       expect(userPrompt).toContain('<strong>');
+    });
+
+    it('detective revision system prompt preserves only sections and photos', async () => {
+      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
+      const { systemPrompt } = await pb.buildRevisionPrompt('content', 'check');
+      expect(systemPrompt).toContain('sections, photos');
+      expect(systemPrompt).not.toContain('pull quotes');
+      expect(systemPrompt).not.toContain('financial tracker');
     });
   });
 
