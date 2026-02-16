@@ -3,163 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Five people woke up with holes where their memories should be. Someone extracted those memories without permission. Someone locked them away. And someone made sure Marcus wouldn&#x27;t be explaining why.">
+  <meta name="description" content="Marcus Blackwood is dead. Most of his guests are missing. And someone paid $4.1 million to make sure no one remembers why.">
   <meta name="author" content="Nova">
-  <meta property="og:title" content="Marcus Blackwood Is Dead. His Memory Machine Is Just Getting Started.">
-  <meta property="og:description" content="Five people woke up with holes where their memories should be. Someone extracted those memories without permission. Someone locked them away. And someone made sure Marcus wouldn&#x27;t be explaining why.">
+  <meta property="og:title" content="The Party That Stole Your Mind">
+  <meta property="og:description" content="Marcus Blackwood is dead. Most of his guests are missing. And someone paid $4.1 million to make sure no one remembers why.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="NovaNews">
 
-  <title>Marcus Blackwood Is Dead. His Memory Machine Is Just Getting Started. | NovaNews</title>
+  <title>The Party That Stole Your Mind | NovaNews</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
 
   <style>
-/**
- * NovaNews Design Tokens
- *
- * Central source of truth for colors, typography, spacing, and breakpoints.
- * Update these values to theme the entire publication.
- */
-
-:root {
-  /* ============================================
-     COLOR PALETTE - Noir Cyberpunk
-     ============================================ */
-
-  /* Backgrounds - Dark to light */
-  --nn-bg-deep: #0a0908;
-  --nn-bg-elevated: #141210;
-  --nn-bg-surface: #1c1915;
-  --nn-bg-overlay: rgba(10, 9, 8, 0.95);
-
-  /* Text hierarchy */
-  --nn-text-primary: #f5f1eb;
-  --nn-text-secondary: #a8a29e;
-  --nn-text-muted: #6b6560;
-  --nn-text-inverse: #0a0908;
-
-  /* Accent colors */
-  --nn-accent-crimson: #9b1b30;
-  --nn-accent-crimson-light: #c42a45;
-  --nn-accent-crimson-glow: rgba(155, 27, 48, 0.3);
-  --nn-accent-amber: #c9a227;
-  --nn-accent-amber-light: #e0b82e;
-  --nn-accent-amber-glow: rgba(201, 162, 39, 0.2);
-  --nn-accent-cyan: #3dd9d6;
-
-  /* Borders and dividers */
-  --nn-border: #2a2520;
-  --nn-border-light: #3a3530;
-
-  /* ============================================
-     TYPOGRAPHY
-     ============================================ */
-
-  --nn-font-headline: 'Zilla Slab', serif;
-  --nn-font-body: 'Source Serif Pro', Georgia, serif;
-  --nn-font-mono: 'JetBrains Mono', monospace;
-
-  /* Type scale */
-  --nn-text-xs: 0.75rem;    /* 12px */
-  --nn-text-sm: 0.875rem;   /* 14px */
-  --nn-text-base: 1rem;     /* 16px */
-  --nn-text-lg: 1.125rem;   /* 18px */
-  --nn-text-xl: 1.25rem;    /* 20px */
-  --nn-text-2xl: 1.5rem;    /* 24px */
-  --nn-text-3xl: 2rem;      /* 32px */
-  --nn-text-4xl: 2.5rem;    /* 40px */
-  --nn-text-5xl: 3rem;      /* 48px */
-
-  /* Line heights */
-  --nn-leading-tight: 1.1;
-  --nn-leading-snug: 1.3;
-  --nn-leading-normal: 1.5;
-  --nn-leading-relaxed: 1.7;
-
-  /* Letter spacing */
-  --nn-tracking-tight: -0.02em;
-  --nn-tracking-normal: 0;
-  --nn-tracking-wide: 0.05em;
-  --nn-tracking-wider: 0.1em;
-  --nn-tracking-widest: 0.2em;
-
-  /* ============================================
-     SPACING
-     ============================================ */
-
-  --nn-space-1: 0.25rem;    /* 4px */
-  --nn-space-2: 0.5rem;     /* 8px */
-  --nn-space-3: 0.75rem;    /* 12px */
-  --nn-space-4: 1rem;       /* 16px */
-  --nn-space-5: 1.25rem;    /* 20px */
-  --nn-space-6: 1.5rem;     /* 24px */
-  --nn-space-8: 2rem;       /* 32px */
-  --nn-space-10: 2.5rem;    /* 40px */
-  --nn-space-12: 3rem;      /* 48px */
-  --nn-space-16: 4rem;      /* 64px */
-  --nn-space-20: 5rem;      /* 80px */
-
-  /* ============================================
-     LAYOUT
-     ============================================ */
-
-  --nn-article-width: 720px;
-  --nn-sidebar-width: 300px;
-  --nn-nav-height: 60px;
-  --nn-container-max: 1200px;
-  --nn-gutter: clamp(1rem, 4vw, 2rem);
-
-  /* ============================================
-     BREAKPOINTS (for reference in JS)
-     ============================================ */
-
-  --nn-bp-sm: 640px;
-  --nn-bp-md: 768px;
-  --nn-bp-lg: 1024px;
-  --nn-bp-xl: 1280px;
-
-  /* ============================================
-     EFFECTS
-     ============================================ */
-
-  /* Shadows */
-  --nn-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --nn-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --nn-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
-  --nn-shadow-glow-crimson: 0 0 20px var(--nn-accent-crimson-glow);
-  --nn-shadow-glow-amber: 0 0 20px var(--nn-accent-amber-glow);
-
-  /* Transitions */
-  --nn-transition-fast: 150ms ease;
-  --nn-transition-base: 250ms ease;
-  --nn-transition-slow: 400ms ease;
-
-  /* Border radius */
-  --nn-radius-sm: 2px;
-  --nn-radius-md: 4px;
-  --nn-radius-lg: 8px;
-
-  /* Z-index scale */
-  --nn-z-base: 1;
-  --nn-z-dropdown: 100;
-  --nn-z-sticky: 200;
-  --nn-z-nav: 300;
-  --nn-z-modal: 400;
-  --nn-z-overlay: 500;
-  --nn-z-grain: 1000;
-}
-
-/* Dark mode is default, but we can add light mode later */
-@media (prefers-color-scheme: light) {
-  :root {
-    /* Could override for light mode if needed */
-  }
-}
-
-
 /**
  * NovaNews Base Styles
  *
@@ -397,6 +254,288 @@ blockquote {
 
   h2 {
     border-bottom-color: black;
+  }
+}
+
+
+/**
+ * NovaNews Components
+ *
+ * Evidence cards, timeline markers, pull quotes, buried markers, and other
+ * visual components for investigative journalism articles.
+ */
+
+/* ============================================
+   EVIDENCE CARD
+   Leaked source material - memory content
+   ============================================ */
+
+.evidence-card {
+  background: var(--nn-bg-elevated);
+  border: 1px solid var(--nn-border);
+  border-left: 3px solid var(--nn-accent-crimson);
+  border-radius: var(--nn-radius-md);
+  padding: var(--nn-space-6);
+  margin: var(--nn-space-8) 0;
+  position: relative;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity var(--nn-transition-base), transform var(--nn-transition-base);
+}
+
+.evidence-card--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.evidence-card__label {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  color: var(--nn-accent-crimson);
+  margin-bottom: var(--nn-space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--nn-space-2);
+}
+
+.evidence-card__label::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--nn-accent-crimson);
+  border-radius: 50%;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--nn-accent-crimson-glow);
+  }
+  50% {
+    box-shadow: 0 0 8px 4px var(--nn-accent-crimson-glow);
+  }
+}
+
+.evidence-card__content {
+  font-style: italic;
+  color: var(--nn-text-secondary);
+  line-height: var(--nn-leading-relaxed);
+  margin-bottom: var(--nn-space-4);
+}
+
+.evidence-card__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nn-space-2);
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  color: var(--nn-text-muted);
+  padding-top: var(--nn-space-3);
+  border-top: 1px solid var(--nn-border);
+}
+
+.evidence-card__owner {
+  color: var(--nn-text-secondary);
+}
+
+.evidence-card__submitter {
+  color: var(--nn-accent-amber);
+}
+
+/* ============================================
+   PULL QUOTE
+   Emphasis moments - key statements
+   ============================================ */
+
+.pull-quote {
+  margin: var(--nn-space-10) 0;
+  padding: var(--nn-space-8) var(--nn-space-6);
+  background: linear-gradient(
+    135deg,
+    var(--nn-bg-elevated) 0%,
+    var(--nn-bg-surface) 100%
+  );
+  border-radius: var(--nn-radius-lg);
+  position: relative;
+  text-align: center;
+}
+
+.pull-quote::before {
+  content: '"';
+  font-family: var(--nn-font-headline);
+  font-size: 4rem;
+  color: var(--nn-accent-crimson);
+  opacity: 0.3;
+  position: absolute;
+  top: var(--nn-space-2);
+  left: var(--nn-space-4);
+  line-height: 1;
+}
+
+.pull-quote__text {
+  font-family: var(--nn-font-headline);
+  font-size: var(--nn-text-xl);
+  font-weight: 500;
+  line-height: var(--nn-leading-snug);
+  color: var(--nn-text-primary);
+  margin-bottom: var(--nn-space-4);
+}
+
+.pull-quote__attribution {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-wide);
+  color: var(--nn-text-muted);
+  text-transform: uppercase;
+}
+
+/* ============================================
+   ARTICLE PHOTO
+   Session photos embedded in article
+   ============================================ */
+
+.article-photo {
+  margin: var(--nn-space-8) 0;
+  background: var(--nn-bg-elevated);
+  border: 1px solid var(--nn-border);
+  border-radius: var(--nn-radius-md);
+  overflow: hidden;
+}
+
+.article-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.article-photo__caption {
+  padding: var(--nn-space-4);
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-muted);
+  line-height: var(--nn-leading-normal);
+  border-top: 1px solid var(--nn-border);
+}
+
+.article-photo__caption strong {
+  color: var(--nn-text-secondary);
+}
+
+/* Hero photo - full width above headline */
+.article-photo--hero {
+  margin: calc(-1 * var(--nn-space-12)) calc(-1 * var(--nn-gutter)) var(--nn-space-8);
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.article-photo--hero img {
+  max-height: 50vh;
+}
+
+/* Inline photo - within article flow */
+.article-photo--inline {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .article-photo {
+    margin: var(--nn-space-6) calc(-1 * var(--nn-space-2));
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .article-photo__caption {
+    padding: var(--nn-space-3);
+    font-size: var(--nn-text-xs);
+  }
+}
+
+/* ============================================
+   SECTION DIVIDER
+   Visual break between sections
+   ============================================ */
+
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--nn-space-4);
+  margin: var(--nn-space-12) 0;
+  color: var(--nn-text-muted);
+}
+
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--nn-border);
+}
+
+.section-divider__icon {
+  font-size: var(--nn-text-lg);
+}
+
+/* ============================================
+   INLINE HIGHLIGHTS
+   ============================================ */
+
+/* Redacted text effect */
+.redacted {
+  background: var(--nn-text-muted);
+  color: transparent;
+  border-radius: 2px;
+  padding: 0 var(--nn-space-1);
+  cursor: not-allowed;
+  user-select: none;
+}
+
+/* Classified stamp */
+.classified-stamp {
+  display: inline-block;
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  color: var(--nn-accent-crimson);
+  border: 2px solid var(--nn-accent-crimson);
+  padding: var(--nn-space-1) var(--nn-space-3);
+  transform: rotate(-3deg);
+  opacity: 0.8;
+}
+
+/* ============================================
+   MOBILE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+  .evidence-card {
+    padding: var(--nn-space-4);
+    margin: var(--nn-space-6) 0;
+  }
+
+  .evidence-card__meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pull-quote {
+    padding: var(--nn-space-6) var(--nn-space-4);
+  }
+
+  .pull-quote__text {
+    font-size: var(--nn-text-lg);
+  }
+
+  .pull-quote::before {
+    font-size: 3rem;
   }
 }
 
@@ -760,288 +899,6 @@ blockquote {
   width: 0;
   background: linear-gradient(90deg, var(--nn-accent-crimson), var(--nn-accent-amber));
   transition: width 100ms ease-out;
-}
-
-
-/**
- * NovaNews Components
- *
- * Evidence cards, timeline markers, pull quotes, buried markers, and other
- * visual components for investigative journalism articles.
- */
-
-/* ============================================
-   EVIDENCE CARD
-   Leaked source material - memory content
-   ============================================ */
-
-.evidence-card {
-  background: var(--nn-bg-elevated);
-  border: 1px solid var(--nn-border);
-  border-left: 3px solid var(--nn-accent-crimson);
-  border-radius: var(--nn-radius-md);
-  padding: var(--nn-space-6);
-  margin: var(--nn-space-8) 0;
-  position: relative;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity var(--nn-transition-base), transform var(--nn-transition-base);
-}
-
-.evidence-card--visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.evidence-card__label {
-  font-family: var(--nn-font-mono);
-  font-size: var(--nn-text-xs);
-  letter-spacing: var(--nn-tracking-widest);
-  text-transform: uppercase;
-  color: var(--nn-accent-crimson);
-  margin-bottom: var(--nn-space-3);
-  display: flex;
-  align-items: center;
-  gap: var(--nn-space-2);
-}
-
-.evidence-card__label::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: var(--nn-accent-crimson);
-  border-radius: 50%;
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 0 var(--nn-accent-crimson-glow);
-  }
-  50% {
-    box-shadow: 0 0 8px 4px var(--nn-accent-crimson-glow);
-  }
-}
-
-.evidence-card__content {
-  font-style: italic;
-  color: var(--nn-text-secondary);
-  line-height: var(--nn-leading-relaxed);
-  margin-bottom: var(--nn-space-4);
-}
-
-.evidence-card__meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--nn-space-2);
-  font-family: var(--nn-font-mono);
-  font-size: var(--nn-text-xs);
-  color: var(--nn-text-muted);
-  padding-top: var(--nn-space-3);
-  border-top: 1px solid var(--nn-border);
-}
-
-.evidence-card__owner {
-  color: var(--nn-text-secondary);
-}
-
-.evidence-card__submitter {
-  color: var(--nn-accent-amber);
-}
-
-/* ============================================
-   PULL QUOTE
-   Emphasis moments - key statements
-   ============================================ */
-
-.pull-quote {
-  margin: var(--nn-space-10) 0;
-  padding: var(--nn-space-8) var(--nn-space-6);
-  background: linear-gradient(
-    135deg,
-    var(--nn-bg-elevated) 0%,
-    var(--nn-bg-surface) 100%
-  );
-  border-radius: var(--nn-radius-lg);
-  position: relative;
-  text-align: center;
-}
-
-.pull-quote::before {
-  content: '"';
-  font-family: var(--nn-font-headline);
-  font-size: 4rem;
-  color: var(--nn-accent-crimson);
-  opacity: 0.3;
-  position: absolute;
-  top: var(--nn-space-2);
-  left: var(--nn-space-4);
-  line-height: 1;
-}
-
-.pull-quote__text {
-  font-family: var(--nn-font-headline);
-  font-size: var(--nn-text-xl);
-  font-weight: 500;
-  line-height: var(--nn-leading-snug);
-  color: var(--nn-text-primary);
-  margin-bottom: var(--nn-space-4);
-}
-
-.pull-quote__attribution {
-  font-family: var(--nn-font-mono);
-  font-size: var(--nn-text-xs);
-  letter-spacing: var(--nn-tracking-wide);
-  color: var(--nn-text-muted);
-  text-transform: uppercase;
-}
-
-/* ============================================
-   ARTICLE PHOTO
-   Session photos embedded in article
-   ============================================ */
-
-.article-photo {
-  margin: var(--nn-space-8) 0;
-  background: var(--nn-bg-elevated);
-  border: 1px solid var(--nn-border);
-  border-radius: var(--nn-radius-md);
-  overflow: hidden;
-}
-
-.article-photo img {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: cover;
-}
-
-.article-photo__caption {
-  padding: var(--nn-space-4);
-  font-family: var(--nn-font-mono);
-  font-size: var(--nn-text-sm);
-  color: var(--nn-text-muted);
-  line-height: var(--nn-leading-normal);
-  border-top: 1px solid var(--nn-border);
-}
-
-.article-photo__caption strong {
-  color: var(--nn-text-secondary);
-}
-
-/* Hero photo - full width above headline */
-.article-photo--hero {
-  margin: calc(-1 * var(--nn-space-12)) calc(-1 * var(--nn-gutter)) var(--nn-space-8);
-  border-radius: 0;
-  border-left: none;
-  border-right: none;
-}
-
-.article-photo--hero img {
-  max-height: 50vh;
-}
-
-/* Inline photo - within article flow */
-.article-photo--inline {
-  max-width: 100%;
-}
-
-@media (max-width: 768px) {
-  .article-photo {
-    margin: var(--nn-space-6) calc(-1 * var(--nn-space-2));
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-  }
-
-  .article-photo__caption {
-    padding: var(--nn-space-3);
-    font-size: var(--nn-text-xs);
-  }
-}
-
-/* ============================================
-   SECTION DIVIDER
-   Visual break between sections
-   ============================================ */
-
-.section-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--nn-space-4);
-  margin: var(--nn-space-12) 0;
-  color: var(--nn-text-muted);
-}
-
-.section-divider::before,
-.section-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--nn-border);
-}
-
-.section-divider__icon {
-  font-size: var(--nn-text-lg);
-}
-
-/* ============================================
-   INLINE HIGHLIGHTS
-   ============================================ */
-
-/* Redacted text effect */
-.redacted {
-  background: var(--nn-text-muted);
-  color: transparent;
-  border-radius: 2px;
-  padding: 0 var(--nn-space-1);
-  cursor: not-allowed;
-  user-select: none;
-}
-
-/* Classified stamp */
-.classified-stamp {
-  display: inline-block;
-  font-family: var(--nn-font-mono);
-  font-size: var(--nn-text-xs);
-  letter-spacing: var(--nn-tracking-widest);
-  text-transform: uppercase;
-  color: var(--nn-accent-crimson);
-  border: 2px solid var(--nn-accent-crimson);
-  padding: var(--nn-space-1) var(--nn-space-3);
-  transform: rotate(-3deg);
-  opacity: 0.8;
-}
-
-/* ============================================
-   MOBILE ADJUSTMENTS
-   ============================================ */
-
-@media (max-width: 768px) {
-  .evidence-card {
-    padding: var(--nn-space-4);
-    margin: var(--nn-space-6) 0;
-  }
-
-  .evidence-card__meta {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .pull-quote {
-    padding: var(--nn-space-6) var(--nn-space-4);
-  }
-
-  .pull-quote__text {
-    font-size: var(--nn-text-lg);
-  }
-
-  .pull-quote::before {
-    font-size: 3rem;
-  }
 }
 
 
@@ -1414,6 +1271,149 @@ blockquote {
   }
 }
 
+
+/**
+ * NovaNews Design Tokens
+ *
+ * Central source of truth for colors, typography, spacing, and breakpoints.
+ * Update these values to theme the entire publication.
+ */
+
+:root {
+  /* ============================================
+     COLOR PALETTE - Noir Cyberpunk
+     ============================================ */
+
+  /* Backgrounds - Dark to light */
+  --nn-bg-deep: #0a0908;
+  --nn-bg-elevated: #141210;
+  --nn-bg-surface: #1c1915;
+  --nn-bg-overlay: rgba(10, 9, 8, 0.95);
+
+  /* Text hierarchy */
+  --nn-text-primary: #f5f1eb;
+  --nn-text-secondary: #a8a29e;
+  --nn-text-muted: #6b6560;
+  --nn-text-inverse: #0a0908;
+
+  /* Accent colors */
+  --nn-accent-crimson: #9b1b30;
+  --nn-accent-crimson-light: #c42a45;
+  --nn-accent-crimson-glow: rgba(155, 27, 48, 0.3);
+  --nn-accent-amber: #c9a227;
+  --nn-accent-amber-light: #e0b82e;
+  --nn-accent-amber-glow: rgba(201, 162, 39, 0.2);
+  --nn-accent-cyan: #3dd9d6;
+
+  /* Borders and dividers */
+  --nn-border: #2a2520;
+  --nn-border-light: #3a3530;
+
+  /* ============================================
+     TYPOGRAPHY
+     ============================================ */
+
+  --nn-font-headline: 'Zilla Slab', serif;
+  --nn-font-body: 'Source Serif Pro', Georgia, serif;
+  --nn-font-mono: 'JetBrains Mono', monospace;
+
+  /* Type scale */
+  --nn-text-xs: 0.75rem;    /* 12px */
+  --nn-text-sm: 0.875rem;   /* 14px */
+  --nn-text-base: 1rem;     /* 16px */
+  --nn-text-lg: 1.125rem;   /* 18px */
+  --nn-text-xl: 1.25rem;    /* 20px */
+  --nn-text-2xl: 1.5rem;    /* 24px */
+  --nn-text-3xl: 2rem;      /* 32px */
+  --nn-text-4xl: 2.5rem;    /* 40px */
+  --nn-text-5xl: 3rem;      /* 48px */
+
+  /* Line heights */
+  --nn-leading-tight: 1.1;
+  --nn-leading-snug: 1.3;
+  --nn-leading-normal: 1.5;
+  --nn-leading-relaxed: 1.7;
+
+  /* Letter spacing */
+  --nn-tracking-tight: -0.02em;
+  --nn-tracking-normal: 0;
+  --nn-tracking-wide: 0.05em;
+  --nn-tracking-wider: 0.1em;
+  --nn-tracking-widest: 0.2em;
+
+  /* ============================================
+     SPACING
+     ============================================ */
+
+  --nn-space-1: 0.25rem;    /* 4px */
+  --nn-space-2: 0.5rem;     /* 8px */
+  --nn-space-3: 0.75rem;    /* 12px */
+  --nn-space-4: 1rem;       /* 16px */
+  --nn-space-5: 1.25rem;    /* 20px */
+  --nn-space-6: 1.5rem;     /* 24px */
+  --nn-space-8: 2rem;       /* 32px */
+  --nn-space-10: 2.5rem;    /* 40px */
+  --nn-space-12: 3rem;      /* 48px */
+  --nn-space-16: 4rem;      /* 64px */
+  --nn-space-20: 5rem;      /* 80px */
+
+  /* ============================================
+     LAYOUT
+     ============================================ */
+
+  --nn-article-width: 720px;
+  --nn-sidebar-width: 300px;
+  --nn-nav-height: 60px;
+  --nn-container-max: 1200px;
+  --nn-gutter: clamp(1rem, 4vw, 2rem);
+
+  /* ============================================
+     BREAKPOINTS (for reference in JS)
+     ============================================ */
+
+  --nn-bp-sm: 640px;
+  --nn-bp-md: 768px;
+  --nn-bp-lg: 1024px;
+  --nn-bp-xl: 1280px;
+
+  /* ============================================
+     EFFECTS
+     ============================================ */
+
+  /* Shadows */
+  --nn-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --nn-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --nn-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --nn-shadow-glow-crimson: 0 0 20px var(--nn-accent-crimson-glow);
+  --nn-shadow-glow-amber: 0 0 20px var(--nn-accent-amber-glow);
+
+  /* Transitions */
+  --nn-transition-fast: 150ms ease;
+  --nn-transition-base: 250ms ease;
+  --nn-transition-slow: 400ms ease;
+
+  /* Border radius */
+  --nn-radius-sm: 2px;
+  --nn-radius-md: 4px;
+  --nn-radius-lg: 8px;
+
+  /* Z-index scale */
+  --nn-z-base: 1;
+  --nn-z-dropdown: 100;
+  --nn-z-sticky: 200;
+  --nn-z-nav: 300;
+  --nn-z-modal: 400;
+  --nn-z-overlay: 500;
+  --nn-z-grain: 1000;
+}
+
+/* Dark mode is default, but we can add light mode later */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* Could override for light mode if needed */
+  }
+}
+
   </style>
 
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZMWN885FWB"></script>
@@ -1450,63 +1450,69 @@ blockquote {
       <header class="nn-article__header">
         <div class="nn-article__kicker">Investigation</div>
       
-        <h1 class="nn-article__headline">Marcus Blackwood Is Dead. His Memory Machine Is Just Getting Started.</h1>
+        <h1 class="nn-article__headline">The Party That Stole Your Mind</h1>
       
-        <p class="nn-article__deck">Five people woke up with holes where their memories should be. Someone extracted those memories without permission. Someone locked them away. And someone made sure Marcus wouldn&#x27;t be explaining why.</p>
+        <p class="nn-article__deck">Marcus Blackwood is dead. Most of his guests are missing. And someone paid $4.1 million to make sure no one remembers why.</p>
       
         <div class="nn-article__meta">
           <span class="nn-article__byline">
-            Nova | Independent Tech Accountability Journalist
+            Nova | Senior Investigative Reporter
           </span>
           <span class="nn-article__divider">·</span>
       
-          <time class="nn-article__date" datetime="2026-02-09">
+          <time class="nn-article__date" datetime="2026-02-14">
             February 22, 2027
           </time>
       
           <span class="nn-article__divider">·</span>
       
-          <span class="nn-article__id">Article NNA-0209-12</span>
+          <span class="nn-article__id">Article NNA-0213-23</span>
         </div>
       </header>
 
       <figure class="article-photo article-photo--hero">
         <img
-          src="sessionphotos/0030/1230whiteboard.jpg"
-          alt="The investigation board. Every name a question. Every arrow a thread we couldn&#x27;t quite follow."
+          src="sessionphotos/0030/20251230_194244-.jpg"
+          alt="The investigation began with extracted memories and ended with more questions than answers."
           class="article-photo__image"
         >
-        <figcaption class="article-photo__caption">The investigation board. Every name a question. Every arrow a thread we couldn&#x27;t quite follow.</figcaption>
+        <figcaption class="article-photo__caption">The investigation began with extracted memories and ended with more questions than answers.</figcaption>
       </figure>
 
       <section class="nn-section nn-section--narrative" id="lede">
 
-        <p>Marcus Blackwood is dead. Five people woke up in his warehouse with holes where their memories should be. Someone extracted those memories without permission. Someone locked them away. And someone made sure Marcus wouldn&#x27;t be explaining why.</p>
+        <p>Marcus Blackwood is dead. Five people woke up the morning after his party. The rest? Nobody knows where they went. But I know what happened to their memories. Someone extracted them. Someone drugged them first. And someone paid over four million dollars to make sure the evidence stayed buried.</p>
 
-        <p>I was there when they started remembering what they&#x27;d lost. I watched Sarah Blackwood&#x27;s face when she realized her marriage had ended twice that night. Once when Marcus betrayed her. Again when the memory of it was stolen from her head.</p>
+        <p>I was there when the survivors started piecing together what they&#x27;d lost. Watching them play back memories they couldn&#x27;t actually remember living. That&#x27;s the thing about extracted memories. You can see yourself on the screen, hear your own voice, and feel absolutely nothing. Because the experience isn&#x27;t yours anymore. It belongs to whoever took it.</p>
 
-        <p>The group accused Marcus and Derek Thorne of distributing untested drugs that caused chaos at the party. They&#x27;re right about the conspiracy. But I think they&#x27;re wrong about the motive. The drugs weren&#x27;t recreational. They were operational. Drugged people make terrible assistants. They make even worse witnesses.</p>
+        <p>This is what I found.</p>
 
       </section>
       <section class="nn-section nn-section--narrative" id="the-story">
         <h2 class="nn-section__title">The Story</h2>
 
-        <p>Start with the affair. That&#x27;s what broke Sarah Blackwood. Not the murder. Not the memory extraction. The betrayal.</p>
+        <p>Five survivors. That&#x27;s what we started with. Five people who woke up in that warehouse with gaps where the night should have been. The rest of the guest list? Vanished. No bodies. No witnesses. Just absence shaped like people who used to be there.</p>
 
-        <p>Jessicah Kane was pregnant with Marcus&#x27;s child. Sarah found out in a bathroom at 3:36 AM, mascara running, the other woman standing right there. I watched that memory play back on the screen. Two women who expected to be enemies discovering they were both victims of the same man.</p>
+        <p>Cassandra&#x27;s sources found no evidence of Marcus&#x27;s body in the warehouse building. No evidence of the murder occurring there at all. Just his secret workshop, hidden behind a wall that shouldn&#x27;t have existed, filled with equipment that shouldn&#x27;t have been legal.</p>
+
+        <p>The missing partygoers left something behind, though. Their memories. Extracted without consent, locked in containers they&#x27;ll never open. Someone has those memories now. Someone is keeping them.</p>
 
         <figure class="article-photo article-photo--">
   <img
-    src="sessionphotos/0030/20251230_201114-.jpg"
-    alt="Sarah and Victoria during the investigation. Some truths are harder to carry than others."
+    src="sessionphotos/0030/20251230_201122-.jpg"
+    alt="Sarah Blackwood and Victoria Kingsley during the investigation. Neither knew what they&#x27;d find."
     loading="lazy"
     class="article-photo__image"
   >
-  <figcaption class="article-photo__caption">Sarah and Victoria during the investigation. Some truths are harder to carry than others.</figcaption>
+  <figcaption class="article-photo__caption">Sarah Blackwood and Victoria Kingsley during the investigation. Neither knew what they&#x27;d find.</figcaption>
 </figure>
 
+        <p>Sarah Blackwood spent the early part of her night searching for a key. Just a key to her purse. She didn&#x27;t know what she&#x27;d find when she opened it. Marcus&#x27;s apology letter to Jessicah Kane. Proof of an affair she&#x27;d suspected but never confirmed. The baby Jessicah was carrying? Marcus&#x27;s.</p>
+
+        <p>At 9:20 PM, Jessicah tried to talk to Marcus about the baby. He blew her off. All she wanted was two minutes. Howie Sullivan overheard, offered her water and kind words. The last thing she needed.</p>
+
         <aside class="evidence-card evidence-card--critical" data-token="jek002">
-  <div class="evidence-card__label">The Bathroom Confession</div>
+  <div class="evidence-card__label">The Reconciliation</div>
   <div class="evidence-card__content">
     JEK002 - 3:36AM - Bathroom. Both crying. SARAH knows. You know she knows. She says: &#x27;The baby&#x27;s his?&#x27; You nod. Expected rage. Get: &#x27;You can have him. But that baby deserves better. We both do.&#x27; You&#x27;re not enemies. You&#x27;re both his victims.
   </div>
@@ -1515,64 +1521,28 @@ blockquote {
   </div>
 </aside>
 
-        <p>That&#x27;s Jessicah&#x27;s memory. Not Sarah&#x27;s. Sarah can watch herself say those words, but she doesn&#x27;t remember the feeling of saying them. That&#x27;s what extraction does. It turns your own life into footage of someone else&#x27;s.</p>
+        <p>By 3:36 AM, Sarah and Jessicah found each other in a bathroom. Both crying. Sarah said it plainly: the baby deserves better. They both did. For one moment, they weren&#x27;t rivals. They were both Marcus&#x27;s victims. And then morning came, and Jessicah was gone with the others.</p>
 
-        <p>But here&#x27;s what I keep coming back to: why was Sarah staring at a wall, tears streaming, at 3:52 AM? She&#x27;d just found out about Jessicah. About the baby. And Marcus needed her to lock away extracted memories she couldn&#x27;t even understand. The affair wasn&#x27;t separate from the extraction. Sarah was a victim of both.</p>
+        <p>That reconciliation happened. I watched it play back on the screen. But neither of them remembers it. The forgiveness that took all night to reach? Extracted. Gone. Jessicah vanished before she could know that Sarah had let go of the rage.</p>
 
-        <p>Now follow the drugs. July 4th, 2022. A backyard BBQ at Leila Bishara&#x27;s place. Derek Thorne meets a fellow chemistry nerd named Oliver Sterling. A new compound. Fascinating side effects. The start of a wonderful friendship.</p>
+        <p>Here&#x27;s what connected the missing to the survivors: Derek Thorne&#x27;s drug. Psychotrophin3B. He didn&#x27;t ask anymore, just offered. I watched Flip&#x27;s memory play back. 10:00 PM. Derek catches Flip&#x27;s eye. The drugs help Flip smile through Rachel Torres laughing at jokes about contractors. The edge smooths. That&#x27;s what Derek was selling. Smooth edges. Compliance.</p>
 
-        <aside class="evidence-card evidence-card--critical" data-token="det001">
-  <div class="evidence-card__label">The Origin Story</div>
+        <aside class="evidence-card evidence-card--supporting" data-token="fli004">
+  <div class="evidence-card__label">The Dealer&#x27;s Routine</div>
   <div class="evidence-card__content">
-    DET001 - 04/07/2022 - LEILA&#x27;s July 4 BBQ. You usually make your nut for the summer from this gig. She introduces you to OLIVER. Fellow chemistry nerd. Working on a new compound. Fascinating side effects. OLIVER is just excited someone is interested. This could be the start of a wonderful friendship.
+    FLI004 - 10:00PM - DEREK doesn&#x27;t ask anymore, just offers. The edge smooths. RACHEL laughs at your venue acoustics joke. She mentions respecting &#x27;people who work with their hands&#x27;—artisans, she means. Not contractors. Not you. DEREK catches your eye. The drugs help you smile.
   </div>
   <div class="evidence-card__meta">
-    <span class="evidence-card__owner">Derek Thorne</span>
+    <span class="evidence-card__owner">Flip</span>
   </div>
 </aside>
 
-        <p>Five years. That&#x27;s how long it took to go from backyard curiosity to the drug administered at Marcus&#x27;s party on February 21, 2027. Psychotrophin. Derek&#x27;s formulation. Marcus&#x27;s distribution network.</p>
+        <p>Derek formulated it. Marcus saw dollar signs. In July 2026, Marcus was already planning the pivot. Alex Reeves&#x27;s algorithm would only take NeurAI so far. But Derek&#x27;s drug? Someone out there wanted to commercialize it. Go legit. Marcus called it the way to a unicorn.</p>
 
-        <figure class="article-photo article-photo--">
-  <img
-    src="sessionphotos/0030/20251230_201546-.jpg"
-    alt="Alex and Sarah piecing together the timeline. Some connections you can&#x27;t unsee."
-    loading="lazy"
-    class="article-photo__image"
-  >
-  <figcaption class="article-photo__caption">Alex and Sarah piecing together the timeline. Some connections you can&#x27;t unsee.</figcaption>
-</figure>
+        <p>There was just one problem. Derek wasn&#x27;t the type to heel.</p>
 
-        <p>Derek knew things. Dangerous things. In a memory from June 2022, Marcus is high out of his mind, running his mouth about Alex Reeves&#x27;s algorithm. The one Marcus claimed as his own. The one that built NeurAI.</p>
-
-        <aside class="evidence-card evidence-card--critical" data-token="det002">
-  <div class="evidence-card__label">The Algorithm Theft</div>
-  <div class="evidence-card__content">
-    DET002 - 06/09/2022 - God&#x27;s favorite idiot. Jesus Christ, MARCUS is so high! He should not have told you that. The algorithm is NOT his! ALEX rewrote the whole thing and MARCUS somehow still gets the credit. You bite your tongue and take another hit. Note to self. REMAIN IRREPLACABLE.
-  </div>
-  <div class="evidence-card__meta">
-    <span class="evidence-card__owner">Derek Thorne</span>
-  </div>
-</aside>
-
-        <p>Remain irreplaceable. That&#x27;s Derek&#x27;s survival strategy. He knew about the IP theft. He had the drug formulation Marcus needed. And according to texts I found, Derek knew something else: Victoria Kingsley faces jail because of Marcus. Derek had leverage on everyone.</p>
-
-        <p>So why was Victoria still investing? Twenty million dollars into NeurAI despite knowing about Alex&#x27;s stolen algorithm. Despite the legal exposure. James Whitman pitched her AIBioComp and got rejected. Marcus got funded. James watched it happen and decided to do something about it.</p>
-
-        <figure class="article-photo article-photo--">
-  <img
-    src="sessionphotos/0030/20251230_200433-.jpg"
-    alt="Ashe, Alex, and Victoria reviewing the evidence. The connections were everywhere once you knew where to look."
-    loading="lazy"
-    class="article-photo__image"
-  >
-  <figcaption class="article-photo__caption">Ashe, Alex, and Victoria reviewing the evidence. The connections were everywhere once you knew where to look.</figcaption>
-</figure>
-
-        <p>July 2026. Marcus sees an opportunity. Everyone loves Derek&#x27;s new drug. Someone wants to commercialize it. Go legit. Alex&#x27;s tech will only take NeurAI so far. This offer might be the way to a unicorn.</p>
-
-        <aside class="evidence-card evidence-card--supporting" data-token="mab002">
-  <div class="evidence-card__label">The Commercialization Play</div>
+        <aside class="evidence-card evidence-card--critical" data-token="mab002">
+  <div class="evidence-card__label">The Unicorn Dream</div>
   <div class="evidence-card__content">
     MAB002 - 07/15/2026 - A new opportunity. Everyone loves DEREK&#x27;s new drug. And NOW, someone out there wants to commercialize the product. Go legit. ALEX&#x27;s tech will take NeurAI only so far. THIS offer might be the way to a unicorn. Now… you just have to get DEREK to heel.
   </div>
@@ -1581,36 +1551,24 @@ blockquote {
   </div>
 </aside>
 
-        <p>Get Derek to heel. That&#x27;s how Marcus thought about his co-conspirator. A dog to be trained. A resource to be managed. No wonder Derek was upset that Marcus profited from his formulation.</p>
-
-        <p>But here&#x27;s where all the threads converge. Marcus&#x27;s own memory from 3:52 AM. The instructions were clear. Someone called &#x27;THEY&#x27; wanted the extracted memories secured. Combinations only Marcus knew. A call when it was done.</p>
-
-        <aside class="evidence-card evidence-card--critical" data-token="mab001">
-  <div class="evidence-card__label">The Safety Marcus Wouldn&#x27;t Remove</div>
-  <div class="evidence-card__content">
-    MAB001 - ??/??/?? -  MARCUS&#x27; memory extraction experiment notes. A heated argument. THEY want you to remove the safety. When the MEMORIES EXPIRE, they are RETURNED to their OWNERS. THEY would rather the memory is destroyed. You will NOT be doing that—thankyouverymuch. and THEY don&#x27;t need to know.
-  </div>
-  <div class="evidence-card__meta">
-    <span class="evidence-card__owner">Marcus Blackwood</span>
-  </div>
-</aside>
-
-        <p>Marcus built a safety into his technology. When memories expire, they return to their owners. THEY wanted that safety removed. THEY wanted memories destroyed permanently. Marcus refused. And THEY don&#x27;t need to know he kept the safety in place.</p>
+        <p>But Derek wasn&#x27;t at the party. Not on the guest list. The architect of the chaos, absent from his own crime scene. Someone else was distributing. Someone else was making sure the drugs hit the right people at the right time. Derek orchestrated from a distance while others took the fall.</p>
 
         <figure class="article-photo article-photo--">
   <img
-    src="sessionphotos/0030/20251230_202424-.jpg"
-    alt="The final hours of the investigation. Sarah, Ashe, and Victoria. Everyone carrying something they couldn&#x27;t quite name."
+    src="sessionphotos/0030/20251230_202410-.jpg"
+    alt="Ashe Motoko, methodically reconstructing what everyone else had forgotten."
     loading="lazy"
     class="article-photo__image"
   >
-  <figcaption class="article-photo__caption">The final hours of the investigation. Sarah, Ashe, and Victoria. Everyone carrying something they couldn&#x27;t quite name.</figcaption>
+  <figcaption class="article-photo__caption">Ashe Motoko, methodically reconstructing what everyone else had forgotten.</figcaption>
 </figure>
 
-        <p>Then 3:52 AM. Marcus trying to execute the plan. Drugged partygoers stumbling around his warehouse. Derek wandering off mid-command. Sarah staring at a wall. Chaos.</p>
+        <p>By 3:52 AM, the chaos was complete. I watched Marcus&#x27;s own memory play back, and what I saw turned my stomach. The instructions were clear: make them secure the tokens. Combinations only he knew. Call when done. Simple. The extractions had worked. Now he just needed these drugged zombies to lock them.</p>
+
+        <p>Derek wandered off mid-command. Sarah was staring at a wall, tears streaming. Marcus was trying to run an operation with people who couldn&#x27;t remember their own names. Drugged people make terrible assistants. And THEY would be back if he didn&#x27;t call soon.</p>
 
         <aside class="evidence-card evidence-card--critical" data-token="mab003">
-  <div class="evidence-card__label">The System Failing</div>
+  <div class="evidence-card__label">The 3:52 AM Instructions</div>
   <div class="evidence-card__content">
     MAB003 - 3:52AM - The instructions were clear: &quot;Make them secure the tokens. Combinations only you know. Call when done.&quot; Simple. The extractions worked. Now you just need these drugged zombies to LOCK them. &quot;DEREK—take this token. Lock it the—.&quot; He wanders off mid-command. SARAH&#x27;s staring at a wall, tears streaming. This is chaos. Don&#x27;t think ANYONE has the right combinations anymore. Drugged people make terrible assistants. And THEY WILL be back if you don&#x27;t call soon.
   </div>
@@ -1619,83 +1577,117 @@ blockquote {
   </div>
 </aside>
 
-        <p>THEY will be back if you don&#x27;t call soon. That&#x27;s the last thing Marcus recorded before he died. Whoever THEY are, they were expecting a phone call. They got silence instead. And then Marcus was dead.</p>
+        <p>THEY. That&#x27;s the word that stopped me cold. Marcus was taking instructions. The man who built NeurAI, who stole Alex&#x27;s algorithm, who turned human memory into a product line, was answering to someone else. And THEY would be back.</p>
 
-        <p>The drugs weren&#x27;t about getting high. They were about compliance. You need people docile enough to have their memories extracted. Confused enough not to remember what happened. But Marcus miscalculated. Drugged people make terrible assistants. The chaos at the party wasn&#x27;t a side effect. It was the system failing.</p>
+        <p>Who was Marcus calling? Who are THEY? The memory cuts off before those questions get answered.</p>
+
+        <p>But I found something else. Marcus&#x27;s experiment notes. Undated. A heated argument. THEY wanted him to remove the safety feature. When the memories expired, they were supposed to return to their owners. THEY wanted them destroyed instead. Marcus refused that one. Small mercy. And THEY didn&#x27;t need to know he was keeping that safety in place.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="mab001">
+  <div class="evidence-card__label">The Safety Feature</div>
+  <div class="evidence-card__content">
+    MAB001 - ??/??/?? -  MARCUS&#x27; memory extraction experiment notes. A heated argument. THEY want you to remove the safety. When the MEMORIES EXPIRE, they are RETURNED to their OWNERS. THEY would rather the memory is destroyed. You will NOT be doing that—thankyouverymuch. and THEY don&#x27;t need to know.
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Marcus Blackwood</span>
+  </div>
+</aside>
+
+        <p>So Marcus had a line he wouldn&#x27;t cross. He&#x27;d steal your memories, drug you into compliance, and hand you over to anonymous partners. But he wouldn&#x27;t destroy those memories forever. He kept one safety feature in place, and he kept it secret from his handlers.</p>
+
+        <p>That might be why he&#x27;s dead.</p>
+
+        <figure class="article-photo article-photo--">
+  <img
+    src="sessionphotos/0030/20251230_200433-.jpg"
+    alt="The investigation team worked through the night, unlocking memories that had been locked away."
+    loading="lazy"
+    class="article-photo__image"
+  >
+  <figcaption class="article-photo__caption">The investigation team worked through the night, unlocking memories that had been locked away.</figcaption>
+</figure>
+
+        <p>At 2:02 AM that night, Jamie Woods was watching the powerful play their games. Marcus handed a fat envelope to a DC type who&#x27;d been hanging around lately. Loaded with Franklins. And this is the same Marcus who asked Jamie to go easy on the top shelf drinks. Penny-wise. Bribing officials while pinching pennies on the bar tab.</p>
+
+        <aside class="evidence-card evidence-card--supporting" data-token="jav021">
+  <div class="evidence-card__label">The Bribe</div>
+  <div class="evidence-card__content">
+    JAV021 - 02:02AM- Untouchable. These motherfuckers think they run the world. Look at MARCUS and that DC type that&#x27;s been hanging around lately. MARCUS just handed over a fig fat envelope. You know that&#x27;s loaded full of Franklins. HA! And MARCUS asked you to go easy on the top shelf drinks tonight. Penny-wise. Fucking Idiot..
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Jamie &quot;Volt&quot; Woods</span>
+  </div>
+</aside>
+
+        <p>Black Market Holdings. That&#x27;s who controls NeurAI now. They own the shares. They have the technology. And they made Alex Reeves an offer he should have refused.</p>
+
+        <p>They offered him Marcus&#x27;s old job. The man whose algorithm Marcus stole, now being asked to take the dead man&#x27;s chair. In exchange for burying evidence that would implicate NeurAI.</p>
+
+        <p>I watched Alex work alongside Ashe Motoko for hours, methodically reconstructing events, devoted to uncovering the truth. And then Black Market Holdings came calling with a job offer and a price for silence. $150,000 transmitted through the memory network. Another $50,000 before that.</p>
 
       </section>
-      <section class="nn-section nn-section--evidence" id="follow-the-money">
+      <section class="nn-section nn-section--notes" id="follow-the-money">
         <h2 class="nn-section__title">Follow the Money</h2>
 
-        <p>Three shell accounts. Over $5 million buried. And every dollar traces back to someone who wanted the truth to stay hidden.</p>
+        <p>Three shell accounts. Over four million dollars buried. And every dollar traces back to someone in that room who decided silence was worth more than truth.</p>
 
-        <p>Anon2 is the monster. $3.72 million across a four-minute window between 9:04 and 9:08 PM. Whoever operates that account was buying silence at industrial scale. Sofia Francisco&#x27;s memory alone cost $750,000 to bury. Someone really didn&#x27;t want that one seeing daylight.</p>
+        <p>Anon2 is the largest account by far. $3.545 million across more than fifteen transactions, almost all of them in an eight-minute window between 9:06 and 9:08 PM. That&#x27;s not individual decisions. That&#x27;s coordinated suppression. Someone was running an operation.</p>
 
-        <p>Then there&#x27;s Anon. $1.175 million. Three transactions including two Victoria Kingsley memories back to back. $450,000 each. Whatever Victoria knew, someone decided it was worth nearly a million to keep quiet.</p>
+        <p>The timing tells its own story. The first transaction hit Anon at 8:58 PM. $450,000. Then another $450,000 a minute later. By 9:01, Sam received $250,000. And then Anon2 exploded. Transaction after transaction, $10,000 here, $750,000 there, all flooding into one account in a panicked rush.</p>
 
-        <p>Sam is interesting. $475,000 across two transactions. The timing aligns suspiciously with bounty offers that came through the memory network. $50,000, then $150,000, offered to anyone willing to bury critical evidence. Black Market Holdings was recruiting. Someone took the job.</p>
+        <p>James Whitman rushed to Black Market Holdings shouting he wanted to bury everything. I saw him do it. Whatever was in those memories, he didn&#x27;t want anyone else to see. The timing of his outburst correlates uncomfortably with the Anon2 surge.</p>
 
-        <p>I watched James Whitman rush to the Valet with most of the group&#x27;s memories. He shouted &#x27;I WANT TO BURY ALL OF THESE.&#x27; The network went dark moments later. Victoria rejected his AIBioComp pitch. Marcus got her $20 million instead. Correlation or causation?</p>
+        <p>Victoria Kingsley helped with locks and puzzles throughout the night. Quiet. Unobtrusive. Anonymous, even. That&#x27;s a curious choice for someone with $163 million at stake. Skyler Iyer had warned her about the Alex-Marcus conflict. She knew what was at risk. And she stayed invisible.</p>
 
-        <p>The money tells a story the evidence can&#x27;t. Someone with deep pockets wanted this investigation to fail. They nearly succeeded.</p>
+        <p>Sam. Two transactions. $475,000 total. The timing correlates with Alex being approached about Marcus&#x27;s job. The second offer of $150,000 hit the network minutes after a $250,000 transaction to Sam. Make of that what you will.</p>
 
       </section>
-      <section class="nn-section nn-section--notes" id="the-players">
+      <section class="nn-section nn-section--narrative" id="the-players">
         <h2 class="nn-section__title">The Players</h2>
 
-        <p>I want to talk about Ashe Motoko for a second. They took meticulous notes throughout, systematically reconstructing events while everyone else was still reeling. Working closely with Alex Reeves. Personal and professional lines blurring. That&#x27;s the kind of partnership that cracks cases.</p>
+        <p>Ashe Motoko became the investigation&#x27;s backbone. I watched her take meticulous notes, acting as group scribe and analyst, systematically working through every unlocked memory to reconstruct what happened. When I needed to understand the timeline, I looked at Ashe&#x27;s work. Her BizAI privacy investigation had already flagged Marcus&#x27;s memory experiments months ago. When Black Market Holdings took control, her thoroughness became a threat.</p>
 
-        <p>Sarah Blackwood spent much of the investigation searching for a key to her purse. Inside: the same apology letter Marcus gave Jessicah. The affair confirmed twice over. She still brought evidence forward. That takes something I don&#x27;t have a word for.</p>
-
-        <p>Victoria Kingsley assisted with locks and puzzles but kept a low profile. Helpful but invisible. I don&#x27;t know what to make of that yet. Her memories are mostly buried. Nearly a million dollars worth. What was Victoria protecting?</p>
+        <p>Alex Reeves worked alongside Ashe for hours, devoted to uncovering the truth about the man who stole his life&#x27;s work. The cease and desist letter is on record. Alex suing Marcus over the algorithm. The algorithm that wasn&#x27;t Marcus&#x27;s at all. Derek&#x27;s memory from June 2022 proves it: Marcus was so high he admitted the whole thing. Alex rewrote everything. Marcus took the credit.</p>
 
         <blockquote class="inline-quote">
   <p><em>"You can have him. But that baby deserves better. We both do."</em></p>
-  <cite>— Sarah Blackwood, from Jessicah&#x27;s extracted memory</cite>
+  <cite>— Sarah Blackwood to Jessicah Kane, 3:36 AM</cite>
 </blockquote>
 
-        <p>Alex Reeves received offers from Black Market Holdings. The company that now controls NeurAI wanted him to take Marcus&#x27;s old job in exchange for burying critical evidence. The algorithm Marcus stole was Alex&#x27;s. The job was always supposed to be Alex&#x27;s. But at what cost?</p>
+        <p>Sarah Blackwood came looking for a key and found her husband&#x27;s betrayal. But what she did with that discovery matters more than how she found it. She found Jessicah. They talked. They cried together. And Sarah chose grace over rage. Both his victims, she said. Not enemies.</p>
 
-        <p>James Whitman rushed to bury evidence after Victoria rejected his pitch. The Anonymous 2 account shows coordinated activity. The network shutdown came moments after his outburst. I&#x27;m not making accusations. I&#x27;m noticing patterns.</p>
+        <p>Then Jessicah vanished with the others. The reconciliation Sarah fought so hard to reach? Gone before morning. The forgiveness exists only as extracted memory now, playing back for strangers who weren&#x27;t there.</p>
 
-        <p>Derek Thorne. The chemist. The leverage-holder. The man who knew about the IP theft and chose to remain irreplaceable. He had every reason to want Marcus gone. His formulation made the whole operation possible. And he was wandering off mid-command at 3:52 AM, too drugged to follow instructions.</p>
+        <p>Victoria Kingsley stayed largely anonymous. Helped with locks. Helped with puzzles. Never drew attention. I&#x27;m not sure what to make of that. Someone with $163 million on the line usually has opinions. Victoria&#x27;s opinions stayed buried.</p>
+
+        <p>James Whitman made his opinions very clear. He rushed to Black Market Holdings shouting his intentions to bury everything. The four witnesses to his outburst had been given dangerous doses of experimental mind-altering substances. Their credibility is compromised. But I saw him. I watched him run.</p>
 
       </section>
       <section class="nn-section nn-section--notes" id="whats-missing">
         <h2 class="nn-section__title">What&#x27;s Missing</h2>
 
-        <p>Who is Oliver Sterling? Derek met him at a BBQ in 2022. A fellow chemistry nerd with a compound that had fascinating side effects. Five years later, that compound is administered at Marcus&#x27;s party. Oliver&#x27;s name appears in one memory. Then nothing. Where is he now?</p>
+        <p>The missing partygoers haunt this story. Only five people woke up. The rest simply weren&#x27;t there anymore. Not dead, as far as we know. Just absent. Cassandra&#x27;s sources found no evidence of Marcus&#x27;s body in the warehouse. No bodies at all. Just equipment that shouldn&#x27;t exist and silence that cost millions.</p>
 
-        <p>Who are THEY? Marcus&#x27;s memories reference someone giving him instructions. Make them secure the memories. Combinations only you know. Call when done. THEY wanted the safety removed so memories would be destroyed permanently. Marcus refused. Did that refusal cost him his life?</p>
+        <p>Derek formulated Psychotrophin3B. Derek distributed it through the party. But Derek wasn&#x27;t on the guest list that night. Who were his hands on the ground? Someone was passing out those smooth edges. Someone was making sure the drugs hit the right people.</p>
 
-        <p>The whiteboard shows $99K connected to the affair. Rachel Torres found an undisclosed money source that Sarah needed to discuss urgently. What was that money for? Silence? Support? The trail goes cold.</p>
+        <p>The instructions at 3:52 AM were clear. Make them secure the tokens. Call when done. But who was Marcus calling? Who are THEY? The memory cuts off before we get names. Before we get faces. Before we understand who was pulling Marcus&#x27;s strings.</p>
 
-        <figure class="article-photo article-photo--">
-  <img
-    src="sessionphotos/0030/20251230_205258-.jpg"
-    alt="Ashe and James in the final minutes. Some answers never came."
-    loading="lazy"
-    class="article-photo__image"
-  >
-  <figcaption class="article-photo__caption">Ashe and James in the final minutes. Some answers never came.</figcaption>
-</figure>
+        <p>Jessicah and Sarah reconciled at 3:36 AM. By morning, Jessicah was gone. Did someone decide that reconciliation was too dangerous to exist? Did someone watch those two women find peace and decide it needed to be erased?</p>
 
-        <p>Victoria invested $20 million despite knowing about the IP theft. Derek texted that she faces jail because of Marcus. Why would she take that risk? What did she know that made the investment worth potential prison?</p>
+        <p>Black Market Holdings controls NeurAI now. They offered Alex the job Marcus held. Why would the new owners want the man who sued Marcus? Unless they wanted to buy his silence. Unless they knew what he could expose.</p>
 
-        <p>Five people woke up that morning. The other partygoers vanished along with Marcus&#x27;s body. No one can account for them. No one knows where they went. The silence has a shape. The shape has a price tag. This one cost $5.37 million.</p>
+        <p>The Anon2 account holder paid $3.545 million to keep something quiet. I can tell you the shape of that silence. I can tell you it happened in eight frantic minutes. I cannot tell you what&#x27;s inside it. Someone can. Someone knows exactly what was worth that much to bury.</p>
 
       </section>
       <section class="nn-section nn-section--conclusion" id="closing">
 
-        <p>The group accused Marcus and Derek of distributing untested drugs. The evidence supports the conspiracy. But the chaos was the cover story. Underneath it: extracted memories, buried evidence, corporate succession, and instructions from someone Marcus called THEY.</p>
+        <p>The group accused Marcus and Derek. Derek as architect, Marcus as distributor. The evidence supports it. Derek&#x27;s drug. Marcus&#x27;s distribution network. The chaos that made extraction possible. The compliance that made it easy.</p>
 
-        <p>Derek and Marcus may have been guilty. But they weren&#x27;t alone.</p>
+        <p>But the accusation misses the larger architecture. Someone gave Marcus instructions. Someone funded the burial. Someone made the witnesses disappear. Marcus and Derek may be guilty. They&#x27;re not the only ones.</p>
 
-        <p>Here&#x27;s what I keep thinking about: five people woke up with their memories stolen. Not metaphorically. Actually extracted. And the first thing that happened? Someone started buying those memories. Paying for silence. Turning human experience into a transaction.</p>
+        <p>This isn&#x27;t just a murder. It&#x27;s a proof of concept. Drug the witnesses. Extract their memories. Pay for their silence. Make the inconvenient ones disappear. First they wanted your clicks. Then your data. Now they want what it felt like to be you. And they&#x27;ll pay to make sure you never remember.</p>
 
-        <p>That&#x27;s not a murder mystery. That&#x27;s a business model. First they wanted your clicks. Then your conversations. Now they want what it felt like to be you.</p>
-
-        <p>I was in that room. I watched them piece it together. And I&#x27;m telling you: whoever THEY are, they&#x27;re still out there. And they have $5.37 million worth of memories that belong to someone else.</p>
+        <p>Marcus Blackwood is dead. Derek is in the wind. And somewhere, THEY are still waiting for their call.</p>
 
       </section>
 
@@ -1705,7 +1697,7 @@ blockquote {
         <div class="financial-tracker__accounts">
           <div class="account-row">
             <span class="account-row__name">Anon2</span>
-            <span class="account-row__amount">$3,720,000</span>
+            <span class="account-row__amount">$3,545,000</span>
             <div class="account-row__bar-container">
               <div class="account-row__bar" style="width: 100%"></div>
             </div>
@@ -1714,7 +1706,7 @@ blockquote {
             <span class="account-row__name">Anon</span>
             <span class="account-row__amount">$1,175,000</span>
             <div class="account-row__bar-container">
-              <div class="account-row__bar" style="width: 32%"></div>
+              <div class="account-row__bar" style="width: 33%"></div>
             </div>
           </div>
           <div class="account-row">
@@ -1729,7 +1721,7 @@ blockquote {
         <div class="financial-tracker__divider"></div>
         <div class="financial-tracker__total">
           <span class="financial-tracker__total-label">Total Buried</span>
-          <span class="financial-tracker__total-amount">$5,370,000</span>
+          <span class="financial-tracker__total-amount">$5,195,000</span>
         </div>
       </div>
 
@@ -1743,7 +1735,7 @@ blockquote {
         <div class="financial-tracker__accounts">
           <div class="account-row">
             <span class="account-row__name">Anon2</span>
-            <span class="account-row__amount">$3,720,000</span>
+            <span class="account-row__amount">$3,545,000</span>
             <div class="account-row__bar-container">
               <div class="account-row__bar" style="width: 100%"></div>
             </div>
@@ -1752,7 +1744,7 @@ blockquote {
             <span class="account-row__name">Anon</span>
             <span class="account-row__amount">$1,175,000</span>
             <div class="account-row__bar-container">
-              <div class="account-row__bar" style="width: 32%"></div>
+              <div class="account-row__bar" style="width: 33%"></div>
             </div>
           </div>
           <div class="account-row">
@@ -1767,7 +1759,7 @@ blockquote {
         <div class="financial-tracker__divider"></div>
         <div class="financial-tracker__total">
           <span class="financial-tracker__total-label">Total Buried</span>
-          <span class="financial-tracker__total-amount">$5,370,000</span>
+          <span class="financial-tracker__total-amount">$5,195,000</span>
         </div>
       </div>
 
@@ -1777,57 +1769,43 @@ blockquote {
           <div class="evidence-card-mini__header">
             <span class="evidence-card-mini__badge">critical</span>
           </div>
-          <div class="evidence-card-mini__headline">The Bathroom Confession</div>
-          <div class="evidence-card-mini__summary">Sarah and Jessicah discover they&#x27;re both Marcus&#x27;s victims in a 3:36 AM bathroom confrontation.</div>
+          <div class="evidence-card-mini__headline">The Reconciliation</div>
+          <div class="evidence-card-mini__summary">Sarah and Jessicah find peace at 3:36 AM. Both victims, not enemies.</div>
         </div>
-        <div class="evidence-card-mini evidence-card--critical" data-token-id="det001">
-          <div class="evidence-card-mini__header">
-            <span class="evidence-card-mini__badge">critical</span>
-          </div>
-          <div class="evidence-card-mini__headline">The Origin Story</div>
-          <div class="evidence-card-mini__summary">Derek meets Oliver at Leila&#x27;s BBQ. A new compound with fascinating side effects. The beginning.</div>
-        </div>
-        <div class="evidence-card-mini evidence-card--critical" data-token-id="det002">
-          <div class="evidence-card-mini__header">
-            <span class="evidence-card-mini__badge">critical</span>
-          </div>
-          <div class="evidence-card-mini__headline">The Algorithm Theft</div>
-          <div class="evidence-card-mini__summary">Derek discovers Marcus stole Alex&#x27;s algorithm. Note to self: remain irreplaceable.</div>
-        </div>
-        <div class="evidence-card-mini evidence-card--critical" data-token-id="mab001">
-          <div class="evidence-card-mini__header">
-            <span class="evidence-card-mini__badge">critical</span>
-          </div>
-          <div class="evidence-card-mini__headline">The Safety Marcus Wouldn&#x27;t Remove</div>
-          <div class="evidence-card-mini__summary">Marcus refuses THEY&#x27;s demand to remove the safety that returns memories to owners.</div>
-        </div>
-        <div class="evidence-card-mini evidence-card--supporting" data-token-id="mab002">
+        <div class="evidence-card-mini evidence-card--supporting" data-token-id="fli004">
           <div class="evidence-card-mini__header">
             <span class="evidence-card-mini__badge">supporting</span>
           </div>
-          <div class="evidence-card-mini__headline">The Commercialization Play</div>
-          <div class="evidence-card-mini__summary">Marcus sees Derek&#x27;s drug as the path to a unicorn. Just need to get Derek to heel.</div>
+          <div class="evidence-card-mini__headline">The Dealer&#x27;s Routine</div>
+          <div class="evidence-card-mini__summary">Derek distributes drugs freely. The edge smooths. Compliance follows.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="mab002">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">The Unicorn Dream</div>
+          <div class="evidence-card-mini__summary">Marcus sees Derek&#x27;s drug as NeurAI&#x27;s future. Just needs Derek to heel.</div>
         </div>
         <div class="evidence-card-mini evidence-card--critical" data-token-id="mab003">
           <div class="evidence-card-mini__header">
             <span class="evidence-card-mini__badge">critical</span>
           </div>
-          <div class="evidence-card-mini__headline">The System Failing</div>
-          <div class="evidence-card-mini__summary">3:52 AM chaos. Drugged people make terrible assistants. THEY will be back if you don&#x27;t call.</div>
+          <div class="evidence-card-mini__headline">The 3:52 AM Instructions</div>
+          <div class="evidence-card-mini__summary">Marcus takes orders from THEY. Drugged guests lock away their own memories.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="mab001">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">The Safety Feature</div>
+          <div class="evidence-card-mini__summary">Marcus secretly keeps safety feature. THEY wanted memories destroyed.</div>
         </div>
         <div class="evidence-card-mini evidence-card--supporting" data-token-id="jav021">
           <div class="evidence-card-mini__header">
             <span class="evidence-card-mini__badge">supporting</span>
           </div>
-          <div class="evidence-card-mini__headline">The Bribery Witness</div>
-          <div class="evidence-card-mini__summary">Jamie witnesses Marcus handing a fat envelope to a DC type. Penny-wise, pound foolish.</div>
-        </div>
-        <div class="evidence-card-mini evidence-card--contextual" data-token-id="fli004">
-          <div class="evidence-card-mini__header">
-            <span class="evidence-card-mini__badge">contextual</span>
-          </div>
-          <div class="evidence-card-mini__headline">The Edge Smooths</div>
-          <div class="evidence-card-mini__summary">Derek doesn&#x27;t ask anymore, just offers. The drugs help Flip smile through the night.</div>
+          <div class="evidence-card-mini__headline">The Bribe</div>
+          <div class="evidence-card-mini__summary">Jamie watches Marcus bribe a DC official while pinching pennies on drinks.</div>
         </div>
       </section>
 
