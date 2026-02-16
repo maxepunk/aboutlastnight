@@ -506,7 +506,8 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         });
 
         // Build initial state from rollback, overrides, rawSessionInput, and approvals
-        let initialState = {};
+        // CRITICAL: theme must be in state (not just config) — state.theme defaults to 'journalist'
+        let initialState = { theme };
 
         // Fresh mode: clear all state fields (Commit 8.9.9 - Fix for thread_id mismatch)
         // Uses ROLLBACK_CLEARS['input-review'] which clears everything for a true fresh start
@@ -868,7 +869,9 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         });
 
         // Clear all state fields for fresh start
-        const initialState = { rawSessionInput, ...buildRollbackState('input-review') };
+        // CRITICAL: theme must be in state (not just config) because initializeSession
+        // and all nodes read state.theme, which defaults to 'journalist' in the annotation.
+        const initialState = { theme, rawSessionInput, ...buildRollbackState('input-review') };
         const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
 
         // Check if graph is interrupted at a checkpoint
