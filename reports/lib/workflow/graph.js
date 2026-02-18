@@ -187,8 +187,9 @@ function routeAfterArcCheckpoint(state) {
  * @returns {string} 'error' or 'continue'
  */
 function routeSchemaValidation(state) {
-  const hasErrors = state.errors && state.errors.some(e => e.type === 'schema-validation');
-  return hasErrors ? 'error' : 'continue';
+  // Check currentPhase set by validateContentBundle, not accumulated errors.
+  // errors uses append reducer so old schema-validation errors persist across retries.
+  return state.currentPhase === PHASES.ERROR ? 'error' : 'continue';
 }
 
 /**

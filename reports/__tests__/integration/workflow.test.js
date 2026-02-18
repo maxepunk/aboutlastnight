@@ -128,24 +128,35 @@ describe('workflow integration', () => {
     });
 
     describe('routeSchemaValidation', () => {
-      it('returns "error" when schema validation errors exist', () => {
+      it('returns "error" when currentPhase is error', () => {
         expect(routeSchemaValidation({
-          errors: [{ type: 'schema-validation', message: 'test' }]
+          currentPhase: PHASES.ERROR
         })).toBe('error');
       });
 
-      it('returns "continue" when errors array is empty', () => {
-        expect(routeSchemaValidation({ errors: [] })).toBe('continue');
+      it('returns "continue" when currentPhase is validate_schema', () => {
+        expect(routeSchemaValidation({
+          currentPhase: PHASES.VALIDATE_SCHEMA
+        })).toBe('continue');
       });
 
       it('returns "continue" when no schema-validation errors', () => {
         expect(routeSchemaValidation({
+          currentPhase: PHASES.VALIDATE_SCHEMA,
           errors: [{ type: 'other-error' }]
         })).toBe('continue');
       });
 
       it('returns "continue" when errors is undefined', () => {
         expect(routeSchemaValidation({})).toBe('continue');
+      });
+
+      it('returns "continue" even with old schema-validation errors if currentPhase is not error', () => {
+        // Regression: append reducer accumulates errors across retries
+        expect(routeSchemaValidation({
+          currentPhase: PHASES.VALIDATE_SCHEMA,
+          errors: [{ type: 'schema-validation', message: 'stale error from previous attempt' }]
+        })).toBe('continue');
       });
     });
   });
