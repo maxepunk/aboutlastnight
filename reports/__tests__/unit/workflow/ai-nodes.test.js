@@ -470,6 +470,73 @@ describe('ai-nodes', () => {
       expect(keys).toContain('currentPhase');
       expect(keys.length).toBeLessThanOrEqual(2);
     });
+
+    it('removes empty paragraph blocks before validation', async () => {
+      const state = {
+        contentBundle: {
+          metadata: { sessionId: '0216', theme: 'journalist', generatedAt: new Date().toISOString() },
+          headline: { main: 'Test Headline That Is Long Enough' },
+          sections: [{
+            id: 'sec-1',
+            type: 'narrative',
+            heading: 'Test Section',
+            content: [
+              { type: 'paragraph', text: 'Valid paragraph with content.' },
+              { type: 'paragraph', text: '' },
+              { type: 'paragraph', text: 'Another valid paragraph.' }
+            ]
+          }]
+        }
+      };
+
+      const result = await validateContentBundle(state, {});
+
+      expect(result.currentPhase).not.toBe(PHASES.ERROR);
+      expect(result.errors).toBeUndefined();
+    });
+
+    it('removes whitespace-only paragraph blocks', async () => {
+      const state = {
+        contentBundle: {
+          metadata: { sessionId: '0216', theme: 'journalist', generatedAt: new Date().toISOString() },
+          headline: { main: 'Test Headline That Is Long Enough' },
+          sections: [{
+            id: 'sec-1',
+            type: 'narrative',
+            heading: 'Test Section',
+            content: [
+              { type: 'paragraph', text: 'Valid text.' },
+              { type: 'paragraph', text: '   ' }
+            ]
+          }]
+        }
+      };
+
+      const result = await validateContentBundle(state, {});
+
+      expect(result.currentPhase).not.toBe(PHASES.ERROR);
+    });
+
+    it('passes valid contentBundle without modification', async () => {
+      const state = {
+        contentBundle: {
+          metadata: { sessionId: '0216', theme: 'journalist', generatedAt: new Date().toISOString() },
+          headline: { main: 'Test Headline That Is Long Enough' },
+          sections: [{
+            id: 'sec-1',
+            type: 'narrative',
+            heading: 'Test Section',
+            content: [
+              { type: 'paragraph', text: 'Valid paragraph.' }
+            ]
+          }]
+        }
+      };
+
+      const result = await validateContentBundle(state, {});
+
+      expect(result.currentPhase).not.toBe(PHASES.ERROR);
+    });
   });
 
   describe('validateArticle', () => {
