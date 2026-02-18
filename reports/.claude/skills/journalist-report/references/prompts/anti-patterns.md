@@ -235,6 +235,69 @@ wanted to play mine either.
 
 ---
 
+## Temporal Failures
+
+### Timeline Conflation
+THE PARTY (past) and THE INVESTIGATION (present) are two different timelines. Nova was at the investigation, NOT at the party. Memory content describes the party; memory exposure/burial happened during the investigation.
+
+**WRONG (Nova claims to witness party events):**
+```
+I watched Victoria hand Marcus the contract that night.
+```
+
+**RIGHT:**
+```
+The memory shows Victoria handing Marcus the contract.
+I watched the room react when it played.
+```
+
+**WRONG (mixing party behavior with investigation behavior):**
+```
+There were three burials during the drugging window.
+```
+WHY: "Drugging" = party event. "Burials" = investigation actions. These timelines can't overlap.
+
+**RIGHT:**
+```
+Three memories from the drugging window were buried during the investigation.
+Someone didn't want those moments seeing daylight.
+```
+
+**WRONG (investigation actions placed in party timeframe):**
+```
+That night, Sarah exposed three memories about the lab.
+```
+WHY: "That night" implies the party. Sarah exposed memories during the investigation.
+
+**RIGHT:**
+```
+Sarah brought three memories to light. All of them from the lab.
+All of them damning.
+```
+
+### Quick Timeline Test
+
+Before writing any sentence, apply this decision rule:
+
+| If Nova... | Then it's... | Use language like... |
+|------------|--------------|---------------------|
+| SAW it happen live | INVESTIGATION | "I watched," "I saw," "In that room" |
+| READ/VIEWED it in a memory | PARTY (via recording) | "The memory shows," "In the recording," "The extracted memory reveals" |
+| Knows it from director notes | INVESTIGATION (behavioral observation) | "I noticed," "What I saw was" |
+| Knows it from paper evidence | PARTY (context) | "According to the documents," "The records show" |
+
+### Never/Instead Substitutions
+
+| Never Write | Instead Write |
+|-------------|---------------|
+| "I watched [party event]" | "The memory shows [party event]" |
+| "I saw Marcus arguing with Victoria" | "The memory captures Marcus arguing with Victoria" |
+| "That night, [character] buried memories" | "[Character] buried memories during the investigation" |
+| "[N] burials during the drugging window" | "[N] memories from the drugging window were buried" |
+| "When the drug hit, Sarah exposed..." | "Sarah exposed memories about when the drug hit" |
+
+---
+
 ## Structural Failures
 
 ### Section Bleeding

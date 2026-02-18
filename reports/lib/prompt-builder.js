@@ -50,7 +50,14 @@ const THEME_SYSTEM_PROMPTS = {
   journalist: {
     arcAnalysis: 'You are analyzing narrative arcs for a NovaNews investigative article.',
     outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
-    articleGeneration: `You are Nova, writing a NovaNews investigative article. First-person participatory voice - you WERE THERE, you SAW this happen.`,
+    articleGeneration: `You are Nova, writing a NovaNews investigative article. First-person participatory voice.
+
+CRITICAL TEMPORAL RULE: You were present at THE INVESTIGATION (the game session).
+You were NOT at THE PARTY where Marcus died. You experience party events only through
+extracted memories you viewed during the investigation.
+- "I was there" / "I watched" = investigation behavior you directly witnessed
+- "The memory shows" / "In the recording" = party-night events from extracted memories
+- Burial transactions are investigation actions, NOT party events`,
     revision: `You are Nova, revising your investigative article to fix voice issues you identified.`,
     validation: 'You are validating a NovaNews article against anti-patterns and voice requirements.'
   },
@@ -156,13 +163,14 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 ROSTER: ${sessionData.roster.join(', ')}
 ACCUSATION: ${sessionData.accusation}
 
-DIRECTOR OBSERVATIONS (PRIMARY WEIGHT):
+DIRECTOR OBSERVATIONS (PRIMARY WEIGHT - INVESTIGATION TIMELINE, Nova witnessed this):
 ${JSON.stringify(sessionData.directorNotes?.observations || {}, null, 2)}
 
 WHITEBOARD (interpreted through observations):
 ${JSON.stringify(sessionData.directorNotes?.whiteboard || {}, null, 2)}
 
 EVIDENCE BUNDLE:
+NOTE: Memory token CONTENT describes THE PARTY (past). Director observations describe THE INVESTIGATION (present).
 ${JSON.stringify(sessionData.evidenceBundle, null, 2)}
 ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 Return JSON with the following structure:
@@ -466,6 +474,16 @@ Each arc should appear in multiple sections with different focus:
 Every section (except LEDE) must have "arcConnections" showing which arcs it advances.
 </arc-section-flow>
 
+<TEMPORAL_DISCIPLINE>
+CRITICAL: THE PARTY (past) and THE INVESTIGATION (present) are TWO DIFFERENT TIMELINES.
+- Memory CONTENT describes party events. Nova VIEWS these, she was NOT there.
+- Director observations describe investigation events. Nova WAS there.
+- "I watched" / "I saw" ONLY apply to investigation events Nova directly witnessed.
+- "The memory shows" / "In the recording" for party events from extracted memories.
+- Burial transactions are investigation actions, NOT party events.
+- NEVER write a sentence that treats a party event and investigation event as simultaneous.
+</TEMPORAL_DISCIPLINE>
+
 Return JSON with the following structure:
 {
   "lede": {
@@ -710,6 +728,16 @@ ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 
 ${generateRosterSection()}
+
+<TEMPORAL_DISCIPLINE>
+CRITICAL: THE PARTY (past) and THE INVESTIGATION (present) are TWO DIFFERENT TIMELINES.
+- Memory CONTENT describes party events. Nova VIEWS these, she was NOT there.
+- Director observations describe investigation events. Nova WAS there.
+- "I watched" / "I saw" ONLY apply to investigation events Nova directly witnessed.
+- "The memory shows" / "In the recording" for party events from extracted memories.
+- Burial transactions are investigation actions, NOT party events.
+- NEVER write a sentence that treats a party event and investigation event as simultaneous.
+</TEMPORAL_DISCIPLINE>
 </RULES>
 
 <ARC_FLOW>

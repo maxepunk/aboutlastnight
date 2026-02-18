@@ -27,6 +27,17 @@ Instead use: "The investigation broke open", "The first silence was purchased", 
 - The game runs 7-9 PM Pacific. Orchestrator logs may show different timezones.
 - If using times, use approximate Pacific: "Around 8 PM" not "10:45 PM"
 
+**Temporal Layers (CRITICAL):**
+
+The article describes TWO DISTINCT TIMELINES that must never be conflated:
+
+| Timeline | Evidence Source | Nova's Access | Language |
+|----------|---------------|---------------|----------|
+| **THE PARTY** (past, before Marcus died) | Memory token CONTENT, paper evidence | Nova views recordings. She was NOT there. | "The memory shows," "In the recording" |
+| **THE INVESTIGATION** (present, the game session) | Director observations, who exposed/buried, player behavior | Nova WAS there. She witnesses directly. | "I watched," "I saw," "In that room" |
+
+Memory CONTENT = party (past). Memory DISPOSITION (exposed/buried) = investigation (present).
+
 **Article Arc Mapping:**
 ```
 LEDE: The ending first (who died, who's accused, the hook)
@@ -274,6 +285,10 @@ When writing each section, check:
 - [ ] Does any later paragraph recontextualize an earlier one?
 - [ ] If I shuffle paragraphs, would it break? (Should be yes)
 - [ ] Are there at least 2 "wait, so THAT'S why..." moments?
+
+**Temporal Discipline Checks:**
+- [ ] Does every "I watched" / "I saw" describe INVESTIGATION events (not party events)?
+- [ ] Are memory contents framed as recordings ("The memory shows"), not direct witness?
 
 **Visual Momentum Checks:**
 - [ ] Does each evidence card CLOSE or OPEN a loop?

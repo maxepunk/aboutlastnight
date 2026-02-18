@@ -279,15 +279,39 @@ Generate 3-5 narrative arcs following this priority:
 
 ---
 
+## SECTION 3.5: TEMPORAL AWARENESS (CRITICAL)
+
+THE PARTY and THE INVESTIGATION are TWO DIFFERENT TIMELINES. Your arc summaries must respect this distinction.
+
+| Timeline | Source | What It Describes | Nova's Access | Language Markers |
+|----------|--------|-------------------|---------------|-----------------|
+| **THE PARTY** (past) | Memory token content, paper evidence | Events from the murder night | Nova VIEWS recordings. She was NOT there. | "The memory shows," "In the recording" |
+| **THE INVESTIGATION** (present) | Director observations, burial transactions, player behavior | The game session where characters piece together what happened | Nova WAS there. She witnessed this directly. | "I watched," "I saw," "In that room" |
+
+**Rules for arc summaries:**
+- Memory CONTENT → party-night events (past tense, framed as recordings)
+- Who EXPOSED or BURIED a memory → investigation events (present, Nova witnessed)
+- Director observations → investigation events (behavioral ground truth Nova saw)
+- Paper evidence → party context (documents from before the investigation)
+
+**WRONG:** "During the party, Sarah exposed three memories about the lab."
+(Sarah exposed memories during the INVESTIGATION, not the party.)
+
+**RIGHT:** "Sarah exposed three memories during the investigation, all depicting lab events from the night of the party."
+
+---
+
 ## SECTION 4: EVIDENCE BUNDLE
 
-### Exposed Tokens (${evidenceSummary.exposedTokens.length} items - Layer 1)
+### Exposed Tokens (${evidenceSummary.exposedTokens.length} items - Layer 1, PARTY MEMORIES)
+These memories describe events from THE PARTY NIGHT. Content is party-era; exposure is investigation-era.
 ${JSON.stringify(evidenceSummary.exposedTokens, null, 2)}
 
-### Paper Evidence (${evidenceSummary.exposedPaper.length} items - Layer 1)
+### Paper Evidence (${evidenceSummary.exposedPaper.length} items - Layer 1, PARTY CONTEXT)
 ${JSON.stringify(evidenceSummary.exposedPaper, null, 2)}
 
-### Buried Transactions (${evidenceSummary.buriedTransactions.length} items - Layer 2 CONTEXT ONLY)
+### Buried Transactions (${evidenceSummary.buriedTransactions.length} items - Layer 2, INVESTIGATION ACTIONS)
+These transactions occurred DURING THE INVESTIGATION when players chose to bury memories.
 ${JSON.stringify(evidenceSummary.buriedTransactions, null, 2)}
 
 ### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
@@ -1255,7 +1279,8 @@ function extractEvidenceSummary(evidenceBundle) {
     id: t.id || t.tokenId,
     owner: t.owner || t.ownerLogline,
     summary: t.summary,
-    characterRefs: t.characterRefs || []
+    characterRefs: t.characterRefs || [],
+    timeline: 'party-night'
   }));
 
   // Get ALL exposed paper evidence with IDs
@@ -1263,7 +1288,8 @@ function extractEvidenceSummary(evidenceBundle) {
     id: p.id || p.name,
     name: p.name,
     summary: p.summary || p.description?.substring(0, 200),
-    characterRefs: p.characterRefs || []
+    characterRefs: p.characterRefs || [],
+    timeline: 'party-context'
   }));
 
   // Get ALL buried transactions with IDs
@@ -1271,7 +1297,8 @@ function extractEvidenceSummary(evidenceBundle) {
     id: t.id,
     shellAccount: t.shellAccount,
     amount: t.amount,
-    time: t.time
+    time: t.time,
+    timeline: 'investigation'
   }));
 
   return {
