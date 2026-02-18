@@ -40,9 +40,7 @@ function mmddToISO(mmdd) {
     const month = mmdd.substring(0, 2);
     const day = mmdd.substring(2, 4);
 
-    // Show run is Nov 2025 - Dec 2025, so use 2025
-    // Adjust if your show dates span multiple years
-    const year = '2025';
+    const year = new Date().getFullYear().toString();
 
     return `${year}-${month}-${day}`;
 }
