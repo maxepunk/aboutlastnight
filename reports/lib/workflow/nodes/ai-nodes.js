@@ -1238,7 +1238,23 @@ async function generateContentBundle(state, config) {
 async function validateContentBundle(state, config) {
   const validator = getSchemaValidator(config);
 
-  const result = validator.validate('content-bundle', state.contentBundle);
+  // Sanitize: remove empty/whitespace-only paragraph blocks (common AI generation artifact)
+  const bundle = state.contentBundle;
+  if (bundle?.sections) {
+    for (const section of bundle.sections) {
+      if (Array.isArray(section.content)) {
+        section.content = section.content.filter(block => {
+          if (block.type === 'paragraph' && (!block.text || !block.text.trim())) {
+            console.log(`[validateContentBundle] Removed empty paragraph from section "${section.id || section.heading}"`);
+            return false;
+          }
+          return true;
+        });
+      }
+    }
+  }
+
+  const result = validator.validate('content-bundle', bundle);
 
   if (!result.valid) {
     return {
