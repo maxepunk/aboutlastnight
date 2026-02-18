@@ -27,7 +27,7 @@ function FileBrowser({ open, mode, initialPath, onSelect, onCancel }) {
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
         // If path not found and we have a fallback, try that instead
-        if (resp.status === 404 && fallback) {
+        if (resp.status === 404 && fallback !== undefined) {
           return fetchDir(fallback);
         }
         throw new Error(body.error || 'Failed to browse directory');

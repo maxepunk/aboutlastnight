@@ -154,7 +154,7 @@ async function checkpointAwaitRoster(state, config) {
   const resumeValue = checkpointInterrupt(
     CHECKPOINT_TYPES.AWAIT_ROSTER,
     {
-      genericPhotoAnalyses: state.genericPhotoAnalyses,
+      genericPhotoAnalyses: state.photoAnalyses,
       whiteboardPhotoPath: state.whiteboardPhotoPath,
       message: 'Provide roster to enable whiteboard OCR and character identification'
     },
@@ -247,7 +247,7 @@ async function joinParallelBranches(state, config) {
   const evidenceCount = state.paperEvidence?.length || 0;
   const tokenCount = state.memoryTokens?.length || 0;
   const photoCount = state.sessionPhotos?.length || 0;
-  const analysisCount = state.genericPhotoAnalyses?.analyses?.length || 0;
+  const analysisCount = state.photoAnalyses?.analyses?.length || 0;
   const whiteboardDetected = state.whiteboardPhotoPath ? 'yes' : 'no';
 
   console.log(`[joinParallelBranches] Evidence: ${evidenceCount} items, Tokens: ${tokenCount}, Photos: ${photoCount}, Analyses: ${analysisCount}, Whiteboard: ${whiteboardDetected}`);
@@ -421,7 +421,7 @@ module.exports = {
     stateFields: ['preprocessedEvidence', 'preCurationApproved']
   }),
   checkpointAwaitRoster: traceNode(checkpointAwaitRoster, 'checkpointAwaitRoster', {
-    stateFields: ['genericPhotoAnalyses', 'roster', 'whiteboardPhotoPath']
+    stateFields: ['photoAnalyses', 'roster', 'whiteboardPhotoPath']
   }),
   checkpointAwaitContext: traceNode(checkpointAwaitContext, 'checkpointAwaitContext', {
     stateFields: ['rawSessionInput', 'roster']

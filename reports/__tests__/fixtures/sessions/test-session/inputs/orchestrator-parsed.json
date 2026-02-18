@@ -1,0 +1,14 @@
+{
+  "exposedTokens": ["tok001", "tok002", "tok003"],
+  "exposedCount": 3,
+  "buriedTokens": [
+    { "tokenId": "tok004", "shellAccount": "TestShell", "amount": 100000, "time": "8:00 PM" },
+    { "tokenId": "tok005", "shellAccount": "AnotherShell", "amount": 50000, "time": "8:15 PM" }
+  ],
+  "buriedCount": 2,
+  "shellAccounts": [
+    { "name": "TestShell", "total": 100000, "tokenCount": 1, "rank": 1 },
+    { "name": "AnotherShell", "total": 50000, "tokenCount": 1, "rank": 2 }
+  ],
+  "totalBuried": 150000
+}

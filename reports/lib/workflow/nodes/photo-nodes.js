@@ -755,6 +755,55 @@ async function finalizePhotoAnalyses(state, config) {
   const sdk = getSdkClient(config, 'finalizePhotos');
   const imagePromptBuilder = getImagePromptBuilder(config);
 
+  // Retry failed photo analyses before enrichment
+  // At this point we have roster + character mappings — more context than initial analysis
+  const failedAnalyses = state.photoAnalyses.analyses.filter(a => a._error);
+  let analyses = state.photoAnalyses.analyses;
+
+  if (failedAnalyses.length > 0) {
+    console.log(`[finalizePhotoAnalyses] Retrying ${failedAnalyses.length} failed photo analyses...`);
+    const sessionPhotos = state.sessionPhotos || [];
+    const roster = state.sessionConfig?.roster || [];
+    const retrySemaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
+
+    const retryResults = await Promise.all(failedAnalyses.map(failed => {
+      // Map filename back to full processed path
+      const photoPath = sessionPhotos.find(p => path.basename(p) === failed.filename);
+      if (!photoPath) {
+        console.warn(`[finalizePhotoAnalyses] Cannot retry ${failed.filename} - path not found in sessionPhotos`);
+        return Promise.resolve(failed);
+      }
+
+      return retrySemaphore(() => analyzeSinglePhoto({
+        sdk,
+        imagePromptBuilder,
+        playerFocus: state.playerFocus,
+        roster,
+        processedPath: photoPath,
+        originalFilename: failed.filename,
+        timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS
+      }));
+    }));
+
+    // Build a map of retried results by filename
+    const retryMap = {};
+    for (const result of retryResults) {
+      retryMap[result.filename] = result;
+    }
+
+    // Replace failed analyses with retry results
+    let recovered = 0;
+    analyses = analyses.map(a => {
+      if (a._error && retryMap[a.filename] && !retryMap[a.filename]._error) {
+        recovered++;
+        return retryMap[a.filename];
+      }
+      return retryMap[a.filename] || a;
+    });
+
+    console.log(`[finalizePhotoAnalyses] Retry complete: ${recovered}/${failedAnalyses.length} recovered`);
+  }
+
   // Build sessionData for enrichment context
   const sessionData = {
     roster: state.sessionConfig?.roster || [],
@@ -764,7 +813,7 @@ async function finalizePhotoAnalyses(state, config) {
   // Phase 4b: Parallelize photo enrichment using same semaphore pattern as analyzePhotos
   const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
 
-  const enrichmentPromises = state.photoAnalyses.analyses.map((analysis) => {
+  const enrichmentPromises = analyses.map((analysis) => {
     const userInput = characterIdMappings[analysis.filename] || {};
 
     // Handle excluded photos (no SDK call needed)
@@ -870,6 +919,10 @@ async function finalizePhotoAnalyses(state, config) {
       withCharacters: enrichedAnalyses.filter(a => a.identifiedCharacters?.length > 0).length,
       withCorrections: enrichedAnalyses.filter(a => a.userCorrections).length,
       excluded: enrichedAnalyses.filter(a => a.excluded).length,
+      retriedPhotos: failedAnalyses.length,
+      recoveredPhotos: failedAnalyses.length > 0
+        ? analyses.filter(a => !a._error).length - state.photoAnalyses.analyses.filter(a => !a._error).length
+        : 0,
       processingTimeMs
     }
   };
