@@ -583,7 +583,7 @@ function GalleryPhotoEditor({ photo, idx, onSave, onCancel }) {
 
 // ── Main Article Component ──
 
-function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, dispatch, revisionCache }) {
+function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, dispatch, revisionCache, pendingEdits }) {
   const contentBundle = (data && data.contentBundle) || {};
 
   // Theme detection: prop > metadata > fallback
@@ -630,6 +630,14 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     setShowHtmlPreview(false);
     setExpandedPhoto(null);
   }, [dataKey]);
+
+  // Restore edits from reducer state if component remounted after processing error
+  React.useEffect(function () {
+    if (pendingEdits && !editedBundle) {
+      setEditedBundle(pendingEdits);
+      setHasEdits(true);
+    }
+  }, [pendingEdits]);
 
   // Word count
   const wordCount = React.useMemo(function () {
@@ -747,6 +755,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   function handleApprove() {
     if (hasEdits && editedBundle) {
+      // Persist edits in reducer state so they survive unmount during processing
+      if (dispatch) {
+        dispatch({ type: 'SAVE_PENDING_EDITS', edits: editedBundle });
+      }
       onApprove({ article: true, articleEdits: editedBundle });
     } else {
       onApprove({ article: true });
