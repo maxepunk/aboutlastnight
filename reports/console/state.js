@@ -24,6 +24,8 @@ const initialState = {
   lastLlmActivity: null,   // Last completed LLM call (with response) for panel display
   // Revision tracking (client-side cache for diff display)
   revisionCache: { outline: null, article: null },
+  // Pending edits (survives component unmount during processing)
+  pendingEdits: null,
   // Errors
   error: null,
   // Completed
@@ -44,6 +46,7 @@ const ACTIONS = {
   SSE_ERROR: 'SSE_ERROR',
   WORKFLOW_COMPLETE: 'WORKFLOW_COMPLETE',
   CACHE_REVISION: 'CACHE_REVISION',
+  SAVE_PENDING_EDITS: 'SAVE_PENDING_EDITS',
   RESET_SESSION: 'RESET_SESSION',
   SET_THEME: 'SET_THEME',
   SET_ERROR: 'SET_ERROR',
@@ -73,7 +76,8 @@ function reducer(state, action) {
         checkpointType: action.checkpointType,
         checkpointData: action.data || {},
         phase: action.phase || state.phase,
-        processing: false
+        processing: false,
+        pendingEdits: null
       };
 
     case ACTIONS.PROCESSING_START:
@@ -135,7 +139,8 @@ function reducer(state, action) {
         ...state,
         completedResult: action.result,
         processing: false,
-        checkpointType: null
+        checkpointType: null,
+        pendingEdits: null
       };
 
     case ACTIONS.CACHE_REVISION:
@@ -146,6 +151,9 @@ function reducer(state, action) {
           [action.contentType]: action.data
         }
       };
+
+    case ACTIONS.SAVE_PENDING_EDITS:
+      return { ...state, pendingEdits: action.edits };
 
     case ACTIONS.SET_ERROR:
       return { ...state, error: action.message };
