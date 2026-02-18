@@ -701,6 +701,15 @@ CRITICAL PRINCIPLES:
    - Never use em-dashes
    - Never claim to know buried content
 
+6. TEMPORAL AWARENESS
+   - THE PARTY (past) and THE INVESTIGATION (present) are two different timelines
+   - Memory token CONTENT describes THE PARTY (events before Marcus died). Nova was NOT there.
+   - Director observations describe THE INVESTIGATION (the game session). Nova WAS there.
+   - Burial transactions are INVESTIGATION actions (players choosing to bury during the session)
+   - Arc summaries must specify which timeline events belong to
+   - "I watched" / "I saw" = investigation events only
+   - "The memory shows" / "In the recording" = party events from extracted memories
+
 OUTPUT:
 Generate 3-5 narrative arcs. Ensure:
 - One arc with arcSource="accusation" (required)
