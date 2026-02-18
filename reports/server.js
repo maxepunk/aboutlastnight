@@ -915,10 +915,23 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         // Check if graph is interrupted using native LangGraph pattern
         const graphState = await graph.getState(config);
         if (!graphState || !isGraphInterrupted(graphState)) {
+            // Recovery path: if graph ended with error after article approval,
+            // guide user to rollback to article checkpoint
+            const stateValues = graphState?.values || {};
+            if (stateValues.currentPhase === 'error' && stateValues.articleApproved === true) {
+                console.log(`[${new Date().toISOString()}] Recovering from article error state for session ${sessionId}`);
+                return res.status(400).json({
+                    sessionId,
+                    error: 'Session ended with error after article approval. Use rollback to return to article checkpoint.',
+                    recoverable: true,
+                    rollbackTo: 'article'
+                });
+            }
+
             return res.status(400).json({
                 sessionId,
                 error: 'Session is not at a checkpoint',
-                currentPhase: graphState?.values?.currentPhase || null
+                currentPhase: stateValues.currentPhase || null
             });
         }
 
