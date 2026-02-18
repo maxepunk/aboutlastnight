@@ -18,6 +18,7 @@ const {
   loadDirectorNotes,
   fetchMemoryTokens,
   fetchPaperEvidence,
+  tagTokenDispositions,
   createMockNotionClient,
   _testing
 } = require('../../../lib/workflow/nodes/fetch-nodes');
@@ -468,6 +469,79 @@ describe('fetch-nodes', () => {
       // Should filter to tokens specified in director notes
       expect(fetchResult.memoryTokens).toHaveLength(3);
       expect(fetchResult.currentPhase).toBe(PHASES.FETCH_EVIDENCE);
+    });
+  });
+
+  describe('tagTokenDispositions', () => {
+    // Fixture has: exposedTokens: [tok001, tok002, tok003], buriedTokens: [tok004, tok005]
+    const config = { configurable: { dataDir: TEST_SESSION_DIR } };
+
+    it('re-tags tokens that already have disposition set (incremental flow fix)', async () => {
+      // Simulate the bug: fetchMemoryTokens ran before orchestrator-parsed.json existed,
+      // so all tokens defaulted to 'buried'. tagTokenDispositions must OVERRIDE these.
+      const state = {
+        sessionId: 'test-session',
+        memoryTokens: [
+          { tokenId: 'tok001', content: 'Exposed memory', disposition: 'buried' },
+          { tokenId: 'tok002', content: 'Another exposed', disposition: 'buried' },
+          { tokenId: 'tok004', content: 'Buried memory', disposition: 'buried' }
+        ]
+      };
+
+      const result = await tagTokenDispositions(state, config);
+
+      expect(result.memoryTokens).toBeDefined();
+      // tok001 and tok002 are in exposedTokens — must be re-tagged to 'exposed'
+      const tok001 = result.memoryTokens.find(t => t.tokenId === 'tok001');
+      const tok002 = result.memoryTokens.find(t => t.tokenId === 'tok002');
+      const tok004 = result.memoryTokens.find(t => t.tokenId === 'tok004');
+
+      expect(tok001.disposition).toBe('exposed');
+      expect(tok002.disposition).toBe('exposed');
+      expect(tok004.disposition).toBe('buried');
+    });
+
+    it('tags tokens correctly from orchestrator-parsed.json', async () => {
+      const state = {
+        sessionId: 'test-session',
+        memoryTokens: [
+          { tokenId: 'tok001', content: 'Memory 1' },
+          { tokenId: 'tok004', content: 'Memory 4' },
+          { tokenId: 'tok999', content: 'Unknown token' }
+        ]
+      };
+
+      const result = await tagTokenDispositions(state, config);
+
+      const tok001 = result.memoryTokens.find(t => t.tokenId === 'tok001');
+      const tok004 = result.memoryTokens.find(t => t.tokenId === 'tok004');
+      const tok999 = result.memoryTokens.find(t => t.tokenId === 'tok999');
+
+      expect(tok001.disposition).toBe('exposed');
+      expect(tok004.disposition).toBe('buried');
+      expect(tok004.shellAccount).toBe('TestShell');
+      expect(tok004.transactionAmount).toBe(100000);
+      // Tokens not in either list default to buried
+      expect(tok999.disposition).toBe('buried');
+    });
+
+    it('skips when no tokens exist', async () => {
+      const result = await tagTokenDispositions({ sessionId: 'test-session', memoryTokens: [] }, config);
+      expect(result).toEqual({});
+    });
+
+    it('defaults all to buried when orchestrator-parsed.json is missing', async () => {
+      const state = {
+        sessionId: 'nonexistent-session',
+        memoryTokens: [
+          { tokenId: 'tok001', content: 'Memory 1', disposition: 'exposed' }
+        ]
+      };
+
+      const result = await tagTokenDispositions(state, config);
+
+      // Without the file, all tokens should be buried
+      expect(result.memoryTokens[0].disposition).toBe('buried');
     });
   });
 });

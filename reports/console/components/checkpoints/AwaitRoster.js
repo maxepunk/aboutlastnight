@@ -11,7 +11,8 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 const { Badge, truncate } = window.Console.utils;
 
 function AwaitRoster({ data, onApprove }) {
-  const genericPhotoAnalyses = (data && data.genericPhotoAnalyses) || [];
+  const rawAnalyses = data && data.genericPhotoAnalyses;
+  const genericPhotoAnalyses = Array.isArray(rawAnalyses) ? rawAnalyses : (rawAnalyses && rawAnalyses.analyses) || [];
   const whiteboardPhotoPath = (data && data.whiteboardPhotoPath) || null;
 
   const [tags, setTags] = React.useState([]);

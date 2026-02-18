@@ -348,12 +348,10 @@ async function tagTokenDispositions(state, config) {
     return {};
   }
 
-  // Skip if ALL tokens already have a disposition set
-  const allTagged = state.memoryTokens.every(t => t.disposition);
-  if (allTagged) {
-    console.log('[tagTokenDispositions] All tokens already tagged, skipping');
-    return {};
-  }
+  // Always re-tag: this node runs AFTER parseRawInput creates orchestrator-parsed.json.
+  // The initial tagging in fetchMemoryTokens defaults all tokens to 'buried' when
+  // orchestrator-parsed.json doesn't exist yet (incremental flow). This node applies
+  // the correct exposed/buried split once the file is available.
 
   // Load orchestrator-parsed.json
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;

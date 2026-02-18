@@ -14,11 +14,13 @@ jest.mock('../../../lib/workflow/checkpoint-helpers',
 
 const {
   analyzePhotos,
+  finalizePhotoAnalyses,
   createMockPhotoAnalyzer,
   _testing: {
     getSdkClient,
     buildPhotoAnalysisSystemPrompt,
     createEmptyPhotoAnalysisResult,
+    createFailedPhotoAnalysis,
     safeParseJson,
     PHOTO_ANALYSIS_SCHEMA
   }
@@ -506,6 +508,131 @@ describe('photo-nodes', () => {
     });
   });
 
+  describe('finalizePhotoAnalyses - failed photo retry', () => {
+    function makeAnalysis(filename, failed = false) {
+      if (failed) return createFailedPhotoAnalysis(filename, 'SDK error');
+      return {
+        filename,
+        visualContent: 'People gathered around table',
+        narrativeMoment: 'Discussion phase',
+        suggestedCaption: 'A group discussion',
+        characterDescriptions: [],
+        emotionalTone: 'tense',
+        storyRelevance: 'supporting'
+      };
+    }
+
+    it('retries failed photo analyses and recovers them', async () => {
+      const mockClient = jest.fn().mockResolvedValue({
+        filename: 'failed.jpg',
+        visualContent: 'Recovered content',
+        narrativeMoment: 'Recovered moment',
+        suggestedCaption: 'Recovered caption',
+        characterDescriptions: [],
+        emotionalTone: 'neutral',
+        storyRelevance: 'contextual'
+      });
+
+      const state = {
+        photoAnalyses: {
+          analyses: [
+            makeAnalysis('good.jpg'),
+            makeAnalysis('failed.jpg', true)
+          ],
+          stats: { totalPhotos: 2, analyzedPhotos: 1, failedPhotos: 1 }
+        },
+        sessionPhotos: ['/photos/good.jpg', '/photos/failed.jpg'],
+        sessionConfig: { roster: ['Alice', 'Bob'] },
+        characterIdMappings: {},
+        playerFocus: {}
+      };
+      const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
+
+      const result = await finalizePhotoAnalyses(state, config);
+
+      // The failed photo should have been retried and recovered
+      const recoveredAnalysis = result.photoAnalyses.analyses.find(a => a.filename === 'failed.jpg');
+      expect(recoveredAnalysis._error).toBeUndefined();
+      expect(recoveredAnalysis.visualContent).toBe('Recovered content');
+      expect(result.photoAnalyses.enrichmentStats.retriedPhotos).toBe(1);
+      expect(result.photoAnalyses.enrichmentStats.recoveredPhotos).toBe(1);
+    });
+
+    it('keeps failed placeholder when retry also fails', async () => {
+      const mockClient = jest.fn().mockRejectedValue(new Error('Still broken'));
+
+      const state = {
+        photoAnalyses: {
+          analyses: [
+            makeAnalysis('good.jpg'),
+            makeAnalysis('failed.jpg', true)
+          ],
+          stats: { totalPhotos: 2, analyzedPhotos: 1, failedPhotos: 1 }
+        },
+        sessionPhotos: ['/photos/good.jpg', '/photos/failed.jpg'],
+        sessionConfig: { roster: [] },
+        characterIdMappings: {},
+        playerFocus: {}
+      };
+      const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
+
+      const result = await finalizePhotoAnalyses(state, config);
+
+      // Failed photo stays failed
+      const stillFailed = result.photoAnalyses.analyses.find(a => a.filename === 'failed.jpg');
+      expect(stillFailed._error).toBeDefined();
+      expect(result.photoAnalyses.enrichmentStats.retriedPhotos).toBe(1);
+      expect(result.photoAnalyses.enrichmentStats.recoveredPhotos).toBe(0);
+    });
+
+    it('skips retry when no photos failed', async () => {
+      const mockClient = jest.fn();
+
+      const state = {
+        photoAnalyses: {
+          analyses: [makeAnalysis('good1.jpg'), makeAnalysis('good2.jpg')],
+          stats: { totalPhotos: 2, analyzedPhotos: 2, failedPhotos: 0 }
+        },
+        sessionPhotos: ['/photos/good1.jpg', '/photos/good2.jpg'],
+        sessionConfig: { roster: [] },
+        characterIdMappings: {},
+        playerFocus: {}
+      };
+      const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
+
+      const result = await finalizePhotoAnalyses(state, config);
+
+      // No SDK calls for retry (only enrichment passthrough)
+      expect(mockClient).not.toHaveBeenCalled();
+      expect(result.photoAnalyses.enrichmentStats.retriedPhotos).toBe(0);
+      expect(result.photoAnalyses.enrichmentStats.recoveredPhotos).toBe(0);
+    });
+
+    it('skips retry for photo whose path is not in sessionPhotos', async () => {
+      const mockClient = jest.fn();
+
+      const state = {
+        photoAnalyses: {
+          analyses: [makeAnalysis('orphaned.jpg', true)],
+          stats: { totalPhotos: 1, analyzedPhotos: 0, failedPhotos: 1 }
+        },
+        sessionPhotos: ['/photos/different.jpg'], // No match for orphaned.jpg
+        sessionConfig: { roster: [] },
+        characterIdMappings: {},
+        playerFocus: {}
+      };
+      const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
+
+      const result = await finalizePhotoAnalyses(state, config);
+
+      // Should not attempt SDK call since path couldn't be resolved
+      expect(mockClient).not.toHaveBeenCalled();
+      // Original failed analysis preserved
+      const stillFailed = result.photoAnalyses.analyses.find(a => a.filename === 'orphaned.jpg');
+      expect(stillFailed._error).toBeDefined();
+    });
+  });
+
   describe('PHOTO_ANALYSIS_SCHEMA', () => {
     it('has required fields defined', () => {
       expect(PHOTO_ANALYSIS_SCHEMA.required).toContain('filename');
@@ -545,6 +672,7 @@ const _testing = {
   getSdkClient,
   buildPhotoAnalysisSystemPrompt,
   createEmptyPhotoAnalysisResult,
+  createFailedPhotoAnalysis,
   safeParseJson,
   PHOTO_ANALYSIS_SCHEMA
 };
