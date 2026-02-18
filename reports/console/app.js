@@ -129,8 +129,11 @@ function App() {
               } else if (result.currentPhase === 'error') {
                 dispatch({
                   type: APP_ACTIONS.SET_ERROR,
-                  message: result.error || 'Workflow error'
+                  message: (result.error || 'Workflow error') +
+                    (result.details ? ' ' + result.details : '') +
+                    ' You can edit and retry, or use rollback.'
                 });
+                // Don't clear checkpointType — let the user retry from the same checkpoint
               }
               break;
             case 'error':
