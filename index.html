@@ -321,6 +321,16 @@
                 </div>
 
                 <div class="faq-item">
+                    <h3 class="faq-question">How do I get there?</h3>
+                    <p class="faq-answer">
+                        We're at <strong>Off the Couch Games, 555 Mowry Ave, Fremont, CA 94536</strong>.
+                        <a href="https://maps.google.com/?q=555+Mowry+Ave+Fremont+CA+94536" class="link-inline" target="_blank" rel="noopener">Get directions →</a><br><br>
+                        <strong>Driving:</strong> Plenty of free parking available on site. No stress about finding a spot.<br><br>
+                        <strong>Public Transit:</strong> Fremont BART is about 1 mile away. AC Transit Lines 200 and 216 run along Mowry Ave and connect directly to the station. Otherwise, it's a quick rideshare from BART.
+                    </p>
+                </div>
+
+                <div class="faq-item">
                     <h3 class="faq-question">Are discounts available?</h3>
                     <p class="faq-answer">
 					Individual tickets are $75 per person. <br><br>
@@ -352,10 +362,6 @@
                     <p class="faq-answer">Themes include: memory loss, corporate conspiracy, infidelity, substance use references, artificial intelligence, and psychological manipulation. No physical contact is required between players.</p>
                 </div>
                 
-                <div class="faq-item">
-                    <h3 class="faq-question">What's parking like?</h3>
-                    <p class="faq-answer">Free parking available at Off the Couch Games. Venue is also accessible via BART (Warm Springs/South Fremont station) with a short rideshare.</p>
-                </div>
                 
                 <div class="faq-item">
                     <h3 class="faq-question">What if I have accessibility needs?</h3>
@@ -400,6 +406,13 @@
                 Time slots are limited • Authorities have been ALERTED • Case sessions fill rapidly
             </p>
 
+            <p class="system-note" style="margin-top: 0.5rem;">
+                <strong>LOCATION:</strong> Off the Couch Games ·
+                <a href="https://maps.google.com/?q=555+Mowry+Ave+Fremont+CA+94536" class="link-inline" target="_blank" rel="noopener">
+                    555 Mowry Ave, Fremont, CA 94536
+                </a>
+            </p>
+
             <!-- Off the Couch Booking Widget -->
             <div id="otcContainer" style="max-width: 800px; margin: 0 auto;"></div>
             <script>const q=window.location.search;let f=document.createElement("iframe");f.src="https://offthecouch.io/book/lastnight"+q;let scrollTop=0;f.width="100%";f.allow="payment";f.scrolling="no";f.style.border="none";f.style.display="block";f.style.overflow="hidden";f.style.height="auto";window.addEventListener("message",e=>{if(e.origin==="https://offthecouch.io"&&e.data.action==="updateHeight")f.style.height=e.data.height+"px";if(e.origin==="https://offthecouch.io"&&e.data.action==="scrollToTop"){scrollTop=findPosY(document.getElementById("otcContainer"));window.scrollTo({top:scrollTop-30,behavior:"smooth"})}if(e.origin==="https://offthecouch.io")switch(e.data.eventType){case"page_view":insertGoogleAnalyticsScript(e.data.id);break;case"add_to_cart":window.gtag&&gtag("event","add_to_cart",{currency:e.data.currency,value:e.data.eventValue});break;case"begin_checkout":window.gtag&&gtag("event","begin_checkout",{currency:e.data.currency,value:e.data.eventValue});break;case"purchase":window.gtag&&gtag("event","purchase",{currency:e.data.currency,value:e.data.eventValue});break;case"success":window.gtag&&gtag("event","success",{currency:e.data.currency,value:e.data.eventValue});break;default:}});document.getElementById("otcContainer").appendChild(f);function findPosY(o){let t=0;if(o.offsetParent)for(;o.offsetParent;)t+=o.offsetTop,o=o.offsetParent;else o.y&&(t+=o.y);return t}function insertGoogleAnalyticsScript(i){if(!i)return;window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}if(!window.gtag){const s=document.createElement("script");s.async=!0;s.onload=()=>{window.gtag=gtag;gtag("js",new Date);gtag("config",i)};s.src="https://www.googletagmanager.com/gtag/js?id="+i;document.head.appendChild(s)}gtag("event","page_view")}</script>
@@ -415,7 +428,12 @@
     <!-- Footer -->
     <footer class="footer">
         <p class="case-details">CASE FILE: ABOUT LAST NIGHT</p>
-        <p class="location-detail">In partnership with Off the Couch Games | Fremont, California</p>
+        <p class="location-detail">
+            In partnership with Off the Couch Games<br>
+            <a href="https://maps.google.com/?q=555+Mowry+Ave+Fremont+CA+94536" class="link-inline" target="_blank" rel="noopener">
+                555 Mowry Ave, Fremont, CA 94536
+            </a>
+        </p>
         <p class="footer-credit">A Patchwork Adventures × StoryPunk Production</p>
         <p class="footer-links"><a href="press.html">Press & Media</a></p>
     </footer>
