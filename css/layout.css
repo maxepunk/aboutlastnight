@@ -191,6 +191,22 @@
     color: rgba(204, 0, 0, 0.8);
 }
 
+.social-links {
+    display: flex;
+    justify-content: center;
+    gap: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+.social-links a {
+    color: rgba(255, 255, 255, 0.4);
+    transition: color 0.3s ease;
+}
+
+.social-links a:hover {
+    color: rgba(204, 0, 0, 0.8);
+}
+
 /* Booking Bar */
 .booking-bar {
     position: sticky;
