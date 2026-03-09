@@ -1243,11 +1243,9 @@ app.get('/api/file', requireAuth, (req, res) => {
     });
 });
 
-// NOTE: detlogv3.html report generation is broken — it sends {systemPrompt, userPrompt, model}
-// to /api/generate which requires {sessionId, theme, ...} and returns 400.
-// Kept as landing page until Phase 4 (detective theme via LangGraph). See roadmap.
+// Redirect root to console SPA
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'detlogv3.html'));
+    res.redirect('/console');
 });
 
 // Start server with Claude Agent SDK health check

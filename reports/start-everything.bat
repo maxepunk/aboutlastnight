@@ -5,7 +5,7 @@ echo   Starting ALN Console + Cloudflare Tunnel
 echo ============================================
 echo.
 echo This will open TWO windows:
-echo   1. Server (localhost:3000)
+echo   1. Server (localhost:3001)
 echo   2. Cloudflare Tunnel
 echo.
 echo Public URL: https://console.aboutlastnightgame.com

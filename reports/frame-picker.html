@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motion Photo Frame Picker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0b;
+    --bg-raised: #0e0e10;
+    --bg-deep: #08080a;
+    --border: #1e1e20;
+    --border-light: #2a2a2e;
+    --text: #e0ddd8;
+    --text-dim: #777;
+    --text-faint: #555;
+    --text-ghost: #333;
+    --accent: #c8b4a0;
+    --accent-hover: #d8c8b8;
+    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', 'Menlo', monospace;
+    --serif: Georgia, 'Times New Roman', serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-raised);
+    flex-shrink: 0;
+  }
+  .header-left { display: flex; align-items: baseline; gap: 12px; }
+  .header-left h1 {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 400;
+    color: #f5f3ef;
+    letter-spacing: -0.02em;
+  }
+  .header-tag { font-size: 11px; color: var(--text-faint); font-weight: 300; }
+  .file-info { display: flex; align-items: center; gap: 16px; font-size: 11px; color: var(--text-dim); }
+  .badge {
+    background: #1a1a1e;
+    padding: 4px 10px;
+    border-radius: 4px;
+    color: var(--accent);
+  }
+
+  .upload-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  .drop-zone {
+    width: 100%;
+    max-width: 560px;
+    border: 2px dashed var(--border-light);
+    border-radius: 12px;
+    padding: 80px 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: #12110f;
+  }
+  .drop-zone .icon { font-size: 48px; margin-bottom: 20px; opacity: 0.3; line-height: 1; }
+  .drop-zone h2 {
+    font-family: var(--serif);
+    font-size: 20px;
+    color: #f5f3ef;
+    font-weight: 400;
+    margin-bottom: 8px;
+  }
+  .drop-zone p { font-size: 12px; color: var(--text-faint); }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border-light);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    margin: 0 auto 20px;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-bar-wrap {
+    width: 80%;
+    max-width: 300px;
+    height: 4px;
+    background: var(--border-light);
+    border-radius: 2px;
+    margin: 16px auto 0;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s ease;
+  }
+
+  .viewer { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  .preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 24px 12px;
+    min-height: 0;
+    position: relative;
+  }
+  .preview img, .preview canvas {
+    max-width: 100%;
+    max-height: calc(100vh - 320px);
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  }
+  .overlay {
+    position: absolute;
+    background: rgba(10,10,11,0.85);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .overlay-left { top: 28px; left: 32px; display: flex; align-items: baseline; gap: 6px; }
+  .overlay-left .num { color: var(--accent); font-weight: 700; font-size: 16px; }
+  .overlay-left .den { color: var(--text-faint); }
+  .overlay-right { top: 28px; right: 32px; font-size: 11px; color: var(--text-faint); }
+  .overlay-format {
+    top: 28px; right: 32px; font-size: 11px; color: var(--text-faint);
+    display: flex; gap: 12px; align-items: center;
+  }
+  .format-tag {
+    background: #1a2a1a;
+    color: #8ab88a;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  .controls {
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #0c0c0e;
+    flex-shrink: 0;
+  }
+  .nav-btn {
+    background: #1a1a1e;
+    border: 1px solid var(--border-light);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: var(--mono);
+    line-height: 1;
+  }
+  .nav-btn:disabled { color: var(--text-ghost); cursor: default; }
+  .slider-wrap { flex: 1; }
+  .slider-wrap input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 4px;
+    cursor: pointer;
+  }
+  .save-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--mono);
+    letter-spacing: 0.05em;
+    transition: background 0.15s ease;
+  }
+  .save-btn:hover { background: var(--accent-hover); }
+  .new-btn {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-faint);
+    border-radius: 6px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--mono);
+  }
+
+  .filmstrip {
+    border-top: 1px solid var(--border);
+    background: var(--bg-deep);
+    padding: 10px 24px;
+    overflow-x: auto;
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .filmstrip::-webkit-scrollbar { height: 4px; }
+  .filmstrip::-webkit-scrollbar-track { background: transparent; }
+  .filmstrip::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+  .thumb-overflow { font-size: 10px; color: #444; padding: 0 6px; flex-shrink: 0; }
+  .thumb {
+    flex-shrink: 0;
+    cursor: pointer;
+    position: relative;
+    border-radius: 3px;
+    overflow: hidden;
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+    opacity: 0.5;
+    transition: all 0.1s ease;
+  }
+  .thumb:hover { opacity: 0.8; }
+  .thumb.selected {
+    outline: 2px solid var(--accent);
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  .thumb img, .thumb canvas { width: 64px; height: 44px; object-fit: cover; display: block; }
+  .thumb .sel-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    display: none;
+  }
+  .thumb.selected .sel-bar { display: block; }
+
+  .hints {
+    padding: 6px 24px 10px;
+    background: var(--bg-deep);
+    font-size: 10px;
+    color: var(--text-ghost);
+    display: flex;
+    gap: 16px;
+    border-top: 1px solid #111;
+    flex-shrink: 0;
+  }
+  kbd {
+    background: #1a1a1e;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-right: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Frame Picker</h1>
+    <span class="header-tag" id="headerTag">MOTION PHOTO</span>
+  </div>
+  <div class="file-info hidden" id="fileInfo">
+    <span id="fileNameDisplay"></span>
+    <span class="badge" id="frameCountBadge"></span>
+  </div>
+</header>
+
+<div class="upload-area" id="uploadArea">
+  <div class="drop-zone" id="dropZone">
+    <div id="uploadContent">
+      <div class="icon">&#9678;</div>
+      <h2>Drop your Motion Photo here</h2>
+      <p>Samsung / Google motion photos &middot; .jpg .mjpg .mjpeg .avi .mp4</p>
+    </div>
+    <div id="loadingContent" class="hidden">
+      <div class="spinner"></div>
+      <p id="loadingText" style="font-size:13px; color:#777;">Detecting format&hellip;</p>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progressBar"></div>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="fileInput" accept=".jpg,.jpeg,.mjpg,.mjpeg,.avi,.mjp,.mp4,.heic" style="display:none">
+</div>
+
+<div class="viewer hidden" id="viewer">
+  <div class="preview" id="previewArea">
+    <img id="mainPreview" src="" alt="Frame preview">
+    <div class="overlay overlay-left">
+      <span class="num" id="currentNum">1</span>
+      <span class="den" id="currentDen">/ 0</span>
+    </div>
+    <div class="overlay overlay-format" id="formatOverlay">
+      <span id="sizeInfo">0 KB</span>
+      <span class="format-tag" id="formatTag"></span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="nav-btn" id="prevBtn">&#9666;</button>
+    <div class="slider-wrap">
+      <input type="range" id="scrubber" min="0" max="0" value="0">
+    </div>
+    <button class="nav-btn" id="nextBtn">&#9656;</button>
+    <button class="save-btn" id="saveBtn">SAVE FRAME</button>
+    <button class="new-btn" id="newBtn">NEW FILE</button>
+  </div>
+
+  <div class="filmstrip" id="filmstrip"></div>
+
+  <div class="hints">
+    <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> navigate</span>
+    <span><kbd>Enter</kbd> save</span>
+  </div>
+</div>
+
+<!-- Hidden elements for video decoding -->
+<video id="hiddenVideo" style="display:none" muted playsinline></video>
+<canvas id="captureCanvas" style="display:none"></canvas>
+
+<script>
+(function() {
+  /* ---- State ---- */
+  var frameBlobs = [];     // Blob objects for each frame
+  var frameURLs = [];      // blob: URLs for display
+  var thumbURLs = [];      // blob: URLs for thumbnails
+  var selectedIndex = 0;
+  var fileName = '';
+  var detectedFormat = '';
+  var THUMBS_VISIBLE = 60;
+  var thumbStart = 0;
+  var thumbEnd = 0;
+
+  /* ---- DOM refs ---- */
+  var uploadArea     = document.getElementById('uploadArea');
+  var dropZone       = document.getElementById('dropZone');
+  var fileInput      = document.getElementById('fileInput');
+  var uploadContent  = document.getElementById('uploadContent');
+  var loadingContent = document.getElementById('loadingContent');
+  var loadingText    = document.getElementById('loadingText');
+  var progressBar    = document.getElementById('progressBar');
+  var fileInfo       = document.getElementById('fileInfo');
+  var fileNameDisp   = document.getElementById('fileNameDisplay');
+  var frameCountBadge = document.getElementById('frameCountBadge');
+  var headerTag      = document.getElementById('headerTag');
+  var viewer         = document.getElementById('viewer');
+  var previewArea    = document.getElementById('previewArea');
+  var mainPreview    = document.getElementById('mainPreview');
+  var currentNum     = document.getElementById('currentNum');
+  var currentDen     = document.getElementById('currentDen');
+  var sizeInfo       = document.getElementById('sizeInfo');
+  var formatTag      = document.getElementById('formatTag');
+  var scrubber       = document.getElementById('scrubber');
+  var prevBtn        = document.getElementById('prevBtn');
+  var nextBtn        = document.getElementById('nextBtn');
+  var saveBtn        = document.getElementById('saveBtn');
+  var newBtn         = document.getElementById('newBtn');
+  var filmstrip      = document.getElementById('filmstrip');
+  var hiddenVideo    = document.getElementById('hiddenVideo');
+  var captureCanvas  = document.getElementById('captureCanvas');
+
+  /* ---- Helpers ---- */
+  function cleanup() {
+    frameURLs.forEach(function(u) { URL.revokeObjectURL(u); });
+    thumbURLs.forEach(function(u) { URL.revokeObjectURL(u); });
+    frameBlobs = []; frameURLs = []; thumbURLs = [];
+    hiddenVideo.src = '';
+    hiddenVideo.load();
+  }
+
+  function padNum(n, w) {
+    var s = '' + n;
+    while (s.length < w) s = '0' + s;
+    return s;
+  }
+
+  function setProgress(pct, text) {
+    progressBar.style.width = pct + '%';
+    if (text) loadingText.textContent = text;
+  }
+
+  /* ======================================================
+   * FORMAT DETECTION
+   * ====================================================== */
+
+  function detectFormat(data) {
+    /* Check for Samsung/Google Motion Photo: XMP with GCamera:MotionPhoto="1" */
+    /* Search in first 200KB for XMP data (covers EXIF + XMP segments) */
+    var searchLimit = Math.min(data.length, 200000);
+    var hasMotionPhotoXMP = false;
+    var mp4Offset = -1;
+
+    /* Quick text search for MotionPhoto marker in header area */
+    for (var i = 0; i < searchLimit - 20; i++) {
+      if (data[i] === 0x4D && data[i+1] === 0x6F && data[i+2] === 0x74 &&
+          data[i+3] === 0x69 && data[i+4] === 0x6F && data[i+5] === 0x6E &&
+          data[i+6] === 0x50 && data[i+7] === 0x68 && data[i+8] === 0x6F &&
+          data[i+9] === 0x74 && data[i+10] === 0x6F) {
+        hasMotionPhotoXMP = true;
+        break;
+      }
+    }
+
+    /* Look for MP4 ftyp box anywhere after initial JPEG data */
+    for (var j = 1000; j < data.length - 8; j++) {
+      if (data[j+4] === 0x66 && data[j+5] === 0x74 && data[j+6] === 0x79 && data[j+7] === 0x70) {
+        /* Verify box size is reasonable */
+        var boxSize = (data[j] << 24) | (data[j+1] << 16) | (data[j+2] << 8) | data[j+3];
+        if (boxSize >= 8 && boxSize <= 64) {
+          mp4Offset = j;
+          break;
+        }
+      }
+    }
+
+    /* Also check for MotionPhoto_Data marker (Samsung) */
+    if (mp4Offset === -1) {
+      var mpd = [0x4D,0x6F,0x74,0x69,0x6F,0x6E,0x50,0x68,0x6F,0x74,0x6F,0x5F,0x44,0x61,0x74,0x61];
+      for (var k = 1000; k < data.length - 20; k++) {
+        var match = true;
+        for (var m = 0; m < mpd.length; m++) {
+          if (data[k+m] !== mpd[m]) { match = false; break; }
+        }
+        if (match) {
+          /* ftyp should follow immediately after the marker */
+          mp4Offset = k + mpd.length;
+          break;
+        }
+      }
+    }
+
+    if ((hasMotionPhotoXMP || mp4Offset > 0) && mp4Offset > 0) {
+      return { type: 'motion_photo', mp4Offset: mp4Offset };
+    }
+
+    /* Check if this is a standalone MP4/video file */
+    if (data[4] === 0x66 && data[5] === 0x74 && data[6] === 0x79 && data[7] === 0x70) {
+      return { type: 'video', mp4Offset: 0 };
+    }
+
+    /* Check for raw MJPEG (starts with FFD8, has multiple SOI markers) */
+    if (data[0] === 0xFF && data[1] === 0xD8) {
+      return { type: 'mjpeg' };
+    }
+
+    return { type: 'unknown' };
+  }
+
+  /* ======================================================
+   * VIDEO FRAME EXTRACTION (Motion Photo / MP4)
+   * ====================================================== */
+
+  function extractVideoFrames(data, mp4Offset, callback) {
+    var mp4Data = data.slice(mp4Offset);
+    var videoBlob = new Blob([mp4Data], { type: 'video/mp4' });
+    var videoURL = URL.createObjectURL(videoBlob);
+
+    hiddenVideo.src = videoURL;
+
+    hiddenVideo.onerror = function() {
+      URL.revokeObjectURL(videoURL);
+      callback('Could not decode video. The format may not be supported by this browser.');
+    };
+
+    hiddenVideo.onloadedmetadata = function() {
+      var duration = hiddenVideo.duration;
+      var width = hiddenVideo.videoWidth;
+      var height = hiddenVideo.videoHeight;
+
+      captureCanvas.width = width;
+      captureCanvas.height = height;
+      var ctx = captureCanvas.getContext('2d');
+
+      /* Create thumbnail canvas */
+      var thumbCanvas = document.createElement('canvas');
+      var thumbH = 44;
+      var thumbW = Math.round((width / height) * thumbH);
+      thumbCanvas.width = thumbW;
+      thumbCanvas.height = thumbH;
+      var thumbCtx = thumbCanvas.getContext('2d');
+
+      /* Estimate frame count: try to step at ~30fps intervals,
+       * but use a minimum step to avoid infinite loops */
+      var fps = 30;
+      var step = 1.0 / fps;
+      var times = [];
+      for (var t = 0; t < duration - 0.001; t += step) {
+        times.push(t);
+      }
+      /* Always include last frame */
+      times.push(Math.max(0, duration - 0.01));
+
+      var capturedFrames = [];
+      var capturedThumbs = [];
+      var idx = 0;
+
+      setProgress(0, 'Extracting frames (0/' + times.length + ')...');
+
+      function captureNext() {
+        if (idx >= times.length) {
+          URL.revokeObjectURL(videoURL);
+          callback(null, capturedFrames, capturedThumbs);
+          return;
+        }
+
+        hiddenVideo.currentTime = times[idx];
+      }
+
+      hiddenVideo.onseeked = function() {
+        /* Draw current frame to full-size canvas */
+        ctx.drawImage(hiddenVideo, 0, 0, width, height);
+
+        /* Capture as JPEG blob */
+        captureCanvas.toBlob(function(blob) {
+          capturedFrames.push(blob);
+
+          /* Also make thumbnail */
+          thumbCtx.drawImage(hiddenVideo, 0, 0, thumbW, thumbH);
+          thumbCanvas.toBlob(function(tBlob) {
+            capturedThumbs.push(tBlob);
+            idx++;
+            setProgress(
+              Math.round((idx / times.length) * 100),
+              'Extracting frames (' + idx + '/' + times.length + ')...'
+            );
+            /* Use setTimeout to avoid call stack issues and let UI update */
+            setTimeout(captureNext, 0);
+          }, 'image/jpeg', 0.7);
+        }, 'image/jpeg', 0.95);
+      };
+
+      captureNext();
+    };
+  }
+
+  /* ======================================================
+   * STRUCTURE-AWARE MJPEG PARSER
+   * ====================================================== */
+
+  function findJPEGFrames(data) {
+    var result = [];
+    var i = 0;
+    var len = data.length;
+
+    while (i < len - 1) {
+      if (data[i] !== 0xFF || data[i + 1] !== 0xD8) { i++; continue; }
+      var start = i;
+      i += 2;
+      var foundEnd = false;
+
+      while (i < len - 1) {
+        if (data[i] !== 0xFF) { i++; continue; }
+        while (i < len && data[i] === 0xFF) i++;
+        if (i >= len) break;
+        var marker = data[i];
+        i++;
+
+        if (marker === 0xD9) {
+          result.push(data.slice(start, i));
+          foundEnd = true;
+          break;
+        }
+        if (marker === 0xD8 || marker === 0x00 || (marker >= 0xD0 && marker <= 0xD7)) continue;
+
+        if (marker === 0xDA) {
+          if (i + 1 >= len) break;
+          var sosLen = (data[i] << 8) | data[i + 1];
+          i += sosLen;
+          while (i < len - 1) {
+            if (data[i] !== 0xFF) { i++; continue; }
+            if (data[i + 1] === 0x00) { i += 2; continue; }
+            if (data[i + 1] >= 0xD0 && data[i + 1] <= 0xD7) { i += 2; continue; }
+            if (data[i + 1] === 0xD9) {
+              i += 2;
+              result.push(data.slice(start, i));
+              foundEnd = true;
+              break;
+            }
+            break;
+          }
+          if (foundEnd) break;
+          continue;
+        }
+
+        if (i + 1 >= len) break;
+        var segLen = (data[i] << 8) | data[i + 1];
+        if (segLen < 2) segLen = 2;
+        i += segLen;
+      }
+
+      if (!foundEnd && start < len) {
+        result.push(data.slice(start));
+      }
+    }
+    return result;
+  }
+
+  /* ======================================================
+   * UI LOGIC
+   * ====================================================== */
+
+  function updateThumbRange(idx) {
+    var half = Math.floor(THUMBS_VISIBLE / 2);
+    thumbStart = Math.max(0, Math.min(idx - half, frameURLs.length - THUMBS_VISIBLE));
+    if (thumbStart < 0) thumbStart = 0;
+    thumbEnd = Math.min(frameURLs.length, thumbStart + THUMBS_VISIBLE);
+    renderFilmstrip();
+  }
+
+  function selectFrame(idx) {
+    if (idx < 0 || idx >= frameURLs.length) return;
+    selectedIndex = idx;
+    mainPreview.src = frameURLs[idx];
+    currentNum.textContent = idx + 1;
+
+    if (frameBlobs[idx]) {
+      sizeInfo.textContent = (frameBlobs[idx].size / 1024).toFixed(1) + ' KB';
+    }
+
+    scrubber.value = idx;
+    prevBtn.disabled = (idx === 0);
+    nextBtn.disabled = (idx === frameURLs.length - 1);
+
+    var thumbs = filmstrip.querySelectorAll('.thumb');
+    for (var t = 0; t < thumbs.length; t++) {
+      var ri = parseInt(thumbs[t].getAttribute('data-index'), 10);
+      thumbs[t].className = (ri === idx) ? 'thumb selected' : 'thumb';
+    }
+
+    if (idx < thumbStart || idx >= thumbEnd) {
+      updateThumbRange(idx);
+    }
+  }
+
+  function renderFilmstrip() {
+    filmstrip.innerHTML = '';
+    var urls = thumbURLs.length > 0 ? thumbURLs : frameURLs;
+
+    if (thumbStart > 0) {
+      var pre = document.createElement('div');
+      pre.className = 'thumb-overflow';
+      pre.textContent = '+' + thumbStart;
+      filmstrip.appendChild(pre);
+    }
+
+    for (var i = thumbStart; i < thumbEnd; i++) {
+      var div = document.createElement('div');
+      div.className = 'thumb' + (i === selectedIndex ? ' selected' : '');
+      div.setAttribute('data-index', i);
+
+      var img = document.createElement('img');
+      img.src = urls[i];
+      img.alt = 'Frame ' + (i + 1);
+
+      var bar = document.createElement('div');
+      bar.className = 'sel-bar';
+
+      div.appendChild(img);
+      div.appendChild(bar);
+      div.addEventListener('click', (function(idx) {
+        return function() { selectFrame(idx); };
+      })(i));
+      filmstrip.appendChild(div);
+    }
+
+    if (thumbEnd < frameURLs.length) {
+      var post = document.createElement('div');
+      post.className = 'thumb-overflow';
+      post.textContent = '+' + (frameURLs.length - thumbEnd);
+      filmstrip.appendChild(post);
+    }
+  }
+
+  function showViewer() {
+    uploadArea.classList.add('hidden');
+    viewer.classList.remove('hidden');
+    fileInfo.classList.remove('hidden');
+    fileNameDisp.textContent = fileName;
+    frameCountBadge.textContent = frameURLs.length + ' frames';
+    currentDen.textContent = '/ ' + frameURLs.length;
+    scrubber.max = frameURLs.length - 1;
+    scrubber.value = 0;
+    formatTag.textContent = detectedFormat;
+    selectFrame(0);
+    updateThumbRange(0);
+  }
+
+  function resetAll() {
+    cleanup();
+    selectedIndex = 0;
+    fileName = '';
+    detectedFormat = '';
+    viewer.classList.add('hidden');
+    fileInfo.classList.add('hidden');
+    uploadArea.classList.remove('hidden');
+    uploadContent.classList.remove('hidden');
+    loadingContent.classList.add('hidden');
+    filmstrip.innerHTML = '';
+    fileInput.value = '';
+    progressBar.style.width = '0%';
+  }
+
+  /* ======================================================
+   * FILE PROCESSING ENTRY POINT
+   * ====================================================== */
+
+  function processFile(file) {
+    cleanup();
+    fileName = file.name;
+    uploadContent.classList.add('hidden');
+    loadingContent.classList.remove('hidden');
+    setProgress(0, 'Reading file...');
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var data = new Uint8Array(e.target.result);
+      setProgress(10, 'Detecting format...');
+
+      var fmt = detectFormat(data);
+
+      if (fmt.type === 'motion_photo' || fmt.type === 'video') {
+        detectedFormat = fmt.type === 'motion_photo' ? 'MOTION PHOTO' : 'MP4';
+        headerTag.textContent = detectedFormat;
+        setProgress(15, 'Found embedded video, extracting frames...');
+
+        extractVideoFrames(data, fmt.mp4Offset, function(err, frameBlobList, thumbBlobList) {
+          if (err) {
+            alert(err);
+            resetAll();
+            return;
+          }
+          frameBlobs = frameBlobList;
+          frameURLs = frameBlobList.map(function(b) { return URL.createObjectURL(b); });
+          thumbURLs = thumbBlobList.map(function(b) { return URL.createObjectURL(b); });
+          showViewer();
+        });
+
+      } else if (fmt.type === 'mjpeg') {
+        detectedFormat = 'MJPEG';
+        headerTag.textContent = 'MJPEG';
+        setProgress(15, 'Parsing JPEG frames...');
+
+        var jpegFrames = findJPEGFrames(data);
+        if (jpegFrames.length <= 1) {
+          alert('Only ' + jpegFrames.length + ' JPEG frame found. This may be a regular JPEG, not a Motion JPEG or Motion Photo.\n\nIf this is a Samsung/Google motion photo, the embedded video may have been stripped during upload. Try using the original file directly.');
+          resetAll();
+          return;
+        }
+
+        frameBlobs = jpegFrames.map(function(d) { return new Blob([d], { type: 'image/jpeg' }); });
+        frameURLs = frameBlobs.map(function(b) { return URL.createObjectURL(b); });
+        thumbURLs = []; /* will use frameURLs */
+        showViewer();
+
+      } else {
+        alert('Unrecognized format. Supported:\n- Samsung/Google Motion Photos (.jpg with embedded video)\n- Raw MJPEG streams (.mjpg, .mjpeg)\n- MP4 video files (.mp4)');
+        resetAll();
+      }
+    };
+
+    reader.onerror = function() {
+      alert('Error reading file.');
+      resetAll();
+    };
+
+    reader.readAsArrayBuffer(file);
+  }
+
+  function downloadFrame() {
+    if (!frameBlobs[selectedIndex]) return;
+    var url = URL.createObjectURL(frameBlobs[selectedIndex]);
+    var a = document.createElement('a');
+    a.href = url;
+    var base = fileName.replace(/\.[^.]+$/, '');
+    a.download = base + '_frame_' + padNum(selectedIndex + 1, 4) + '.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /* ---- Event listeners ---- */
+  dropZone.addEventListener('click', function() { fileInput.click(); });
+  fileInput.addEventListener('change', function(e) {
+    if (e.target.files && e.target.files[0]) processFile(e.target.files[0]);
+  });
+
+  dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', function() {
+    dropZone.classList.remove('drag-over');
+  });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  scrubber.addEventListener('input', function(e) {
+    var val = parseInt(e.target.value, 10);
+    selectFrame(val);
+    updateThumbRange(val);
+  });
+
+  prevBtn.addEventListener('click', function() {
+    selectFrame(selectedIndex - 1);
+    updateThumbRange(selectedIndex);
+  });
+  nextBtn.addEventListener('click', function() {
+    selectFrame(selectedIndex + 1);
+    updateThumbRange(selectedIndex);
+  });
+
+  saveBtn.addEventListener('click', downloadFrame);
+  newBtn.addEventListener('click', resetAll);
+
+  document.addEventListener('keydown', function(e) {
+    if (frameURLs.length === 0) return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectFrame(selectedIndex - 1);
+      updateThumbRange(selectedIndex);
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectFrame(selectedIndex + 1);
+      updateThumbRange(selectedIndex);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      downloadFrame();
+    }
+  });
+})();
+</script>
+</body>
+</html>
