@@ -116,6 +116,17 @@ async function assembleHtml(state, config) {
   // Pass sessionId for photo path resolution
   const sessionId = state.sessionId || config?.configurable?.sessionId;
 
+  // Log financial data discrepancies before deterministic override corrects them
+  const { validateFinancialData } = require('./node-helpers');
+  const financialIssues = validateFinancialData(
+    state.contentBundle?.financialTracker,
+    state.shellAccounts
+  );
+  if (financialIssues.length > 0) {
+    console.warn('[assembleHtml] Financial data corrections applied:');
+    financialIssues.forEach(issue => console.warn(`  - ${issue}`));
+  }
+
   // Inject shellAccounts for deterministic financial tracker override
   const contentBundleWithFinancials = {
     ...state.contentBundle,

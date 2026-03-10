@@ -372,7 +372,7 @@ class TemplateAssembler {
 
       return {
         ...entry,
-        amount: `$${authoritative.total.toLocaleString()}`
+        amount: `$${authoritative.total.toLocaleString('en-US')}`
       };
     });
 
@@ -381,7 +381,7 @@ class TemplateAssembler {
     return {
       ...financialTracker,
       entries,
-      totalExposed: `$${totalExposed.toLocaleString()}`
+      totalExposed: `$${totalExposed.toLocaleString('en-US')}`
     };
   }
 

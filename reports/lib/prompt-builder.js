@@ -238,9 +238,9 @@ Return JSON with the following structure:
 <FINANCIAL_SUMMARY>
 AUTHORITATIVE SHELL ACCOUNT DATA (use these exact figures in financialTracker):
 ${nonZero.map(a =>
-  `- ${a.name}: $${a.total.toLocaleString()} (${a.tokenCount} token${a.tokenCount !== 1 ? 's' : ''})`
+  `- ${a.name}: $${a.total.toLocaleString('en-US')} (${a.tokenCount} token${a.tokenCount !== 1 ? 's' : ''})`
 ).join('\n')}
-Total buried: $${shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0).toLocaleString()}
+Total buried: $${shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0).toLocaleString('en-US')}
 
 These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use exact values.
 </FINANCIAL_SUMMARY>`;
