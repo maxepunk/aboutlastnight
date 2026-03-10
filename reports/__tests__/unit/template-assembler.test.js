@@ -306,6 +306,106 @@ describe('detective theme', () => {
   });
 });
 
+describe('overrideFinancialTracker', () => {
+  let assembler;
+
+  beforeAll(async () => {
+    assembler = new TemplateAssembler('journalist');
+    await assembler.initialize();
+  });
+
+  it('should replace LLM amounts with authoritative shell account data', () => {
+    const tracker = {
+      entries: [
+        { name: 'Cayman', amount: '$1,000,000' },
+        { name: 'Sarah', amount: '$125,000' }
+      ]
+    };
+    const shellAccounts = [
+      { name: 'Cayman', total: 1455000, tokenCount: 9 },
+      { name: 'Sarah', total: 350000, tokenCount: 1 }
+    ];
+
+    const result = assembler.overrideFinancialTracker(tracker, shellAccounts);
+    expect(result.entries[0].amount).toBe('$1,455,000');
+    expect(result.entries[1].amount).toBe('$350,000');
+  });
+
+  it('should calculate totalExposed from all shell accounts', () => {
+    const tracker = {
+      entries: [
+        { name: 'Cayman', amount: '$1,000,000' }
+      ]
+    };
+    const shellAccounts = [
+      { name: 'Cayman', total: 1455000 },
+      { name: 'Sarah', total: 350000 }
+    ];
+
+    const result = assembler.overrideFinancialTracker(tracker, shellAccounts);
+    expect(result.totalExposed).toBe('$1,805,000');
+  });
+
+  it('should return original tracker when no shellAccounts', () => {
+    const tracker = { entries: [{ name: 'X', amount: '$100' }] };
+    const result = assembler.overrideFinancialTracker(tracker, []);
+    expect(result).toBe(tracker);
+  });
+
+  it('should return original tracker when tracker has no entries', () => {
+    const tracker = { entries: [] };
+    const result = assembler.overrideFinancialTracker(tracker, [{ name: 'X', total: 100 }]);
+    expect(result).toBe(tracker);
+  });
+
+  it('should return original tracker when tracker is null', () => {
+    const result = assembler.overrideFinancialTracker(null, [{ name: 'X', total: 100 }]);
+    expect(result).toBeNull();
+  });
+
+  it('should preserve non-amount fields', () => {
+    const tracker = {
+      entries: [{ name: 'Cayman', amount: '$1,000', label: 'Shell Account 1' }],
+      title: 'Money Trail'
+    };
+    const result = assembler.overrideFinancialTracker(tracker, [{ name: 'Cayman', total: 1455000 }]);
+    expect(result.entries[0].label).toBe('Shell Account 1');
+    expect(result.title).toBe('Money Trail');
+  });
+
+  it('should match account names case-insensitively', () => {
+    const tracker = {
+      entries: [{ name: 'CAYMAN', amount: '$1,000' }]
+    };
+    const result = assembler.overrideFinancialTracker(tracker, [{ name: 'cayman', total: 500000 }]);
+    expect(result.entries[0].amount).toBe('$500,000');
+  });
+
+  it('should leave entries unchanged when no matching shell account', () => {
+    const tracker = {
+      entries: [{ name: 'Unknown', amount: '$999' }]
+    };
+    const result = assembler.overrideFinancialTracker(tracker, [{ name: 'Cayman', total: 100 }]);
+    expect(result.entries[0].amount).toBe('$999');
+  });
+
+  it('should skip shell accounts with zero total', () => {
+    const tracker = {
+      entries: [{ name: 'Empty', amount: '$1,000' }]
+    };
+    const result = assembler.overrideFinancialTracker(tracker, [{ name: 'Empty', total: 0 }]);
+    expect(result.entries[0].amount).toBe('$1,000');
+  });
+
+  it('should use entry.account field as fallback for name matching', () => {
+    const tracker = {
+      entries: [{ account: 'Cayman', amount: '$1,000' }]
+    };
+    const result = assembler.overrideFinancialTracker(tracker, [{ name: 'Cayman', total: 750000 }]);
+    expect(result.entries[0].amount).toBe('$750,000');
+  });
+});
+
 describe('_testing exports', () => {
   it('exports DEFAULT_TEMPLATE_DIR', () => {
     expect(_testing.DEFAULT_TEMPLATE_DIR).toBeDefined();

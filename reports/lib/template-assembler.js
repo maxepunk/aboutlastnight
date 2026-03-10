@@ -324,11 +324,17 @@ class TemplateAssembler {
         Array.isArray(contentBundle.financialTracker.entries) &&
         contentBundle.financialTracker.entries.length > 0,
 
-      // Transform financialTracker to include bar widths
-      financialTracker: contentBundle.financialTracker ? {
-        ...contentBundle.financialTracker,
-        entries: this._calculateBarWidths(contentBundle.financialTracker.entries)
-      } : null,
+      // Override LLM-generated financial data with deterministic values
+      financialTracker: (() => {
+        const correctedTracker = this.overrideFinancialTracker(
+          contentBundle.financialTracker,
+          contentBundle._shellAccounts || []
+        );
+        return correctedTracker ? {
+          ...correctedTracker,
+          entries: this._calculateBarWidths(correctedTracker.entries)
+        } : null;
+      })(),
 
       hasPullQuotes: Array.isArray(contentBundle.pullQuotes) &&
         contentBundle.pullQuotes.length > 0,
@@ -341,6 +347,41 @@ class TemplateAssembler {
 
       // Section navigation items (for sidebar)
       sectionNav: this.buildSectionNav(contentBundle.sections)
+    };
+  }
+
+  /**
+   * Override LLM-generated financial tracker with deterministic shell account data
+   * Preserves LLM-generated labels/descriptions but replaces amounts with authoritative values
+   *
+   * @param {Object} financialTracker - LLM-generated financial tracker
+   * @param {Array} shellAccounts - Authoritative shell account data
+   * @returns {Object} Financial tracker with corrected amounts
+   */
+  overrideFinancialTracker(financialTracker, shellAccounts) {
+    if (!financialTracker?.entries?.length || !shellAccounts?.length) return financialTracker;
+
+    const accountMap = new Map(
+      shellAccounts.filter(a => a.total > 0).map(a => [a.name.toLowerCase(), a])
+    );
+
+    const entries = financialTracker.entries.map(entry => {
+      const name = entry.name || entry.account || '';
+      const authoritative = accountMap.get(name.toLowerCase());
+      if (!authoritative) return entry;
+
+      return {
+        ...entry,
+        amount: `$${authoritative.total.toLocaleString()}`
+      };
+    });
+
+    const totalExposed = shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0);
+
+    return {
+      ...financialTracker,
+      entries,
+      totalExposed: `$${totalExposed.toLocaleString()}`
     };
   }
 
