@@ -6,7 +6,7 @@
 
   Context:
     headline: { main, kicker?, deck? }
-    byline: { author, title?, location?, date? }
+    byline: { author, title?, location?, date?, guestReporter? }
     metadata: { sessionId, generatedAt, version? }
 --}}
 <header class="nn-article__header">
@@ -29,11 +29,16 @@
     <span class="nn-article__byline">
       {{byline.author}}{{#if byline.title}} | {{byline.title}}{{/if}}
     </span>
+    {{#if byline.guestReporter}}
+    <span class="nn-article__guest-reporter">
+      with {{byline.guestReporter}}
+    </span>
+    {{/if}}
     <span class="nn-article__divider">·</span>
     {{/if}}
 
     <time class="nn-article__date" datetime="{{formatDatetime metadata.generatedAt}}">
-      February 22, 2027
+      {{formatDate metadata.generatedAt}}
     </time>
 
     <span class="nn-article__divider">·</span>

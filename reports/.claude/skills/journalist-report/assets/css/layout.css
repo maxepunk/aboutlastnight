@@ -182,6 +182,11 @@
   color: var(--nn-accent-crimson-light);
 }
 
+.nn-article__guest-reporter {
+  font-style: italic;
+  margin-left: 0.25em;
+}
+
 .nn-article__date {
   color: var(--nn-text-muted);
 }
