@@ -153,6 +153,40 @@ describe('PromptBuilder', () => {
 
       expect(userPrompt).toContain('DIRECTOR OBSERVATIONS');
     });
+
+    describe('reporting mode context', () => {
+      it('should include reporting mode context in arc analysis prompt', async () => {
+        mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+          'character-voice': '', 'evidence-boundaries': '',
+          'narrative-structure': '', 'anti-patterns': ''
+        });
+
+        const remoteBuilder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
+        const { userPrompt } = await remoteBuilder.buildArcAnalysisPrompt({
+          roster: ['Alex'], accusation: 'Jess', directorNotes: {}, evidenceBundle: {}
+        });
+
+        expect(userPrompt).toContain('REPORTING MODE: remote');
+        expect(userPrompt).toContain('LAST NIGHT');
+        expect(userPrompt).toContain('THIS MORNING');
+        expect(userPrompt).toContain('received tips remotely');
+      });
+
+      it('should default to on-site reporting mode', async () => {
+        mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+          'character-voice': '', 'evidence-boundaries': '',
+          'narrative-structure': '', 'anti-patterns': ''
+        });
+
+        const defaultBuilder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+        const { userPrompt } = await defaultBuilder.buildArcAnalysisPrompt({
+          roster: ['Alex'], accusation: 'Jess', directorNotes: {}, evidenceBundle: {}
+        });
+
+        expect(userPrompt).toContain('REPORTING MODE: on-site');
+        expect(userPrompt).toContain('witnessed this');
+      });
+    });
   });
 
   describe('buildOutlinePrompt', () => {

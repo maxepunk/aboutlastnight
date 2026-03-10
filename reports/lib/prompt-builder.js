@@ -168,8 +168,10 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
 ROSTER: ${sessionData.roster.join(', ')}
 ACCUSATION: ${sessionData.accusation}
+REPORTING MODE: ${this.sessionConfig.reportingMode || 'on-site'}
+NOTE: The party was LAST NIGHT. The investigation was THIS MORNING. The article is being written NOW.
 
-DIRECTOR OBSERVATIONS (PRIMARY WEIGHT - INVESTIGATION TIMELINE, Nova witnessed this):
+DIRECTOR OBSERVATIONS (PRIMARY WEIGHT - INVESTIGATION THIS MORNING, Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received tips remotely' : 'witnessed this'}):
 ${JSON.stringify(sessionData.directorNotes?.observations || {}, null, 2)}
 
 WHITEBOARD (interpreted through observations):
