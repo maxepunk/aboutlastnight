@@ -93,3 +93,11 @@ describe('mergeDirectorOverrides', () => {
     expect(merged.reportingMode).toBe('remote');
   });
 });
+
+describe('shellAccounts state propagation', () => {
+  it('shellAccounts should NOT be in mergeDirectorOverrides output (separate data path)', () => {
+    const { mergeDirectorOverrides } = _testing;
+    const merged = mergeDirectorOverrides({ roster: ['Alex'] }, { observations: {} });
+    expect(merged.shellAccounts).toBeUndefined();
+  });
+});
