@@ -336,6 +336,9 @@ class TemplateAssembler {
       hasEvidenceCards: Array.isArray(contentBundle.evidenceCards) &&
         contentBundle.evidenceCards.length > 0,
 
+      // Byline data for header partial (author, title, guestReporter)
+      byline: contentBundle.byline || {},
+
       // Section navigation items (for sidebar)
       sectionNav: this.buildSectionNav(contentBundle.sections)
     };
