@@ -674,6 +674,7 @@ Return structured JSON matching the schema.`;
     sessionConfig,
     directorNotes,
     playerFocus,
+    shellAccounts: orchestratorParsed?.shellAccounts || [],
     _parsedInput: {
       sessionConfig,
       directorNotes,
@@ -756,6 +757,7 @@ async function finalizeInput(state, config) {
       sessionConfig: editedInput.sessionConfig || state.sessionConfig,
       directorNotes: editedInput.directorNotes || state.directorNotes,
       playerFocus: editedInput.playerFocus || state.playerFocus,
+      shellAccounts: editedInput.orchestratorParsed?.shellAccounts || state.shellAccounts,
       currentPhase: PHASES.LOAD_DIRECTOR_NOTES
     };
   }

@@ -135,6 +135,12 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => ({})
   }),
 
+  /** Shell account standings from orchestrator parsed data (authoritative financial data) */
+  shellAccounts: Annotation({
+    reducer: replaceReducer,
+    default: () => ([])
+  }),
+
   // ═══════════════════════════════════════════════════════
   // FETCHED DATA (from Notion/external sources)
   // ═══════════════════════════════════════════════════════
