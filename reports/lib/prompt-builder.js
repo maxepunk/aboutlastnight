@@ -933,6 +933,11 @@ STRUCTURE:
    - Any passive/observer voice that slipped through?
    - Any game mechanics language?
    - Any generic praise or vague attribution?
+
+8. "byline" - Article byline object:
+   - "author": "${this.sessionConfig.journalistFirstName || 'Cassandra'} Nova | NovaNews"
+   - "title": "Senior Investigative Correspondent"${this.sessionConfig.guestReporter ? `
+   - "guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"` : ''}
 </GENERATION_INSTRUCTION>`;
     }
 
