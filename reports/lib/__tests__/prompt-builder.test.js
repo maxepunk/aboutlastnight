@@ -724,6 +724,40 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('resolvePromptVariables', () => {
+    it('should replace {{JOURNALIST_FIRST_NAME}} with sessionConfig value', () => {
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Cassandra' });
+      const input = 'Nova (first name configurable via {{JOURNALIST_FIRST_NAME}}) is the journalist.';
+      const result = builder.resolvePromptVariables(input);
+      expect(result).toBe('Nova (first name configurable via Cassandra) is the journalist.');
+    });
+
+    it('should replace {{REPORTING_MODE}} with sessionConfig value', () => {
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
+      const result = builder.resolvePromptVariables('Mode: {{REPORTING_MODE}}');
+      expect(result).toBe('Mode: remote');
+    });
+
+    it('should use defaults when sessionConfig values are missing', () => {
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const result = builder.resolvePromptVariables('{{JOURNALIST_FIRST_NAME}} Nova');
+      expect(result).toBe('Cassandra Nova');
+    });
+
+    it('should handle null/empty input gracefully', () => {
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      expect(builder.resolvePromptVariables('')).toBe('');
+      expect(builder.resolvePromptVariables(null)).toBe('');
+      expect(builder.resolvePromptVariables(undefined)).toBe('');
+    });
+
+    it('should leave unknown variables untouched', () => {
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const result = builder.resolvePromptVariables('Hello {{UNKNOWN_VAR}}');
+      expect(result).toBe('Hello {{UNKNOWN_VAR}}');
+    });
+  });
+
   describe('module exports', () => {
     it('should export PromptBuilder class', () => {
       expect(PromptBuilder).toBeDefined();
