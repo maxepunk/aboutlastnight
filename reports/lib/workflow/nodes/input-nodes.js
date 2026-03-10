@@ -361,6 +361,20 @@ function deriveSessionId(dateStr, sessionNumber = 1) {
  * @param {Object} config - Graph config with optional configurable.sdkClient, dataDir
  * @returns {Object} Partial state update with sessionConfig, directorNotes, playerFocus, currentPhase
  */
+
+/**
+ * Merge director note overrides into sessionConfig
+ * Applies defaults when director notes don't specify values
+ */
+function mergeDirectorOverrides(sessionConfig, directorNotes) {
+  return {
+    ...sessionConfig,
+    reportingMode: directorNotes?.reportingMode ?? 'on-site',
+    journalistFirstName: directorNotes?.journalistFirstName ?? sessionConfig?.journalistName ?? 'Cassandra',
+    guestReporter: directorNotes?.guestReporter || null
+  };
+}
+
 async function parseRawInput(state, config) {
   // Skip if no raw input provided (resume case or pre-populated files)
   if (!state.rawSessionInput) {
@@ -554,6 +568,13 @@ Return structured JSON matching the schema.`;
     : { observations: { behaviorPatterns: [], suspiciousCorrelations: [], notableMoments: [] } };
 
   console.log('[parseRawInput] Steps 1-3 complete');
+
+  // Merge director note overrides into sessionConfig
+  sessionConfig = mergeDirectorOverrides(sessionConfig, directorNotes);
+  console.log(`[parseRawInput] Reporting mode: ${sessionConfig.reportingMode}`);
+  if (sessionConfig.guestReporter) {
+    console.log(`[parseRawInput] Guest reporter: ${sessionConfig.guestReporter.name}`);
+  }
 
   // ─────────────────────────────────────────────────────
   // Step 4: Analyze whiteboard photo (Layer 3 data)
@@ -851,6 +872,7 @@ module.exports = {
     WHITEBOARD_SCHEMA,
     deriveSessionId,
     ensureDir,
-    sanitizePath
+    sanitizePath,
+    mergeDirectorOverrides
   }
 };
