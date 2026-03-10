@@ -1087,6 +1087,26 @@ ${validationReturnFormat}`;
   getPhaseRequirements(phase) {
     return PHASE_REQUIREMENTS[phase] || [];
   }
+
+  /**
+   * Resolve template variables in prompt text using sessionConfig values
+   * Variables use {{VARIABLE_NAME}} format (matching existing prompt conventions)
+   *
+   * @param {string} text - Prompt text with template variables
+   * @returns {string} Text with variables resolved
+   */
+  resolvePromptVariables(text) {
+    if (!text) return '';
+
+    const variables = {
+      JOURNALIST_FIRST_NAME: this.sessionConfig.journalistFirstName || 'Cassandra',
+      REPORTING_MODE: this.sessionConfig.reportingMode || 'on-site'
+    };
+
+    return text.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      return variables[varName] !== undefined ? variables[varName] : match;
+    });
+  }
 }
 
 /**
