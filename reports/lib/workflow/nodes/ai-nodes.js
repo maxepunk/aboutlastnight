@@ -899,6 +899,7 @@ async function generateOutline(state, config) {
 
   // PHASE 1 FIX: Pass arcEvidencePackages with full content and enriched photos
   const arcEvidencePackages = state.arcEvidencePackages || [];
+  const shellAccounts = state.shellAccounts || [];
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(
     arcAnalysis,
@@ -906,7 +907,8 @@ async function generateOutline(state, config) {
     heroImage,
     state.evidenceBundle || {},
     availablePhotos,  // Available photos
-    arcEvidencePackages  // NEW: per-arc curated evidence with fullContent and photos
+    arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
+    shellAccounts  // Deterministic shell account data for financial summary
   );
 
   const theme = config?.configurable?.theme || 'journalist';
@@ -1159,12 +1161,15 @@ async function generateContentBundle(state, config) {
     }
   });
 
+  const shellAccounts = state.shellAccounts || [];
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     state.outline || {},
     state.evidenceBundle || {},
     template,
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
-    state.heroImage  // Hero image filename (prevents duplicate in photos array)
+    state.heroImage,  // Hero image filename (prevents duplicate in photos array)
+    shellAccounts  // Deterministic shell account data for financial summary
   );
 
   // Get JSON schema for structured output
@@ -1552,14 +1557,14 @@ function createMockPromptBuilder() {
       };
     },
 
-    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle) {
+    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos, arcEvidencePackages, shellAccounts) {
       return {
         systemPrompt: 'Mock system prompt for outline generation',
         userPrompt: `Generate outline for arcs: ${selectedArcs?.join(', ') || 'none selected'}`
       };
     },
 
-    async buildArticlePrompt(outline, evidenceBundle, template) {
+    async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages, heroImage, shellAccounts) {
       return {
         systemPrompt: 'Mock system prompt for article generation',
         userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`

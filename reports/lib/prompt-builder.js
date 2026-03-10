@@ -222,7 +222,31 @@ Return JSON with the following structure:
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos = [], arcEvidencePackages = []) {
+  /**
+   * Generate FINANCIAL_SUMMARY XML section from shell account data
+   * Returns empty string if no accounts with positive totals
+   *
+   * @param {Array} shellAccounts - Array of {name, total, tokenCount} objects
+   * @returns {string} XML section or empty string
+   */
+  _buildFinancialSummary(shellAccounts) {
+    if (!shellAccounts || shellAccounts.length === 0) return '';
+    const nonZero = shellAccounts.filter(a => a.total > 0);
+    if (nonZero.length === 0) return '';
+
+    return `
+<FINANCIAL_SUMMARY>
+AUTHORITATIVE SHELL ACCOUNT DATA (use these exact figures in financialTracker):
+${nonZero.map(a =>
+  `- ${a.name}: $${a.total.toLocaleString()} (${a.tokenCount} token${a.tokenCount !== 1 ? 's' : ''})`
+).join('\n')}
+Total buried: $${shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0).toLocaleString()}
+
+These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use exact values.
+</FINANCIAL_SUMMARY>`;
+  }
+
+  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos = [], arcEvidencePackages = [], shellAccounts = []) {
     const rawPrompts = await this.theme.loadPhasePrompts('outlineGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -496,7 +520,7 @@ CRITICAL: THREE TIMELINES — THE PARTY (LAST NIGHT), THE INVESTIGATION (THIS MO
 - NEVER treat a party event and investigation event as simultaneous.
 - NEVER say "tonight" — the party was last night, the investigation was this morning.
 </TEMPORAL_DISCIPLINE>
-
+${this._buildFinancialSummary(shellAccounts)}
 Return JSON with the following structure:
 {
   "lede": {
@@ -576,7 +600,7 @@ Return JSON with the following structure:
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null) {
+  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = []) {
     const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -732,7 +756,7 @@ EVIDENCE BUNDLE (quote ONLY from exposed evidence):
 ${JSON.stringify(evidenceBundle, null, 2)}
 ${arcEvidenceSection}
 </DATA_CONTEXT>
-
+${this._buildFinancialSummary(shellAccounts)}
 <TEMPLATE>
 ${template}
 </TEMPLATE>
