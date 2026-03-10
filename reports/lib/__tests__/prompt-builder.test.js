@@ -976,6 +976,126 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('financial summary in prompts', () => {
+    it('buildOutlinePrompt should include FINANCIAL_SUMMARY when shellAccounts provided', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const shellAccounts = [
+        { name: 'Cayman', total: 1455000, tokenCount: 9 },
+        { name: 'Sarah', total: 350000, tokenCount: 1 }
+      ];
+
+      const { userPrompt } = await builder.buildOutlinePrompt(
+        { narrativeArcs: [] }, [], 'hero.jpg', {}, [], [], shellAccounts
+      );
+
+      expect(userPrompt).toContain('FINANCIAL_SUMMARY');
+      expect(userPrompt).toContain('Cayman');
+      expect(userPrompt).toContain('$1,455,000');
+      expect(userPrompt).toContain('$350,000');
+    });
+
+    it('should not include FINANCIAL_SUMMARY when shellAccounts empty', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const { userPrompt } = await builder.buildOutlinePrompt(
+        { narrativeArcs: [] }, [], 'hero.jpg', {}, [], [], []
+      );
+
+      expect(userPrompt).not.toContain('FINANCIAL_SUMMARY');
+    });
+
+    it('buildArticlePrompt should include FINANCIAL_SUMMARY when shellAccounts provided', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const shellAccounts = [
+        { name: 'Cayman', total: 1455000, tokenCount: 9 },
+        { name: 'Sarah', total: 350000, tokenCount: 1 }
+      ];
+
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { lede: { hook: 'Hook' } }, { exposed: { tokens: [] } }, '<html></html>', [], 'hero.jpg', shellAccounts
+      );
+
+      expect(userPrompt).toContain('FINANCIAL_SUMMARY');
+      expect(userPrompt).toContain('Cayman');
+      expect(userPrompt).toContain('$1,455,000');
+      expect(userPrompt).toContain('$350,000');
+      expect(userPrompt).toContain('DETERMINISTIC');
+    });
+
+    it('buildArticlePrompt should not include FINANCIAL_SUMMARY when shellAccounts empty', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { lede: { hook: 'Hook' } }, { exposed: { tokens: [] } }, '<html></html>', [], 'hero.jpg', []
+      );
+
+      expect(userPrompt).not.toContain('FINANCIAL_SUMMARY');
+    });
+
+    it('should filter out shellAccounts with zero total', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const shellAccounts = [
+        { name: 'Cayman', total: 1455000, tokenCount: 9 },
+        { name: 'EmptyAccount', total: 0, tokenCount: 0 }
+      ];
+
+      const { userPrompt } = await builder.buildOutlinePrompt(
+        { narrativeArcs: [] }, [], 'hero.jpg', {}, [], [], shellAccounts
+      );
+
+      expect(userPrompt).toContain('Cayman');
+      expect(userPrompt).not.toContain('EmptyAccount');
+    });
+
+    it('should include total buried amount', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const shellAccounts = [
+        { name: 'Cayman', total: 1455000, tokenCount: 9 },
+        { name: 'Sarah', total: 350000, tokenCount: 1 }
+      ];
+
+      const { userPrompt } = await builder.buildOutlinePrompt(
+        { narrativeArcs: [] }, [], 'hero.jpg', {}, [], [], shellAccounts
+      );
+
+      expect(userPrompt).toContain('$1,805,000');
+    });
+  });
+
   describe('module exports', () => {
     it('should export PromptBuilder class', () => {
       expect(PromptBuilder).toBeDefined();
