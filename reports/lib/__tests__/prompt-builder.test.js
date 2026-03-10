@@ -858,6 +858,45 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('articleGeneration system prompt', () => {
+    it('should reference last night/this morning timeline', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+      mockThemeLoader.loadTemplate.mockResolvedValue('template');
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
+      const { systemPrompt } = await builder.buildArticlePrompt(
+        { sections: [] }, {}, 'template', [], 'hero.jpg'
+      );
+
+      expect(systemPrompt).toContain('LAST NIGHT');
+      expect(systemPrompt).toContain('THIS MORNING');
+      expect(systemPrompt).not.toContain('the game session');
+    });
+  });
+
+  describe('outline TEMPORAL_DISCIPLINE', () => {
+    it('should reference LAST NIGHT and THIS MORNING instead of past/present', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'section-rules': '', 'editorial-design': '', 'narrative-structure': '',
+        'formatting': '', 'evidence-boundaries': ''
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
+      const { userPrompt } = await builder.buildOutlinePrompt(
+        { narrativeArcs: [] }, ['Arc 1'], 'hero.png', {}
+      );
+
+      expect(userPrompt).toContain('LAST NIGHT');
+      expect(userPrompt).toContain('THIS MORNING');
+      expect(userPrompt).not.toContain('(past)');
+      expect(userPrompt).not.toContain('(present)');
+    });
+  });
+
   describe('module exports', () => {
     it('should export PromptBuilder class', () => {
       expect(PromptBuilder).toBeDefined();
