@@ -115,7 +115,14 @@ async function assembleHtml(state, config) {
 
   // Pass sessionId for photo path resolution
   const sessionId = state.sessionId || config?.configurable?.sessionId;
-  const html = await assembler.assemble(state.contentBundle, { sessionId });
+
+  // Inject shellAccounts for deterministic financial tracker override
+  const contentBundleWithFinancials = {
+    ...state.contentBundle,
+    _shellAccounts: state.shellAccounts || []
+  };
+
+  const html = await assembler.assemble(contentBundleWithFinancials, { sessionId });
 
   // Determine base directory (configurable for testing)
   const baseDir = config?.configurable?.baseDir || path.join(__dirname, '..', '..', '..');
