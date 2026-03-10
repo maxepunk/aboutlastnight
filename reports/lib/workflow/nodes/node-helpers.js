@@ -969,7 +969,7 @@ function validateFinancialData(financialTracker, shellAccounts) {
 
     if (actualAmount !== expectedTotal) {
       issues.push(
-        `Financial mismatch: "${name}" shows $${actualAmount.toLocaleString()} but authoritative data is $${expectedTotal.toLocaleString()}`
+        `Financial mismatch: "${name}" shows $${actualAmount.toLocaleString('en-US')} but authoritative data is $${expectedTotal.toLocaleString('en-US')}`
       );
     }
   }
