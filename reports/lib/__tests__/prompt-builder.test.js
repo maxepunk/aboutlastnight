@@ -931,6 +931,51 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('byline generation instruction', () => {
+    it('should include byline instruction in journalist article prompt', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+      mockThemeLoader.loadTemplate.mockResolvedValue('template');
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {
+        journalistFirstName: 'Cassandra',
+        guestReporter: null
+      });
+
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { sections: [] }, {}, 'template', [], 'hero.jpg'
+      );
+
+      expect(userPrompt).toContain('"byline"');
+      expect(userPrompt).toContain('"author"');
+      expect(userPrompt).toContain('Cassandra Nova | NovaNews');
+    });
+
+    it('should include guest reporter in byline when present', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+      mockThemeLoader.loadTemplate.mockResolvedValue('template');
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {
+        journalistFirstName: 'Cassandra',
+        guestReporter: { name: 'Ashe Motoko', role: 'Guest Reporter' }
+      });
+
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { sections: [] }, {}, 'template', [], 'hero.jpg'
+      );
+
+      expect(userPrompt).toContain('Ashe Motoko');
+      expect(userPrompt).toContain('Guest Reporter');
+    });
+  });
+
   describe('module exports', () => {
     it('should export PromptBuilder class', () => {
       expect(PromptBuilder).toBeDefined();
