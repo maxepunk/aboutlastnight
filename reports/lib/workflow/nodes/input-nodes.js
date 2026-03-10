@@ -202,6 +202,24 @@ const DIRECTOR_NOTES_SCHEMA = {
           description: 'Key moments during the session'
         }
       }
+    },
+    reportingMode: {
+      type: 'string',
+      enum: ['on-site', 'remote'],
+      description: 'Whether the journalist was physically present (on-site) or receiving tips remotely (remote). Infer from director notes.'
+    },
+    journalistFirstName: {
+      type: 'string',
+      description: 'First name of the journalist NPC for this session, if explicitly mentioned.'
+    },
+    guestReporter: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        role: { type: 'string' }
+      },
+      required: ['name'],
+      description: 'If a player or NPC is credited as guest/co-reporter, extract their name and role here.'
     }
   }
 };
@@ -475,7 +493,7 @@ Return structured JSON matching the schema.`;
     }
 
     console.log('[parseRawInput] Step 3: Parsing director notes');
-    const directorNotesPrompt = `Parse the following director observations into categorized lists:
+    const directorNotesPrompt = `Parse the following director observations into categorized lists and extract session metadata:
 
 DIRECTOR NOTES:
 ${rawInput.directorNotes}
@@ -484,13 +502,16 @@ Categories:
 1. behaviorPatterns: Observable behaviors (who talked to whom, what they did)
 2. suspiciousCorrelations: Suspected connections, possible pseudonyms, theories
 3. notableMoments: Key moments or events worth highlighting
+4. reportingMode: Was the journalist physically present ("on-site") or receiving tips remotely ("remote")? Look for phrases like "not on site", "received tips remotely", "was present at the scene", etc. If unclear, omit this field.
+5. journalistFirstName: The journalist's first name if explicitly mentioned. If not mentioned, omit this field.
+6. guestReporter: If any player or character is credited as a guest reporter, co-reporter, or contributor, extract their name and role. Only include if explicitly stated.
 
 Return structured JSON matching the schema.`;
 
     try {
       return await sdk({
         prompt: directorNotesPrompt,
-        systemPrompt: 'You categorize game director observations into behavior patterns, suspicions, and notable moments.',
+        systemPrompt: 'You parse game director observations into categorized lists and extract session metadata.',
         model: 'haiku',
         jsonSchema: DIRECTOR_NOTES_SCHEMA
       });
