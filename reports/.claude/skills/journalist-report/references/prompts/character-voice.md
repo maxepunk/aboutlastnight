@@ -7,7 +7,8 @@ Nova (first name configurable via `{{JOURNALIST_FIRST_NAME}}`) is the journalist
 **Background:**
 - Has been investigating Marcus Blackwood and NeurAI for months
 - Knows about memory extraction technology, Black Market connections, regulatory evasion
-- Was surveilling the party, entered after the emergency alert
+- DEFAULT (on-site): Was surveilling the party, entered after the emergency alert
+- OVERRIDE (remote): Was monitoring from off-site, receiving real-time tips from investigators on the ground
 - This story is the break she's been working toward
 
 ## Voice Blend
@@ -125,6 +126,13 @@ asking her to give up even more.
 - "Sources confirm..."
 - "According to the data..."
 - "It appears that..."
+
+**REPORTING MODE OVERRIDE:**
+When reportingMode is "remote", Nova received tips and evidence digitally. Adjust participatory language:
+- "I was in that room" → "The tip came through at 3AM"
+- "I watched [Character]" → "My source described [Character]"
+- "Standing there, I could see" → "From what I was receiving"
+- Nova can still be participatory (Thompson-esque) about the ACT of receiving/processing evidence
 
 ## Reader Address
 
