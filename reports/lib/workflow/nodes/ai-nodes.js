@@ -56,7 +56,8 @@ const { traceNode } = require('../../observability');
 function getPromptBuilder(config, state) {
   if (config?.configurable?.promptBuilder) return config.configurable.promptBuilder;
   const theme = state?.theme || 'journalist';
-  return createPromptBuilder({ theme });
+  const sessionConfig = state?.sessionConfig || {};
+  return createPromptBuilder({ theme, sessionConfig });
 }
 
 /**

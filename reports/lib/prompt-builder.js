@@ -135,9 +135,10 @@ class PromptBuilder {
    * @param {ThemeLoader} themeLoader - Initialized ThemeLoader instance
    * @param {string} themeName - Theme name (default: 'journalist')
    */
-  constructor(themeLoader, themeName = 'journalist') {
+  constructor(themeLoader, themeName = 'journalist', sessionConfig = {}) {
     this.theme = themeLoader;
     this.themeName = themeName;
+    this.sessionConfig = sessionConfig;
   }
 
   /**
@@ -1100,9 +1101,9 @@ function createPromptBuilder(options = null) {
     return new PromptBuilder(themeLoader, 'journalist');
   }
 
-  const { theme = 'journalist', customSkillPath } = options || {};
+  const { theme = 'journalist', customSkillPath, sessionConfig = {} } = options || {};
   const themeLoader = createThemeLoader({ theme, customPath: customSkillPath });
-  return new PromptBuilder(themeLoader, theme);
+  return new PromptBuilder(themeLoader, theme, sessionConfig);
 }
 
 module.exports = {
