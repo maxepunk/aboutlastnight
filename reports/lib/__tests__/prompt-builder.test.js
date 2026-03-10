@@ -39,6 +39,17 @@ describe('PromptBuilder', () => {
     it('should store theme loader reference', () => {
       expect(builder.theme).toBe(mockThemeLoader);
     });
+
+    it('should accept sessionConfig as optional third parameter', () => {
+      const sessionConfig = { reportingMode: 'remote', journalistFirstName: 'Cassandra' };
+      const b = new PromptBuilder(mockThemeLoader, 'journalist', sessionConfig);
+      expect(b.sessionConfig).toEqual(sessionConfig);
+    });
+
+    it('should default sessionConfig to empty object when not provided', () => {
+      const b = new PromptBuilder(mockThemeLoader, 'journalist');
+      expect(b.sessionConfig).toEqual({});
+    });
   });
 
   describe('buildArcAnalysisPrompt', () => {
@@ -441,6 +452,17 @@ describe('PromptBuilder', () => {
     it('should default themeName to journalist', () => {
       const b = createPromptBuilder();
       expect(b.themeName).toBe('journalist');
+    });
+
+    it('should pass sessionConfig to PromptBuilder', () => {
+      const sessionConfig = { reportingMode: 'remote' };
+      const b = createPromptBuilder({ theme: 'journalist', sessionConfig });
+      expect(b.sessionConfig).toEqual(sessionConfig);
+    });
+
+    it('should default sessionConfig to empty object when not provided', () => {
+      const b = createPromptBuilder({ theme: 'journalist' });
+      expect(b.sessionConfig).toEqual({});
     });
   });
 
