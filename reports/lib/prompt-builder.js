@@ -153,7 +153,11 @@ class PromptBuilder {
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildArcAnalysisPrompt(sessionData) {
-    const prompts = await this.theme.loadPhasePrompts('arcAnalysis');
+    const rawPrompts = await this.theme.loadPhasePrompts('arcAnalysis');
+    // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
+    const prompts = Object.fromEntries(
+      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
+    );
 
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].arcAnalysis}
 ${labelPromptSection('character-voice', prompts['character-voice'])}
@@ -216,7 +220,11 @@ Return JSON with the following structure:
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos = [], arcEvidencePackages = []) {
-    const prompts = await this.theme.loadPhasePrompts('outlineGeneration');
+    const rawPrompts = await this.theme.loadPhasePrompts('outlineGeneration');
+    // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
+    const prompts = Object.fromEntries(
+      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
+    );
 
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
 ${labelPromptSection('section-rules', prompts['section-rules'])}
@@ -565,7 +573,11 @@ Return JSON with the following structure:
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null) {
-    const prompts = await this.theme.loadPhasePrompts('articleGeneration');
+    const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
+    // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
+    const prompts = Object.fromEntries(
+      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
+    );
 
     // System prompt: Identity and hard constraints (kept short for salience)
     // Roster in system prompt for higher salience (prevents name hallucination)

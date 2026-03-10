@@ -758,6 +758,69 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('prompt variable resolution in build methods', () => {
+    it('buildArcAnalysisPrompt should resolve variables in loaded prompts', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': 'Nova ({{JOURNALIST_FIRST_NAME}}) is the journalist.',
+        'evidence-boundaries': 'Boundaries text',
+        'narrative-structure': 'Structure text',
+        'anti-patterns': 'Anti-patterns text'
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
+
+      const sessionData = {
+        roster: ['Alex'],
+        accusation: 'Jess Kane',
+        directorNotes: { observations: {} },
+        evidenceBundle: {}
+      };
+
+      const { systemPrompt } = await builder.buildArcAnalysisPrompt(sessionData);
+      expect(systemPrompt).toContain('Nova (Athena) is the journalist.');
+      expect(systemPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
+    });
+
+    it('buildOutlinePrompt should resolve variables in loaded prompts', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'section-rules': 'Written by {{JOURNALIST_FIRST_NAME}} for NovaNews.',
+        'editorial-design': 'Design text',
+        'narrative-structure': 'Structure text',
+        'formatting': 'Formatting text',
+        'evidence-boundaries': 'Boundaries text'
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
+
+      const { systemPrompt } = await builder.buildOutlinePrompt(
+        { narrativeArcs: [] }, ['Arc 1'], 'hero.png', {}
+      );
+      expect(systemPrompt).toContain('Written by Athena for NovaNews.');
+      expect(systemPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
+    });
+
+    it('buildArticlePrompt should resolve variables in loaded prompts', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '{{JOURNALIST_FIRST_NAME}} Nova reporting.',
+        'writing-principles': 'Principles text',
+        'evidence-boundaries': 'Boundaries text',
+        'section-rules': 'Rules text',
+        'narrative-structure': 'Structure text',
+        'formatting': 'Formatting text',
+        'anti-patterns': 'Anti-patterns text',
+        'editorial-design': 'Design text'
+      });
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
+
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { lede: { hook: 'Hook' } }, { exposed: { tokens: [] } }, '<html></html>'
+      );
+      expect(userPrompt).toContain('Athena Nova reporting.');
+      expect(userPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
+    });
+  });
+
   describe('module exports', () => {
     it('should export PromptBuilder class', () => {
       expect(PromptBuilder).toBeDefined();
