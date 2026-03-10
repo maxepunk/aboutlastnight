@@ -935,6 +935,48 @@ END PREVIOUS OUTPUT
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FINANCIAL VALIDATION (Pipeline Quality D2)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Compares LLM-generated financial tracker amounts against authoritative shell
+// account totals from orchestratorParsed. Returns issue strings for mismatches.
+
+/**
+ * Validate financial tracker entries against authoritative shell account data
+ * Returns array of issue strings (empty = valid)
+ *
+ * @param {Object} financialTracker - LLM-generated financial tracker with entries array
+ * @param {Array} shellAccounts - Authoritative shell account data from orchestratorParsed
+ * @returns {string[]} Array of issue descriptions (empty if all valid)
+ */
+function validateFinancialData(financialTracker, shellAccounts) {
+  if (!financialTracker?.entries?.length || !shellAccounts?.length) return [];
+
+  const accountMap = new Map(
+    shellAccounts.filter(a => a.total > 0).map(a => [a.name.toLowerCase(), a.total])
+  );
+
+  const issues = [];
+  for (const entry of financialTracker.entries) {
+    const name = entry.name || entry.account || '';
+    const expectedTotal = accountMap.get(name.toLowerCase());
+    if (expectedTotal === undefined) continue;
+
+    const actualAmount = typeof entry.amount === 'number'
+      ? entry.amount
+      : parseFloat(String(entry.amount).replace(/[$,]/g, '')) || 0;
+
+    if (actualAmount !== expectedTotal) {
+      issues.push(
+        `Financial mismatch: "${name}" shows $${actualAmount.toLocaleString()} but authoritative data is $${expectedTotal.toLocaleString()}`
+      );
+    }
+  }
+
+  return issues;
+}
+
 module.exports = {
   safeParseJson,
   getSdkClient,
@@ -965,6 +1007,9 @@ module.exports = {
   // Non-roster PC validation (Commit 8.xx) - Three-category character model
   isNonRosterPC,
   getNonRosterPCs,
+
+  // Financial validation (Pipeline Quality D2)
+  validateFinancialData,
 
   // Revision context helper (DRY)
   buildRevisionContext,
