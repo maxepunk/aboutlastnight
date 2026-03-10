@@ -743,13 +743,18 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 ${generateRosterSection()}
 
 <TEMPORAL_DISCIPLINE>
-CRITICAL: THE PARTY (past) and THE INVESTIGATION (present) are TWO DIFFERENT TIMELINES.
-- Memory CONTENT describes party events. Nova VIEWS these, she was NOT there.
-- Director observations describe investigation events. Nova WAS there.
-- "I watched" / "I saw" ONLY apply to investigation events Nova directly witnessed.
-- "The memory shows" / "In the recording" for party events from extracted memories.
-- Burial transactions are investigation actions, NOT party events.
-- NEVER write a sentence that treats a party event and investigation event as simultaneous.
+CRITICAL: THREE TIMELINES — get them right or the article makes no sense.
+
+1. THE PARTY (LAST NIGHT): Marcus's party where the death occurred. Events known ONLY through extracted memories.
+2. THE INVESTIGATION (THIS MORNING): Party attendees woke up with holes in their memories. Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received real-time tips from investigators' : 'was physically present, witnessing the investigation firsthand'}.
+3. THE ARTICLE (NOW): Written immediately after the investigation concluded.
+
+LANGUAGE RULES:
+- Party events: "Last night..." / "The memory shows..." / "In the recording..." — Nova was NOT at the party.
+- Investigation events: "This morning..." / "I watched..." / "I saw..." — Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received reports and tips as they happened' : 'directly witnessed these'}.
+- Burial transactions are INVESTIGATION actions (this morning), NOT party events (last night).
+- NEVER treat a party event and investigation event as simultaneous.
+- NEVER say "tonight" — the party was last night, the investigation was this morning.
 </TEMPORAL_DISCIPLINE>
 </RULES>
 

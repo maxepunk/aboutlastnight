@@ -821,6 +821,43 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('TEMPORAL_DISCIPLINE content', () => {
+    it('should include LAST NIGHT and THIS MORNING timeline references', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+      mockThemeLoader.loadTemplate.mockResolvedValue('template');
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { sections: [] }, {}, 'template', [], 'hero.jpg'
+      );
+
+      expect(userPrompt).toContain('LAST NIGHT');
+      expect(userPrompt).toContain('THIS MORNING');
+      expect(userPrompt).toContain('physically present');
+    });
+
+    it('should use remote language when reportingMode is remote', async () => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+        'section-rules': '', 'editorial-design': '', 'formatting': '',
+        'arc-flow': '', 'anti-patterns': ''
+      });
+      mockThemeLoader.loadTemplate.mockResolvedValue('template');
+
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { sections: [] }, {}, 'template', [], 'hero.jpg'
+      );
+
+      expect(userPrompt).toContain('received real-time tips');
+      expect(userPrompt).not.toContain('physically present');
+    });
+  });
+
   describe('module exports', () => {
     it('should export PromptBuilder class', () => {
       expect(PromptBuilder).toBeDefined();
