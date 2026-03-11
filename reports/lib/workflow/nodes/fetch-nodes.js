@@ -182,12 +182,18 @@ async function loadDirectorNotes(state, config) {
   // But still return _parsedInput for fetchMemoryTokens disposition tagging
   if (state.directorNotes && Object.keys(state.directorNotes).length > 0) {
     console.log('[loadDirectorNotes] Skipping full load - directorNotes already in state');
-    return {
+    const result = {
       _parsedInput: {
         orchestratorParsed
       },
       currentPhase: PHASES.FETCH_TOKENS
     };
+    // Populate shellAccounts from file if not already in state
+    if ((!state.shellAccounts || state.shellAccounts.length === 0) && orchestratorParsed.shellAccounts?.length > 0) {
+      result.shellAccounts = orchestratorParsed.shellAccounts;
+      console.log(`[loadDirectorNotes] Populated shellAccounts from file: ${orchestratorParsed.shellAccounts.length} accounts`);
+    }
+    return result;
   }
 
   console.log('[loadDirectorNotes] Loading from files...');
@@ -229,7 +235,7 @@ async function loadDirectorNotes(state, config) {
     }
   }
 
-  return {
+  const result = {
     directorNotes: Object.keys(directorNotes).length > 0 ? directorNotes : null,
     sessionConfig: Object.keys(sessionConfig).length > 0 ? sessionConfig : null,
     playerFocus,
@@ -239,6 +245,14 @@ async function loadDirectorNotes(state, config) {
     },
     currentPhase: PHASES.FETCH_TOKENS
   };
+
+  // Populate shellAccounts from file if available
+  if (orchestratorParsed.shellAccounts?.length > 0) {
+    result.shellAccounts = orchestratorParsed.shellAccounts;
+    console.log(`[loadDirectorNotes] Populated shellAccounts from file: ${orchestratorParsed.shellAccounts.length} accounts`);
+  }
+
+  return result;
 }
 
 /**
