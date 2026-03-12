@@ -338,8 +338,9 @@ async function processBatch(batch, sdkClient, batchIndex) {
           // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
           // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
           disposition: original.disposition || item.disposition || 'buried',
-          // PHASE 1 FIX: Preserve full content for article generation quotes
-          fullContent: rawFullContent,
+          // Preserve full content for EXPOSED items only (defense-in-depth)
+          // Buried items must not carry narrative content — only transaction metadata
+          ...(original.disposition !== 'buried' ? { fullContent: rawFullContent } : {}),
           ownerLogline: item.ownerLogline || original.ownerLogline,
           narrativeTimelineContext: item.narrativeTimelineContext || original.timelineContext,
           sfFields: item.sfFields || original.sfFields,
@@ -378,8 +379,8 @@ async function processBatch(batch, sdkClient, batchIndex) {
         originalType: item.originalType,
         disposition: item.disposition || 'buried', // Preserve disposition
         summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
-        // PHASE 1 FIX: Preserve full content for article generation quotes
-        fullContent: rawFullContent,
+        // Preserve full content for EXPOSED items only (defense-in-depth)
+        ...(item.disposition !== 'buried' ? { fullContent: rawFullContent } : {}),
         characterRefs: [],
         ownerLogline: item.ownerLogline,
         narrativeTimelineRef: null,
@@ -494,8 +495,10 @@ function createMockPreprocessor(mockData = {}) {
         summary: mockData.summaryPrefix
           ? `${mockData.summaryPrefix} - Token ${i + 1}`
           : `Mock summary for token ${i + 1}`,
-        // PHASE 1 FIX: Include fullContent for verbatim quoting
-        fullContent: token.content || token.description || `Mock full content for token ${i + 1}`,
+        // Include fullContent for verbatim quoting (exposed items only)
+        ...(token.disposition !== 'buried' ? {
+          fullContent: token.content || token.description || `Mock full content for token ${i + 1}`
+        } : {}),
         characterRefs: token.characterRefs || [],
         ownerLogline: token.owner?.logline || null,
         timelineRef: null,
