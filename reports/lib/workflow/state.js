@@ -286,6 +286,15 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Evidence checkpoint approval flag (SRP checkpoint separation)
+   * Set to true when user approves evidence bundle at checkpoint
+   */
+  _evidenceApproved: Annotation({
+    reducer: replaceReducer,
+    default: () => false
+  }),
+
+  /**
    * Outline checkpoint approval flag (Commit 8.26 - SRP checkpoint separation)
    * Set to true when user approves outline at checkpoint
    */
@@ -647,7 +656,8 @@ function getDefaultState() {
     // Pre-curation checkpoint (Phase 4f)
     preCurationApproved: false,
     preCurationSummary: null,
-    // Checkpoint approvals (Commit 8.26 - SRP separation)
+    // Checkpoint approvals (SRP separation)
+    _evidenceApproved: false,
     outlineApproved: false,
     articleApproved: false,
     // Curated data
@@ -800,7 +810,7 @@ const ROLLBACK_CLEARS = {
     // Photo analysis
     'photoAnalyses', 'characterIdMappings',
     // Preprocessing and curation
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // Generation
@@ -814,7 +824,7 @@ const ROLLBACK_CLEARS = {
   'paper-evidence-selection': [
     'selectedPaperEvidence',
     'photoAnalyses', 'characterIdMappings',
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -825,7 +835,7 @@ const ROLLBACK_CLEARS = {
   'await-roster': [
     'whiteboardAnalysis',
     'characterIdMappings',
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -836,7 +846,7 @@ const ROLLBACK_CLEARS = {
   'character-ids': [
     'characterIdMappings',
     // Note: photoAnalyses preserved - only mappings need re-entry
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle',
+    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -847,7 +857,7 @@ const ROLLBACK_CLEARS = {
   'pre-curation': [
     'preCurationApproved',
     // Note: preprocessedEvidence preserved - expensive to regenerate
-    'evidenceBundle',
+    'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -856,7 +866,7 @@ const ROLLBACK_CLEARS = {
 
   // Phase 1.8: Evidence and photos approval
   'evidence-and-photos': [
-    'evidenceBundle',
+    'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',

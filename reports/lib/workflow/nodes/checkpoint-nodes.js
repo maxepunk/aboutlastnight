@@ -257,6 +257,42 @@ async function joinParallelBranches(state, config) {
   };
 }
 
+/**
+ * Evidence and Photos Checkpoint
+ *
+ * Pauses for user to review curated three-layer evidence bundle and photo analyses.
+ * Handles rescue of excluded paper evidence items.
+ * Requires: state.evidenceBundle (from curateEvidenceBundle)
+ *
+ * SRP: This node contains ONLY the interrupt. Data generation happens in curateEvidenceBundle.
+ *
+ * @param {Object} state - Current state with evidenceBundle
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with _rescuedItems, _evidenceApproved, currentPhase
+ */
+async function checkpointEvidenceAndPhotos(state, config) {
+  // Skip if already approved (resume case)
+  const skipCondition = state._evidenceApproved ? state.evidenceBundle : null;
+
+  const resumeValue = checkpointInterrupt(
+    CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS,
+    {
+      evidenceBundle: state.evidenceBundle,
+      _excludedItemsCache: state._excludedItemsCache
+    },
+    skipCondition
+  );
+
+  // Process rescue items if user specified any
+  const rescuedItems = resumeValue?.rescuedItems || [];
+
+  return {
+    _rescuedItems: rescuedItems,
+    _evidenceApproved: true,
+    currentPhase: PHASES.CURATE_EVIDENCE
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // EVALUATION CHECKPOINT NODES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -432,6 +468,11 @@ module.exports = {
     stateFields: ['memoryTokens', 'paperEvidence', 'sessionPhotos', 'whiteboardPhotoPath']
   }),
 
+  // Evidence curation checkpoint (SRP: separate from curateEvidenceBundle data node)
+  checkpointEvidenceAndPhotos: traceNode(checkpointEvidenceAndPhotos, 'checkpointEvidenceAndPhotos', {
+    stateFields: ['evidenceBundle', '_excludedItemsCache', '_evidenceApproved']
+  }),
+
   // Evaluation checkpoint nodes (SRP: separate from expensive evaluation)
   checkpointArcSelection: traceNode(checkpointArcSelection, 'checkpointArcSelection', {
     stateFields: ['narrativeArcs', 'selectedArcs', 'evaluationHistory']
@@ -451,6 +492,7 @@ module.exports = {
     checkpointAwaitRoster,
     checkpointAwaitContext,
     joinParallelBranches,
+    checkpointEvidenceAndPhotos,
     checkpointArcSelection,
     checkpointOutline,
     checkpointArticle
