@@ -26,7 +26,7 @@
  * → checkpointCharacterIds [interrupt: character-ids]
  * → parseCharacterIds → finalizePhotoAnalyses
  * → preprocessEvidence → checkpointPreCuration [interrupt: pre-curation]
- * → curateEvidenceBundle [interrupt: evidence-photos] → processRescuedItems
+ * → curateEvidenceBundle → checkpointEvidenceAndPhotos [interrupt: evidence-photos] → processRescuedItems
  *
  * PHASE 2: Arc Analysis (Player-Focus-Guided)
  * → analyzeArcs → validateArcs → evaluateArcs
@@ -355,8 +355,10 @@ function createGraphBuilder() {
   // Checkpoint: Pre-curation approval
   builder.addNode('checkpointPreCuration', nodes.checkpointPreCuration);
 
-  // Evidence curation (has interrupt for evidence-photos checkpoint)
+  // Evidence curation (pure data node - no interrupt, SRP)
   builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
+  // Evidence checkpoint (SRP: interrupt separated from curateEvidenceBundle)
+  builder.addNode('checkpointEvidenceAndPhotos', nodes.checkpointEvidenceAndPhotos);
   builder.addNode('processRescuedItems', nodes.processRescuedItems);
 
   // ═══════════════════════════════════════════════════════
@@ -500,8 +502,9 @@ function createGraphBuilder() {
   // Pre-curation → evidence curation (has interrupt for evidence-photos)
   builder.addEdge('checkpointPreCuration', 'curateEvidenceBundle');
 
-  // Curation → rescued items → arc analysis
-  builder.addEdge('curateEvidenceBundle', 'processRescuedItems');
+  // Curation → checkpoint → rescued items → arc analysis
+  builder.addEdge('curateEvidenceBundle', 'checkpointEvidenceAndPhotos');
+  builder.addEdge('checkpointEvidenceAndPhotos', 'processRescuedItems');
   builder.addEdge('processRescuedItems', 'analyzeArcs');
 
   // ═══════════════════════════════════════════════════════

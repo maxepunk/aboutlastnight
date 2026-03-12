@@ -303,6 +303,8 @@ describe('ReportStateAnnotation', () => {
         // Error handling
         'errors',
         // NOTE: awaitingApproval/approvalType removed in interrupt() migration
+        // Checkpoint approvals (SRP separation)
+        '_evidenceApproved',
         // Internal temporary state (Commit 8.10+)
         '_rescuedItems',
         '_excludedItemsCache',

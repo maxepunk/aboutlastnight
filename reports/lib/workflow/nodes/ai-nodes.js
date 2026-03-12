@@ -24,7 +24,6 @@
  */
 
 const { PHASES } = require('../state');
-const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
 const { SchemaValidator } = require('../../schema-validator');
 const { createPromptBuilder } = require('../../prompt-builder');
 const outlineSchema = require('../../schemas/outline.schema.json');
@@ -321,13 +320,6 @@ async function curateEvidenceBundle(state, config) {
       }
     };
 
-    // Interrupt for evidence approval - user reviews evidence bundle and photos
-    checkpointInterrupt(
-      CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS,
-      { evidenceBundle: emptyBundle },
-      null  // No skip - always pause for approval after curation
-    );
-
     return {
       evidenceBundle: emptyBundle,
       currentPhase: PHASES.CURATE_EVIDENCE
@@ -467,13 +459,6 @@ async function curateEvidenceBundle(state, config) {
   }
 
   console.log(`[curateEvidenceBundle] Built cache for ${Object.keys(_excludedItemsCache).length} excluded items`);
-
-  // Interrupt for evidence approval - user reviews evidence bundle and photos
-  checkpointInterrupt(
-    CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS,
-    { evidenceBundle, _excludedItemsCache },
-    null  // No skip - always pause for approval after curation
-  );
 
   return {
     evidenceBundle,

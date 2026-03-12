@@ -61,6 +61,9 @@ module.exports = {
   checkpointAwaitContext: checkpointNodes.checkpointAwaitContext,
   joinParallelBranches: checkpointNodes.joinParallelBranches,
 
+  // Evidence curation checkpoint (SRP: separate from curateEvidenceBundle data node)
+  checkpointEvidenceAndPhotos: checkpointNodes.checkpointEvidenceAndPhotos,
+
   // Evaluation checkpoint nodes (Commit 8.26: SRP separation from evaluators)
   checkpointArcSelection: checkpointNodes.checkpointArcSelection,
   checkpointOutline: checkpointNodes.checkpointOutline,
