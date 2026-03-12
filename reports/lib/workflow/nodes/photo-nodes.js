@@ -104,8 +104,7 @@ const PHOTO_ANALYSIS_SCHEMA = {
     },
     emotionalTone: {
       type: 'string',
-      enum: ['tense', 'celebratory', 'suspicious', 'revelatory', 'confrontational', 'collaborative', 'neutral'],
-      description: 'Overall emotional tone of the scene'
+      description: 'Overall emotional tone of the scene (e.g., tense, celebratory, suspicious, revelatory, confrontational, collaborative, neutral, investigative, analytical, focused, dramatic, playful, somber, chaotic)'
     },
     storyRelevance: {
       type: 'string',
