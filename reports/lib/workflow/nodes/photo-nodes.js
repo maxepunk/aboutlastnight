@@ -491,7 +491,7 @@ async function analyzePhotos(state, config) {
  */
 const ENRICHED_PHOTO_SCHEMA = {
   type: 'object',
-  required: ['enrichedVisualContent', 'enrichedNarrativeMoment', 'finalCaption', 'identifiedCharacters'],
+  required: ['enrichedVisualContent', 'finalCaption', 'identifiedCharacters'],
   properties: {
     enrichedVisualContent: {
       type: 'string',
