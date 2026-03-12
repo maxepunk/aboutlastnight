@@ -67,6 +67,33 @@ function traceNode(nodeFn, name, options = {}) {
         } catch (err) {
           return { node: safeName, error: 'Failed to extract metadata' };
         }
+      },
+
+      // Filter outputs to prevent cumulative 274MB+ traces
+      process_outputs: (output) => {
+        if (!output || typeof output !== 'object') return output;
+        try {
+          const filtered = {};
+          for (const [key, value] of Object.entries(output)) {
+            if (value === null || value === undefined) {
+              filtered[key] = value;
+            } else if (typeof value === 'string') {
+              filtered[key] = value.length > 2000
+                ? value.slice(0, 2000) + `... [+${value.length - 2000} chars]`
+                : value;
+            } else if (typeof value === 'object') {
+              const serialized = JSON.stringify(value);
+              filtered[key] = serialized.length > 4000
+                ? `[${Array.isArray(value) ? 'Array' : 'Object'} ${serialized.length} chars]`
+                : value;
+            } else {
+              filtered[key] = value;
+            }
+          }
+          return filtered;
+        } catch (err) {
+          return { error: 'Failed to filter outputs', keys: Object.keys(output) };
+        }
       }
     }
   );
