@@ -640,12 +640,13 @@ describe('photo-nodes', () => {
       expect(PHOTO_ANALYSIS_SCHEMA.required).toContain('narrativeMoment');
     });
 
-    it('defines emotionalTone as enum', () => {
+    it('defines emotionalTone as description-guided string', () => {
       const emotionalTone = PHOTO_ANALYSIS_SCHEMA.properties.emotionalTone;
 
       expect(emotionalTone.type).toBe('string');
-      expect(emotionalTone.enum).toContain('tense');
-      expect(emotionalTone.enum).toContain('revelatory');
+      expect(emotionalTone.enum).toBeUndefined();
+      expect(emotionalTone.description).toContain('tense');
+      expect(emotionalTone.description).toContain('revelatory');
     });
 
     it('defines storyRelevance as enum', () => {
