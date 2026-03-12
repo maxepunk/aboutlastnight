@@ -102,6 +102,25 @@ function createTracedSdkQuery(sdkQueryFn) {
           timeout: safe.timeoutMs || null,
           project: getProject()
         };
+      },
+
+      // Filter outputs to prevent trace payload overflow
+      process_outputs: (output) => {
+        if (!output || typeof output !== 'object') return output;
+        try {
+          const serialized = JSON.stringify(output);
+          if (serialized.length > 8000) {
+            return {
+              _truncated: true,
+              _originalSize: serialized.length,
+              _keys: Object.keys(output),
+              _preview: serialized.slice(0, 4000) + '...'
+            };
+          }
+          return output;
+        } catch (err) {
+          return { error: 'Failed to serialize output' };
+        }
       }
     }
   );
@@ -149,6 +168,25 @@ function traceLLMCall(llmFn, name = 'claude-sdk-query') {
           hasAgents: !!safe.agents,
           timeoutMs: safe.timeoutMs || null
         };
+      },
+
+      // Filter outputs to prevent trace payload overflow
+      process_outputs: (output) => {
+        if (!output || typeof output !== 'object') return output;
+        try {
+          const serialized = JSON.stringify(output);
+          if (serialized.length > 8000) {
+            return {
+              _truncated: true,
+              _originalSize: serialized.length,
+              _keys: Object.keys(output),
+              _preview: serialized.slice(0, 4000) + '...'
+            };
+          }
+          return output;
+        } catch (err) {
+          return { error: 'Failed to serialize output' };
+        }
       }
     }
   );
@@ -182,7 +220,26 @@ function traceBatch(batchFn, name) {
       }),
       metadata: (items) => ({
         batchSize: Array.isArray(items) ? items.length : 'unknown'
-      })
+      }),
+
+      // Filter outputs to prevent trace payload overflow
+      process_outputs: (output) => {
+        if (!output || typeof output !== 'object') return output;
+        try {
+          const serialized = JSON.stringify(output);
+          if (serialized.length > 8000) {
+            return {
+              _truncated: true,
+              _originalSize: serialized.length,
+              _keys: Object.keys(output),
+              _preview: serialized.slice(0, 4000) + '...'
+            };
+          }
+          return output;
+        } catch (err) {
+          return { error: 'Failed to serialize output' };
+        }
+      }
     }
   );
 }
