@@ -120,7 +120,10 @@ const PAPER_SCORING_SCHEMA = {
           include: { type: 'boolean' },
           criteriaMatched: { type: 'array', items: { type: 'string' } },
           relevanceNote: { type: 'string' },
-          excludeReason: { type: 'string' },
+          excludeReason: {
+            type: 'string',
+            enum: ['puzzleArtifact', 'insufficientConnection', 'tangentialThread', 'minimalContent', 'containerOnly']
+          },
           excludeNote: { type: 'string' },
           rescuable: { type: 'boolean' }
         }
