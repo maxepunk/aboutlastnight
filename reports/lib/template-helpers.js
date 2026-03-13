@@ -192,33 +192,28 @@ function contentBlockPartial(contentType) {
 
 /**
  * Generate article ID from session metadata
- * Format: {PREFIX}-{MMDD}-{HH}
+ * Format: {PREFIX}-{sessionId}-{YY}
  * Prefix from theme-config.js display.articleIdPrefix (NNA for journalist, DCR for detective)
+ * Year suffix from real-world generation date (2026 → "26"), NOT story date (2027)
  *
- * @param {Object} metadata - ContentBundle metadata (must include .theme for non-default prefix)
- * @returns {string} Article ID
+ * @param {Object} metadata - ContentBundle metadata
+ * @returns {string} Article ID (e.g., NNA-0306-26)
  */
 function articleId(metadata) {
-  // Lazy-require to avoid circular dependency (template-helpers loaded early)
   const { getThemeConfig } = require('./theme-config');
   const theme = (metadata && metadata.theme) || 'journalist';
   const config = getThemeConfig(theme);
   const prefix = (config && config.display && config.display.articleIdPrefix) || 'NNA';
 
-  if (!metadata || !metadata.generatedAt) {
+  if (!metadata || !metadata.sessionId) {
     return `${prefix}-0000-00`;
   }
 
-  const date = parseDate(metadata.generatedAt);
-  if (!date) {
-    return `${prefix}-0000-00`;
-  }
+  const yearSuffix = metadata.generatedAt
+    ? String(new Date(metadata.generatedAt).getFullYear()).slice(-2)
+    : '00';
 
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hour = String(date.getHours()).padStart(2, '0');
-
-  return `${prefix}-${month}${day}-${hour}`;
+  return `${prefix}-${metadata.sessionId}-${yearSuffix}`;
 }
 
 // ============================================================================
