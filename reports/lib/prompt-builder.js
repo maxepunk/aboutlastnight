@@ -608,7 +608,7 @@ Return JSON with the following structure:
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null) {
+  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null) {
     const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -765,6 +765,14 @@ ${JSON.stringify(evidenceBundle, null, 2)}
 ${arcEvidenceSection}
 </DATA_CONTEXT>
 ${this._buildFinancialSummary(shellAccounts)}
+${(directorNotes?.observations && Object.keys(directorNotes.observations).length > 0) ? `
+<INVESTIGATION_OBSERVATIONS>
+What you observed during the investigation this morning.
+These ground your behavioral claims - who you saw talking to whom,
+notable moments, patterns you noticed.
+
+${JSON.stringify(directorNotes.observations, null, 2)}
+</INVESTIGATION_OBSERVATIONS>` : ''}
 <TEMPLATE>
 ${template}
 </TEMPLATE>
