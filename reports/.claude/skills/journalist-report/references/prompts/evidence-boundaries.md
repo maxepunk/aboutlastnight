@@ -40,10 +40,11 @@ Memory tokens sold to the Black Market are PRIVATE. The Valet promised discretio
 **Understanding the Game Mechanics:**
 1. Players FIND/UNLOCK memory tokens during the game
 2. A token belongs to whoever's memory it contains (the OWNER)
-3. Players can SELL any token they find to Blake/Valet (receiving money as incentive)
-4. The seller CHOOSES a shell account name for the transaction
-5. **Black Market display shows:** Account Name + Total Amount (PUBLIC)
-6. **Black Market display does NOT show:** Which tokens/owners contributed (PRIVATE)
+3. Players can BURY any token they find by giving it to Blake/Valet
+4. In exchange, Blake's employers PAY the player - money goes INTO a shell account
+5. The player CHOOSES the shell account name (some use their real name, others use pseudonyms)
+6. **Black Market display shows:** Account Name + Total Amount (PUBLIC)
+7. **Black Market display does NOT show:** Which tokens/owners were buried (PRIVATE)
 
 **Key Distinction:**
 - **Token OWNER** = Whose memory is in the token (e.g., "Kai's memory of...")
@@ -83,6 +84,19 @@ Memory tokens sold to the Black Market are PRIVATE. The Valet promised discretio
 > The first burial came at 8:15 PM. $200,000 to Offbeat. I don't know whose memory that was. I know what the silence cost.
 
 > Six different shell accounts. Over $4 million in buried evidence. I can tell you the shape of the silence. I can't tell you what's inside it.
+
+### WRONG - Money Direction Reversed
+
+> Vic paid $675,000 to bury two memories.
+
+WHY THIS IS WRONG: Burying evidence PAYS the player. Vic RECEIVED $675,000
+from Blake's employers for burying two memories. Money flows TO the person
+burying, not FROM them.
+
+### CORRECT - Money Direction
+
+> $675,000 went to an account bearing Vic's name. Two memories buried.
+> Someone decided those memories were worth more hidden than exposed.
 
 ### Director Observation Exception
 
@@ -256,7 +270,7 @@ When analyzing arcs, assign emphasis based on accusation and observation alignme
 |---------------------|-------|----------|
 | "Alex's memory shows him presenting his algorithm" | 1 | YES - exposed content |
 | "Victoria buried a memory about the murder" | 2 | NO - can't know content |
-| "Victoria paid $450K to bury two memories" | 2 | YES - observable transaction |
+| "$675,000 went to Vic's account for burying two memories" | 2 | YES - observable transaction |
 | "The group suspected Derek" | 3 | YES - director notes |
 | "Derek's buried memory proves guilt" | 2 | NO - can't infer content |
 | "James exposed the cease and desist letter" | 1 | YES - attribution + content |
