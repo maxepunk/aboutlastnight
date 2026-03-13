@@ -144,10 +144,11 @@ class PromptBuilder {
    * @param {ThemeLoader} themeLoader - Initialized ThemeLoader instance
    * @param {string} themeName - Theme name (default: 'journalist')
    */
-  constructor(themeLoader, themeName = 'journalist', sessionConfig = {}) {
+  constructor(themeLoader, themeName = 'journalist', sessionConfig = {}, canonicalCharacters = null) {
     this.theme = themeLoader;
     this.themeName = themeName;
     this.sessionConfig = sessionConfig;
+    this.canonicalCharacters = canonicalCharacters;
   }
 
   /**
@@ -620,7 +621,7 @@ Return JSON with the following structure:
     const constraints = THEME_CONSTRAINTS[this.themeName];
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
 
-${generateRosterSection(this.themeName)}
+${generateRosterSection(this.themeName, this.canonicalCharacters)}
 
 ${constraints.hardConstraints}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
@@ -675,7 +676,7 @@ ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 
-${generateRosterSection(this.themeName)}
+${generateRosterSection(this.themeName, this.canonicalCharacters)}
 </RULES>
 
 <SECTION_GUIDANCE>
@@ -784,7 +785,7 @@ ${labelPromptSection('arc-flow', prompts['arc-flow'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 
-${generateRosterSection()}
+${generateRosterSection(this.themeName, this.canonicalCharacters)}
 
 <TEMPORAL_DISCIPLINE>
 CRITICAL: THREE TIMELINES — get them right or the article makes no sense.
@@ -1203,9 +1204,9 @@ function createPromptBuilder(options = null) {
     return new PromptBuilder(themeLoader, 'journalist');
   }
 
-  const { theme = 'journalist', customSkillPath, sessionConfig = {} } = options || {};
+  const { theme = 'journalist', customSkillPath, sessionConfig = {}, canonicalCharacters = null } = options || {};
   const themeLoader = createThemeLoader({ theme, customPath: customSkillPath });
-  return new PromptBuilder(themeLoader, theme, sessionConfig);
+  return new PromptBuilder(themeLoader, theme, sessionConfig, canonicalCharacters);
 }
 
 module.exports = {
