@@ -189,6 +189,7 @@ class TemplateAssembler {
    * @param {Object} options - Assembly options
    * @param {boolean} options.skipValidation - Skip schema validation
    * @param {string} options.sessionId - Session ID for photo paths (overrides constructor)
+   * @param {Array} options.shellAccounts - Authoritative shell account data for financial override
    * @returns {Promise<string>} Assembled HTML
    * @throws {Error} If ContentBundle is invalid
    */
@@ -210,7 +211,7 @@ class TemplateAssembler {
     const sessionId = options.sessionId || this.sessionId;
 
     // Build template context (async for CSS loading)
-    const context = await this.buildContext(contentBundle, sessionId);
+    const context = await this.buildContext(contentBundle, sessionId, options.shellAccounts);
 
     // Render template
     return this.mainTemplate(context);
@@ -226,9 +227,10 @@ class TemplateAssembler {
    * @private
    * @param {Object} contentBundle - ContentBundle JSON
    * @param {string} sessionId - Session ID for photo path transformation
+   * @param {Array} shellAccounts - Authoritative shell account data for financial override
    * @returns {Promise<Object>} Template context
    */
-  async buildContext(contentBundle, sessionId) {
+  async buildContext(contentBundle, sessionId, shellAccounts) {
     // Calculate photos base path for session-specific photo serving
     // Use relative path (no leading /) for standalone HTML compatibility (GitHub Pages, file://)
     const photosBasePath = sessionId ? `sessionphotos/${sessionId}/` : 'photos/';
@@ -328,7 +330,7 @@ class TemplateAssembler {
       financialTracker: (() => {
         const correctedTracker = this.overrideFinancialTracker(
           contentBundle.financialTracker,
-          contentBundle._shellAccounts || []
+          shellAccounts || []
         );
         return correctedTracker ? {
           ...correctedTracker,

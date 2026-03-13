@@ -127,13 +127,10 @@ async function assembleHtml(state, config) {
     financialIssues.forEach(issue => console.warn(`  - ${issue}`));
   }
 
-  // Inject shellAccounts for deterministic financial tracker override
-  const contentBundleWithFinancials = {
-    ...state.contentBundle,
-    _shellAccounts: state.shellAccounts || []
-  };
-
-  const html = await assembler.assemble(contentBundleWithFinancials, { sessionId });
+  const html = await assembler.assemble(state.contentBundle, {
+    sessionId,
+    shellAccounts: state.shellAccounts || []
+  });
 
   // Determine base directory (configurable for testing)
   const baseDir = config?.configurable?.baseDir || path.join(__dirname, '..', '..', '..');
