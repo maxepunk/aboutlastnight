@@ -1151,13 +1151,26 @@ async function generateContentBundle(state, config) {
 
   const shellAccounts = state.shellAccounts || [];
 
+  // Build session facts for non-roster character guardrail (RC3)
+  const roster = state.sessionConfig?.roster || [];
+  const canonicalChars = state.canonicalCharacters || {};
+  const sessionFacts = roster.length > 0 ? {
+    roster: roster.map(p => {
+      const name = p.name || p;
+      return canonicalChars[name] || name;
+    }),
+    accusation: state.sessionConfig?.accusation?.accused?.join(' and ') || 'Unknown',
+    playerCount: roster.length
+  } : null;
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     state.outline || {},
     state.evidenceBundle || {},
     template,
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     state.heroImage,  // Hero image filename (prevents duplicate in photos array)
-    shellAccounts  // Deterministic shell account data for financial summary
+    shellAccounts,  // Deterministic shell account data for financial summary
+    sessionFacts  // RC3: non-roster character guardrail
   );
 
   // Get JSON schema for structured output

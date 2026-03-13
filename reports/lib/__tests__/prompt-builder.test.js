@@ -1108,6 +1108,55 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('SESSION_FACTS injection in article prompt', () => {
+    beforeEach(() => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': 'voice content',
+        'evidence-boundaries': 'boundaries content',
+        'narrative-structure': 'structure content',
+        'anti-patterns': 'anti-patterns content',
+        'section-rules': 'section rules',
+        'arc-flow': 'arc flow',
+        'formatting': 'formatting',
+        'editorial-design': 'editorial design',
+        'writing-principles': 'writing principles',
+        'photo-analysis': 'photo analysis'
+      });
+      mockThemeLoader.loadTemplate.mockResolvedValue('<template>');
+    });
+
+    it('should include SESSION_FACTS when sessionFacts provided', async () => {
+      const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const { userPrompt } = await b.buildArticlePrompt(
+        {}, // outline
+        {}, // evidenceBundle
+        '<template>',
+        [], // arcEvidencePackages
+        null, // heroImage
+        [], // shellAccounts
+        { // sessionFacts
+          roster: ['Alex Reeves', 'Vic Kingsley', 'Sam Thorne'],
+          accusation: 'Vic and Sam',
+          playerCount: 3
+        }
+      );
+      expect(userPrompt).toContain('<SESSION_FACTS>');
+      expect(userPrompt).toContain('INVESTIGATION ROSTER (3 players)');
+      expect(userPrompt).toContain('Alex Reeves');
+      expect(userPrompt).toContain('Vic Kingsley');
+      expect(userPrompt).toContain('CHARACTER AGENCY RULE');
+      expect(userPrompt).toContain('Use exactly 3');
+    });
+
+    it('should omit SESSION_FACTS when sessionFacts is null', async () => {
+      const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const { userPrompt } = await b.buildArticlePrompt(
+        {}, {}, '<template>', [], null, [], null
+      );
+      expect(userPrompt).not.toContain('<SESSION_FACTS>');
+    });
+  });
+
   describe('generateRosterSection with override', () => {
     it('should merge Notion-derived override with theme-config fallback', () => {
       const { generateRosterSection } = require('../prompt-builder');
