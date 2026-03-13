@@ -110,6 +110,7 @@ const THEME_CONFIGS = {
     display: {
       articleIdPrefix: 'NNA',           // NovaNews Article
       crystallizationLabel: "Nova's Insight",
+      storyDate: '2027-02-22',           // In-world article date (always Feb 22, 2027)
       postGenValidation: {
         minPullQuotes: 2,
         minInlineEvidenceCards: 3

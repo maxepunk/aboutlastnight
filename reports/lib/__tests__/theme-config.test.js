@@ -257,6 +257,16 @@ describe('theme-config', () => {
       expect(config.display.postGenValidation.minPullQuotes).toBe(0);
       expect(config.display.postGenValidation.minInlineEvidenceCards).toBe(0);
     });
+
+    it('journalist has storyDate for in-world article date', () => {
+      const config = getThemeConfig('journalist');
+      expect(config.display.storyDate).toBe('2027-02-22');
+    });
+
+    it('detective does not have storyDate (no in-world date constraint)', () => {
+      const config = getThemeConfig('detective');
+      expect(config.display.storyDate).toBeUndefined();
+    });
   });
 
   describe('module exports', () => {
