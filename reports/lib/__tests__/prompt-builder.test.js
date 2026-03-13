@@ -1107,4 +1107,35 @@ describe('PromptBuilder', () => {
       expect(typeof createPromptBuilder).toBe('function');
     });
   });
+
+  describe('generateRosterSection with override', () => {
+    it('should merge Notion-derived override with theme-config fallback', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const override = {
+        'Alex': 'Alex Reeves',
+        'Vic': 'Vic Kingsley'
+      };
+      const result = generateRosterSection('journalist', override);
+      expect(result).toContain('Alex → Alex Reeves');
+      expect(result).toContain('Vic → Vic Kingsley');
+      // theme-config fallback names ALSO present (merge, not replace)
+      expect(result).toContain('Sarah → Sarah Blackwood');
+      expect(result).toContain('Marcus → Marcus Blackwood');
+    });
+
+    it('should prefer Notion-derived name over theme-config when both exist', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const override = { 'Sarah': 'Sarah Rebranded' };
+      const result = generateRosterSection('journalist', override);
+      expect(result).toContain('Sarah → Sarah Rebranded');
+      expect(result).not.toContain('Sarah Blackwood');
+    });
+
+    it('should fall back to theme-config when no override provided', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const result = generateRosterSection('journalist');
+      expect(result).toContain('Sarah → Sarah Blackwood');
+      expect(result).toContain('Remi → Remi Whitman');
+    });
+  });
 });

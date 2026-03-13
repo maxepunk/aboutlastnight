@@ -9,15 +9,23 @@ const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
 const { getThemeConfig } = require('./theme-config');
 
 /**
- * Generate canonical character roster section from theme config
- * DRY: Single source of truth is theme-config.js canonicalCharacters
+ * Generate canonical character roster section
+ * Merges Notion-derived override with theme-config.js fallback.
+ * Override names take precedence; theme-config fills in characters
+ * without tokens in this session (e.g., characters with no memories).
+ *
+ * Per spec: "Notion-derived map supplements (not replaces) theme-config.js"
  *
  * @param {string} theme - Theme name (e.g., 'journalist')
+ * @param {Object|null} canonicalCharacters - Optional override map from Notion data
  * @returns {string} Formatted roster section for prompts
  */
-function generateRosterSection(theme = 'journalist') {
-  const config = getThemeConfig(theme);
-  const characters = config?.canonicalCharacters || {};
+function generateRosterSection(theme = 'journalist', canonicalCharacters = null) {
+  const themeCharacters = getThemeConfig(theme)?.canonicalCharacters || {};
+  // Merge: theme-config as base, Notion override wins on conflict
+  const characters = canonicalCharacters
+    ? { ...themeCharacters, ...canonicalCharacters }
+    : themeCharacters;
 
   const lines = Object.entries(characters)
     .map(([first, full]) => `- ${first} → ${full}`)
@@ -1178,7 +1186,8 @@ function createPromptBuilder(options = null) {
 
 module.exports = {
   PromptBuilder,
-  createPromptBuilder
+  createPromptBuilder,
+  generateRosterSection
 };
 
 // Self-test when run directly
