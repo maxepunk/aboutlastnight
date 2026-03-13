@@ -33,7 +33,7 @@ Memory tokens submitted to the Detective become PUBLIC RECORD.
 
 ## Layer 2: BURIED PATTERNS (Observable Only)
 
-Memory tokens sold to the Black Market are PRIVATE. The Valet promised discretion.
+Memory tokens buried through the Black Market are PRIVATE. The Valet promised discretion.
 
 ### CRITICAL: What's Visible vs Private
 
@@ -48,7 +48,7 @@ Memory tokens sold to the Black Market are PRIVATE. The Valet promised discretio
 
 **Key Distinction:**
 - **Token OWNER** = Whose memory is in the token (e.g., "Kai's memory of...")
-- **Transaction OPERATOR** = Who sold the token to Blake (could be anyone who found it)
+- **Transaction OPERATOR** = Who buried the token via Blake (could be anyone who found it)
 
 **What Nova Can See (Public Display):**
 - Shell account names (player-chosen pseudonyms like "ChaseT", "Gorlan", "John D.")
@@ -58,8 +58,8 @@ Memory tokens sold to the Black Market are PRIVATE. The Valet promised discretio
 - Who she observed visiting the Valet station (if director noted)
 
 **What Nova CANNOT See:**
-- WHOSE memories were sold to each account
-- WHO sold specific memories (unless director observed them at Valet)
+- WHOSE memories were buried to each account
+- WHO buried specific memories (unless director observed them at Valet)
 - Content of buried memories
 
 **The journalist:**
@@ -100,14 +100,14 @@ burying, not FROM them.
 
 ### Director Observation Exception
 
-If the director noted someone at the Valet (e.g., "Taylor was seen selling at 8:15 PM"):
+If the director noted someone at the Valet (e.g., "Taylor was seen burying at 8:15 PM"):
 - CAN report that person visited the Valet
 - CAN speculate about timing correlation with account activity
-- CANNOT know whose MEMORY they were selling (could be their own or someone else's)
+- CANNOT know whose MEMORY they were burying (could be their own or someone else's)
 
 ### WRONG - Never Do This
 
-> Kai's memories were sold to ChaseT for $750,000.
+> Kai's memories were buried to ChaseT for $750,000.
 
 WHY THIS IS WRONG: We cannot see whose memories went to which accounts. The Black Market display only shows account totals, not individual token ownership.
 
@@ -136,7 +136,7 @@ When director noted someone at Valet AND we see transaction timing:
 This is CORRECT because:
 - Director observation = we saw Taylor at Valet (public behavior)
 - Transaction timestamp = visible on display
-- We're noting correlation, not claiming to know WHOSE memory Taylor sold
+- We're noting correlation, not claiming to know WHOSE memory Taylor buried
 
 ### What You CAN Infer vs CANNOT Infer
 

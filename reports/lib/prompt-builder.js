@@ -764,7 +764,6 @@ This image is the HERO IMAGE at the top of the article.
 EVIDENCE BUNDLE (quote ONLY from exposed evidence):
 ${JSON.stringify(evidenceBundle, null, 2)}
 ${arcEvidenceSection}
-</DATA_CONTEXT>
 ${this._buildFinancialSummary(shellAccounts)}
 ${(directorNotes?.observations && Object.keys(directorNotes.observations).length > 0) ? `
 <INVESTIGATION_OBSERVATIONS>
@@ -774,6 +773,7 @@ notable moments, patterns you noticed.
 
 ${JSON.stringify(directorNotes.observations, null, 2)}
 </INVESTIGATION_OBSERVATIONS>` : ''}
+</DATA_CONTEXT>
 <TEMPLATE>
 ${template}
 </TEMPLATE>
