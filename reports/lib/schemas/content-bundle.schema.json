@@ -28,6 +28,10 @@
           "type": "string",
           "default": "1.0.0",
           "description": "Schema version for future compatibility"
+        },
+        "storyDate": {
+          "type": "string",
+          "description": "In-world article date (e.g., 2027-02-22 for journalist theme)"
         }
       },
       "additionalProperties": false

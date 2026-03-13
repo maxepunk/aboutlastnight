@@ -1213,6 +1213,13 @@ async function generateContentBundle(state, config) {
         }
       };
 
+  // Populate storyDate from theme config (RC4: in-world date)
+  const themeConfig = getThemeConfig(state.theme || 'journalist');
+  if (themeConfig?.display?.storyDate) {
+    contentBundle.metadata = contentBundle.metadata || {};
+    contentBundle.metadata.storyDate = themeConfig.display.storyDate;
+  }
+
   return {
     contentBundle,
     currentPhase: PHASES.GENERATE_CONTENT
