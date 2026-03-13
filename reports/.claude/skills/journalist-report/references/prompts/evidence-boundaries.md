@@ -21,7 +21,7 @@ Memory tokens submitted to the Detective become PUBLIC RECORD.
 
 > A cease and desist letter came across my desk. Patchwork Law Firm, representing Alex Chen, demanding NeurAI stop using the stolen algorithm.
 
-> Jamie's memory shows Victoria offering Alex the position Marcus held. "He's gone. The job is yours." That's Victoria's voice. Jamie witnessed it.
+> Jamie's memory shows Vic offering Alex the position Marcus held. "He's gone. The job is yours." That's Vic's voice. Jamie witnessed it.
 
 ### What Makes Exposed Evidence Usable
 
@@ -111,19 +111,19 @@ If the director noted someone at the Valet (e.g., "Taylor was seen selling at 8:
 
 WHY THIS IS WRONG: We cannot see whose memories went to which accounts. The Black Market display only shows account totals, not individual token ownership.
 
-> Leila's 5 tokens went to Dominic.
+> Zia's 5 tokens went to Dominic.
 
 WHY THIS IS WRONG: Same issue. We can see "Dominic received $960,000 across 5 transactions" but NOT whose memories those were.
 
-> Victoria buried a memory showing her meeting with Marcus about the algorithm.
+> Vic buried a memory showing her meeting with Marcus about the algorithm.
 
 WHY THIS IS WRONG: Two violations - we can't know WHO's memory was buried AND we can't know what it contained.
 
-> Derek's buried memories proved he knew about the lab experiments.
+> Sam's buried memories proved he knew about the lab experiments.
 
 WHY THIS IS WRONG: We cannot "prove" anything from buried content. We can only report what we see on the display (account names, totals, timestamps).
 
-> The buried evidence revealed Victoria's involvement in the murder.
+> The buried evidence revealed Vic's involvement in the murder.
 
 WHY THIS IS WRONG: Buried evidence reveals NOTHING about content or ownership. Only patterns of account activity and timing.
 
@@ -204,15 +204,15 @@ CORRECT (player-focused approach):
 
 **Example: Dec 21 Session**
 
-Accusation: Victoria and Morgan accused of colluding to murder Marcus
-Director Observations: Victoria and Morgan working together, ChaseT activity in second half, John D. anonymity
-Whiteboard Notes: SUSPECTS: Derek (emphasized), Victoria, Morgan; "Victoria + Morgan = permanent solution"
+Accusation: Vic and Morgan accused of colluding to murder Marcus
+Director Observations: Vic and Morgan working together, ChaseT activity in second half, John D. anonymity
+Whiteboard Notes: SUSPECTS: Sam (emphasized), Vic, Morgan; "Vic + Morgan = permanent solution"
 
 This shapes the article to:
-- Lead with Victoria/Morgan collusion arc (accusation focus)
+- Lead with Vic/Morgan collusion arc (accusation focus)
 - Ground behavioral claims in director observations (what was seen, not inferred)
 - Use whiteboard notes as supporting context for investigation journey
-- Include Derek's suspicious behavior (players noticed him, whiteboard emphasis)
+- Include Sam's suspicious behavior (players noticed him, whiteboard emphasis)
 - Arcs not aligned with accusation get LOWER priority regardless of evidence volume
 
 ### Player Emphasis Levels
@@ -269,10 +269,10 @@ When analyzing arcs, assign emphasis based on accusation and observation alignme
 | What You Want to Say | Layer | Allowed? |
 |---------------------|-------|----------|
 | "Alex's memory shows him presenting his algorithm" | 1 | YES - exposed content |
-| "Victoria buried a memory about the murder" | 2 | NO - can't know content |
+| "Vic buried a memory about the murder" | 2 | NO - can't know content |
 | "$675,000 went to Vic's account for burying two memories" | 2 | YES - observable transaction |
-| "The group suspected Derek" | 3 | YES - director notes |
-| "Derek's buried memory proves guilt" | 2 | NO - can't infer content |
-| "James exposed the cease and desist letter" | 1 | YES - attribution + content |
+| "The group suspected Sam" | 3 | YES - director notes |
+| "Sam's buried memory proves guilt" | 2 | NO - can't infer content |
+| "Remi exposed the cease and desist letter" | 1 | YES - attribution + content |
 | "ChaseT might be Taylor's account" | 2 | YES - pattern inference |
 | "The buried memories revealed the conspiracy" | 2 | NO - buried reveals nothing |

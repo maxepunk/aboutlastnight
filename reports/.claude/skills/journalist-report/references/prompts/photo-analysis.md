@@ -14,7 +14,7 @@ At this stage, you do NOT know which character each person represents. Describe 
 - Relative identifiers (person in red, tall figure, person with glasses)
 
 **Do NOT use:**
-- Character names (Victoria, Marcus, Blake)
+- Character names (Vic, Marcus, Blake)
 - Player names
 - Assumed roles (the detective, the victim)
 - Gender assumptions (prefer "person" to "man/woman" unless clearly intentional costume)
@@ -27,7 +27,7 @@ At this stage, you do NOT know which character each person represents. Describe 
 
 ### Wrong - Never Do This
 
-> Victoria examines evidence while Marcus watches from across the room.
+> Vic examines evidence while Marcus watches from across the room.
 
 WHY THIS IS WRONG: We don't yet know which character each person represents. That mapping comes from user feedback.
 

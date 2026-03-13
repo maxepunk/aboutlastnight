@@ -47,22 +47,22 @@ When an evidence card is placed, the surrounding prose serves different purposes
 | Position | Purpose | Example |
 |----------|---------|---------|
 | **Prose BEFORE card** | Set up the question or tension | "Who would take over if Marcus was gone?" |
-| **EVIDENCE CARD** | Provide the proof/quote | [Victoria offers Alex the job] |
-| **Prose AFTER card** | Draw implications, connect to bigger picture | "Victoria had already made her move. Before Marcus was cold." |
+| **EVIDENCE CARD** | Provide the proof/quote | [Vic offers Alex the job] |
+| **Prose AFTER card** | Draw implications, connect to bigger picture | "Vic had already made her move. Before Marcus was cold." |
 
 **Example - WRONG:**
 ```
-Victoria's extracted memory shows her offering Alex the position.
-[EVIDENCE CARD: Victoria offers Alex the job]
-Victoria clearly offered Alex the position that Marcus held.
+Vic's extracted memory shows her offering Alex the position.
+[EVIDENCE CARD: Vic offers Alex the job]
+Vic clearly offered Alex the position that Marcus held.
 ```
 WHY: The prose before AND after just restates what's on the card.
 
 **Example - CORRECT:**
 ```
 There's a question of succession. Who would take over if Marcus was gone?
-[EVIDENCE CARD: Victoria offers Alex the job]
-Victoria had already made her move. Before Marcus was cold, she'd lined up his replacement.
+[EVIDENCE CARD: Vic offers Alex the job]
+Vic had already made her move. Before Marcus was cold, she'd lined up his replacement.
 ```
 WHY: Before sets up the question. Card answers it. After draws the implication.
 
@@ -142,13 +142,13 @@ THE STORY spans TWO DISTINCT TIMELINES. Every sentence must belong to one:
 
 **WRONG (conflated timelines):**
 ```
-I watched Victoria hand Marcus the contract.
+I watched Vic hand Marcus the contract.
 ```
 WHY: Nova saw a memory RECORDING of this. She was not at the party.
 
 **RIGHT (separated timelines):**
 ```
-The memory shows Victoria handing Marcus the contract. When it played,
+The memory shows Vic handing Marcus the contract. When it played,
 the room went quiet. I watched their faces change.
 ```
 WHY: Party event framed as recording. Investigation reaction framed as witnessed.
@@ -202,9 +202,9 @@ stayed buried.
 Arcs should be INTERCUT, not sequential. The reader should experience multiple arcs simultaneously:
 
 ```
-[Arc A establishes: Victoria knew about the IP theft]
+[Arc A establishes: Vic knew about the IP theft]
 [Arc B introduces: Morgan had lab access - why?]
-[Arc A continues: Victoria's role deeper than it seemed - connects to Arc B]
+[Arc A continues: Vic's role deeper than it seemed - connects to Arc B]
 [Arc C reveals: The murder scene - suddenly Arc A and B click together]
 [Arc B callback: "Remember the lab access? Now you know why it matters."]
 ```
@@ -223,9 +223,9 @@ The most powerful tool for compulsive reading is the CALLBACK - where a later pa
 
 **Example:**
 ```
-Early (Arc A): "Victoria was in the lab that night. Security logs confirm it."
+Early (Arc A): "Vic was in the lab that night. Security logs confirm it."
 [...multiple paragraphs on other arcs...]
-Later (Arc C): "Victoria wasn't there for the equipment. She was there for the witness."
+Later (Arc C): "Vic wasn't there for the equipment. She was there for the witness."
 ```
 
 The reader MUST re-evaluate Arc A in light of Arc C. This is what creates the "can't put it down" effect.
@@ -236,8 +236,8 @@ Human brains love patterns. Use similar structures across arcs that reveal deepe
 
 | Arc A | Arc B | Reader Realizes |
 |-------|-------|-----------------|
-| "Victoria knew about the fraud" | "Victoria was in the lab" | She's at the center of EVERYTHING |
-| "Derek buried $127K" | "Derek was first to accuse Blake" | Guilt and deflection? |
+| "Vic knew about the fraud" | "Vic was in the lab" | She's at the center of EVERYTHING |
+| "Sam buried $127K" | "Sam was first to accuse Blake" | Guilt and deflection? |
 | "Alex lost his life's work" | "Alex is offered Marcus's job" | Motive on motive |
 
 These parallels don't need to be explicit. Plant them. Let the reader's brain connect them.
@@ -320,17 +320,17 @@ back to someone in that room.
 
 [FINANCIAL TRACKER]
 
-Derek walked away the richest. I don't know what was in
-those three memories. Neither does Derek, anymore. But NeurAI
+Sam walked away the richest. I don't know what was in
+those three memories. Neither does Sam, anymore. But NeurAI
 knows. And they paid well to keep it that way.
 ```
 
 **Bad (prose-only):**
 ```
 Financial Summary:
-- Derek: $127,000
+- Sam: $127,000
 - Sarah: $45,000
-- James: $0
+- Remi: $0
 ```
 
 **If minimal financial activity:**
@@ -394,7 +394,7 @@ WHY: Generic, could apply to any session, vague attribution.
 
 **Example - CORRECT Pull Quote:**
 ```
-> "The job is yours." That's Victoria's voice. The CEO isn't even cold yet.
+> "The job is yours." That's Vic's voice. The CEO isn't even cold yet.
 > — From Jamie's extracted memory
 ```
 WHY: Specific, damning, sourced to actual evidence.
@@ -417,8 +417,8 @@ Those who held their cards:
 **BAD (repetition):**
 ```
 Alex exposed 3 memories about the IP theft.
-Diana exposed 2 memories about the funding.
-James exposed 1 memory about the lab.
+Mel exposed 2 memories about the funding.
+Remi exposed 1 memory about the lab.
 ```
 
 **GOOD (evaluation):**
@@ -427,7 +427,7 @@ Alex didn't hesitate. Three memories, all of them damning,
 all of them aimed at the system that stole his work. That
 takes a kind of courage that has nothing to do with bravery.
 
-Diana took the harder path. Two memories exposed, one buried.
+Mel took the harder path. Two memories exposed, one buried.
 I don't know what was in the buried one. But I know the two
 she released told a story she didn't have to tell.
 ```
@@ -487,7 +487,7 @@ exposed. I don't blame them. But I do wonder.
 **WRONG (reveals ownership):**
 ```
 Kai's memories were sold to ChaseT for $750,000.
-Leila's 5 tokens went to Dominic.
+Zia's 5 tokens went to Dominic.
 ```
 WHY: Nova cannot see whose memories went to which accounts.
 

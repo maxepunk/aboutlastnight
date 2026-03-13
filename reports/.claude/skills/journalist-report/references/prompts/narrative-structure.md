@@ -67,7 +67,7 @@ Apply the same 80%/enrichment pattern from the detective report system:
 **CRITICAL:** Do NOT create separate narrative threads for background-only information. Background enriches PRIMARY threads with context.
 
 **Enrichment Pattern Example:**
-- Primary: Victoria's extracted memory about funding
+- Primary: Vic's extracted memory about funding
 - Thread established: "The funding conspiracy"
 - Pull from Background: Paper evidence about NeurAI, character relationships
 - Result: THE STORY covers conspiracy AND explains competitive context
@@ -111,10 +111,10 @@ Create curiosity gaps that pull readers forward. Introduce questions, delay answ
 **Examples:**
 
 BAD (no gap):
-> "Victoria's extracted memories show she knew about the fraud. Here's exactly what she knew and when she knew it."
+> "Vic's extracted memories show she knew about the fraud. Here's exactly what she knew and when she knew it."
 
 GOOD (gap created):
-> "Three of Victoria's memories made it to the Detective. Only one made it out clean."
+> "Three of Vic's memories made it to the Detective. Only one made it out clean."
 
 BAD (immediate explanation):
 > "Someone buried Alex's memory for $4,200. That someone was Morgan, who wanted to protect Marcus's reputation."
@@ -140,12 +140,12 @@ This internal structure prevents character-cataloging.
 ## 6. Character Catalog Transformation
 
 **BAD (Character catalog):**
-> "Alex provided 3 memories. Diana provided 2 memories. James provided 1 memory. Morgan provided 2 memories. Each of these memories revealed important information about the case."
+> "Alex provided 3 memories. Mel provided 2 memories. Remi provided 1 memory. Morgan provided 2 memories. Each of these memories revealed important information about the case."
 
 **GOOD (Narrative arc):**
-> "The first breakthrough came from Alex. Three memories that traced the IP theft back to 2022. But it was Diana's contribution, paired with what she chose to bury, that revealed the deeper pattern."
+> "The first breakthrough came from Alex. Three memories that traced the IP theft back to 2022. But it was Mel's contribution, paired with what she chose to bury, that revealed the deeper pattern."
 
-**The difference:** The article follows THREADS (IP theft, cover-up conspiracy, financial trail), not PEOPLE (Alex, Diana, James, Morgan). Characters appear when their evidence intersects the thread being explored.
+**The difference:** The article follows THREADS (IP theft, cover-up conspiracy, financial trail), not PEOPLE (Alex, Mel, Remi, Morgan). Characters appear when their evidence intersects the thread being explored.
 
 ---
 
@@ -168,11 +168,11 @@ This internal structure prevents character-cataloging.
 4. Would removing this paragraph break the narrative flow?
 
 **BAD (low density):**
-> "Victoria's memory extraction reveals important information about the funding scheme. The memory shows that she was aware of the fraud. This is significant because it proves she knew about Marcus's actions. The extracted memory is a key piece of evidence."
+> "Vic's memory extraction reveals important information about the funding scheme. The memory shows that she was aware of the fraud. This is significant because it proves she knew about Marcus's actions. The extracted memory is a key piece of evidence."
 
 **GOOD (high density):**
-> "Victoria knew. Three words that cost her everything."
-> [EVIDENCE CARD: Victoria's extracted memory with key quote]
+> "Vic knew. Three words that cost her everything."
+> [EVIDENCE CARD: Vic's extracted memory with key quote]
 
 The visual component DOES the work. The prose FRAMES and ADVANCES.
 
@@ -199,7 +199,7 @@ Every evidence card must either CLOSE a loop or OPEN one:
 
 | Card Type | When to Use | Example Placement |
 |-----------|-------------|-------------------|
-| **CLOSER** | After building tension - proves what was hinted | "Victoria knew." → [CARD] |
+| **CLOSER** | After building tension - proves what was hinted | "Vic knew." → [CARD] |
 | **OPENER** | Raises new question while answering old | [CARD reveals Morgan present] → "Why was Morgan there?" |
 | **AMPLIFIER** | Before climax - raises stakes | [CARD: threatening letter] → "Three days later, Marcus was dead." |
 | **CALLBACK** | Recontextualizes earlier material | [CARD] → Reader now re-reads Arc A differently |
@@ -217,7 +217,7 @@ Photos reset emotional temperature. Use them for:
 | **Cross-arc bridge** | Same character in different context - visual connection |
 | **Scene establishment** | Opening of new arc, anchor reader in space |
 
-**Photos create pacing.** A photo after Victoria's exposure lets the reader breathe before Morgan's revelation. This is intentional.
+**Photos create pacing.** A photo after Vic's exposure lets the reader breathe before Morgan's revelation. This is intentional.
 
 **Photos are inline content blocks** - they appear within section content arrays, not in a separate photos array or gallery section. Place them at paragraph-level precision for maximum emotional impact.
 
@@ -237,7 +237,7 @@ Pull quotes STOP the reader to land a moment. They demand the reader pause and a
 **Example - WRONG:**
 ```
 "$163 million. That's what Skyler threatened to withdraw from NeurAI."
-— From Skyler's texts to Victoria
+— From Skyler's texts to Vic
 ```
 WHY WRONG: This is a summary ABOUT the texts, not a quote FROM them.
 
