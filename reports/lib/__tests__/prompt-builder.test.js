@@ -61,7 +61,7 @@ describe('PromptBuilder', () => {
           behaviorPatterns: ['Pattern 1', 'Pattern 2']
         },
         whiteboard: {
-          suspects: ['Derek']
+          suspects: ['Sam']
         }
       },
       evidenceBundle: {
