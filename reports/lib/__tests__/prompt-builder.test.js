@@ -54,8 +54,8 @@ describe('PromptBuilder', () => {
 
   describe('buildArcAnalysisPrompt', () => {
     const mockSessionData = {
-      roster: ['Alex', 'James', 'Victoria', 'Morgan', 'Derek'],
-      accusation: 'Victoria and Morgan',
+      roster: ['Alex', 'Remi', 'Vic', 'Morgan', 'Sam'],
+      accusation: 'Vic and Morgan',
       directorNotes: {
         observations: {
           behaviorPatterns: ['Pattern 1', 'Pattern 2']
@@ -107,13 +107,13 @@ describe('PromptBuilder', () => {
     it('should include roster in user prompt', async () => {
       const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
 
-      expect(userPrompt).toContain('Alex, James, Victoria, Morgan, Derek');
+      expect(userPrompt).toContain('Alex, Remi, Vic, Morgan, Sam');
     });
 
     it('should include accusation in user prompt', async () => {
       const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
 
-      expect(userPrompt).toContain('Victoria and Morgan');
+      expect(userPrompt).toContain('Vic and Morgan');
     });
 
     it('should include director observations in user prompt', async () => {
@@ -374,7 +374,7 @@ describe('PromptBuilder', () => {
 
   describe('buildValidationPrompt', () => {
     const mockArticleHtml = '<article><p>The investigation reveals...</p></article>';
-    const roster = ['Alex', 'James', 'Victoria'];
+    const roster = ['Alex', 'Remi', 'Vic'];
 
     beforeEach(() => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
@@ -412,7 +412,7 @@ describe('PromptBuilder', () => {
     it('should include roster in user prompt', async () => {
       const { userPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
 
-      expect(userPrompt).toContain('Alex, James, Victoria');
+      expect(userPrompt).toContain('Alex, Remi, Vic');
     });
 
     it('should include article HTML in user prompt', async () => {
@@ -520,8 +520,8 @@ describe('PromptBuilder', () => {
 
     it('buildArcAnalysisPrompt uses detective framing', async () => {
       const { systemPrompt } = await detectiveBuilder.buildArcAnalysisPrompt({
-        roster: ['Alex', 'Victoria'],
-        accusation: 'Victoria',
+        roster: ['Alex', 'Vic'],
+        accusation: 'Vic',
         directorNotes: { observations: {} },
         evidenceBundle: { exposed: {}, buried: {} }
       });
