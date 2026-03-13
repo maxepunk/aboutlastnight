@@ -77,25 +77,25 @@ const THEME_CONFIGS = {
     // Maps first names to full canonical names for consistent attribution
     // Source: docs/PIPELINE_DEEP_DIVE.md character roster
     canonicalCharacters: {
-      // 20 Playable Characters (PCs)
+      // 20 Playable Characters (PCs) — names from Notion (source of truth)
       'Sarah': 'Sarah Blackwood',
       'Alex': 'Alex Reeves',
-      'James': 'James Whitman',
-      'Victoria': 'Victoria Kingsley',
-      'Derek': 'Derek Thorne',
+      'Remi': 'Remi Whitman',
+      'Vic': 'Vic Kingsley',
+      'Sam': 'Sam Thorne',
       'Ashe': 'Ashe Motoko',
-      'Diana': 'Diana Nilsson',
-      'Jessicah': 'Jessicah Kane',
+      'Mel': 'Mel Nilsson',
+      'Jess': 'Jess Kane',
       'Morgan': 'Morgan Reed',
       'Flip': 'Flip',  // No known last name
       'Taylor': 'Taylor Chase',
-      'Leila': 'Leila Bishara',
-      'Rachel': 'Rachel Torres',
-      'Howie': 'Howie Sullivan',
+      'Zia': 'Zia Bishara',
+      'Riley': 'Riley Torres',
+      'Ezra': 'Ezra Sullivan',
       'Kai': 'Kai Andersen',
       'Jamie': 'Jamie "Volt" Woods',
-      'Sofia': 'Sofia Francisco',
-      'Oliver': 'Oliver Sterling',
+      'Nat': 'Nat Francisco',
+      'Quinn': 'Quinn Sterling',
       'Skyler': 'Skyler Iyer',
       'Tori': 'Tori Zhang',
       // 3 NPCs
@@ -165,25 +165,25 @@ const THEME_CONFIGS = {
 
     // Same 20 PCs + different NPCs (no Nova, Marcus is still NPC)
     canonicalCharacters: {
-      // 20 Playable Characters (PCs)
+      // 20 Playable Characters (PCs) — names from Notion (source of truth)
       'Sarah': 'Sarah Blackwood',
       'Alex': 'Alex Reeves',
-      'James': 'James Whitman',
-      'Victoria': 'Victoria Kingsley',
-      'Derek': 'Derek Thorne',
+      'Remi': 'Remi Whitman',
+      'Vic': 'Vic Kingsley',
+      'Sam': 'Sam Thorne',
       'Ashe': 'Ashe Motoko',
-      'Diana': 'Diana Nilsson',
-      'Jessicah': 'Jessicah Kane',
+      'Mel': 'Mel Nilsson',
+      'Jess': 'Jess Kane',
       'Morgan': 'Morgan Reed',
       'Flip': 'Flip',
       'Taylor': 'Taylor Chase',
-      'Leila': 'Leila Bishara',
-      'Rachel': 'Rachel Torres',
-      'Howie': 'Howie Sullivan',
+      'Zia': 'Zia Bishara',
+      'Riley': 'Riley Torres',
+      'Ezra': 'Ezra Sullivan',
       'Kai': 'Kai Andersen',
       'Jamie': 'Jamie "Volt" Woods',
-      'Sofia': 'Sofia Francisco',
-      'Oliver': 'Oliver Sterling',
+      'Nat': 'Nat Francisco',
+      'Quinn': 'Quinn Sterling',
       'Skyler': 'Skyler Iyer',
       'Tori': 'Tori Zhang',
       // NPCs
@@ -256,9 +256,9 @@ function getArticleRules(theme) {
  * Used by extractOwnerName() in node-helpers.js to ensure consistent
  * character attribution across the pipeline.
  *
- * @param {string} firstName - First name (e.g., 'Victoria')
+ * @param {string} firstName - First name (e.g., 'Vic')
  * @param {string} theme - Theme name (default: 'journalist')
- * @returns {string} Full canonical name (e.g., 'Victoria Kingsley') or firstName if not found
+ * @returns {string} Full canonical name (e.g., 'Vic Kingsley') or firstName if not found
  */
 function getCanonicalName(firstName, theme = 'journalist') {
   if (!firstName) return firstName;

@@ -216,7 +216,7 @@ describe('theme-config', () => {
 
     it('getCanonicalName works with detective theme', () => {
       expect(getCanonicalName('Sarah', 'detective')).toBe('Sarah Blackwood');
-      expect(getCanonicalName('Victoria', 'detective')).toBe('Victoria Kingsley');
+      expect(getCanonicalName('Vic', 'detective')).toBe('Vic Kingsley');
     });
 
     it('detective does not include Nova as NPC', () => {
@@ -266,6 +266,60 @@ describe('theme-config', () => {
     it('detective does not have storyDate (no in-world date constraint)', () => {
       const config = getThemeConfig('detective');
       expect(config.display.storyDate).toBeUndefined();
+    });
+  });
+
+  describe('canonical character names (current Notion names)', () => {
+    it('journalist canonicalCharacters has current first names', () => {
+      const config = getThemeConfig('journalist');
+      const chars = config.canonicalCharacters;
+      // Updated names (Notion source of truth)
+      expect(chars['Remi']).toBe('Remi Whitman');
+      expect(chars['Vic']).toBe('Vic Kingsley');
+      expect(chars['Sam']).toBe('Sam Thorne');
+      expect(chars['Mel']).toBe('Mel Nilsson');
+      expect(chars['Jess']).toBe('Jess Kane');
+      expect(chars['Zia']).toBe('Zia Bishara');
+      expect(chars['Riley']).toBe('Riley Torres');
+      expect(chars['Ezra']).toBe('Ezra Sullivan');
+      expect(chars['Nat']).toBe('Nat Francisco');
+      expect(chars['Quinn']).toBe('Quinn Sterling');
+      // Unchanged names
+      expect(chars['Sarah']).toBe('Sarah Blackwood');
+      expect(chars['Alex']).toBe('Alex Reeves');
+      expect(chars['Ashe']).toBe('Ashe Motoko');
+      expect(chars['Morgan']).toBe('Morgan Reed');
+      expect(chars['Flip']).toBe('Flip');
+      expect(chars['Taylor']).toBe('Taylor Chase');
+      expect(chars['Kai']).toBe('Kai Andersen');
+      expect(chars['Jamie']).toBe("Jamie \"Volt\" Woods");
+      expect(chars['Skyler']).toBe('Skyler Iyer');
+      expect(chars['Tori']).toBe('Tori Zhang');
+    });
+
+    it('journalist should NOT have stale names', () => {
+      const config = getThemeConfig('journalist');
+      const chars = config.canonicalCharacters;
+      expect(chars['James']).toBeUndefined();
+      expect(chars['Victoria']).toBeUndefined();
+      expect(chars['Derek']).toBeUndefined();
+      expect(chars['Diana']).toBeUndefined();
+      expect(chars['Jessicah']).toBeUndefined();
+      expect(chars['Leila']).toBeUndefined();
+      expect(chars['Rachel']).toBeUndefined();
+      expect(chars['Howie']).toBeUndefined();
+      expect(chars['Sofia']).toBeUndefined();
+      expect(chars['Oliver']).toBeUndefined();
+    });
+
+    it('detective canonicalCharacters matches journalist PCs', () => {
+      const journalist = getThemeConfig('journalist');
+      const detective = getThemeConfig('detective');
+      const journalistPCs = Object.keys(journalist.canonicalCharacters)
+        .filter(name => !['Marcus', 'Nova', 'Blake'].includes(name));
+      const detectivePCs = Object.keys(detective.canonicalCharacters)
+        .filter(name => !['Marcus', 'Blake'].includes(name));
+      expect(detectivePCs.sort()).toEqual(journalistPCs.sort());
     });
   });
 
