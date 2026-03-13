@@ -56,7 +56,8 @@ function getPromptBuilder(config, state) {
   if (config?.configurable?.promptBuilder) return config.configurable.promptBuilder;
   const theme = state?.theme || 'journalist';
   const sessionConfig = state?.sessionConfig || {};
-  return createPromptBuilder({ theme, sessionConfig });
+  const canonicalCharacters = state?.canonicalCharacters || null;
+  return createPromptBuilder({ theme, sessionConfig, canonicalCharacters });
 }
 
 /**
@@ -1573,7 +1574,7 @@ function createMockPromptBuilder() {
       };
     },
 
-    async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages, heroImage, shellAccounts) {
+    async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes) {
       return {
         systemPrompt: 'Mock system prompt for article generation',
         userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`
