@@ -335,8 +335,14 @@ async function fetchMemoryTokens(state, config) {
 
   console.log(`[fetchMemoryTokens] Tagged ${taggedTokens.length} tokens: ${exposedCount} exposed, ${buriedCount} buried, ${unknownCount} unknown`);
 
+  // Extract canonical character map from Notion token data (RC2)
+  const { extractCanonicalCharacters } = require('./node-helpers');
+  const canonicalCharacters = extractCanonicalCharacters(taggedTokens, state.theme || 'journalist');
+  console.log(`[fetchMemoryTokens] Derived ${Object.keys(canonicalCharacters).length} canonical characters from Notion data`);
+
   return {
     memoryTokens: taggedTokens,
+    canonicalCharacters,
     currentPhase: PHASES.FETCH_EVIDENCE
   };
 }

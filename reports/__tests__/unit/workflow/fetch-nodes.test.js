@@ -273,7 +273,7 @@ describe('fetch-nodes', () => {
 
       const result = await fetchMemoryTokens(state, config);
 
-      expect(Object.keys(result).sort()).toEqual(['currentPhase', 'memoryTokens']);
+      expect(Object.keys(result).sort()).toEqual(['canonicalCharacters', 'currentPhase', 'memoryTokens']);
     });
   });
 

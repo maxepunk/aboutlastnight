@@ -249,6 +249,7 @@ describe('ReportStateAnnotation', () => {
         'playerFocus',
         // Fetched data
         'memoryTokens',
+        'canonicalCharacters',
         'paperEvidence',
         'selectedPaperEvidence',  // Commit 8.9
         'sessionPhotos',
