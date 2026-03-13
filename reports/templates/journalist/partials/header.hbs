@@ -7,7 +7,7 @@
   Context:
     headline: { main, kicker?, deck? }
     byline: { author, title?, location?, date?, guestReporter? }
-    metadata: { sessionId, generatedAt, version? }
+    metadata: { sessionId, generatedAt, storyDate?, version? }
 --}}
 <header class="nn-article__header">
   {{!-- Kicker: Small crimson uppercase text above headline --}}
@@ -37,9 +37,15 @@
     <span class="nn-article__divider">·</span>
     {{/if}}
 
+    {{#if metadata.storyDate}}
+    <time class="nn-article__date" datetime="{{formatDatetime metadata.storyDate}}">
+      {{formatDate metadata.storyDate}}
+    </time>
+    {{else}}
     <time class="nn-article__date" datetime="{{formatDatetime metadata.generatedAt}}">
       {{formatDate metadata.generatedAt}}
     </time>
+    {{/if}}
 
     <span class="nn-article__divider">·</span>
 
