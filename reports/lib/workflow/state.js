@@ -151,6 +151,15 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => []
   }),
 
+  /** Canonical character map derived from Notion token owners (RC2)
+   *  Maps firstName -> fullName, e.g. { 'Alex': 'Alex Reeves' }
+   *  Populated by fetchMemoryTokens, consumed by PromptBuilder
+   */
+  canonicalCharacters: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
   /** Paper evidence documents from Notion */
   paperEvidence: Annotation({
     reducer: replaceReducer,
@@ -637,6 +646,7 @@ function getDefaultState() {
     playerFocus: {},
     // Fetched data
     memoryTokens: [],
+    canonicalCharacters: null,  // RC2: firstName -> fullName map from Notion tokens
     paperEvidence: [],
     selectedPaperEvidence: null,  // Commit 8.9: user-selected subset
     sessionPhotos: [],

@@ -936,6 +936,40 @@ END PREVIOUS OUTPUT
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CANONICAL CHARACTER EXTRACTION (RC2)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Extracts canonical character map from Notion token owner data at fetch time.
+// Stored in state.canonicalCharacters for downstream PromptBuilder use.
+
+/**
+ * Extract canonical character map from Notion token owner data
+ *
+ * Builds a first-name -> full-name map from token owners,
+ * resolving full names via theme-config.js.
+ *
+ * @param {Array} tokens - Fetched tokens with `owners` arrays
+ * @param {string} theme - Theme name for full-name resolution
+ * @returns {Object} Map of firstName -> fullName
+ */
+function extractCanonicalCharacters(tokens, theme = 'journalist') {
+  const characters = {};
+
+  for (const token of tokens) {
+    for (const owner of (token.owners || [])) {
+      if (!owner || characters[owner]) continue;
+      const fullName = getCanonicalName(owner, theme);
+      if (fullName === owner && !['Flip', 'Nova', 'Blake', 'Marcus'].includes(owner)) {
+        console.warn(`[extractCanonicalCharacters] Unknown character "${owner}" not in theme-config`);
+      }
+      characters[owner] = fullName;
+    }
+  }
+
+  return characters;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FINANCIAL VALIDATION (Pipeline Quality D2)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -1007,6 +1041,9 @@ module.exports = {
   // Non-roster PC validation (Commit 8.xx) - Three-category character model
   isNonRosterPC,
   getNonRosterPCs,
+
+  // Canonical character extraction (RC2)
+  extractCanonicalCharacters,
 
   // Financial validation (Pipeline Quality D2)
   validateFinancialData,
