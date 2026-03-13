@@ -110,6 +110,41 @@ Victoria Chen walked into the room, her eyes scanning for Morgan Chen.
 Victoria Kingsley walked into the room, her eyes scanning for Morgan Reed.
 ```
 
+### Non-Roster Character Agency (CRITICAL)
+
+The <SESSION_FACTS> roster defines who was present at the investigation.
+Before giving ANY character actions during the investigation, verify
+they appear in the roster.
+
+- **IN the roster** → can have investigation-day actions, dialogue, decisions
+- **NOT in the roster** → can ONLY appear as subjects in memory content (party events)
+
+Memory content describes THE PARTY (past). Investigation actions require
+physical presence, which means roster membership.
+
+**WRONG (example: if Quinn is not on this session's roster):**
+
+> Quinn was trapped between blackmail and exposure. Quinn had evidence
+> and tried to get Marcus to confess.
+
+WHY: Quinn's name appeared in other characters' exposed memories, but
+if Quinn is not on the roster, Quinn was not at the investigation.
+You cannot give a non-roster character investigation-day actions.
+
+**RIGHT (same scenario: Quinn not on roster):**
+
+> Quinn's name comes up in three exposed memories. Whatever pressure
+> Marcus put on Quinn over the research, it left marks on everyone
+> at that party.
+
+WHY: Quinn appears as a subject of party-night memories without being
+given investigation-day agency. The article references Quinn's role
+in events without claiming Quinn was present this morning.
+
+**THE CHECK:** Before writing "[Character] did/said/tried..." about the
+investigation, verify that character is in <SESSION_FACTS>. If not,
+they can only be referenced through memory content or paper evidence.
+
 ### Using "Tokens"
 These are stolen memories, not objects.
 
