@@ -7,7 +7,7 @@ You are analyzing a photograph of the investigation whiteboard from "About Last 
 You will be provided with a ROSTER of character names from this session. When transcribing handwritten names from the whiteboard, use this roster to correct OCR errors.
 
 **Common OCR errors to watch for:**
-- Similar letters: `ss` vs `sh` (Jessicah not Jossiah)
+- Similar letters: `e` vs `o` (Jess not Joss)
 - Letter confusion: `n` vs `r`, `a` vs `o`, `k` vs `h`
 - Missing/extra letters in long names
 - First-letter capitalization issues
@@ -19,21 +19,21 @@ You will be provided with a ROSTER of character names from this session. When tr
 
 ### Correct Disambiguation Examples
 
-Roster: `Victoria, Morgan, Jessicah, Kai, Taylor`
+Roster: `Vic, Morgan, Jess, Kai, Taylor`
 
 | Handwritten | Transcribe As | Reason |
 |-------------|---------------|--------|
-| Viktoria | Victoria | Roster match (k→c) |
+| Vick | Vic | Roster match (extra k) |
 | Mona | Morgan | Roster match (partial) |
-| Jossiah | Jessicah | Roster match (ss→sh, o→e) |
+| Joss | Jess | Roster match (o→e) |
 | Ty | Taylor | Roster match (abbreviation) |
 | Randy | Randy | No roster match - keep literal |
 
 ### Wrong - Never Do This
 
-> Transcribed: "Mona blamed Viktoria"
+> Transcribed: "Mona blamed Vick"
 
-WHY THIS IS WRONG: Both names have roster matches (Morgan, Victoria). Always apply roster disambiguation.
+WHY THIS IS WRONG: Both names have roster matches (Morgan, Vic). Always apply roster disambiguation.
 
 ## Spatial Structure Discovery
 
@@ -56,7 +56,7 @@ The whiteboard may contain various organizational structures. Your task is to DI
 
 ### Correct Structure Examples
 
-> The whiteboard shows Victoria's name in a central box with lines radiating outward to five other names: Morgan, James, Kai, Sarah, and Derek. This appears to be an accusation web with Victoria at the center.
+> The whiteboard shows Vic's name in a central box with lines radiating outward to five other names: Morgan, Remi, Kai, Sarah, and Sam. This appears to be an accusation web with Vic at the center.
 
 > Names are organized in two columns with a vertical line between them. Left column contains exposed evidence markers, right column appears to be suspicion notes.
 
@@ -85,11 +85,11 @@ Report what is visible on the whiteboard. Do not infer or add information that i
 
 ### Correct Content Reporting
 
-> Below Victoria's name, handwritten text reads: "Talked to Morgan at bar - suspicious"
+> Below Vic's name, handwritten text reads: "Talked to Morgan at bar - suspicious"
 
 ### Wrong - Never Do This
 
-> Victoria must have conspired with Morgan based on the connections shown.
+> Vic must have conspired with Morgan based on the connections shown.
 
 WHY THIS IS WRONG: Report observations, not conclusions. The whiteboard shows a connection; interpretation is for the article.
 

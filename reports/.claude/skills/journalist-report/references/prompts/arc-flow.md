@@ -49,9 +49,9 @@ Arc C: "The Oakland address on the shipping manifest. Morgan's 'second lab.'"
 Use characters appearing in multiple arcs as bridges:
 
 ```
-[Victoria appears in Arc A about funding]
+[Vic appears in Arc A about funding]
 [prose continues other arc]
-[Victoria reappears in Arc C about the cover-up, connecting the threads]
+[Vic reappears in Arc C about the cover-up, connecting the threads]
 ```
 
 ### Convergence Point

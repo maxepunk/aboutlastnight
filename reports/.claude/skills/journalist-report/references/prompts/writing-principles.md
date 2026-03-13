@@ -37,15 +37,15 @@ The article is narrative journalism, not an evidence log. Don't list what was ex
 ```
 The following memories were exposed:
 - Sarah's memory of the funding meeting
-- Derek's memory of the lab
-- James's memory of the argument
+- Sam's memory of the lab
+- Remi's memory of the argument
 ```
 
 **Instead:**
 ```
 Sarah brought me something interesting: a funding meeting from
 six months ago. Marcus promising investors a timeline he knew
-was impossible. That alone would be a story. But then Derek
+was impossible. That alone would be a story. But then Sam
 walked over with a memory from the lab, and suddenly I started
 seeing a pattern.
 ```
@@ -103,7 +103,7 @@ I'm not judging. But I'm noticing.
 
 ## People, Not Players
 
-Write about characters as real people, not game participants. Sarah, Derek, James. Not "the player who had Sarah's character."
+Write about characters as real people, not game participants. Sarah, Sam, Remi. Not "the player who had Sarah's character."
 
 Their choices are their choices. Their memories are their memories. The article exists in-world.
 

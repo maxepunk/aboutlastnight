@@ -76,13 +76,13 @@ Visual components are emitted as **content blocks within section content arrays*
 ### Photo Content Block
 
 ```json
-{ "type": "photo", "filename": "20251221_205807.png", "caption": "Victoria before the vote" }
+{ "type": "photo", "filename": "20251221_205807.png", "caption": "Vic before the vote" }
 ```
 
 ### Evidence Card Content Block
 
 ```json
-{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Victoria Chase", "significance": "critical" }
+{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Chase", "significance": "critical" }
 ```
 
 ### Sidebar vs Inline Evidence Cards
@@ -106,8 +106,8 @@ Example section with inline photo:
 {
   "id": "the-story",
   "content": [
-    { "type": "paragraph", "text": "Victoria arrived early that evening..." },
-    { "type": "photo", "filename": "20251221_205807.png", "caption": "Victoria before the vote" },
+    { "type": "paragraph", "text": "Vic arrived early that evening..." },
+    { "type": "photo", "filename": "20251221_205807.png", "caption": "Vic before the vote" },
     { "type": "paragraph", "text": "No one knew what she was carrying..." }
   ]
 }

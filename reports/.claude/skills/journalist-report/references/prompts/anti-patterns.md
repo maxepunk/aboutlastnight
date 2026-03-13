@@ -91,10 +91,10 @@ NEVER invent last names. Use ONLY canonical names from the roster.
 
 | WRONG (Hallucinated) | CORRECT (Canonical) |
 |----------------------|---------------------|
-| Victoria Chen | Victoria Kingsley |
+| Vic Chen | Vic Kingsley |
 | Alex Chen | Alex Reeves |
 | Sarah Chen | Sarah Blackwood |
-| James Chen | James Whitman |
+| Remi Chen | Remi Whitman |
 
 The LLM tends to default to common last names like "Chen" or "Smith" when uncertain. This is ALWAYS wrong. Every character has a specific canonical last name defined in the roster.
 
@@ -102,12 +102,12 @@ The LLM tends to default to common last names like "Chen" or "Smith" when uncert
 
 **WRONG:**
 ```
-Victoria Chen walked into the room, her eyes scanning for Morgan Chen.
+Vic Chen walked into the room, her eyes scanning for Morgan Chen.
 ```
 
 **RIGHT:**
 ```
-Victoria Kingsley walked into the room, her eyes scanning for Morgan Reed.
+Vic Kingsley walked into the room, her eyes scanning for Morgan Reed.
 ```
 
 ### Non-Roster Character Agency (CRITICAL)
@@ -150,12 +150,12 @@ These are stolen memories, not objects.
 
 **WRONG:**
 ```
-The token containing Derek's memory was submitted to the board.
+The token containing Sam's memory was submitted to the board.
 ```
 
 **RIGHT:**
 ```
-Derek brought me his memory. Or what's left of it. He can
+Sam brought me his memory. Or what's left of it. He can
 watch it on a screen now, but he doesn't actually remember
 being there.
 ```
@@ -192,13 +192,13 @@ Only use documented information.
 
 **WRONG:**
 ```
-Sarah's hands were shaking as she made her decision. Derek
+Sarah's hands were shaking as she made her decision. Sam
 looked away, unable to meet anyone's eyes.
 ```
 
 **RIGHT:**
 ```
-Sarah buried three memories. Derek exposed two. I don't know
+Sarah buried three memories. Sam exposed two. I don't know
 what they were thinking. I only know what they did.
 ```
 
@@ -209,15 +209,15 @@ Synthesize into narrative.
 ```
 The following evidence was exposed:
 - Memory A (Sarah)
-- Memory B (Derek)
-- Memory C (James)
+- Memory B (Sam)
+- Memory C (Remi)
 ```
 
 **RIGHT:**
 ```
 Sarah started it. A memory from the funding meeting that
 showed Marcus promising timelines he knew were impossible.
-Then Derek added what he'd found in the lab. James connected
+Then Sam added what he'd found in the lab. Remi connected
 the dots to the Black Market.
 ```
 
@@ -277,12 +277,12 @@ THE PARTY (past) and THE INVESTIGATION (present) are two different timelines. No
 
 **WRONG (Nova claims to witness party events):**
 ```
-I watched Victoria hand Marcus the contract that night.
+I watched Vic hand Marcus the contract that night.
 ```
 
 **RIGHT:**
 ```
-The memory shows Victoria handing Marcus the contract.
+The memory shows Vic handing Marcus the contract.
 I watched the room react when it played.
 ```
 
@@ -326,7 +326,7 @@ Before writing any sentence, apply this decision rule:
 | Never Write | Instead Write |
 |-------------|---------------|
 | "I watched [party event]" | "The memory shows [party event]" |
-| "I saw Marcus arguing with Victoria" | "The memory captures Marcus arguing with Victoria" |
+| "I saw Marcus arguing with Vic" | "The memory captures Marcus arguing with Vic" |
 | "That night, [character] buried memories" | "[Character] buried memories during the investigation" |
 | "[N] burials during the drugging window" | "[N] memories from the drugging window were buried" |
 | "When the drug hit, Sarah exposed..." | "Sarah exposed memories about when the drug hit" |
@@ -425,6 +425,6 @@ Pull quotes and evidence must have DOCUMENTED sources:
 | "Sources confirm" | Wire-service voice, not Nova. |
 
 **Valid Attributions:**
-- Character name: `Derek, on why he exposed`
-- Memory reference: `From Victoria's extracted memory`
+- Character name: `Sam, on why he exposed`
+- Memory reference: `From Vic's extracted memory`
 - Nova herself: `Nova` or no attribution needed

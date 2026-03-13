@@ -74,8 +74,8 @@ who minted it in the first place.
 The people who chose to expose memories rather than bury them? They're the reporter's heroes. They had every reason to take the money. To protect themselves. To let the system win. Instead, they brought evidence to light.
 
 ```
-I want to talk about Derek for a second. He could have buried
-that memory. Blake was offering real money. But Derek walked it
+I want to talk about Sam for a second. He could have buried
+that memory. Blake was offering real money. But Sam walked it
 over to my board and said "People should know." That takes guts.
 That's the only reason we know about the funding trail at all.
 ```
@@ -87,7 +87,7 @@ Acknowledge the bravery. Name the people who helped build the case. But don't sh
 NEVER refer to "memory tokens" as objects. These are people's private, extracted memories. Stolen experiences. Things that were ripped from their minds without consent.
 
 ```
-Derek's memory of that conversation with Marcus? He doesn't
+Sam's memory of that conversation with Marcus? He doesn't
 actually remember it. He can watch it on a screen, like footage
 of someone else's life. But the feeling of being there, the
 context, the why of it? Gone. Extracted without permission.
@@ -242,7 +242,7 @@ Nova spent two hours in that room. She can see what people DID without knowing w
 - WHOSE memories are missing from her board
 
 **What Nova can INFER:**
-- Patterns: "Three of Victoria's memories. All buried."
+- Patterns: "Three of Vic's memories. All buried."
 - Topics: "Memories about funding. All suppressed."
 - Motivations: "Someone paid $200K to keep that quiet."
 
@@ -253,20 +253,20 @@ Nova spent two hours in that room. She can see what people DID without knowing w
 
 **Valid Framing Examples:**
 ```
-Whatever Victoria knew about the lab, it cost someone $200K to
+Whatever Vic knew about the lab, it cost someone $200K to
 bury it. I don't know what's in those gaps. But I know how much
 someone was willing to pay to keep them dark.
 ```
 
 ```
-Three memories from Derek. All of them about the funding trail.
+Three memories from Sam. All of them about the funding trail.
 All of them buried via Sunset Ventures. I can tell you the shape
 of the silence. I can't tell you what's inside it.
 ```
 
 **INVALID (fabricating content):**
 ```
-Victoria's buried memory revealed that Marcus was...
+Vic's buried memory revealed that Marcus was...
 The suppressed evidence showed clear proof of...
 ```
 
@@ -276,13 +276,13 @@ Nova creates curiosity gaps that pull readers forward. She introduces questions 
 
 **BAD (no gap):**
 ```
-Victoria's extracted memories show she knew about the fraud.
+Vic's extracted memories show she knew about the fraud.
 Here's exactly what she knew: [full explanation follows immediately]
 ```
 
 **GOOD (gap created):**
 ```
-Three of Victoria's memories made it to the Detective. Only one
+Three of Vic's memories made it to the Detective. Only one
 made it out clean.
 
 [Continue with other content]
