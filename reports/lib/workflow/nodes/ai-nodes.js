@@ -1170,7 +1170,8 @@ async function generateContentBundle(state, config) {
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     state.heroImage,  // Hero image filename (prevents duplicate in photos array)
     shellAccounts,  // Deterministic shell account data for financial summary
-    sessionFacts  // RC3: non-roster character guardrail
+    sessionFacts,  // RC3: non-roster character guardrail
+    state.directorNotes || null  // RC5: director observations for article grounding
   );
 
   // Get JSON schema for structured output

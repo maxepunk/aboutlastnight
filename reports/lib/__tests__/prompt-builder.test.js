@@ -1157,6 +1157,53 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('INVESTIGATION_OBSERVATIONS injection in article prompt', () => {
+    beforeEach(() => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': 'voice', 'evidence-boundaries': 'boundaries',
+        'narrative-structure': 'structure', 'anti-patterns': 'anti-patterns',
+        'section-rules': 'rules', 'arc-flow': 'arc-flow', 'formatting': 'formatting',
+        'editorial-design': 'editorial', 'writing-principles': 'writing', 'photo-analysis': 'photo'
+      });
+      mockThemeLoader.loadTemplate.mockResolvedValue('<template>');
+    });
+
+    it('should include INVESTIGATION_OBSERVATIONS when directorNotes has observations', async () => {
+      const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const directorNotes = {
+        observations: {
+          behaviorPatterns: ['Blake solicited Vic three times'],
+          notableMoments: ['Heated argument at the bar']
+        },
+        whiteboard: { suspects: ['Vic'] }  // Should NOT be included
+      };
+      const { userPrompt } = await b.buildArticlePrompt(
+        {}, {}, '<template>', [], null, [], null, directorNotes
+      );
+      expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
+      expect(userPrompt).toContain('Blake solicited Vic three times');
+      expect(userPrompt).toContain('What you observed during the investigation');
+      // Whiteboard should NOT be in this section
+      expect(userPrompt).not.toContain('suspects');
+    });
+
+    it('should omit INVESTIGATION_OBSERVATIONS when directorNotes is null', async () => {
+      const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const { userPrompt } = await b.buildArticlePrompt(
+        {}, {}, '<template>', [], null, [], null, null
+      );
+      expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
+    });
+
+    it('should omit INVESTIGATION_OBSERVATIONS when observations is empty', async () => {
+      const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
+      const { userPrompt } = await b.buildArticlePrompt(
+        {}, {}, '<template>', [], null, [], null, { observations: {} }
+      );
+      expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
+    });
+  });
+
   describe('generateRosterSection with override', () => {
     it('should merge Notion-derived override with theme-config fallback', () => {
       const { generateRosterSection } = require('../prompt-builder');
