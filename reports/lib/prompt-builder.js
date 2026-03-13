@@ -608,7 +608,7 @@ Return JSON with the following structure:
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = []) {
+  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null) {
     const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -872,6 +872,22 @@ MINIMUM REQUIREMENTS:
 - No two evidence-cards adjacent (separate with prose)
 </VISUAL_COMPONENT_TYPES>
 
+${sessionFacts ? `
+<SESSION_FACTS>
+INVESTIGATION ROSTER (${sessionFacts.playerCount} players):
+${sessionFacts.roster.join('\n')}
+
+ACCUSATION: ${sessionFacts.accusation}
+
+CRITICAL - CHARACTER AGENCY RULE:
+ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
+Characters who appear in memory content but are NOT listed above were subjects
+of memories from the party - they were NOT at the investigation.
+NEVER give non-roster characters actions, decisions, or dialogue during
+investigation events.
+
+Use exactly ${sessionFacts.playerCount} when referencing how many people were present.
+</SESSION_FACTS>` : ''}
 <ANTI_PATTERNS>
 ${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 </ANTI_PATTERNS>
