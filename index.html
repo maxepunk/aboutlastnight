@@ -438,6 +438,12 @@
                 </a>
             </p>
 
+            <p class="system-note" style="margin-top: 0.5rem;">
+                <strong>PRIVATE BOOKINGS:</strong> Want a private experience or custom date?
+                Email us at <a href="mailto:aboutlastnightgame@gmail.com" class="link-inline">aboutlastnightgame@gmail.com</a>
+                with your preferred date/time and group size (5-20 players).
+            </p>
+
             <!-- Off the Couch Booking Widget -->
             <div id="otcContainer" style="max-width: 800px; margin: 0 auto;"></div>
             <script>const q=window.location.search;let f=document.createElement("iframe");f.src="https://offthecouch.io/book/lastnight"+q;let scrollTop=0;f.width="100%";f.allow="payment";f.scrolling="no";f.style.border="none";f.style.display="block";f.style.overflow="hidden";f.style.height="auto";window.addEventListener("message",e=>{if(e.origin==="https://offthecouch.io"&&e.data.action==="updateHeight")f.style.height=e.data.height+"px";if(e.origin==="https://offthecouch.io"&&e.data.action==="scrollToTop"){scrollTop=findPosY(document.getElementById("otcContainer"));window.scrollTo({top:scrollTop-30,behavior:"smooth"})}if(e.origin==="https://offthecouch.io")switch(e.data.eventType){case"page_view":insertGoogleAnalyticsScript(e.data.id);break;case"add_to_cart":window.gtag&&gtag("event","add_to_cart",{currency:e.data.currency,value:e.data.eventValue});break;case"begin_checkout":window.gtag&&gtag("event","begin_checkout",{currency:e.data.currency,value:e.data.eventValue});break;case"purchase":window.gtag&&gtag("event","purchase",{currency:e.data.currency,value:e.data.eventValue});break;case"success":window.gtag&&gtag("event","success",{currency:e.data.currency,value:e.data.eventValue});break;default:}});document.getElementById("otcContainer").appendChild(f);function findPosY(o){let t=0;if(o.offsetParent)for(;o.offsetParent;)t+=o.offsetTop,o=o.offsetParent;else o.y&&(t+=o.y);return t}function insertGoogleAnalyticsScript(i){if(!i)return;window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}if(!window.gtag){const s=document.createElement("script");s.async=!0;s.onload=()=>{window.gtag=gtag;gtag("js",new Date);gtag("config",i)};s.src="https://www.googletagmanager.com/gtag/js?id="+i;document.head.appendChild(s)}gtag("event","page_view")}</script>
