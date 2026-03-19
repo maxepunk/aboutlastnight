@@ -656,3 +656,75 @@
 .callout-p::before {
     display: none;
 }
+
+/* ═══════════════════════════════════════════════════════ */
+/* Press Badge (Hero)                                       */
+/* ═══════════════════════════════════════════════════════ */
+
+.press-badge {
+    font-size: 0.9rem;
+    color: rgba(255, 200, 0, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 1.5rem;
+    font-weight: 400;
+    border-top: 1px solid rgba(255, 200, 0, 0.3);
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* Testimonial Attribution                                  */
+/* ═══════════════════════════════════════════════════════ */
+
+.testimonial-attribution {
+    display: block;
+    margin-top: 1rem;
+    font-style: normal;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* Press Testimonial Modifier                               */
+/* ═══════════════════════════════════════════════════════ */
+
+.testimonial--press {
+    border-left-color: rgba(255, 200, 0, 0.7);
+}
+
+.testimonial--press p::before,
+.testimonial--press p::after {
+    color: rgba(255, 200, 0, 0.6);
+}
+
+.testimonial--press .testimonial-source {
+    color: rgba(255, 200, 0, 0.9);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+}
+
+.testimonial--press .testimonial-author {
+    color: rgba(255, 255, 255, 0.7);
+    margin-left: 0.5rem;
+}
+
+.testimonial--press .testimonial-author::before {
+    content: '— ';
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* Mobile Utilities                                         */
+/* ═══════════════════════════════════════════════════════ */
+
+.mobile-break {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-break {
+        display: block;
+    }
+}
