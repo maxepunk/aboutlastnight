@@ -462,7 +462,7 @@ async function generateCoreArcs(state, config) {
       systemPrompt: CORE_ARC_SYSTEM_PROMPT,
       model: 'sonnet',
       jsonSchema: CORE_ARC_SCHEMA,
-      timeoutMs: 5 * 60 * 1000,  // 5 minutes (restored: 34K+ prompts with 92 tokens need more time)
+      timeoutMs: 8 * 60 * 1000,  // 8 minutes — 31K+ char prompts with structured output need headroom for schema retries
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
       label: 'Core arc generation (Call 1)'
     });
@@ -1027,22 +1027,26 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     };
 
   } catch (error) {
-    console.error('[analyzeArcsPlayerFocusGuided] Error:', error.message);
+    const isTimeout = error.message?.includes('timeout') && error.message?.includes('limit');
+    console.error(`[analyzeArcsPlayerFocusGuided] ${isTimeout ? 'Timeout' : 'Error'}:`, error.message);
 
     return {
       narrativeArcs: [],
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         _error: error.message,
+        _generationTimedOut: isTimeout,
         architecture: 'split-call'
       },
       errors: [{
         phase: PHASES.ARC_SYNTHESIS,
-        type: 'split-call-failed',
+        type: isTimeout ? 'split-call-timeout' : 'split-call-failed',
         message: error.message,
         timestamp: new Date().toISOString()
       }],
-      currentPhase: PHASES.ERROR
+      // Use ARC_SYNTHESIS (not ERROR) — let routing handle the 0-arc case
+      // ERROR phase would bypass validateArcs entirely but then there's no route to checkpoint
+      currentPhase: PHASES.ARC_SYNTHESIS
     };
   }
 }

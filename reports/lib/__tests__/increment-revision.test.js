@@ -1,5 +1,5 @@
 const { _testing } = require('../workflow/graph');
-const { incrementArcRevision, incrementOutlineRevision, incrementArticleRevision, routeAfterArcCheckpoint } = _testing;
+const { incrementArcRevision, incrementOutlineRevision, incrementArticleRevision, routeAfterArcCheckpoint, routeArcValidation } = _testing;
 
 describe('incrementArcRevision', () => {
   test('adds evaluation invalidation entry with source', async () => {
@@ -100,5 +100,62 @@ describe('routeAfterArcCheckpoint', () => {
 
   test('returns revise when human count below cap', () => {
     expect(routeAfterArcCheckpoint({ selectedArcs: null, humanArcRevisionCount: 3 })).toBe('revise');
+  });
+});
+
+describe('routeArcValidation', () => {
+  test('evaluates when structural checks pass', () => {
+    expect(routeArcValidation({
+      _arcValidation: { structuralPassed: true }
+    })).toBe('evaluate');
+  });
+
+  test('revises when structural issues and arcs exist to revise', () => {
+    expect(routeArcValidation({
+      _arcValidation: { structuralPassed: false, missingRoster: ['Sarah'] },
+      narrativeArcs: [{ id: 'a1' }],
+      _previousArcs: null,
+      arcRevisionCount: 0
+    })).toBe('revise');
+  });
+
+  test('evaluates (not revise) when 0 arcs AND no previous arcs — futile revision prevention', () => {
+    // This is the key fix: initial generation failure should not burn revision slots
+    expect(routeArcValidation({
+      _arcValidation: { structuralPassed: false, missingRoster: ['Sarah', 'Alex'] },
+      narrativeArcs: [],
+      _previousArcs: null,
+      arcRevisionCount: 0
+    })).toBe('evaluate');
+  });
+
+  test('evaluates when 0 arcs, empty previous arcs', () => {
+    expect(routeArcValidation({
+      _arcValidation: { structuralPassed: false },
+      narrativeArcs: [],
+      _previousArcs: [],
+      arcRevisionCount: 0
+    })).toBe('evaluate');
+  });
+
+  test('revises when 0 current arcs but previous arcs exist (timeout recovery)', () => {
+    expect(routeArcValidation({
+      _arcValidation: { structuralPassed: false, missingRoster: ['Sarah'] },
+      narrativeArcs: [],
+      _previousArcs: [{ id: 'a1' }],
+      arcRevisionCount: 0
+    })).toBe('revise');
+  });
+
+  test('evaluates when at revision cap regardless', () => {
+    expect(routeArcValidation({
+      _arcValidation: { structuralPassed: false },
+      narrativeArcs: [{ id: 'a1' }],
+      arcRevisionCount: 2
+    })).toBe('evaluate');
+  });
+
+  test('evaluates when no validation data', () => {
+    expect(routeArcValidation({ _arcValidation: null })).toBe('evaluate');
   });
 });
