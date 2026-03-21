@@ -712,6 +712,8 @@ textarea.input {
   color: var(--text-muted);
   padding: 2px var(--space-sm);
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .progress-messages__item:last-child {
@@ -934,6 +936,8 @@ textarea.input {
   letter-spacing: 0.04em;
   color: var(--text-primary);
   flex: 1;
+  overflow-wrap: break-word;
+  word-break: break-word;
   min-width: 0;
 }
 
@@ -942,6 +946,9 @@ textarea.input {
   align-items: baseline;
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .evidence-item__meta {
@@ -1502,11 +1509,12 @@ textarea.input {
   background: rgba(78, 205, 196, 0.08);
   max-width: 100%;
   overflow-wrap: break-word;
+  word-break: break-word;
   border: 1px solid rgba(78, 205, 196, 0.2);
   border-radius: 12px;
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .character-tag__name {
@@ -1516,6 +1524,8 @@ textarea.input {
 
 .character-tag__role {
   color: var(--text-muted);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .character-tag__role::before {
@@ -1584,6 +1594,8 @@ textarea.input {
   font-size: 0.9rem;
   color: var(--text-secondary);
   font-style: italic;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .revision-diff__changes {
@@ -1600,6 +1612,8 @@ textarea.input {
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 0.8rem;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .revision-diff__item--added {
@@ -1635,6 +1649,9 @@ textarea.input {
   color: inherit;
   opacity: 0.7;
   font-size: 0.75rem;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 /* ── Outline Sections ── */
@@ -1642,6 +1659,8 @@ textarea.input {
   padding-left: var(--space-md);
   border-left: 2px solid rgba(212, 168, 83, 0.2);
   margin-bottom: var(--space-md);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .outline-section__title {

@@ -87,8 +87,11 @@ function getCheckpointData(checkpointType, state) {
             return {
                 narrativeArcs: state.narrativeArcs,
                 revisionCount: state.arcRevisionCount || 0,
+                humanRevisionCount: state.humanArcRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARCS,
-                previousFeedback: state._arcFeedback || null
+                maxHumanRevisions: REVISION_CAPS.HUMAN_ARCS,
+                previousFeedback: state._arcFeedback || null,
+                _revisionTimedOut: state._arcAnalysisCache?._revisionTimedOut || false
             };
         case CHECKPOINT_TYPES.OUTLINE:
             return {

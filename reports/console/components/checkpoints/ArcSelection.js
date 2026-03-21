@@ -117,13 +117,18 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
 
   if (arcs.length === 0) {
     return React.createElement('div', { className: 'flex flex-col gap-md' },
-      React.createElement('p', { className: 'text-muted text-sm' }, 'No narrative arcs available.'),
-      React.createElement('div', { className: 'flex gap-md mt-md' },
-        React.createElement('button', {
-          className: 'btn btn-primary',
-          onClick: function () { onApprove({ selectedArcs: [] }); }
-        }, 'Continue')
-      )
+      React.createElement('div', { className: 'revision-diff__warning' },
+        'No arcs available. This usually means revision timed out or generation failed.'
+      ),
+      previousFeedback && React.createElement('div', { className: 'revision-diff__feedback' },
+        React.createElement('span', { className: 'revision-diff__feedback-label' }, 'Your Last Feedback'),
+        React.createElement('p', { className: 'revision-diff__feedback-text' }, previousFeedback)
+      ),
+      React.createElement('button', {
+        className: 'btn btn-danger',
+        onClick: function() { dispatch({ type: 'SHOW_ROLLBACK' }); },
+        'aria-label': 'Roll back to regenerate arcs'
+      }, 'Roll Back to Regenerate')
     );
   }
 
@@ -135,7 +140,9 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
       current: arcs,
       revisionCount: revisionCount,
       maxRevisions: maxRevisions,
-      previousFeedback: previousFeedback
+      previousFeedback: previousFeedback,
+      humanRevisionCount: (data && data.humanRevisionCount) || 0,
+      maxHumanRevisions: (data && data.maxHumanRevisions) || 4
     }),
 
     // Hint text

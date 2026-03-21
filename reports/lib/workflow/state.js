@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (53 total - includes revision context + human feedback):
+ * State Fields (55 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus
@@ -25,7 +25,7 @@
  *   - Supervisor (8.6): supervisorNarrativeCompass
  *   - Output: assembledHtml, validationResults
  *   - Control: currentPhase, errors
- *   - Revision Counters (8.6): arcRevisionCount, outlineRevisionCount, articleRevisionCount
+ *   - Revision Counters (8.6): arcRevisionCount, humanArcRevisionCount, outlineRevisionCount, articleRevisionCount
  */
 
 const { Annotation } = require('@langchain/langgraph');
@@ -47,6 +47,7 @@ const replaceReducer = (oldValue, newValue) => newValue !== undefined ? newValue
  * @returns {Array} Combined array
  */
 const appendReducer = (oldValue, newValue) => {
+  if (Array.isArray(newValue) && newValue.length === 0) return [];
   const prev = oldValue || [];
   const next = newValue || [];
   return [...prev, ...next];
@@ -73,6 +74,7 @@ const mergeReducer = (oldValue, newValue) => {
  * @returns {Array} Array with new item appended
  */
 const appendSingleReducer = (oldValue, newValue) => {
+  if (Array.isArray(newValue) && newValue.length === 0) return [];
   const prev = oldValue || [];
   if (newValue === null || newValue === undefined) return prev;
   return [...prev, newValue];
@@ -495,8 +497,14 @@ const ReportStateAnnotation = Annotation.Root({
   // PHASE-SPECIFIC REVISION COUNTERS (Commit 8.6)
   // ═══════════════════════════════════════════════════════
 
-  /** Arc revision count (max 2 - foundational, escalate early) */
+  /** Arc revision count — evaluator-driven (max 2 - foundational, escalate early) */
   arcRevisionCount: Annotation({
+    reducer: replaceReducer,
+    default: () => 0
+  }),
+
+  /** Human arc revision count — human rejection-driven (max 4 - domain knowledge iterations) */
+  humanArcRevisionCount: Annotation({
     reducer: replaceReducer,
     default: () => 0
   }),
@@ -629,7 +637,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (53 fields after human feedback additions)
+ * Get default state with all fields initialized (55 fields after human feedback + revision budget additions)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -697,6 +705,7 @@ function getDefaultState() {
     voiceRevisionCount: 0,  // @deprecated
     // Revision counters (Commit 8.6)
     arcRevisionCount: 0,
+    humanArcRevisionCount: 0,
     outlineRevisionCount: 0,
     articleRevisionCount: 0,
     // Error handling
@@ -795,6 +804,7 @@ const PHASES = {
  */
 const REVISION_CAPS = {
   ARCS: 2,
+  HUMAN_ARCS: 4,
   OUTLINE: 3,
   ARTICLE: 3
 };
@@ -910,13 +920,13 @@ const ROLLBACK_CLEARS = {
  * Rolling back past a phase resets its revision counter for fresh attempts.
  */
 const ROLLBACK_COUNTER_RESETS = {
-  'input-review': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'paper-evidence-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'await-roster': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'character-ids': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'pre-curation': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'evidence-and-photos': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'arc-selection': { arcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'input-review': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'paper-evidence-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'await-roster': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'character-ids': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'pre-curation': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'evidence-and-photos': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'arc-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'outline': { outlineRevisionCount: 0, articleRevisionCount: 0 },
   'article': { articleRevisionCount: 0 }
 };
@@ -985,7 +995,7 @@ if (require.main === module) {
   // NOTE: APPROVAL_TYPES removed - checkpoint types now in checkpoint-helpers.js
 
   // Test revision caps
-  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, OUTLINE: 3, ARTICLE: 3 }
+  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, HUMAN_ARCS: 4, OUTLINE: 3, ARTICLE: 3 }
 
   // Test rollback points
   console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 8

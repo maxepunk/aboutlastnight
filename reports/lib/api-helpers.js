@@ -24,7 +24,11 @@ function buildRollbackState(rollbackPoint = 'input-review') {
     throw new Error(`Invalid rollback point: '${rollbackPoint}'`);
   }
   const state = {};
-  ROLLBACK_CLEARS[rollbackPoint].forEach(field => { state[field] = null; });
+  // Fields using append reducers need [] (not null) to clear — see appendSingleReducer/appendReducer
+  const appendReducerFields = new Set(['evaluationHistory', 'errors']);
+  ROLLBACK_CLEARS[rollbackPoint].forEach(field => {
+    state[field] = appendReducerFields.has(field) ? [] : null;
+  });
   Object.assign(state, ROLLBACK_COUNTER_RESETS[rollbackPoint]);
   state.currentPhase = null;
   return state;

@@ -26,12 +26,17 @@ const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require(
 // ═══════════════════════════════════════════════════════
 
 describe('buildRollbackState', () => {
-  test('returns object with all ROLLBACK_CLEARS fields set to null', () => {
+  test('returns object with all ROLLBACK_CLEARS fields cleared', () => {
     const state = buildRollbackState('arc-selection');
     const expectedFields = ROLLBACK_CLEARS['arc-selection'];
+    const appendReducerFields = new Set(['evaluationHistory', 'errors']);
 
     for (const field of expectedFields) {
-      expect(state).toHaveProperty(field, null);
+      if (appendReducerFields.has(field)) {
+        expect(state[field]).toEqual([]);
+      } else {
+        expect(state).toHaveProperty(field, null);
+      }
     }
   });
 
@@ -52,9 +57,14 @@ describe('buildRollbackState', () => {
   test('defaults to input-review when no argument provided', () => {
     const state = buildRollbackState();
     const expectedFields = ROLLBACK_CLEARS['input-review'];
+    const appendReducerFields = new Set(['evaluationHistory', 'errors']);
 
     for (const field of expectedFields) {
-      expect(state).toHaveProperty(field, null);
+      if (appendReducerFields.has(field)) {
+        expect(state[field]).toEqual([]);
+      } else {
+        expect(state).toHaveProperty(field, null);
+      }
     }
 
     const expectedCounters = ROLLBACK_COUNTER_RESETS['input-review'];
@@ -63,13 +73,24 @@ describe('buildRollbackState', () => {
     }
   });
 
+  test('sets evaluationHistory to [] (not null) for append-reducer compatibility', () => {
+    const state = buildRollbackState('evidence-and-photos');
+    expect(state.evaluationHistory).toEqual([]);
+    expect(state.evaluationHistory).not.toBeNull();
+  });
+
   test('works for each valid rollback point', () => {
+    const appendReducerFields = new Set(['evaluationHistory', 'errors']);
     for (const point of Object.keys(ROLLBACK_CLEARS)) {
       const state = buildRollbackState(point);
 
-      // All fields from ROLLBACK_CLEARS should be null
+      // All fields from ROLLBACK_CLEARS should be cleared appropriately
       for (const field of ROLLBACK_CLEARS[point]) {
-        expect(state).toHaveProperty(field, null);
+        if (appendReducerFields.has(field)) {
+          expect(state[field]).toEqual([]);
+        } else {
+          expect(state).toHaveProperty(field, null);
+        }
       }
 
       // Counter resets should be present
