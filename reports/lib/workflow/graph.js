@@ -218,6 +218,15 @@ function routeArcValidation(state) {
   }
 
   if (validation.structuralPassed === false) {
+    // If 0 arcs AND no previous arcs, revision is pointless — nothing to revise.
+    // Skip directly to evaluation which will escalate to human checkpoint.
+    const hasNoArcs = !state.narrativeArcs || state.narrativeArcs.length === 0;
+    const hasNoPreviousArcs = !state._previousArcs || state._previousArcs.length === 0;
+    if (hasNoArcs && hasNoPreviousArcs) {
+      console.log('[routeArcValidation] 0 arcs with no previous arcs — revision would be futile, escalating to evaluation');
+      return 'evaluate';
+    }
+
     // Check revision cap before routing to revise
     const atCap = (state.arcRevisionCount || 0) >= REVISION_CAPS.ARCS;
     if (atCap) {
@@ -717,6 +726,7 @@ module.exports = {
   _testing: {
     createGraphBuilder,
     // Routing functions - evaluation-based (evaluation/schema logic)
+    routeArcValidation,
     routeArcEvaluation,
     routeOutlineEvaluation,
     routeArticleEvaluation,
