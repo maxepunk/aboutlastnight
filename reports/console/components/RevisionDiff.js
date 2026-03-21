@@ -71,17 +71,21 @@ const STATUS_PREFIX = {
   unchanged: '= '
 };
 
-function RevisionDiff({ previous, current, revisionCount, maxRevisions, previousFeedback }) {
+function RevisionDiff({ previous, current, revisionCount, maxRevisions, previousFeedback, humanRevisionCount, maxHumanRevisions }) {
   // Only render if we have a previous version to compare
   if (previous === null || previous === undefined) {
     return null;
   }
 
-  const budgetRemaining = maxRevisions - revisionCount;
+  // Show whichever revision type is active
+  const isHumanRevision = humanRevisionCount > 0;
+  const displayCount = isHumanRevision ? humanRevisionCount : revisionCount;
+  const displayMax = isHumanRevision ? (maxHumanRevisions || 4) : maxRevisions;
+  const budgetRemaining = displayMax - displayCount;
   const budgetColor = budgetRemaining > 1 ? 'var(--accent-green)' :
                       budgetRemaining === 1 ? 'var(--accent-amber)' :
                       'var(--accent-red)';
-  const atMax = revisionCount >= maxRevisions;
+  const atMax = displayCount >= displayMax;
 
   const diffItems = shallowDiff(previous, current);
 
@@ -90,7 +94,7 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
     // Revision number banner
     React.createElement('div', { className: 'revision-diff__banner' },
       React.createElement('span', { className: 'revision-diff__banner-text' },
-        'Revision ' + revisionCount + ' of ' + maxRevisions
+        (isHumanRevision ? 'Human Revision ' : 'Revision ') + displayCount + ' of ' + displayMax
       ),
       React.createElement(Badge, {
         label: budgetRemaining + ' remaining',

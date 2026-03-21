@@ -55,21 +55,21 @@ describe('workflow integration', () => {
     describe('routeArcEvaluation', () => {
       it('returns "checkpoint" when evaluation ready', () => {
         expect(routeArcEvaluation({
-          evaluationHistory: [{ ready: true }],
+          evaluationHistory: [{ phase: 'arcs', ready: true }],
           arcRevisionCount: 0
         })).toBe('checkpoint');
       });
 
       it('returns "checkpoint" when at revision cap', () => {
         expect(routeArcEvaluation({
-          evaluationHistory: [{ ready: false }],
+          evaluationHistory: [{ phase: 'arcs', ready: false }],
           arcRevisionCount: REVISION_CAPS.ARCS
         })).toBe('checkpoint');
       });
 
       it('returns "revise" when not ready and under cap', () => {
         expect(routeArcEvaluation({
-          evaluationHistory: [{ ready: false }],
+          evaluationHistory: [{ phase: 'arcs', ready: false }],
           arcRevisionCount: 0
         })).toBe('revise');
       });
@@ -84,21 +84,21 @@ describe('workflow integration', () => {
     describe('routeOutlineEvaluation', () => {
       it('returns "checkpoint" when evaluation ready', () => {
         expect(routeOutlineEvaluation({
-          evaluationHistory: [{ ready: true }],
+          evaluationHistory: [{ phase: 'outline', ready: true }],
           outlineRevisionCount: 0
         })).toBe('checkpoint');
       });
 
       it('returns "checkpoint" when at revision cap', () => {
         expect(routeOutlineEvaluation({
-          evaluationHistory: [{ ready: false }],
+          evaluationHistory: [{ phase: 'outline', ready: false }],
           outlineRevisionCount: REVISION_CAPS.OUTLINE
         })).toBe('checkpoint');
       });
 
       it('returns "revise" when not ready and under cap', () => {
         expect(routeOutlineEvaluation({
-          evaluationHistory: [{ ready: false }],
+          evaluationHistory: [{ phase: 'outline', ready: false }],
           outlineRevisionCount: 1
         })).toBe('revise');
       });
@@ -107,14 +107,14 @@ describe('workflow integration', () => {
     describe('routeArticleEvaluation', () => {
       it('returns "checkpoint" when evaluation ready', () => {
         expect(routeArticleEvaluation({
-          evaluationHistory: [{ ready: true }],
+          evaluationHistory: [{ phase: 'article', ready: true }],
           articleRevisionCount: 0
         })).toBe('checkpoint');
       });
 
       it('returns "checkpoint" when at revision cap', () => {
         expect(routeArticleEvaluation({
-          evaluationHistory: [{ ready: false }],
+          evaluationHistory: [{ phase: 'article', ready: false }],
           articleRevisionCount: REVISION_CAPS.ARTICLE
         })).toBe('checkpoint');
       });

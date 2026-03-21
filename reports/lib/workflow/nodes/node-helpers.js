@@ -9,7 +9,7 @@
 
 const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
-const { getCanonicalName } = require('../../theme-config');
+const { getCanonicalName, getThemeNPCs, getThemeCharacters } = require('../../theme-config');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NPC VALIDATION
@@ -447,7 +447,8 @@ function routeTokensByDisposition(tokens) {
       });
     } else if (t.disposition === 'buried') {
       buried.push({
-        id: t.id,
+        // id intentionally omitted — token IDs like "sam004" leak whose memory was buried
+        // Evidence boundaries: Nova CANNOT know whose memories went to which accounts
         sourceType: 'memory-token',
         shellAccount: t.shellAccount,
         amount: t.transactionAmount,
@@ -954,12 +955,19 @@ END PREVIOUS OUTPUT
  */
 function extractCanonicalCharacters(tokens, theme = 'journalist') {
   const characters = {};
+  // Build set of all known character first names (PCs + NPCs) from theme-config
+  const knownNames = new Set([
+    ...getThemeCharacters(theme),
+    ...getThemeNPCs(theme)
+  ]);
 
   for (const token of tokens) {
     for (const owner of (token.owners || [])) {
       if (!owner || characters[owner]) continue;
-      const fullName = getCanonicalName(owner, theme);
-      if (fullName === owner && !['Flip', 'Nova', 'Blake', 'Marcus'].includes(owner)) {
+      // Extract first name for lookup — Notion owners may use full names like "Sarah Blackwood"
+      const firstName = owner.includes(' ') ? owner.split(' ')[0].trim() : owner;
+      const fullName = getCanonicalName(firstName, theme);
+      if (!knownNames.has(firstName)) {
         console.warn(`[extractCanonicalCharacters] Unknown character "${owner}" not in theme-config`);
       }
       characters[owner] = fullName;

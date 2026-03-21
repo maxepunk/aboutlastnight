@@ -87,9 +87,10 @@ function routeArcEvaluation(state) {
     return 'error';
   }
 
-  // Check if evaluation says ready or hit revision cap
+  // Check most recent arcs evaluation (phase-filtered, consistent with evaluator skip logic)
   const evalHistory = state.evaluationHistory || [];
-  const lastEval = evalHistory[evalHistory.length - 1];
+  const phaseEvals = evalHistory.filter(e => e.phase === 'arcs');
+  const lastEval = phaseEvals[phaseEvals.length - 1];
   const atCap = (state.arcRevisionCount || 0) >= REVISION_CAPS.ARCS;
 
   if (lastEval?.ready || atCap) {
@@ -110,7 +111,8 @@ function routeOutlineEvaluation(state) {
   }
 
   const evalHistory = state.evaluationHistory || [];
-  const lastEval = evalHistory[evalHistory.length - 1];
+  const phaseEvals = evalHistory.filter(e => e.phase === 'outline');
+  const lastEval = phaseEvals[phaseEvals.length - 1];
   const atCap = (state.outlineRevisionCount || 0) >= REVISION_CAPS.OUTLINE;
 
   if (lastEval?.ready || atCap) {
@@ -131,7 +133,8 @@ function routeArticleEvaluation(state) {
   }
 
   const evalHistory = state.evaluationHistory || [];
-  const lastEval = evalHistory[evalHistory.length - 1];
+  const phaseEvals = evalHistory.filter(e => e.phase === 'article');
+  const lastEval = phaseEvals[phaseEvals.length - 1];
   const atCap = (state.articleRevisionCount || 0) >= REVISION_CAPS.ARTICLE;
 
   if (lastEval?.ready || atCap) {
@@ -174,6 +177,11 @@ function routeAfterArticleCheckpoint(state) {
  */
 function routeAfterArcCheckpoint(state) {
   if (state.selectedArcs?.length > 0) return 'forward';
+  const humanAtCap = (state.humanArcRevisionCount || 0) >= REVISION_CAPS.HUMAN_ARCS;
+  if (humanAtCap) {
+    console.log('[routeAfterArcCheckpoint] Human revision cap reached, forcing forward');
+    return 'forward';
+  }
   return 'revise';
 }
 
@@ -242,12 +250,33 @@ function routeArcValidation(state) {
  * Clears narrativeArcs so analyzeArcs skip logic doesn't trigger
  */
 async function incrementArcRevision(state) {
-  const newCount = (state.arcRevisionCount || 0) + 1;
-  console.log(`[incrementArcRevision] Incrementing count to ${newCount}, preserving arcs for revision context`);
+  const isHumanDriven = !!state._arcFeedback;
+  const newEvalCount = isHumanDriven
+    ? (state.arcRevisionCount || 0)
+    : (state.arcRevisionCount || 0) + 1;
+  const newHumanCount = isHumanDriven
+    ? (state.humanArcRevisionCount || 0) + 1
+    : (state.humanArcRevisionCount || 0);
+
+  // Preserve arcs for revision context — fall back to _previousArcs if narrativeArcs lost (timeout)
+  const arcsToPreserve = (state.narrativeArcs?.length > 0)
+    ? state.narrativeArcs
+    : state._previousArcs;
+
+  console.log(`[incrementArcRevision] count=${newEvalCount}, humanCount=${newHumanCount}, source=${isHumanDriven ? 'human' : 'evaluator'}, preserving ${arcsToPreserve?.length || 0} arcs`);
+
   return {
-    arcRevisionCount: newCount,
-    _previousArcs: state.narrativeArcs, // PRESERVE for revision context
-    narrativeArcs: null // Clear for regeneration (replaceReducer now handles null)
+    arcRevisionCount: newEvalCount,
+    humanArcRevisionCount: newHumanCount,
+    _previousArcs: arcsToPreserve,
+    narrativeArcs: null,
+    evaluationHistory: {
+      phase: 'arcs',
+      ready: false,
+      reason: 'revision-invalidated',
+      source: isHumanDriven ? 'human' : 'evaluator',
+      timestamp: new Date().toISOString()
+    }
   };
 }
 
@@ -258,11 +287,17 @@ async function incrementArcRevision(state) {
  */
 async function incrementOutlineRevision(state) {
   const newCount = (state.outlineRevisionCount || 0) + 1;
-  console.log(`[incrementOutlineRevision] Incrementing count to ${newCount}, preserving outline for revision context`);
+  console.log(`[incrementOutlineRevision] Incrementing count to ${newCount}`);
   return {
     outlineRevisionCount: newCount,
-    _previousOutline: state.outline, // PRESERVE for revision context
-    outline: null // Clear for regeneration
+    _previousOutline: state.outline,
+    outline: null,
+    evaluationHistory: {
+      phase: 'outline',
+      ready: false,
+      reason: 'revision-invalidated',
+      timestamp: new Date().toISOString()
+    }
   };
 }
 
@@ -273,12 +308,18 @@ async function incrementOutlineRevision(state) {
  */
 async function incrementArticleRevision(state) {
   const newCount = (state.articleRevisionCount || 0) + 1;
-  console.log(`[incrementArticleRevision] Incrementing count to ${newCount}, preserving content for revision context`);
+  console.log(`[incrementArticleRevision] Incrementing count to ${newCount}`);
   return {
     articleRevisionCount: newCount,
-    _previousContentBundle: state.contentBundle, // PRESERVE for revision context
-    contentBundle: null, // Clear for regeneration
-    assembledHtml: null  // Clear assembled output too
+    _previousContentBundle: state.contentBundle,
+    contentBundle: null,
+    assembledHtml: null,
+    evaluationHistory: {
+      phase: 'article',
+      ready: false,
+      reason: 'revision-invalidated',
+      timestamp: new Date().toISOString()
+    }
   };
 }
 
@@ -681,6 +722,7 @@ module.exports = {
     routeArticleEvaluation,
     routeSchemaValidation,
     // Routing functions - checkpoint-based (human approval routing)
+    routeAfterArcCheckpoint,
     routeAfterOutlineCheckpoint,
     routeAfterArticleCheckpoint,
     // Revision handlers (kept)

@@ -257,7 +257,28 @@ Generate 3-5 narrative arcs following this priority:
 
 ---
 
-## SECTION 3: EVIDENCE BOUNDARIES
+## SECTION 3: EVIDENCE BUNDLE
+
+### Exposed Tokens (${evidenceSummary.exposedTokens.length} items - Layer 1, PARTY MEMORIES)
+These memories describe events from THE PARTY NIGHT. Content is party-era; exposure is investigation-era.
+${JSON.stringify(evidenceSummary.exposedTokens, null, 2)}
+
+### Paper Evidence (${evidenceSummary.exposedPaper.length} items - Layer 1, PARTY CONTEXT)
+${JSON.stringify(evidenceSummary.exposedPaper, null, 2)}
+
+### Buried Transactions (${evidenceSummary.buriedTransactions.length} items - Layer 2, INVESTIGATION ACTIONS)
+These transactions occurred DURING THE INVESTIGATION when players chose to bury memories.
+Token identity is intentionally hidden - Nova CANNOT know whose memories were buried.
+${JSON.stringify(evidenceSummary.buriedTransactions, null, 2)}
+
+### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
+${JSON.stringify(evidenceSummary.allEvidenceIds)}
+
+CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
+
+---
+
+## SECTION 4: EVIDENCE BOUNDARIES (rules for the data above)
 
 ### Layer 1 - EXPOSED (Full Reportability)
 - CAN quote full memory contents, describe what memory reveals
@@ -279,7 +300,7 @@ Generate 3-5 narrative arcs following this priority:
 
 ---
 
-## SECTION 3.5: TEMPORAL AWARENESS (CRITICAL)
+## SECTION 4.5: TEMPORAL AWARENESS (CRITICAL)
 
 THE PARTY and THE INVESTIGATION are TWO DIFFERENT TIMELINES. Your arc summaries must respect this distinction.
 
@@ -298,26 +319,6 @@ THE PARTY and THE INVESTIGATION are TWO DIFFERENT TIMELINES. Your arc summaries 
 (Sarah exposed memories during the INVESTIGATION, not the party.)
 
 **RIGHT:** "Sarah exposed three memories during the investigation, all depicting lab events from the night of the party."
-
----
-
-## SECTION 4: EVIDENCE BUNDLE
-
-### Exposed Tokens (${evidenceSummary.exposedTokens.length} items - Layer 1, PARTY MEMORIES)
-These memories describe events from THE PARTY NIGHT. Content is party-era; exposure is investigation-era.
-${JSON.stringify(evidenceSummary.exposedTokens, null, 2)}
-
-### Paper Evidence (${evidenceSummary.exposedPaper.length} items - Layer 1, PARTY CONTEXT)
-${JSON.stringify(evidenceSummary.exposedPaper, null, 2)}
-
-### Buried Transactions (${evidenceSummary.buriedTransactions.length} items - Layer 2, INVESTIGATION ACTIONS)
-These transactions occurred DURING THE INVESTIGATION when players chose to bury memories.
-${JSON.stringify(evidenceSummary.buriedTransactions, null, 2)}
-
-### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
-${JSON.stringify(evidenceSummary.allEvidenceIds)}
-
-CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
 
 ---
 
@@ -780,7 +781,32 @@ Generate 3-5 narrative arcs following this priority:
 
 ---
 
-## SECTION 3: EVIDENCE BOUNDARIES
+## SECTION 3: EVIDENCE BUNDLE
+
+### Exposed Tokens (${exposedTokens.length} items - Layer 1)
+${JSON.stringify(exposedTokens, null, 2)}
+
+### Paper Evidence (${exposedPaper.length} items - Layer 1)
+${JSON.stringify(exposedPaper, null, 2)}
+
+### Buried Transactions (${buriedTransactions.length} items - Layer 2 CONTEXT ONLY)
+Token identity is intentionally hidden - Nova CANNOT know whose memories were buried.
+${JSON.stringify(buriedTransactions, null, 2)}
+
+⚠️ BURIED TRANSACTIONS ARE FOR CONTEXT/ANALYSIS ONLY.
+Buried transactions have no IDs - they cannot be cited as keyEvidence.
+You can DISCUSS patterns from buried transactions in analysisNotes.financial,
+but keyEvidence must ONLY contain IDs from the EXPOSED evidence below.
+
+### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
+${JSON.stringify(allEvidenceIds)}
+
+CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
+Use buried patterns in analysisNotes.financial, but cite EXPOSED evidence in keyEvidence.
+
+---
+
+## SECTION 4: EVIDENCE BOUNDARIES (rules for the data above)
 
 ### Layer 1 - EXPOSED (Full Reportability)
 - CAN quote full memory contents, describe what memory reveals
@@ -806,30 +832,6 @@ Generate 3-5 narrative arcs following this priority:
 - Never use em-dashes (use periods, restructure sentences)
 - Never use game mechanics language ("Act 3 unlock", "first burial", "token scan")
 - Never claim to know buried memory content or ownership
-
----
-
-## SECTION 4: EVIDENCE BUNDLE
-
-### Exposed Tokens (${exposedTokens.length} items - Layer 1)
-${JSON.stringify(exposedTokens, null, 2)}
-
-### Paper Evidence (${exposedPaper.length} items - Layer 1)
-${JSON.stringify(exposedPaper, null, 2)}
-
-### Buried Transactions (${buriedTransactions.length} items - Layer 2 CONTEXT ONLY)
-${JSON.stringify(buriedTransactions, null, 2)}
-
-⚠️ BURIED TRANSACTIONS ARE FOR CONTEXT/ANALYSIS ONLY - DO NOT USE THEIR IDs IN keyEvidence!
-You can DISCUSS patterns from buried transactions in analysisNotes.financial,
-but keyEvidence must ONLY contain IDs from the EXPOSED evidence below.
-
-### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
-${JSON.stringify(allEvidenceIds)}
-
-CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
-Buried transaction IDs (vik001, mor021, etc.) are NOT valid keyEvidence - they will fail validation.
-Use buried patterns in analysisNotes.financial, but cite EXPOSED evidence in keyEvidence.
 
 ---
 
@@ -1116,10 +1118,11 @@ async function reviseArcs(state, config) {
   try {
     const result = await sdkClient({
       prompt: revisionPrompt,
-      systemPrompt: getArcRevisionSystemPrompt(),
-      model: 'sonnet',  // Same model as generation
+      systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback),
+      model: 'sonnet',
       jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
-      timeoutMs: 5 * 60 * 1000,  // 5 minutes
+      disableTools: true,        // Pure analytical task — no tool access needed
+      timeoutMs: 8 * 60 * 1000, // 8 min — revision prompt is ~55K chars
       label: `Arc revision ${revisionCount}`
     });
 
@@ -1152,12 +1155,37 @@ async function reviseArcs(state, config) {
     };
 
   } catch (error) {
-    console.error('[reviseArcs] Error:', error.message);
+    const isTimeout = error.message?.includes('timeout') && error.message?.includes('limit');
 
+    // Graceful timeout recovery: preserve previous arcs, don't consume revision slot
+    // Cap consecutive timeouts to prevent infinite retry loops with degraded SDK
+    const consecutiveTimeouts = (state._arcAnalysisCache?._consecutiveTimeouts || 0) + 1;
+    if (isTimeout && previousArcs?.length > 0 && consecutiveTimeouts < 3) {
+      console.warn(`[reviseArcs] Timeout ${consecutiveTimeouts}/2 - preserving ${previousArcs.length} previous arcs (free retry)`);
+      return {
+        narrativeArcs: previousArcs,
+        _previousArcs: null,
+        _arcFeedback: state._arcFeedback,  // Preserve for retry — don't lose human intent
+        _arcAnalysisCache: {
+          synthesizedAt: new Date().toISOString(),
+          _revisionTimedOut: true,
+          _revisionAttempt: revisionCount,
+          _consecutiveTimeouts: consecutiveTimeouts,
+          architecture: 'player-focus-guided-revision-timeout'
+        },
+        // Decrement counters — timeout is a free retry
+        arcRevisionCount: Math.max(0, (state.arcRevisionCount || 1) - 1),
+        humanArcRevisionCount: Math.max(0, (state.humanArcRevisionCount || 1) - 1),
+        currentPhase: PHASES.ARC_SYNTHESIS
+      };
+    }
+
+    // Non-timeout errors: existing behavior
+    console.error('[reviseArcs] Error:', error.message);
     return {
       narrativeArcs: [],
-      _previousArcs: null,  // Clear temporary field
-      _arcFeedback: null,   // Clear human feedback after consumption
+      _previousArcs: null,
+      _arcFeedback: null,
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         _error: error.message,
@@ -1177,16 +1205,36 @@ async function reviseArcs(state, config) {
 
 /**
  * Get system prompt for arc revision
- * Focuses on TARGETED FIXES, not regeneration
+ * Human feedback: allows conceptual arc replacement
+ * Evaluator feedback: targeted fixes only
+ *
+ * @param {boolean} hasHumanFeedback - Whether revision is driven by human rejection
+ * @returns {string} System prompt
  */
-function getArcRevisionSystemPrompt() {
+function getArcRevisionSystemPrompt(hasHumanFeedback = false) {
+  if (hasHumanFeedback) {
+    return `You are revising narrative arcs based on human reviewer feedback for "About Last Night."
+
+The human reviewer has domain expertise about the game mechanics. Their feedback takes ABSOLUTE PRIORITY.
+
+RULES:
+1. Address the human's feedback completely - this is your primary task
+2. You MAY replace entire arcs if the feedback warrants it
+3. You MAY restructure arc narratives to address conceptual issues
+4. PRESERVE arcs and arc content the feedback does not mention
+5. If the feedback corrects a game mechanic (e.g., burial attribution, evidence boundaries), apply the correction ACROSS ALL arcs, not just the one mentioned
+6. Output complete arcs with all required fields - do not return partial arcs
+7. Maintain the same JSON schema structure as the input arcs`;
+  }
+
+  // Evaluator-driven revision: targeted fixes only
   return `You are revising narrative arcs for an investigative article about "About Last Night".
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING existing arcs, not generating from scratch
 2. The previous output is provided - PRESERVE everything that's working well
 3. Only modify the specific issues identified in the feedback
-4. If a criterion is scoring ≥80%, do NOT change anything related to it
+4. If a criterion is scoring >=80%, do NOT change anything related to it
 5. Maintain the same overall arc structure and organization
 6. Output complete arcs with all required fields
 
@@ -1294,7 +1342,7 @@ function extractEvidenceSummary(evidenceBundle) {
 
   // Get ALL buried transactions with IDs
   const buriedTransactions = (buried.transactions || []).map(t => ({
-    id: t.id,
+    // id intentionally omitted — prevents identity inference from token IDs
     shellAccount: t.shellAccount,
     amount: t.amount,
     time: t.time,

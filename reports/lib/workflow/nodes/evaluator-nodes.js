@@ -608,14 +608,11 @@ function buildEvaluationUserPrompt(phase, state) {
       const buriedTx = Array.isArray(buriedData.transactions) ? buriedData.transactions : [];
       const buriedRel = Array.isArray(buriedData.relationships) ? buriedData.relationships : [];
       const buriedEvidence = [...buriedTx, ...buriedRel]
-        .map(e => ({
-          id: e.id || e.tokenId || e.name,
-          title: e.title || e.name || e.tokenId,
-          // Include amounts for financial claim verification
-          ...(e.amount && { amount: e.amount }),
-          ...(e.from && { from: e.from }),
-          ...(e.to && { to: e.to }),
-          ...(e.accountName && { accountName: e.accountName })
+        .map((e, index) => ({
+          id: `buried-${index + 1}`,  // Synthetic ID — real token IDs stripped to prevent identity leak
+          amount: e.amount || e.transactionAmount,
+          accountName: e.shellAccount || e.accountName || 'Unknown',
+          time: e.time || e.sessionTransactionTime
         }));
 
       // Extract key playerFocus elements for evaluation
@@ -872,11 +869,13 @@ function createEvaluator(phase, options = {}) {
       };
     }
 
-    // Skip logic 2: If this phase was already evaluated with ready=true, skip
+    // Skip logic 2: Check MOST RECENT evaluation for this phase
+    // (not first ready=true — that persists across revisions and blocks re-evaluation)
     const existingEvals = state.evaluationHistory || [];
-    const phaseEval = existingEvals.find(e => e.phase === phase && e.ready === true);
-    if (phaseEval) {
-      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - already evaluated with ready=true`);
+    const phaseEvals = existingEvals.filter(e => e.phase === phase);
+    const mostRecent = phaseEvals[phaseEvals.length - 1];
+    if (mostRecent?.ready === true) {
+      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - most recent ${phase} evaluation is ready=true`);
       return {
         currentPhase: phaseConstant
       };

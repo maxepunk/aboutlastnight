@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 54 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 55 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -299,6 +299,7 @@ describe('ReportStateAnnotation', () => {
         'voiceRevisionCount',  // @deprecated
         // Revision counters (Commit 8.6)
         'arcRevisionCount',
+        'humanArcRevisionCount',
         'outlineRevisionCount',
         'articleRevisionCount',
         // Error handling
@@ -613,8 +614,12 @@ describe('ReportStateAnnotation', () => {
       expect(REVISION_CAPS.ARTICLE).toBe(3);
     });
 
-    it('defines exactly 3 revision caps', () => {
-      expect(Object.keys(REVISION_CAPS)).toHaveLength(3);
+    it('defines HUMAN_ARCS cap as 4 (domain knowledge iterations are valuable)', () => {
+      expect(REVISION_CAPS.HUMAN_ARCS).toBe(4);
+    });
+
+    it('defines exactly 4 revision caps', () => {
+      expect(Object.keys(REVISION_CAPS)).toHaveLength(4);
     });
 
     it('all revision cap values are positive integers', () => {
