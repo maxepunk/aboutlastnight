@@ -462,7 +462,7 @@ async function generateCoreArcs(state, config) {
       systemPrompt: CORE_ARC_SYSTEM_PROMPT,
       model: 'sonnet',
       jsonSchema: CORE_ARC_SCHEMA,
-      timeoutMs: 8 * 60 * 1000,  // 8 minutes — 31K+ char prompts with structured output need headroom for schema retries
+      timeoutMs: 10 * 60 * 1000, // 10 minutes — 31K+ char prompts need headroom for schema validation retries (observed: 170s generation + 130s retry)
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
       label: 'Core arc generation (Call 1)'
     });
