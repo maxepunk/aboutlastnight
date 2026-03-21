@@ -142,8 +142,13 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
       maxRevisions: maxRevisions,
       previousFeedback: previousFeedback,
       humanRevisionCount: (data && data.humanRevisionCount) || 0,
-      maxHumanRevisions: (data && data.maxHumanRevisions) || 4
+      maxHumanRevisions: (data && data.maxHumanRevisions) || 0
     }),
+
+    // Timeout recovery banner — user should know these are preserved arcs, not fresh output
+    (data && data._revisionTimedOut) && React.createElement('div', { className: 'revision-diff__warning', style: { background: 'rgba(212, 168, 83, 0.12)', borderColor: 'rgba(212, 168, 83, 0.4)', color: 'var(--accent-amber)' } },
+      'Revision timed out. These are the arcs from before your feedback was applied. You can approve them as-is, reject with the same feedback to retry, or roll back.'
+    ),
 
     // Hint text
     React.createElement('p', { className: 'text-sm text-muted' },

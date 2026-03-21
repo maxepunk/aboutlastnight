@@ -78,9 +78,10 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
   }
 
   // Show whichever revision type is active
-  const isHumanRevision = humanRevisionCount > 0;
+  // Only treat as human revision when both count AND max are explicitly provided
+  const isHumanRevision = humanRevisionCount > 0 && maxHumanRevisions > 0;
   const displayCount = isHumanRevision ? humanRevisionCount : revisionCount;
-  const displayMax = isHumanRevision ? (maxHumanRevisions || 4) : maxRevisions;
+  const displayMax = isHumanRevision ? maxHumanRevisions : maxRevisions;
   const budgetRemaining = displayMax - displayCount;
   const budgetColor = budgetRemaining > 1 ? 'var(--accent-green)' :
                       budgetRemaining === 1 ? 'var(--accent-amber)' :
