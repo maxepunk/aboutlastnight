@@ -439,7 +439,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme }) 
       current: outline,
       revisionCount: revisionCount,
       maxRevisions: maxRevisions,
-      previousFeedback: previousFeedback
+      previousFeedback: previousFeedback,
+      humanRevisionCount: 0,
+      maxHumanRevisions: 0
     }),
 
     // Evaluation bar

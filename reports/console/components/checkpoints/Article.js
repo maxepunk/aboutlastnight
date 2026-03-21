@@ -1206,7 +1206,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       current: contentBundle,
       revisionCount: revisionCount,
       maxRevisions: maxRevisions,
-      previousFeedback: previousFeedback
+      previousFeedback: previousFeedback,
+      humanRevisionCount: 0,
+      maxHumanRevisions: 0
     }),
 
     // Evaluation bar
