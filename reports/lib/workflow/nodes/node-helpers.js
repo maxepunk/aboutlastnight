@@ -441,6 +441,7 @@ function routeTokensByDisposition(tokens) {
         content: extractFullContent(t),
         characterRefs: t.characterRefs ?? [],
         narrativeTimeline: t.narrativeTimelineContext,
+        temporalContext: 'PARTY',
         tags: t.tags ?? [],
         // Preserve raw data for downstream use
         rawData: t.rawData
@@ -452,7 +453,8 @@ function routeTokensByDisposition(tokens) {
         sourceType: 'memory-token',
         shellAccount: t.shellAccount,
         amount: t.transactionAmount,
-        time: t.sessionTransactionTime
+        time: t.sessionTransactionTime,
+        temporalContext: 'INVESTIGATION'
       });
     }
     // All tokens are now either 'exposed' or 'buried' — no unknown disposition

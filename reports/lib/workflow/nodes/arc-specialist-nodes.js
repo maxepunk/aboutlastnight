@@ -1358,7 +1358,7 @@ function extractEvidenceSummary(evidenceBundle) {
     owner: t.owner || t.ownerLogline,
     summary: t.summary,
     characterRefs: t.characterRefs || [],
-    timeline: 'party-night'
+    timeline: t.temporalContext || 'party-night'
   }));
 
   // Get ALL exposed paper evidence with IDs
@@ -1367,7 +1367,7 @@ function extractEvidenceSummary(evidenceBundle) {
     name: p.name,
     summary: p.summary || p.description?.substring(0, 200),
     characterRefs: p.characterRefs || [],
-    timeline: 'party-context'
+    timeline: p.temporalContext || 'party-context'
   }));
 
   // Get ALL buried transactions with IDs
@@ -1376,7 +1376,7 @@ function extractEvidenceSummary(evidenceBundle) {
     shellAccount: t.shellAccount,
     amount: t.amount,
     time: t.time,
-    timeline: 'investigation'
+    timeline: t.temporalContext || 'investigation'
   }));
 
   return {

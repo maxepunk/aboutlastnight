@@ -46,7 +46,8 @@ describe('buried transaction ID stripping', () => {
       sourceType: 'memory-token',
       shellAccount: 'Meridian',
       amount: '$50,000',
-      time: '7:00 PM'
+      time: '7:00 PM',
+      temporalContext: 'INVESTIGATION'
     });
   });
 
