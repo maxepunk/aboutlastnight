@@ -762,6 +762,16 @@ This image is the HERO IMAGE at the top of the article.
 - Inline photos must use DIFFERENT photos from the session
 
 EVIDENCE BUNDLE (quote ONLY from exposed evidence):
+
+TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
+- "PARTY" = RECOVERED MEMORY from the night of the party. You watched this play back on a screen.
+  USE: "The memory shows..." / "Recovered footage from [time] captures..." / "A memory from [time] reveals..."
+  NEVER: "I watched [character] do X" for party events. You were NOT at the party.
+- "INVESTIGATION" = Something you DIRECTLY OBSERVED or that occurred during this morning's investigation.
+  USE: "I watched..." / "I saw..." / "This morning..."
+- "BACKGROUND" = Document or evidence that predates the party.
+  USE: "Records show..." / "Documents reveal..."
+
 ${JSON.stringify(evidenceBundle, null, 2)}
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
