@@ -243,13 +243,23 @@ Return JSON with the following structure:
     const nonZero = shellAccounts.filter(a => a.total > 0);
     if (nonZero.length === 0) return '';
 
+    const total = shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0);
+
     return `
 <FINANCIAL_SUMMARY>
+HOW THE BLACK MARKET WORKS:
+Blake's network collects memories and buries them — removing them from the public record.
+In exchange, account holders are PAID for surrendering their memories.
+Shell account totals represent how much each account holder RECEIVED for burying secrets.
+The total ($${total.toLocaleString('en-US')}) is the combined VALUE of secrets Blake acquired.
+Blake now possesses all buried memories and the leverage they contain.
+Nova CANNOT know whose specific memories went to which accounts — only the account names, amounts, and timing.
+
 AUTHORITATIVE SHELL ACCOUNT DATA (use these exact figures in financialTracker):
 ${nonZero.map(a =>
   `- ${a.name}: $${a.total.toLocaleString('en-US')} (${a.tokenCount} token${a.tokenCount !== 1 ? 's' : ''})`
 ).join('\n')}
-Total buried: $${shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0).toLocaleString('en-US')}
+Total buried: $${total.toLocaleString('en-US')}
 
 These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use exact values.
 </FINANCIAL_SUMMARY>`;
