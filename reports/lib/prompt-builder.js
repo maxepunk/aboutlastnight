@@ -18,6 +18,7 @@ const { getThemeConfig } = require('./theme-config');
  *
  * @param {string} theme - Theme name (e.g., 'journalist')
  * @param {Object|null} canonicalCharacters - Optional override map from Notion data
+ * @param {Object|null} characterData - Optional character metadata (groups, roles, relationships) from extractCharacterData node
  * @returns {string} Formatted roster section for prompts
  */
 function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null) {
@@ -42,11 +43,10 @@ ${lines}`;
       if (data.role) parts.push(`Role: ${data.role}`);
       if (data.groups?.length) parts.push(`Member of: ${data.groups.join(', ')}`);
       if (data.relationships && Object.keys(data.relationships).length > 0) {
-        const rels = Object.entries(data.relationships)
-          .slice(0, 4)
-          .map(([k, v]) => `${k} (${v})`)
-          .join(', ');
-        parts.push(`Relationships: ${rels}`);
+        const allRels = Object.entries(data.relationships);
+        const shown = allRels.slice(0, 4).map(([k, v]) => `${k} (${v})`).join(', ');
+        const overflow = allRels.length > 4 ? ` (+${allRels.length - 4} more)` : '';
+        parts.push(`Relationships: ${shown}${overflow}`);
       }
       if (parts.length > 0) {
         result += `\n- ${name}: ${parts.join(' | ')}`;
