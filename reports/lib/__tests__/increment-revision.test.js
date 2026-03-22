@@ -1,5 +1,5 @@
 const { _testing } = require('../workflow/graph');
-const { incrementArcRevision, incrementOutlineRevision, incrementArticleRevision, routeAfterArcCheckpoint, routeArcValidation } = _testing;
+const { incrementArcRevision, incrementOutlineRevision, incrementArticleRevision, routeAfterArcCheckpoint, routeArcValidation, routeArcEvaluation } = _testing;
 
 describe('incrementArcRevision', () => {
   test('adds evaluation invalidation entry with source', async () => {
@@ -157,5 +157,42 @@ describe('routeArcValidation', () => {
 
   test('evaluates when no validation data', () => {
     expect(routeArcValidation({ _arcValidation: null })).toBe('evaluate');
+  });
+});
+
+describe('routeArcEvaluation - futile revision guard', () => {
+  test('routes to checkpoint (not revise) when 0 arcs and no previous arcs', () => {
+    expect(routeArcEvaluation({
+      narrativeArcs: [],
+      _previousArcs: null,
+      evaluationHistory: [{ phase: 'arcs', ready: false }],
+      arcRevisionCount: 0
+    })).toBe('checkpoint');
+  });
+
+  test('routes to revise when 0 current arcs but previous arcs exist', () => {
+    expect(routeArcEvaluation({
+      narrativeArcs: [],
+      _previousArcs: [{ id: 'a1' }],
+      evaluationHistory: [{ phase: 'arcs', ready: false }],
+      arcRevisionCount: 0
+    })).toBe('revise');
+  });
+
+  test('routes to checkpoint when 0 arcs and _previousArcs is empty array', () => {
+    expect(routeArcEvaluation({
+      narrativeArcs: [],
+      _previousArcs: [],
+      evaluationHistory: [{ phase: 'arcs', ready: false }],
+      arcRevisionCount: 0
+    })).toBe('checkpoint');
+  });
+
+  test('still routes to checkpoint when evaluation ready', () => {
+    expect(routeArcEvaluation({
+      narrativeArcs: [{ id: 'a1' }],
+      evaluationHistory: [{ phase: 'arcs', ready: true }],
+      arcRevisionCount: 0
+    })).toBe('checkpoint');
   });
 });

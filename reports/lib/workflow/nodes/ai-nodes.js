@@ -326,6 +326,9 @@ async function curateEvidenceBundle(state, config) {
 
     return {
       evidenceBundle: emptyBundle,
+      memoryTokens: null,          // Prune: data now in evidenceBundle.exposed.tokens
+      paperEvidence: null,          // Prune: data now in evidenceBundle.exposed.paperEvidence
+      preprocessedEvidence: null,   // Prune: consumed to build evidenceBundle
       currentPhase: PHASES.CURATE_EVIDENCE
     };
   }
@@ -467,6 +470,9 @@ async function curateEvidenceBundle(state, config) {
   return {
     evidenceBundle,
     _excludedItemsCache,
+    memoryTokens: null,          // Prune: data now in evidenceBundle.exposed.tokens
+    paperEvidence: null,          // Prune: data now in evidenceBundle.exposed.paperEvidence
+    preprocessedEvidence: null,   // Prune: consumed to build evidenceBundle
     currentPhase: PHASES.CURATE_EVIDENCE
   };
 }

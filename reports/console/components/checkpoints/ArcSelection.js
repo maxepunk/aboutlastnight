@@ -116,9 +116,15 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
   const isValid = selectedArcs.size >= 1;
 
   if (arcs.length === 0) {
+    var isGenTimeout = data && data._generationTimedOut;
     return React.createElement('div', { className: 'flex flex-col gap-md' },
-      React.createElement('div', { className: 'revision-diff__warning' },
-        'No arcs available. This usually means revision timed out or generation failed.'
+      React.createElement('div', {
+        className: 'revision-diff__warning',
+        style: isGenTimeout ? { background: 'rgba(212, 168, 83, 0.12)', borderColor: 'rgba(212, 168, 83, 0.4)', color: 'var(--accent-amber)' } : undefined
+      },
+        isGenTimeout
+          ? 'Arc generation timed out after multiple retries. Roll back to try again, or check if the evidence bundle is unusually large.'
+          : 'No arcs available. This usually means generation failed.'
       ),
       previousFeedback && React.createElement('div', { className: 'revision-diff__feedback' },
         React.createElement('span', { className: 'revision-diff__feedback-label' }, 'Your Last Feedback'),

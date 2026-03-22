@@ -885,7 +885,11 @@ const ROLLBACK_CLEARS = {
   ],
 
   // Phase 1.8: Evidence and photos approval
+  // Note: memoryTokens, paperEvidence, preprocessedEvidence included because
+  // curateEvidenceBundle prunes these to null after consuming them.
+  // Rollback must clear them so fetch nodes re-fetch from Notion on replay.
   'evidence-and-photos': [
+    'memoryTokens', 'paperEvidence', 'preprocessedEvidence',
     'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
