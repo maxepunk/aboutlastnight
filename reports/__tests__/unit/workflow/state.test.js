@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 56 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 57 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -263,6 +263,7 @@ describe('ReportStateAnnotation', () => {
         // Preprocessed data (Commit 8.5)
         'preprocessedEvidence',
         'characterData',  // Character groups, relationships, roles (pre-curation extraction)
+        'narrativeTensions',  // Programmatic contradiction surfacing (pre-arc-analysis)
         // Photo processing (Parallel branch architecture)
         'whiteboardPhotoPath',
         'preprocessStats',
