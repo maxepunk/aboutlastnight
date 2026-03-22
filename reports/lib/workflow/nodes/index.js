@@ -26,6 +26,7 @@ const arcSpecialistNodes = require('./arc-specialist-nodes');
 const evaluatorNodes = require('./evaluator-nodes');
 // NOTE: validationNodes removed in Commit 8.23 - trust Opus evaluators instead
 const aiNodes = require('./ai-nodes');
+const characterDataNodes = require('./character-data-nodes');
 const templateNodes = require('./template-nodes');
 const nodeHelpers = require('./node-helpers');
 
@@ -52,6 +53,9 @@ module.exports = {
 
   // Preprocess nodes (from preprocess-nodes.js) - Commit 8.5
   preprocessEvidence: preprocessNodes.preprocessEvidence,
+
+  // Character data extraction (pipeline accuracy improvements)
+  extractCharacterData: characterDataNodes.extractCharacterData,
 
   // Checkpoint nodes (from checkpoint-nodes.js) - Parallel branch architecture
   checkpointPaperEvidence: checkpointNodes.checkpointPaperEvidence,
@@ -110,6 +114,7 @@ module.exports = {
     // NOTE: validation removed in Commit 8.23
     // NOTE: supervisor removed in interrupt() migration - generation-supervisor.js was deprecated
     ai: aiNodes._testing,
+    characterData: characterDataNodes._testing,
     template: templateNodes._testing,
     helpers: nodeHelpers
   },

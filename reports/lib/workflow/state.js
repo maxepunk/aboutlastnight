@@ -288,6 +288,16 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Character data extracted from paper evidence + tokens (pre-curation)
+   * Contains structured groups, relationships, and roles for roster characters.
+   * Extracted before curation so character sheet data is captured regardless of scoring.
+   */
+  characterData: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
    * Pre-curation checkpoint approval flag (Phase 4f)
    * Set to true when user approves preprocessed evidence
    */
@@ -671,6 +681,7 @@ function getDefaultState() {
     characterIdsRaw: null,  // Natural language character ID input (Commit 8.9.x)
     // Preprocessed data (Commit 8.5)
     preprocessedEvidence: null,
+    characterData: null,  // Character groups, relationships, roles (pre-curation extraction)
     // Pre-curation checkpoint (Phase 4f)
     preCurationApproved: false,
     preCurationSummary: null,
@@ -830,7 +841,7 @@ const ROLLBACK_CLEARS = {
     // Photo analysis
     'photoAnalyses', 'characterIdMappings',
     // Preprocessing and curation
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // Generation
@@ -844,7 +855,7 @@ const ROLLBACK_CLEARS = {
   'paper-evidence-selection': [
     'selectedPaperEvidence',
     'photoAnalyses', 'characterIdMappings',
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -855,7 +866,7 @@ const ROLLBACK_CLEARS = {
   'await-roster': [
     'whiteboardAnalysis',
     'characterIdMappings',
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -866,7 +877,7 @@ const ROLLBACK_CLEARS = {
   'character-ids': [
     'characterIdMappings',
     // Note: photoAnalyses preserved - only mappings need re-entry
-    'preprocessedEvidence', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -875,7 +886,7 @@ const ROLLBACK_CLEARS = {
 
   // Phase 1.75: Pre-curation checkpoint (Phase 4f)
   'pre-curation': [
-    'preCurationApproved',
+    'preCurationApproved', 'characterData',
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
@@ -889,7 +900,7 @@ const ROLLBACK_CLEARS = {
   // curateEvidenceBundle prunes these to null after consuming them.
   // Rollback must clear them so fetch nodes re-fetch from Notion on replay.
   'evidence-and-photos': [
-    'memoryTokens', 'paperEvidence', 'preprocessedEvidence',
+    'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData',
     'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',

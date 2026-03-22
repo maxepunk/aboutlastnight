@@ -25,7 +25,7 @@
  * → checkpointPaperEvidence [interrupt: paper-evidence-selection]
  * → checkpointCharacterIds [interrupt: character-ids]
  * → parseCharacterIds → finalizePhotoAnalyses
- * → preprocessEvidence → checkpointPreCuration [interrupt: pre-curation]
+ * → preprocessEvidence → extractCharacterData → checkpointPreCuration [interrupt: pre-curation]
  * → curateEvidenceBundle → checkpointEvidenceAndPhotos [interrupt: evidence-photos] → processRescuedItems
  *
  * PHASE 2: Arc Analysis (Player-Focus-Guided)
@@ -411,6 +411,9 @@ function createGraphBuilder() {
   // Evidence preprocessing (pure - no checkpoint)
   builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
 
+  // Character data extraction (pre-curation, Haiku-powered)
+  builder.addNode('extractCharacterData', nodes.extractCharacterData);
+
   // Checkpoint: Pre-curation approval
   builder.addNode('checkpointPreCuration', nodes.checkpointPreCuration);
 
@@ -555,8 +558,9 @@ function createGraphBuilder() {
   // Tag tokens → preprocess evidence (NOW tokens have correct disposition)
   builder.addEdge('tagTokenDispositions', 'preprocessEvidence');
 
-  // Preprocess evidence → pre-curation checkpoint
-  builder.addEdge('preprocessEvidence', 'checkpointPreCuration');
+  // Preprocess evidence → character data extraction → pre-curation checkpoint
+  builder.addEdge('preprocessEvidence', 'extractCharacterData');
+  builder.addEdge('extractCharacterData', 'checkpointPreCuration');
 
   // Pre-curation → evidence curation (has interrupt for evidence-photos)
   builder.addEdge('checkpointPreCuration', 'curateEvidenceBundle');
