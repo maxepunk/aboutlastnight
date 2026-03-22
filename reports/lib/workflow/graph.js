@@ -423,6 +423,9 @@ function createGraphBuilder() {
   builder.addNode('checkpointEvidenceAndPhotos', nodes.checkpointEvidenceAndPhotos);
   builder.addNode('processRescuedItems', nodes.processRescuedItems);
 
+  // Contradiction surfacing (programmatic, no LLM - pipeline accuracy improvements)
+  builder.addNode('surfaceContradictions', nodes.surfaceContradictions);
+
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
   // ═══════════════════════════════════════════════════════
@@ -568,7 +571,8 @@ function createGraphBuilder() {
   // Curation → checkpoint → rescued items → arc analysis
   builder.addEdge('curateEvidenceBundle', 'checkpointEvidenceAndPhotos');
   builder.addEdge('checkpointEvidenceAndPhotos', 'processRescuedItems');
-  builder.addEdge('processRescuedItems', 'analyzeArcs');
+  builder.addEdge('processRescuedItems', 'surfaceContradictions');
+  builder.addEdge('surfaceContradictions', 'analyzeArcs');
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)

@@ -297,6 +297,9 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => null
   }),
 
+  // Narrative tensions from programmatic cross-referencing (pre-arc-analysis)
+  narrativeTensions: Annotation({ reducer: replaceReducer, default: () => null }),
+
   /**
    * Pre-curation checkpoint approval flag (Phase 4f)
    * Set to true when user approves preprocessed evidence
@@ -682,6 +685,7 @@ function getDefaultState() {
     // Preprocessed data (Commit 8.5)
     preprocessedEvidence: null,
     characterData: null,  // Character groups, relationships, roles (pre-curation extraction)
+    narrativeTensions: null,  // Programmatic contradiction surfacing (pre-arc-analysis)
     // Pre-curation checkpoint (Phase 4f)
     preCurationApproved: false,
     preCurationSummary: null,
@@ -841,7 +845,7 @@ const ROLLBACK_CLEARS = {
     // Photo analysis
     'photoAnalyses', 'characterIdMappings',
     // Preprocessing and curation
-    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // Generation
@@ -855,7 +859,7 @@ const ROLLBACK_CLEARS = {
   'paper-evidence-selection': [
     'selectedPaperEvidence',
     'photoAnalyses', 'characterIdMappings',
-    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -866,7 +870,7 @@ const ROLLBACK_CLEARS = {
   'await-roster': [
     'whiteboardAnalysis',
     'characterIdMappings',
-    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -877,7 +881,7 @@ const ROLLBACK_CLEARS = {
   'character-ids': [
     'characterIdMappings',
     // Note: photoAnalyses preserved - only mappings need re-entry
-    'preprocessedEvidence', 'characterData', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -886,7 +890,7 @@ const ROLLBACK_CLEARS = {
 
   // Phase 1.75: Pre-curation checkpoint (Phase 4f)
   'pre-curation': [
-    'preCurationApproved', 'characterData',
+    'preCurationApproved', 'characterData', 'narrativeTensions',
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
@@ -900,7 +904,7 @@ const ROLLBACK_CLEARS = {
   // curateEvidenceBundle prunes these to null after consuming them.
   // Rollback must clear them so fetch nodes re-fetch from Notion on replay.
   'evidence-and-photos': [
-    'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData',
+    'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData', 'narrativeTensions',
     'evidenceBundle', '_evidenceApproved',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
@@ -910,6 +914,7 @@ const ROLLBACK_CLEARS = {
 
   // Phase 2.3: Arc selection - most common rollback point
   'arc-selection': [
+    'narrativeTensions',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback',

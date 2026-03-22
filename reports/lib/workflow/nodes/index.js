@@ -27,6 +27,7 @@ const evaluatorNodes = require('./evaluator-nodes');
 // NOTE: validationNodes removed in Commit 8.23 - trust Opus evaluators instead
 const aiNodes = require('./ai-nodes');
 const characterDataNodes = require('./character-data-nodes');
+const contradictionNodes = require('./contradiction-nodes');
 const templateNodes = require('./template-nodes');
 const nodeHelpers = require('./node-helpers');
 
@@ -56,6 +57,9 @@ module.exports = {
 
   // Character data extraction (pipeline accuracy improvements)
   extractCharacterData: characterDataNodes.extractCharacterData,
+
+  // Contradiction surfacing (pipeline accuracy improvements)
+  surfaceContradictions: contradictionNodes.surfaceContradictions,
 
   // Checkpoint nodes (from checkpoint-nodes.js) - Parallel branch architecture
   checkpointPaperEvidence: checkpointNodes.checkpointPaperEvidence,
@@ -115,6 +119,7 @@ module.exports = {
     // NOTE: supervisor removed in interrupt() migration - generation-supervisor.js was deprecated
     ai: aiNodes._testing,
     characterData: characterDataNodes._testing,
+    contradictions: contradictionNodes._testing,
     template: templateNodes._testing,
     helpers: nodeHelpers
   },
