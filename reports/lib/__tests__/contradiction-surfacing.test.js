@@ -88,4 +88,10 @@ describe('surfaceContradictions', () => {
     expect(blakeProx.length).toBe(1);
     expect(blakeProx[0].observations[0]).toContain('Blake');
   });
+
+  test('handles missing state fields gracefully', () => {
+    const state = { narrativeTensions: null };
+    const result = surfaceContradictions(state);
+    expect(result.narrativeTensions.tensions).toEqual([]);
+  });
 });

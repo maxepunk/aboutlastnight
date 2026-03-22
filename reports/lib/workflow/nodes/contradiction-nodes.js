@@ -36,11 +36,12 @@ function surfaceContradictions(state) {
     const rosterName = roster.find(r => r.toLowerCase() === account.name.toLowerCase());
 
     // Check for transparency contradiction: director noted public behavior + burial
-    const transparencyNotes = behaviorPatterns.filter(p =>
-      p.toLowerCase().includes(rosterName.toLowerCase()) &&
-      (p.includes('submit') || p.includes('expos') || p.includes('public') ||
-       p.includes('nothing to hide') || p.includes('boldly') || p.includes('transparent'))
-    );
+    const transparencyNotes = behaviorPatterns.filter(p => {
+      const pLower = p.toLowerCase();
+      return pLower.includes(rosterName.toLowerCase()) &&
+        (pLower.includes('submit') || pLower.includes('expos') || pLower.includes('public') ||
+         pLower.includes('nothing to hide') || pLower.includes('boldly') || pLower.includes('transparent'));
+    });
 
     if (transparencyNotes.length > 0) {
       tensions.push({
@@ -68,6 +69,7 @@ function surfaceContradictions(state) {
   if (blakeProximity.length > 0) {
     tensions.push({
       type: 'blake-proximity',
+      character: null, // No single character — pattern-level observation
       observations: blakeProximity,
       narrativeNote: 'Director observed multiple characters interacting with Blake. Nova can note these patterns without knowing transaction details.'
     });
