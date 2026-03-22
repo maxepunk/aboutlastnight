@@ -758,6 +758,7 @@ async function finalizeInput(state, config) {
       directorNotes: editedInput.directorNotes || state.directorNotes,
       playerFocus: editedInput.playerFocus || state.playerFocus,
       shellAccounts: editedInput.orchestratorParsed?.shellAccounts || state.shellAccounts,
+      rawSessionInput: null,  // Prune: parsed into sessionConfig/directorNotes/playerFocus
       currentPhase: PHASES.LOAD_DIRECTOR_NOTES
     };
   }
@@ -766,6 +767,7 @@ async function finalizeInput(state, config) {
   console.log('[finalizeInput] Input approved, proceeding to workflow');
 
   return {
+    rawSessionInput: null,  // Prune: parsed into sessionConfig/directorNotes/playerFocus
     currentPhase: PHASES.LOAD_DIRECTOR_NOTES
   };
 }

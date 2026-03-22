@@ -67,11 +67,21 @@ describe('workflow integration', () => {
         })).toBe('checkpoint');
       });
 
-      it('returns "revise" when not ready and under cap', () => {
+      it('returns "revise" when not ready, under cap, and arcs exist', () => {
         expect(routeArcEvaluation({
+          narrativeArcs: [{ id: 'a1' }],
           evaluationHistory: [{ phase: 'arcs', ready: false }],
           arcRevisionCount: 0
         })).toBe('revise');
+      });
+
+      it('returns "checkpoint" when 0 arcs and no previous arcs (futile revision guard)', () => {
+        expect(routeArcEvaluation({
+          narrativeArcs: [],
+          _previousArcs: null,
+          evaluationHistory: [{ phase: 'arcs', ready: false }],
+          arcRevisionCount: 0
+        })).toBe('checkpoint');
       });
 
       it('returns "error" when in error phase', () => {

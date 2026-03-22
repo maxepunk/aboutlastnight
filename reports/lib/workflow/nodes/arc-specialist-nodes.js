@@ -957,18 +957,43 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
 
   try {
     // ═══════════════════════════════════════════════════════════════════════
-    // CALL 1: Core Arc Generation (3 min timeout)
+    // CALL 1: Core Arc Generation with retry-at-source
+    // Up to 3 attempts on timeout (transient SDK/schema validation failures)
+    // Non-timeout errors fail immediately. generateCoreArcs stays single-attempt.
     // ═══════════════════════════════════════════════════════════════════════
-    const call1Start = Date.now();
-    const coreResult = await generateCoreArcs(state, config);
-    const call1Duration = ((Date.now() - call1Start) / 1000).toFixed(1);
+    const MAX_GENERATION_ATTEMPTS = 3;
+    let coreResult = null;
+    let retryCount = 0;
+    let call1Duration = '0';
 
-    // Validate we got arcs
-    if (!coreResult || !coreResult.narrativeArcs || coreResult.narrativeArcs.length === 0) {
-      throw new Error('Call 1 returned no arcs');
+    for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
+      try {
+        const call1Start = Date.now();
+        coreResult = await generateCoreArcs(state, config);
+        call1Duration = ((Date.now() - call1Start) / 1000).toFixed(1);
+
+        // Validate we got arcs
+        if (!coreResult || !coreResult.narrativeArcs || coreResult.narrativeArcs.length === 0) {
+          throw new Error('Call 1 returned no arcs');
+        }
+
+        console.log(`[analyzeArcsPlayerFocusGuided] Call 1 complete: ${coreResult.narrativeArcs.length} arcs in ${call1Duration}s${retryCount > 0 ? ` (after ${retryCount} retries)` : ''}`);
+        break; // Success — exit retry loop
+
+      } catch (attemptError) {
+        const isTimeout = attemptError.message?.includes('timeout') && attemptError.message?.includes('limit');
+
+        if (!isTimeout || attempt === MAX_GENERATION_ATTEMPTS) {
+          // Non-timeout error OR final attempt exhausted: propagate to outer catch
+          throw attemptError;
+        }
+
+        // Timeout on non-final attempt: retry
+        retryCount++;
+        console.warn(`[analyzeArcsPlayerFocusGuided] Call 1 timeout on attempt ${attempt}/${MAX_GENERATION_ATTEMPTS}: ${attemptError.message}`);
+        console.log(`[analyzeArcsPlayerFocusGuided] Retrying (attempt ${attempt + 1}/${MAX_GENERATION_ATTEMPTS})...`);
+      }
     }
-
-    console.log(`[analyzeArcsPlayerFocusGuided] Call 1 complete: ${coreResult.narrativeArcs.length} arcs in ${call1Duration}s`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // CALL 2: Interweaving Enrichment (2 min timeout, graceful degradation)
@@ -1020,7 +1045,8 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         timing: {
           call1: `${call1Duration}s`,
           call2: `${call2Duration}s`,
-          total: `${totalDuration}s`
+          total: `${totalDuration}s`,
+          retries: retryCount
         }
       },
       currentPhase: PHASES.ARC_SYNTHESIS,

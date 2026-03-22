@@ -87,6 +87,15 @@ function routeArcEvaluation(state) {
     return 'error';
   }
 
+  // Futile revision guard: 0 arcs with no previous arcs = generation failed entirely
+  // Revision is pointless — escalate to checkpoint for human rollback
+  const hasNoArcs = !state.narrativeArcs || state.narrativeArcs.length === 0;
+  const hasNoPreviousArcs = !state._previousArcs || state._previousArcs.length === 0;
+  if (hasNoArcs && hasNoPreviousArcs) {
+    console.log('[routeArcEvaluation] 0 arcs with no previous arcs — escalating to checkpoint');
+    return 'checkpoint';
+  }
+
   // Check most recent arcs evaluation (phase-filtered, consistent with evaluator skip logic)
   const evalHistory = state.evaluationHistory || [];
   const phaseEvals = evalHistory.filter(e => e.phase === 'arcs');
