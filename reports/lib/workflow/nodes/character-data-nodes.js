@@ -8,7 +8,6 @@
  * Uses Haiku for fast extraction — this is a factual parsing task, not creative.
  */
 
-const { PHASES } = require('../state');
 const { getSdkClient } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 
@@ -35,7 +34,8 @@ const CHARACTER_EXTRACTION_SCHEMA = {
             type: 'string',
             description: 'Professional or social role (e.g., "Attorney", "Bartender", "Investor")'
           }
-        }
+        },
+        required: ['groups', 'relationships', 'role']
       }
     }
   },
@@ -61,9 +61,11 @@ async function extractCharacterData(state, config) {
   const sdk = getSdkClient(config, 'extractCharacterData');
 
   // Build context from ALL paper evidence (not just curated)
+  // Generous limit — character sheets and emails contain relationship data
+  // that's the whole reason this node exists. Haiku handles the volume easily.
   const paperContext = paperEvidence
     .filter(p => p.description && p.description.length > 20)
-    .map(p => `[${p.name}] ${p.description.substring(0, 500)}`)
+    .map(p => `[${p.name}] ${p.description.substring(0, 1500)}`)
     .join('\n\n');
 
   // Build context from exposed tokens (first 200 chars each)
@@ -75,8 +77,12 @@ async function extractCharacterData(state, config) {
   const prompt = `Extract character relationship data from these documents and memories.
 
 ROSTER (characters in this session): ${roster.join(', ')}
-Marcus Blackwood is the deceased victim (NPC, not on roster).
-Blake/Valet is the Black Market operator (NPC, not on roster).
+
+NPCs (not on roster, do NOT create top-level entries for these):
+- Marcus Blackwood: the deceased victim, founder of NeurAI
+- Blake/Valet: the Black Market operator
+- Nova: the journalist narrator
+NPCs may appear as relationship targets (e.g., "Marcus": "old friend") but should not have their own character entries.
 
 PAPER EVIDENCE:
 ${paperContext}
@@ -84,8 +90,8 @@ ${paperContext}
 EXPOSED MEMORY CONTENT:
 ${tokenContext}
 
-For each roster character mentioned, extract:
-1. Named groups they belong to (e.g., "Stanford Four" — include ALL members)
+For each ROSTER character mentioned in the evidence, extract:
+1. Named groups they belong to (e.g., "Stanford Four" — include ALL members of the group)
 2. Key relationships with other characters (role-based: "attorney for", "mentor to", "friend of")
 3. Their professional/social role
 
@@ -105,6 +111,7 @@ Only include data explicitly stated or strongly implied by the evidence. Do not 
     const charCount = Object.keys(result.characters || {}).length;
     console.log(`[extractCharacterData] Extracted data for ${charCount} characters`);
 
+    // Wrap SDK result with metadata (source/extractedAt are node-level, not schema fields)
     return {
       characterData: {
         characters: result.characters || {},
