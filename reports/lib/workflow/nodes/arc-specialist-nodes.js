@@ -1367,7 +1367,7 @@ function extractEvidenceSummary(evidenceBundle) {
     name: p.name,
     summary: p.summary || p.description?.substring(0, 200),
     characterRefs: p.characterRefs || [],
-    timeline: p.temporalContext || 'party-context'
+    timeline: p.temporalContext || 'BACKGROUND'
   }));
 
   // Get ALL buried transactions with IDs
