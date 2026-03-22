@@ -30,6 +30,18 @@ const MODEL_TIMEOUTS = {
 };
 
 /**
+ * Resolve shorthand model names to explicit model IDs.
+ * The Agent SDK's shorthand resolution lags behind latest releases
+ * (e.g., 'sonnet' resolves to 4.5 instead of 4.6). Using explicit IDs
+ * guarantees we run on the intended model version.
+ */
+const MODEL_IDS = {
+  opus: 'claude-opus-4-6',
+  sonnet: 'claude-sonnet-4-6',
+  haiku: 'claude-haiku-4-5'
+};
+
+/**
  * SDK wrapper for LangGraph nodes with timeout and progress streaming
  *
  * @param {Object} options - Query options
@@ -60,6 +72,7 @@ async function sdkQueryImpl({
   label,
   disableTools = false
 }) {
+  const resolvedModel = MODEL_IDS[model] || model;
   const effectiveTimeout = timeoutMs || MODEL_TIMEOUTS[model] || MODEL_TIMEOUTS.sonnet;
   const abortController = new AbortController();
   const startTime = Date.now();
@@ -71,7 +84,7 @@ async function sdkQueryImpl({
   }, effectiveTimeout);
 
   const options = {
-    model,
+    model: resolvedModel,
     systemPrompt,
     allowedTools,
     permissionMode: 'bypassPermissions',
@@ -79,8 +92,7 @@ async function sdkQueryImpl({
   };
 
   // Enable 1M context window for Opus and Sonnet (beta)
-  // Haiku doesn't support 1M; beta header is a no-op on unsupported models
-  // but we skip it explicitly to avoid unexpected behavior
+  // Haiku doesn't support 1M
   if (model !== 'haiku') {
     options.betas = ['context-1m-2025-08-07'];
   }
