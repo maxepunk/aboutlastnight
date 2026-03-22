@@ -233,6 +233,22 @@ ${nonRosterPCs.length > 0 ? `- These are valid game characters not playing this 
 - Roles must be evidence-based: "Mentioned in X's memory"
 - Add caveats when using: "Based on memory evidence only"` : ''}
 
+${state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
+### Character Context (extracted from paper evidence — use for accuracy)
+${Object.entries(state.characterData.characters).map(([name, data]) => {
+  const parts = [];
+  if (data.groups?.length) parts.push(`Member of: ${data.groups.join(', ')}`);
+  if (data.role) parts.push(`Role: ${data.role}`);
+  if (data.relationships) {
+    const rels = Object.entries(data.relationships).slice(0, 4).map(([k, v]) => `${k} (${v})`).join(', ');
+    if (rels) parts.push(`Relationships: ${rels}`);
+  }
+  return parts.length > 0 ? `- ${name}: ${parts.join(' | ')}` : null;
+}).filter(Boolean).join('\n')}
+
+IMPORTANT: Use these group memberships as ground truth. Do NOT infer different group compositions from memory content.
+` : ''}
+
 ---
 
 ## SECTION 2: ARC GENERATION RULES
