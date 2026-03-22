@@ -641,7 +641,7 @@ Return JSON with the following structure:
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null) {
+  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null) {
     const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -815,6 +815,13 @@ notable moments, patterns you noticed.
 
 ${JSON.stringify(directorNotes.observations, null, 2)}
 </INVESTIGATION_OBSERVATIONS>` : ''}
+${(narrativeTensions?.tensions?.length > 0) ? `
+<NARRATIVE_TENSIONS>
+These contradictions between public behavior and Black Market activity are verified
+to respect evidence boundaries. They are strong narrative opportunities — weave them
+into the narrative where appropriate:
+${narrativeTensions.tensions.map(t => `- [${t.type}] ${t.narrativeNote}`).join('\n')}
+</NARRATIVE_TENSIONS>` : ''}
 </DATA_CONTEXT>
 <TEMPLATE>
 ${template}

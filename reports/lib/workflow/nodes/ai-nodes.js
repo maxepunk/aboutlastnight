@@ -1181,7 +1181,8 @@ async function generateContentBundle(state, config) {
     state.heroImage,  // Hero image filename (prevents duplicate in photos array)
     shellAccounts,  // Deterministic shell account data for financial summary
     sessionFacts,  // RC3: non-roster character guardrail
-    state.directorNotes || null  // RC5: director observations for article grounding
+    state.directorNotes || null,  // RC5: director observations for article grounding
+    state.narrativeTensions || null  // Task F: programmatic contradictions for narrative weaving
   );
 
   // Get JSON schema for structured output

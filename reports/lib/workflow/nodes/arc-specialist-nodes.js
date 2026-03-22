@@ -337,7 +337,16 @@ THE PARTY and THE INVESTIGATION are TWO DIFFERENT TIMELINES. Your arc summaries 
 **RIGHT:** "Sarah exposed three memories during the investigation, all depicting lab events from the night of the party."
 
 ---
+${state.narrativeTensions?.tensions?.length > 0 ? `
+## SECTION 4.6: NARRATIVE TENSIONS (programmatic cross-references — evidence-boundary compliant)
 
+These contradictions were identified by comparing public behavior with Black Market activity.
+They are strong narrative opportunities. Each has been verified to respect evidence boundaries.
+
+${state.narrativeTensions.tensions.map(t => `- [${t.type}] ${t.narrativeNote}`).join('\n')}
+
+---
+` : ''}
 ## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
 
 For each arc, analyze through all three lenses and document in analysisNotes:
