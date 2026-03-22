@@ -63,7 +63,7 @@ describe('extractEvidenceSummary temporal tags', () => {
     };
     const result = extractEvidenceSummary(bundle);
     expect(result.exposedTokens[0].timeline).toBe('party-night');
-    expect(result.exposedPaper[0].timeline).toBe('party-context');
+    expect(result.exposedPaper[0].timeline).toBe('BACKGROUND');
     expect(result.buriedTransactions[0].timeline).toBe('investigation');
   });
 });

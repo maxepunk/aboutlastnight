@@ -416,7 +416,8 @@ async function curateEvidenceBundle(state, config) {
         ...(p.rawData || p),  // Raw fields (name, description, notionId, owners)
         id: p.id,
         fullContent: extractFullContent(p),  // Use helper for fallback chain
-        sourceType: 'paper-evidence'
+        sourceType: 'paper-evidence',
+        temporalContext: 'BACKGROUND'
       }))
     },
     buried: {
@@ -583,6 +584,7 @@ async function processRescuedItems(state, config) {
         score: rescueItem.score,
         note: rescueItem.note,
         sourceType: 'paper-evidence',
+        temporalContext: 'BACKGROUND',
         rescuedByHuman: true,
         _incomplete: true
       });
