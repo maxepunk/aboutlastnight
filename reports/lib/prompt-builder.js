@@ -20,7 +20,7 @@ const { getThemeConfig } = require('./theme-config');
  * @param {Object|null} canonicalCharacters - Optional override map from Notion data
  * @returns {string} Formatted roster section for prompts
  */
-function generateRosterSection(theme = 'journalist', canonicalCharacters = null) {
+function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null) {
   const themeCharacters = getThemeConfig(theme)?.canonicalCharacters || {};
   // Merge: theme-config as base, Notion override wins on conflict
   const characters = canonicalCharacters
@@ -31,9 +31,30 @@ function generateRosterSection(theme = 'journalist', canonicalCharacters = null)
     .map(([first, full]) => `- ${first} → ${full}`)
     .join('\n');
 
-  return `CANONICAL CHARACTER ROSTER:
+  let result = `CANONICAL CHARACTER ROSTER:
 Use ONLY these full names in ALL article text. NEVER invent different last names:
 ${lines}`;
+
+  if (characterData && Object.keys(characterData).length > 0) {
+    result += '\n\nCHARACTER CONTEXT (extracted from evidence — use for factual accuracy):';
+    for (const [name, data] of Object.entries(characterData)) {
+      const parts = [];
+      if (data.role) parts.push(`Role: ${data.role}`);
+      if (data.groups?.length) parts.push(`Member of: ${data.groups.join(', ')}`);
+      if (data.relationships && Object.keys(data.relationships).length > 0) {
+        const rels = Object.entries(data.relationships)
+          .slice(0, 4)
+          .map(([k, v]) => `${k} (${v})`)
+          .join(', ');
+        parts.push(`Relationships: ${rels}`);
+      }
+      if (parts.length > 0) {
+        result += `\n- ${name}: ${parts.join(' | ')}`;
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -144,11 +165,12 @@ class PromptBuilder {
    * @param {ThemeLoader} themeLoader - Initialized ThemeLoader instance
    * @param {string} themeName - Theme name (default: 'journalist')
    */
-  constructor(themeLoader, themeName = 'journalist', sessionConfig = {}, canonicalCharacters = null) {
+  constructor(themeLoader, themeName = 'journalist', sessionConfig = {}, canonicalCharacters = null, characterData = null) {
     this.theme = themeLoader;
     this.themeName = themeName;
     this.sessionConfig = sessionConfig;
     this.canonicalCharacters = canonicalCharacters;
+    this.characterData = characterData;
   }
 
   /**
@@ -631,7 +653,7 @@ Return JSON with the following structure:
     const constraints = THEME_CONSTRAINTS[this.themeName];
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters)}
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
 
 ${constraints.hardConstraints}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
@@ -686,7 +708,7 @@ ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters)}
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
 </RULES>
 
 <SECTION_GUIDANCE>
@@ -805,7 +827,7 @@ ${labelPromptSection('arc-flow', prompts['arc-flow'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters)}
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
 
 <TEMPORAL_DISCIPLINE>
 CRITICAL: THREE TIMELINES — get them right or the article makes no sense.
@@ -1224,9 +1246,9 @@ function createPromptBuilder(options = null) {
     return new PromptBuilder(themeLoader, 'journalist');
   }
 
-  const { theme = 'journalist', customSkillPath, sessionConfig = {}, canonicalCharacters = null } = options || {};
+  const { theme = 'journalist', customSkillPath, sessionConfig = {}, canonicalCharacters = null, characterData = null } = options || {};
   const themeLoader = createThemeLoader({ theme, customPath: customSkillPath });
-  return new PromptBuilder(themeLoader, theme, sessionConfig, canonicalCharacters);
+  return new PromptBuilder(themeLoader, theme, sessionConfig, canonicalCharacters, characterData);
 }
 
 module.exports = {

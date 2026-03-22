@@ -57,7 +57,8 @@ function getPromptBuilder(config, state) {
   const theme = state?.theme || 'journalist';
   const sessionConfig = state?.sessionConfig || {};
   const canonicalCharacters = state?.canonicalCharacters || null;
-  return createPromptBuilder({ theme, sessionConfig, canonicalCharacters });
+  const characterData = state?.characterData?.characters || null;
+  return createPromptBuilder({ theme, sessionConfig, canonicalCharacters, characterData });
 }
 
 /**
