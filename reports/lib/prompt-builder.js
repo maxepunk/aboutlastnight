@@ -639,6 +639,10 @@ Return JSON with the following structure:
    * @param {string} template - HTML template content
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent (Phase 1 Fix)
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
+   * @param {Array} shellAccounts - Shell account data for financial summary
+   * @param {Object|null} sessionFacts - Session facts for non-roster character guardrail
+   * @param {Object|null} directorNotes - Director observations for article grounding
+   * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null) {
