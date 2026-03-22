@@ -78,6 +78,13 @@ async function sdkQueryImpl({
     abortController
   };
 
+  // Enable 1M context window for Opus and Sonnet (beta)
+  // Haiku doesn't support 1M; beta header is a no-op on unsupported models
+  // but we skip it explicitly to avoid unexpected behavior
+  if (model !== 'haiku') {
+    options.betas = ['context-1m-2025-08-07'];
+  }
+
   // Set working directory for file operations
   if (workingDirectory) {
     options.workingDirectory = workingDirectory;
@@ -123,6 +130,14 @@ async function sdkQueryImpl({
     for await (const msg of query({ prompt, options })) {
       messageCount++;
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      // Log context window on session init (verify 1M beta is active)
+      if (msg.type === 'system' && msg.subtype === 'init' && msg.model_usage) {
+        const ctxWindow = Object.values(msg.model_usage)?.[0]?.contextWindow;
+        if (ctxWindow) {
+          console.log(`[${progressLabel}] Context window: ${(ctxWindow / 1000).toFixed(0)}K tokens (model: ${model})`);
+        }
+      }
 
       // Stream progress for intermediate messages
       if (onProgress) {
