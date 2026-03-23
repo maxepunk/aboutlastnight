@@ -93,16 +93,13 @@ If #3 is "no," rewrite the prose.
 - Can be a single striking image or moment
 - Must hint at both the murder AND the systemic critique
 
-**Good:**
-```
-Marcus Blackwood is dead. [X] people woke up this morning
-with holes where their memories should be. Someone extracted
-those memories without permission. Someone locked them away.
-And someone made sure Marcus wouldn't be explaining why.
+**Lede Structure:**
+1. Death declaration (1 sentence)
+2. Memory theft framing — what happened to the victims (1-2 sentences)
+3. Accusation preview — who's accused and why, plus any alternative theories (1-2 sentences)
+4. Nova's presence — she was there (1 sentence)
 
-I was there when they started remembering what they'd lost.
-```
-*(Replace [X] with actual roster count from session data - NEVER copy "18" literally)*
+Generate original prose for each session. Do NOT reuse phrasing from previous articles.
 
 **Bad:**
 ```
@@ -111,12 +108,10 @@ when Marcus Blackwood, CEO of NeurAI, was found deceased
 following a party at his residence.
 ```
 
-**Variables to incorporate (from session data, NOT from examples):**
+**Variables to incorporate (from session data):**
 - Session date (in-world: always 02/22/27)
 - **Number of characters present:** Count actual roster (e.g., "Fifteen people" for 15-person roster)
 - Murder accusation outcome (if resolved)
-
-**CRITICAL:** The examples use [X] as a placeholder. Replace with ACTUAL roster count from session data.
 
 ---
 
@@ -300,17 +295,16 @@ Each shell account total includes:
 [Prose: what the numbers mean - 1-2 paragraphs]
 ```
 
-**Good (with tracker):**
+**Good structure (with tracker):**
 ```
-Three shell accounts. $27,400 buried. And every dollar traces
-back to someone in that room.
+[Prose: total buried amount, number of accounts, what that scale means — 1-2 sentences]
 
 [FINANCIAL TRACKER]
 
-Sam walked away the richest. I don't know what was in
-those three memories. Neither does Sam, anymore. But NeurAI
-knows. And they paid well to keep it that way.
+[Prose: name the top account, connect its total to a narrative thread from THE STORY — 2-3 sentences]
 ```
+
+Generate original prose from THIS session's financial data. Do NOT reuse phrasing from previous articles.
 
 **Bad (prose-only):**
 ```
