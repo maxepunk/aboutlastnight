@@ -452,7 +452,7 @@ USING ARC METADATA IN THE OUTLINE:
 </arc-metadata>
 
 <arc-interweaving>
-See <arc-flow> for complete interweaving philosophy. Key points:
+See <narrative-structure> "Arc Flow & Interweaving" section for complete philosophy. Key points:
 - Arcs are THREADS, not CHAPTERS
 - Plan callback opportunities (details planted in Arc A that pay off in Arc C)
 - All arcs must converge at a specific point in THE STORY
@@ -532,7 +532,6 @@ ${JSON.stringify(arcAnalysis, null, 2)}
 EVIDENCE BUNDLE (for evidence card selection):
 ${JSON.stringify(evidenceBundle, null, 2)}
 ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
-${labelPromptSection('arc-flow', prompts['arc-flow'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 </arc-analysis>
@@ -834,7 +833,6 @@ ${template}
 <RULES>
 ${labelPromptSection('section-rules', prompts['section-rules'])}
 ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
-${labelPromptSection('arc-flow', prompts['arc-flow'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 

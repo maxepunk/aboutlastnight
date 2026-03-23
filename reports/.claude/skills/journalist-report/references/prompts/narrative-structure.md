@@ -272,3 +272,101 @@ When writing each section, check:
 - [ ] Are photos placed for emotional pacing (breathe before escalation)?
 - [ ] Are pull quotes VERBATIM text (not summaries)?
 - [ ] Do sections end with open loops pulling into next section?
+
+---
+
+## Arc Flow & Interweaving
+
+How narrative arcs thread through the entire article. Arcs are NOT sequential chapters. They are INTERLEAVED threads that weave through every section.
+
+### Arc-Section Mapping
+
+Each arc should appear in multiple sections with different focus:
+
+| Section | Arc Role |
+|---------|----------|
+| LEDE | Primary arc establishes the hook and central tension |
+| THE STORY | All arcs interleaved, with convergence point |
+| FOLLOW THE MONEY | Financial threads from each arc continue here |
+| THE PLAYERS | Character angles advancing each arc |
+| WHAT'S MISSING | Gaps/questions raised by each arc create tension |
+| CLOSING | Arc resolutions or haunting continuations |
+
+**Every section (except LEDE) must have "arcConnections"** showing which arcs it advances.
+
+### Interweaving Techniques
+
+**Callback Seeds** — Plant specific details in one arc that pay off in another:
+
+```
+Arc A: "Morgan mentioned a second lab, somewhere in Oakland."
+[continue with other content]
+Arc C: "The Oakland address on the shipping manifest. Morgan's 'second lab.'"
+```
+
+**Shared Characters** — Use characters appearing in multiple arcs as bridges:
+
+```
+[Vic appears in Arc A about funding]
+[prose continues other arc]
+[Vic reappears in Arc C about the cover-up, connecting the threads]
+```
+
+**Convergence Point** — Identify where all arcs meet (usually mid-THE STORY):
+
+```
+THE STORY arc plan:
+- Paragraphs 1-3: Arc A setup
+- Paragraphs 4-6: Arc B intercuts
+- Paragraphs 7-8: Arc C enters
+- Paragraph 9: CONVERGENCE - all three arcs collide
+- Paragraphs 10-12: Resolution cascade
+```
+
+### THE STORY Section: Interleaving Plan
+
+THE STORY is where arcs must interweave most tightly. Plan it as:
+
+1. **Interleaving plan**: How arcs will be intercut (not sequential)
+2. **Callback opportunities**: Details planted in one arc that pay off in another
+3. **Convergence point**: Where all arcs meet (paragraph/section location)
+
+**Example structure for 3 arcs:**
+```
+Para 1: Arc A setup (plant detail X)
+Para 2: Arc B enters (introduces Morgan)
+Para 3: Arc A continues (escalates tension)
+Para 4: Arc C enters (the money angle)
+Para 5: Arc B returns (Morgan connects to money)
+Para 6: CONVERGENCE (all three arcs collide)
+Para 7: Arc A resolution (detail X pays off)
+Para 8: Final implications (reader recontextualizes earlier paragraphs)
+```
+
+### Interweaving Self-Check
+
+Before finalizing outline or article:
+
+- [ ] Does any later paragraph recontextualize an earlier one?
+- [ ] Do shared characters serve as bridges between arcs?
+- [ ] Is there a clear convergence point in THE STORY?
+- [ ] Does every section (except LEDE) advance at least one arc?
+
+### Integration with Other Sections
+
+**FOLLOW THE MONEY:**
+- Continue arc threads through financial lens per arcConnections
+- Each arc's money angle gets its moment
+- Shell accounts connect to specific arcs
+
+**THE PLAYERS:**
+- Advance arcs through character revelations per arcConnections
+- Characters are evaluated through the lens of arc involvement
+
+**WHAT'S MISSING:**
+- Honor the knownUnknowns - gaps Nova noticed per arc
+- Each arc has unanswered questions creating tension
+
+**CLOSING:**
+- Resolve or haunt per arcResolutions
+- Each arc gets its ending or its lingering question
