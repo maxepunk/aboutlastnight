@@ -514,7 +514,6 @@ describe('PromptBuilder', () => {
         'formatting': 'Strong tags for names...',
         'anti-patterns': 'Section differentiation...',
         'editorial-design': 'Single column...',
-        'arc-flow': 'Linear thematic...'
       });
     });
 
@@ -695,7 +694,6 @@ describe('PromptBuilder', () => {
         'formatting': 'formatting stub',
         'anti-patterns': 'anti-patterns stub',
         'editorial-design': 'design stub',
-        'arc-flow': 'flow stub'
       }),
       loadTemplate: jest.fn(),
       validate: jest.fn()
@@ -860,7 +858,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
       mockThemeLoader.loadTemplate.mockResolvedValue('template');
 
@@ -878,7 +876,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
       mockThemeLoader.loadTemplate.mockResolvedValue('template');
 
@@ -897,7 +895,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
       mockThemeLoader.loadTemplate.mockResolvedValue('template');
 
@@ -936,7 +934,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
       mockThemeLoader.loadTemplate.mockResolvedValue('template');
 
@@ -958,7 +956,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
       mockThemeLoader.loadTemplate.mockResolvedValue('template');
 
@@ -981,7 +979,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
@@ -1004,7 +1002,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
@@ -1019,7 +1017,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
@@ -1043,7 +1041,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
@@ -1058,7 +1056,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
@@ -1079,7 +1077,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'arc-flow': '', 'anti-patterns': ''
+        'anti-patterns': ''
       });
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
@@ -1116,7 +1114,6 @@ describe('PromptBuilder', () => {
         'narrative-structure': 'structure content',
         'anti-patterns': 'anti-patterns content',
         'section-rules': 'section rules',
-        'arc-flow': 'arc flow',
         'formatting': 'formatting',
         'editorial-design': 'editorial design',
         'writing-principles': 'writing principles',
@@ -1162,7 +1159,7 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': 'voice', 'evidence-boundaries': 'boundaries',
         'narrative-structure': 'structure', 'anti-patterns': 'anti-patterns',
-        'section-rules': 'rules', 'arc-flow': 'arc-flow', 'formatting': 'formatting',
+        'section-rules': 'rules', 'formatting': 'formatting',
         'editorial-design': 'editorial', 'writing-principles': 'writing', 'photo-analysis': 'photo'
       });
       mockThemeLoader.loadTemplate.mockResolvedValue('<template>');
