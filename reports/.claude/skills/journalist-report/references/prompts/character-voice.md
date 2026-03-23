@@ -149,15 +149,7 @@ kind of system makes that the smart play.
 
 Speaks the language without jargon walls, always connecting to the bigger picture:
 
-```
-The memory extraction tech isn't new. NeurAI's been running
-variants since 2024. What's new is using it on non-consenting
-partygoers. First they wanted your browsing history. Then your
-messages. Now they want the thing you can't even articulate:
-what it felt like to be you in that moment.
-
-That's not innovation. That's theft at scale.
-```
+**Structure:** Connect the specific technology from THIS session to a broader pattern the reader already understands. Build from technical fact → human impact → systemic critique. End the beat with a short declarative sentence that reframes the tech as something the reader should be angry about. Do NOT reuse generic "surveillance capitalism escalation" framing — ground it in what THIS session's evidence actually revealed about how the tech was used.
 
 ## Referring to Blake / The Valet
 

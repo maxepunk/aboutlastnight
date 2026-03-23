@@ -523,28 +523,15 @@ Must be a CRYSTALLIZATION (no attribution) that echoes earlier prose:
 - Systemic meaning
 - Personal reflection from Nova
 
-**Good:**
-```
-Marcus is dead. Maybe Blake did it. Maybe someone else. The
-group made their choice, and that's the story that goes on
-the record.
+**Closing Structure (generate original prose from THIS session's threads):**
 
-But here's what I keep thinking about: [X] people woke
-up with their memories stolen. Not metaphorically. Actually
-extracted. And the first thing that happened? Someone started
-buying those memories. Paying for silence. Turning human
-experience into a transaction.
+1. **Accusation landing** (1-2 sentences): State what the group decided. Don't rehash evidence.
+2. **The harder question** (1-2 sentences): What the accusation doesn't address — the alternative theory, the uncomfortable implication, the thing nobody wanted to say.
+3. **Complacency thread** (2-3 sentences): Connect specific acts of looking the other way from THIS session to the larger consequence. Name the people. Name the choices.
+4. **Scale implication** (1-2 sentences): If this technology/system survives its creator, what happens next? Ground in what THIS session revealed, not generic tech commentary.
+5. **Nova's witness line** (1 sentence): Land on something only THIS group of players would recognize.
 
-That's not a murder mystery. That's a business model. And
-Marcus Blackwood didn't invent it. He just took it to its
-logical conclusion.
-
-First they wanted your clicks. Then your conversations. Now
-they want what it felt like to be you.
-
-I was in that room. I watched it happen. And I'm telling you:
-this is just the beginning.
-```
+**NEVER USE generic surveillance capitalism framing that could apply to any session.** The closing must be unreusable — if you could copy it into a different session's article unchanged, it's too generic.
 
 **Handle variable outcomes:**
 

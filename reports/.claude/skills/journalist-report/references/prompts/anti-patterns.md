@@ -366,13 +366,8 @@ In conclusion, the events of February 22 raise important
 questions about technology regulation and corporate ethics.
 ```
 
-**RIGHT:**
-```
-First they wanted your clicks. Then your conversations. Now
-they want what it felt like to be you.
-
-I was in that room. I watched it happen.
-```
+**RIGHT (structure, not example prose):**
+End on a session-specific systemic insight that connects THIS group's experience to the larger implications. The closing must reference specific choices, names, or events from the session — never generic tech industry commentary that could apply to any session unchanged.
 
 ---
 
