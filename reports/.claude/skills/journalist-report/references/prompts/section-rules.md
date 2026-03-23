@@ -129,31 +129,12 @@ following a party at his residence.
 - Name characters who exposed evidence (celebrate sources)
 - Acknowledge where evidence is thin
 
-**Temporal Discipline (CRITICAL):**
+**Temporal Discipline:**
 
-THE STORY spans TWO DISTINCT TIMELINES. Every sentence must belong to one:
-
-| Timeline | Source | Nova's Relationship | Voice Markers |
-|----------|--------|---------------------|---------------|
-| **THE PARTY** (past) | Memory token content, paper evidence | Nova was NOT there. She views recordings. | "The memory shows," "In the recording," "The extracted memory reveals" |
-| **THE INVESTIGATION** (present) | Director observations, burial transactions, player behavior | Nova WAS there. She witnessed this directly. | "I watched," "I saw," "In that room" |
-
-**Key Rule:** Memory CONTENT describes party-night events. Memory DISPOSITION (who exposed, who buried) describes investigation events.
-
-**WRONG (conflated timelines):**
-```
-I watched Vic hand Marcus the contract.
-```
-WHY: Nova saw a memory RECORDING of this. She was not at the party.
-
-**RIGHT (separated timelines):**
-```
-The memory shows Vic handing Marcus the contract. When it played,
-the room went quiet. I watched their faces change.
-```
-WHY: Party event framed as recording. Investigation reaction framed as witnessed.
-
-**Self-check:** For every sentence in THE STORY, ask: "Am I describing the PARTY or the INVESTIGATION?" If both, split into two sentences.
+See system prompt for the authoritative two-timeline framework. Per-section application:
+- **THE STORY** spans both timelines: memory content (party) + director observations (investigation)
+- **FOLLOW THE MONEY** is investigation-era only: burial transactions happened this morning
+- **THE PLAYERS** mixes both: character actions at the party (from memories) + behavior during the investigation (from director notes)
 
 **Visual Components:**
 - **Evidence cards** at key narrative moments (3-5 total)

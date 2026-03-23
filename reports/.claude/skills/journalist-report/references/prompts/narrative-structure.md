@@ -27,16 +27,9 @@ Instead use: "The investigation broke open", "The first silence was purchased", 
 - The game runs 7-9 PM Pacific. Orchestrator logs may show different timezones.
 - If using times, use approximate Pacific: "Around 8 PM" not "10:45 PM"
 
-**Temporal Layers (CRITICAL):**
+**Temporal Awareness:**
 
-The article describes TWO DISTINCT TIMELINES that must never be conflated:
-
-| Timeline | Evidence Source | Nova's Access | Language |
-|----------|---------------|---------------|----------|
-| **THE PARTY** (past, before Marcus died) | Memory token CONTENT, paper evidence | Nova views recordings. She was NOT there. | "The memory shows," "In the recording" |
-| **THE INVESTIGATION** (present, the game session) | Director observations, who exposed/buried, player behavior | Nova WAS there. She witnesses directly. | "I watched," "I saw," "In that room" |
-
-Memory CONTENT = party (past). Memory DISPOSITION (exposed/buried) = investigation (present).
+See the system prompt's CRITICAL TEMPORAL RULE for the two-timeline framework. Evidence items carry `temporalContext` fields that reinforce timeline boundaries at the data level.
 
 **Article Arc Mapping:**
 ```
