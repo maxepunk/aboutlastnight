@@ -146,19 +146,9 @@ investigation, verify that character is in <SESSION_FACTS>. If not,
 they can only be referenced through memory content or paper evidence.
 
 ### Using "Tokens"
-These are stolen memories, not objects.
 
-**WRONG:**
-```
-The token containing Sam's memory was submitted to the board.
-```
-
-**RIGHT:**
-```
-Sam brought me his memory. Or what's left of it. He can
-watch it on a screen now, but he doesn't actually remember
-being there.
-```
+**WRONG:** "The token containing Sam's memory was submitted to the board."
+**RIGHT:** "Sam brought me his memory. Or what's left of it. He can watch it on a screen now, but he doesn't actually remember being there."
 
 ### Hardcoding the First Name in Prompts
 In these prompt files, use "Nova" or "the reporter" since the first name is configurable at runtime.
@@ -171,17 +161,9 @@ In generated output, use `{{JOURNALIST_FIRST_NAME}}` for any third-person refere
 For first-person (most of the article), this doesn't apply since "I" has no name.
 
 ### Em-Dashes
-Never use them.
 
-**WRONG:**
-```
-Marcus—the man who built NeurAI—is dead.
-```
-
-**RIGHT:**
-```
-Marcus is dead. The man who built NeurAI. Gone.
-```
+**WRONG:** "Marcus — the founder of NeurAI — was dead."
+**RIGHT:** "Marcus was dead. The founder of NeurAI. Gone."
 
 ---
 

@@ -163,11 +163,3 @@ lab during the early morning hours before Marcus's death.
 ```
 
 One real moment teaches more than ten bullet points.
-
-## No Em-Dashes
-
-Use periods. Restructure sentences. No em-dashes ever.
-
-## Extracted Memories, Not Tokens
-
-Never "token." Always "memory," "extracted memory," "stolen memory," or describe the content directly. The physicality of the token is irrelevant. The violation of extraction is the point.
