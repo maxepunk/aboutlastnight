@@ -544,6 +544,17 @@ Lean into the ambiguity. Sometimes stories don't have clean endings.
 
 ---
 
+## Evidence Boundaries
+
+See `<evidence-boundaries>` for the authoritative three-layer model. Per-section application:
+
+- **THE STORY:** Primarily Layer 1 (exposed evidence as narrative). Layer 3 (director observations) for behavioral grounding.
+- **FOLLOW THE MONEY:** Layer 2 patterns only (shell account names, amounts, timing). Account name = payment recipient, not necessarily who initiated the burial. Cross-reference director observations for behavioral hypotheses.
+- **THE PLAYERS:** Layer 1 + Layer 3 (exposed evidence + director observations for character assessment). Layer 2 only for named account observations.
+- **WHAT'S MISSING:** Frame Layer 2 gaps as mysteries. "I can tell you the shape of the silence."
+
+---
+
 ## Global Rules (Apply to All Sections)
 
 See `<character-voice>` for the authoritative voice and language rules:
