@@ -70,25 +70,9 @@ Apply the same 80%/enrichment pattern from the detective report system:
 
 ## 3. Section Differentiation
 
-Each section answers a DIFFERENT QUESTION. Repetition occurs when multiple sections answer the SAME question.
+See `<section-rules>` for the authoritative section-question table and the arc-weaving distinction.
 
-| Section | Question Answered | Focus |
-|---------|-------------------|-------|
-| THE STORY | "What happened that night?" | Narrative of events, discoveries |
-| FOLLOW THE MONEY | "Who profited from burying evidence?" | Financial analysis, shell accounts |
-| THE PLAYERS | "Who helped and who hindered?" | Character evaluations, choices |
-| WHAT'S MISSING | "What don't we know?" | Evidence gaps, buried secrets |
-| CLOSING | "What does this mean for all of us?" | Systemic reflection |
-
-**ANTI-REPETITION CHECK:** Before writing any sentence, ask:
-> "Have I already stated this fact in a previous section?"
-
-If yes: Either skip it OR present from a new angle answering THAT section's question.
-
-**Example:**
-- THE STORY: "Alex's extracted memory shows the IP theft in 2022."
-- BAD in FOLLOW THE MONEY: "Alex's memory revealed the IP theft." (repetition)
-- GOOD in FOLLOW THE MONEY: "Someone paid to bury Alex's memory. The price? $4,200 to Sunset Ventures." (new angle)
+Key rule: **Repetition** = same fact restated. **Multi-angle** = same event examined through a different section's lens. The first is a violation. The second is good journalism.
 
 ---
 

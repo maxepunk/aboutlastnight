@@ -6,21 +6,27 @@ Each section has a specific purpose. Respect the boundaries. Don't let sections 
 
 ## Critical: Section Differentiation
 
-**Each section answers a DIFFERENT QUESTION.** Repetition occurs when multiple sections answer the SAME question about the same facts.
+Each section answers a DIFFERENT QUESTION about the same underlying events.
 
-| Section | Question Answered |
-|---------|-------------------|
-| LEDE | "What's the hook?" |
-| THE STORY | "What happened that night?" |
-| FOLLOW THE MONEY | "Who profited from burying evidence?" |
-| THE PLAYERS | "Who helped and who hindered?" |
-| WHAT'S MISSING | "What don't we know?" |
-| CLOSING | "What does this mean for all of us?" |
+| Section | Question | Angle |
+|---------|----------|-------|
+| LEDE | What happened? | Hook and stakes |
+| THE STORY | How did it unfold? | Narrative chronology, evidence, discoveries |
+| FOLLOW THE MONEY | Who profited from silence? | Financial patterns, shell accounts |
+| THE PLAYERS | Who helped and who hindered? | Character choices and motivations |
+| WHAT'S MISSING | What don't we know? | Gaps, buried secrets, unanswered questions |
+| CLOSING | What does this mean? | Systemic reflection, forward implications |
 
-**ANTI-REPETITION CHECK:** Before writing any sentence, ask:
-> "Have I already stated this fact in a previous section?"
+**The arc-weaving distinction:** An event can appear in multiple sections — but each section must examine it through a DIFFERENT lens:
+- THE STORY: What happened (the narrative, the timeline)
+- FOLLOW THE MONEY: What it reveals financially (transaction patterns)
+- THE PLAYERS: What it says about character (choices, motivations)
 
-If yes: Either SKIP it OR present from the NEW angle answering THIS section's question.
+**Repetition = same fact, same angle, different section. That's the violation.**
+**Multi-angle = same event, different question answered. That's good writing.**
+
+First mention of an event: full narrative treatment (evidence card, context, analysis).
+Subsequent mentions: one-sentence callback that adds the NEW angle. ("Morgan's betrayal of Riley, detailed above, explains why $1.3M flowed to Motherofmen in the final minutes.")
 
 ---
 
