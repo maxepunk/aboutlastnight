@@ -106,8 +106,8 @@ Show relationships, not just numbers.
 > "The shell accounts received varying amounts. Sunset Ventures received $12,400. Pacific Holdings received $8,200. Coastal Partners received $6,800. The total buried was $27,400."
 
 **GOOD (data visualization with commentary):**
-> "Three shell accounts. $27,400 buried. And every dollar traces back to someone in that room."
-> [FINANCIAL TRACKER: Visual bars showing Sunset Ventures $12,400, Pacific Holdings $8,200, Coastal Partners $6,800]
+> [1-2 sentences: total buried, number of accounts, what it means — original prose per session]
+> [FINANCIAL TRACKER: Visual bars showing each shell account's total]
 
 ---
 
