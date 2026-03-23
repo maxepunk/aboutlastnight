@@ -234,33 +234,9 @@ When analyzing arcs, assign emphasis based on accusation and observation alignme
 
 ---
 
-## Applying Boundaries in Each Section
+## Per-Section Application
 
-### THE STORY
-- Heavy use of Layer 1 (exposed evidence as narrative facts)
-- Light Layer 3 (director notes for emphasis/framing)
-- NO Layer 2 content (buried patterns don't belong here)
-
-### FOLLOW THE MONEY
-- Heavy Layer 2 patterns (shell accounts, amounts, timing)
-- Light Layer 3 (suspicious correlations director noted)
-- NO content inference from transactions
-
-### THE PLAYERS
-- Mix of Layers 1-3
-- Who exposed (Layer 1 + credit)
-- Who buried (Layer 2 patterns, no content)
-- Behavioral observations (Layer 3)
-
-### WHAT'S MISSING
-- Pure Layer 2 (the mysteries)
-- Shapes of silence, not contents
-- Invitation to wonder, not claims
-
-### CLOSING
-- Systemic critique (beyond individual layers)
-- The accusation (Layer 3 framing)
-- What this means (synthesis)
+See `<section-rules>` "Evidence Boundaries" section for how each article section applies the three-layer model.
 
 ---
 
