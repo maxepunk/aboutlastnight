@@ -341,7 +341,7 @@ class CachedNotionClient {
       or: [
         { property: 'Basic Type', select: { equals: 'Memory Token' } },
         { property: 'Basic Type', select: { equals: 'Memory Token Video' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Image' } },
+        { property: 'Basic Type', select: { equals: 'Memory Token Audio + Image' } },
         { property: 'Basic Type', select: { equals: 'Memory Token Audio' } }
       ]
     };
@@ -353,8 +353,6 @@ class CachedNotionClient {
         {
           or: [
             { property: 'Basic Type', select: { equals: 'Prop' } },
-            { property: 'Basic Type', select: { equals: 'Physical' } },
-            { property: 'Basic Type', select: { equals: 'Clue' } },
             { property: 'Basic Type', select: { equals: 'Document' } },
             { property: 'Basic Type', select: { equals: 'Set Dressing' } }
           ]

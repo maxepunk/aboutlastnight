@@ -362,6 +362,17 @@ async function detectWhiteboard(state, config) {
     return { currentPhase: PHASES.DETECT_WHITEBOARD };
   }
 
+  // Check if user provided whiteboard path via rawSessionInput
+  // (detectWhiteboard runs before parseRawInput, so check rawSessionInput directly)
+  const userProvidedPath = state.rawSessionInput?.whiteboardPhotoPath;
+  if (userProvidedPath) {
+    console.log(`[detectWhiteboard] Using user-provided path: ${userProvidedPath}`);
+    return {
+      whiteboardPhotoPath: userProvidedPath,
+      currentPhase: PHASES.DETECT_WHITEBOARD
+    };
+  }
+
   // Fuzzy match "whiteboard" in filename (case-insensitive)
   const whiteboardPattern = /whiteboard/i;
   const matches = photos.filter(photo => {

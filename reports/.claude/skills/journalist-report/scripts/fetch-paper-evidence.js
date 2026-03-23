@@ -139,8 +139,6 @@ async function fetchPaperEvidence() {
             {
                 or: [
                     { property: 'Basic Type', select: { equals: 'Prop' } },
-                    { property: 'Basic Type', select: { equals: 'Physical' } },
-                    { property: 'Basic Type', select: { equals: 'Clue' } },
                     { property: 'Basic Type', select: { equals: 'Document' } },
                     { property: 'Basic Type', select: { equals: 'Set Dressing' } }
                 ]
