@@ -141,7 +141,7 @@ class NotionClient {
       or: [
         { property: 'Basic Type', select: { equals: 'Memory Token' } },
         { property: 'Basic Type', select: { equals: 'Memory Token Video' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Image' } },
+        { property: 'Basic Type', select: { equals: 'Memory Token Audio + Image' } },
         { property: 'Basic Type', select: { equals: 'Memory Token Audio' } }
       ]
     };
@@ -203,7 +203,7 @@ class NotionClient {
   /**
    * Fetch paper evidence from Notion Elements database
    *
-   * Filters for Basic Type: Prop, Physical, Clue, Document, Set Dressing
+   * Filters for Basic Type: Prop, Document, Set Dressing
    * AND Narrative Threads: Funding & Espionage, Marriage Troubles, Memory Drug, Underground Parties
    *
    * @param {boolean} includeFiles - Whether to include file attachment URLs
@@ -220,8 +220,6 @@ class NotionClient {
         {
           or: [
             { property: 'Basic Type', select: { equals: 'Prop' } },
-            { property: 'Basic Type', select: { equals: 'Physical' } },
-            { property: 'Basic Type', select: { equals: 'Clue' } },
             { property: 'Basic Type', select: { equals: 'Document' } },
             { property: 'Basic Type', select: { equals: 'Set Dressing' } }
           ]

@@ -162,7 +162,7 @@ async function fetchMemoryTokens() {
         or: [
             { property: 'Basic Type', select: { equals: 'Memory Token' } },
             { property: 'Basic Type', select: { equals: 'Memory Token Video' } },
-            { property: 'Basic Type', select: { equals: 'Memory Token Image' } },
+            { property: 'Basic Type', select: { equals: 'Memory Token Audio + Image' } },
             { property: 'Basic Type', select: { equals: 'Memory Token Audio' } }
         ]
     };
