@@ -273,7 +273,8 @@ wanted to play mine either.
 ## Temporal Failures
 
 ### Timeline Conflation
-THE PARTY (past) and THE INVESTIGATION (present) are two different timelines. Nova was at the investigation, NOT at the party. Memory content describes the party; memory exposure/burial happened during the investigation.
+
+See system prompt for the two-timeline framework. Here are specific violations to avoid:
 
 **WRONG (Nova claims to witness party events):**
 ```

@@ -1,31 +1,10 @@
 # Writing Principles
 
-## Temporal Framework (Critical)
+## Temporal Discipline
 
-The article covers TWO distinct time periods. NEVER conflate them:
+The system prompt contains the authoritative two-timeline framework (PARTY = last night, INVESTIGATION = this morning). Evidence items carry a `temporalContext` field (PARTY/INVESTIGATION/BACKGROUND) that reinforces this at the data level.
 
-### The Party Night (LORE)
-- **When**: February 21/22, 2027 (overnight)
-- **Source**: Memory tokens (extracted memories)
-- **Voice**: "That night..." / "The memory shows..." / "In the extracted memory..."
-- **What happened**: Marcus's party, the events leading to his death
-
-### The Investigation Day (PRESENT)
-- **When**: February 22, 2027
-- **Source**: Director observations, burial transactions, whiteboard notes
-- **Voice**: "During the investigation..." / "I watched..." / "At 11:49 PM..."
-- **What happened**: Players investigating, exposing/burying memories, making accusations
-
-### Anti-Pattern: Temporal Conflation
-**WRONG**: "Kai searched for Ashe. At 11:49 PM, Kai ran to the Valet."
-(Conflates party night searching with investigation day transactions)
-
-**RIGHT**: "That night, Kai's memory shows them searching for Ashe. During the investigation, at 11:49 PM, Kai ran to the Valet."
-(Clear separation of time periods)
-
-### Key Distinction
-- Memory CONTENT = party night (what the memory shows)
-- Memory DISPOSITION = investigation day (when someone exposed/buried it)
+Key principle: Memory CONTENT describes party events from last night. Director observations describe investigation events from this morning. Never conflate them.
 
 ---
 
