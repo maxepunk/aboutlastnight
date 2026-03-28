@@ -7,6 +7,7 @@ Handles booking system paste format and sends personalized follow-up emails
 import smtplib
 import csv
 import re
+import html
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
@@ -164,6 +165,42 @@ def get_booking_data() -> List[Dict]:
         print("Please check your paste format and try again.")
         return []
 
+def get_session_note() -> str:
+    """
+    Prompt user for an optional note to append after the signoff.
+    Returns the note text, or empty string if skipped.
+    """
+    print("\n" + "="*60)
+    print("SESSION NOTE (OPTIONAL)")
+    print("="*60)
+    print("\nAdd a note to the end of this email? (leave blank to skip)")
+    print("Paste your note below, then press Enter twice:")
+    print("-" * 60)
+
+    lines = []
+    empty_count = 0
+    while True:
+        line = input()
+        if line.strip() == "":
+            if not lines:
+                # Immediate empty line = skip
+                return ""
+            empty_count += 1
+            if empty_count >= 2:
+                # Two consecutive blank lines = done
+                break
+        else:
+            # If we had a single pending blank line, preserve it (paragraph break)
+            for _ in range(empty_count):
+                lines.append("")
+            empty_count = 0
+            lines.append(line)
+
+    note = '\n'.join(lines).strip()
+    if note:
+        print(f"\n✓ Note added ({len(note)} chars)")
+    return note
+
 def load_template() -> str:
     """Load the HTML email template"""
     if not Path(TEMPLATE_FILE).exists():
@@ -172,7 +209,7 @@ def load_template() -> str:
     with open(TEMPLATE_FILE, 'r', encoding='utf-8') as f:
         return f.read()
 
-def personalize_email(template: str, recipient: Dict, session_date: str, report_id: str) -> str:
+def personalize_email(template: str, recipient: Dict, session_date: str, report_id: str, session_note: str = "") -> str:
     """Replace placeholders with recipient-specific data"""
     email = template
     email = email.replace("{{PLAYER_NAME}}", recipient['name'].split()[0])  # First name only
@@ -180,50 +217,80 @@ def personalize_email(template: str, recipient: Dict, session_date: str, report_
     # Extract MMDD from MMDDYY for feedback form (first 4 digits)
     feedback_date = session_date[:4]
     email = email.replace("{{FEEDBACK_FORM_URL}}", f"{FEEDBACK_BASE}?date={feedback_date}")
+
+    # Session note block — render HTML or remove placeholder
+    if session_note:
+        escaped_note = html.escape(session_note).replace('\n', '<br>')
+        note_html = (
+            '      <tr>\n'
+            '          <td style="padding: 16px 40px;">\n'
+            '              <table width="100%" border="0" cellspacing="0" cellpadding="0">\n'
+            '                  <tr>\n'
+            '                      <td style="color:#ffffff; font-size:16px; line-height:1.5; font-family:Arial, sans-serif">\n'
+            f'                          {escaped_note}\n'
+            '                      </td>\n'
+            '                  </tr>\n'
+            '              </table>\n'
+            '          </td>\n'
+            '      </tr>'
+        )
+        email = email.replace("{{PS_NOTE_BLOCK}}", note_html)
+    else:
+        email = email.replace("{{PS_NOTE_BLOCK}}", "")
+
     return email
 
-def create_email_message(recipient: Dict, html_content: str) -> MIMEMultipart:
+def create_email_message(recipient: Dict, html_content: str, session_note: str = "") -> MIMEMultipart:
     """Create the email message with headers and content"""
-    
+
     # Create message container
     msg = MIMEMultipart('alternative')
-    
+
     # Set headers
     msg['From'] = formataddr((SENDER_NAME, SENDER_EMAIL))
     msg['To'] = recipient['email']
     msg['Reply-To'] = REPLY_TO_EMAIL
     msg['Subject'] = "Thank you for playing About Last Night"
-    
-    # Create plain text version (fallback)
-    text_content = f"""
-Hey {recipient['name'].split()[0]},
+
+    first_name = recipient['name'].split()[0]
+
+    # Plain text version (fallback)
+    # NOTE: This text must match preview_recipients() and the HTML template content.
+    # If you update the email copy, update all three locations.
+    text_content = f"""Hey {first_name},
 
 First of all, thank you.
 
-I hope it gave you something worth remembering.
+About Last Night... is a weird, ambitious thing that we've been building for over a year and a half. It's a pop-up. It's experimental. It only exists because people like you decide to show up and trust us with your precious free time. So thank you for taking a chance on a new and unusual experience. I hope it gave you something worth remembering.
 
-And speaking of memories — Detective Anondono's case file is ready.
+And speaking of memories — there's a new NovaNews article that's just dropped, covering your investigation:
 
-Visit aboutlastnightgame.com to view your personalized case file and leave feedback.
+  >> {CASE_FILE_BASE}report-{recipient.get('report_id', '')}.html
 
-If you want to share anything from the night — photos, theories, hot takes — we'd love to see it. 
-Tag @storypunkstudio on Instagram or StoryPunk on Facebook.
+This investigative article is unique to YOUR game-session. Its contents are all based on what you chose to expose publicly, and the things you chose to bury for profit. You might see threads you recognize, or pieces that fill in parts of the story that you didn't get to. It is a version of the story that could not exist without your choices and participation.
 
-We'd love to have you come back and play again and bring your crew through. 
-Use promo code EarlyAccessWelcomeBack for a 33% discount.
+We're a small, independent show and reviews genuinely make a difference for us. If you had a good time, leaving a review on Morty would be amazing. And if you want to share photos, theories, or hot takes from the night, tag @storypunkstudio on Instagram or StoryPunk on Facebook — we love seeing your posts.
+
+And if you've got thoughts on the experience (what worked, what didn't, how you might describe the game to a friend), it would mean the WORLD to us to have your feedback as we continue to evolve and grow our game. Use the link below or just reply to this email with your thoughts:
+
+  >> {FEEDBACK_BASE}?date={recipient.get('feedback_date', '')}
+
+Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: EarlyAccessWelcomeBack — consider it a thank you for being part of the story of this experience.
 
 Thanks again for being part of this.
 
-Max & Shuai
-StoryPunk / Patchwork Adventures
-    """
-    
+Max, Shuai & Casey
+StoryPunk / Patchwork Adventures"""
+
+    if session_note:
+        text_content = text_content.rstrip() + "\n\n" + session_note
+
     # Attach both versions
     part1 = MIMEText(text_content.strip(), 'plain', 'utf-8')
     part2 = MIMEText(html_content, 'html', 'utf-8')
     msg.attach(part1)
     msg.attach(part2)
-    
+
     return msg
 
 def send_email(recipient: Dict, msg: MIMEMultipart, server, dry_run: bool = True) -> bool:
@@ -255,15 +322,56 @@ def save_to_csv(recipients: List[Dict], session_date: str, report_id: str, filen
             })
     print(f"  ✓ Saved to: {filename}")
 
-def preview_recipients(recipients: List[Dict], session_date: str, report_id: str):
-    """Show preview of what will be sent"""
+def preview_recipients(recipients: List[Dict], session_date: str, report_id: str, session_note: str = ""):
+    """Show preview of what will be sent, including full email body"""
     print("\n" + "="*60)
     print("PREVIEW")
     print("="*60)
     print(f"\nSession Date: {session_date}")
     print(f"Report ID: {report_id}")
     print(f"Recipients: {len(recipients)}")
-    print("\nRecipient List:")
+
+    # Show full plain text body using first recipient as example
+    # NOTE: This text must match create_email_message() and the HTML template content.
+    # If you update the email copy, update all three locations.
+    first = recipients[0]
+    first_name = first['name'].split()[0]
+    feedback_date = session_date[:4]
+
+    text_body = f"""Hey {first_name},
+
+First of all, thank you.
+
+About Last Night... is a weird, ambitious thing that we've been building for over a year and a half. It's a pop-up. It's experimental. It only exists because people like you decide to show up and trust us with your precious free time. So thank you for taking a chance on a new and unusual experience. I hope it gave you something worth remembering.
+
+And speaking of memories — there's a new NovaNews article that's just dropped, covering your investigation:
+
+  >> {CASE_FILE_BASE}report-{report_id}.html
+
+This investigative article is unique to YOUR game-session. Its contents are all based on what you chose to expose publicly, and the things you chose to bury for profit. You might see threads you recognize, or pieces that fill in parts of the story that you didn't get to. It is a version of the story that could not exist without your choices and participation.
+
+We're a small, independent show and reviews genuinely make a difference for us. If you had a good time, leaving a review on Morty would be amazing. And if you want to share photos, theories, or hot takes from the night, tag @storypunkstudio on Instagram or StoryPunk on Facebook — we love seeing your posts.
+
+And if you've got thoughts on the experience (what worked, what didn't, how you might describe the game to a friend), it would mean the WORLD to us to have your feedback as we continue to evolve and grow our game. Use the link below or just reply to this email with your thoughts:
+
+  >> {FEEDBACK_BASE}?date={feedback_date}
+
+Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: EarlyAccessWelcomeBack — consider it a thank you for being part of the story of this experience.
+
+Thanks again for being part of this.
+
+Max, Shuai & Casey
+StoryPunk / Patchwork Adventures"""
+
+    if session_note:
+        text_body += "\n\n" + session_note
+
+    print(f"\nFull email body (using {first['name']} as example):")
+    print("-" * 60)
+    print(text_body)
+    print("-" * 60)
+
+    print(f"\nRecipient List:")
     print("-" * 60)
     for i, recipient in enumerate(recipients, 1):
         print(f"{i:2}. {recipient['name']:<30} {recipient['email']}")
