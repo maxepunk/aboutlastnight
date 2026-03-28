@@ -16,7 +16,7 @@ Paste your note below, then press Enter twice:
 ------------------------------------------------------------
 ```
 
-- Multi-line input using the same pattern as `get_booking_data()` (collect lines until empty line after content).
+- Multi-line input: collect lines until empty line after content. Unlike `get_booking_data()`, internal blank lines are **preserved** (notes may have paragraph breaks).
 - Empty input (immediate Enter) = no note added.
 - Returns the note as a raw string, no prefix or formatting applied.
 
@@ -46,6 +46,11 @@ The HTML block when rendered:
 ```
 
 Same styling as all other body text blocks in the template.
+
+**Text processing:**
+- Newlines in the note are converted to `<br>` tags for the HTML version (so multi-line notes render correctly).
+- Special characters (`&`, `<`, `>`) are HTML-escaped via `html.escape()` before insertion.
+- The plain text version uses the raw note text as-is.
 
 ### 3. Plain text version (`create_email_message()`)
 
@@ -97,16 +102,19 @@ Recipient List:
 main()
   → get_session_info()        # existing
   → get_booking_data()        # existing
-  → preview_recipients()      # existing, now also shows email body
-  → confirm                   # existing
   → get_session_note()        # NEW — prompt for optional note
-  → preview with note         # show updated preview if note was added
+  → preview_recipients(... session_note, template)  # upgraded: full email body preview
+  → confirm                   # existing
   → save CSV                  # existing, unchanged
-  → load template             # existing
-  → personalize_email(... session_note)  # updated signature
-  → create_email_message(... session_note)  # updated signature
-  → send                      # existing
+  → load template             # already loaded for preview
+  → dry run loop              # existing — calls updated personalize_email() and create_email_message()
+  → confirm real send         # existing
+  → real send loop            # existing — calls updated personalize_email() and create_email_message()
 ```
+
+**Note:** `session_note` is threaded through all call sites: `preview_recipients()`, the dry run loop, and the real send loop. The template is loaded before the preview so it can render the example email body.
+
+**Note:** `preview_recipients()` gains parameters `session_note` and `template`. It calls `personalize_email()` internally on the first recipient to generate the example plain text body.
 
 ## Files modified
 
