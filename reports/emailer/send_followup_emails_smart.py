@@ -382,90 +382,98 @@ def main():
     print("\n" + "="*60)
     print("ABOUT LAST NIGHT - EMAIL SENDER")
     print("="*60)
-    
+
     # Check template exists
     if not Path(TEMPLATE_FILE).exists():
         print(f"\n❌ Template file not found: {TEMPLATE_FILE}")
         print("Make sure 'about_last_night_followup_template.html' is in the same directory.")
         return
-    
+
     # Step 1: Get session info
     session_date, report_id = get_session_info()
-    
+
     # Step 2: Get and parse booking data
     recipients = get_booking_data()
     if not recipients:
         return
-    
-    # Step 3: Preview
-    preview_recipients(recipients, session_date, report_id)
-    
-    # Step 4: Confirm before proceeding
+
+    # Step 3: Load template (needed for preview and sending)
+    template = load_template()
+    print("✓ Template loaded")
+
+    # Step 4: Get optional session note
+    session_note = get_session_note()
+
+    # Enrich recipients with computed fields for plain text rendering
+    feedback_date = session_date[:4]
+    for r in recipients:
+        r['report_id'] = report_id
+        r['feedback_date'] = feedback_date
+
+    # Step 5: Preview (full email body + recipient list)
+    preview_recipients(recipients, session_date, report_id, session_note)
+
+    # Step 6: Confirm before proceeding
     print("\n" + "="*60)
     response = input("\nDoes this look correct? (yes/no): ").strip().lower()
     if response != 'yes':
         print("Cancelled.")
         return
-    
-    # Step 5: Save CSV if enabled
+
+    # Step 7: Save CSV if enabled
     if SAVE_CSV:
         csv_filename = f"recipients_{session_date}_{report_id}.csv"
         save_to_csv(recipients, session_date, report_id, csv_filename)
-    
-    # Step 6: Load template
+
+    # Step 8: Dry run
     print("\n" + "="*60)
     print("PREPARING EMAILS")
     print("="*60)
-    template = load_template()
-    print("✓ Template loaded")
-    
-    # Step 7: Dry run
     print("\n=== DRY RUN (no emails will be sent) ===")
     for recipient in recipients:
-        personalized = personalize_email(template, recipient, session_date, report_id)
-        msg = create_email_message(recipient, personalized)
+        personalized = personalize_email(template, recipient, session_date, report_id, session_note)
+        msg = create_email_message(recipient, personalized, session_note)
         send_email(recipient, msg, None, dry_run=True)
-    
-    # Step 8: Confirm real send
+
+    # Step 9: Confirm real send
     print("\n" + "="*60)
     print(f"\nReady to send {len(recipients)} emails")
     print(f"From: {SENDER_NAME} <{SENDER_EMAIL}>")
     print(f"Reply-To: {REPLY_TO_EMAIL}")
     print(f"SMTP: {SMTP_SERVER}:{SMTP_PORT}")
+    if session_note:
+        print(f"Session note: YES ({len(session_note)} chars)")
     response = input("\nSend for real? (yes/no): ").strip().lower()
-    
+
     if response != 'yes':
         print("Cancelled.")
         return
-    
-    # Step 9: Real send
+
+    # Step 10: Real send
     print("\n=== SENDING EMAILS ===")
     success_count = 0
-    
+
     try:
-        # Connect to SMTP server once for all emails (more efficient)
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.set_debuglevel(0)  # Set to 1 for debugging
+            server.set_debuglevel(0)
             server.starttls()
             print("Authenticating...")
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             print("✓ Connected to SMTP server\n")
-            
-            # Send each email
+
             for i, recipient in enumerate(recipients, 1):
                 print(f"[{i}/{len(recipients)}]", end=" ")
-                personalized = personalize_email(template, recipient, session_date, report_id)
-                msg = create_email_message(recipient, personalized)
-                
+                personalized = personalize_email(template, recipient, session_date, report_id, session_note)
+                msg = create_email_message(recipient, personalized, session_note)
+
                 if send_email(recipient, msg, server, dry_run=False):
                     success_count += 1
-                
-                # Rate limiting (except for last email)
+
                 if i < len(recipients):
                     time.sleep(DELAY_BETWEEN_EMAILS)
-        
+
         print(f"\n✓ Successfully sent {success_count}/{len(recipients)} emails")
-        
+
     except smtplib.SMTPAuthenticationError:
         print("\n❌ Authentication failed!")
         print("Check your email and app password settings.")
