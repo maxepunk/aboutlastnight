@@ -234,7 +234,6 @@ Return JSON with the following structure:
    * @param {Object} arcAnalysis - Arc analysis results
    * @param {string[]} selectedArcs - User-selected arc names
    * @param {string} heroImage - Confirmed hero image filename
-   * @param {Object} evidenceBundle - Evidence bundle for reference
    * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
@@ -273,7 +272,7 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
 </FINANCIAL_SUMMARY>`;
   }
 
-  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos = [], arcEvidencePackages = [], shellAccounts = []) {
+  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = []) {
     const rawPrompts = await this.theme.loadPhasePrompts('outlineGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -616,7 +615,6 @@ Return JSON with the following structure:
    * - Voice self-check: model assesses own output
    *
    * @param {Object} outline - Approved article outline
-   * @param {Object} evidenceBundle - Full evidence bundle for quoting
    * @param {string} template - HTML template content
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent (Phase 1 Fix)
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
@@ -626,7 +624,7 @@ Return JSON with the following structure:
    * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null) {
+  async buildArticlePrompt(outline, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null) {
     const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
