@@ -92,10 +92,10 @@ describe('PromptBuilder', () => {
       expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('arcAnalysis');
     });
 
-    it('should include character-voice in system prompt', async () => {
+    it('should not include character-voice in system prompt (removed from arcAnalysis phase)', async () => {
       const { systemPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
 
-      expect(systemPrompt).toContain('Be NovaGlade');
+      expect(systemPrompt).not.toContain('Be NovaGlade');
     });
 
     it('should include evidence-boundaries in system prompt', async () => {
@@ -789,8 +789,8 @@ describe('PromptBuilder', () => {
   describe('prompt variable resolution in build methods', () => {
     it('buildArcAnalysisPrompt should resolve variables in loaded prompts', async () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': 'Nova ({{JOURNALIST_FIRST_NAME}}) is the journalist.',
-        'evidence-boundaries': 'Boundaries text',
+        'character-voice': 'Nova voice text',
+        'evidence-boundaries': '{{JOURNALIST_FIRST_NAME}} must only report exposed evidence.',
         'narrative-structure': 'Structure text',
         'anti-patterns': 'Anti-patterns text'
       });
@@ -805,7 +805,7 @@ describe('PromptBuilder', () => {
       };
 
       const { systemPrompt } = await builder.buildArcAnalysisPrompt(sessionData);
-      expect(systemPrompt).toContain('Nova (Athena) is the journalist.');
+      expect(systemPrompt).toContain('Athena must only report exposed evidence.');
       expect(systemPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
     });
 

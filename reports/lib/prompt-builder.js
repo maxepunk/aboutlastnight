@@ -178,7 +178,6 @@ class PromptBuilder {
     );
 
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].arcAnalysis}
-${labelPromptSection('character-voice', prompts['character-voice'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
     const userPrompt = `Analyze the following evidence for narrative arcs.
