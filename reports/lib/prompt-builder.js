@@ -347,8 +347,6 @@ ${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type}
 <arc-analysis>
 ${JSON.stringify(arcAnalysis, null, 2)}
 
-EVIDENCE BUNDLE:
-${JSON.stringify(evidenceBundle, null, 2)}
 ${labelPromptSection('section-rules', prompts['section-rules'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 </arc-analysis>
@@ -521,8 +519,6 @@ ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'U
 <arc-analysis>
 ${JSON.stringify(arcAnalysis, null, 2)}
 
-EVIDENCE BUNDLE (for evidence card selection):
-${JSON.stringify(evidenceBundle, null, 2)}
 ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
@@ -688,8 +684,6 @@ Filename: ${heroImage || 'Use first available photo from outline'}
 - Use this exact filename in the "heroImage" field
 - Do NOT include this filename in the "photos" array
 
-EVIDENCE BUNDLE:
-${JSON.stringify(evidenceBundle, null, 2)}
 ${arcEvidenceSection}
 </DATA_CONTEXT>
 
@@ -788,8 +782,6 @@ This image is the HERO IMAGE at the top of the article.
 - Do NOT include this filename in the "photos" array (it would cause duplication)
 - Inline photos must use DIFFERENT photos from the session
 
-EVIDENCE BUNDLE (quote ONLY from exposed evidence):
-
 TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 - "PARTY" = RECOVERED MEMORY from the night of the party. You watched this play back on a screen.
   USE: "The memory shows..." / "Recovered footage from [time] captures..." / "A memory from [time] reveals..."
@@ -799,7 +791,6 @@ TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 - "BACKGROUND" = Document or evidence that predates the party.
   USE: "Records show..." / "Documents reveal..."
 
-${JSON.stringify(evidenceBundle, null, 2)}
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
 ${(directorNotes?.observations && Object.keys(directorNotes.observations).length > 0) ? `
