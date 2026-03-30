@@ -275,6 +275,18 @@ describe('fetch-nodes', () => {
 
       expect(Object.keys(result).sort()).toEqual(['canonicalCharacters', 'currentPhase', 'memoryTokens']);
     });
+
+    it('derives canonicalCharacters from token owners', async () => {
+      const state = { sessionId: 'test-session', directorNotes: {} };
+      const config = { configurable: { notionClient: mockClient } };
+
+      const result = await fetchMemoryTokens(state, config);
+
+      expect(result.canonicalCharacters).toBeDefined();
+      expect(result.canonicalCharacters['Blake']).toBe('Blake M.');
+      expect(result.canonicalCharacters['Charlie']).toBe('Charlie D.');
+      expect(result.canonicalCharacters['Diana']).toBe('Diana K.');
+    });
   });
 
   describe('fetchPaperEvidence', () => {
