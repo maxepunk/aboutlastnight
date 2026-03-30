@@ -129,16 +129,16 @@ Example section with inline photo:
 
 ## Length Guidelines
 
-| Section | Target Length |
-|---------|---------------|
-| LEDE | 100-200 words |
-| THE STORY | 400-800 words (scales with evidence) |
-| FOLLOW THE MONEY | 100-300 words |
-| THE PLAYERS | 200-400 words |
-| WHAT'S MISSING | 100-200 words |
-| CLOSING | 150-300 words |
+| Section | Target Length | Notes |
+|---------|---------------|-------|
+| LEDE | 75-150 words | Hook, not setup |
+| THE STORY | 350-550 words | Scales with exposed evidence |
+| FOLLOW THE MONEY | 75-200 words | Tracker does the visual work |
+| THE PLAYERS | 150-250 words | Evaluate choices, not catalog |
+| WHAT'S MISSING | 75-150 words | Brief mystery, not exhaustive |
+| CLOSING | 75-150 words | Forward implications, not recap |
 
-**Total article:** 1000-1500 words. Quality over quantity - a tight article with impact beats a long one that wanders.
+**Total article:** 1000-1500 words of prose. Quality over quantity - a tight article with impact beats a long one that wanders. Section ranges sum to ~1450 max, leaving headroom for natural variance.
 
 ---
 
