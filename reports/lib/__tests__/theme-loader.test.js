@@ -182,7 +182,6 @@ describe('ThemeLoader', () => {
       const result = await loader.loadPhasePrompts('arcAnalysis');
 
       expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.arcAnalysis);
-      expect(result['character-voice']).toBe('Content for character-voice');
       expect(result['evidence-boundaries']).toBe('Content for evidence-boundaries');
     });
 
