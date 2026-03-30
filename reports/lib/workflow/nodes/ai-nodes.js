@@ -377,7 +377,7 @@ async function curateEvidenceBundle(state, config) {
   // Exposed token summaries are included in each scoring batch to enable
   // the +2 TOKEN_CORROBORATION criterion.
 
-  const exposedSummaries = buildExposedTokenSummaries(exposedTokens);
+  const exposedSummaries = buildExposedTokenSummaries(exposedTokens, state.canonicalCharacters || {});
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // STEP 4: Batched paper evidence scoring (Sonnet, parallel)

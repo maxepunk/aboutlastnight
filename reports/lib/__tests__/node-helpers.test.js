@@ -5,11 +5,11 @@
 describe('extractCanonicalCharacters', () => {
   const { extractCanonicalCharacters } = require('../workflow/nodes/node-helpers');
 
-  it('should extract unique owner names from token data', () => {
+  it('should derive firstName -> fullName map from Notion owner strings', () => {
     const tokens = [
-      { owners: ['Vic'] },
-      { owners: ['Alex', 'Vic'] },
-      { owners: ['Sarah'] }
+      { owners: ['Vic Kingsley'] },
+      { owners: ['Alex Reeves', 'Vic Kingsley'] },
+      { owners: ['Sarah Blackwood'] }
     ];
     const result = extractCanonicalCharacters(tokens, 'journalist');
     expect(result['Vic']).toBe('Vic Kingsley');
@@ -17,10 +17,10 @@ describe('extractCanonicalCharacters', () => {
     expect(result['Sarah']).toBe('Sarah Blackwood');
   });
 
-  it('should use theme-config as fallback for full name resolution', () => {
-    const tokens = [{ owners: ['Kai'] }];
+  it('should handle single-name owners without last name', () => {
+    const tokens = [{ owners: ['Flip'] }];
     const result = extractCanonicalCharacters(tokens, 'journalist');
-    expect(result['Kai']).toBe('Kai Andersen');
+    expect(result['Flip']).toBe('Flip');
   });
 
   it('should handle empty token array', () => {
@@ -34,31 +34,20 @@ describe('extractCanonicalCharacters', () => {
     expect(result).toEqual({});
   });
 
-  it('should log warning for unknown first names not in theme-config', () => {
+  it('should not warn for any Notion-provided names (no hardcoded validation)', () => {
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
     const tokens = [{ owners: ['UnknownPerson'] }];
     const result = extractCanonicalCharacters(tokens, 'journalist');
-    expect(result['UnknownPerson']).toBe('UnknownPerson');
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('UnknownPerson')
-    );
-    consoleSpy.mockRestore();
-  });
-
-  it('should not warn for known NPCs that resolve to themselves', () => {
-    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-    const tokens = [{ owners: ['Flip'] }];
-    const result = extractCanonicalCharacters(tokens, 'journalist');
-    expect(result['Flip']).toBe('Flip');
+    expect(result['Unknownperson']).toBe('UnknownPerson');
     expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
-  it('should deduplicate owners across multiple tokens', () => {
+  it('should deduplicate owners across multiple tokens (first occurrence wins)', () => {
     const tokens = [
-      { owners: ['Alex'] },
-      { owners: ['Alex'] },
-      { owners: ['Alex', 'Sarah'] }
+      { owners: ['Alex Reeves'] },
+      { owners: ['Alex Reeves'] },
+      { owners: ['Alex Reeves', 'Sarah Blackwood'] }
     ];
     const result = extractCanonicalCharacters(tokens, 'journalist');
     expect(Object.keys(result)).toHaveLength(2);

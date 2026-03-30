@@ -37,7 +37,7 @@ const {
   getNonRosterPCs,  // Commit 8.xx: Get all non-roster PCs for a session
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper (renamed to avoid local shadow)
 } = require('./node-helpers');
-const { getThemeNPCs, getThemeCharacters, getCanonicalName } = require('../../theme-config');  // Commit 8.17+: Theme-configurable NPCs and character list
+const { getThemeNPCs, getCanonicalName } = require('../../theme-config');  // Commit 8.17+: Theme-configurable NPCs; getCanonicalName uses Notion-derived map
 const { traceNode } = require('../../observability');
 
 // Commit 8.13: Import centralized rules loader for evidence boundaries
@@ -154,11 +154,12 @@ function buildCoreArcPrompt(state) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
 
-  // Commit 8.xx: Compute non-roster PCs for three-category character guidance
+  // Compute non-roster PCs for three-category character guidance
+  // Character list derived from Notion (state.canonicalCharacters) instead of hardcoded config
   const theme = state.theme || 'journalist';
   const themeNPCs = getThemeNPCs(theme);
-  const themeCharacters = getThemeCharacters(theme);
-  const nonRosterPCs = getNonRosterPCs(context.roster, themeCharacters, themeNPCs);
+  const allCharacters = Object.keys(state.canonicalCharacters || {});
+  const nonRosterPCs = getNonRosterPCs(context.roster, allCharacters, themeNPCs);
 
   // Output format at TOP for recency bias
   const outputFormat = buildOutputFormatSection(`{
@@ -1505,9 +1506,9 @@ function validateArcStructure(state, config) {
   const themeNPCs = getThemeNPCs(theme);
   console.log(`[validateArcStructure] Theme "${theme}" NPCs: ${themeNPCs.join(', ') || '(none)'}`);
 
-  // Commit 8.xx: Get all valid game characters for non-roster PC detection
-  const themeCharacters = getThemeCharacters(theme);
-  const nonRosterPCs = getNonRosterPCs(roster, themeCharacters, themeNPCs);
+  // Get all valid game characters for non-roster PC detection (from Notion-derived map)
+  const allCharacters = Object.keys(state?.canonicalCharacters || {});
+  const nonRosterPCs = getNonRosterPCs(roster, allCharacters, themeNPCs);
   console.log(`[validateArcStructure] Non-roster PCs: ${nonRosterPCs.join(', ') || '(none)'}`);
 
   // Build valid evidence ID set using helper from node-helpers
@@ -1577,8 +1578,9 @@ function validateArcStructure(state, config) {
     const placementRoles = {};  // Track roles for coherence check
 
     Object.entries(arc.characterPlacements || {}).forEach(([name, role]) => {
-      // Use fuzzy matching helper (Commit 8.xx: now preserves canonical full names)
-      const matchedName = validateRosterName(name, roster, theme);
+      // Use fuzzy matching helper (now uses Notion-derived canonical characters map)
+      const canonicalChars = state?.canonicalCharacters || {};
+      const matchedName = validateRosterName(name, roster, canonicalChars);
 
       if (matchedName) {
         // Roster member or canonical full name - preserve as-is
@@ -1596,7 +1598,7 @@ function validateArcStructure(state, config) {
         // NPCs are valid in characterPlacements but don't count toward roster coverage
         validatedPlacements[name] = role;
         // Don't add to placementRoles - NPCs don't affect roster coverage checks
-      } else if (isNonRosterPC(name, roster, themeCharacters, themeNPCs)) {
+      } else if (isNonRosterPC(name, roster, allCharacters, themeNPCs)) {
         // Commit 8.xx: Non-roster PC - valid game character not playing this session
         // They appear in evidence about them but Nova didn't observe their behavior
         // Valid in characterPlacements (evidence-based mentions) but don't count for coverage
@@ -1730,11 +1732,12 @@ function validateArcStructure(state, config) {
 
   // Build mapping from canonical names to roster entries
   // e.g., "sarah blackwood" → "sarah", "sarah" → "sarah"
+  const canonicalCharsForCoverage = state?.canonicalCharacters || {};
   const canonicalToRoster = new Map();
   roster.forEach(rosterName => {
     const nameLower = rosterName.toLowerCase();
     canonicalToRoster.set(nameLower, nameLower);
-    const canonical = getCanonicalName(rosterName, theme);
+    const canonical = getCanonicalName(rosterName, canonicalCharsForCoverage);
     if (canonical.toLowerCase() !== nameLower) {
       canonicalToRoster.set(canonical.toLowerCase(), nameLower);
     }
