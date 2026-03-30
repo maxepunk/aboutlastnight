@@ -109,7 +109,7 @@ const THEME_CONSTRAINTS = {
     hardConstraints: `HARD CONSTRAINTS (violations = failure):
 - NO em-dashes (use commas or periods)
 - NO "tokens" - say "extracted memories" or "memories"
-- NO game mechanics ("transactions", "buried", "first-buried bonus", "guests")
+- NO game mechanics ("buried memories", "first-buried bonus", "guests")
 - NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
 - NO third-person self-reference ("The Detective noted") - you ARE the detective
 - NO countable memories ("5 memories") - memories are experiences, not inventory
@@ -1089,7 +1089,7 @@ ${revisionConstraints.revisionVoice}`;
 - Any remaining passive/observer voice patterns
 - Any em-dashes that slipped through
 - Generic praise or vague attributions
-- Game mechanics language ("tokens", "transactions", "buried bonus")`;
+- Game mechanics language ("tokens", "buried memories", "buried bonus")`;
 
     const userPrompt = `<YOUR_SELF_CHECK>
 ${voiceSelfCheck}
