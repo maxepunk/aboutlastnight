@@ -282,6 +282,13 @@ async function fetchMemoryTokens(state, config) {
   // - array (even empty) = already fetched (skip)
   if (state.memoryTokens !== null && state.memoryTokens !== undefined) {
     console.log(`[fetchMemoryTokens] Skipping - already set (${state.memoryTokens.length} tokens)`);
+    // Re-derive canonicalCharacters if missing (resume from pre-deployment checkpoint)
+    if (state.canonicalCharacters === null || state.canonicalCharacters === undefined) {
+      const { extractCanonicalCharacters } = require('./node-helpers');
+      const canonicalCharacters = extractCanonicalCharacters(state.memoryTokens, state.theme || 'journalist');
+      console.log(`[fetchMemoryTokens] Re-derived ${Object.keys(canonicalCharacters).length} canonical characters for resumed session`);
+      return { canonicalCharacters, currentPhase: PHASES.FETCH_EVIDENCE };
+    }
     return {
       currentPhase: PHASES.FETCH_EVIDENCE
     };
