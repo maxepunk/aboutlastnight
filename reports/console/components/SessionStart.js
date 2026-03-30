@@ -19,6 +19,7 @@ function SessionStart({ dispatch, theme }) {
   const [whiteboardPath, setWhiteboardPath] = React.useState('');
   const [status, setStatus] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const [reporterName, setReporterName] = React.useState('');
 
   // FileBrowser modal state
   const [browseOpen, setBrowseOpen] = React.useState(false);
@@ -38,6 +39,9 @@ function SessionStart({ dispatch, theme }) {
     };
     if (whiteboardPath.trim()) {
       raw.whiteboardPhotoPath = whiteboardPath.trim();
+    }
+    if (theme === 'journalist') {
+      raw.journalistFirstName = reporterName.trim() || 'Cassandra';
     }
     return raw;
   }
@@ -218,6 +222,24 @@ function SessionStart({ dispatch, theme }) {
         autoFocus: true,
         disabled: loading
       })
+    ),
+
+    // Reporter First Name (journalist theme only)
+    theme === 'journalist' && React.createElement('div', { className: 'session-start__input-group mt-md' },
+      React.createElement('label', { htmlFor: 'reporter-name' }, 'Reporter First Name'),
+      React.createElement('input', {
+        id: 'reporter-name',
+        type: 'text',
+        className: 'input',
+        placeholder: 'Cassandra',
+        value: reporterName,
+        onChange: (e) => setReporterName(e.target.value),
+        disabled: loading,
+        'aria-label': 'First name of the journalist character for this session'
+      }),
+      React.createElement('p', { className: 'text-muted text-xs mt-xs' },
+        'Leave blank for default (Cassandra Nova)'
+      )
     ),
 
     // Photos Path (with Browse button)
