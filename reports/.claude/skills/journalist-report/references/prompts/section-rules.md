@@ -38,7 +38,7 @@ Subsequent mentions: one-sentence callback that adds the NEW angle. ("Morgan's b
 > - Photo distribution and emotional pacing
 > - Pull quote types (verbatim vs crystallization)
 
-Visual components are **inline content blocks** within sections. The "max 3 paragraphs" rule is guidance, not a hard cap - the goal is compelling narrative flow.
+Visual components are **inline content blocks** within sections. Place them where they serve the narrative — to prove a claim (evidence card), to humanize before a revelation (photo), or to crystallize a powerful moment (pull quote). The goal is compulsive readability, not quota compliance.
 
 **Components EARN their place.** The goal is a compelling GIFT for players, not quota compliance.
 

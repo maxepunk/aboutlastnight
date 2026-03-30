@@ -18,7 +18,9 @@ Rules for article output structure. The AI outputs JSON (Outline or ContentBundl
 
 Four visual component types break up text walls and create scroll engagement. Use them strategically at narrative moments, not decoratively.
 
-### Rule: Max 3 paragraphs without a visual break
+### Visual Pacing for Compulsive Readability
+
+Place visual components (evidence cards, photos, pull quotes) to maintain scroll engagement. Every 2-3 paragraphs, readers decide whether to continue or abandon. A well-placed visual at that decision point acts as a micro-reward that pulls them forward. Let the narrative dictate placement — components should EARN their position by serving the story, not filling a quota.
 
 ### Evidence Card
 
