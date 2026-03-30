@@ -36,9 +36,9 @@ const THEME_CONFIGS = {
       // Target word counts per section (advisory)
       wordBudgets: {
         lede: { min: 50, max: 150 },
-        theStory: { min: 200, max: 800 },
-        thePlayers: { min: 100, max: 400 },
-        closing: { min: 50, max: 200 }
+        theStory: { min: 300, max: 600 },
+        thePlayers: { min: 100, max: 300 },
+        closing: { min: 50, max: 150 }
       }
     },
 

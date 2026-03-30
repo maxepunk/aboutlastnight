@@ -130,7 +130,7 @@ This internal structure prevents character-cataloging.
 
 **Measure by WORD COUNT, not HTML lines.** Visual components add markup but not reading time.
 
-**Target:** 1200-1800 words of prose (excluding visual component markup)
+**Target:** 1000-1500 words of prose (excluding visual component markup)
 
 **Density Principles:**
 - Every paragraph must ADVANCE the narrative or DEEPEN understanding

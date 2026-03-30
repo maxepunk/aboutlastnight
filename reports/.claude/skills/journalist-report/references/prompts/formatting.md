@@ -128,7 +128,7 @@ Example section with inline photo:
 | WHAT'S MISSING | 100-200 words |
 | CLOSING | 150-300 words |
 
-**Total article:** 1000-2000 words typical. Can be shorter with sparse evidence.
+**Total article:** 1000-1500 words. Quality over quantity - a tight article with impact beats a long one that wanders.
 
 ---
 
