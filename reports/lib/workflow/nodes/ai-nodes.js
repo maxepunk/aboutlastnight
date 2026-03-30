@@ -866,16 +866,34 @@ async function generateOutline(state, config) {
     ? getPhotoFilename(state.whiteboardPhotoPath)
     : null;
 
-  // Select hero image: prefer arc analysis suggestion, fallback to first non-whiteboard photo
-  // FIX: Previously hardcoded to first photo, ignoring arc analysis (Commit 8.26)
-  // FIX: Skip whiteboard when selecting fallback hero
-  const arcSuggestion = arcAnalysis?.heroImageSuggestion;
-  const fallbackHeroPhoto = (state.sessionPhotos || []).find(
+  // Select hero image: prefer largest group photo, fallback to first non-whiteboard photo
+  // Group photos better represent the ensemble cast as hero images
+  const nonWhiteboardPhotos = (state.sessionPhotos || []).filter(
     photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename
   );
-  const heroImage = arcSuggestion?.filename
-    || getPhotoFilename(fallbackHeroPhoto)
-    || 'evidence-board.png';
+
+  let heroImage;
+  const analyses = state.photoAnalyses?.analyses || [];
+  if (analyses.length > 0 && nonWhiteboardPhotos.length > 0) {
+    // Score each photo by number of identified characters (more = better group photo)
+    // Uses identifiedCharacters (post-enrichment) with characterDescriptions as fallback
+    const scored = nonWhiteboardPhotos.map(photo => {
+      const filename = getPhotoFilename(photo);
+      const analysis = analyses.find(a => a.filename === filename);
+      // identifiedCharacters = enriched name strings, characterDescriptions = pre-enrichment objects
+      const characterCount = analysis?.identifiedCharacters?.length
+        || analysis?.characterDescriptions?.length
+        || 0;
+      return { photo, filename, characterCount };
+    });
+    // Sort by character count descending, take first
+    scored.sort((a, b) => b.characterCount - a.characterCount);
+    heroImage = scored[0]?.filename || getPhotoFilename(nonWhiteboardPhotos[0]) || 'evidence-board.png';
+    console.log(`[generateOutline] Hero image selected: ${heroImage} (${scored[0]?.characterCount || 0} characters identified)`);
+  } else {
+    heroImage = getPhotoFilename(nonWhiteboardPhotos[0]) || 'evidence-board.png';
+    console.log(`[generateOutline] Hero image fallback: ${heroImage} (no photo analyses available)`);
+  }
 
   // Build available photos list with analyses for outline generation (Commit 8.24)
   // FIX: Filter out hero to prevent duplicate usage (Commit 8.26)
