@@ -921,7 +921,6 @@ async function generateOutline(state, config) {
     arcAnalysis,
     state.selectedArcs || [],
     heroImage,
-    state.evidenceBundle || {},
     availablePhotos,  // Available photos
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     shellAccounts  // Deterministic shell account data for financial summary
@@ -1193,7 +1192,6 @@ async function generateContentBundle(state, config) {
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     state.outline || {},
-    state.evidenceBundle || {},
     template,
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     state.heroImage,  // Hero image filename (prevents duplicate in photos array)
@@ -1595,14 +1593,14 @@ function createMockPromptBuilder() {
       };
     },
 
-    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, evidenceBundle, availablePhotos, arcEvidencePackages, shellAccounts) {
+    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts) {
       return {
         systemPrompt: 'Mock system prompt for outline generation',
         userPrompt: `Generate outline for arcs: ${selectedArcs?.join(', ') || 'none selected'}`
       };
     },
 
-    async buildArticlePrompt(outline, evidenceBundle, template, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions) {
+    async buildArticlePrompt(outline, template, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions) {
       return {
         systemPrompt: 'Mock system prompt for article generation',
         userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`
