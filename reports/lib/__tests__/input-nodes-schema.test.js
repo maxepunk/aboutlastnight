@@ -8,11 +8,6 @@ describe('DIRECTOR_NOTES_SCHEMA extensions', () => {
     expect(DIRECTOR_NOTES_SCHEMA.properties.reportingMode.enum).toEqual(['on-site', 'remote']);
   });
 
-  it('should include journalistFirstName property', () => {
-    expect(DIRECTOR_NOTES_SCHEMA.properties.journalistFirstName).toBeDefined();
-    expect(DIRECTOR_NOTES_SCHEMA.properties.journalistFirstName.type).toBe('string');
-  });
-
   it('should include guestReporter property as object with name and role', () => {
     expect(DIRECTOR_NOTES_SCHEMA.properties.guestReporter).toBeDefined();
     expect(DIRECTOR_NOTES_SCHEMA.properties.guestReporter.type).toBe('object');
@@ -36,11 +31,10 @@ describe('mergeDirectorOverrides', () => {
   const { mergeDirectorOverrides } = _testing;
 
   it('should merge reportingMode from director notes into sessionConfig', () => {
-    const sessionConfig = { roster: ['Alex'], journalistName: 'Cassandra' };
+    const sessionConfig = { roster: ['Alex'], journalistFirstName: 'Cassandra' };
     const directorNotes = {
       observations: { behaviorPatterns: [] },
       reportingMode: 'remote',
-      journalistFirstName: 'Cassandra',
       guestReporter: { name: 'Ashe Motoko', role: 'Guest Reporter' }
     };
     const merged = mergeDirectorOverrides(sessionConfig, directorNotes);
@@ -50,21 +44,14 @@ describe('mergeDirectorOverrides', () => {
   });
 
   it('should default reportingMode to on-site when not specified', () => {
-    const sessionConfig = { roster: ['Alex'], journalistName: 'Cassandra' };
+    const sessionConfig = { roster: ['Alex'], journalistFirstName: 'Cassandra' };
     const directorNotes = { observations: { behaviorPatterns: [] } };
     const merged = mergeDirectorOverrides(sessionConfig, directorNotes);
     expect(merged.reportingMode).toBe('on-site');
   });
 
-  it('should default journalistFirstName to "Cassandra" when not specified', () => {
-    const sessionConfig = { roster: ['Alex'], journalistName: 'Cassandra' };
-    const directorNotes = { observations: { behaviorPatterns: [] } };
-    const merged = mergeDirectorOverrides(sessionConfig, directorNotes);
-    expect(merged.journalistFirstName).toBe('Cassandra');
-  });
-
-  it('should fall back to sessionConfig.journalistName for journalistFirstName', () => {
-    const sessionConfig = { roster: ['Alex'], journalistName: 'Athena' };
+  it('should preserve journalistFirstName from sessionConfig', () => {
+    const sessionConfig = { roster: ['Alex'], journalistFirstName: 'Athena' };
     const directorNotes = { observations: { behaviorPatterns: [] } };
     const merged = mergeDirectorOverrides(sessionConfig, directorNotes);
     expect(merged.journalistFirstName).toBe('Athena');
@@ -80,12 +67,12 @@ describe('mergeDirectorOverrides', () => {
   it('should handle null directorNotes gracefully', () => {
     const result = mergeDirectorOverrides({ roster: ['Alex'] }, null);
     expect(result.reportingMode).toBe('on-site');
-    expect(result.journalistFirstName).toBe('Cassandra');
+    expect(result.journalistFirstName).toBeUndefined();
     expect(result.guestReporter).toBeNull();
   });
 
   it('should preserve existing sessionConfig fields', () => {
-    const sessionConfig = { roster: ['Alex', 'Sam'], sessionId: '0307', journalistName: 'Cassandra' };
+    const sessionConfig = { roster: ['Alex', 'Sam'], sessionId: '0307', journalistFirstName: 'Cassandra' };
     const directorNotes = { observations: { behaviorPatterns: [] }, reportingMode: 'remote' };
     const merged = mergeDirectorOverrides(sessionConfig, directorNotes);
     expect(merged.roster).toEqual(['Alex', 'Sam']);

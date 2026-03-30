@@ -208,10 +208,6 @@ const DIRECTOR_NOTES_SCHEMA = {
       enum: ['on-site', 'remote'],
       description: 'Whether the journalist was physically present (on-site) or receiving tips remotely (remote). Infer from director notes.'
     },
-    journalistFirstName: {
-      type: 'string',
-      description: 'First name of the journalist NPC for this session, if explicitly mentioned.'
-    },
     guestReporter: {
       type: 'object',
       properties: {
@@ -370,7 +366,6 @@ function mergeDirectorOverrides(sessionConfig, directorNotes) {
   return {
     ...sessionConfig,
     reportingMode: directorNotes?.reportingMode ?? 'on-site',
-    journalistFirstName: directorNotes?.journalistFirstName ?? sessionConfig?.journalistName ?? 'Cassandra',
     guestReporter: directorNotes?.guestReporter || null
   };
 }
@@ -439,7 +434,7 @@ Return structured JSON matching the schema.`;
     });
     result.rosterCount = result.roster?.length || 0;
     result.photosPath = sanitizePath(rawInput.photosPath);
-    result.journalistName = 'Cassandra'; // Default journalist NPC name
+    result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
     result.createdAt = new Date().toISOString();
     return result;
   })();
@@ -517,8 +512,7 @@ Categories:
 2. suspiciousCorrelations: Suspected connections, possible pseudonyms, theories
 3. notableMoments: Key moments or events worth highlighting
 4. reportingMode: Was the journalist physically present ("on-site") or receiving tips remotely ("remote")? Look for phrases like "not on site", "received tips remotely", "was present at the scene", etc. If unclear, omit this field.
-5. journalistFirstName: The journalist's first name if explicitly mentioned. If not mentioned, omit this field.
-6. guestReporter: If any player or character is credited as a guest reporter, co-reporter, or contributor, extract their name and role. Only include if explicitly stated.
+5. guestReporter: If any player or character is credited as a guest reporter, co-reporter, or contributor, extract their name and role. Only include if explicitly stated.
 
 Return structured JSON matching the schema.`;
 
