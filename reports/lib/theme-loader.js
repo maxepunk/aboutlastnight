@@ -17,7 +17,6 @@ const PHASE_REQUIREMENTS = {
     'photo-enrichment'
   ],
   arcAnalysis: [
-    'character-voice',
     'evidence-boundaries',
     'narrative-structure',
     'anti-patterns'
