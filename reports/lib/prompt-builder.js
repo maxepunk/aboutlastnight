@@ -1074,7 +1074,9 @@ REVISION RULES:
 - Preserve structure: ${this.themeName === 'detective' ? 'sections, photos' : 'sections, evidence cards, photos, pull quotes, financial tracker'}
 - Focus on the specific issues you identified in your self-check
 
-${revisionConstraints.revisionVoice}`;
+${revisionConstraints.revisionVoice}
+
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}`;
 
     const revisionChecklist = this.themeName === 'detective'
       ? `Fix the issues you identified in your self-check. Also check for:
