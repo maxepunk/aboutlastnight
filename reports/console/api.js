@@ -47,7 +47,7 @@ const api = {
 
   /**
    * Start a new session with raw input
-   * @param {string} sessionId - MMDD format
+   * @param {string} sessionId - Alphanumeric + hyphens, 1-30 chars
    * @param {object} rawInput - Raw session input (photosPath required)
    * @returns {Promise<object>} Checkpoint or phase response
    */
