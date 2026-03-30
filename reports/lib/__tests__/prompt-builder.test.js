@@ -367,6 +367,14 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('VISUAL_DISTRIBUTION');
       expect(userPrompt).toContain('ARC_FLOW');
     });
+
+    it('journalist article prompt includes explicit word target in GENERATION_INSTRUCTION', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
+        { lede: { hook: 'test' } }, '<html></html>', [], null
+      );
+      const generationInstruction = userPrompt.split('<GENERATION_INSTRUCTION>')[1] || '';
+      expect(generationInstruction).toContain('1000-1500 words');
+    });
   });
 
   describe('buildValidationPrompt', () => {

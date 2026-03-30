@@ -271,7 +271,7 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
 </FINANCIAL_SUMMARY>`;
   }
 
-  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = []) {
+  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null) {
     const rawPrompts = await this.theme.loadPhasePrompts('outlineGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -358,7 +358,16 @@ The report should feel BESPOKE to this specific case—reference unique details,
 
 TARGET LENGTH: ~750 words total. Be economical. Every sentence earns its place.
 </section-guidance>
+${sessionFacts ? `
+<SESSION_FACTS>
+INVESTIGATION ROSTER (${sessionFacts.playerCount} subjects):
+${sessionFacts.roster.join('\n')}
 
+ACCUSATION: ${sessionFacts.accusation}
+
+ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
+Use exactly ${sessionFacts.playerCount} when referencing how many subjects were involved.
+</SESSION_FACTS>` : ''}
 Return JSON with the following structure:
 {
   "executiveSummary": {
@@ -541,6 +550,17 @@ CRITICAL: THREE TIMELINES — THE PARTY (LAST NIGHT), THE INVESTIGATION (THIS MO
 - NEVER say "tonight" — the party was last night, the investigation was this morning.
 </TEMPORAL_DISCIPLINE>
 ${this._buildFinancialSummary(shellAccounts)}
+${sessionFacts ? `
+<SESSION_FACTS>
+INVESTIGATION ROSTER (${sessionFacts.playerCount} players):
+${sessionFacts.roster.join('\n')}
+
+ACCUSATION: ${sessionFacts.accusation}
+
+CRITICAL - CHARACTER AGENCY RULE:
+ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
+Use exactly ${sessionFacts.playerCount} when referencing how many people were present.
+</SESSION_FACTS>` : ''}
 Return JSON with the following structure:
 {
   "lede": {
@@ -936,6 +956,8 @@ ${constraints.voiceQuestion}
 
 <GENERATION_INSTRUCTION>
 Generate structured article content as JSON matching the ContentBundle schema.
+
+TARGET LENGTH: 1000-1500 words of prose (excluding visual component markup). Quality over quantity.
 
 STRUCTURE:
 1. "sections" - Array of article sections, each with:
