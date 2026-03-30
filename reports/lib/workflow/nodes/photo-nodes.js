@@ -381,7 +381,11 @@ async function detectWhiteboard(state, config) {
   });
 
   if (matches.length === 0) {
-    throw new Error('No whiteboard photo found. Ensure one photo has "whiteboard" in filename.');
+    console.warn('[detectWhiteboard] No whiteboard photo found in session photos');
+    return {
+      whiteboardPhotoPath: null,
+      currentPhase: PHASES.DETECT_WHITEBOARD
+    };
   }
 
   if (matches.length > 1) {
