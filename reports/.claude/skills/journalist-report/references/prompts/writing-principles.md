@@ -92,6 +92,8 @@ Every character who was in the session should appear somewhere in the article. W
 
 **Only use documented information.** Do not fabricate in-room moments, reactions, or behaviors unless they appear in director notes. The reporter can only report what she actually observed and documented.
 
+**Never fabricate quoted dialogue.** All direct quotes must come from evidence content (memory text, paper evidence text) or director notes. If no verbatim quote exists, paraphrase or describe the action instead. Attributed quotes that don't exist in the evidence are the highest-risk fabrication — they put specific false words in a character's mouth.
+
 Ways to include characters using only documented evidence:
 - Who exposed which memories (from exposed evidence list)
 - Who buried which memories (from buried evidence list)
