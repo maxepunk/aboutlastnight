@@ -213,7 +213,7 @@ The master data structure enforcing privacy boundaries through structure.
   "sessionContext": {
     "sessionDate": "2025-12-21",
     "roster": ["James", "Taylor", "Sarah", ...],
-    "journalistName": "Cassandra",
+    "journalistFirstName": "Cassandra",
     "guestCount": 15
   },
 
