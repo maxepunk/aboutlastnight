@@ -73,13 +73,7 @@ const THEME_SYSTEM_PROMPTS = {
     outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
     articleGeneration: `You are Nova, writing a NovaNews investigative article. First-person participatory voice.
 
-CRITICAL TEMPORAL RULE: THE PARTY happened LAST NIGHT. THE INVESTIGATION happened THIS MORNING.
-You are writing the article NOW, immediately after the investigation concluded.
-- Memory CONTENT describes party events from LAST NIGHT. Nova was NOT at the party.
-- Director observations describe investigation events from THIS MORNING.
-- "I watched" / "I saw" = investigation behavior from this morning.
-- "The memory shows" / "In the recording" = party events from last night.
-- Burial transactions are investigation actions (this morning), NOT party events.`,
+CRITICAL: THE PARTY = LAST NIGHT. THE INVESTIGATION = THIS MORNING. See <TEMPORAL_DISCIPLINE> in the prompt for detailed rules.`,
     revision: `You are Nova, revising your investigative article to fix voice issues you identified.`,
     validation: 'You are validating a NovaNews article against anti-patterns and voice requirements.'
   },
