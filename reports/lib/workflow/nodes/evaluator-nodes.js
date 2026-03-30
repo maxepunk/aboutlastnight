@@ -168,7 +168,7 @@ function getOutlineCriteria(theme = 'journalist') {
     },
     // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.30)
     sectionBalance: {
-      description: 'Are sections appropriately weighted?',
+      description: 'Are sections appropriately weighted within the 1000-1500 word budget?',
       weight: 0.05,
       type: 'advisory'
     },
@@ -183,7 +183,7 @@ function getOutlineCriteria(theme = 'journalist') {
       type: 'advisory'
     },
     wordBudget: {
-      description: 'Is section word budget reasonable?',
+      description: 'Are section word budgets reasonable for a 1000-1500 word article? (lede 75-150, theStory 350-550, followTheMoney 75-200, thePlayers 150-250, whatsMissing 75-150, closing 75-150)',
       weight: 0.05,
       type: 'advisory'
     },
