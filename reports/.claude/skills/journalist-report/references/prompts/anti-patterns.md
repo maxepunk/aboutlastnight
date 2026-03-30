@@ -172,6 +172,17 @@ For first-person (most of the article), this doesn't apply since "I" has no name
 ### Fabricating Moments
 Only use documented information.
 
+**Fabricated dialogue is the worst form of fabrication:**
+
+**WRONG:** "I didn't have a choice," Vic whispered, her voice cracking.
+**WHY:** Unless this exact quote appears in evidence or director notes, it's invented dialogue attributed to a real character.
+
+**RIGHT:** The memory captures Vic's voice, barely audible: "I didn't have a choice."
+**WHY:** This quotes FROM the evidence content, framed as what the memory shows.
+
+**RIGHT (no quote available):** Vic's composure fractured — the director noted her visible distress when the evidence surfaced.
+**WHY:** Paraphrases a director observation without inventing dialogue.
+
 **WRONG:**
 ```
 Sarah's hands were shaking as she made her decision. Sam
