@@ -1,6 +1,6 @@
 /**
  * SessionStart Component
- * Session ID input (4-digit MMDD), photos path, optional whiteboard path.
+ * Session ID input (alphanumeric + hyphens), photos path, optional whiteboard path.
  * Browse buttons open FileBrowser modal for server-side path selection.
  * Start Fresh and Resume buttons.
  * Exports to window.Console.SessionStart
@@ -26,7 +26,7 @@ function SessionStart({ dispatch, theme }) {
   const [browseInitialPath, setBrowseInitialPath] = React.useState('');
   const [browseTarget, setBrowseTarget] = React.useState(null); // 'photos' | 'whiteboard'
 
-  const isValid = /^\d{4}$/.test(sessionId);
+  const isValid = /^[a-zA-Z0-9-]{1,30}$/.test(sessionId);
   const defaultPhotosPath = sessionId ? 'data/' + sessionId + '/photos' : '';
 
   /**
@@ -169,7 +169,7 @@ function SessionStart({ dispatch, theme }) {
   return React.createElement('div', { className: 'session-start fade-in' },
     React.createElement('h2', { className: 'session-start__title' }, 'Session'),
     React.createElement('p', { className: 'session-start__subtitle' },
-      'Enter a 4-digit session ID (MMDD format) to start or resume a workflow.'
+      'Enter a session ID (e.g. 1221, march-15-matinee) to start or resume a workflow.'
     ),
 
     // Theme selector
@@ -209,15 +209,14 @@ function SessionStart({ dispatch, theme }) {
         placeholder: '1221',
         value: sessionId,
         onChange: (e) => {
-          const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+          const val = e.target.value.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 30);
           setSessionId(val);
           setStatus('');
         },
         onKeyDown: handleKeyDown,
-        maxLength: 4,
+        maxLength: 30,
         autoFocus: true,
-        disabled: loading,
-        style: { textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.3em' }
+        disabled: loading
       })
     ),
 
