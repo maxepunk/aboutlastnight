@@ -1642,7 +1642,7 @@ async function handleInputReview(checkpoint, currentPhase) {
   // Header with session info
   sectionBox('INPUT REVIEW');
   displayField('Session ID', sessionConfig.sessionId || parsedInput.sessionId, { indent: 2 });
-  displayField('Journalist', sessionConfig.journalistName, { indent: 2 });
+  displayField('Journalist', sessionConfig.journalistFirstName, { indent: 2 });
   if (parsedInput.parsedAt) {
     console.log(color(`  Parsed: ${new Date(parsedInput.parsedAt).toLocaleString()} (${parsedInput.processingTimeMs || 0}ms)`, 'dim'));
   }
