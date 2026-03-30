@@ -36,9 +36,9 @@ function InputReview({ data, onApprove }) {
           React.createElement('span', { className: 'text-muted' }, 'Session ID: '),
           React.createElement('span', { className: 'text-secondary' }, sessionConfig.sessionId || parsedInput.sessionId || 'N/A')
         ),
-        sessionConfig.journalistName && React.createElement('span', { className: 'text-sm' },
+        sessionConfig.journalistFirstName && React.createElement('span', { className: 'text-sm' },
           React.createElement('span', { className: 'text-muted' }, 'Journalist: '),
-          React.createElement('span', { className: 'text-secondary' }, sessionConfig.journalistName)
+          React.createElement('span', { className: 'text-secondary' }, sessionConfig.journalistFirstName)
         ),
         parsedInput.parsedAt && React.createElement('span', { className: 'text-sm' },
           React.createElement('span', { className: 'text-muted' }, 'Parsed at: '),
