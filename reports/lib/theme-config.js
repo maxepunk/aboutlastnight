@@ -73,36 +73,9 @@ const THEME_CONFIGS = {
       minRosterMentions: 1  // Each roster member should be mentioned at least once
     },
 
-    // Canonical character names (Commit 8.26)
-    // Maps first names to full canonical names for consistent attribution
-    // Source: docs/PIPELINE_DEEP_DIVE.md character roster
-    canonicalCharacters: {
-      // 20 Playable Characters (PCs) — names from Notion (source of truth)
-      'Sarah': 'Sarah Blackwood',
-      'Alex': 'Alex Reeves',
-      'Remi': 'Remi Whitman',
-      'Vic': 'Vic Kingsley',
-      'Sam': 'Sam Thorne',
-      'Ashe': 'Ashe Motoko',
-      'Mel': 'Mel Nilsson',
-      'Jess': 'Jess Kane',
-      'Morgan': 'Morgan Reed',
-      'Flip': 'Flip',  // No known last name
-      'Taylor': 'Taylor Chase',
-      'Zia': 'Zia Bishara',
-      'Riley': 'Riley Torres',
-      'Ezra': 'Ezra Sullivan',
-      'Kai': 'Kai Andersen',
-      'Jamie': 'Jamie "Volt" Woods',
-      'Nat': 'Nat Francisco',
-      'Quinn': 'Quinn Sterling',
-      'Skyler': 'Skyler Iyer',
-      'Tori': 'Tori Zhang',
-      // 3 NPCs
-      'Marcus': 'Marcus Blackwood',
-      'Nova': 'Nova',
-      'Blake': 'Blake'
-    },
+    // canonicalCharacters REMOVED — now derived from Notion Character database
+    // via extractCanonicalCharacters() in node-helpers.js at fetch time.
+    // Stored in state.canonicalCharacters for downstream use.
 
     // Display constants for template rendering and post-generation validation
     // Used by template-helpers.js (articleIdPrefix), Article.js (crystallizationLabel),
@@ -163,34 +136,8 @@ const THEME_CONFIGS = {
       minRosterMentions: 1
     },
 
-    // Same 20 PCs + different NPCs (no Nova, Marcus is still NPC)
-    canonicalCharacters: {
-      // 20 Playable Characters (PCs) — names from Notion (source of truth)
-      'Sarah': 'Sarah Blackwood',
-      'Alex': 'Alex Reeves',
-      'Remi': 'Remi Whitman',
-      'Vic': 'Vic Kingsley',
-      'Sam': 'Sam Thorne',
-      'Ashe': 'Ashe Motoko',
-      'Mel': 'Mel Nilsson',
-      'Jess': 'Jess Kane',
-      'Morgan': 'Morgan Reed',
-      'Flip': 'Flip',
-      'Taylor': 'Taylor Chase',
-      'Zia': 'Zia Bishara',
-      'Riley': 'Riley Torres',
-      'Ezra': 'Ezra Sullivan',
-      'Kai': 'Kai Andersen',
-      'Jamie': 'Jamie "Volt" Woods',
-      'Nat': 'Nat Francisco',
-      'Quinn': 'Quinn Sterling',
-      'Skyler': 'Skyler Iyer',
-      'Tori': 'Tori Zhang',
-      // NPCs
-      'Marcus': 'Marcus Blackwood',
-      'Blake': 'Blake'
-      // NOTE: No 'Nova' — detective theme narrator is Anondono, not an NPC
-    },
+    // canonicalCharacters REMOVED — now derived from Notion Character database
+    // via extractCanonicalCharacters() in node-helpers.js at fetch time.
 
     // Display constants for template rendering and post-generation validation
     // Detective case reports use different ID prefix and no minimum pull quote/evidence card requirements
@@ -251,41 +198,32 @@ function getArticleRules(theme) {
 }
 
 /**
- * Get canonical full name for a character first name (Commit 8.26)
+ * Get canonical full name for a character first name
  *
- * Used by extractOwnerName() in node-helpers.js to ensure consistent
- * character attribution across the pipeline.
+ * Looks up a first name in a Notion-derived canonical characters map.
+ * The map is built by extractCanonicalCharacters() from token owner data.
  *
  * @param {string} firstName - First name (e.g., 'Vic')
- * @param {string} theme - Theme name (default: 'journalist')
+ * @param {Object} canonicalCharacters - Notion-derived map of firstName -> fullName
  * @returns {string} Full canonical name (e.g., 'Vic Kingsley') or firstName if not found
  */
-function getCanonicalName(firstName, theme = 'journalist') {
+function getCanonicalName(firstName, canonicalCharacters = {}) {
   if (!firstName) return firstName;
   // Normalize to title case for lookup
   const normalized = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-  return THEME_CONFIGS[theme]?.canonicalCharacters?.[normalized] || firstName;
+  return canonicalCharacters[normalized] || firstName;
 }
 
 /**
- * Get all playable character first names for a theme (Commit 8.xx)
+ * @deprecated Use Object.keys(state.canonicalCharacters) instead.
+ * Character names are now derived from Notion at fetch time, not hardcoded.
  *
- * Returns only PC names, not NPCs. Used for non-roster PC derivation.
- * Non-roster PCs = getThemeCharacters(theme) - roster - npcs
- *
- * @param {string} theme - Theme name (default: 'journalist')
- * @returns {string[]} Array of PC first names
+ * @param {string} theme - Theme name (unused)
+ * @returns {string[]} Always returns empty array
  */
 function getThemeCharacters(theme = 'journalist') {
-  const config = THEME_CONFIGS[theme];
-  if (!config?.canonicalCharacters) return [];
-
-  const npcs = config.npcs || [];
-  const npcSet = new Set(npcs.map(n => n.toLowerCase()));
-
-  // Return first names of characters that aren't NPCs
-  return Object.keys(config.canonicalCharacters)
-    .filter(name => !npcSet.has(name.toLowerCase()));
+  console.warn('[getThemeCharacters] DEPRECATED: Use Object.keys(state.canonicalCharacters) instead. Hardcoded character maps have been removed.');
+  return [];
 }
 
 module.exports = {

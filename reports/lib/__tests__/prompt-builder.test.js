@@ -1201,34 +1201,37 @@ describe('PromptBuilder', () => {
     });
   });
 
-  describe('generateRosterSection with override', () => {
-    it('should merge Notion-derived override with theme-config fallback', () => {
+  describe('generateRosterSection (Notion-derived)', () => {
+    it('should use Notion-derived canonical characters directly', () => {
       const { generateRosterSection } = require('../prompt-builder');
-      const override = {
+      const canonicalCharacters = {
         'Alex': 'Alex Reeves',
-        'Vic': 'Vic Kingsley'
+        'Vic': 'Vic Kingsley',
+        'Sarah': 'Sarah Blackwood'
       };
-      const result = generateRosterSection('journalist', override);
+      const result = generateRosterSection('journalist', canonicalCharacters);
       expect(result).toContain('Alex → Alex Reeves');
       expect(result).toContain('Vic → Vic Kingsley');
-      // theme-config fallback names ALSO present (merge, not replace)
       expect(result).toContain('Sarah → Sarah Blackwood');
-      expect(result).toContain('Marcus → Marcus Blackwood');
     });
 
-    it('should prefer Notion-derived name over theme-config when both exist', () => {
-      const { generateRosterSection } = require('../prompt-builder');
-      const override = { 'Sarah': 'Sarah Rebranded' };
-      const result = generateRosterSection('journalist', override);
-      expect(result).toContain('Sarah → Sarah Rebranded');
-      expect(result).not.toContain('Sarah Blackwood');
-    });
-
-    it('should fall back to theme-config when no override provided', () => {
+    it('should return empty roster when no characters provided', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const result = generateRosterSection('journalist');
-      expect(result).toContain('Sarah → Sarah Blackwood');
-      expect(result).toContain('Remi → Remi Whitman');
+      expect(result).toContain('CANONICAL CHARACTER ROSTER');
+      // No character entries since no hardcoded fallback
+      expect(result).not.toContain('→');
+    });
+
+    it('should include character data when provided', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const canonicalCharacters = { 'Alex': 'Alex Reeves' };
+      const characterData = {
+        'Alex Reeves': { role: 'CEO', groups: ['Board'] }
+      };
+      const result = generateRosterSection('journalist', canonicalCharacters, characterData);
+      expect(result).toContain('Alex → Alex Reeves');
+      expect(result).toContain('Alex Reeves: Role: CEO | Member of: Board');
     });
   });
 });

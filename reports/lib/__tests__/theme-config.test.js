@@ -175,7 +175,6 @@ describe('theme-config', () => {
       expect(config.npcs).toBeDefined();
       expect(config.outlineRules).toBeDefined();
       expect(config.articleRules).toBeDefined();
-      expect(config.canonicalCharacters).toBeDefined();
     });
 
     it('detective outlineRules has correct required sections', () => {
@@ -201,22 +200,6 @@ describe('theme-config', () => {
       expect(rules.requiredVoiceMarkers).toEqual(
         expect.arrayContaining(['the investigation', 'evidence'])
       );
-    });
-
-    it('detective canonicalCharacters matches journalist PCs (same game)', () => {
-      const detective = getThemeConfig('detective');
-      const journalist = getThemeConfig('journalist');
-      // Extract PC names only (exclude NPCs)
-      const journalistPCs = Object.keys(journalist.canonicalCharacters)
-        .filter(name => !['Marcus', 'Nova', 'Blake'].includes(name));
-      const detectivePCs = Object.keys(detective.canonicalCharacters)
-        .filter(name => !['Marcus', 'Blake'].includes(name));
-      expect(detectivePCs.sort()).toEqual(journalistPCs.sort());
-    });
-
-    it('getCanonicalName works with detective theme', () => {
-      expect(getCanonicalName('Sarah', 'detective')).toBe('Sarah Blackwood');
-      expect(getCanonicalName('Vic', 'detective')).toBe('Vic Kingsley');
     });
 
     it('detective does not include Nova as NPC', () => {
@@ -269,57 +252,55 @@ describe('theme-config', () => {
     });
   });
 
-  describe('canonical character names (current Notion names)', () => {
-    it('journalist canonicalCharacters has current first names', () => {
-      const config = getThemeConfig('journalist');
-      const chars = config.canonicalCharacters;
-      // Updated names (Notion source of truth)
-      expect(chars['Remi']).toBe('Remi Whitman');
-      expect(chars['Vic']).toBe('Vic Kingsley');
-      expect(chars['Sam']).toBe('Sam Thorne');
-      expect(chars['Mel']).toBe('Mel Nilsson');
-      expect(chars['Jess']).toBe('Jess Kane');
-      expect(chars['Zia']).toBe('Zia Bishara');
-      expect(chars['Riley']).toBe('Riley Torres');
-      expect(chars['Ezra']).toBe('Ezra Sullivan');
-      expect(chars['Nat']).toBe('Nat Francisco');
-      expect(chars['Quinn']).toBe('Quinn Sterling');
-      // Unchanged names
-      expect(chars['Sarah']).toBe('Sarah Blackwood');
-      expect(chars['Alex']).toBe('Alex Reeves');
-      expect(chars['Ashe']).toBe('Ashe Motoko');
-      expect(chars['Morgan']).toBe('Morgan Reed');
-      expect(chars['Flip']).toBe('Flip');
-      expect(chars['Taylor']).toBe('Taylor Chase');
-      expect(chars['Kai']).toBe('Kai Andersen');
-      expect(chars['Jamie']).toBe("Jamie \"Volt\" Woods");
-      expect(chars['Skyler']).toBe('Skyler Iyer');
-      expect(chars['Tori']).toBe('Tori Zhang');
+  describe('getCanonicalName (Notion-derived map)', () => {
+    it('looks up first name in provided map', () => {
+      const map = { 'Sarah': 'Sarah Blackwood', 'Vic': 'Vic Kingsley' };
+      expect(getCanonicalName('Sarah', map)).toBe('Sarah Blackwood');
+      expect(getCanonicalName('Vic', map)).toBe('Vic Kingsley');
     });
 
-    it('journalist should NOT have stale names', () => {
-      const config = getThemeConfig('journalist');
-      const chars = config.canonicalCharacters;
-      expect(chars['James']).toBeUndefined();
-      expect(chars['Victoria']).toBeUndefined();
-      expect(chars['Derek']).toBeUndefined();
-      expect(chars['Diana']).toBeUndefined();
-      expect(chars['Jessicah']).toBeUndefined();
-      expect(chars['Leila']).toBeUndefined();
-      expect(chars['Rachel']).toBeUndefined();
-      expect(chars['Howie']).toBeUndefined();
-      expect(chars['Sofia']).toBeUndefined();
-      expect(chars['Oliver']).toBeUndefined();
+    it('normalizes to title case for lookup', () => {
+      const map = { 'Sarah': 'Sarah Blackwood' };
+      expect(getCanonicalName('sarah', map)).toBe('Sarah Blackwood');
+      expect(getCanonicalName('SARAH', map)).toBe('Sarah Blackwood');
     });
 
-    it('detective canonicalCharacters matches journalist PCs', () => {
-      const journalist = getThemeConfig('journalist');
-      const detective = getThemeConfig('detective');
-      const journalistPCs = Object.keys(journalist.canonicalCharacters)
-        .filter(name => !['Marcus', 'Nova', 'Blake'].includes(name));
-      const detectivePCs = Object.keys(detective.canonicalCharacters)
-        .filter(name => !['Marcus', 'Blake'].includes(name));
-      expect(detectivePCs.sort()).toEqual(journalistPCs.sort());
+    it('returns input unchanged when not in map', () => {
+      const map = { 'Sarah': 'Sarah Blackwood' };
+      expect(getCanonicalName('Unknown', map)).toBe('Unknown');
+    });
+
+    it('returns input unchanged when map is empty', () => {
+      expect(getCanonicalName('Sarah', {})).toBe('Sarah');
+      expect(getCanonicalName('Sarah')).toBe('Sarah');
+    });
+
+    it('handles null/empty input gracefully', () => {
+      const map = { 'Sarah': 'Sarah Blackwood' };
+      expect(getCanonicalName(null, map)).toBeNull();
+      expect(getCanonicalName('', map)).toBe('');
+    });
+  });
+
+  describe('getThemeCharacters (deprecated)', () => {
+    it('returns empty array and logs deprecation warning', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = getThemeCharacters('journalist');
+      expect(result).toEqual([]);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('DEPRECATED'));
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('canonicalCharacters removed from theme configs', () => {
+    it('journalist config should not have canonicalCharacters', () => {
+      const config = getThemeConfig('journalist');
+      expect(config.canonicalCharacters).toBeUndefined();
+    });
+
+    it('detective config should not have canonicalCharacters', () => {
+      const config = getThemeConfig('detective');
+      expect(config.canonicalCharacters).toBeUndefined();
     });
   });
 

@@ -6,27 +6,19 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
-const { getThemeConfig } = require('./theme-config');
+// theme-config import removed: canonicalCharacters now derived entirely from Notion
 
 /**
  * Generate canonical character roster section
- * Merges Notion-derived override with theme-config.js fallback.
- * Override names take precedence; theme-config fills in characters
- * without tokens in this session (e.g., characters with no memories).
+ * Uses Notion-derived canonical characters map directly (sole source of truth).
  *
- * Per spec: "Notion-derived map supplements (not replaces) theme-config.js"
- *
- * @param {string} theme - Theme name (e.g., 'journalist')
- * @param {Object|null} canonicalCharacters - Optional override map from Notion data
+ * @param {string} theme - Theme name (e.g., 'journalist') — kept for signature compatibility
+ * @param {Object|null} canonicalCharacters - Notion-derived map of firstName -> fullName
  * @param {Object|null} characterData - Optional character metadata (groups, roles, relationships) from extractCharacterData node
  * @returns {string} Formatted roster section for prompts
  */
 function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null) {
-  const themeCharacters = getThemeConfig(theme)?.canonicalCharacters || {};
-  // Merge: theme-config as base, Notion override wins on conflict
-  const characters = canonicalCharacters
-    ? { ...themeCharacters, ...canonicalCharacters }
-    : themeCharacters;
+  const characters = canonicalCharacters || {};
 
   const lines = Object.entries(characters)
     .map(([first, full]) => `- ${first} → ${full}`)

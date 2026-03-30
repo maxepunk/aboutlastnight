@@ -9,7 +9,7 @@
 
 const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
-const { getCanonicalName, getThemeNPCs, getThemeCharacters } = require('../../theme-config');
+const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NPC VALIDATION
@@ -466,20 +466,20 @@ function routeTokensByDisposition(tokens) {
 /**
  * Extract owner name from logline for compact summaries
  *
- * Commit 8.26: Now returns canonical full name (e.g., "Alex Reeves" instead of "Alex")
+ * Returns canonical full name (e.g., "Alex Reeves" instead of "Alex")
  * to ensure consistent character attribution across the pipeline.
  *
  * @param {string} ownerLogline - e.g., "Alex's memory of..." or "ALEX: ..."
- * @param {string} theme - Theme name for canonical lookup (default: 'journalist')
+ * @param {Object} canonicalCharacters - Notion-derived map of firstName -> fullName
  * @returns {string} Canonical full name (e.g., "Alex Reeves") or first name if not found
  */
-function extractOwnerName(ownerLogline, theme = 'journalist') {
+function extractOwnerName(ownerLogline, canonicalCharacters = {}) {
   if (!ownerLogline) return 'Unknown';
   // Extract first name from "Alex's memory of..." or "ALEX: ..."
   const match = ownerLogline.match(/^(\w+)/);
   const firstName = match ? match[1] : ownerLogline.substring(0, 20);
-  // Map to canonical full name using theme-config
-  return getCanonicalName(firstName, theme);
+  // Map to canonical full name using Notion-derived map
+  return getCanonicalName(firstName, canonicalCharacters);
 }
 
 /**
@@ -489,12 +489,13 @@ function extractOwnerName(ownerLogline, theme = 'journalist') {
  * the +2 TOKEN_CORROBORATION criterion.
  *
  * @param {Array} exposedTokens - Routed exposed tokens
+ * @param {Object} canonicalCharacters - Notion-derived map of firstName -> fullName
  * @returns {Array} Compact summaries (~80 chars each)
  */
-function buildExposedTokenSummaries(exposedTokens) {
+function buildExposedTokenSummaries(exposedTokens, canonicalCharacters = {}) {
   return exposedTokens.map(t => ({
     id: t.id,
-    owner: extractOwnerName(t.owner),
+    owner: extractOwnerName(t.owner, canonicalCharacters),
     chars: (t.characterRefs || []).slice(0, 3).join(', '),
     gist: (t.summary || '').substring(0, 60)
   }));
@@ -677,10 +678,10 @@ function buildValidEvidenceIds(evidenceBundle) {
  *
  * @param {string} name - Character name from arc characterPlacements
  * @param {string[]} roster - Array of roster names (typically first names)
- * @param {string} theme - Theme name for canonical lookup (default: 'journalist')
+ * @param {Object} canonicalCharacters - Notion-derived map of firstName -> fullName
  * @returns {string|null} Original name (preserved) if valid, or null
  */
-function validateRosterName(name, roster, theme = 'journalist') {
+function validateRosterName(name, roster, canonicalCharacters = {}) {
   if (!name || !Array.isArray(roster) || roster.length === 0) {
     return null;
   }
@@ -694,7 +695,7 @@ function validateRosterName(name, roster, theme = 'journalist') {
   // 2. Check if input IS a canonical full name for any roster entry
   // Example: input "Sarah Blackwood" should match roster entry "Sarah"
   for (const rosterName of roster) {
-    const canonical = getCanonicalName(rosterName, theme);
+    const canonical = getCanonicalName(rosterName, canonicalCharacters);
     if (canonical.toLowerCase().trim() === normalizedInput) {
       return name;  // Return original name (preserves canonical full name)
     }
@@ -948,31 +949,30 @@ END PREVIOUS OUTPUT
 /**
  * Extract canonical character map from Notion token owner data
  *
- * Builds a first-name -> full-name map from token owners,
- * resolving full names via theme-config.js.
+ * Builds a first-name -> full-name map directly from Notion owner strings.
+ * No hardcoded character list required — Notion is the sole source of truth.
+ *
+ * Owner strings from Notion are already canonical full names (e.g., "Sarah Blackwood")
+ * via resolveRelationNames. This function derives the firstName -> fullName mapping.
  *
  * @param {Array} tokens - Fetched tokens with `owners` arrays
- * @param {string} theme - Theme name for full-name resolution
- * @returns {Object} Map of firstName -> fullName
+ * @param {string} theme - Theme name (unused, kept for signature compatibility)
+ * @param {Array} [paperEvidence] - Optional paper evidence with character references
+ * @returns {Object} Map of firstName -> fullName (e.g., { "Sarah": "Sarah Blackwood" })
  */
-function extractCanonicalCharacters(tokens, theme = 'journalist') {
+function extractCanonicalCharacters(tokens, theme = 'journalist', paperEvidence = []) {
   const characters = {};
-  // Build set of all known character first names (PCs + NPCs) from theme-config
-  const knownNames = new Set([
-    ...getThemeCharacters(theme),
-    ...getThemeNPCs(theme)
-  ]);
 
   for (const token of tokens) {
     for (const owner of (token.owners || [])) {
-      if (!owner || characters[owner]) continue;
-      // Extract first name for lookup — Notion owners may use full names like "Sarah Blackwood"
+      if (!owner) continue;
+      // Derive first name from Notion's canonical full name
       const firstName = owner.includes(' ') ? owner.split(' ')[0].trim() : owner;
-      const fullName = getCanonicalName(firstName, theme);
-      if (!knownNames.has(firstName)) {
-        console.warn(`[extractCanonicalCharacters] Unknown character "${owner}" not in theme-config`);
+      const firstNameKey = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+      // First occurrence wins (preserves Notion's canonical form)
+      if (!characters[firstNameKey]) {
+        characters[firstNameKey] = owner;
       }
-      characters[owner] = fullName;
     }
   }
 
