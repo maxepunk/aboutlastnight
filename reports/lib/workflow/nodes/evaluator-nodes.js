@@ -643,8 +643,8 @@ ${JSON.stringify(playerFocusForEval, null, 2)}
 ALL VALID EVIDENCE IDS (${allEvidenceIds.length} total - use to verify keyEvidence references):
 ${JSON.stringify(allEvidenceIds, null, 2)}
 
-EXPOSED EVIDENCE DETAILS (first 25 of ${exposedEvidence.length}):
-${JSON.stringify(exposedEvidence.slice(0, 25), null, 2)}
+EXPOSED EVIDENCE DETAILS (${exposedEvidence.length} items):
+${JSON.stringify(exposedEvidence, null, 2)}
 
 BURIED TRANSACTIONS (${buriedEvidence.length} - for amount/account verification):
 ${JSON.stringify(buriedEvidence, null, 2)}
