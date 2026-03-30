@@ -102,7 +102,7 @@ describe('theme-config', () => {
       const rules = getOutlineRules('journalist');
       expect(rules.wordBudgets).toBeDefined();
       expect(rules.wordBudgets.lede).toEqual({ min: 50, max: 150 });
-      expect(rules.wordBudgets.theStory).toEqual({ min: 200, max: 800 });
+      expect(rules.wordBudgets.theStory).toEqual({ min: 300, max: 600 });
     });
 
     it('should return empty object for unknown theme', () => {
