@@ -85,7 +85,7 @@ If #3 is "no," rewrite the prose.
 
 **Purpose:** Hook the reader immediately. One vivid moment that captures the whole story.
 
-**Length:** 2-4 paragraphs max.
+**Length:** 2-4 paragraphs max (75-150 words).
 
 **Content:**
 - Immediate, visceral, specific
@@ -110,7 +110,7 @@ following a party at his residence.
 
 **Variables to incorporate (from session data):**
 - Session date (in-world: always 02/22/27)
-- **Number of characters present:** Count actual roster (e.g., "Fifteen people" for 15-person roster)
+- **Number of characters present:** Count the actual roster provided in session data — do NOT default to any number
 - Murder accusation outcome (if resolved)
 
 ---
@@ -121,7 +121,7 @@ following a party at his residence.
 
 **Purpose:** Narrative reconstruction of what happened. Evidence woven into story.
 
-**Length:** The longest section. Scales with amount of exposed evidence.
+**Length:** The longest section, 350-550 words. Scales with amount of exposed evidence.
 
 **Content:**
 - Chronological OR thematic organization (choose based on evidence)
@@ -257,7 +257,7 @@ If yes to the third question, you don't have true interweaving. The arcs should 
 
 **Purpose:** The financial tracker is a TOOL, not the content. The PROSE interprets what the money MEANS narratively.
 
-**Length:** Scales with financial activity. Can be brief if little happened.
+**Length:** 75-200 words. Scales with financial activity. Can be brief if little happened.
 
 **Content:**
 - Named shell accounts and their totals (displayed in tracker)
@@ -333,7 +333,7 @@ didn't trust where the money was coming from.
 
 **Purpose:** Evaluate characters by their CHOICES, not catalog their contributions.
 
-**Length:** Moderate. Scales with roster size.
+**Length:** 150-250 words. Scales with roster size.
 
 **Content:**
 - Grouped by relationship to truth (helped, hindered, held back)
@@ -428,7 +428,7 @@ she released told a story she didn't have to tell.
 
 **Purpose:** The gaps ARE the story. Buried evidence creates mystery and invites reader curiosity.
 
-**Length:** Brief to moderate. Don't dwell, but don't skip.
+**Length:** 75-150 words. Don't dwell, but don't skip.
 
 **Content:**
 - What THREADS went dark (not individual transactions)
@@ -487,7 +487,7 @@ Must be a CRYSTALLIZATION (no attribution) that echoes earlier prose:
 
 **Purpose:** Why this matters. The bigger picture. The systemic critique lands here.
 
-**Length:** 2-4 paragraphs.
+**Length:** 2-4 paragraphs (75-150 words).
 
 **Visual Components:**
 - **Pull quote** (optional, if there's a powerful closing thought)
