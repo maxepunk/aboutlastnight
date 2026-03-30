@@ -103,7 +103,7 @@ Write TWO files:
   "sessionContext": {
     "sessionDate": "2025-12-21",
     "roster": [...],
-    "journalistName": "Cassandra",
+    "journalistFirstName": "Cassandra",
     "guestCount": 15
   },
   "sessionPhotos": [...],

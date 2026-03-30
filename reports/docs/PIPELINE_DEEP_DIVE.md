@@ -253,7 +253,7 @@ Nova's article is NOT just a factual record. It reflects:
 - Whiteboard photo/content
 
 **Outputs**:
-- `sessionConfig`: { roster, accusation, journalistName, photosPath }
+- `sessionConfig`: { roster, accusation, journalistFirstName, photosPath }
 - `directorNotes`: { playerFocus, observations, whiteboard, accusationContext }
 
 **Checkpoint**:
