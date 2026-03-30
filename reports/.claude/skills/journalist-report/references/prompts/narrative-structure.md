@@ -227,7 +227,7 @@ WHY CORRECT: This is the actual text from the evidence.
 
 ### Visual Rhythm Rules
 
-1. **Never more than 3 paragraphs without a visual break** (existing rule)
+1. **Pace visual components for scroll engagement** — aim for a visual element every 2-3 paragraphs, but let narrative rhythm dictate placement
 2. **Alternate between closers and openers** - don't close 3 loops in a row, don't open 3 in a row
 3. **Use photos for emotional reset before escalation** - let reader breathe, then hit harder
 4. **Place the most impactful evidence card at arc convergence** - maximum resonance

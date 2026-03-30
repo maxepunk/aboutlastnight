@@ -14,7 +14,7 @@ Readers decide to continue or abandon every 2-3 paragraphs. Design for this real
 - Data terminal elements create curiosity ("what will the next reveal show?")
 - Dense text walls signal "this will be work" and trigger abandonment
 
-**Rule:** Never more than 3 consecutive paragraphs of prose without a visual break.
+**Guidance:** Aim for no more than 3 consecutive paragraphs of prose without a visual component. But the placement should feel organic — a perfectly placed evidence card after one paragraph of explosive revelation is better than a forced card after exactly three paragraphs of filler.
 
 ---
 
