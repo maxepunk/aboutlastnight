@@ -871,19 +871,20 @@ Quality over quantity. A tight article with 3 perfectly-placed evidence cards be
 <VISUAL_COMPONENT_TYPES>
 CRITICAL: Understand the difference between evidence-card and evidence-reference.
 
-EVIDENCE-CARD (inline, full display):
+EVIDENCE-CARD (inline, full display — use sparingly, 3-5 per article):
 - Goes in sections[].content[] array
 - type: "evidence-card"
 - REQUIRES: tokenId, headline, content (VERBATIM from arcEvidencePackages.evidenceItems[].fullContent), owner, significance
 - SHOWS: Full evidence as styled card in article body
 - USE FOR: Narrative climax moments, proving claims, CLOSING or OPENING a loop
+- The surrounding prose should set up WHY this evidence matters, then the card delivers the proof.
 
-EVIDENCE-REFERENCE (link only):
+EVIDENCE-REFERENCE (lightweight link — use freely):
 - Goes in sections[].content[] array
 - type: "evidence-reference"
 - REQUIRES: tokenId only (plus optional caption)
 - SHOWS: Small diamond icon linking to sidebar
-- USE FOR: Brief mentions, sidebar navigation ONLY
+- USE FOR: Supporting mentions, corroboration, threading evidence through prose without interrupting flow
 
 IF YOU WANT EVIDENCE DISPLAYED INLINE: You MUST use "evidence-card" type.
 Using "evidence-reference" will NOT display content - it only creates a link.
