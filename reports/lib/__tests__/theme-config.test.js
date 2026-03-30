@@ -98,11 +98,15 @@ describe('theme-config', () => {
       expect(rules.optionalSections).toContain('whatsMissing');
     });
 
-    it('should include word budgets', () => {
+    it('should include word budgets for all sections', () => {
       const rules = getOutlineRules('journalist');
       expect(rules.wordBudgets).toBeDefined();
-      expect(rules.wordBudgets.lede).toEqual({ min: 50, max: 150 });
-      expect(rules.wordBudgets.theStory).toEqual({ min: 300, max: 600 });
+      expect(rules.wordBudgets.lede).toEqual({ min: 75, max: 150 });
+      expect(rules.wordBudgets.theStory).toEqual({ min: 350, max: 550 });
+      expect(rules.wordBudgets.followTheMoney).toEqual({ min: 75, max: 200 });
+      expect(rules.wordBudgets.thePlayers).toEqual({ min: 150, max: 250 });
+      expect(rules.wordBudgets.whatsMissing).toEqual({ min: 75, max: 150 });
+      expect(rules.wordBudgets.closing).toEqual({ min: 75, max: 150 });
     });
 
     it('should return empty object for unknown theme', () => {

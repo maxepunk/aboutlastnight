@@ -34,11 +34,14 @@ const THEME_CONFIGS = {
       // Sections that MAY exist
       optionalSections: ['followTheMoney', 'whatsMissing'],
       // Target word counts per section (advisory)
+      // Reconciled to sum to 1000-1500 word envelope (see docs/superpowers/plans/2026-03-30-word-budget-reconciliation.md)
       wordBudgets: {
-        lede: { min: 50, max: 150 },
-        theStory: { min: 300, max: 600 },
-        thePlayers: { min: 100, max: 300 },
-        closing: { min: 50, max: 150 }
+        lede: { min: 75, max: 150 },
+        theStory: { min: 350, max: 550 },
+        followTheMoney: { min: 75, max: 200 },
+        thePlayers: { min: 150, max: 250 },
+        whatsMissing: { min: 75, max: 150 },
+        closing: { min: 75, max: 150 }
       }
     },
 
