@@ -8,12 +8,15 @@ import smtplib
 import csv
 import re
 import html
+import io
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 from email.utils import formataddr
 from pathlib import Path
 from typing import List, Dict, Tuple
 import time
+from PIL import Image
 
 # ===== CONFIGURATION =====
 
@@ -201,6 +204,126 @@ def get_session_note() -> str:
         print(f"\n✓ Note added ({len(note)} chars)")
     return note
 
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.heic'}
+
+def get_photo_folder() -> List[Path]:
+    """
+    Prompt user for a folder containing session photos.
+    Returns sorted list of image Paths, or empty list if skipped.
+    """
+    print("\n" + "="*60)
+    print("SESSION PHOTOS (OPTIONAL)")
+    print("="*60)
+    print("\nAttach group photos from the session?")
+    print("Enter a folder path, or press Enter to skip:")
+    print("-" * 60)
+
+    while True:
+        folder = input().strip()
+        if not folder:
+            print("  No photos — skipping.")
+            return []
+
+        folder_path = Path(folder)
+        if not folder_path.is_dir():
+            print(f"  ❌ Not a valid folder: {folder}")
+            print("  Try again or press Enter to skip:")
+            continue
+
+        images = sorted(
+            p for p in folder_path.iterdir()
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        )
+
+        if not images:
+            print(f"  ⚠️  No image files found in {folder}")
+            print(f"  (Looking for: {', '.join(IMAGE_EXTENSIONS)})")
+            print("  Try a different folder or press Enter to skip:")
+            continue
+
+        print(f"\n✓ Found {len(images)} photo(s)")
+        for img in images:
+            size_kb = img.stat().st_size / 1024
+            print(f"    {img.name}  ({size_kb:.0f} KB)")
+        return images
+
+def process_photos(image_paths: List[Path], session_date: str) -> List[Tuple[str, bytes]]:
+    """
+    Resize photos and return as named JPEG byte tuples.
+    Returns list of (filename, jpeg_bytes).
+    """
+    MAX_DIMENSION = 1600
+    JPEG_QUALITY = 85
+    TOTAL_SIZE_WARN = 20 * 1024 * 1024  # 20MB
+
+    results = []
+    for idx, img_path in enumerate(image_paths, 1):
+        img = Image.open(img_path)
+
+        # Convert RGBA/palette to RGB for JPEG (skip if transparent PNG)
+        if img.mode in ('RGBA', 'P'):
+            if img.mode == 'RGBA' and img.split()[3].getextrema() != (255, 255):
+                # Has actual transparency — attach as PNG instead
+                buf = io.BytesIO()
+                img.save(buf, format='PNG', optimize=True)
+                filename = f"aboutlastnight_{session_date}_{idx:02d}.png"
+                results.append((filename, buf.getvalue()))
+                continue
+            img = img.convert('RGB')
+
+        # Resize if needed
+        w, h = img.size
+        if max(w, h) > MAX_DIMENSION:
+            ratio = MAX_DIMENSION / max(w, h)
+            new_size = (int(w * ratio), int(h * ratio))
+            img = img.resize(new_size, Image.LANCZOS)
+
+        # Save to JPEG in memory
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=JPEG_QUALITY)
+        filename = f"aboutlastnight_{session_date}_{idx:02d}.jpg"
+        results.append((filename, buf.getvalue()))
+
+    # Size guardrail
+    total_size = sum(len(data) for _, data in results)
+    if total_size > TOTAL_SIZE_WARN:
+        print(f"\n  ⚠️  Total photo size: {total_size / (1024*1024):.1f} MB (exceeds 20 MB)")
+        for fname, data in results:
+            print(f"    {fname}  ({len(data) / (1024*1024):.1f} MB)")
+        print("\n  Options:")
+        print("    1 = Reduce quality to 70% and retry")
+        print("    2 = Proceed anyway (Gmail limit is 25 MB)")
+        print("    3 = Skip photos for this send")
+
+        while True:
+            choice = input("  Enter choice [2]: ").strip() or "2"
+            if choice == "1":
+                # Re-process at lower quality
+                results = []
+                for idx, img_path in enumerate(image_paths, 1):
+                    img = Image.open(img_path)
+                    if img.mode in ('RGBA', 'P'):
+                        img = img.convert('RGB')
+                    w, h = img.size
+                    if max(w, h) > MAX_DIMENSION:
+                        ratio = MAX_DIMENSION / max(w, h)
+                        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+                    buf = io.BytesIO()
+                    img.save(buf, format='JPEG', quality=70)
+                    filename = f"aboutlastnight_{session_date}_{idx:02d}.jpg"
+                    results.append((filename, buf.getvalue()))
+                new_total = sum(len(d) for _, d in results)
+                print(f"  ✓ Reduced to {new_total / (1024*1024):.1f} MB")
+                break
+            elif choice == "2":
+                break
+            elif choice == "3":
+                return []
+            else:
+                print("  Please enter 1, 2, or 3")
+
+    return results
+
 def load_template() -> str:
     """Load the HTML email template"""
     if not Path(TEMPLATE_FILE).exists():
@@ -240,17 +363,8 @@ def personalize_email(template: str, recipient: Dict, session_date: str, report_
 
     return email
 
-def create_email_message(recipient: Dict, html_content: str, session_note: str = "") -> MIMEMultipart:
-    """Create the email message with headers and content"""
-
-    # Create message container
-    msg = MIMEMultipart('alternative')
-
-    # Set headers
-    msg['From'] = formataddr((SENDER_NAME, SENDER_EMAIL))
-    msg['To'] = recipient['email']
-    msg['Reply-To'] = REPLY_TO_EMAIL
-    msg['Subject'] = "Thank you for playing About Last Night"
+def create_email_message(recipient: Dict, html_content: str, session_note: str = "", photos: List[Tuple[str, bytes]] = None) -> MIMEMultipart:
+    """Create the email message with headers and content, optionally with photo attachments"""
 
     first_name = recipient['name'].split()[0]
 
@@ -285,11 +399,37 @@ StoryPunk / Patchwork Adventures"""
     if session_note:
         text_content = text_content.rstrip() + "\n\n" + session_note
 
-    # Attach both versions
-    part1 = MIMEText(text_content.strip(), 'plain', 'utf-8')
-    part2 = MIMEText(html_content, 'html', 'utf-8')
-    msg.attach(part1)
-    msg.attach(part2)
+    if photos:
+        text_content = text_content.rstrip() + f"\n\n[{len(photos)} photo(s) from your session are attached to this email]"
+
+    # Build text and HTML parts
+    part_plain = MIMEText(text_content.strip(), 'plain', 'utf-8')
+    part_html = MIMEText(html_content, 'html', 'utf-8')
+
+    if photos:
+        # Mixed container: alternative text/html + image attachments
+        msg = MIMEMultipart('mixed')
+        alt = MIMEMultipart('alternative')
+        alt.attach(part_plain)
+        alt.attach(part_html)
+        msg.attach(alt)
+
+        for filename, data in photos:
+            img_type = 'png' if filename.endswith('.png') else 'jpeg'
+            img_part = MIMEImage(data, _subtype=img_type)
+            img_part.add_header('Content-Disposition', 'attachment', filename=filename)
+            msg.attach(img_part)
+    else:
+        # No photos — original structure
+        msg = MIMEMultipart('alternative')
+        msg.attach(part_plain)
+        msg.attach(part_html)
+
+    # Set headers
+    msg['From'] = formataddr((SENDER_NAME, SENDER_EMAIL))
+    msg['To'] = recipient['email']
+    msg['Reply-To'] = REPLY_TO_EMAIL
+    msg['Subject'] = "Thank you for playing About Last Night"
 
     return msg
 
@@ -322,7 +462,7 @@ def save_to_csv(recipients: List[Dict], session_date: str, report_id: str, filen
             })
     print(f"  ✓ Saved to: {filename}")
 
-def preview_recipients(recipients: List[Dict], session_date: str, report_id: str, session_note: str = ""):
+def preview_recipients(recipients: List[Dict], session_date: str, report_id: str, session_note: str = "", photos: List[Tuple[str, bytes]] = None):
     """Show preview of what will be sent, including full email body"""
     print("\n" + "="*60)
     print("PREVIEW")
@@ -377,6 +517,14 @@ StoryPunk / Patchwork Adventures"""
         print(f"{i:2}. {recipient['name']:<30} {recipient['email']}")
     print("-" * 60)
 
+    if photos:
+        total_mb = sum(len(d) for _, d in photos) / (1024 * 1024)
+        print(f"\nPhotos: {len(photos)} attachment(s) ({total_mb:.1f} MB total)")
+        for fname, data in photos:
+            print(f"    {fname}  ({len(data) / (1024*1024):.1f} MB)")
+    else:
+        print(f"\nPhotos: None")
+
 def main():
     """Main execution"""
     print("\n" + "="*60)
@@ -404,14 +552,18 @@ def main():
     # Step 4: Get optional session note
     session_note = get_session_note()
 
+    # Step 4b: Get optional session photos
+    photo_paths = get_photo_folder()
+    photos = process_photos(photo_paths, session_date) if photo_paths else []
+
     # Enrich recipients with computed fields for plain text rendering
     feedback_date = session_date[:4]
     for r in recipients:
         r['report_id'] = report_id
         r['feedback_date'] = feedback_date
 
-    # Step 5: Preview (full email body + recipient list)
-    preview_recipients(recipients, session_date, report_id, session_note)
+    # Step 5: Preview (full email body + recipient list + photo summary)
+    preview_recipients(recipients, session_date, report_id, session_note, photos)
 
     # Step 6: Confirm before proceeding
     print("\n" + "="*60)
@@ -432,7 +584,7 @@ def main():
     print("\n=== DRY RUN (no emails will be sent) ===")
     for recipient in recipients:
         personalized = personalize_email(template, recipient, session_date, report_id, session_note)
-        msg = create_email_message(recipient, personalized, session_note)
+        msg = create_email_message(recipient, personalized, session_note, photos)
         send_email(recipient, msg, None, dry_run=True)
 
     # Step 9: Confirm real send
@@ -443,6 +595,9 @@ def main():
     print(f"SMTP: {SMTP_SERVER}:{SMTP_PORT}")
     if session_note:
         print(f"Session note: YES ({len(session_note)} chars)")
+    if photos:
+        total_mb = sum(len(d) for _, d in photos) / (1024 * 1024)
+        print(f"Photos: {len(photos)} attachment(s) ({total_mb:.1f} MB total)")
     response = input("\nSend for real? (yes/no): ").strip().lower()
 
     if response != 'yes':
@@ -464,7 +619,7 @@ def main():
             for i, recipient in enumerate(recipients, 1):
                 print(f"[{i}/{len(recipients)}]", end=" ")
                 personalized = personalize_email(template, recipient, session_date, report_id, session_note)
-                msg = create_email_message(recipient, personalized, session_note)
+                msg = create_email_message(recipient, personalized, session_note, photos)
 
                 if send_email(recipient, msg, server, dry_run=False):
                     success_count += 1
