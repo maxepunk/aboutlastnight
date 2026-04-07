@@ -467,16 +467,8 @@
     font-size: 0.95em;
 }
 
-/* Mobile Touch Targets */
+/* Mobile Overrides */
 @media (max-width: 768px) {
-    .accordion-trigger,
-    .personnel-file h3,
-    .faq-question {
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-    }
-
     .explanation-section p {
         font-size: 1.1rem;
         padding-left: 1.2rem;
