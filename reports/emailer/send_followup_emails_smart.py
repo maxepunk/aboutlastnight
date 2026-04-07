@@ -400,7 +400,7 @@ And if you've got thoughts on the experience (what worked, what didn't, how you 
 
   >> {FEEDBACK_BASE}?date={recipient.get('feedback_date', '')}
 
-Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: EarlyAccessWelcomeBack — consider it a thank you for being part of the story of this experience.
+Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: ALNReturnVisit — consider it a thank you for being part of the story of this experience.
 
 Thanks again for being part of this.
 
@@ -507,7 +507,7 @@ And if you've got thoughts on the experience (what worked, what didn't, how you 
 
   >> {FEEDBACK_BASE}?date={feedback_date}
 
-Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: EarlyAccessWelcomeBack — consider it a thank you for being part of the story of this experience.
+Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: ALNReturnVisit — consider it a thank you for being part of the story of this experience.
 
 Thanks again for being part of this.
 
