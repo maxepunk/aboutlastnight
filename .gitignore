@@ -43,6 +43,14 @@ __pycache__/
 # Superpowers brainstorm session artifacts (ephemeral mockups)
 .superpowers/
 
+# Playwright MCP screenshots and snapshots (debug artifacts from
+# mid-session visual verification — NOT product images)
+.playwright-mcp/
+/task*.png
+/mobile-*.png
+/desktop-*.png
+/interlude-moved.png
+
 # Reports - session data and temp files (NOT generated reports)
 reports/data/
 reports/sessionphotos/
