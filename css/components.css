@@ -728,3 +728,44 @@
         display: block;
     }
 }
+
+/* ═══════════════════════════════════════════════════════ */
+/* Mobile tuning for accordion cards                        */
+/* Densifies heading + padding sizing for narrow viewports. */
+/* Bug fix lives in css/layout.css (removal of broken flex  */
+/* rule); this block handles the "feels heavy" follow-up.   */
+/* ═══════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    /* ─── Personnel Files (WHO WE ARE) ─── */
+    .personnel-file {
+        /* Asymmetric: extra right padding preserves chevron clearance
+           (chevron is 24px wide at right:0 from .accordion-trigger::after) */
+        padding: 1.5rem 2.5rem 1.5rem 1.25rem;
+    }
+
+    .personnel-file h3 {
+        font-size: 1.75rem;       /* was 2.5rem — names fit on one line */
+        margin-bottom: 0.25rem;   /* was 0.5rem — tighter title spacing */
+    }
+
+    .personnel-file .subtitle {
+        font-size: 0.95rem;       /* was 1.1rem */
+        line-height: 1.4;
+        margin-bottom: 0.75rem;   /* was 1rem */
+    }
+
+    .personnel-file .credentials {
+        font-size: 1rem;          /* was 1.1rem — better line count when expanded */
+    }
+
+    /* ─── FAQ Items ─── */
+    .faq-item {
+        padding: 1.25rem 2.5rem 1.25rem 1rem;  /* chevron clearance preserved */
+    }
+
+    .faq-question {
+        font-size: 1.2rem;        /* was 1.5rem — questions read in 1-2 lines */
+        margin-bottom: 0.75rem;   /* was 1rem */
+    }
+}
