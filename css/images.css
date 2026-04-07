@@ -121,3 +121,45 @@
     aspect-ratio: 3/4;
   }
 }
+
+
+/* ─── PATTERN B: CONTAINED LANDSCAPE BANNER ──────────────────── */
+/*
+   A landscape image placed between paragraphs as a rhythmic break.
+   Sits inside the section's content column (max-width 900px).
+
+   aspect-ratio and object-position MUST be set per-image via
+   inline style attributes on the <img> element. They depend on
+   the source composition and are tuned to preserve specific
+   subjects (heads, key objects). See the per-image crop spec
+   table in the design doc.
+*/
+
+.inline-banner {
+  margin: 2.5rem auto;
+  max-width: 900px;
+  position: relative;
+}
+
+.inline-banner img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  border: 1px solid rgba(204, 0, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75);
+}
+
+.inline-banner::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0) 3px,
+    rgba(0, 0, 0, 0.1) 4px
+  );
+  pointer-events: none;
+  opacity: 0.4;
+}
