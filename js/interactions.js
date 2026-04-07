@@ -168,6 +168,17 @@ function initScrollReveal() {
         observer.observe(block);
     });
 
+    // Testimonials (player feedback + press quotes) — same slide-from-left
+    // animation as memory blocks. The observer's intersect callback already
+    // sets transform: translateX(0), which is the correct end state for
+    // both .memory-block and .testimonial.
+    document.querySelectorAll('.testimonial').forEach(testimonial => {
+        testimonial.style.opacity = '0';
+        testimonial.style.transform = 'translateX(-50px)';
+        testimonial.style.transition = 'all 0.8s ease-out';
+        observer.observe(testimonial);
+    });
+
     // Fade-in sections
     document.querySelectorAll('.fade-in-section').forEach(section => {
         section.style.opacity = '0';
