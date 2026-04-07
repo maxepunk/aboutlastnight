@@ -214,7 +214,7 @@ The master data structure enforcing privacy boundaries through structure.
     "sessionDate": "2025-12-21",
     "roster": ["James", "Taylor", "Sarah", ...],
     "journalistFirstName": "Cassandra",
-    "guestCount": 15
+    "guestCount": "{{roster.length}}"
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -402,7 +402,7 @@ The approved structure that Phase 4 generates from.
 ```javascript
 {
   lede: {
-    hook: "Marcus is dead. Victoria and Morgan accused. 15 people's memories extracted.",
+    hook: "Marcus is dead. Victoria and Morgan accused. [N] people's memories extracted.",
     key_tension: "Murder mystery + systemic critique",
     evidence_to_reference: []  // Lede is pure prose, no evidence cards
   },

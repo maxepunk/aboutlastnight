@@ -104,7 +104,7 @@ Write TWO files:
     "sessionDate": "2025-12-21",
     "roster": [...],
     "journalistFirstName": "Cassandra",
-    "guestCount": 15
+    "guestCount": "{{roster.length}}"
   },
   "sessionPhotos": [...],
   "bundledAt": "ISO timestamp"
