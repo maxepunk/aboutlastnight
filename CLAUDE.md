@@ -170,6 +170,35 @@ brew install tidy-html5
 - **Minimal DOM manipulation:** Progressive enhancement approach
 - **No render-blocking resources:** Background images with parallax scrolling
 
+### Scroll-Reveal Animations
+
+`js/interactions.js` `initScrollReveal()` runs an `IntersectionObserver` (threshold 0.1, rootMargin -100px) that animates these element classes:
+
+| Class | Animation | Used by |
+|---|---|---|
+| `.fade-in-section` | fade up from `translateY(30px)`, 1s ease-out | All major sections + image wrappers |
+| `.memory-block` | slide from left (`translateX(-50px)`), 0.8s ease-out | FRAGMENTED MEMORIES blocks |
+| `.testimonial` | slide from left, 0.8s ease-out | Player feedback + press quotes |
+| `.personnel-file` | slide from left, 0.8s ease-out | Creator profile cards |
+
+**Adding new animated elements:** if it should fade up like a section, just add the `fade-in-section` class to the wrapper element — the observer handles arbitrary elements with that class. For new element TYPES that need a different animation, add a new `forEach` block in `initScrollReveal()`.
+
+**Nested `fade-in-section` is supported.** A child element with the class inside a parent with the same class gets its own discrete reveal moment when scrolled into view, independent of the parent's animation.
+
+**Verifying scroll animations in playwright:** don't check initial computed styles at page load — for in-viewport elements the observer has already fired by the time you check. Instead: confirm the element is below the viewport (`getBoundingClientRect().top > innerHeight`), assert `opacity: 0`, call `scrollIntoView`, wait for the animation duration (1s or 0.8s), then assert `opacity: 1`.
+
+### Image Treatment Patterns (`css/images.css`)
+
+Three CSS patterns for foreground marketing photos that layer over the noir-parallax background system:
+
+- **`.side-by-side`** — portrait image + paragraph cluster (260px wide image default; `.side-by-side--image-right` modifier flips to text-on-left). Mobile collapses to single column.
+- **`.inline-banner`** — landscape strip inside the section's content column (max-width 900px).
+- **`.section-closer-image` / `.section-prelude-image` / `.section-interlude-image`** — cinematic 21:9 full-bleed strips that break out of section padding via negative margins. Closer hugs section bottom, prelude hugs section top, interlude is a body-level sibling between sections.
+
+**Per-image crops live in inline `<img>` `style` attributes**, NOT in the CSS class. `aspect-ratio` and `object-position` are tuned per source composition — the class handles layout/border/shadow, the inline style handles the image-specific crop math. **Swapping an image requires re-tuning these values** to preserve the subjects in frame. Comment markers in the HTML flag this for content editors.
+
+See `docs/superpowers/specs/2026-04-06-image-integration-design.md` for the per-image crop spec table and full design rationale.
+
 ## Form Integration Architecture
 
 **Three separate forms with different backends:**
@@ -254,6 +283,7 @@ This project is in active development before launch:
 - `docs/DEPLOYMENT.md` - Full deployment and rollback procedures
 - `docs/MIGRATION_GUIDE.md` - Maps old→new file locations (post-refactor)
 - `docs/COMMENT_MARKERS_TEST.md` - Test coverage for content markers
+- `docs/superpowers/specs/2026-04-06-image-integration-design.md` - Image treatment patterns, per-image crop specs, and design rationale for the marketing photo integration
 - `FORM_IMPLEMENTATION.md` - Form integration architecture and alternatives
 - `PLAYTEST_SETUP_GUIDE.md` - Playtest system setup instructions
 - `FEEDBACK_SETUP_GUIDE.md` - Feedback form setup instructions
@@ -364,6 +394,29 @@ if (formData.email) {
 - ✅ Frontend shows success message (not error)
 - ✅ Spot counter updates immediately
 - ✅ Capacity badges update correctly
+
+## CSS Architecture Gotchas
+
+### Background Images Are in CSS, Not HTML
+
+Most major sections have a fixed-parallax background photo applied via class selectors in `css/layout.css`, NOT via inline `style` attributes in `index.html`. The current set:
+
+- `.party-scene` → `ALN-seatingarea.jpg`
+- `.narrative` → `ALN-partyentry.jpg`
+- `.explanation-section` → `ALN-noirdrugwall.jpg`
+- `.creators` → `ALN-seatingarea.jpg` (heavily darkened)
+- `.faq-section` → `ALN-seatingarea.jpg` (heavily darkened)
+- `.interest-form` → `ALN-puzzlingtogether.jpg`
+
+**First-pass audits that only read `index.html` will miss these entirely.** When evaluating what images are actually rendering on the page or planning image-related work, always check `css/layout.css` too.
+
+### `.explanation-section p` Cascade Inheritance
+
+`css/layout.css` applies styles to ALL `<p>` descendants of `.explanation-section` — including a `:first-of-type` callout treatment (red left border, red-tinted background, larger font) and `::before` chevron bullets. **Any new markup containing paragraphs inside an explanation-section will inherit these unless explicitly overridden at higher specificity.**
+
+**Affected sections:** `#what-exactly-is-about-last-night`, `#why-we-made-this` (both use `.explanation-section`).
+
+**Example:** the side-by-side image cluster in OUR PHILOSOPHY — the first cluster paragraph got the unwanted red-bordered lead callout because it was `<p>:first-of-type` inside `.side-by-side__text`, and the existing `.explanation-section p:first-of-type` rule outranked the simpler `.side-by-side__text p` override. Fix: a more-specific selector (`.explanation-section .side-by-side__text p:first-of-type`) that resets `border`, `background`, `padding`, `font-size`. See `css/images.css` for the existing override block as a template when adding new content inside explanation-sections.
 
 ## Common Debugging Patterns
 
