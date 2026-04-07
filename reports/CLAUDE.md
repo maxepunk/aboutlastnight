@@ -52,7 +52,7 @@ npx @langchain/langgraph-cli dev --tunnel  # With tunnel (for Safari/remote)
 
 ## Architecture
 
-### LangGraph Workflow (6 Phases, 40 Nodes)
+### LangGraph Workflow (6 Phases, 43 Nodes)
 
 ```
 Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
@@ -99,10 +99,22 @@ lib/observability/
 ├── progress-emitter.js             # SSE progress streaming via EventEmitter
 ├── progress-bridge.js              # Unified progress/tracing (llm_start/llm_complete)
 └── message-formatter.js            # DRY formatting for console + SSE
-lib/theme-config.js                 # Theme settings, NPC definitions, validation rules (8.17)
+lib/cache/
+├── index.js                        # Public API for Notion caching
+├── cached-notion-client.js         # Cache-aware Notion client wrapper
+├── freshness-checker.js            # Cache staleness detection
+└── notion-cache-store.js           # Persistent cache storage
+lib/notion-client.js                # Raw Notion API client
+lib/schema-validator.js             # JSON schema validation helpers
+lib/evidence-preprocessor.js        # Evidence batch preprocessing
+lib/image-preprocessor.js           # Image analysis preprocessing
+lib/image-prompt-builder.js         # Image prompt construction for Haiku
+lib/template-assembler.js           # Handlebars template compilation
+lib/template-helpers.js             # Handlebars helper registration
+lib/theme-config.js                 # Theme settings, NPC definitions, validation rules
 lib/prompt-builder.js               # Prompt assembly for each phase
 lib/workflow/
-├── graph.js                        # LangGraph StateGraph (37 nodes, edges)
+├── graph.js                        # LangGraph StateGraph (43 nodes, edges)
 ├── state.js                        # State annotations, phases, reducers
 ├── checkpoint-helpers.js           # Native interrupt() helpers (DRY)
 ├── reference-loader.js             # Load reference files for prompts
@@ -116,8 +128,9 @@ lib/workflow/
     ├── preprocess-nodes.js         # Batch evidence summarization
     ├── arc-specialist-nodes.js     # Single SDK call arc analysis (8.15)
     ├── evaluator-nodes.js          # Quality evaluation per phase
-    ├── ai-nodes.js                 # Claude content generation
-    ├── validation-nodes.js         # Programmatic validation (8.20)
+    ├── ai-nodes.js                 # Claude content generation + programmatic validation
+    ├── character-data-nodes.js     # Character extraction and processing
+    ├── contradiction-nodes.js      # Contradiction detection and surfacing
     └── template-nodes.js           # HTML assembly
 lib/schemas/
 ├── content-bundle.schema.json      # Final article content structure
@@ -251,7 +264,7 @@ For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 |--------|-----------------|-----------|
 | AI Calls | `sdkQuery()` makes all Claude requests | Routes between nodes |
 | Structured Output | JSON schemas via `jsonSchema` param | N/A |
-| State Management | N/A | 51 state fields with reducers |
+| State Management | N/A | 60 state fields with reducers |
 | Checkpointing | N/A | MemorySaver/SqliteSaver |
 | Human Approval | N/A | Native `interrupt()` pattern |
 | Revision Loops | N/A | Conditional edges with caps |
@@ -311,7 +324,7 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 **Requirements:** LangSmith account + `LANGSMITH_API_KEY` in `.env`
 **Config:** `langgraph.json` defines graph as `./lib/studio/entry.js:graph`
 
-**Features:** Graph visualization (40 nodes), state inspection, time-travel debugging, prompt iteration
+**Features:** Graph visualization (43 nodes), state inspection, time-travel debugging, prompt iteration
 
 ## Console Frontend
 
@@ -340,6 +353,7 @@ console/
     ├── RevisionDiff.js             # Shallow diff for revision loops
     ├── RollbackPanel.js            # Rollback confirmation modal
     ├── CompletionView.js           # Success screen with report link
+    ├── FileBrowser.js              # Session file browser
     └── checkpoints/
         ├── InputReview.js          # Parsed session input display
         ├── PaperEvidence.js        # Selectable paper evidence list
@@ -378,7 +392,15 @@ Each checkpoint component follows the same pattern:
 - `/api/session/:id/approve` (POST) - Submit checkpoint approval
 - `/api/session/:id/rollback` (POST) - Roll back to checkpoint
 - `/api/session/:id/state` (GET) - Get current state
+- `/api/session/:id/state/:field` (GET) - Get single state field
 - `/api/session/:id/checkpoint` (GET) - Get checkpoint info
+- `/api/session/:id/progress` (GET, SSE) - Stream pipeline progress events
+
+**Utility:**
+- `/api/health` (GET) - Health check
+- `/api/config` (GET) - Client configuration
+- `/api/browse` (GET) - List session data files
+- `/api/file` (GET) - Read session data file
 
 **Legacy:** `/api/generate` (POST) - Deprecated. Use `/start` or `/resume` instead.
 
