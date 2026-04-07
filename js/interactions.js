@@ -179,6 +179,17 @@ function initScrollReveal() {
         observer.observe(testimonial);
     });
 
+    // Personnel files (Creator profile cards) — slide in from left like
+    // memory blocks. Visually they're case-file-style cards similar to
+    // memory blocks, so the same animation creates a satisfying staggered
+    // reveal as the user scrolls through the WHO WE ARE section.
+    document.querySelectorAll('.personnel-file').forEach(file => {
+        file.style.opacity = '0';
+        file.style.transform = 'translateX(-50px)';
+        file.style.transition = 'all 0.8s ease-out';
+        observer.observe(file);
+    });
+
     // Fade-in sections
     document.querySelectorAll('.fade-in-section').forEach(section => {
         section.style.opacity = '0';
