@@ -163,3 +163,89 @@
   pointer-events: none;
   opacity: 0.4;
 }
+
+
+/* ─── PATTERN C: FULL-BLEED CLOSER / PRELUDE ─────────────────── */
+/*
+   Landscape image that breaks out of the section's content
+   container to span the full viewport width. Two variants:
+
+   - .section-closer-image: positioned as the LAST child of a
+     section, hugs the bottom edge. Used for emotional payoff or
+     thriller climax moments.
+
+   - .section-prelude-image: positioned as the FIRST child of a
+     section, hugs the top edge. Used for visual transitions
+     into a section.
+
+   object-position MUST be set per-image via inline style
+   attribute on the <img> element. aspect-ratio is fixed at
+   21/9 for both variants for visual consistency across the page.
+*/
+
+.section-closer-image,
+.section-prelude-image {
+  position: relative;
+  width: calc(100% + 4rem);
+  margin-left: -2rem;
+  margin-right: -2rem;
+}
+
+.section-closer-image img,
+.section-prelude-image img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 21/9;
+  object-fit: cover;
+  border-top: 1px solid rgba(204, 0, 0, 0.5);
+  border-bottom: 1px solid rgba(204, 0, 0, 0.5);
+}
+
+.section-closer-image::after,
+.section-prelude-image::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0) 3px,
+    rgba(0, 0, 0, 0.1) 4px
+  );
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Section-specific margin overrides to hug section vertical edges.
+   Each value matches the parent section's vertical padding so the
+   negative margin cancels it out exactly.
+
+   .narrative has padding: 8rem 2rem (from layout.css).
+   #why-we-made-this has inline padding: 5rem 2rem.
+   .interest-form has padding: 6rem 2rem (from layout.css). */
+
+#narrative .section-closer-image {
+  margin-top: 3rem;
+  margin-bottom: -8rem;
+}
+
+#why-we-made-this .section-closer-image {
+  margin-top: 3rem;
+  margin-bottom: -5rem;
+}
+
+#submit-evidence .section-prelude-image {
+  margin-top: -6rem;
+  margin-bottom: 4rem;
+}
+
+/* Allow full-bleed images to escape the parent section's
+   overflow:hidden (which would otherwise clip the negative margins).
+   These three sections all have overflow:hidden in layout.css. */
+
+#narrative,
+#why-we-made-this,
+#submit-evidence {
+  overflow: visible;
+}
