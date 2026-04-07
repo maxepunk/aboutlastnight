@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 About Last Night - Smart Email Sender
 Handles booking system paste format and sends personalized follow-up emails
@@ -16,7 +16,12 @@ from email.utils import formataddr
 from pathlib import Path
 from typing import List, Dict, Tuple
 import time
-from PIL import Image
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
 # ===== CONFIGURATION =====
 
@@ -219,7 +224,8 @@ def get_photo_folder() -> List[Path]:
     print("-" * 60)
 
     while True:
-        folder = input().strip()
+        # Strip surrounding quotes from "Copy as path" in Windows Explorer
+        folder = input().strip().strip('"').strip("'")
         if not folder:
             print("  No photos — skipping.")
             return []
@@ -252,6 +258,11 @@ def process_photos(image_paths: List[Path], session_date: str) -> List[Tuple[str
     Resize photos and return as named JPEG byte tuples.
     Returns list of (filename, jpeg_bytes).
     """
+    if not HAS_PIL:
+        print("  ⚠️  Pillow not installed — cannot process photos.")
+        print("  Install with: pip install Pillow")
+        return []
+
     MAX_DIMENSION = 1600
     JPEG_QUALITY = 85
     TOTAL_SIZE_WARN = 20 * 1024 * 1024  # 20MB
