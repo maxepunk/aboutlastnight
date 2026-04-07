@@ -36,6 +36,10 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Reports - session data and temp files (NOT generated reports)
 reports/data/
 reports/sessionphotos/
