@@ -1,0 +1,104 @@
+/* ═══════════════════════════════════════════════════════════════ */
+/*  IMAGE TREATMENTS                                                */
+/*  Three patterns for integrating new marketing photos into        */
+/*  index.html as a foreground layer over the existing noir-        */
+/*  parallax background system.                                     */
+/*                                                                  */
+/*  Pattern A: Side-by-side portrait + paragraph cluster            */
+/*  Pattern B: Contained landscape banner (inline rhythm break)     */
+/*  Pattern C: Full-bleed landscape closer / prelude                */
+/*                                                                  */
+/*  Per-image crops (aspect-ratio, object-position) are applied    */
+/*  via inline style attributes on the <img> elements, not in this */
+/*  file. Each crop is tuned to the specific source image's        */
+/*  composition. See docs/superpowers/specs/2026-04-06-image-      */
+/*  integration-design.md for the per-image crop spec table.       */
+/* ═══════════════════════════════════════════════════════════════ */
+
+
+/* ─── PATTERN A: SIDE-BY-SIDE ─────────────────────────────────── */
+/*
+   A portrait image paired with a multi-paragraph text cluster.
+   The cluster must be a thematically cohesive group of paragraphs
+   that fills enough vertical space to balance against the image
+   (target ~70% fill of image height with text content).
+
+   Default: image LEFT, text RIGHT.
+   Modifier .side-by-side--image-right flips to text LEFT, image RIGHT.
+*/
+
+.side-by-side {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 36px;
+  align-items: start;
+  margin: 3rem auto;
+  max-width: 900px;
+  position: relative;
+}
+
+.side-by-side--image-right {
+  grid-template-columns: 1fr 260px;
+}
+
+.side-by-side__image {
+  position: relative;
+}
+
+.side-by-side__image img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  display: block;
+  border: 1px solid rgba(204, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+}
+
+/* Scanline overlay matches the existing explanation-section aesthetic */
+.side-by-side__image::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0) 3px,
+    rgba(0, 0, 0, 0.1) 4px
+  );
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.side-by-side__text {
+  padding-top: 0.25rem;
+}
+
+/* Text cluster paragraphs use tighter spacing and slightly smaller
+   font than the surrounding section flow, so the cluster reads as
+   a visual unit rather than three loose paragraphs. */
+.side-by-side__text p {
+  font-size: 14px;
+  line-height: 1.8;
+  margin-bottom: 1.1rem;
+}
+
+.side-by-side__text p:last-child {
+  margin-bottom: 0;
+}
+
+/* Mobile: collapse to single column. HTML order determines
+   stacking — for default variant, image stacks above text;
+   for reverse variant, text stacks above image. Both work. */
+@media (max-width: 768px) {
+  .side-by-side,
+  .side-by-side--image-right {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  .side-by-side__image img {
+    max-width: 320px;
+    margin: 0 auto;
+    aspect-ratio: 3/4;
+  }
+}
