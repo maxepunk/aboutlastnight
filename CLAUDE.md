@@ -56,11 +56,11 @@ JS (js/*.js)      = All behavior (organized by concern)
 - `animations.css` - Keyframes, scroll effects, parallax backgrounds
 
 **JavaScript Organization (js/ directory):**
-- `utils.js` (~7.5KB) - Device detection, UTM parameter tracking, hidden field population
-- `forms.js` (~12.8KB) - Form submission, localStorage recovery, retry logic with exponential backoff
-- `interactions.js` (~16.1KB) - Accordions, sticky header, scroll effects, analytics (for index.html)
-- `playtest-interactions.js` (~12KB) - Playtest-specific: spot counter, date selection, capacity fetching (for playtest.html)
-- `feedback-interactions.js` (~3KB) - Feedback form: URL parameter parsing, form submission (for feedback.html)
+- `utils.js` - Device detection, UTM parameter tracking, hidden field population
+- `forms.js` - Form submission, localStorage recovery, retry logic with exponential backoff
+- `interactions.js` - Accordions, sticky header, scroll effects, analytics (for index.html)
+- `playtest-interactions.js` - Playtest-specific: spot counter, date selection, capacity fetching (for playtest.html)
+- `feedback-interactions.js` - Feedback form: URL parameter parsing, form submission (for feedback.html)
 
 ### Progressive Enhancement
 - Core content works without JavaScript
@@ -82,8 +82,9 @@ GitHub Pages auto-deploys from main branch. Changes live within 1-2 minutes.
 ### Testing Locally
 ```bash
 # Preview HTML directly (forms won't work)
-open index.html  # macOS
-xdg-open index.html  # Linux
+start index.html    # Windows
+open index.html     # macOS
+xdg-open index.html # Linux
 
 # Test forms (requires local server)
 python3 -m http.server
@@ -239,8 +240,12 @@ This project is in active development before launch:
 - `index.html` - Main landing page (all content)
 - `playtest.html` - Playtest signup form
 - `feedback.html` - Post-show feedback form
+- `how-to-play.html` - Interactive game instructions page
+- `press.html` - Press/media coverage and quotes
 - `css/` - Modular stylesheets (base, layout, components, animations, playtest, feedback)
 - `js/` - Modular JavaScript (utils, forms, interactions, playtest-interactions, feedback-interactions)
+- `images/` - Hero images, media assets, MP4 video
+- `downloads/` - Press kit
 - `FORM_HANDLER_GOOGLE_SCRIPT.js` - Main form backend
 - `PLAYTEST_GOOGLE_SCRIPT.js` - Playtest form backend
 - `FEEDBACK_GOOGLE_SCRIPT.js` - Feedback form backend
