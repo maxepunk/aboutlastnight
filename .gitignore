@@ -44,12 +44,11 @@ __pycache__/
 .superpowers/
 
 # Playwright MCP screenshots and snapshots (debug artifacts from
-# mid-session visual verification — NOT product images)
+# mid-session visual verification — NOT product images). All product
+# images live in images/ or reports/, so anything PNG at the project
+# root is debug noise.
 .playwright-mcp/
-/task*.png
-/mobile-*.png
-/desktop-*.png
-/interlude-moved.png
+/*.png
 
 # Reports - session data and temp files (NOT generated reports)
 reports/data/
