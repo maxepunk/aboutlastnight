@@ -917,13 +917,26 @@ async function generateOutline(state, config) {
   const arcEvidencePackages = state.arcEvidencePackages || [];
   const shellAccounts = state.shellAccounts || [];
 
+  // Build session facts for outline (same as article phase - RC3 guardrail)
+  const roster = state.sessionConfig?.roster || [];
+  const canonicalChars = state.canonicalCharacters || {};
+  const sessionFacts = roster.length > 0 ? {
+    roster: roster.map(p => {
+      const name = p.name || p;
+      return canonicalChars[name] || name;
+    }),
+    accusation: state.sessionConfig?.accusation?.accused?.join(' and ') || 'Unknown',
+    playerCount: roster.length
+  } : null;
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(
     arcAnalysis,
     state.selectedArcs || [],
     heroImage,
     availablePhotos,  // Available photos
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
-    shellAccounts  // Deterministic shell account data for financial summary
+    shellAccounts,  // Deterministic shell account data for financial summary
+    sessionFacts  // Session facts for player count and roster guardrail
   );
 
   const theme = config?.configurable?.theme || 'journalist';
@@ -1593,7 +1606,7 @@ function createMockPromptBuilder() {
       };
     },
 
-    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts) {
+    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts, sessionFacts) {
       return {
         systemPrompt: 'Mock system prompt for outline generation',
         userPrompt: `Generate outline for arcs: ${selectedArcs?.join(', ') || 'none selected'}`
