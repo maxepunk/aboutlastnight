@@ -120,6 +120,29 @@
     margin: 0 auto;
     aspect-ratio: 3/4;
   }
+
+  /* On mobile the side-by-side collapses to stacked vertical, so the
+     cluster text loses its spatial separation from the surrounding
+     section flow. The smaller-font / no-chevron cluster styling that
+     reads as "visually distinct sub-block" on desktop reads as
+     "inconsistent typography" on mobile. Restore the cluster text to
+     match the section's normal paragraph styling — but KEEP the
+     no-callout-treatment overrides so the first cluster paragraph
+     doesn't get the lead/border/background that would otherwise apply
+     via .explanation-section p:first-of-type. */
+  .explanation-section .side-by-side__text p,
+  .explanation-section .side-by-side__text p:first-of-type {
+    font-size: 1.1rem;
+    line-height: 1.9;
+    padding: 0 0 0 1.2rem;
+    margin-bottom: 1.8rem;
+    /* font-weight, color, border, background remain overridden from
+       the desktop rules above — no callout, no border, no bg tint. */
+  }
+
+  .explanation-section .side-by-side__text p::before {
+    display: inline;
+  }
 }
 
 
