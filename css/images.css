@@ -165,10 +165,10 @@
 }
 
 
-/* ─── PATTERN C: FULL-BLEED CLOSER / PRELUDE ─────────────────── */
+/* ─── PATTERN C: FULL-BLEED CLOSER / PRELUDE / INTERLUDE ─────── */
 /*
    Landscape image that breaks out of the section's content
-   container to span the full viewport width. Two variants:
+   container to span the full viewport width. Three variants:
 
    - .section-closer-image: positioned as the LAST child of a
      section, hugs the bottom edge. Used for emotional payoff or
@@ -178,9 +178,14 @@
      section, hugs the top edge. Used for visual transitions
      into a section.
 
+   - .section-interlude-image: standalone full-bleed image placed
+     BETWEEN sections (as a body-level sibling, not inside any
+     section). No parent padding to escape, so no negative margins
+     needed — just full viewport width.
+
    object-position MUST be set per-image via inline style
    attribute on the <img> element. aspect-ratio is fixed at
-   21/9 for both variants for visual consistency across the page.
+   21/9 for all three variants for visual consistency.
 */
 
 .section-closer-image,
@@ -191,8 +196,15 @@
   margin-right: -2rem;
 }
 
+.section-interlude-image {
+  position: relative;
+  width: 100%;
+  margin: 0;
+}
+
 .section-closer-image img,
-.section-prelude-image img {
+.section-prelude-image img,
+.section-interlude-image img {
   width: 100%;
   display: block;
   aspect-ratio: 21/9;
@@ -202,7 +214,8 @@
 }
 
 .section-closer-image::after,
-.section-prelude-image::after {
+.section-prelude-image::after,
+.section-interlude-image::after {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
