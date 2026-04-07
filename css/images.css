@@ -76,14 +76,33 @@
 
 /* Text cluster paragraphs use tighter spacing and slightly smaller
    font than the surrounding section flow, so the cluster reads as
-   a visual unit rather than three loose paragraphs. */
-.side-by-side__text p {
+   a visual unit rather than three loose paragraphs.
+
+   When the side-by-side appears inside .explanation-section (which is
+   most uses), we have to override the existing .explanation-section p
+   cascade explicitly. The existing layout.css applies: 1.2rem font,
+   padding-left for chevron, ::before chevron bullet, and a callout/
+   lead treatment on p:first-of-type (red border, background, larger
+   font). All of those need to be suppressed inside the cluster. */
+.side-by-side__text p,
+.explanation-section .side-by-side__text p,
+.explanation-section .side-by-side__text p:first-of-type {
   font-size: 14px;
+  font-weight: 300;
   line-height: 1.8;
   margin-bottom: 1.1rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.88);
 }
 
-.side-by-side__text p:last-child {
+.explanation-section .side-by-side__text p::before {
+  display: none;
+}
+
+.side-by-side__text p:last-child,
+.explanation-section .side-by-side__text p:last-child {
   margin-bottom: 0;
 }
 
