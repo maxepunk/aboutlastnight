@@ -40,6 +40,9 @@ pnpm-lock.yaml
 __pycache__/
 *.pyc
 
+# Superpowers brainstorm session artifacts (ephemeral mockups)
+.superpowers/
+
 # Reports - session data and temp files (NOT generated reports)
 reports/data/
 reports/sessionphotos/
