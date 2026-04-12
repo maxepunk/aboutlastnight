@@ -670,7 +670,7 @@ async function analyzeNarrativeArcs(state, config) {
   const arcAnalysis = await sdk({
     prompt: userPrompt,
     systemPrompt,
-    model: 'sonnet',
+    model: 'opus',
     disableTools: true,
     jsonSchema: {
       type: 'object',
@@ -1359,7 +1359,7 @@ async function validateArticle(state, config) {
   const validationResults = await sdk({
     prompt: userPrompt,
     systemPrompt,
-    model: 'haiku',
+    model: 'opus',
     disableTools: true,
     jsonSchema: {
       type: 'object',

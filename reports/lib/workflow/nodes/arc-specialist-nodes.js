@@ -486,7 +486,7 @@ async function generateCoreArcs(state, config) {
     const result = await sdkClient({
       prompt,
       systemPrompt: CORE_ARC_SYSTEM_PROMPT,
-      model: 'sonnet',
+      model: 'opus',
       jsonSchema: CORE_ARC_SCHEMA,
       timeoutMs: 10 * 60 * 1000, // 10 minutes — 31K+ char prompts need headroom for schema validation retries (observed: 170s generation + 130s retry)
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
@@ -541,9 +541,9 @@ async function enrichWithInterweaving(coreArcs, roster, config) {
     const result = await sdkClient({
       prompt,
       systemPrompt: INTERWEAVING_SYSTEM_PROMPT,
-      model: 'sonnet',
+      model: 'opus',
       jsonSchema: INTERWEAVING_SCHEMA,
-      timeoutMs: 2 * 60 * 1000,  // 2 minutes
+      timeoutMs: 10 * 60 * 1000, // 10 minutes
       label: 'Interweaving enrichment (Call 2)'
     });
 
@@ -1175,10 +1175,10 @@ async function reviseArcs(state, config) {
     const result = await sdkClient({
       prompt: revisionPrompt,
       systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback),
-      model: 'sonnet',
+      model: 'opus',
       jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
       disableTools: true,        // Pure analytical task — no tool access needed
-      timeoutMs: 8 * 60 * 1000, // 8 min — revision prompt is ~55K chars
+      timeoutMs: 10 * 60 * 1000, // 10 min — revision prompt is ~55K chars
       label: `Arc revision ${revisionCount}`
     });
 
