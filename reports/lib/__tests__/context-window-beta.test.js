@@ -29,13 +29,13 @@ describe('1M context window beta', () => {
     capturedOptions = null;
   });
 
-  test('opus resolves to claude-opus-4-6 with 1M beta', async () => {
+  test('opus resolves to claude-opus-4-7 with 1M beta', async () => {
     await sdkQuery({
       prompt: 'test',
       model: 'opus',
       disableTools: true
     });
-    expect(capturedOptions.model).toBe('claude-opus-4-6');
+    expect(capturedOptions.model).toBe('claude-opus-4-7');
     expect(capturedOptions.betas).toEqual(['context-1m-2025-08-07']);
   });
 
@@ -71,10 +71,10 @@ describe('1M context window beta', () => {
   test('explicit model IDs pass through unchanged', async () => {
     await sdkQuery({
       prompt: 'test',
-      model: 'claude-opus-4-6',
+      model: 'claude-opus-4-7',
       disableTools: true
     });
-    expect(capturedOptions.model).toBe('claude-opus-4-6');
+    expect(capturedOptions.model).toBe('claude-opus-4-7');
     expect(capturedOptions.betas).toEqual(['context-1m-2025-08-07']);
   });
 });

@@ -16,7 +16,7 @@ if (require.main === module) {
   const { query } = require('@anthropic-ai/claude-agent-sdk');
 
   const MODEL_IDS = {
-    opus: 'claude-opus-4-6',
+    opus: 'claude-opus-4-7',
     sonnet: 'claude-sonnet-4-6',
     haiku: 'claude-haiku-4-5'
   };

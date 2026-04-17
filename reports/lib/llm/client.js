@@ -36,7 +36,7 @@ const MODEL_TIMEOUTS = {
  * guarantees we run on the intended model version.
  */
 const MODEL_IDS = {
-  opus: 'claude-opus-4-6',
+  opus: 'claude-opus-4-7',
   sonnet: 'claude-sonnet-4-6',
   haiku: 'claude-haiku-4-5'
 };
