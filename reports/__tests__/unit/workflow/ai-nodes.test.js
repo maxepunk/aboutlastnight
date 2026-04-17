@@ -288,12 +288,12 @@ describe('ai-nodes', () => {
     // NOTE: approvalType test removed in interrupt() migration
     // AI nodes no longer set approvalType - checkpoint-helpers.js handles interrupts
 
-    it('calls SDK with sonnet model', async () => {
+    it('calls SDK with opus model', async () => {
       mockClient.clearCalls();
       await analyzeNarrativeArcs({}, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('sonnet');
+      expect(lastCall.model).toBe('opus');
     });
 
     it('extracts roster names from sessionConfig', async () => {
@@ -605,12 +605,12 @@ describe('ai-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.COMPLETE);
     });
 
-    it('calls SDK with haiku model', async () => {
+    it('calls SDK with opus model', async () => {
       mockClient.clearCalls();
       await validateArticle({}, config);
 
       const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('haiku');
+      expect(lastCall.model).toBe('opus');
     });
 
     it('uses assembledHtml if available', async () => {
