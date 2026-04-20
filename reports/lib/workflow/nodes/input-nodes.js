@@ -296,6 +296,35 @@ function deriveSessionId(dateStr, sessionNumber = 1) {
   return sessionNumber > 1 ? `${base}${sessionNumber}` : base;
 }
 
+/**
+ * Project buriedTokens entries into the scoringTimeline row shape expected by
+ * the director-notes enricher prompt builder.
+ *
+ * orchestratorParsed has no `scoringTimeline` field; the Scoring Timeline data
+ * the enricher needs for cross-referencing director observations to transactions
+ * lives in `buriedTokens` (one row per burial sale). This helper reshapes those
+ * rows into the `{ time, type, detail, team, amount }` shape consumed by
+ * `lib/director-enricher.js`.
+ *
+ * @param {Array<{tokenId: string, shellAccount: string, amount: number, time?: string}>} buriedTokens
+ * @returns {Array<{time: string, type: string, detail: string, team: string, amount: string}>}
+ */
+function projectBuriedTokensToScoringTimeline(buriedTokens) {
+  if (!Array.isArray(buriedTokens) || buriedTokens.length === 0) {
+    return [];
+  }
+  return buriedTokens.map(entry => {
+    const rawAmount = typeof entry.amount === 'number' ? entry.amount : 0;
+    return {
+      time: entry.sessionTransactionTime || entry.time || '',
+      type: 'Sale',
+      detail: entry.tokenId || '',
+      team: entry.shellAccount || '',
+      amount: `+$${rawAmount.toLocaleString('en-US')}`
+    };
+  });
+}
+
 // ═══════════════════════════════════════════════════════
 // PARSE RAW INPUT NODE
 // ═══════════════════════════════════════════════════════
@@ -495,7 +524,7 @@ Return structured JSON matching the schema.`;
       npcs: themeNPCs,
       shellAccounts: orchestratorParsed.shellAccounts || [],
       detectiveEvidenceLog: orchestratorParsed.exposedTokens || [],
-      scoringTimeline: []
+      scoringTimeline: projectBuriedTokensToScoringTimeline(orchestratorParsed.buriedTokens || [])
     }, sdk);
 
     const counts = {
@@ -814,6 +843,7 @@ module.exports = {
     deriveSessionId,
     ensureDir,
     sanitizePath,
-    mergeDirectorOverrides
+    mergeDirectorOverrides,
+    projectBuriedTokensToScoringTimeline
   }
 };
