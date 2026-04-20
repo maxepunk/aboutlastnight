@@ -195,7 +195,59 @@ ${rawProse}
   return { systemPrompt: ENRICHMENT_SYSTEM_PROMPT, userPrompt };
 }
 
+function createFallback(rawProse) {
+  return {
+    rawProse: rawProse || '',
+    characterMentions: {},
+    entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+    quotes: [],
+    transactionReferences: [],
+    postInvestigationDevelopments: []
+  };
+}
+
+async function enrichDirectorNotes(context, sdk) {
+  const rawProse = context?.rawProse || '';
+  if (!rawProse) {
+    return createFallback('');
+  }
+
+  const { systemPrompt, userPrompt } = buildEnrichmentPrompt(context);
+
+  try {
+    const result = await sdk({
+      prompt: userPrompt,
+      systemPrompt,
+      model: 'opus',
+      disableTools: true,
+      jsonSchema: DIRECTOR_NOTES_ENRICHED_SCHEMA,
+      timeoutMs: 10 * 60 * 1000,
+      label: 'Director notes enrichment'
+    });
+
+    if (!result || typeof result.rawProse !== 'string') {
+      console.warn('[enrichDirectorNotes] SDK returned invalid result; falling back');
+      return createFallback(rawProse);
+    }
+
+    // Normalize optional fields so downstream consumers always see the expected shape
+    return {
+      rawProse: result.rawProse,
+      characterMentions: result.characterMentions || {},
+      entityNotes: result.entityNotes || { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: result.quotes || [],
+      transactionReferences: result.transactionReferences || [],
+      postInvestigationDevelopments: result.postInvestigationDevelopments || []
+    };
+  } catch (error) {
+    console.warn(`[enrichDirectorNotes] SDK call failed: ${error.message}; falling back`);
+    return createFallback(rawProse);
+  }
+}
+
 module.exports = {
   DIRECTOR_NOTES_ENRICHED_SCHEMA,
-  buildEnrichmentPrompt
+  buildEnrichmentPrompt,
+  enrichDirectorNotes,
+  createFallback
 };

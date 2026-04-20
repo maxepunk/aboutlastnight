@@ -1,4 +1,4 @@
-const { DIRECTOR_NOTES_ENRICHED_SCHEMA, buildEnrichmentPrompt } = require('../director-enricher');
+const { DIRECTOR_NOTES_ENRICHED_SCHEMA, buildEnrichmentPrompt, enrichDirectorNotes, createFallback } = require('../director-enricher');
 
 describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
   it('requires rawProse as the source of truth', () => {
@@ -131,5 +131,87 @@ describe('buildEnrichmentPrompt', () => {
     const { userPrompt } = buildEnrichmentPrompt(minimal);
     expect(userPrompt).toContain('Short note.');
     expect(userPrompt).toContain('<ROSTER>');
+  });
+});
+
+describe('createFallback', () => {
+  it('preserves rawProse and returns empty indexes', () => {
+    const fallback = createFallback('some prose');
+    expect(fallback.rawProse).toBe('some prose');
+    expect(fallback.characterMentions).toEqual({});
+    expect(fallback.entityNotes).toEqual({ npcsReferenced: [], shellAccountsReferenced: [] });
+    expect(fallback.quotes).toEqual([]);
+    expect(fallback.transactionReferences).toEqual([]);
+    expect(fallback.postInvestigationDevelopments).toEqual([]);
+  });
+});
+
+describe('enrichDirectorNotes', () => {
+  const baseContext = {
+    rawProse: 'Vic was working the room. "do you want to trade a little" Remi said to Mel.',
+    roster: ['Vic', 'Remi', 'Mel'],
+    accusation: { accused: ['Morgan'], charge: 'Murder' },
+    npcs: ['Blake'],
+    shellAccounts: [],
+    detectiveEvidenceLog: [],
+    scoringTimeline: []
+  };
+
+  it('invokes sdk with opus model, schema, and disableTools', async () => {
+    const sdk = jest.fn().mockResolvedValue({
+      rawProse: baseContext.rawProse,
+      characterMentions: {},
+      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [],
+      transactionReferences: [],
+      postInvestigationDevelopments: []
+    });
+
+    await enrichDirectorNotes(baseContext, sdk);
+
+    expect(sdk).toHaveBeenCalledTimes(1);
+    const call = sdk.mock.calls[0][0];
+    expect(call.model).toBe('opus');
+    expect(call.disableTools).toBe(true);
+    expect(call.jsonSchema).toBe(DIRECTOR_NOTES_ENRICHED_SCHEMA);
+    expect(call.timeoutMs).toBe(10 * 60 * 1000);
+    expect(call.label).toBe('Director notes enrichment');
+  });
+
+  it('returns the SDK result on success', async () => {
+    const expected = {
+      rawProse: baseContext.rawProse,
+      characterMentions: { Vic: [{ excerpt: 'Vic was working the room.' }] },
+      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }],
+      transactionReferences: [],
+      postInvestigationDevelopments: []
+    };
+    const sdk = jest.fn().mockResolvedValue(expected);
+
+    const result = await enrichDirectorNotes(baseContext, sdk);
+    expect(result).toEqual(expected);
+  });
+
+  it('returns fallback when SDK throws', async () => {
+    const sdk = jest.fn().mockRejectedValue(new Error('timeout'));
+    const result = await enrichDirectorNotes(baseContext, sdk);
+    expect(result.rawProse).toBe(baseContext.rawProse);
+    expect(result.characterMentions).toEqual({});
+    expect(result.quotes).toEqual([]);
+    expect(result.transactionReferences).toEqual([]);
+  });
+
+  it('returns fallback when SDK returns result missing required rawProse', async () => {
+    const sdk = jest.fn().mockResolvedValue({ characterMentions: {} });
+    const result = await enrichDirectorNotes(baseContext, sdk);
+    expect(result.rawProse).toBe(baseContext.rawProse);
+  });
+
+  it('returns fallback with empty prose when input rawProse is missing', async () => {
+    const sdk = jest.fn();
+    const result = await enrichDirectorNotes({ ...baseContext, rawProse: '' }, sdk);
+    expect(result.rawProse).toBe('');
+    expect(sdk).not.toHaveBeenCalled();
   });
 });
