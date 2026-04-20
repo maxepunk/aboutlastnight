@@ -21,6 +21,8 @@ function SessionStart({ dispatch, theme }) {
   const [loading, setLoading] = React.useState(false);
   const [reporterName, setReporterName] = React.useState('');
   const [reportingMode, setReportingMode] = React.useState('on-site');
+  const [guestReporterName, setGuestReporterName] = React.useState('');
+  const [guestReporterRole, setGuestReporterRole] = React.useState('');
 
   // FileBrowser modal state
   const [browseOpen, setBrowseOpen] = React.useState(false);
@@ -44,6 +46,12 @@ function SessionStart({ dispatch, theme }) {
     if (theme === 'journalist') {
       raw.journalistFirstName = reporterName.trim() || 'Cassandra';
       raw.reportingMode = reportingMode;
+      if (guestReporterName.trim()) {
+        raw.guestReporter = {
+          name: guestReporterName.trim(),
+          role: guestReporterRole.trim() || 'Guest Reporter'
+        };
+      }
     }
     return raw;
   }
@@ -273,6 +281,44 @@ function SessionStart({ dispatch, theme }) {
       ),
       React.createElement('p', { className: 'text-muted text-xs mt-xs' },
         'On-site: Nova physically present at investigation. Remote: receiving tips remotely.'
+      )
+    ),
+
+    // Guest Reporter (journalist theme only, optional, collapsed by default)
+    theme === 'journalist' && React.createElement('div', { className: 'mt-sm' },
+      React.createElement(CollapsibleSection, {
+        title: 'Guest Reporter (Optional)',
+        defaultOpen: false
+      },
+        React.createElement('div', { className: 'session-start__input-group' },
+          React.createElement('label', { htmlFor: 'guest-reporter-name' }, 'Name'),
+          React.createElement('input', {
+            id: 'guest-reporter-name',
+            type: 'text',
+            className: 'input',
+            placeholder: 'e.g. Ashe Motoko',
+            value: guestReporterName,
+            onChange: (e) => setGuestReporterName(e.target.value),
+            disabled: loading,
+            'aria-label': 'Name of the player or character credited as guest reporter'
+          })
+        ),
+        React.createElement('div', { className: 'session-start__input-group mt-sm' },
+          React.createElement('label', { htmlFor: 'guest-reporter-role' }, 'Role'),
+          React.createElement('input', {
+            id: 'guest-reporter-role',
+            type: 'text',
+            className: 'input',
+            placeholder: 'Guest Reporter',
+            value: guestReporterRole,
+            onChange: (e) => setGuestReporterRole(e.target.value),
+            disabled: loading,
+            'aria-label': 'Role or title of the guest reporter'
+          }),
+          React.createElement('p', { className: 'text-muted text-xs mt-xs' },
+            'Leave Name blank to omit. Role defaults to "Guest Reporter" if blank.'
+          )
+        )
       )
     ),
 
