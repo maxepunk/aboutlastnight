@@ -1166,13 +1166,13 @@ Task(subagent_type="journalist-article-generator", prompt=`
   Emit a ContentBundle JSON matching lib/schemas/content-bundle.schema.json.
 
   Write to:
-  - output/content-bundle.json (your structured output)
-  - output/article-metadata.json (word count, components used, self-assessment)
+  - data/20251221/output/content-bundle.json (your structured output)
+  - data/20251221/output/article-metadata.json (word count, components used, self-assessment)
 
-  Then run:
+  Then run (from the repo root):
     node scripts/assemble-article.js \
-      --bundle output/content-bundle.json \
-      --out output/article.html
+      --bundle data/20251221/output/content-bundle.json \
+      --out data/20251221/output/article.html
 
   Return concise summary with word count and voice assessment.
 `)
