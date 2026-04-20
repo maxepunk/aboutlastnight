@@ -202,20 +202,6 @@ const DIRECTOR_NOTES_SCHEMA = {
           description: 'Key moments during the session'
         }
       }
-    },
-    reportingMode: {
-      type: 'string',
-      enum: ['on-site', 'remote'],
-      description: 'Whether the journalist was physically present (on-site) or receiving tips remotely (remote). Infer from director notes.'
-    },
-    guestReporter: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        role: { type: 'string' }
-      },
-      required: ['name'],
-      description: 'If a player or NPC is credited as guest/co-reporter, extract their name and role here.'
     }
   }
 };
@@ -363,11 +349,7 @@ function deriveSessionId(dateStr, sessionNumber = 1) {
  * Applies defaults when director notes don't specify values
  */
 function mergeDirectorOverrides(sessionConfig, directorNotes) {
-  return {
-    ...sessionConfig,
-    reportingMode: directorNotes?.reportingMode ?? 'on-site',
-    guestReporter: directorNotes?.guestReporter || null
-  };
+  return { ...sessionConfig };
 }
 
 async function parseRawInput(state, config) {
@@ -435,6 +417,8 @@ Return structured JSON matching the schema.`;
     result.rosterCount = result.roster?.length || 0;
     result.photosPath = sanitizePath(rawInput.photosPath);
     result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
+    result.reportingMode = rawInput.reportingMode || 'on-site';
+    result.guestReporter = rawInput.guestReporter || null;
     result.createdAt = new Date().toISOString();
     return result;
   })();
@@ -511,8 +495,6 @@ Categories:
 1. behaviorPatterns: Observable behaviors (who talked to whom, what they did)
 2. suspiciousCorrelations: Suspected connections, possible pseudonyms, theories
 3. notableMoments: Key moments or events worth highlighting
-4. reportingMode: Was the journalist physically present ("on-site") or receiving tips remotely ("remote")? Look for phrases like "not on site", "received tips remotely", "was present at the scene", etc. If unclear, omit this field.
-5. guestReporter: If any player or character is credited as a guest reporter, co-reporter, or contributor, extract their name and role. Only include if explicitly stated.
 
 Return structured JSON matching the schema.`;
 
