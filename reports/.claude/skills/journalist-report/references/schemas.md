@@ -619,3 +619,71 @@ Written alongside article-outline.json for parent agent checkpoint presentation.
 | 1 | Wrong voice entirely |
 
 **Passing Criteria:** `passed: true` only if zero critical issues AND voice_score >= 4
+
+---
+
+## ContentBundle (Phase 4 Output)
+
+**Authoritative schema:** `lib/schemas/content-bundle.schema.json`
+
+Always read the schema file directly before generating — this document is a
+human-readable summary; the JSON schema is what `TemplateAssembler` validates
+against.
+
+**Top-level shape:**
+
+```json
+{
+  "metadata": {
+    "sessionId": "20251221",
+    "theme": "journalist",
+    "generatedAt": "2026-04-20T18:30:00.000Z",
+    "version": "1.0.0",
+    "storyDate": "2027-02-22"
+  },
+  "headline": {
+    "main": "Required primary headline (10-200 chars)",
+    "kicker": "Optional small text above",
+    "deck": "Optional subheadline"
+  },
+  "byline": {
+    "author": "Cassandra Nova",
+    "title": "Senior Investigative Reporter",
+    "location": "Fremont, CA",
+    "date": "December 21, 2025"
+  },
+  "sections": [ /* see Section shape */ ],
+  "pullQuotes": [ /* verbatim or crystallization */ ],
+  "evidenceCards": [ /* sidebar + inline evidence */ ],
+  "financialTracker": { "entries": [...], "totalExposed": "$4.06M" },
+  "photos": [ /* inline photos */ ],
+  "heroImage": { "filename": "...", "caption": "...", "characters": [...] }
+}
+```
+
+**Section shape (`sections[]`):**
+
+- `id` — unique section identifier (e.g., `"lede"`, `"the-story"`)
+- `type` — one of `narrative`, `evidence-highlight`, `investigation-notes`, `conclusion`, `case-summary`
+- `heading` — optional section heading
+- `content[]` — array of content blocks, each one of:
+  - `paragraph` — `{ type, text }`
+  - `quote` — `{ type, text, attribution }`
+  - `evidence-reference` — `{ type, tokenId, caption }`
+  - `list` — `{ type, ordered, items[] }`
+  - `photo` — `{ type, filename, caption, characters[] }`
+  - `evidence-card` — `{ type, tokenId, headline, content, owner, significance }`
+
+**Pull quote shape (`pullQuotes[]`):**
+
+- `verbatim` — exact quote from evidence, requires `attribution` and `sourceTokenId`
+- `crystallization` — journalist insight, `attribution` MUST be `null`
+
+**Evidence card shape (`evidenceCards[]`):**
+
+- Required: `tokenId`, `headline`
+- Optional: `content` (full quotable text), `summary`, `owner`, `significance` (`critical`/`supporting`/`contextual`), `placement` (`sidebar`/`inline`)
+
+**Validation:** `scripts/assemble-article.js` invokes `TemplateAssembler.assemble()`
+which validates against the schema. Errors name the offending JSON path. Fix the
+bundle and re-run the script.
