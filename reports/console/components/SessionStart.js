@@ -20,6 +20,7 @@ function SessionStart({ dispatch, theme }) {
   const [status, setStatus] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [reporterName, setReporterName] = React.useState('');
+  const [reportingMode, setReportingMode] = React.useState('on-site');
 
   // FileBrowser modal state
   const [browseOpen, setBrowseOpen] = React.useState(false);
@@ -42,6 +43,7 @@ function SessionStart({ dispatch, theme }) {
     }
     if (theme === 'journalist') {
       raw.journalistFirstName = reporterName.trim() || 'Cassandra';
+      raw.reportingMode = reportingMode;
     }
     return raw;
   }
@@ -239,6 +241,38 @@ function SessionStart({ dispatch, theme }) {
       }),
       React.createElement('p', { className: 'text-muted text-xs mt-xs' },
         'Leave blank for default (Cassandra Nova)'
+      )
+    ),
+
+    // Reporting Mode (journalist theme only)
+    theme === 'journalist' && React.createElement('div', { className: 'session-start__input-group mt-md' },
+      React.createElement('label', { className: 'form-label' }, 'Reporting Mode'),
+      React.createElement('div', { className: 'flex gap-md mt-xs', role: 'radiogroup', 'aria-label': 'Whether Nova was physically present at the investigation' },
+        React.createElement('label', { className: 'flex gap-sm items-center text-sm' },
+          React.createElement('input', {
+            type: 'radio',
+            name: 'reporting-mode',
+            value: 'on-site',
+            checked: reportingMode === 'on-site',
+            onChange: () => setReportingMode('on-site'),
+            disabled: loading
+          }),
+          React.createElement('span', null, 'On-site')
+        ),
+        React.createElement('label', { className: 'flex gap-sm items-center text-sm' },
+          React.createElement('input', {
+            type: 'radio',
+            name: 'reporting-mode',
+            value: 'remote',
+            checked: reportingMode === 'remote',
+            onChange: () => setReportingMode('remote'),
+            disabled: loading
+          }),
+          React.createElement('span', null, 'Remote')
+        )
+      ),
+      React.createElement('p', { className: 'text-muted text-xs mt-xs' },
+        'On-site: Nova physically present at investigation. Remote: receiving tips remotely.'
       )
     ),
 
