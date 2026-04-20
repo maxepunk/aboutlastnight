@@ -71,3 +71,6 @@ reports/script*.md
 
 # Emailer - recipient lists contain PII
 reports/emailer/recipients_*.csv
+
+# Git worktrees (superpowers skill)
+.worktrees/
