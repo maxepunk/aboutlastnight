@@ -12,11 +12,8 @@ describe('surfaceContradictions', () => {
         { name: 'Mel', total: 810000, tokenCount: 5 }
       ],
       directorNotes: {
-        observations: {
-          behaviorPatterns: [
-            'Skyler was the first to submit information to Nova, boldly declaring he had nothing to hide'
-          ]
-        }
+        rawProse: 'Skyler was the first to submit information to Nova, boldly declaring he had nothing to hide',
+        transactionReferences: []
       }
     };
 
@@ -43,7 +40,7 @@ describe('surfaceContradictions', () => {
         { name: 'Burns', total: 1300000, tokenCount: 7 },
         { name: 'Daisy', total: 1312500, tokenCount: 3 }
       ],
-      directorNotes: { observations: { behaviorPatterns: [] } }
+      directorNotes: { rawProse: '', transactionReferences: [] }
     };
 
     const result = surfaceContradictions(state);
@@ -56,7 +53,7 @@ describe('surfaceContradictions', () => {
       narrativeTensions: null,
       sessionConfig: { roster: ['Skyler'] },
       shellAccounts: [{ name: 'Skyler', total: 155000, tokenCount: 2 }],
-      directorNotes: { observations: { behaviorPatterns: [] } }
+      directorNotes: { rawProse: '', transactionReferences: [] }
     };
 
     const result = surfaceContradictions(state);
@@ -77,9 +74,8 @@ describe('surfaceContradictions', () => {
       sessionConfig: { roster: ['Jamie'] },
       shellAccounts: [],
       directorNotes: {
-        observations: {
-          behaviorPatterns: ['Jamie discussed literature with Blake several times']
-        }
+        rawProse: 'Jamie discussed literature with Blake several times',
+        transactionReferences: []
       }
     };
 
@@ -93,5 +89,28 @@ describe('surfaceContradictions', () => {
     const state = { narrativeTensions: null };
     const result = surfaceContradictions(state);
     expect(result.narrativeTensions.tensions).toEqual([]);
+  });
+
+  test('transactionReferences from enriched notes are available in state for downstream use', () => {
+    // This test documents that pre-computed transaction refs survive into the contradiction
+    // surfacing step's state. The current programmatic logic doesn't consume them directly,
+    // but they're available for future checks and for downstream prompt assembly.
+    const state = {
+      narrativeTensions: null,
+      sessionConfig: { roster: ['Kai'] },
+      shellAccounts: [],
+      directorNotes: {
+        rawProse: 'Kai was seen with Blake.',
+        transactionReferences: [{
+          excerpt: 'Kai was seen with Blake',
+          linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }],
+          confidence: 'high'
+        }]
+      }
+    };
+    const result = surfaceContradictions(state);
+    expect(result.narrativeTensions).toBeDefined();
+    // transactionReferences pass through state unchanged (not consumed by this node directly)
+    expect(state.directorNotes.transactionReferences[0].linkedTransactions[0].tokenId).toBe('tay004');
   });
 });

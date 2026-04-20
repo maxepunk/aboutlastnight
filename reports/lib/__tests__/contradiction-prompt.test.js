@@ -24,7 +24,7 @@ describe('contradiction data in arc prompt', () => {
         primaryInvestigation: 'fraud'
       },
       sessionConfig: { roster: ['Skyler', 'Alex'] },
-      directorNotes: { observations: { behaviorPatterns: [] } },
+      directorNotes: { rawProse: '', transactionReferences: [] },
       theme: 'journalist',
       narrativeTensions: {
         tensions: [
@@ -59,7 +59,7 @@ describe('contradiction data in arc prompt', () => {
         primaryInvestigation: 'fraud'
       },
       sessionConfig: { roster: ['Skyler'] },
-      directorNotes: { observations: { behaviorPatterns: [] } },
+      directorNotes: { rawProse: '', transactionReferences: [] },
       theme: 'journalist',
       narrativeTensions: null
     };
