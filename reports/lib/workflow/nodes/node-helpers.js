@@ -335,7 +335,9 @@ function extractFullContent(item) {
  */
 function synthesizePlayerFocus(sessionConfig, directorNotes) {
   const whiteboard = directorNotes?.whiteboard || {};
-  const observations = directorNotes?.observations || {};
+  const rawProse = directorNotes?.rawProse || '';
+  const quotes = directorNotes?.quotes || [];
+  const postInvestigationDevelopments = directorNotes?.postInvestigationDevelopments || [];
 
   // Extract suspects from whiteboard if available
   const suspectsGroup = whiteboard.groups?.find(g =>
@@ -373,10 +375,11 @@ function synthesizePlayerFocus(sessionConfig, directorNotes) {
     },
 
     // Director observations (what ACTUALLY happened - highest weight for narrative)
+    // Enriched schema (2026-04): raw prose + quote bank + post-investigation news
     directorObservations: {
-      behaviorPatterns: observations.behaviorPatterns || [],
-      suspiciousCorrelations: observations.suspiciousCorrelations || [],
-      notableMoments: observations.notableMoments || []
+      rawProse,
+      quotes,
+      postInvestigationDevelopments
     },
 
     // Whiteboard context (what players explored during investigation)
