@@ -1,4 +1,4 @@
-const { DIRECTOR_NOTES_ENRICHED_SCHEMA } = require('../director-enricher');
+const { DIRECTOR_NOTES_ENRICHED_SCHEMA, buildEnrichmentPrompt } = require('../director-enricher');
 
 describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
   it('requires rawProse as the source of truth', () => {
@@ -60,5 +60,76 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
 
   it('does NOT include the legacy observations.{behaviorPatterns,...} field', () => {
     expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.observations).toBeUndefined();
+  });
+});
+
+describe('buildEnrichmentPrompt', () => {
+  const sampleContext = {
+    rawProse: 'Vic was working the room. Remi said "do you want to trade a little" to Mel.',
+    roster: ['Vic', 'Remi', 'Mel'],
+    accusation: { accused: ['Morgan'], charge: 'Murder of Marcus' },
+    npcs: ['Blake', 'Marcus', 'Nova'],
+    shellAccounts: [{ name: 'Marcus friend', total: 930000, tokenCount: 3 }],
+    detectiveEvidenceLog: [{ token: 'tay004', owner: 'Taylor Chase', time: '09:40 PM', evidence: '...' }],
+    scoringTimeline: [{ time: '09:40 PM', type: 'Sale', detail: 'tay004/Taylor Chase', team: 'Cass', amount: '+$450,000' }]
+  };
+
+  it('returns systemPrompt and userPrompt strings', () => {
+    const out = buildEnrichmentPrompt(sampleContext);
+    expect(typeof out.systemPrompt).toBe('string');
+    expect(typeof out.userPrompt).toBe('string');
+    expect(out.systemPrompt.length).toBeGreaterThan(0);
+    expect(out.userPrompt.length).toBeGreaterThan(0);
+  });
+
+  it('system prompt forbids summarization and requires rawProse verbatim', () => {
+    const { systemPrompt } = buildEnrichmentPrompt(sampleContext);
+    expect(systemPrompt).toMatch(/not.*summariz/i);
+    expect(systemPrompt).toMatch(/verbatim/i);
+    expect(systemPrompt).toMatch(/rawProse.*MUST equal the input/i);
+  });
+
+  it('user prompt contains all context sections as XML tags', () => {
+    const { userPrompt } = buildEnrichmentPrompt(sampleContext);
+    expect(userPrompt).toContain('<ROSTER>');
+    expect(userPrompt).toContain('<ACCUSATION>');
+    expect(userPrompt).toContain('<NPCS>');
+    expect(userPrompt).toContain('<SHELL_ACCOUNTS>');
+    expect(userPrompt).toContain('<DETECTIVE_EVIDENCE_LOG>');
+    expect(userPrompt).toContain('<SCORING_TIMELINE>');
+    expect(userPrompt).toContain('<DIRECTOR_NOTES_RAW>');
+    expect(userPrompt).toContain('<ENRICHMENT_RULES>');
+  });
+
+  it('user prompt includes the raw director prose unmodified', () => {
+    const { userPrompt } = buildEnrichmentPrompt(sampleContext);
+    expect(userPrompt).toContain(sampleContext.rawProse);
+  });
+
+  it('rules appear LAST in user prompt for recency bias', () => {
+    const { userPrompt } = buildEnrichmentPrompt(sampleContext);
+    const rulesIdx = userPrompt.lastIndexOf('<ENRICHMENT_RULES>');
+    const notesIdx = userPrompt.lastIndexOf('<DIRECTOR_NOTES_RAW>');
+    expect(rulesIdx).toBeGreaterThan(notesIdx);
+  });
+
+  it('lists roster members inside <ROSTER>', () => {
+    const { userPrompt } = buildEnrichmentPrompt(sampleContext);
+    expect(userPrompt).toMatch(/<ROSTER>[\s\S]*Vic[\s\S]*Remi[\s\S]*Mel[\s\S]*<\/ROSTER>/);
+  });
+
+  it('handles empty optional context gracefully', () => {
+    const minimal = {
+      rawProse: 'Short note.',
+      roster: [],
+      accusation: null,
+      npcs: [],
+      shellAccounts: [],
+      detectiveEvidenceLog: [],
+      scoringTimeline: []
+    };
+    const { userPrompt } = buildEnrichmentPrompt(minimal);
+    expect(userPrompt).toContain('Short note.');
+    expect(userPrompt).toContain('<ROSTER>');
   });
 });

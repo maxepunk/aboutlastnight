@@ -118,6 +118,84 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
   }
 };
 
+const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*.
+
+Hard rules:
+1. \`rawProse\` in your output MUST equal the input prose exactly (verbatim, including punctuation, line breaks, and typos).
+2. Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes (npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).
+3. transactionReferences: link an observation to a scoring-timeline row ONLY when timestamp, actor, and amount converge. If no row matches cleanly, emit linkedTransactions: [] with confidence: "low" and a linkReasoning explaining the ambiguity. Do NOT fabricate.
+4. quotes: only extract phrases that appear in quotation marks in the prose, or unambiguous direct speech. Preserve wording exactly. confidence: "high" iff speaker is named adjacent to the quote; otherwise "low".
+5. postInvestigationDevelopments: only passages with explicit post-investigation temporal markers ("just been announced", "currently whereabouts unknown", "is on his way to", "following the investigation", "at the time of this article's writing").
+6. Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.
+
+You are an INDEXER, not a SUMMARIZER. If you find yourself rewriting the director's words, stop — quote them verbatim in excerpts instead.`;
+
+function buildEnrichmentPrompt({
+  rawProse,
+  roster = [],
+  accusation = null,
+  npcs = [],
+  shellAccounts = [],
+  detectiveEvidenceLog = [],
+  scoringTimeline = []
+}) {
+  const rosterBlock = roster.length > 0 ? roster.join(', ') : '(none provided)';
+  const accusationBlock = accusation
+    ? `Accused: ${(accusation.accused || []).join(', ') || 'unspecified'}\nCharge: ${accusation.charge || 'unspecified'}`
+    : '(none provided)';
+  const npcsBlock = npcs.length > 0 ? npcs.join(', ') : '(none)';
+  const shellAccountsBlock = shellAccounts.length > 0
+    ? JSON.stringify(shellAccounts, null, 2)
+    : '(none)';
+  const evidenceLogBlock = detectiveEvidenceLog.length > 0
+    ? JSON.stringify(detectiveEvidenceLog, null, 2)
+    : '(none)';
+  const timelineBlock = scoringTimeline.length > 0
+    ? JSON.stringify(scoringTimeline, null, 2)
+    : '(none)';
+
+  const userPrompt = `<ROSTER>
+${rosterBlock}
+</ROSTER>
+
+<ACCUSATION>
+${accusationBlock}
+</ACCUSATION>
+
+<NPCS>
+${npcsBlock}
+</NPCS>
+
+<SHELL_ACCOUNTS>
+${shellAccountsBlock}
+</SHELL_ACCOUNTS>
+
+<DETECTIVE_EVIDENCE_LOG>
+${evidenceLogBlock}
+</DETECTIVE_EVIDENCE_LOG>
+
+<SCORING_TIMELINE>
+${timelineBlock}
+</SCORING_TIMELINE>
+
+<DIRECTOR_NOTES_RAW>
+${rawProse}
+</DIRECTOR_NOTES_RAW>
+
+<ENRICHMENT_RULES>
+1. Preserve rawProse verbatim — your output's rawProse field MUST equal the director notes above, exactly.
+2. Use ONLY roster names from the roster section as keys in characterMentions.
+3. Link transactionReferences only when timestamp, actor, and amount converge with the scoring timeline. Otherwise confidence: "low" and empty linkedTransactions.
+4. Extract quotes verbatim; confidence "high" iff speaker named adjacent, else "low".
+5. postInvestigationDevelopments only for passages with explicit post-investigation markers.
+6. Empty arrays are valid. Never fabricate.
+</ENRICHMENT_RULES>
+`;
+
+  return { systemPrompt: ENRICHMENT_SYSTEM_PROMPT, userPrompt };
+}
+
 module.exports = {
-  DIRECTOR_NOTES_ENRICHED_SCHEMA
+  DIRECTOR_NOTES_ENRICHED_SCHEMA,
+  buildEnrichmentPrompt
 };
