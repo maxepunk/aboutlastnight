@@ -36,6 +36,8 @@ const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers
 const { getSdkClient, synthesizePlayerFocus } = require('./node-helpers');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { traceNode } = require('../../observability');
+const { enrichDirectorNotes } = require('../../director-enricher');
+const { getThemeNPCs } = require('../../theme-config');
 
 /**
  * Default data directory for session files
@@ -172,36 +174,6 @@ const SESSION_REPORT_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
       description: 'Team names registered in session'
-    }
-  }
-};
-
-/**
- * Schema for director notes parsing
- */
-const DIRECTOR_NOTES_SCHEMA = {
-  type: 'object',
-  required: ['observations'],
-  properties: {
-    observations: {
-      type: 'object',
-      properties: {
-        behaviorPatterns: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Observed behavior patterns during gameplay'
-        },
-        suspiciousCorrelations: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Suspected connections between players/events'
-        },
-        notableMoments: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Key moments during the session'
-        }
-      }
     }
   }
 };
@@ -477,60 +449,15 @@ Return structured JSON matching the schema.`;
     }
   })();
 
-  // Step 3 Promise: Parse director notes
-  const step3Promise = (async () => {
-    if (!rawInput.directorNotes) {
-      return {
-        observations: {
-          behaviorPatterns: [],
-          suspiciousCorrelations: [],
-          notableMoments: []
-        }
-      };
-    }
-
-    console.log('[parseRawInput] Step 3: Parsing director notes');
-    const directorNotesPrompt = `Parse the following director observations into categorized lists and extract session metadata:
-
-DIRECTOR NOTES:
-${rawInput.directorNotes}
-
-Categories:
-1. behaviorPatterns: Observable behaviors (who talked to whom, what they did)
-2. suspiciousCorrelations: Suspected connections, possible pseudonyms, theories
-3. notableMoments: Key moments or events worth highlighting
-
-Return structured JSON matching the schema.`;
-
-    try {
-      return await sdk({
-        prompt: directorNotesPrompt,
-        systemPrompt: 'You parse game director observations into categorized lists and extract session metadata.',
-        model: 'haiku',
-        jsonSchema: DIRECTOR_NOTES_SCHEMA
-      });
-    } catch (error) {
-      console.warn('[parseRawInput] Error parsing director notes:', error.message);
-      // Continue with empty observations - not critical
-      return {
-        observations: {
-          behaviorPatterns: [],
-          suspiciousCorrelations: [],
-          notableMoments: []
-        }
-      };
-    }
-  })();
-
-  // Wait for Steps 1-3 to complete in parallel
-  // Use allSettled to handle partial failures gracefully
-  const [step1Result, step2Result, step3Result] = await Promise.allSettled([
+  // Wait for Steps 1-2 to complete in parallel (Step 3 enrichment depends on
+  // Step 1 roster + Step 2 orchestrator data, so it runs sequentially after).
+  // Use allSettled to handle partial failures gracefully.
+  const [step1Result, step2Result] = await Promise.allSettled([
     step1Promise,
-    step2Promise,
-    step3Promise
+    step2Promise
   ]);
 
-  // Extract results (Step 1 is critical, Steps 2-3 have fallbacks)
+  // Extract results (Step 1 is critical, Step 2 has fallback)
   let sessionConfig;
   if (step1Result.status === 'fulfilled') {
     sessionConfig = step1Result.value;
@@ -543,11 +470,42 @@ Return structured JSON matching the schema.`;
     ? step2Result.value
     : { exposedTokens: [], buriedTokens: [], shellAccounts: [], exposedCount: 0, buriedCount: 0, totalBuried: 0 };
 
-  let directorNotes = step3Result.status === 'fulfilled'
-    ? step3Result.value
-    : { observations: { behaviorPatterns: [], suspiciousCorrelations: [], notableMoments: [] } };
+  console.log('[parseRawInput] Steps 1-2 complete');
 
-  console.log('[parseRawInput] Steps 1-3 complete');
+  // Step 3: Director notes enrichment (depends on Step 1 roster + Step 2 orchestrator data)
+  const theme = config?.configurable?.theme || 'journalist';
+  const themeNPCs = getThemeNPCs(theme);
+
+  let directorNotes;
+  if (!rawInput.directorNotes) {
+    directorNotes = {
+      rawProse: '',
+      characterMentions: {},
+      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [],
+      transactionReferences: [],
+      postInvestigationDevelopments: []
+    };
+  } else {
+    console.log('[parseRawInput] Step 3: Enriching director notes with Opus');
+    directorNotes = await enrichDirectorNotes({
+      rawProse: rawInput.directorNotes,
+      roster: sessionConfig.roster || [],
+      accusation: sessionConfig.accusation || null,
+      npcs: themeNPCs,
+      shellAccounts: orchestratorParsed.shellAccounts || [],
+      detectiveEvidenceLog: orchestratorParsed.exposedTokens || [],
+      scoringTimeline: []
+    }, sdk);
+
+    const counts = {
+      chars: Object.keys(directorNotes.characterMentions || {}).length,
+      quotes: (directorNotes.quotes || []).length,
+      txRefs: (directorNotes.transactionReferences || []).length,
+      postInv: (directorNotes.postInvestigationDevelopments || []).length
+    };
+    console.log(`[parseRawInput] Director enrichment complete: ${counts.chars} character mentions, ${counts.quotes} quotes, ${counts.txRefs} transaction links, ${counts.postInv} post-investigation items`);
+  }
 
   // Merge director note overrides into sessionConfig
   sessionConfig = mergeDirectorOverrides(sessionConfig, directorNotes);
@@ -852,7 +810,6 @@ module.exports = {
     DEFAULT_DATA_DIR,
     SESSION_CONFIG_SCHEMA,
     SESSION_REPORT_SCHEMA,
-    DIRECTOR_NOTES_SCHEMA,
     WHITEBOARD_SCHEMA,
     deriveSessionId,
     ensureDir,
