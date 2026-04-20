@@ -377,11 +377,11 @@ async function parseRawInput(state, config) {
   const configSessionId = config?.configurable?.sessionId;
 
   // ─────────────────────────────────────────────────────
-  // Phase 4c: Run Steps 1, 2, 3 in parallel (independent AI calls)
-  // Step 4 (whiteboard) depends on Step 1 (roster for OCR)
+  // Phase 4c: Run Steps 1, 2 in parallel (independent AI calls)
+  // Step 3 (whiteboard) runs sequentially, needs outputs from Steps 1 & 2
   // ─────────────────────────────────────────────────────
 
-  console.log('[parseRawInput] Running Steps 1-3 in parallel');
+  console.log('[parseRawInput] Running Steps 1-2 in parallel');
 
   // Use config sessionId if provided, otherwise try to derive from session report
   const sessionIdHint = configSessionId
@@ -743,83 +743,6 @@ async function finalizeInput(state, config) {
 // TESTING UTILITIES
 // ═══════════════════════════════════════════════════════
 
-/**
- * Create mock SDK client for testing
- *
- * @param {Object} mockResponses - Map of expected responses by schema type
- * @returns {Function} Mock SDK query function
- */
-function createMockInputParser(mockResponses = {}) {
-  const calls = [];
-
-  async function mockSdk({ prompt, systemPrompt, model, jsonSchema }) {
-    calls.push({ prompt, systemPrompt, model, jsonSchema });
-
-    // Determine which mock to return based on schema
-    if (jsonSchema === SESSION_CONFIG_SCHEMA) {
-      return mockResponses.sessionConfig || {
-        sessionId: '1221',
-        sessionDate: '2025-12-21',
-        roster: ['Alex', 'Victoria', 'Morgan'],
-        rosterCount: 3,
-        accusation: {
-          accused: ['Victoria', 'Morgan'],
-          charge: 'Collusion to murder Marcus',
-          notes: 'Test accusation'
-        }
-      };
-    }
-
-    if (jsonSchema === SESSION_REPORT_SCHEMA) {
-      return mockResponses.sessionReport || {
-        exposedTokens: ['alr001', 'asm031'],
-        buriedTokens: [
-          { tokenId: 'mor021', shellAccount: 'Offbeat', amount: 150000, time: '10:30 PM' }
-        ],
-        shellAccounts: [
-          { name: 'Offbeat', total: 150000, tokenCount: 1, rank: 1 }
-        ],
-        exposedCount: 2,
-        buriedCount: 1,
-        totalBuried: 150000
-      };
-    }
-
-    if (jsonSchema === DIRECTOR_NOTES_SCHEMA) {
-      return mockResponses.directorNotes || {
-        observations: {
-          behaviorPatterns: ['Taylor and Diana spotted together early'],
-          suspiciousCorrelations: ['ChaseT might be Taylor'],
-          notableMoments: ['Final accusation at 11:48 PM']
-        }
-      };
-    }
-
-    if (jsonSchema === WHITEBOARD_SCHEMA) {
-      return mockResponses.whiteboard || {
-        names: ['Victoria', 'Morgan', 'Derek', 'Marcus', 'James'],
-        connections: [
-          { from: 'Victoria', to: 'Morgan', label: 'colluded with' },
-          { from: 'Marcus', to: 'Victoria', label: 'was married to' }
-        ],
-        groups: [
-          { label: 'SUSPECTS', members: ['Victoria', 'Morgan', 'Derek'] },
-          { label: 'FACTS', members: ['Marcus was killed', 'Memory drug was used'] }
-        ],
-        notes: ['Victoria hired Morgan', 'Past bad blood between Marcus and Victoria'],
-        structureType: 'accusation web with suspects circled',
-        ambiguities: ['Unclear handwriting near top right corner']
-      };
-    }
-
-    return {};
-  }
-
-  mockSdk.getCalls = () => calls;
-  mockSdk.clear = () => { calls.length = 0; };
-
-  return mockSdk;
-}
 
 module.exports = {
   // Node functions (wrapped with LangSmith tracing)
@@ -830,9 +753,6 @@ module.exports = {
 
   // Utilities (exported for DRY reuse in server.js Phase 4e)
   sanitizePath,
-
-  // Testing utilities
-  createMockInputParser,
 
   // Constants for testing
   _testing: {
