@@ -234,7 +234,7 @@ ${context.directorTransactionLinks.map(t => {
 
 ${context.directorPostInvestigation.length > 0 ? `<POST_INVESTIGATION_NEWS>
 Developments that occurred AFTER the investigation concluded — distinct epistemic status:
-${context.directorPostInvestigation.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}`).join('\n')}
+${context.directorPostInvestigation.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}${d.bearingOnNarrative ? ` — ${d.bearingOnNarrative}` : ''}`).join('\n')}
 </POST_INVESTIGATION_NEWS>` : ''}
 
 ### Primary Investigation Focus
@@ -791,7 +791,7 @@ ${directorTxRefs.map(t => {
 
 ${directorPostInv.length > 0 ? `<POST_INVESTIGATION_NEWS>
 Developments that occurred AFTER the investigation concluded — distinct epistemic status:
-${directorPostInv.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}`).join('\n')}
+${directorPostInv.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}${d.bearingOnNarrative ? ` — ${d.bearingOnNarrative}` : ''}`).join('\n')}
 </POST_INVESTIGATION_NEWS>` : ''}
 
 ### Primary Investigation Focus
@@ -1419,7 +1419,7 @@ ${directorTxRefs.map(t => {
 
 ${directorPostInv.length > 0 ? `<POST_INVESTIGATION_NEWS>
 Developments that occurred AFTER the investigation concluded — distinct epistemic status:
-${directorPostInv.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}`).join('\n')}
+${directorPostInv.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}${d.bearingOnNarrative ? ` — ${d.bearingOnNarrative}` : ''}`).join('\n')}
 </POST_INVESTIGATION_NEWS>` : ''}
 
 ### Valid Evidence IDs (for keyEvidence validation)
