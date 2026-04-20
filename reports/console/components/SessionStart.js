@@ -285,7 +285,7 @@ function SessionStart({ dispatch, theme }) {
     ),
 
     // Guest Reporter (journalist theme only, optional, collapsed by default)
-    theme === 'journalist' && React.createElement('div', { className: 'mt-sm' },
+    theme === 'journalist' && React.createElement('div', { className: 'mt-md' },
       React.createElement(CollapsibleSection, {
         title: 'Guest Reporter (Optional)',
         defaultOpen: false
