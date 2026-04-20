@@ -447,6 +447,10 @@ See `PIPELINE_DEEP_DIVE.md#common-debugging-scenarios` for detailed debugging gu
 
 See `.claude/agents/` directory for complete subagent definitions.
 
+**Rendering:** Article generation emits a `ContentBundle` JSON and renders HTML via
+`scripts/assemble-article.js`, which uses the shared `TemplateAssembler` (same as
+the server pipeline). Output is structurally identical across both paths.
+
 ## Session Data Directory Structure
 
 | Directory | Purpose | Key Files |
