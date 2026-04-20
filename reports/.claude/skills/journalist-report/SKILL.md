@@ -1190,9 +1190,9 @@ Task(subagent_type="journalist-article-generator", prompt=`
 ### 4.3 Output
 
 The subagent produces:
-- `output/content-bundle.json` - Validated ContentBundle JSON
-- `output/article.html` - Rendered HTML via shared `TemplateAssembler`
-- `output/article-metadata.json` - Generation metadata and self-assessment
+- `data/20251221/output/content-bundle.json` - Validated ContentBundle JSON
+- `data/20251221/output/article.html` - Rendered HTML via shared `TemplateAssembler`
+- `data/20251221/output/article-metadata.json` - Generation metadata and self-assessment
 
 **Critical constraints enforced by subagent:**
 - First-person participatory voice ("I was there when...")
