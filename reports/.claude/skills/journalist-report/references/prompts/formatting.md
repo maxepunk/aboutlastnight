@@ -105,6 +105,52 @@ Visual components are emitted as **content blocks within section content arrays*
 - Use for mentions that don't need full display: "Records show..." with a reference link
 - Keeps prose flowing without interrupting with full evidence blocks
 
+### Complete Content Block Reference
+
+All six content-block shapes the subagent may emit inside `sections[].content[]`:
+
+```json
+{ "type": "paragraph", "text": "Vic arrived early that evening..." }
+```
+
+```json
+{ "type": "quote", "text": "The job is yours.", "attribution": "Vic Chase" }
+```
+
+```json
+{ "type": "evidence-reference", "tokenId": "rat031", "caption": "The offer" }
+```
+
+```json
+{ "type": "list", "ordered": false, "items": ["First observation", "Second observation"] }
+```
+
+```json
+{ "type": "photo", "filename": "20251221_205807.png", "caption": "Vic before the vote", "characters": ["Vic"] }
+```
+
+```json
+{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Chase", "significance": "critical" }
+```
+
+### Top-Level Arrays
+
+`pullQuotes[]` — two shapes:
+
+```json
+{ "type": "verbatim", "text": "The job is yours.", "attribution": "Vic Chase", "sourceTokenId": "rat031", "placement": "right" }
+```
+
+```json
+{ "type": "crystallization", "text": "Memory is the one thing the market never stops buying.", "attribution": null, "placement": "center" }
+```
+
+`evidenceCards[]` — sidebar catalog entries (summary, not full content):
+
+```json
+{ "tokenId": "rat031", "headline": "The Offer", "summary": "Vic Chase takes Marcus's chair before his body is cold.", "owner": "Vic Chase", "significance": "critical", "placement": "sidebar" }
+```
+
 ---
 
 ## Photos (Inline Placement)
