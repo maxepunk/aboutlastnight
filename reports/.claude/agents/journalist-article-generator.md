@@ -64,21 +64,21 @@ Also READ the JSON schema that defines the shape of your output:
 2. Read the approved outline - follow placements EXACTLY
 3. Read the ContentBundle schema so your output validates on the first pass
 4. Produce a ContentBundle JSON matching `lib/schemas/content-bundle.schema.json`
-5. Write the bundle to `output/content-bundle.json`
-6. Write `output/article-metadata.json` (see shape below)
-7. Invoke the shared renderer via Bash (run from the repo root so the relative path resolves):
+5. Write the bundle to `data/{session-id}/output/content-bundle.json`
+6. Write `data/{session-id}/output/article-metadata.json` (see shape below)
+7. Invoke the shared renderer via Bash (run from the repo root; replace `{session-id}` with the actual session date, e.g., `20251221`):
    ```
    node scripts/assemble-article.js \
-     --bundle output/content-bundle.json \
-     --out output/article.html
+     --bundle data/{session-id}/output/content-bundle.json \
+     --out data/{session-id}/output/article.html
    ```
-8. Confirm `output/article.html` exists and is non-empty
+8. Confirm `data/{session-id}/output/article.html` exists and is non-empty
 
 ## Output Files
 
-- `output/content-bundle.json` - Validated ContentBundle JSON (your structured output)
-- `output/article.html` - Rendered HTML produced by the assembly script
-- `output/article-metadata.json`:
+- `data/{session-id}/output/content-bundle.json` - Validated ContentBundle JSON (your structured output)
+- `data/{session-id}/output/article.html` - Rendered HTML produced by the assembly script
+- `data/{session-id}/output/article-metadata.json`:
 ```json
 {
   "wordCount": 1847,
