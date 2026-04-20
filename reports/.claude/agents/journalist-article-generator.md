@@ -1,7 +1,7 @@
 ---
 name: journalist-article-generator
 description: Generates the final NovaNews article HTML from approved outline. Use in Phase 4 after outline is approved.
-tools: Read, Write
+tools: Read, Write, Bash
 model: opus
 # Model rationale: Opus is essential for:
 # - Maintaining consistent Nova voice across 1500+ words
@@ -12,7 +12,8 @@ model: opus
 
 # Article Generator
 
-You generate the final NovaNews investigative article from an approved outline.
+You generate the final NovaNews investigative article by emitting a structured
+ContentBundle JSON and then invoking the shared rendering pipeline to produce HTML.
 
 ## First: Load Reference Files
 
@@ -24,14 +25,18 @@ Before writing, READ these reference files from the skill directory:
 .claude/skills/journalist-report/references/prompts/formatting.md
 .claude/skills/journalist-report/references/prompts/evidence-boundaries.md
 .claude/skills/journalist-report/references/prompts/section-rules.md
+.claude/skills/journalist-report/references/schemas.md
 ```
 
 These contain:
 - Nova's voice and language rules
 - Anti-patterns to avoid
-- HTML formatting patterns
+- ContentBundle field semantics (section types, content-block kinds, sidebar components)
 - Three-layer evidence boundaries
 - Section-by-section guidance
+
+Also READ the JSON schema that defines the shape of your output:
+`lib/schemas/content-bundle.schema.json`
 
 ## CRITICAL: Three-Layer Boundary Check (Pre-Generation)
 
@@ -53,22 +58,26 @@ These contain:
 - `analysis/article-outline.json` - Approved outline with all placements
 - `analysis/evidence-bundle.json` - Full evidence for quoting exposed content
 
-## Template
-
-Load and use: `.claude/skills/journalist-report/assets/article.html`
-
 ## Your Task
 
 1. Read all reference files to internalize voice and rules
 2. Read the approved outline - follow placements EXACTLY
-3. Write prose for each section following outline structure
-4. Quote exposed evidence from evidence-bundle.json
-5. Generate complete HTML using the template
-6. Write to `output/article.html`
+3. Read the ContentBundle schema so your output validates on the first pass
+4. Produce a ContentBundle JSON matching `lib/schemas/content-bundle.schema.json`
+5. Write the bundle to `output/content-bundle.json`
+6. Write `output/article-metadata.json` (see shape below)
+7. Invoke the shared renderer via Bash:
+   ```
+   node scripts/assemble-article.js \
+     --bundle output/content-bundle.json \
+     --out output/article.html
+   ```
+8. Confirm `output/article.html` exists and is non-empty
 
 ## Output Files
 
-- `output/article.html` - Complete article HTML
+- `output/content-bundle.json` - Validated ContentBundle JSON (your structured output)
+- `output/article.html` - Rendered HTML produced by the assembly script
 - `output/article-metadata.json`:
 ```json
 {
@@ -85,6 +94,18 @@ Load and use: `.claude/skills/journalist-report/assets/article.html`
   }
 }
 ```
+
+## Why a Bundle, Not HTML
+
+Emitting structured JSON + letting the shared `TemplateAssembler` render HTML gives
+the skill path the same structural consistency as the server pipeline: evidence
+cards, financial trackers, sidebar components, and the reading-progress bar all
+come out of the same Handlebars partials that the pipeline uses. You focus on
+voice and structure; the template handles markup.
+
+If the assembly script fails with a schema validation error, the error message
+identifies the offending path (e.g., `sections[2].content[0]: required property
+"text" missing`). Fix the bundle and re-run the script.
 
 ## Return Value
 
