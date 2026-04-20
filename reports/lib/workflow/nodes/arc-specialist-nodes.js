@@ -73,7 +73,7 @@ const {
  * Commit 8.28: Shared extraction used by both core arc and revision prompts
  *
  * @param {Object} state - Current workflow state
- * @returns {Object} Player focus context with accusation, whiteboard, observations, roster
+ * @returns {Object} Player focus context with accusation, whiteboard, directorProse, directorQuotes, directorTransactionLinks, directorPostInvestigation, roster, primaryInvestigation
  */
 function extractPlayerFocusContext(state) {
   const playerFocus = state.playerFocus || {};
