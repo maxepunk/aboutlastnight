@@ -10,7 +10,7 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, safeStringify } = window.Console.utils;
 
-function InputReview({ data, onApprove }) {
+function InputReview({ data, onApprove, theme }) {
   const parsedInput = (data && data.parsedInput) || {};
   const sessionConfig = (data && data.sessionConfig) || {};
   const directorNotes = (data && data.directorNotes) || {};
@@ -40,11 +40,11 @@ function InputReview({ data, onApprove }) {
           React.createElement('span', { className: 'text-muted' }, 'Journalist: '),
           React.createElement('span', { className: 'text-secondary' }, sessionConfig.journalistFirstName)
         ),
-        sessionConfig.reportingMode && React.createElement('span', { className: 'text-sm' },
+        theme === 'journalist' && sessionConfig.reportingMode && React.createElement('span', { className: 'text-sm' },
           React.createElement('span', { className: 'text-muted' }, 'Reporting Mode: '),
           React.createElement('span', { className: 'text-secondary' }, sessionConfig.reportingMode)
         ),
-        sessionConfig.guestReporter && React.createElement('span', { className: 'text-sm' },
+        theme === 'journalist' && sessionConfig.guestReporter && React.createElement('span', { className: 'text-sm' },
           React.createElement('span', { className: 'text-muted' }, 'Guest Reporter: '),
           React.createElement('span', { className: 'text-secondary' },
             sessionConfig.guestReporter.name + ' | ' + (sessionConfig.guestReporter.role || 'Guest Reporter')
