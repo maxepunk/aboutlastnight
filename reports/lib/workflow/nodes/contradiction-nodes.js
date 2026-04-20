@@ -21,7 +21,14 @@ function surfaceContradictions(state) {
   // Roster may contain strings or objects with .name — normalize to strings
   const roster = rawRoster.map(r => (typeof r === 'string' ? r : r?.name || '')).filter(Boolean);
   const shellAccounts = state.shellAccounts || [];
-  const behaviorPatterns = state.directorNotes?.observations?.behaviorPatterns || [];
+  // Enriched schema (2026-04): search raw prose instead of the removed 3-bucket arrays.
+  // We split on sentence boundaries to preserve the per-sentence match semantics the
+  // old behaviorPatterns array provided.
+  const rawProse = state.directorNotes?.rawProse || '';
+  const behaviorPatterns = rawProse
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(Boolean);
   const rosterLower = new Set(roster.map(r => r.toLowerCase()));
 
   const tensions = [];
