@@ -1135,6 +1135,8 @@ User approves or requests revisions. Iterate if needed.
 ## Phase 4: Article Generation (ARTICLE-GENERATOR SUBAGENT)
 
 **Use the article-generator subagent** for quality prose generation with fresh context.
+The subagent emits a structured `ContentBundle` JSON; a shared rendering script then
+produces the final HTML using the same Handlebars template system as the server pipeline.
 
 ### 4.1 Record Outline Approval
 
@@ -1161,11 +1163,16 @@ Task(subagent_type="journalist-article-generator", prompt=`
   - analysis/article-outline.json (approved outline with all placements)
   - analysis/evidence-bundle.json (for quoting exposed evidence)
 
-  Use template: .claude/skills/journalist-report/assets/article.html
+  Emit a ContentBundle JSON matching lib/schemas/content-bundle.schema.json.
 
   Write to:
-  - output/article.html (complete article)
+  - output/content-bundle.json (your structured output)
   - output/article-metadata.json (word count, components used, self-assessment)
+
+  Then run:
+    node scripts/assemble-article.js \
+      --bundle output/content-bundle.json \
+      --out output/article.html
 
   Return concise summary with word count and voice assessment.
 `)
@@ -1177,11 +1184,14 @@ Task(subagent_type="journalist-article-generator", prompt=`
 - `references/prompts/formatting.md`
 - `references/prompts/evidence-boundaries.md`
 - `references/prompts/section-rules.md`
+- `references/schemas.md`
+- `lib/schemas/content-bundle.schema.json`
 
 ### 4.3 Output
 
 The subagent produces:
-- `output/article.html` - Complete HTML with embedded images
+- `output/content-bundle.json` - Validated ContentBundle JSON
+- `output/article.html` - Rendered HTML via shared `TemplateAssembler`
 - `output/article-metadata.json` - Generation metadata and self-assessment
 
 **Critical constraints enforced by subagent:**
@@ -1190,6 +1200,11 @@ The subagent produces:
 - "Extracted memories" never "tokens"
 - Blake suspicious but not condemned
 - Systemic critique woven throughout
+
+**Structural consistency** is now enforced by the template system rather than by the
+LLM: evidence cards, financial trackers, pull quotes, and sidebar components are
+all rendered from the same Handlebars partials the pipeline uses, so the skill and
+pipeline paths now produce structurally identical HTML for equivalent inputs.
 
 ---
 
