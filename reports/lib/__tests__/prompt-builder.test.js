@@ -1168,13 +1168,13 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadTemplate.mockResolvedValue('<template>');
     });
 
-    it('should include INVESTIGATION_OBSERVATIONS when directorNotes has observations', async () => {
+    it('should include INVESTIGATION_OBSERVATIONS when directorNotes has rawProse', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const directorNotes = {
-        observations: {
-          behaviorPatterns: ['Blake solicited Vic three times'],
-          notableMoments: ['Heated argument at the bar']
-        },
+        rawProse: 'Blake solicited Vic three times. Heated argument at the bar.',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: [],
         whiteboard: { suspects: ['Vic'] }  // Should NOT be included
       };
       const { userPrompt } = await b.buildArticlePrompt(
@@ -1195,10 +1195,10 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
 
-    it('should omit INVESTIGATION_OBSERVATIONS when observations is empty', async () => {
+    it('should omit INVESTIGATION_OBSERVATIONS when rawProse is empty', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, '<template>', [], null, [], null, { observations: {} }
+        {}, '<template>', [], null, [], null, { rawProse: '', quotes: [], transactionReferences: [], postInvestigationDevelopments: [] }
       );
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
@@ -1235,6 +1235,100 @@ describe('PromptBuilder', () => {
       const result = generateRosterSection('journalist', canonicalCharacters, characterData);
       expect(result).toContain('Alex → Alex Reeves');
       expect(result).toContain('Alex Reeves: Role: CEO | Member of: Board');
+    });
+  });
+
+  describe('buildArticlePrompt — enriched director notes', () => {
+    let builder;
+    let mockThemeLoader;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockThemeLoader = {
+        loadPhasePrompts: jest.fn().mockResolvedValue({
+          'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+          'anti-patterns': '', 'section-rules': '', 'editorial-design': '', 'formatting': '',
+          'writing-principles': ''
+        }),
+        loadTemplate: jest.fn(),
+        validate: jest.fn()
+      };
+      const sessionConfig = { reportingMode: 'on-site', journalistFirstName: 'Cassandra' };
+      builder = new PromptBuilder(mockThemeLoader, 'journalist', sessionConfig);
+    });
+
+    const outline = { theStory: { arcs: [] } };
+    const template = '<template/>';
+
+    it('injects rawProse inside <INVESTIGATION_OBSERVATIONS>', async () => {
+      const directorNotes = {
+        rawProse: 'I watched Alex and Sam in the corner.',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
+      expect(userPrompt).toContain('I watched Alex and Sam in the corner.');
+      expect(userPrompt).not.toContain('"behaviorPatterns"');
+    });
+
+    it('emits <QUOTE_BANK> when quotes present', async () => {
+      const directorNotes = {
+        rawProse: 'notes',
+        quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
+        transactionReferences: [],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<QUOTE_BANK>');
+      expect(userPrompt).toContain('we had to act');
+    });
+
+    it('emits <TRANSACTION_LINKS> when links present', async () => {
+      const directorNotes = {
+        rawProse: 'notes',
+        quotes: [],
+        transactionReferences: [{
+          excerpt: 'Kai paid Blake', linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }], confidence: 'high'
+        }],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<TRANSACTION_LINKS>');
+      expect(userPrompt).toContain('tay004');
+    });
+
+    it('emits <POST_INVESTIGATION_NEWS> when developments present', async () => {
+      const directorNotes = {
+        rawProse: 'notes',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'Just been announced' }]
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<POST_INVESTIGATION_NEWS>');
+      expect(userPrompt).toContain('Sarah named interim CEO');
+      // This tag must be DISTINCT from general observations so Nova writes "It has just been announced..."
+      expect(userPrompt).toMatch(/<POST_INVESTIGATION_NEWS>[\s\S]*Sarah named interim CEO[\s\S]*<\/POST_INVESTIGATION_NEWS>/);
+    });
+
+    it('omits empty tags', async () => {
+      const directorNotes = {
+        rawProse: 'just prose here',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).not.toContain('<QUOTE_BANK>');
+      expect(userPrompt).not.toContain('<TRANSACTION_LINKS>');
+      expect(userPrompt).not.toContain('<POST_INVESTIGATION_NEWS>');
+    });
+
+    it('handles null directorNotes gracefully', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, null, null);
+      expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
   });
 });

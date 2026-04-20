@@ -804,14 +804,31 @@ TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
-${(directorNotes?.observations && Object.keys(directorNotes.observations).length > 0) ? `
+${(directorNotes?.rawProse) ? `
 <INVESTIGATION_OBSERVATIONS>
 What you observed during the investigation this morning.
-These ground your behavioral claims - who you saw talking to whom,
-notable moments, patterns you noticed.
+These ground your behavioral claims — who you saw talking to whom, notable moments, patterns you noticed.
 
-${JSON.stringify(directorNotes.observations, null, 2)}
+${directorNotes.rawProse}
 </INVESTIGATION_OBSERVATIONS>` : ''}
+${(directorNotes?.quotes?.length > 0) ? `
+<QUOTE_BANK>
+Verbatim quotes extracted from the investigation. Prefer these when citing what someone said over paraphrasing.
+${directorNotes.quotes.map(q => `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`).join('\n')}
+</QUOTE_BANK>` : ''}
+${(directorNotes?.transactionReferences?.length > 0) ? `
+<TRANSACTION_LINKS>
+Behavioral observations pre-linked to specific burial transactions. Use these to ground financial claims in hard data.
+${directorNotes.transactionReferences.map(t => {
+  const txs = (t.linkedTransactions || []).map(tx => `${tx.timestamp} ${tx.tokenId} ${tx.amount} → ${tx.sellingTeam}`).join('; ');
+  return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
+}).join('\n')}
+</TRANSACTION_LINKS>` : ''}
+${(directorNotes?.postInvestigationDevelopments?.length > 0) ? `
+<POST_INVESTIGATION_NEWS>
+Developments that occurred AFTER the investigation concluded. Write these with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…". Do NOT conflate these with things Nova witnessed this morning.
+${directorNotes.postInvestigationDevelopments.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}${d.bearingOnNarrative ? ` — ${d.bearingOnNarrative}` : ''}`).join('\n')}
+</POST_INVESTIGATION_NEWS>` : ''}
 ${(narrativeTensions?.tensions?.length > 0) ? `
 <NARRATIVE_TENSIONS>
 These contradictions between public behavior and Black Market activity are verified
