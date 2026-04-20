@@ -83,7 +83,11 @@ function extractPlayerFocusContext(state) {
   return {
     accusation: playerFocus.accusation || {},
     whiteboard: playerFocus.whiteboardContext || {},
-    observations: directorNotes.observations || {},
+    // Enriched director-notes shape (2026-04): rawProse primary, quotes + tx refs + post-investigation news as structured extras
+    directorProse: directorNotes.rawProse || '',
+    directorQuotes: directorNotes.quotes || [],
+    directorTransactionLinks: directorNotes.transactionReferences || [],
+    directorPostInvestigation: directorNotes.postInvestigationDevelopments || [],
     roster: sessionConfig.roster || [],
     primaryInvestigation: playerFocus.primaryInvestigation || 'General investigation'
   };
@@ -209,9 +213,29 @@ You MUST generate an arc that addresses this accusation. Even if evidence is wea
 **Names Identified:** ${JSON.stringify(context.whiteboard.namesFound || [])}
 
 ### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
-**Behavior Patterns:** ${JSON.stringify(context.observations.behaviorPatterns || [])}
-**Suspicious Correlations:** ${JSON.stringify(context.observations.suspiciousCorrelations || [])}
-**Notable Moments:** ${JSON.stringify(context.observations.notableMoments || [])}
+The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
+
+<DIRECTOR_NOTES>
+${context.directorProse || '(no director notes provided)'}
+</DIRECTOR_NOTES>
+
+${context.directorQuotes.length > 0 ? `<QUOTE_BANK>
+Verbatim quotes extracted from the notes — prefer these when citing what someone said:
+${context.directorQuotes.map(q => `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`).join('\n')}
+</QUOTE_BANK>` : ''}
+
+${context.directorTransactionLinks.length > 0 ? `<TRANSACTION_LINKS>
+Behavioral observations pre-linked to specific burial transactions:
+${context.directorTransactionLinks.map(t => {
+  const txs = (t.linkedTransactions || []).map(tx => `${tx.timestamp} ${tx.tokenId} ${tx.amount} → ${tx.sellingTeam}`).join('; ');
+  return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
+}).join('\n')}
+</TRANSACTION_LINKS>` : ''}
+
+${context.directorPostInvestigation.length > 0 ? `<POST_INVESTIGATION_NEWS>
+Developments that occurred AFTER the investigation concluded — distinct epistemic status:
+${context.directorPostInvestigation.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}`).join('\n')}
+</POST_INVESTIGATION_NEWS>` : ''}
 
 ### Primary Investigation Focus
 ${context.primaryInvestigation}
@@ -719,7 +743,11 @@ function buildPlayerFocusGuidedPrompt(state) {
   // Extract player focus data
   const accusation = playerFocus.accusation || {};
   const wbCtx = playerFocus.whiteboardContext || {};
-  const observations = directorNotes.observations || {};
+  // Enriched director-notes shape (2026-04)
+  const directorProse = directorNotes.rawProse || '';
+  const directorQuotes = directorNotes.quotes || [];
+  const directorTxRefs = directorNotes.transactionReferences || [];
+  const directorPostInv = directorNotes.postInvestigationDevelopments || [];
   const roster = sessionConfig.roster || [];
 
   return `# Arc Analysis: Player-Focus-Guided Investigation
@@ -742,9 +770,29 @@ You MUST generate an arc that addresses this accusation. Even if evidence is wea
 **Names Identified:** ${JSON.stringify(wbCtx.namesFound || [])}
 
 ### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
-**Behavior Patterns:** ${JSON.stringify(observations.behaviorPatterns || [])}
-**Suspicious Correlations:** ${JSON.stringify(observations.suspiciousCorrelations || [])}
-**Notable Moments:** ${JSON.stringify(observations.notableMoments || [])}
+The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
+
+<DIRECTOR_NOTES>
+${directorProse || '(no director notes provided)'}
+</DIRECTOR_NOTES>
+
+${directorQuotes.length > 0 ? `<QUOTE_BANK>
+Verbatim quotes extracted from the notes — prefer these when citing what someone said:
+${directorQuotes.map(q => `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`).join('\n')}
+</QUOTE_BANK>` : ''}
+
+${directorTxRefs.length > 0 ? `<TRANSACTION_LINKS>
+Behavioral observations pre-linked to specific burial transactions:
+${directorTxRefs.map(t => {
+  const txs = (t.linkedTransactions || []).map(tx => `${tx.timestamp} ${tx.tokenId} ${tx.amount} → ${tx.sellingTeam}`).join('; ');
+  return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
+}).join('\n')}
+</TRANSACTION_LINKS>` : ''}
+
+${directorPostInv.length > 0 ? `<POST_INVESTIGATION_NEWS>
+Developments that occurred AFTER the investigation concluded — distinct epistemic status:
+${directorPostInv.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}`).join('\n')}
+</POST_INVESTIGATION_NEWS>` : ''}
 
 ### Primary Investigation Focus
 ${playerFocus.primaryInvestigation || 'General investigation'}
@@ -941,7 +989,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
   const pf = state.playerFocus || {};
   const wbCtx = pf.whiteboardContext || {};
   const acc = pf.accusation || {};
-  const observations = state.directorNotes?.observations || {};
+  const directorNotes = state.directorNotes || {};
 
   // Flatten evidence bundle for counting
   const exposedData = state.evidenceBundle?.exposed || {};
@@ -955,7 +1003,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
   console.log(`  - accusation.accused: ${JSON.stringify(acc.accused || [])}`);
   console.log(`  - accusation.charge: ${acc.charge || 'MISSING'}`);
   console.log(`  - whiteboard.suspectsExplored: ${JSON.stringify(wbCtx.suspectsExplored || [])}`);
-  console.log(`  - director.behaviorPatterns: ${(observations.behaviorPatterns || []).length} items`);
+  console.log(`  - director: ${(directorNotes.rawProse || '').length} chars prose, ${(directorNotes.quotes || []).length} quotes, ${(directorNotes.transactionReferences || []).length} tx refs`);
   console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
   console.log(`  - roster: ${JSON.stringify(state.sessionConfig?.roster || [])}`);
 
@@ -1322,12 +1370,18 @@ function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
   const playerFocus = state.playerFocus || {};
   const sessionConfig = state.sessionConfig || {};
   const evidenceBundle = state.evidenceBundle || {};
+  const directorNotes = state.directorNotes || {};
 
   // Extract evidence summary for reference
   const evidenceSummary = extractEvidenceSummary(evidenceBundle);
 
   const accusation = playerFocus.accusation || {};
   const roster = sessionConfig.roster || [];
+  // Enriched director-notes shape (2026-04)
+  const directorProse = directorNotes.rawProse || '';
+  const directorQuotes = directorNotes.quotes || [];
+  const directorTxRefs = directorNotes.transactionReferences || [];
+  const directorPostInv = directorNotes.postInvestigationDevelopments || [];
 
   return `# Arc Revision Request
 
@@ -1342,6 +1396,31 @@ ${contextSection}
 
 ### Roster
 ${JSON.stringify(roster)}
+
+### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
+The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
+
+<DIRECTOR_NOTES>
+${directorProse || '(no director notes provided)'}
+</DIRECTOR_NOTES>
+
+${directorQuotes.length > 0 ? `<QUOTE_BANK>
+Verbatim quotes extracted from the notes — prefer these when citing what someone said:
+${directorQuotes.map(q => `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`).join('\n')}
+</QUOTE_BANK>` : ''}
+
+${directorTxRefs.length > 0 ? `<TRANSACTION_LINKS>
+Behavioral observations pre-linked to specific burial transactions:
+${directorTxRefs.map(t => {
+  const txs = (t.linkedTransactions || []).map(tx => `${tx.timestamp} ${tx.tokenId} ${tx.amount} → ${tx.sellingTeam}`).join('; ');
+  return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
+}).join('\n')}
+</TRANSACTION_LINKS>` : ''}
+
+${directorPostInv.length > 0 ? `<POST_INVESTIGATION_NEWS>
+Developments that occurred AFTER the investigation concluded — distinct epistemic status:
+${directorPostInv.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}`).join('\n')}
+</POST_INVESTIGATION_NEWS>` : ''}
 
 ### Valid Evidence IDs (for keyEvidence validation)
 ${JSON.stringify(evidenceSummary.allEvidenceIds)}
@@ -1971,7 +2050,10 @@ module.exports = {
 
     // Commit 8.15: Player-focus-guided schema (used by revision flow)
     PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
-    PLAYER_FOCUS_GUIDED_SCHEMA
+    PLAYER_FOCUS_GUIDED_SCHEMA,
+
+    // Revision path prompt builder (for director-notes enrichment testing)
+    buildArcRevisionPrompt
   }
 };
 
