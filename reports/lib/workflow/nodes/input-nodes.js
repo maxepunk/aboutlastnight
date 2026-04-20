@@ -345,8 +345,12 @@ function deriveSessionId(dateStr, sessionNumber = 1) {
  */
 
 /**
- * Merge director note overrides into sessionConfig
- * Applies defaults when director notes don't specify values
+ * Shallow-copy sessionConfig, reserved as an extension point for future
+ * director-notes-driven overrides. Currently a passthrough — reportingMode
+ * and guestReporter are now stamped from rawSessionInput in parseRawInput
+ * Step 1 (see docs/superpowers/specs/2026-04-20-reporting-mode-explicit-input-design.md).
+ * @param {Object} sessionConfig - Parsed session config from Step 1
+ * @param {Object} directorNotes - Unused; retained for signature stability
  */
 function mergeDirectorOverrides(sessionConfig, directorNotes) {
   return { ...sessionConfig };
