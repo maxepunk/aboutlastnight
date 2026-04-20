@@ -35,8 +35,9 @@ Three new controls rendered only when `theme === 'journalist'`, grouped below th
 const [reportingMode, setReportingMode] = React.useState('on-site');
 const [guestReporterName, setGuestReporterName] = React.useState('');
 const [guestReporterRole, setGuestReporterRole] = React.useState('');
-const [showGuestReporter, setShowGuestReporter] = React.useState(false);
 ```
+
+The collapsible's open/closed state is managed internally by the existing `CollapsibleSection` component — no separate state hook is needed.
 
 **`buildRawInput()` extensions (journalist theme only):**
 ```js
