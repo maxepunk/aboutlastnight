@@ -378,7 +378,7 @@ async function parseRawInput(state, config) {
 
   // ─────────────────────────────────────────────────────
   // Phase 4c: Run Steps 1, 2 in parallel (independent AI calls)
-  // Step 3 (whiteboard) runs sequentially, needs outputs from Steps 1 & 2
+  // Steps 3 (director enrichment) and 4 (whiteboard) run sequentially — both need outputs from Steps 1 & 2.
   // ─────────────────────────────────────────────────────
 
   console.log('[parseRawInput] Running Steps 1-2 in parallel');
