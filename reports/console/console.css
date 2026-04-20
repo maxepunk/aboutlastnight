@@ -418,6 +418,16 @@ textarea.input {
   text-align: left;
 }
 
+.session-start__input-group [role="radiogroup"] label {
+  font-family: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  color: inherit;
+  font-size: inherit;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
 .session-start__actions {
   display: flex;
   gap: var(--space-md);

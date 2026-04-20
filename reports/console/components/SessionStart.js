@@ -246,7 +246,7 @@ function SessionStart({ dispatch, theme }) {
 
     // Reporting Mode (journalist theme only)
     theme === 'journalist' && React.createElement('div', { className: 'session-start__input-group mt-md' },
-      React.createElement('label', { className: 'form-label' }, 'Reporting Mode'),
+      React.createElement('label', null, 'Reporting Mode'),
       React.createElement('div', { className: 'flex gap-md mt-xs', role: 'radiogroup', 'aria-label': 'Whether Nova was physically present at the investigation' },
         React.createElement('label', { className: 'flex gap-sm items-center text-sm' },
           React.createElement('input', {
