@@ -1,6 +1,6 @@
 ---
 name: journalist-article-generator
-description: Generates the final NovaNews article HTML from approved outline. Use in Phase 4 after outline is approved.
+description: Generates the final NovaNews article by emitting a ContentBundle JSON and invoking the shared renderer. Use in Phase 4 after outline is approved.
 tools: Read, Write, Bash
 model: opus
 # Model rationale: Opus is essential for:
@@ -66,7 +66,7 @@ Also READ the JSON schema that defines the shape of your output:
 4. Produce a ContentBundle JSON matching `lib/schemas/content-bundle.schema.json`
 5. Write the bundle to `output/content-bundle.json`
 6. Write `output/article-metadata.json` (see shape below)
-7. Invoke the shared renderer via Bash:
+7. Invoke the shared renderer via Bash (run from the repo root so the relative path resolves):
    ```
    node scripts/assemble-article.js \
      --bundle output/content-bundle.json \
