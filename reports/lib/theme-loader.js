@@ -16,11 +16,6 @@ const PHASE_REQUIREMENTS = {
     'photo-analysis',
     'photo-enrichment'
   ],
-  arcAnalysis: [
-    'evidence-boundaries',
-    'narrative-structure',
-    'anti-patterns'
-  ],
   outlineGeneration: [
     'section-rules',
     'editorial-design',
@@ -321,8 +316,8 @@ if (require.main === module) {
     // Test loading
     console.log('Testing prompt loading...');
     try {
-      const prompts = await loader.loadPhasePrompts('arcAnalysis');
-      console.log(`Loaded ${Object.keys(prompts).length} prompts for arcAnalysis:`);
+      const prompts = await loader.loadPhasePrompts('articleGeneration');
+      console.log(`Loaded ${Object.keys(prompts).length} prompts for articleGeneration:`);
       Object.keys(prompts).forEach(name => {
         console.log(`  - ${name}: ${prompts[name].length} chars`);
       });
