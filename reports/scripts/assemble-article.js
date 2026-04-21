@@ -12,38 +12,37 @@
 
 const fs = require('fs');
 const path = require('path');
-const { TemplateAssembler } = require('../lib/template-assembler');
+const { parseArgs } = require('util');
+const { createTemplateAssembler } = require('../lib/template-assembler');
+const { THEME_CONFIGS } = require('../lib/theme-config');
 
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i += 2) {
-    const key = argv[i];
-    const value = argv[i + 1];
-    if (!key || !value || !key.startsWith('--')) {
-      throw new Error(`Invalid CLI arguments. Usage: --bundle <path> --out <path>`);
-    }
-    args[key.slice(2)] = value;
-  }
-  if (!args.bundle || !args.out) {
-    throw new Error(`Missing required flags. Usage: --bundle <path> --out <path>`);
-  }
-  return args;
-}
+const DEFAULT_THEME = Object.keys(THEME_CONFIGS)[0];
 
 async function main() {
-  const { bundle: bundlePath, out: outPath } = parseArgs(process.argv.slice(2));
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      bundle: { type: 'string' },
+      out: { type: 'string' },
+    },
+    strict: true,
+  });
 
-  const bundle = JSON.parse(fs.readFileSync(bundlePath, 'utf-8'));
-  const theme = bundle?.metadata?.theme || 'journalist';
+  if (!values.bundle || !values.out) {
+    throw new Error('Missing required flags. Usage: --bundle <path> --out <path>');
+  }
+
+  const bundle = JSON.parse(fs.readFileSync(values.bundle, 'utf-8'));
+  const theme = bundle?.metadata?.theme || DEFAULT_THEME;
   const sessionId = bundle?.metadata?.sessionId || null;
 
-  const assembler = new TemplateAssembler(theme, { sessionId });
-  const html = await assembler.assemble(bundle, { sessionId });
+  const assembler = createTemplateAssembler(theme, { sessionId });
+  const html = await assembler.assemble(bundle);
 
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, html);
+  fs.mkdirSync(path.dirname(values.out), { recursive: true });
+  fs.writeFileSync(values.out, html);
 
-  console.log(`Wrote ${html.length} bytes to ${outPath}`);
+  console.log(`Wrote ${html.length} bytes to ${values.out}`);
 }
 
 main().catch(err => {
