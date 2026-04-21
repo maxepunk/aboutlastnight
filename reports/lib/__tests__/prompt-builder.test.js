@@ -52,143 +52,6 @@ describe('PromptBuilder', () => {
     });
   });
 
-  describe('buildArcAnalysisPrompt', () => {
-    const mockSessionData = {
-      roster: ['Alex', 'Remi', 'Vic', 'Morgan', 'Sam'],
-      accusation: 'Vic and Morgan',
-      directorNotes: {
-        observations: {
-          behaviorPatterns: ['Pattern 1', 'Pattern 2']
-        },
-        whiteboard: {
-          suspects: ['Sam']
-        }
-      },
-      evidenceBundle: {
-        exposed: { tokens: [{ id: 'tok1' }] },
-        buried: { transactions: [] }
-      }
-    };
-
-    beforeEach(() => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': 'Be NovaGlade...',
-        'evidence-boundaries': 'Only report exposed...',
-        'narrative-structure': 'Build 2-4 arcs...',
-        'anti-patterns': 'Avoid em-dashes...'
-      });
-    });
-
-    it('should return system and user prompts', async () => {
-      const result = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(result).toHaveProperty('systemPrompt');
-      expect(result).toHaveProperty('userPrompt');
-    });
-
-    it('should load arcAnalysis phase prompts', async () => {
-      await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('arcAnalysis');
-    });
-
-    it('should not include character-voice in system prompt (removed from arcAnalysis phase)', async () => {
-      const { systemPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(systemPrompt).not.toContain('Be NovaGlade');
-    });
-
-    it('should include evidence-boundaries in system prompt', async () => {
-      const { systemPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(systemPrompt).toContain('Only report exposed');
-    });
-
-    it('should include roster in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Alex, Remi, Vic, Morgan, Sam');
-    });
-
-    it('should include accusation in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Vic and Morgan');
-    });
-
-    it('should include director observations in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Pattern 1');
-      expect(userPrompt).toContain('Pattern 2');
-    });
-
-    it('should include evidence bundle in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('tok1');
-    });
-
-    it('should include narrative-structure in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Build 2-4 arcs');
-    });
-
-    it('should include JSON output structure specification', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('narrativeArcs');
-      expect(userPrompt).toContain('characterPlacementOpportunities');
-      expect(userPrompt).toContain('rosterCoverage');
-    });
-
-    it('should handle missing director notes gracefully', async () => {
-      const dataWithoutNotes = {
-        ...mockSessionData,
-        directorNotes: null
-      };
-
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(dataWithoutNotes);
-
-      expect(userPrompt).toContain('DIRECTOR OBSERVATIONS');
-    });
-
-    describe('reporting mode context', () => {
-      it('should include reporting mode context in arc analysis prompt', async () => {
-        mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-          'character-voice': '', 'evidence-boundaries': '',
-          'narrative-structure': '', 'anti-patterns': ''
-        });
-
-        const remoteBuilder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
-        const { userPrompt } = await remoteBuilder.buildArcAnalysisPrompt({
-          roster: ['Alex'], accusation: 'Jess', directorNotes: {}, evidenceBundle: {}
-        });
-
-        expect(userPrompt).toContain('REPORTING MODE: remote');
-        expect(userPrompt).toContain('LAST NIGHT');
-        expect(userPrompt).toContain('THIS MORNING');
-        expect(userPrompt).toContain('received tips remotely');
-      });
-
-      it('should default to on-site reporting mode', async () => {
-        mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-          'character-voice': '', 'evidence-boundaries': '',
-          'narrative-structure': '', 'anti-patterns': ''
-        });
-
-        const defaultBuilder = new PromptBuilder(mockThemeLoader, 'journalist', {});
-        const { userPrompt } = await defaultBuilder.buildArcAnalysisPrompt({
-          roster: ['Alex'], accusation: 'Jess', directorNotes: {}, evidenceBundle: {}
-        });
-
-        expect(userPrompt).toContain('REPORTING MODE: on-site');
-        expect(userPrompt).toContain('witnessed this');
-      });
-    });
-  });
-
   describe('buildOutlinePrompt', () => {
     const mockArcAnalysis = {
       narrativeArcs: [
@@ -522,17 +385,6 @@ describe('PromptBuilder', () => {
       });
     });
 
-    it('buildArcAnalysisPrompt uses detective framing', async () => {
-      const { systemPrompt } = await detectiveBuilder.buildArcAnalysisPrompt({
-        roster: ['Alex', 'Vic'],
-        accusation: 'Vic',
-        directorNotes: { observations: {} },
-        evidenceBundle: { exposed: {}, buried: {} }
-      });
-      expect(systemPrompt).not.toContain('NovaNews');
-      expect(systemPrompt).toContain('detective');
-    });
-
     it('buildOutlinePrompt uses detective framing', async () => {
       const { systemPrompt } = await detectiveBuilder.buildOutlinePrompt(
         { narrativeArcs: [] }, ['Arc 1'], 'hero.png'
@@ -795,28 +647,6 @@ describe('PromptBuilder', () => {
   });
 
   describe('prompt variable resolution in build methods', () => {
-    it('buildArcAnalysisPrompt should resolve variables in loaded prompts', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': 'Nova voice text',
-        'evidence-boundaries': '{{JOURNALIST_FIRST_NAME}} must only report exposed evidence.',
-        'narrative-structure': 'Structure text',
-        'anti-patterns': 'Anti-patterns text'
-      });
-
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
-
-      const sessionData = {
-        roster: ['Alex'],
-        accusation: 'Jess Kane',
-        directorNotes: { observations: {} },
-        evidenceBundle: {}
-      };
-
-      const { systemPrompt } = await builder.buildArcAnalysisPrompt(sessionData);
-      expect(systemPrompt).toContain('Athena must only report exposed evidence.');
-      expect(systemPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
-    });
-
     it('buildOutlinePrompt should resolve variables in loaded prompts', async () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'section-rules': 'Written by {{JOURNALIST_FIRST_NAME}} for NovaNews.',
