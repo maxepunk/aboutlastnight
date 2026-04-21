@@ -20,7 +20,6 @@ jest.mock('../../../lib/workflow/checkpoint-helpers',
 
 const {
   curateEvidenceBundle,
-  analyzeNarrativeArcs,
   generateOutline,
   generateContentBundle,
   validateContentBundle,
@@ -47,10 +46,6 @@ describe('ai-nodes', () => {
   describe('module exports', () => {
     it('exports curateEvidenceBundle function', () => {
       expect(typeof curateEvidenceBundle).toBe('function');
-    });
-
-    it('exports analyzeNarrativeArcs function', () => {
-      expect(typeof analyzeNarrativeArcs).toBe('function');
     });
 
     it('exports generateOutline function', () => {
@@ -177,7 +172,6 @@ describe('ai-nodes', () => {
     it('creates builder with all required methods', () => {
       const builder = createMockPromptBuilder();
 
-      expect(typeof builder.buildArcAnalysisPrompt).toBe('function');
       expect(typeof builder.buildOutlinePrompt).toBe('function');
       expect(typeof builder.buildArticlePrompt).toBe('function');
       expect(typeof builder.buildValidationPrompt).toBe('function');
@@ -195,7 +189,7 @@ describe('ai-nodes', () => {
     it('returns systemPrompt and userPrompt from build methods', async () => {
       const builder = createMockPromptBuilder();
 
-      const result = await builder.buildArcAnalysisPrompt({ roster: ['A', 'B'] });
+      const result = await builder.buildOutlinePrompt({ narrativeArcs: [] }, ['A'], 'hero.png');
 
       expect(result.systemPrompt).toBeDefined();
       expect(result.userPrompt).toBeDefined();
@@ -253,60 +247,6 @@ describe('ai-nodes', () => {
       const lastCall = mockClient.getLastCall();
       // Check for playerFocus from the mockPreprocessedEvidence fixture
       expect(lastCall.prompt).toContain('Victoria + Morgan collusion');
-    });
-  });
-
-  describe('analyzeNarrativeArcs', () => {
-    const mockClient = createMockSdkClient({ arcAnalysis: mockArcAnalysis });
-    const mockBuilder = createMockPromptBuilder();
-    const config = {
-      configurable: {
-        sdkClient: mockClient,
-        promptBuilder: mockBuilder
-      }
-    };
-
-    it('returns narrativeArcs array in state update', async () => {
-      const state = {
-        evidenceBundle: mockEvidenceBundle,
-        directorNotes: { observations: {} },
-        sessionConfig: { roster: [{ name: 'Test' }] }
-      };
-
-      const result = await analyzeNarrativeArcs(state, config);
-
-      expect(result.narrativeArcs).toBeDefined();
-      expect(Array.isArray(result.narrativeArcs)).toBe(true);
-    });
-
-    it('sets currentPhase to ANALYZE_ARCS', async () => {
-      const result = await analyzeNarrativeArcs({}, config);
-
-      expect(result.currentPhase).toBe(PHASES.ANALYZE_ARCS);
-    });
-
-    // NOTE: approvalType test removed in interrupt() migration
-    // AI nodes no longer set approvalType - checkpoint-helpers.js handles interrupts
-
-    it('calls SDK with opus model', async () => {
-      mockClient.clearCalls();
-      await analyzeNarrativeArcs({}, config);
-
-      const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('opus');
-    });
-
-    it('extracts roster names from sessionConfig', async () => {
-      const state = {
-        sessionConfig: {
-          roster: [{ name: 'Alice' }, { name: 'Bob' }]
-        }
-      };
-
-      const result = await analyzeNarrativeArcs(state, config);
-
-      // Verify the call was made with roster data
-      expect(result.narrativeArcs).toBeDefined();
     });
   });
 
@@ -731,21 +671,21 @@ describe('ai-nodes', () => {
 
     it('uses injected promptBuilder from config', async () => {
       const customBuilder = createMockPromptBuilder();
-      customBuilder.buildArcAnalysisPrompt = jest.fn().mockResolvedValue({
+      customBuilder.buildOutlinePrompt = jest.fn().mockResolvedValue({
         systemPrompt: 'custom system',
         userPrompt: 'custom user'
       });
 
       const config = {
         configurable: {
-          sdkClient: createMockSdkClient({}),
+          sdkClient: createMockSdkClient({ outline: mockOutline }),
           promptBuilder: customBuilder
         }
       };
 
-      await analyzeNarrativeArcs({}, config);
+      await generateOutline({}, config);
 
-      expect(customBuilder.buildArcAnalysisPrompt).toHaveBeenCalled();
+      expect(customBuilder.buildOutlinePrompt).toHaveBeenCalled();
     });
 
     it('uses injected schemaValidator from config', async () => {
@@ -775,12 +715,6 @@ describe('ai-nodes', () => {
 
       expect(result.evidenceBundle).toBeDefined();
       expect(result.currentPhase).toBe(PHASES.CURATE_EVIDENCE);
-    });
-
-    it('handles missing roster in sessionConfig', async () => {
-      const result = await analyzeNarrativeArcs({ sessionConfig: {} }, config);
-
-      expect(result.narrativeArcs).toBeDefined();
     });
 
     it('handles missing sessionPhotos', async () => {
@@ -869,18 +803,6 @@ describe('ai-nodes', () => {
       expect(result.evidenceBundle.curationReport.excluded[0].reason).toBe('scoringError');
     });
 
-    it('analyzeNarrativeArcs propagates SDK errors', async () => {
-      const config = {
-        configurable: {
-          sdkClient: createErrorClient('Model overloaded'),
-          promptBuilder: createMockPromptBuilder()
-        }
-      };
-
-      await expect(analyzeNarrativeArcs({}, config))
-        .rejects.toThrow(/Model overloaded/);
-    });
-
     it('generateOutline propagates SDK errors', async () => {
       const config = {
         configurable: {
@@ -953,31 +875,6 @@ describe('ai-nodes', () => {
         promptBuilder: mockBuilder
       }
     };
-
-    it('can chain curateEvidenceBundle -> analyzeNarrativeArcs', async () => {
-      // Phase 1.8
-      const curateResult = await curateEvidenceBundle({}, config);
-      expect(curateResult.evidenceBundle).toBeDefined();
-
-      // Phase 2
-      const arcState = { ...curateResult };
-      const arcResult = await analyzeNarrativeArcs(arcState, config);
-      expect(arcResult.narrativeArcs).toBeDefined();
-    });
-
-    it('can chain analyzeNarrativeArcs -> generateOutline', async () => {
-      // Phase 2
-      const arcResult = await analyzeNarrativeArcs({}, config);
-
-      // Phase 3 (with user selection)
-      const outlineState = {
-        ...arcResult,
-        selectedArcs: arcResult.narrativeArcs.map(a => a.name)
-      };
-      const outlineResult = await generateOutline(outlineState, config);
-
-      expect(outlineResult.outline).toBeDefined();
-    });
 
     it('can chain generateOutline -> generateContentBundle -> validateContentBundle', async () => {
       // Phase 3

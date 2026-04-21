@@ -157,8 +157,10 @@ Example: {"description": "person in blue jacket with glasses", "role": "pointing
       : '';
 
     // Include relevant director notes if available
-    const directorContext = sessionData.directorNotes?.observations?.behaviorPatterns?.length > 0
-      ? `DIRECTOR OBSERVATIONS:\n${sessionData.directorNotes.observations.behaviorPatterns.slice(0, 3).join('\n')}`
+    // Enriched schema (2026-04): use raw prose, truncated for context
+    const rawProse = sessionData.directorNotes?.rawProse || '';
+    const directorContext = rawProse
+      ? `DIRECTOR OBSERVATIONS:\n${rawProse.slice(0, 600)}${rawProse.length > 600 ? '…' : ''}`
       : '';
 
     const systemPrompt = prompts['photo-enrichment'];
@@ -409,9 +411,7 @@ if (require.main === module) {
       sessionData: {
         roster: ['Victoria', 'Morgan', 'Derek'],
         directorNotes: {
-          observations: {
-            behaviorPatterns: ['Victoria and Morgan worked together throughout']
-          }
+          rawProse: 'Victoria and Morgan worked together throughout.'
         }
       }
     };

@@ -6,6 +6,7 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
+const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
 /**
@@ -69,7 +70,6 @@ ${content.trim()}
 // Theme-specific system prompt framing
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
-    arcAnalysis: 'You are analyzing narrative arcs for a NovaNews investigative article.',
     outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
     articleGeneration: `You are Nova, writing a NovaNews investigative article. First-person participatory voice.
 
@@ -78,7 +78,6 @@ CRITICAL: THE PARTY = LAST NIGHT. THE INVESTIGATION = THIS MORNING. See <TEMPORA
     validation: 'You are validating a NovaNews article against anti-patterns and voice requirements.'
   },
   detective: {
-    arcAnalysis: 'You are analyzing narrative threads for a detective investigation case report. Identify thematic clusters from the evidence that can be synthesized into a coherent case file.',
     outlineGeneration: 'You are planning the structure of Detective Anondono\'s case report. Each section answers a DIFFERENT QUESTION about the same underlying facts.',
     articleGeneration: `You are a cynical, seasoned Detective in a near-future noir setting. You are writing an official Case Report.
 
@@ -157,73 +156,6 @@ class PromptBuilder {
     this.sessionConfig = sessionConfig;
     this.canonicalCharacters = canonicalCharacters;
     this.characterData = characterData;
-  }
-
-  /**
-   * Build arc analysis prompt
-   * Phase 2: Analyze evidence for narrative arcs based on director observations
-   *
-   * @param {Object} sessionData - Session data
-   * @param {string[]} sessionData.roster - Character names
-   * @param {string} sessionData.accusation - Who was accused
-   * @param {Object} sessionData.directorNotes - Director observations and whiteboard
-   * @param {Object} sessionData.evidenceBundle - Three-layer evidence bundle
-   * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
-   */
-  async buildArcAnalysisPrompt(sessionData) {
-    const rawPrompts = await this.theme.loadPhasePrompts('arcAnalysis');
-    // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
-    const prompts = Object.fromEntries(
-      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
-    );
-
-    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].arcAnalysis}
-${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
-
-    const userPrompt = `Analyze the following evidence for narrative arcs.
-
-ROSTER: ${sessionData.roster.join(', ')}
-ACCUSATION: ${sessionData.accusation}
-REPORTING MODE: ${this.sessionConfig.reportingMode || 'on-site'}
-NOTE: The party was LAST NIGHT. The investigation was THIS MORNING. The article is being written NOW.
-
-DIRECTOR OBSERVATIONS (PRIMARY WEIGHT - INVESTIGATION THIS MORNING, Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received tips remotely' : 'witnessed this'}):
-${JSON.stringify(sessionData.directorNotes?.observations || {}, null, 2)}
-
-WHITEBOARD (interpreted through observations):
-${JSON.stringify(sessionData.directorNotes?.whiteboard || {}, null, 2)}
-
-EVIDENCE BUNDLE:
-NOTE: Memory token CONTENT describes THE PARTY (past). Director observations describe THE INVESTIGATION (present).
-${JSON.stringify(sessionData.evidenceBundle, null, 2)}
-${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
-Return JSON with the following structure:
-{
-  "narrativeArcs": [
-    {
-      "name": "Arc Name",
-      "playerEmphasis": "HIGH|MEDIUM|LOW",
-      "directorObservationSupport": "What director saw that supports this",
-      "evidenceTokens": ["token1", "token2"],
-      "charactersFeatured": ["Name1", "Name2"],
-      "summary": "Brief description"
-    }
-  ],
-  "characterPlacementOpportunities": {
-    "CharacterName": "How they can be featured based on observations"
-  },
-  "rosterCoverage": {
-    "featured": ["names appearing prominently"],
-    "mentioned": ["names appearing briefly"],
-    "needsPlacement": ["names not yet covered"]
-  },
-  "heroImageSuggestion": {
-    "filename": "suggested photo",
-    "reasoning": "why this photo works"
-  }
-}`;
-
-    return { systemPrompt, userPrompt };
   }
 
   /**
@@ -804,13 +736,17 @@ TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
-${(directorNotes?.observations && Object.keys(directorNotes.observations).length > 0) ? `
-<INVESTIGATION_OBSERVATIONS>
+${directorNotes?.rawProse ? `<INVESTIGATION_OBSERVATIONS>
 What you observed during the investigation this morning.
-These ground your behavioral claims - who you saw talking to whom,
-notable moments, patterns you noticed.
+These ground your behavioral claims — who you saw talking to whom, notable moments, patterns you noticed.
+For the POST_INVESTIGATION_NEWS sub-block below (if present), write with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…" — do NOT conflate these with things Nova witnessed this morning.
 
-${JSON.stringify(directorNotes.observations, null, 2)}
+${renderDirectorEnrichmentBlock({
+  rawProse: directorNotes.rawProse,
+  quotes: directorNotes.quotes,
+  transactionReferences: directorNotes.transactionReferences,
+  postInvestigationDevelopments: directorNotes.postInvestigationDevelopments
+})}
 </INVESTIGATION_OBSERVATIONS>` : ''}
 ${(narrativeTensions?.tensions?.length > 0) ? `
 <NARRATIVE_TENSIONS>
@@ -1279,31 +1215,6 @@ if (require.main === module) {
       process.exit(1);
     }
     console.log('Theme files validated.\n');
-
-    // Test arc analysis prompt build
-    console.log('Building arcAnalysis prompt...');
-    const mockSessionData = {
-      roster: ['Alex', 'James', 'Victoria', 'Morgan', 'Derek'],
-      accusation: 'Victoria and Morgan',
-      directorNotes: {
-        observations: {
-          behaviorPatterns: ['Test observation 1', 'Test observation 2']
-        },
-        whiteboard: {
-          suspects: ['Derek', 'Victoria']
-        }
-      },
-      evidenceBundle: {
-        exposed: { tokens: [], paperEvidence: [] },
-        buried: { transactions: [] }
-      }
-    };
-
-    const { systemPrompt, userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-    console.log(`System prompt: ${systemPrompt.length} chars`);
-    console.log(`User prompt: ${userPrompt.length} chars`);
-    console.log(`Total: ${systemPrompt.length + userPrompt.length} chars\n`);
 
     // Show phase requirements
     console.log('Phase requirements:');

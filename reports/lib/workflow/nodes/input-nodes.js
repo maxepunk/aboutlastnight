@@ -36,6 +36,8 @@ const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers
 const { getSdkClient, synthesizePlayerFocus } = require('./node-helpers');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { traceNode } = require('../../observability');
+const { enrichDirectorNotes } = require('../../director-enricher');
+const { getThemeNPCs } = require('../../theme-config');
 
 /**
  * Default data directory for session files
@@ -177,36 +179,6 @@ const SESSION_REPORT_SCHEMA = {
 };
 
 /**
- * Schema for director notes parsing
- */
-const DIRECTOR_NOTES_SCHEMA = {
-  type: 'object',
-  required: ['observations'],
-  properties: {
-    observations: {
-      type: 'object',
-      properties: {
-        behaviorPatterns: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Observed behavior patterns during gameplay'
-        },
-        suspiciousCorrelations: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Suspected connections between players/events'
-        },
-        notableMoments: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Key moments during the session'
-        }
-      }
-    }
-  }
-};
-
-/**
  * Schema for whiteboard analysis
  */
 const WHITEBOARD_SCHEMA = {
@@ -324,6 +296,35 @@ function deriveSessionId(dateStr, sessionNumber = 1) {
   return sessionNumber > 1 ? `${base}${sessionNumber}` : base;
 }
 
+/**
+ * Project buriedTokens entries into the scoringTimeline row shape expected by
+ * the director-notes enricher prompt builder.
+ *
+ * orchestratorParsed has no `scoringTimeline` field; the Scoring Timeline data
+ * the enricher needs for cross-referencing director observations to transactions
+ * lives in `buriedTokens` (one row per burial sale). This helper reshapes those
+ * rows into the `{ time, type, detail, team, amount }` shape consumed by
+ * `lib/director-enricher.js`.
+ *
+ * @param {Array<{tokenId: string, shellAccount: string, amount: number, time?: string}>} buriedTokens
+ * @returns {Array<{time: string, type: string, detail: string, team: string, amount: string}>}
+ */
+function projectBuriedTokensToScoringTimeline(buriedTokens) {
+  if (!Array.isArray(buriedTokens) || buriedTokens.length === 0) {
+    return [];
+  }
+  return buriedTokens.map(entry => {
+    const rawAmount = typeof entry.amount === 'number' ? entry.amount : 0;
+    return {
+      time: entry.sessionTransactionTime || entry.time || '',
+      type: 'Sale',
+      detail: entry.tokenId || '',
+      team: entry.shellAccount || '',
+      amount: `+$${rawAmount.toLocaleString('en-US')}`
+    };
+  });
+}
+
 // ═══════════════════════════════════════════════════════
 // PARSE RAW INPUT NODE
 // ═══════════════════════════════════════════════════════
@@ -376,11 +377,11 @@ async function parseRawInput(state, config) {
   const configSessionId = config?.configurable?.sessionId;
 
   // ─────────────────────────────────────────────────────
-  // Phase 4c: Run Steps 1, 2, 3 in parallel (independent AI calls)
-  // Step 4 (whiteboard) depends on Step 1 (roster for OCR)
+  // Phase 4c: Run Steps 1, 2 in parallel (independent AI calls)
+  // Steps 3 (director enrichment) and 4 (whiteboard) run sequentially — both need outputs from Steps 1 & 2.
   // ─────────────────────────────────────────────────────
 
-  console.log('[parseRawInput] Running Steps 1-3 in parallel');
+  console.log('[parseRawInput] Running Steps 1-2 in parallel');
 
   // Use config sessionId if provided, otherwise try to derive from session report
   const sessionIdHint = configSessionId
@@ -477,60 +478,15 @@ Return structured JSON matching the schema.`;
     }
   })();
 
-  // Step 3 Promise: Parse director notes
-  const step3Promise = (async () => {
-    if (!rawInput.directorNotes) {
-      return {
-        observations: {
-          behaviorPatterns: [],
-          suspiciousCorrelations: [],
-          notableMoments: []
-        }
-      };
-    }
-
-    console.log('[parseRawInput] Step 3: Parsing director notes');
-    const directorNotesPrompt = `Parse the following director observations into categorized lists and extract session metadata:
-
-DIRECTOR NOTES:
-${rawInput.directorNotes}
-
-Categories:
-1. behaviorPatterns: Observable behaviors (who talked to whom, what they did)
-2. suspiciousCorrelations: Suspected connections, possible pseudonyms, theories
-3. notableMoments: Key moments or events worth highlighting
-
-Return structured JSON matching the schema.`;
-
-    try {
-      return await sdk({
-        prompt: directorNotesPrompt,
-        systemPrompt: 'You parse game director observations into categorized lists and extract session metadata.',
-        model: 'haiku',
-        jsonSchema: DIRECTOR_NOTES_SCHEMA
-      });
-    } catch (error) {
-      console.warn('[parseRawInput] Error parsing director notes:', error.message);
-      // Continue with empty observations - not critical
-      return {
-        observations: {
-          behaviorPatterns: [],
-          suspiciousCorrelations: [],
-          notableMoments: []
-        }
-      };
-    }
-  })();
-
-  // Wait for Steps 1-3 to complete in parallel
-  // Use allSettled to handle partial failures gracefully
-  const [step1Result, step2Result, step3Result] = await Promise.allSettled([
+  // Wait for Steps 1-2 to complete in parallel (Step 3 enrichment depends on
+  // Step 1 roster + Step 2 orchestrator data, so it runs sequentially after).
+  // Use allSettled to handle partial failures gracefully.
+  const [step1Result, step2Result] = await Promise.allSettled([
     step1Promise,
-    step2Promise,
-    step3Promise
+    step2Promise
   ]);
 
-  // Extract results (Step 1 is critical, Steps 2-3 have fallbacks)
+  // Extract results (Step 1 is critical, Step 2 has fallback)
   let sessionConfig;
   if (step1Result.status === 'fulfilled') {
     sessionConfig = step1Result.value;
@@ -543,11 +499,42 @@ Return structured JSON matching the schema.`;
     ? step2Result.value
     : { exposedTokens: [], buriedTokens: [], shellAccounts: [], exposedCount: 0, buriedCount: 0, totalBuried: 0 };
 
-  let directorNotes = step3Result.status === 'fulfilled'
-    ? step3Result.value
-    : { observations: { behaviorPatterns: [], suspiciousCorrelations: [], notableMoments: [] } };
+  console.log('[parseRawInput] Steps 1-2 complete');
 
-  console.log('[parseRawInput] Steps 1-3 complete');
+  // Step 3: Director notes enrichment (depends on Step 1 roster + Step 2 orchestrator data)
+  const theme = config?.configurable?.theme || 'journalist';
+  const themeNPCs = getThemeNPCs(theme);
+
+  let directorNotes;
+  if (!rawInput.directorNotes) {
+    directorNotes = {
+      rawProse: '',
+      characterMentions: {},
+      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [],
+      transactionReferences: [],
+      postInvestigationDevelopments: []
+    };
+  } else {
+    console.log('[parseRawInput] Step 3: Enriching director notes with Opus');
+    directorNotes = await enrichDirectorNotes({
+      rawProse: rawInput.directorNotes,
+      roster: sessionConfig.roster || [],
+      accusation: sessionConfig.accusation || null,
+      npcs: themeNPCs,
+      shellAccounts: orchestratorParsed.shellAccounts || [],
+      detectiveEvidenceLog: orchestratorParsed.exposedTokens || [],
+      scoringTimeline: projectBuriedTokensToScoringTimeline(orchestratorParsed.buriedTokens || [])
+    }, sdk);
+
+    const counts = {
+      chars: Object.keys(directorNotes.characterMentions || {}).length,
+      quotes: (directorNotes.quotes || []).length,
+      txRefs: (directorNotes.transactionReferences || []).length,
+      postInv: (directorNotes.postInvestigationDevelopments || []).length
+    };
+    console.log(`[parseRawInput] Director enrichment complete: ${counts.chars} character mentions, ${counts.quotes} quotes, ${counts.txRefs} transaction links, ${counts.postInv} post-investigation items`);
+  }
 
   // Merge director note overrides into sessionConfig
   sessionConfig = mergeDirectorOverrides(sessionConfig, directorNotes);
@@ -756,83 +743,6 @@ async function finalizeInput(state, config) {
 // TESTING UTILITIES
 // ═══════════════════════════════════════════════════════
 
-/**
- * Create mock SDK client for testing
- *
- * @param {Object} mockResponses - Map of expected responses by schema type
- * @returns {Function} Mock SDK query function
- */
-function createMockInputParser(mockResponses = {}) {
-  const calls = [];
-
-  async function mockSdk({ prompt, systemPrompt, model, jsonSchema }) {
-    calls.push({ prompt, systemPrompt, model, jsonSchema });
-
-    // Determine which mock to return based on schema
-    if (jsonSchema === SESSION_CONFIG_SCHEMA) {
-      return mockResponses.sessionConfig || {
-        sessionId: '1221',
-        sessionDate: '2025-12-21',
-        roster: ['Alex', 'Victoria', 'Morgan'],
-        rosterCount: 3,
-        accusation: {
-          accused: ['Victoria', 'Morgan'],
-          charge: 'Collusion to murder Marcus',
-          notes: 'Test accusation'
-        }
-      };
-    }
-
-    if (jsonSchema === SESSION_REPORT_SCHEMA) {
-      return mockResponses.sessionReport || {
-        exposedTokens: ['alr001', 'asm031'],
-        buriedTokens: [
-          { tokenId: 'mor021', shellAccount: 'Offbeat', amount: 150000, time: '10:30 PM' }
-        ],
-        shellAccounts: [
-          { name: 'Offbeat', total: 150000, tokenCount: 1, rank: 1 }
-        ],
-        exposedCount: 2,
-        buriedCount: 1,
-        totalBuried: 150000
-      };
-    }
-
-    if (jsonSchema === DIRECTOR_NOTES_SCHEMA) {
-      return mockResponses.directorNotes || {
-        observations: {
-          behaviorPatterns: ['Taylor and Diana spotted together early'],
-          suspiciousCorrelations: ['ChaseT might be Taylor'],
-          notableMoments: ['Final accusation at 11:48 PM']
-        }
-      };
-    }
-
-    if (jsonSchema === WHITEBOARD_SCHEMA) {
-      return mockResponses.whiteboard || {
-        names: ['Victoria', 'Morgan', 'Derek', 'Marcus', 'James'],
-        connections: [
-          { from: 'Victoria', to: 'Morgan', label: 'colluded with' },
-          { from: 'Marcus', to: 'Victoria', label: 'was married to' }
-        ],
-        groups: [
-          { label: 'SUSPECTS', members: ['Victoria', 'Morgan', 'Derek'] },
-          { label: 'FACTS', members: ['Marcus was killed', 'Memory drug was used'] }
-        ],
-        notes: ['Victoria hired Morgan', 'Past bad blood between Marcus and Victoria'],
-        structureType: 'accusation web with suspects circled',
-        ambiguities: ['Unclear handwriting near top right corner']
-      };
-    }
-
-    return {};
-  }
-
-  mockSdk.getCalls = () => calls;
-  mockSdk.clear = () => { calls.length = 0; };
-
-  return mockSdk;
-}
 
 module.exports = {
   // Node functions (wrapped with LangSmith tracing)
@@ -844,19 +754,16 @@ module.exports = {
   // Utilities (exported for DRY reuse in server.js Phase 4e)
   sanitizePath,
 
-  // Testing utilities
-  createMockInputParser,
-
   // Constants for testing
   _testing: {
     DEFAULT_DATA_DIR,
     SESSION_CONFIG_SCHEMA,
     SESSION_REPORT_SCHEMA,
-    DIRECTOR_NOTES_SCHEMA,
     WHITEBOARD_SCHEMA,
     deriveSessionId,
     ensureDir,
     sanitizePath,
-    mergeDirectorOverrides
+    mergeDirectorOverrides,
+    projectBuriedTokensToScoringTimeline
   }
 };
