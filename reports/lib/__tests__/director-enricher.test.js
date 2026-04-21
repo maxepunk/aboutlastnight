@@ -12,7 +12,7 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
     expect(prop.additionalProperties.type).toBe('array');
     const item = prop.additionalProperties.items;
     expect(item.properties.excerpt.type).toBe('string');
-    expect(item.properties.proseOffset.type).toBe('number');
+    expect(item.properties.proseOffset.type).toBe('integer');
     expect(item.properties.timeAnchor.type).toBe('string');
     expect(item.properties.linkedCharacters.type).toBe('array');
     expect(item.properties.kind.type).toBe('string');
@@ -242,5 +242,84 @@ describe('enrichDirectorNotes — normalizes missing optional fields on success'
     expect(result.quotes).toEqual([]);
     expect(result.transactionReferences).toEqual([]);
     expect(result.postInvestigationDevelopments).toEqual([]);
+  });
+});
+
+describe('buildEnrichmentPrompt — defensive input guards', () => {
+  it('accepts accusation.accused as a string and coerces to array', () => {
+    const { userPrompt } = buildEnrichmentPrompt({
+      rawProse: 'p',
+      accusation: { accused: 'Morgan', charge: 'Murder' }
+    });
+    expect(userPrompt).toContain('Accused: Morgan');
+  });
+
+  it('accepts roster as non-array by coercing to empty', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', roster: null });
+    expect(userPrompt).toContain('<ROSTER>\n(none provided)\n</ROSTER>');
+  });
+
+  it('accepts npcs as non-array by coercing to empty', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', npcs: null });
+    expect(userPrompt).toContain('<NPCS>\n(none)\n</NPCS>');
+  });
+});
+
+describe('enrichDirectorNotes — verbatim check', () => {
+  it('falls back when SDK returns a non-verbatim rawProse', async () => {
+    const input = 'Vic worked the room.';
+    const sdk = jest.fn().mockResolvedValue({
+      rawProse: 'Vic worked the room (summarized).',
+      characterMentions: {}, entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [], transactionReferences: [], postInvestigationDevelopments: []
+    });
+
+    const result = await enrichDirectorNotes({ rawProse: input, roster: [] }, sdk);
+    expect(result.rawProse).toBe(input);
+    expect(result.characterMentions).toEqual({});
+  });
+
+  it('accepts SDK result when rawProse matches exactly', async () => {
+    const input = 'Vic worked the room.';
+    const sdk = jest.fn().mockResolvedValue({
+      rawProse: input,
+      characterMentions: { Vic: [{ excerpt: 'Vic worked the room.' }] },
+      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [], transactionReferences: [], postInvestigationDevelopments: []
+    });
+
+    const result = await enrichDirectorNotes({ rawProse: input, roster: [] }, sdk);
+    expect(result.rawProse).toBe(input);
+    expect(result.characterMentions).toEqual({ Vic: [{ excerpt: 'Vic worked the room.' }] });
+  });
+});
+
+describe('DIRECTOR_NOTES_ENRICHED_SCHEMA — tightened constraints', () => {
+  it('declares additionalProperties: false at the top level', () => {
+    expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it('declares proseOffset as integer with minimum 0 on characterMentions items', () => {
+    const prop = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.characterMentions.additionalProperties.items.properties.proseOffset;
+    expect(prop.type).toBe('integer');
+    expect(prop.minimum).toBe(0);
+  });
+
+  it('declares proseOffset as integer with minimum 0 on transactionReferences items', () => {
+    const prop = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.transactionReferences.items.properties.proseOffset;
+    expect(prop.type).toBe('integer');
+    expect(prop.minimum).toBe(0);
+  });
+
+  it('declares proseOffset as integer with minimum 0 on quotes items', () => {
+    const prop = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.proseOffset;
+    expect(prop.type).toBe('integer');
+    expect(prop.minimum).toBe(0);
+  });
+
+  it('declares proseOffset as integer with minimum 0 on postInvestigationDevelopments items', () => {
+    const prop = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.postInvestigationDevelopments.items.properties.proseOffset;
+    expect(prop.type).toBe('integer');
+    expect(prop.minimum).toBe(0);
   });
 });

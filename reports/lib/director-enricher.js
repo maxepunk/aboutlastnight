@@ -12,6 +12,7 @@
 const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
   type: 'object',
   required: ['rawProse'],
+  additionalProperties: false,
   properties: {
     rawProse: {
       type: 'string',
@@ -27,7 +28,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
           required: ['excerpt'],
           properties: {
             excerpt: { type: 'string', description: 'Verbatim passage from rawProse' },
-            proseOffset: { type: 'number', description: 'Byte index into rawProse' },
+            proseOffset: { type: 'integer', minimum: 0, description: 'Byte index into rawProse' },
             timeAnchor: { type: 'string', description: 'Temporal cue if present (e.g., "throughout morning")' },
             linkedCharacters: {
               type: 'array',
@@ -67,7 +68,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
         required: ['excerpt', 'linkedTransactions', 'confidence'],
         properties: {
           excerpt: { type: 'string', description: 'Observation text that references a transaction' },
-          proseOffset: { type: 'number' },
+          proseOffset: { type: 'integer', minimum: 0 },
           linkedTransactions: {
             type: 'array',
             items: {
@@ -96,7 +97,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
           text: { type: 'string', description: 'Verbatim quote' },
           addressee: { type: 'string', description: 'Who the speaker was addressing, if known' },
           context: { type: 'string', description: 'Surrounding context from prose' },
-          proseOffset: { type: 'number' },
+          proseOffset: { type: 'integer', minimum: 0 },
           confidence: { type: 'string', enum: ['high', 'low'], description: 'high = speaker named adjacent' }
         }
       }
@@ -111,7 +112,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
           detail: { type: 'string', description: 'Full text from prose' },
           subjects: { type: 'array', items: { type: 'string' }, description: 'Characters involved' },
           bearingOnNarrative: { type: 'string', description: 'Why this matters for the article' },
-          proseOffset: { type: 'number' }
+          proseOffset: { type: 'integer', minimum: 0 }
         }
       }
     }
@@ -132,26 +133,40 @@ You are an INDEXER, not a SUMMARIZER. If you find yourself rewriting the directo
 
 function buildEnrichmentPrompt({
   rawProse,
-  roster = [],
+  roster,
   accusation = null,
-  npcs = [],
-  shellAccounts = [],
-  detectiveEvidenceLog = [],
-  scoringTimeline = []
-}) {
-  const rosterBlock = roster.length > 0 ? roster.join(', ') : '(none provided)';
+  npcs,
+  shellAccounts,
+  detectiveEvidenceLog,
+  scoringTimeline
+} = {}) {
+  // Coerce any non-array input to an empty array for safe downstream handling
+  const rosterArr = Array.isArray(roster) ? roster : [];
+  const npcsArr = Array.isArray(npcs) ? npcs : [];
+  const shellAccountsArr = Array.isArray(shellAccounts) ? shellAccounts : [];
+  const evidenceLogArr = Array.isArray(detectiveEvidenceLog) ? detectiveEvidenceLog : [];
+  const timelineArr = Array.isArray(scoringTimeline) ? scoringTimeline : [];
+
+  const rosterBlock = rosterArr.length > 0 ? rosterArr.join(', ') : '(none provided)';
+
+  // accusation.accused may arrive as string, array, or missing
+  const accusedValue = accusation?.accused;
+  const accusedStr = Array.isArray(accusedValue)
+    ? (accusedValue.join(', ') || 'unspecified')
+    : (typeof accusedValue === 'string' && accusedValue.trim() ? accusedValue : 'unspecified');
   const accusationBlock = accusation
-    ? `Accused: ${(accusation.accused || []).join(', ') || 'unspecified'}\nCharge: ${accusation.charge || 'unspecified'}`
+    ? `Accused: ${accusedStr}\nCharge: ${accusation.charge || 'unspecified'}`
     : '(none provided)';
-  const npcsBlock = npcs.length > 0 ? npcs.join(', ') : '(none)';
-  const shellAccountsBlock = shellAccounts.length > 0
-    ? JSON.stringify(shellAccounts, null, 2)
+
+  const npcsBlock = npcsArr.length > 0 ? npcsArr.join(', ') : '(none)';
+  const shellAccountsBlock = shellAccountsArr.length > 0
+    ? JSON.stringify(shellAccountsArr, null, 2)
     : '(none)';
-  const evidenceLogBlock = detectiveEvidenceLog.length > 0
-    ? JSON.stringify(detectiveEvidenceLog, null, 2)
+  const evidenceLogBlock = evidenceLogArr.length > 0
+    ? JSON.stringify(evidenceLogArr, null, 2)
     : '(none)';
-  const timelineBlock = scoringTimeline.length > 0
-    ? JSON.stringify(scoringTimeline, null, 2)
+  const timelineBlock = timelineArr.length > 0
+    ? JSON.stringify(timelineArr, null, 2)
     : '(none)';
 
   const userPrompt = `<ROSTER>
@@ -227,6 +242,11 @@ async function enrichDirectorNotes(context, sdk) {
 
     if (!result || typeof result.rawProse !== 'string') {
       console.warn('[enrichDirectorNotes] SDK returned invalid result; falling back');
+      return createFallback(rawProse);
+    }
+
+    if (result.rawProse !== rawProse) {
+      console.warn('[enrichDirectorNotes] SDK returned non-verbatim rawProse; falling back to preserve source prose');
       return createFallback(rawProse);
     }
 
