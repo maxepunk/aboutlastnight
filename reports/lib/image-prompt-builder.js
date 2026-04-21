@@ -411,9 +411,7 @@ if (require.main === module) {
       sessionData: {
         roster: ['Victoria', 'Morgan', 'Derek'],
         directorNotes: {
-          observations: {
-            behaviorPatterns: ['Victoria and Morgan worked together throughout']
-          }
+          rawProse: 'Victoria and Morgan worked together throughout.'
         }
       }
     };
