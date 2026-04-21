@@ -59,6 +59,8 @@ const {
   // (SPECIALIST_AGENT_NAMES, getSpecialistAgents, ORCHESTRATOR_*, SYNTHESIS_*, SPECIALIST_*)
 } = require('../../sdk-client/subagents');
 
+const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -73,7 +75,7 @@ const {
  * Commit 8.28: Shared extraction used by both core arc and revision prompts
  *
  * @param {Object} state - Current workflow state
- * @returns {Object} Player focus context with accusation, whiteboard, observations, roster
+ * @returns {Object} Player focus context with accusation, whiteboard, directorProse, directorQuotes, directorTransactionLinks, directorPostInvestigation, roster, primaryInvestigation
  */
 function extractPlayerFocusContext(state) {
   const playerFocus = state.playerFocus || {};
@@ -83,7 +85,11 @@ function extractPlayerFocusContext(state) {
   return {
     accusation: playerFocus.accusation || {},
     whiteboard: playerFocus.whiteboardContext || {},
-    observations: directorNotes.observations || {},
+    // Enriched director-notes shape (2026-04): rawProse primary, quotes + tx refs + post-investigation news as structured extras
+    directorProse: directorNotes.rawProse || '',
+    directorQuotes: directorNotes.quotes || [],
+    directorTransactionLinks: directorNotes.transactionReferences || [],
+    directorPostInvestigation: directorNotes.postInvestigationDevelopments || [],
     roster: sessionConfig.roster || [],
     primaryInvestigation: playerFocus.primaryInvestigation || 'General investigation'
   };
@@ -209,9 +215,14 @@ You MUST generate an arc that addresses this accusation. Even if evidence is wea
 **Names Identified:** ${JSON.stringify(context.whiteboard.namesFound || [])}
 
 ### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
-**Behavior Patterns:** ${JSON.stringify(context.observations.behaviorPatterns || [])}
-**Suspicious Correlations:** ${JSON.stringify(context.observations.suspiciousCorrelations || [])}
-**Notable Moments:** ${JSON.stringify(context.observations.notableMoments || [])}
+The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
+
+${renderDirectorEnrichmentBlock({
+  rawProse: context.directorProse,
+  quotes: context.directorQuotes,
+  transactionReferences: context.directorTransactionLinks,
+  postInvestigationDevelopments: context.directorPostInvestigation
+})}
 
 ### Primary Investigation Focus
 ${context.primaryInvestigation}
@@ -683,234 +694,6 @@ ${scoresText || '  Not available'}
 
 Focus on addressing the specific issues above. Do not just regenerate - IMPROVE.`;
 }
-// ═══════════════════════════════════════════════════════════════════════════
-// PLAYER-FOCUS-GUIDED PROMPT (for revision flow)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Build player-focus-guided comprehensive prompt for arc analysis
- *
- * Commit 8.15: NEW ARCHITECTURE - Player conclusions drive arc generation
- *
- * @deprecated Commit 8.28: Use buildCoreArcPrompt() instead for new arc generation.
- * This function is kept for backwards compatibility with the revision flow.
- *
- * Prompt structure (order matters - player focus FIRST):
- * 1. PLAYER CONCLUSIONS (PRIMARY) - accusation, whiteboard, observations, roster
- * 2. ARC GENERATION RULES - priority hierarchy, required fields
- * 3. EVIDENCE RULES - three-layer model, anti-patterns
- * 4. EVIDENCE BUNDLE - all evidence with IDs for validation
- * 5. THREE-LENS REQUIREMENT - financial/behavioral/victimization analysis per arc
- *
- * @param {Object} state - Current workflow state
- * @returns {string} Comprehensive prompt for arc analysis
- */
-function buildPlayerFocusGuidedPrompt(state) {
-  const evidenceBundle = state.evidenceBundle || {};
-  const playerFocus = state.playerFocus || {};
-  const sessionConfig = state.sessionConfig || {};
-  const directorNotes = state.directorNotes || {};
-  const theme = state.theme || 'journalist';
-
-  // Extract evidence summary
-  const evidenceSummary = extractEvidenceSummary(evidenceBundle);
-  const { exposedTokens, exposedPaper, buriedTransactions, allEvidenceIds } = evidenceSummary;
-
-  // Extract player focus data
-  const accusation = playerFocus.accusation || {};
-  const wbCtx = playerFocus.whiteboardContext || {};
-  const observations = directorNotes.observations || {};
-  const roster = sessionConfig.roster || [];
-
-  return `# Arc Analysis: Player-Focus-Guided Investigation
-
-You are analyzing evidence for an investigative article about "About Last Night" - a crime thriller game where players investigate the death of Marcus Blackwood.
-
-## SECTION 1: WHAT PLAYERS CONCLUDED (PRIMARY - Your arcs must address this)
-
-### The Accusation (REQUIRED ARC)
-**Accused:** ${JSON.stringify(accusation.accused || [])}
-**Charge:** ${accusation.charge || 'Not specified'}
-**Players' Reasoning:** ${accusation.reasoning || 'Not documented'}
-
-You MUST generate an arc that addresses this accusation. Even if evidence is weak, include this arc and mark it appropriately with evidenceStrength="speculative" if needed.
-
-### Whiteboard Connections (Players drew these during investigation)
-**Suspects Explored:** ${JSON.stringify(wbCtx.suspectsExplored || [])}
-**Connections Found:** ${JSON.stringify(wbCtx.connections || [])}
-**Notes Captured:** ${JSON.stringify(wbCtx.notes || [])}
-**Names Identified:** ${JSON.stringify(wbCtx.namesFound || [])}
-
-### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
-**Behavior Patterns:** ${JSON.stringify(observations.behaviorPatterns || [])}
-**Suspicious Correlations:** ${JSON.stringify(observations.suspiciousCorrelations || [])}
-**Notable Moments:** ${JSON.stringify(observations.notableMoments || [])}
-
-### Primary Investigation Focus
-${playerFocus.primaryInvestigation || 'General investigation'}
-
-### Session Roster (ALL characters who need placement)
-${JSON.stringify(roster)}
-
----
-
-## SECTION 2: ARC GENERATION RULES
-
-Generate 3-5 narrative arcs following this priority:
-
-### Priority 1: ACCUSATION ARC (Required)
-- Must directly address the accusation above
-- arcSource: "accusation"
-- Include even if evidenceStrength is "speculative"
-- If evidence is thin, use caveats to acknowledge uncertainty
-- Can be supported by director notes/whiteboard even with no Layer 1/2 evidence
-
-### Priority 2: WHITEBOARD/OBSERVATION ARCS (1-3 arcs)
-- Generated from significant whiteboard connections or director observations
-- arcSource: "whiteboard" or "observation"
-- Should have at least "weak" evidenceStrength
-
-### Priority 3: DISCOVERED ARC (Optional, max 1)
-- Only if evidence strongly supports something players completely missed
-- arcSource: "discovered"
-- Must have evidenceStrength "strong" or "moderate"
-- Lower priority than player-focused arcs
-
-### For EACH arc, you MUST provide:
-
-**arcSource** - Where this arc comes from:
-- "accusation": Directly from the accusation (REQUIRED to have one)
-- "whiteboard": From whiteboard connections or notes
-- "observation": From director observations
-- "discovered": Pattern found in evidence that players missed
-
-**evidenceStrength** - How well does Layer 1/2 evidence support this arc?
-- "strong": Multiple direct evidence pieces, minimal contradictions
-- "moderate": Some supporting evidence, some gaps
-- "weak": Limited evidence, mostly inference
-- "speculative": Supported by director notes/whiteboard but thin Layer 1/2 evidence
-
-**caveats** - What complicates or contradicts this arc?
-- Example: "Transaction timing suggests Morgan acted alone in the final hour"
-- These become "But questions remain..." in the article
-- BE HONEST about complications
-
-**unansweredQuestions** - What evidence gaps exist?
-- Example: "Why did ChaseT go silent after 10:30 PM?"
-- These create narrative tension
-- ${theme === 'journalist' ? "Nova can acknowledge what she doesn't know" : 'The investigation can acknowledge gaps in evidence'}
-
-**analysisNotes** - How each lens supports/contradicts:
-- financial: Transaction patterns relevant to this arc
-- behavioral: Director observations relevant to this arc
-- victimization: Targeting patterns relevant to this arc
-
----
-
-## SECTION 3: EVIDENCE BUNDLE
-
-### Exposed Tokens (${exposedTokens.length} items - Layer 1)
-${JSON.stringify(exposedTokens, null, 2)}
-
-### Paper Evidence (${exposedPaper.length} items - Layer 1)
-${JSON.stringify(exposedPaper, null, 2)}
-
-### Buried Transactions (${buriedTransactions.length} items - Layer 2 CONTEXT ONLY)
-Token identity is intentionally hidden - Nova CANNOT know whose memories were buried.
-${JSON.stringify(buriedTransactions, null, 2)}
-
-⚠️ BURIED TRANSACTIONS ARE FOR CONTEXT/ANALYSIS ONLY.
-Buried transactions have no IDs - they cannot be cited as keyEvidence.
-You can DISCUSS patterns from buried transactions in analysisNotes.financial,
-but keyEvidence must ONLY contain IDs from the EXPOSED evidence below.
-
-### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
-${JSON.stringify(allEvidenceIds)}
-
-CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
-Use buried patterns in analysisNotes.financial, but cite EXPOSED evidence in keyEvidence.
-
----
-
-## SECTION 4: EVIDENCE BOUNDARIES (rules for the data above)
-
-### Layer 1 - EXPOSED (Full Reportability)
-- CAN quote full memory contents, describe what memory reveals
-- CAN draw conclusions from content, name who exposed each memory
-- These are the FACTS of the article
-
-### Layer 2 - BURIED (Observable Only)
-- CAN report: shell account names, dollar amounts, timing patterns, transaction counts
-- CAN note: suspicious correlations (ChaseT = Taylor Chase?), timing clusters
-- CAN report: who was OBSERVED at Valet (if director noted)
-- CANNOT report: whose memories went to which accounts
-- CANNOT report: content of buried memories
-- CANNOT infer: specific content from transaction patterns
-- These are the MYSTERIES of the article
-
-### Layer 3 - DIRECTOR NOTES (Priority Hierarchy)
-1. ACCUSATION = PRIMARY (what players concluded)
-2. DIRECTOR OBSERVATIONS = HIGHEST NARRATIVE WEIGHT (ground truth of what happened)
-3. WHITEBOARD = SUPPORTING CONTEXT (notes captured during investigation)
-
-### Anti-Patterns
-- Never use "token" (say "memory", "extracted memory", "stolen memory")
-- Never use em-dashes (use periods, restructure sentences)
-- Never use game mechanics language ("Act 3 unlock", "first burial", "token scan")
-- Never claim to know buried memory content or ownership
-
----
-
-## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
-
-For each arc, analyze through all three lenses and document in analysisNotes:
-
-### Financial Lens
-- Transaction patterns that support this arc
-- Account naming that suggests involvement
-- Timing correlations with other evidence
-
-### Behavioral Lens
-- Director observations that support this arc
-- Character dynamics relevant to this arc
-- Behavior-transaction correlations
-
-### Victimization Lens
-- Targeting patterns that support this arc
-- Victim/operator relationships
-- Self-burial vs. being targeted by others
-
----
-
-## OUTPUT FORMAT
-
-Return valid JSON:
-{
-  "narrativeArcs": [
-    {
-      "id": "arc-[descriptive-slug]",
-      "title": "Compelling arc title",
-      "summary": "2-3 sentences describing this narrative thread",
-      "arcSource": "accusation" | "whiteboard" | "observation" | "discovered",
-      "keyEvidence": ["exact-id-1", "exact-id-2"],
-      "characterPlacements": { "RosterName": "Role in this arc" },
-      "evidenceStrength": "strong" | "moderate" | "weak" | "speculative",
-      "caveats": ["What complicates this arc"],
-      "unansweredQuestions": ["What gaps exist"],
-      "emotionalHook": "What makes this compelling",
-      "playerEmphasis": "high" | "medium" | "low",
-      "storyRelevance": "critical" | "supporting" | "contextual",
-      "analysisNotes": {
-        "financial": "Relevant transaction patterns",
-        "behavioral": "Relevant director observations",
-        "victimization": "Relevant targeting patterns"
-      }
-    }
-  ],
-  "synthesisNotes": "How you addressed player conclusions and what patterns emerged"
-}
-${buildArcRevisionContext(state)}`;
-}
 
 /**
  * Analyze arcs with player-focus-guided comprehensive call
@@ -941,7 +724,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
   const pf = state.playerFocus || {};
   const wbCtx = pf.whiteboardContext || {};
   const acc = pf.accusation || {};
-  const observations = state.directorNotes?.observations || {};
+  const directorNotes = state.directorNotes || {};
 
   // Flatten evidence bundle for counting
   const exposedData = state.evidenceBundle?.exposed || {};
@@ -955,7 +738,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
   console.log(`  - accusation.accused: ${JSON.stringify(acc.accused || [])}`);
   console.log(`  - accusation.charge: ${acc.charge || 'MISSING'}`);
   console.log(`  - whiteboard.suspectsExplored: ${JSON.stringify(wbCtx.suspectsExplored || [])}`);
-  console.log(`  - director.behaviorPatterns: ${(observations.behaviorPatterns || []).length} items`);
+  console.log(`  - director: ${(directorNotes.rawProse || '').length} chars prose, ${(directorNotes.quotes || []).length} quotes, ${(directorNotes.transactionReferences || []).length} tx refs`);
   console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
   console.log(`  - roster: ${JSON.stringify(state.sessionConfig?.roster || [])}`);
 
@@ -1322,12 +1105,18 @@ function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
   const playerFocus = state.playerFocus || {};
   const sessionConfig = state.sessionConfig || {};
   const evidenceBundle = state.evidenceBundle || {};
+  const directorNotes = state.directorNotes || {};
 
   // Extract evidence summary for reference
   const evidenceSummary = extractEvidenceSummary(evidenceBundle);
 
   const accusation = playerFocus.accusation || {};
   const roster = sessionConfig.roster || [];
+  // Enriched director-notes shape (2026-04)
+  const directorProse = directorNotes.rawProse || '';
+  const directorQuotes = directorNotes.quotes || [];
+  const directorTxRefs = directorNotes.transactionReferences || [];
+  const directorPostInv = directorNotes.postInvestigationDevelopments || [];
 
   return `# Arc Revision Request
 
@@ -1342,6 +1131,16 @@ ${contextSection}
 
 ### Roster
 ${JSON.stringify(roster)}
+
+### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
+The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
+
+${renderDirectorEnrichmentBlock({
+  rawProse: directorProse,
+  quotes: directorQuotes,
+  transactionReferences: directorTxRefs,
+  postInvestigationDevelopments: directorPostInv
+})}
 
 ### Valid Evidence IDs (for keyEvidence validation)
 ${JSON.stringify(evidenceSummary.allEvidenceIds)}
@@ -1971,7 +1770,10 @@ module.exports = {
 
     // Commit 8.15: Player-focus-guided schema (used by revision flow)
     PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
-    PLAYER_FOCUS_GUIDED_SCHEMA
+    PLAYER_FOCUS_GUIDED_SCHEMA,
+
+    // Revision path prompt builder (for director-notes enrichment testing)
+    buildArcRevisionPrompt
   }
 };
 

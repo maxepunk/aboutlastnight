@@ -52,143 +52,6 @@ describe('PromptBuilder', () => {
     });
   });
 
-  describe('buildArcAnalysisPrompt', () => {
-    const mockSessionData = {
-      roster: ['Alex', 'Remi', 'Vic', 'Morgan', 'Sam'],
-      accusation: 'Vic and Morgan',
-      directorNotes: {
-        observations: {
-          behaviorPatterns: ['Pattern 1', 'Pattern 2']
-        },
-        whiteboard: {
-          suspects: ['Sam']
-        }
-      },
-      evidenceBundle: {
-        exposed: { tokens: [{ id: 'tok1' }] },
-        buried: { transactions: [] }
-      }
-    };
-
-    beforeEach(() => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': 'Be NovaGlade...',
-        'evidence-boundaries': 'Only report exposed...',
-        'narrative-structure': 'Build 2-4 arcs...',
-        'anti-patterns': 'Avoid em-dashes...'
-      });
-    });
-
-    it('should return system and user prompts', async () => {
-      const result = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(result).toHaveProperty('systemPrompt');
-      expect(result).toHaveProperty('userPrompt');
-    });
-
-    it('should load arcAnalysis phase prompts', async () => {
-      await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('arcAnalysis');
-    });
-
-    it('should not include character-voice in system prompt (removed from arcAnalysis phase)', async () => {
-      const { systemPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(systemPrompt).not.toContain('Be NovaGlade');
-    });
-
-    it('should include evidence-boundaries in system prompt', async () => {
-      const { systemPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(systemPrompt).toContain('Only report exposed');
-    });
-
-    it('should include roster in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Alex, Remi, Vic, Morgan, Sam');
-    });
-
-    it('should include accusation in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Vic and Morgan');
-    });
-
-    it('should include director observations in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Pattern 1');
-      expect(userPrompt).toContain('Pattern 2');
-    });
-
-    it('should include evidence bundle in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('tok1');
-    });
-
-    it('should include narrative-structure in user prompt', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('Build 2-4 arcs');
-    });
-
-    it('should include JSON output structure specification', async () => {
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-      expect(userPrompt).toContain('narrativeArcs');
-      expect(userPrompt).toContain('characterPlacementOpportunities');
-      expect(userPrompt).toContain('rosterCoverage');
-    });
-
-    it('should handle missing director notes gracefully', async () => {
-      const dataWithoutNotes = {
-        ...mockSessionData,
-        directorNotes: null
-      };
-
-      const { userPrompt } = await builder.buildArcAnalysisPrompt(dataWithoutNotes);
-
-      expect(userPrompt).toContain('DIRECTOR OBSERVATIONS');
-    });
-
-    describe('reporting mode context', () => {
-      it('should include reporting mode context in arc analysis prompt', async () => {
-        mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-          'character-voice': '', 'evidence-boundaries': '',
-          'narrative-structure': '', 'anti-patterns': ''
-        });
-
-        const remoteBuilder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
-        const { userPrompt } = await remoteBuilder.buildArcAnalysisPrompt({
-          roster: ['Alex'], accusation: 'Jess', directorNotes: {}, evidenceBundle: {}
-        });
-
-        expect(userPrompt).toContain('REPORTING MODE: remote');
-        expect(userPrompt).toContain('LAST NIGHT');
-        expect(userPrompt).toContain('THIS MORNING');
-        expect(userPrompt).toContain('received tips remotely');
-      });
-
-      it('should default to on-site reporting mode', async () => {
-        mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-          'character-voice': '', 'evidence-boundaries': '',
-          'narrative-structure': '', 'anti-patterns': ''
-        });
-
-        const defaultBuilder = new PromptBuilder(mockThemeLoader, 'journalist', {});
-        const { userPrompt } = await defaultBuilder.buildArcAnalysisPrompt({
-          roster: ['Alex'], accusation: 'Jess', directorNotes: {}, evidenceBundle: {}
-        });
-
-        expect(userPrompt).toContain('REPORTING MODE: on-site');
-        expect(userPrompt).toContain('witnessed this');
-      });
-    });
-  });
-
   describe('buildOutlinePrompt', () => {
     const mockArcAnalysis = {
       narrativeArcs: [
@@ -450,8 +313,8 @@ describe('PromptBuilder', () => {
 
   describe('getPhaseRequirements', () => {
     it('should return requirements for valid phase', () => {
-      const reqs = builder.getPhaseRequirements('arcAnalysis');
-      expect(reqs).toEqual(PHASE_REQUIREMENTS.arcAnalysis);
+      const reqs = builder.getPhaseRequirements('articleGeneration');
+      expect(reqs).toEqual(PHASE_REQUIREMENTS.articleGeneration);
     });
 
     it('should return empty array for unknown phase', () => {
@@ -520,17 +383,6 @@ describe('PromptBuilder', () => {
         'anti-patterns': 'Section differentiation...',
         'editorial-design': 'Single column...',
       });
-    });
-
-    it('buildArcAnalysisPrompt uses detective framing', async () => {
-      const { systemPrompt } = await detectiveBuilder.buildArcAnalysisPrompt({
-        roster: ['Alex', 'Vic'],
-        accusation: 'Vic',
-        directorNotes: { observations: {} },
-        evidenceBundle: { exposed: {}, buried: {} }
-      });
-      expect(systemPrompt).not.toContain('NovaNews');
-      expect(systemPrompt).toContain('detective');
     });
 
     it('buildOutlinePrompt uses detective framing', async () => {
@@ -795,28 +647,6 @@ describe('PromptBuilder', () => {
   });
 
   describe('prompt variable resolution in build methods', () => {
-    it('buildArcAnalysisPrompt should resolve variables in loaded prompts', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': 'Nova voice text',
-        'evidence-boundaries': '{{JOURNALIST_FIRST_NAME}} must only report exposed evidence.',
-        'narrative-structure': 'Structure text',
-        'anti-patterns': 'Anti-patterns text'
-      });
-
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
-
-      const sessionData = {
-        roster: ['Alex'],
-        accusation: 'Jess Kane',
-        directorNotes: { observations: {} },
-        evidenceBundle: {}
-      };
-
-      const { systemPrompt } = await builder.buildArcAnalysisPrompt(sessionData);
-      expect(systemPrompt).toContain('Athena must only report exposed evidence.');
-      expect(systemPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
-    });
-
     it('buildOutlinePrompt should resolve variables in loaded prompts', async () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'section-rules': 'Written by {{JOURNALIST_FIRST_NAME}} for NovaNews.',
@@ -1168,13 +998,13 @@ describe('PromptBuilder', () => {
       mockThemeLoader.loadTemplate.mockResolvedValue('<template>');
     });
 
-    it('should include INVESTIGATION_OBSERVATIONS when directorNotes has observations', async () => {
+    it('should include INVESTIGATION_OBSERVATIONS when directorNotes has rawProse', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const directorNotes = {
-        observations: {
-          behaviorPatterns: ['Blake solicited Vic three times'],
-          notableMoments: ['Heated argument at the bar']
-        },
+        rawProse: 'Blake solicited Vic three times. Heated argument at the bar.',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: [],
         whiteboard: { suspects: ['Vic'] }  // Should NOT be included
       };
       const { userPrompt } = await b.buildArticlePrompt(
@@ -1195,10 +1025,10 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
 
-    it('should omit INVESTIGATION_OBSERVATIONS when observations is empty', async () => {
+    it('should omit INVESTIGATION_OBSERVATIONS when rawProse is empty', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, '<template>', [], null, [], null, { observations: {} }
+        {}, '<template>', [], null, [], null, { rawProse: '', quotes: [], transactionReferences: [], postInvestigationDevelopments: [] }
       );
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
@@ -1235,6 +1065,100 @@ describe('PromptBuilder', () => {
       const result = generateRosterSection('journalist', canonicalCharacters, characterData);
       expect(result).toContain('Alex → Alex Reeves');
       expect(result).toContain('Alex Reeves: Role: CEO | Member of: Board');
+    });
+  });
+
+  describe('buildArticlePrompt — enriched director notes', () => {
+    let builder;
+    let mockThemeLoader;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockThemeLoader = {
+        loadPhasePrompts: jest.fn().mockResolvedValue({
+          'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
+          'anti-patterns': '', 'section-rules': '', 'editorial-design': '', 'formatting': '',
+          'writing-principles': ''
+        }),
+        loadTemplate: jest.fn(),
+        validate: jest.fn()
+      };
+      const sessionConfig = { reportingMode: 'on-site', journalistFirstName: 'Cassandra' };
+      builder = new PromptBuilder(mockThemeLoader, 'journalist', sessionConfig);
+    });
+
+    const outline = { theStory: { arcs: [] } };
+    const template = '<template/>';
+
+    it('injects rawProse inside <INVESTIGATION_OBSERVATIONS>', async () => {
+      const directorNotes = {
+        rawProse: 'I watched Alex and Sam in the corner.',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
+      expect(userPrompt).toContain('I watched Alex and Sam in the corner.');
+      expect(userPrompt).not.toContain('"behaviorPatterns"');
+    });
+
+    it('emits <QUOTE_BANK> when quotes present', async () => {
+      const directorNotes = {
+        rawProse: 'notes',
+        quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
+        transactionReferences: [],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<QUOTE_BANK>');
+      expect(userPrompt).toContain('we had to act');
+    });
+
+    it('emits <TRANSACTION_LINKS> when links present', async () => {
+      const directorNotes = {
+        rawProse: 'notes',
+        quotes: [],
+        transactionReferences: [{
+          excerpt: 'Kai paid Blake', linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }], confidence: 'high'
+        }],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<TRANSACTION_LINKS>');
+      expect(userPrompt).toContain('tay004');
+    });
+
+    it('emits <POST_INVESTIGATION_NEWS> when developments present', async () => {
+      const directorNotes = {
+        rawProse: 'notes',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'Just been announced' }]
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).toContain('<POST_INVESTIGATION_NEWS>');
+      expect(userPrompt).toContain('Sarah named interim CEO');
+      // This tag must be DISTINCT from general observations so Nova writes "It has just been announced..."
+      expect(userPrompt).toMatch(/<POST_INVESTIGATION_NEWS>[\s\S]*Sarah named interim CEO[\s\S]*<\/POST_INVESTIGATION_NEWS>/);
+    });
+
+    it('omits empty tags', async () => {
+      const directorNotes = {
+        rawProse: 'just prose here',
+        quotes: [],
+        transactionReferences: [],
+        postInvestigationDevelopments: []
+      };
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      expect(userPrompt).not.toContain('<QUOTE_BANK>');
+      expect(userPrompt).not.toContain('<TRANSACTION_LINKS>');
+      expect(userPrompt).not.toContain('<POST_INVESTIGATION_NEWS>');
+    });
+
+    it('handles null directorNotes gracefully', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, null, null);
+      expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
   });
 });
