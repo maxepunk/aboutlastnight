@@ -108,9 +108,19 @@ describe('surfaceContradictions', () => {
         }]
       }
     };
+    const originalTxRefs = JSON.parse(JSON.stringify(state.directorNotes.transactionReferences));
     const result = surfaceContradictions(state);
+
+    // Node correctly produces tensions (Kai's Blake-proximity flag)
     expect(result.narrativeTensions).toBeDefined();
-    // transactionReferences pass through state unchanged (not consumed by this node directly)
-    expect(state.directorNotes.transactionReferences[0].linkedTransactions[0].tokenId).toBe('tay004');
+    expect(result.narrativeTensions.tensions.length).toBeGreaterThan(0);
+    const blakeTension = result.narrativeTensions.tensions.find(t => t.type === 'blake-proximity');
+    expect(blakeTension).toBeDefined();
+
+    // Node does NOT mutate transactionReferences on the input state
+    expect(state.directorNotes.transactionReferences).toEqual(originalTxRefs);
+
+    // Node does NOT expose transactionReferences on its output (current contract — pure pass-through)
+    expect(result.directorNotes).toBeUndefined();
   });
 });
