@@ -23,9 +23,9 @@ function surfaceContradictions(state) {
   const shellAccounts = state.shellAccounts || [];
   // Enriched schema (2026-04): search raw prose instead of the removed 3-bucket arrays.
   // We split on sentence boundaries to preserve the per-sentence match semantics the
-  // old behaviorPatterns array provided.
+  // old proseSentences array provided.
   const rawProse = state.directorNotes?.rawProse || '';
-  const behaviorPatterns = rawProse
+  const proseSentences = rawProse
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
     .filter(Boolean);
@@ -43,7 +43,7 @@ function surfaceContradictions(state) {
     const rosterName = roster.find(r => r.toLowerCase() === account.name.toLowerCase());
 
     // Check for transparency contradiction: director noted public behavior + burial
-    const transparencyNotes = behaviorPatterns.filter(p => {
+    const transparencyNotes = proseSentences.filter(p => {
       const pLower = p.toLowerCase();
       return pLower.includes(rosterName.toLowerCase()) &&
         (pLower.includes('submit') || pLower.includes('expos') || pLower.includes('public') ||
@@ -69,7 +69,7 @@ function surfaceContradictions(state) {
   }
 
   // 2. Flag Blake-proximity patterns from director observations
-  const blakeProximity = behaviorPatterns.filter(p =>
+  const blakeProximity = proseSentences.filter(p =>
     p.toLowerCase().includes('blake') || p.toLowerCase().includes('valet')
   );
 
