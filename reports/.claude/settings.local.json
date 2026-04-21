@@ -22,7 +22,10 @@
       "mcp__plugin_context7_context7__query-docs",
       "mcp__plugin_episodic-memory_episodic-memory__search",
       "Read(//c/Users/spide/Documents/claudecode/aboutlastnight/.worktrees/prompt-quality/reports/**)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Read(//c/Users/spide/.claude/skills/**)",
+      "Read(//c/Users/spide/documents/claudecode/aboutlastnight/.claude/skills/**)",
+      "Bash(curl -s -m 3 http://localhost:3001/api/health)"
     ]
   }
 }
