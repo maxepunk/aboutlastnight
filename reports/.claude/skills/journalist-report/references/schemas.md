@@ -628,7 +628,8 @@ Written alongside article-outline.json for parent agent checkpoint presentation.
 
 Always read the schema file directly before generating — this document is a
 human-readable summary; the JSON schema is what `TemplateAssembler` validates
-against.
+against. For concrete JSON examples of each content-block and pull-quote
+shape, see `references/prompts/formatting.md` § Complete Content Block Reference.
 
 **Top-level shape:**
 

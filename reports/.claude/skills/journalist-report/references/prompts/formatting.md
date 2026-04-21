@@ -107,7 +107,9 @@ Visual components are emitted as **content blocks within section content arrays*
 
 ### Complete Content Block Reference
 
-All six content-block shapes the subagent may emit inside `sections[].content[]`:
+All six content-block shapes the subagent may emit inside `sections[].content[]`.
+The authoritative field list (required vs. optional) lives in
+`lib/schemas/content-bundle.schema.json`; `references/schemas.md` summarises it in prose.
 
 ```json
 { "type": "paragraph", "text": "Vic arrived early that evening..." }
