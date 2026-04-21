@@ -173,18 +173,6 @@ describe('ThemeLoader', () => {
   });
 
   describe('loadPhasePrompts', () => {
-    it('should load all prompts for arcAnalysis phase', async () => {
-      fs.readFile.mockImplementation((filePath) => {
-        const name = path.basename(filePath, '.md');
-        return Promise.resolve(`Content for ${name}`);
-      });
-
-      const result = await loader.loadPhasePrompts('arcAnalysis');
-
-      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.arcAnalysis);
-      expect(result['evidence-boundaries']).toBe('Content for evidence-boundaries');
-    });
-
     it('should load all prompts for outlineGeneration phase', async () => {
       fs.readFile.mockResolvedValue('content');
 
@@ -216,7 +204,7 @@ describe('ThemeLoader', () => {
 
     it('should include valid phase names in error message', async () => {
       await expect(loader.loadPhasePrompts('bad'))
-        .rejects.toThrow('Valid phases: imageAnalysis, arcAnalysis, outlineGeneration, articleGeneration, validation');
+        .rejects.toThrow('Valid phases: imageAnalysis, outlineGeneration, articleGeneration, validation');
     });
   });
 
@@ -383,7 +371,6 @@ describe('ThemeLoader', () => {
     it('should return copy of phase requirements', () => {
       const reqs = ThemeLoader.getPhaseRequirements();
 
-      expect(reqs.arcAnalysis).toEqual(PHASE_REQUIREMENTS.arcAnalysis);
       expect(reqs.outlineGeneration).toEqual(PHASE_REQUIREMENTS.outlineGeneration);
       expect(reqs.articleGeneration).toEqual(PHASE_REQUIREMENTS.articleGeneration);
       expect(reqs.validation).toEqual(PHASE_REQUIREMENTS.validation);
@@ -391,9 +378,9 @@ describe('ThemeLoader', () => {
 
     it('should return a copy (not the original)', () => {
       const reqs = ThemeLoader.getPhaseRequirements();
-      reqs.arcAnalysis = ['modified'];
+      reqs.outlineGeneration = ['modified'];
 
-      expect(PHASE_REQUIREMENTS.arcAnalysis).not.toEqual(['modified']);
+      expect(PHASE_REQUIREMENTS.outlineGeneration).not.toEqual(['modified']);
     });
   });
 
@@ -464,7 +451,6 @@ describe('ThemeLoader', () => {
 
     it('should export PHASE_REQUIREMENTS', () => {
       expect(PHASE_REQUIREMENTS).toBeDefined();
-      expect(PHASE_REQUIREMENTS.arcAnalysis).toBeDefined();
       expect(PHASE_REQUIREMENTS.outlineGeneration).toBeDefined();
       expect(PHASE_REQUIREMENTS.articleGeneration).toBeDefined();
       expect(PHASE_REQUIREMENTS.validation).toBeDefined();

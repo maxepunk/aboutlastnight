@@ -241,7 +241,7 @@ The pipeline supports multiple report themes via `state.theme`. Each theme produ
 - `labelPromptSection()` wraps content in `<tag>content</tag>` format
 - Token savings: ~560 tokens per article generation
 - Cross-references: "See `<arc-flow>` Section 3" format
-- Methods: `buildArcAnalysisPrompt()`, `buildOutlinePrompt()`, `buildArticlePrompt()`
+- Methods: `buildOutlinePrompt()`, `buildArticlePrompt()`, `buildValidationPrompt()` (arc generation lives in `arc-specialist-nodes.js`, not in PromptBuilder)
 
 For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 

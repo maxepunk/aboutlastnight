@@ -313,8 +313,8 @@ describe('PromptBuilder', () => {
 
   describe('getPhaseRequirements', () => {
     it('should return requirements for valid phase', () => {
-      const reqs = builder.getPhaseRequirements('arcAnalysis');
-      expect(reqs).toEqual(PHASE_REQUIREMENTS.arcAnalysis);
+      const reqs = builder.getPhaseRequirements('articleGeneration');
+      expect(reqs).toEqual(PHASE_REQUIREMENTS.articleGeneration);
     });
 
     it('should return empty array for unknown phase', () => {

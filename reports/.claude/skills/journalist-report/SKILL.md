@@ -896,16 +896,13 @@ The server workflow uses a single `sdkQuery()` call with embedded three-lens ana
 
 ```javascript
 // From lib/workflow/nodes/arc-specialist-nodes.js
+// Arc generation builds its prompt inline (via buildCoreArcPrompt) rather than
+// through PromptBuilder. See arc-specialist-nodes.js for the full prompt shape.
 const result = await sdkQuery({
-  prompt: promptBuilder.buildArcAnalysisPrompt({
-    playerFocus,         // Accusation + whiteboard conclusions
-    directorNotes,       // Observations as ground truth
-    evidenceBundle,      // Three-layer curated data
-    sessionConfig        // Roster for coverage tracking
-  }),
-  systemPrompt: '...',   // Embedded character-voice, evidence-boundaries, anti-patterns
-  model: 'sonnet',
-  jsonSchema: arcAnalysisSchema,
+  prompt: buildCoreArcPrompt(state),  // Composes accusation + whiteboard + enriched director notes + evidence
+  systemPrompt: CORE_ARC_SYSTEM_PROMPT,
+  model: 'opus',
+  jsonSchema: CORE_ARC_SCHEMA,
   disableTools: true     // Pure structured output, no tool calls
 });
 ```

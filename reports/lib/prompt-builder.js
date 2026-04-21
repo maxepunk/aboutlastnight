@@ -69,7 +69,6 @@ ${content.trim()}
 // Theme-specific system prompt framing
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
-    arcAnalysis: 'You are analyzing narrative arcs for a NovaNews investigative article.',
     outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
     articleGeneration: `You are Nova, writing a NovaNews investigative article. First-person participatory voice.
 
@@ -78,7 +77,6 @@ CRITICAL: THE PARTY = LAST NIGHT. THE INVESTIGATION = THIS MORNING. See <TEMPORA
     validation: 'You are validating a NovaNews article against anti-patterns and voice requirements.'
   },
   detective: {
-    arcAnalysis: 'You are analyzing narrative threads for a detective investigation case report. Identify thematic clusters from the evidence that can be synthesized into a coherent case file.',
     outlineGeneration: 'You are planning the structure of Detective Anondono\'s case report. Each section answers a DIFFERENT QUESTION about the same underlying facts.',
     articleGeneration: `You are a cynical, seasoned Detective in a near-future noir setting. You are writing an official Case Report.
 
