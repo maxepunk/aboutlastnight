@@ -185,9 +185,7 @@ describe('ImagePromptBuilder', () => {
       sessionData: {
         roster: ['Victoria', 'Morgan', 'Derek'],
         directorNotes: {
-          observations: {
-            behaviorPatterns: ['Victoria and Morgan worked together']
-          }
+          rawProse: 'Victoria and Morgan worked together'
         }
       }
     };
@@ -253,6 +251,101 @@ describe('ImagePromptBuilder', () => {
       });
 
       expect(result).toHaveProperty('userPrompt');
+    });
+  });
+
+  describe('buildPhotoEnrichmentPrompt — enriched director notes', () => {
+    it('references rawProse (truncated to 600 chars) when directorNotes.rawProse present', async () => {
+      const longProse = 'A'.repeat(700) + ' Vic working the room.';
+      const sessionData = {
+        roster: ['Vic', 'Morgan'],
+        directorNotes: { rawProse: longProse }
+      };
+      const analysis = {
+        filename: 'p.jpg',
+        visualContent: 'v',
+        narrativeMoment: 'n',
+        suggestedCaption: 'caption',
+        emotionalTone: 'e',
+        storyRelevance: 's'
+      };
+
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'whiteboard-analysis': 'You are analyzing a whiteboard...',
+        'photo-analysis': 'You are analyzing photos...',
+        'photo-enrichment': 'You are enriching photo analyses...'
+      });
+
+      const result = await builder.buildPhotoEnrichmentPrompt({
+        analysis,
+        userInput: {},
+        sessionData
+      });
+
+      expect(result.userPrompt).toContain('DIRECTOR OBSERVATIONS:');
+      // truncated context: the 600-char slice should appear, with ellipsis since prose > 600 chars
+      expect(result.userPrompt).toContain('…');
+    });
+
+    it('omits director context when rawProse missing', async () => {
+      const sessionData = { roster: [], directorNotes: {} };
+      const analysis = {
+        filename: 'p.jpg',
+        visualContent: 'v',
+        narrativeMoment: 'n',
+        suggestedCaption: 'caption',
+        emotionalTone: 'e',
+        storyRelevance: 's'
+      };
+
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'whiteboard-analysis': 'You are analyzing a whiteboard...',
+        'photo-analysis': 'You are analyzing photos...',
+        'photo-enrichment': 'You are enriching photo analyses...'
+      });
+
+      const result = await builder.buildPhotoEnrichmentPrompt({
+        analysis,
+        userInput: {},
+        sessionData
+      });
+
+      expect(result.userPrompt).not.toMatch(/DIRECTOR OBSERVATIONS:/);
+    });
+
+    it('handles short rawProse without ellipsis', async () => {
+      const sessionData = {
+        roster: [],
+        directorNotes: { rawProse: 'Short note.' }
+      };
+      const analysis = {
+        filename: 'p.jpg',
+        visualContent: 'v',
+        narrativeMoment: 'n',
+        suggestedCaption: 'caption',
+        emotionalTone: 'e',
+        storyRelevance: 's'
+      };
+
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'whiteboard-analysis': 'You are analyzing a whiteboard...',
+        'photo-analysis': 'You are analyzing photos...',
+        'photo-enrichment': 'You are enriching photo analyses...'
+      });
+
+      const result = await builder.buildPhotoEnrichmentPrompt({
+        analysis,
+        userInput: {},
+        sessionData
+      });
+
+      expect(result.userPrompt).toContain('Short note.');
+      expect(result.userPrompt).toContain('DIRECTOR OBSERVATIONS:');
+      // For short prose (< 600 chars), no ellipsis should appear
+      const obsIndex = result.userPrompt.indexOf('DIRECTOR OBSERVATIONS:');
+      const afterObs = result.userPrompt.substring(obsIndex);
+      // Check that the section doesn't have an ellipsis
+      expect(afterObs.match(/Short note\.\n/)).toBeTruthy();
     });
   });
 
