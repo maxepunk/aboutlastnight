@@ -160,73 +160,6 @@ class PromptBuilder {
   }
 
   /**
-   * Build arc analysis prompt
-   * Phase 2: Analyze evidence for narrative arcs based on director observations
-   *
-   * @param {Object} sessionData - Session data
-   * @param {string[]} sessionData.roster - Character names
-   * @param {string} sessionData.accusation - Who was accused
-   * @param {Object} sessionData.directorNotes - Director observations and whiteboard
-   * @param {Object} sessionData.evidenceBundle - Three-layer evidence bundle
-   * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
-   */
-  async buildArcAnalysisPrompt(sessionData) {
-    const rawPrompts = await this.theme.loadPhasePrompts('arcAnalysis');
-    // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
-    const prompts = Object.fromEntries(
-      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
-    );
-
-    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].arcAnalysis}
-${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
-
-    const userPrompt = `Analyze the following evidence for narrative arcs.
-
-ROSTER: ${sessionData.roster.join(', ')}
-ACCUSATION: ${sessionData.accusation}
-REPORTING MODE: ${this.sessionConfig.reportingMode || 'on-site'}
-NOTE: The party was LAST NIGHT. The investigation was THIS MORNING. The article is being written NOW.
-
-DIRECTOR OBSERVATIONS (PRIMARY WEIGHT - INVESTIGATION THIS MORNING, Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received tips remotely' : 'witnessed this'}):
-${JSON.stringify(sessionData.directorNotes?.observations || {}, null, 2)}
-
-WHITEBOARD (interpreted through observations):
-${JSON.stringify(sessionData.directorNotes?.whiteboard || {}, null, 2)}
-
-EVIDENCE BUNDLE:
-NOTE: Memory token CONTENT describes THE PARTY (past). Director observations describe THE INVESTIGATION (present).
-${JSON.stringify(sessionData.evidenceBundle, null, 2)}
-${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
-Return JSON with the following structure:
-{
-  "narrativeArcs": [
-    {
-      "name": "Arc Name",
-      "playerEmphasis": "HIGH|MEDIUM|LOW",
-      "directorObservationSupport": "What director saw that supports this",
-      "evidenceTokens": ["token1", "token2"],
-      "charactersFeatured": ["Name1", "Name2"],
-      "summary": "Brief description"
-    }
-  ],
-  "characterPlacementOpportunities": {
-    "CharacterName": "How they can be featured based on observations"
-  },
-  "rosterCoverage": {
-    "featured": ["names appearing prominently"],
-    "mentioned": ["names appearing briefly"],
-    "needsPlacement": ["names not yet covered"]
-  },
-  "heroImageSuggestion": {
-    "filename": "suggested photo",
-    "reasoning": "why this photo works"
-  }
-}`;
-
-    return { systemPrompt, userPrompt };
-  }
-
-  /**
    * Build outline generation prompt
    * Phase 3: Generate article outline from selected arcs
    *
@@ -1296,31 +1229,6 @@ if (require.main === module) {
       process.exit(1);
     }
     console.log('Theme files validated.\n');
-
-    // Test arc analysis prompt build
-    console.log('Building arcAnalysis prompt...');
-    const mockSessionData = {
-      roster: ['Alex', 'James', 'Victoria', 'Morgan', 'Derek'],
-      accusation: 'Victoria and Morgan',
-      directorNotes: {
-        observations: {
-          behaviorPatterns: ['Test observation 1', 'Test observation 2']
-        },
-        whiteboard: {
-          suspects: ['Derek', 'Victoria']
-        }
-      },
-      evidenceBundle: {
-        exposed: { tokens: [], paperEvidence: [] },
-        buried: { transactions: [] }
-      }
-    };
-
-    const { systemPrompt, userPrompt } = await builder.buildArcAnalysisPrompt(mockSessionData);
-
-    console.log(`System prompt: ${systemPrompt.length} chars`);
-    console.log(`User prompt: ${userPrompt.length} chars`);
-    console.log(`Total: ${systemPrompt.length + userPrompt.length} chars\n`);
 
     // Show phase requirements
     console.log('Phase requirements:');

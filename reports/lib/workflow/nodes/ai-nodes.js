@@ -3,7 +3,6 @@
  *
  * These nodes handle the AI-powered phases of the pipeline:
  * - curateEvidenceBundle: Curate evidence into three-layer structure (1.8)
- * - analyzeNarrativeArcs: Analyze evidence for narrative arcs (2)
  * - generateOutline: Generate article outline from selected arcs (3)
  * - generateContentBundle: Generate structured content JSON (4)
  * - validateArticle: Validate voice and anti-patterns (5.1)
@@ -633,62 +632,6 @@ async function processRescuedItems(state, config) {
     _rescuedItems: null,      // Clear the rescue request
     _excludedItemsCache: null, // Clear the cache
     _rescueWarnings: warnings.length > 0 ? warnings : null
-  };
-}
-
-/**
- * Analyze narrative arcs based on curated evidence
- *
- * Uses Claude to identify narrative arcs weighted by player emphasis.
- * The director's observations from whiteboard drive arc priority.
- *
- * @param {Object} state - Current state with evidenceBundle, directorNotes, sessionConfig
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with narrativeArcs, currentPhase, approval flags
- */
-async function analyzeNarrativeArcs(state, config) {
-  // Skip if already analyzed (resume case)
-  if (state.narrativeArcs && state.narrativeArcs.length > 0) {
-    return {
-      currentPhase: PHASES.ANALYZE_ARCS
-    };
-  }
-
-  const sdk = getSdkClient(config, 'analyzeArcs');
-  const promptBuilder = getPromptBuilder(config, state);
-
-  // Build session data for prompt builder
-  const sessionData = {
-    roster: state.sessionConfig?.roster?.map(p => p.name) || [],
-    accusation: state.sessionConfig?.accusation?.accused?.join(' and ') || 'Unknown',
-    directorNotes: state.directorNotes || {},
-    evidenceBundle: state.evidenceBundle || {}
-  };
-
-  const { systemPrompt, userPrompt } = await promptBuilder.buildArcAnalysisPrompt(sessionData);
-
-  const arcAnalysis = await sdk({
-    prompt: userPrompt,
-    systemPrompt,
-    model: 'opus',
-    disableTools: true,
-    jsonSchema: {
-      type: 'object',
-      properties: {
-        narrativeArcs: { type: 'array' },
-        characterPlacementOpportunities: { type: 'object' },
-        rosterCoverage: { type: 'object' },
-        heroImageSuggestion: {}
-      },
-      required: ['narrativeArcs']
-    }
-  });
-
-  return {
-    narrativeArcs: arcAnalysis.narrativeArcs || [],
-    currentPhase: PHASES.ANALYZE_ARCS,
-    // Store full analysis for outline generation
-    _arcAnalysisCache: arcAnalysis
   };
 }
 
@@ -1599,13 +1542,6 @@ function createMockPromptBuilder() {
   return {
     theme: mockTheme,
 
-    async buildArcAnalysisPrompt(sessionData) {
-      return {
-        systemPrompt: 'Mock system prompt for arc analysis',
-        userPrompt: `Analyze arcs for ${sessionData.roster?.join(', ') || 'unknown roster'}`
-      };
-    },
-
     async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts, sessionFacts) {
       return {
         systemPrompt: 'Mock system prompt for outline generation',
@@ -1642,7 +1578,6 @@ module.exports = {
     stateFields: ['preprocessedEvidence', 'selectedPaperEvidence']
   }),
   processRescuedItems: traceNode(processRescuedItems, 'processRescuedItems'),
-  analyzeNarrativeArcs: traceNode(analyzeNarrativeArcs, 'analyzeNarrativeArcs'),
   buildArcEvidencePackages: traceNode(buildArcEvidencePackages, 'buildArcEvidencePackages', {
     stateFields: ['selectedArcs', 'evidenceBundle', 'photoAnalyses']
   }),
