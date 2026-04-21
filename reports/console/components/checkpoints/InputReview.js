@@ -124,16 +124,15 @@ function InputReview({ data, onApprove, theme }) {
           )
       ),
 
-    // Director Observations
-    directorNotes.observations && directorNotes.observations.length > 0 &&
-      React.createElement('div', { className: 'checkpoint-section' },
-        React.createElement('h4', { className: 'checkpoint-section__title' }, 'Director Observations'),
-        React.createElement('ul', { className: 'checkpoint-section__list' },
-          directorNotes.observations.map(function (obs, i) {
-            return React.createElement('li', { key: obs + '-' + i, className: 'text-sm text-secondary' }, obs);
-          })
-        )
-      ),
+    // Director Notes (raw prose - source of truth)
+    directorNotes.rawProse && React.createElement('div', { className: 'checkpoint-section' },
+      React.createElement(window.Console.utils.CollapsibleSection, {
+        title: 'Director Notes (' + directorNotes.rawProse.length + ' chars)',
+        defaultOpen: true
+      },
+        React.createElement('pre', { className: 'director-prose' }, directorNotes.rawProse)
+      )
+    ),
 
     // Whiteboard
     (whiteboard.connectionsMade || whiteboard.questionsRaised || whiteboard.votingResults) &&

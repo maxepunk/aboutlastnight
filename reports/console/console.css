@@ -2427,3 +2427,19 @@ textarea.input {
     flex-direction: column;
   }
 }
+
+/* Director raw-prose display (InputReview checkpoint) */
+.director-prose {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  padding: var(--space-md);
+  border-left: 2px solid var(--accent-cyan);
+  border-radius: 2px;
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
