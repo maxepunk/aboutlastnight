@@ -59,6 +59,8 @@ const {
   // (SPECIALIST_AGENT_NAMES, getSpecialistAgents, ORCHESTRATOR_*, SYNTHESIS_*, SPECIALIST_*)
 } = require('../../sdk-client/subagents');
 
+const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -215,27 +217,12 @@ You MUST generate an arc that addresses this accusation. Even if evidence is wea
 ### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
 The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
 
-<DIRECTOR_NOTES>
-${context.directorProse || '(no director notes provided)'}
-</DIRECTOR_NOTES>
-
-${context.directorQuotes.length > 0 ? `<QUOTE_BANK>
-Verbatim quotes extracted from the notes — prefer these when citing what someone said:
-${context.directorQuotes.map(q => `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`).join('\n')}
-</QUOTE_BANK>` : ''}
-
-${context.directorTransactionLinks.length > 0 ? `<TRANSACTION_LINKS>
-Behavioral observations pre-linked to specific burial transactions:
-${context.directorTransactionLinks.map(t => {
-  const txs = (t.linkedTransactions || []).map(tx => `${tx.timestamp} ${tx.tokenId} ${tx.amount} → ${tx.sellingTeam}`).join('; ');
-  return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
-}).join('\n')}
-</TRANSACTION_LINKS>` : ''}
-
-${context.directorPostInvestigation.length > 0 ? `<POST_INVESTIGATION_NEWS>
-Developments that occurred AFTER the investigation concluded — distinct epistemic status:
-${context.directorPostInvestigation.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}${d.bearingOnNarrative ? ` — ${d.bearingOnNarrative}` : ''}`).join('\n')}
-</POST_INVESTIGATION_NEWS>` : ''}
+${renderDirectorEnrichmentBlock({
+  rawProse: context.directorProse,
+  quotes: context.directorQuotes,
+  transactionReferences: context.directorTransactionLinks,
+  postInvestigationDevelopments: context.directorPostInvestigation
+})}
 
 ### Primary Investigation Focus
 ${context.primaryInvestigation}
@@ -1148,27 +1135,12 @@ ${JSON.stringify(roster)}
 ### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
 The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
 
-<DIRECTOR_NOTES>
-${directorProse || '(no director notes provided)'}
-</DIRECTOR_NOTES>
-
-${directorQuotes.length > 0 ? `<QUOTE_BANK>
-Verbatim quotes extracted from the notes — prefer these when citing what someone said:
-${directorQuotes.map(q => `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`).join('\n')}
-</QUOTE_BANK>` : ''}
-
-${directorTxRefs.length > 0 ? `<TRANSACTION_LINKS>
-Behavioral observations pre-linked to specific burial transactions:
-${directorTxRefs.map(t => {
-  const txs = (t.linkedTransactions || []).map(tx => `${tx.timestamp} ${tx.tokenId} ${tx.amount} → ${tx.sellingTeam}`).join('; ');
-  return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
-}).join('\n')}
-</TRANSACTION_LINKS>` : ''}
-
-${directorPostInv.length > 0 ? `<POST_INVESTIGATION_NEWS>
-Developments that occurred AFTER the investigation concluded — distinct epistemic status:
-${directorPostInv.map(d => `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}${d.bearingOnNarrative ? ` — ${d.bearingOnNarrative}` : ''}`).join('\n')}
-</POST_INVESTIGATION_NEWS>` : ''}
+${renderDirectorEnrichmentBlock({
+  rawProse: directorProse,
+  quotes: directorQuotes,
+  transactionReferences: directorTxRefs,
+  postInvestigationDevelopments: directorPostInv
+})}
 
 ### Valid Evidence IDs (for keyEvidence validation)
 ${JSON.stringify(evidenceSummary.allEvidenceIds)}
