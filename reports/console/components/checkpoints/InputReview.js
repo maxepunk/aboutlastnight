@@ -12,6 +12,7 @@ const { Badge, safeStringify } = window.Console.utils;
 
 function CharacterMentionsSection({ mentions, roster }) {
   const [selected, setSelected] = React.useState(null);
+  React.useEffect(() => { setSelected(null); }, [mentions]);
   const rosterNames = roster.length > 0 ? roster : Object.keys(mentions);
   const entries = rosterNames.map(name => ({
     name,
@@ -185,24 +186,27 @@ function InputReview({ data, onApprove, theme }) {
     // Quote Bank
     directorNotes.quotes && directorNotes.quotes.length > 0 &&
       React.createElement('div', { className: 'checkpoint-section' },
-        React.createElement('h4', { className: 'checkpoint-section__title' },
-          'Quote Bank (' + directorNotes.quotes.length + ')'),
-        React.createElement('ul', { className: 'quote-list' },
-          directorNotes.quotes.map((q, i) =>
-            React.createElement('li', { key: i, className: 'quote-row' + (q.confidence === 'low' ? ' is-low-confidence' : '') },
-              React.createElement('span', { className: 'quote-speaker' },
-                q.speaker,
-                q.addressee && React.createElement('span', { className: 'text-muted' }, ' \u2192 ' + q.addressee),
-                ': '
-              ),
-              React.createElement('span', { className: 'quote-text' }, '"' + q.text + '"'),
-              React.createElement(Badge, {
-                label: q.confidence,
-                color: q.confidence === 'high' ? 'var(--accent-green)' : 'var(--accent-amber)'
-              }),
-              q.context && React.createElement('details', { className: 'quote-context' },
-                React.createElement('summary', null, 'context'),
-                React.createElement('p', { className: 'text-sm text-muted' }, q.context)
+        React.createElement(window.Console.utils.CollapsibleSection, {
+          title: 'Quote Bank (' + directorNotes.quotes.length + ')',
+          defaultOpen: false
+        },
+          React.createElement('ul', { className: 'quote-list' },
+            directorNotes.quotes.map((q, i) =>
+              React.createElement('li', { key: i, className: 'quote-row' + (q.confidence === 'low' ? ' is-low-confidence' : '') },
+                React.createElement('span', { className: 'quote-speaker' },
+                  q.speaker,
+                  q.addressee && React.createElement('span', { className: 'text-muted' }, ' \u2192 ' + q.addressee),
+                  ': '
+                ),
+                React.createElement('span', { className: 'quote-text' }, '"' + q.text + '"'),
+                React.createElement(Badge, {
+                  label: q.confidence,
+                  color: q.confidence === 'high' ? 'var(--accent-green)' : 'var(--accent-amber)'
+                }),
+                q.context && React.createElement('details', { className: 'quote-context' },
+                  React.createElement('summary', null, 'context'),
+                  React.createElement('p', { className: 'text-sm text-muted' }, q.context)
+                )
               )
             )
           )
@@ -212,32 +216,35 @@ function InputReview({ data, onApprove, theme }) {
     // Transaction Cross-References
     directorNotes.transactionReferences && directorNotes.transactionReferences.length > 0 &&
       React.createElement('div', { className: 'checkpoint-section' },
-        React.createElement('h4', { className: 'checkpoint-section__title' },
-          'Transaction Cross-References (' + directorNotes.transactionReferences.length + ')'),
-        React.createElement('div', { className: 'tx-ref-list' },
-          directorNotes.transactionReferences.map((t, i) =>
-            React.createElement('div', { key: i, className: 'tx-ref-row' },
-              React.createElement('div', { className: 'tx-ref-excerpt' },
-                React.createElement('p', { className: 'text-sm' }, '"' + t.excerpt + '"'),
-                React.createElement(Badge, {
-                  label: t.confidence,
-                  color: t.confidence === 'high' ? 'var(--accent-green)'
-                       : t.confidence === 'medium' ? 'var(--accent-amber)' : 'var(--accent-red)'
-                })
-              ),
-              React.createElement('div', { className: 'tx-ref-links' },
-                (t.linkedTransactions || []).length === 0
-                  ? React.createElement('span', { className: 'text-sm text-muted' }, '(no link)')
-                  : t.linkedTransactions.map((tx, j) =>
-                      React.createElement('div', { key: j, className: 'tx-ref-row__tx text-sm' },
-                        React.createElement('span', { className: 'text-muted' }, tx.timestamp + ' \u00B7 '),
-                        React.createElement('span', null, tx.tokenId + ' (' + tx.tokenOwner + ') '),
-                        React.createElement('span', { className: 'text-secondary' }, tx.amount + ' \u2192 ' + tx.sellingTeam)
-                      )
-                    ),
-                t.linkReasoning && React.createElement('details', { className: 'tx-ref-reason' },
-                  React.createElement('summary', null, 'Why this link?'),
-                  React.createElement('p', { className: 'text-sm text-muted' }, t.linkReasoning)
+        React.createElement(window.Console.utils.CollapsibleSection, {
+          title: 'Transaction Cross-References (' + directorNotes.transactionReferences.length + ')',
+          defaultOpen: false
+        },
+          React.createElement('div', { className: 'tx-ref-list' },
+            directorNotes.transactionReferences.map((t, i) =>
+              React.createElement('div', { key: i, className: 'tx-ref-row' },
+                React.createElement('div', { className: 'tx-ref-excerpt' },
+                  React.createElement('p', { className: 'text-sm' }, '"' + t.excerpt + '"'),
+                  React.createElement(Badge, {
+                    label: t.confidence,
+                    color: t.confidence === 'high' ? 'var(--accent-green)'
+                         : t.confidence === 'medium' ? 'var(--accent-amber)' : 'var(--accent-red)'
+                  })
+                ),
+                React.createElement('div', { className: 'tx-ref-links' },
+                  (t.linkedTransactions || []).length === 0
+                    ? React.createElement('span', { className: 'text-sm text-muted' }, '(no link)')
+                    : t.linkedTransactions.map((tx, j) =>
+                        React.createElement('div', { key: j, className: 'tx-ref-row__tx text-sm' },
+                          React.createElement('span', { className: 'text-muted' }, tx.timestamp + ' \u00B7 '),
+                          React.createElement('span', null, tx.tokenId + ' (' + tx.tokenOwner + ') '),
+                          React.createElement('span', { className: 'text-secondary' }, tx.amount + ' \u2192 ' + tx.sellingTeam)
+                        )
+                      ),
+                  t.linkReasoning && React.createElement('details', { className: 'tx-ref-reason' },
+                    React.createElement('summary', null, 'Why this link?'),
+                    React.createElement('p', { className: 'text-sm text-muted' }, t.linkReasoning)
+                  )
                 )
               )
             )
@@ -248,16 +255,20 @@ function InputReview({ data, onApprove, theme }) {
     // Post-Investigation Developments
     directorNotes.postInvestigationDevelopments && directorNotes.postInvestigationDevelopments.length > 0 &&
       React.createElement('div', { className: 'checkpoint-section' },
-        React.createElement('h4', { className: 'checkpoint-section__title' }, 'Post-Investigation Developments'),
-        React.createElement('div', { className: 'news-card-list' },
-          directorNotes.postInvestigationDevelopments.map((d, i) =>
-            React.createElement('div', { key: i, className: 'news-card' },
-              React.createElement('h5', { className: 'news-card__headline' }, d.headline),
-              d.detail && React.createElement('p', { className: 'news-card__detail text-sm' }, d.detail),
-              (d.subjects || []).length > 0 && React.createElement('div', { className: 'news-card__subjects' },
-                d.subjects.map(s => React.createElement(Badge, { key: s, label: s, color: 'var(--accent-cyan)' }))
-              ),
-              d.bearingOnNarrative && React.createElement('p', { className: 'news-card__bearing text-sm text-muted' }, d.bearingOnNarrative)
+        React.createElement(window.Console.utils.CollapsibleSection, {
+          title: 'Post-Investigation Developments (' + directorNotes.postInvestigationDevelopments.length + ')',
+          defaultOpen: false
+        },
+          React.createElement('div', { className: 'news-card-list' },
+            directorNotes.postInvestigationDevelopments.map((d, i) =>
+              React.createElement('div', { key: i, className: 'news-card' },
+                React.createElement('h5', { className: 'news-card__headline' }, d.headline),
+                d.detail && React.createElement('p', { className: 'news-card__detail text-sm' }, d.detail),
+                (d.subjects || []).length > 0 && React.createElement('div', { className: 'news-card__subjects' },
+                  d.subjects.map(s => React.createElement(Badge, { key: s, label: s, color: 'var(--accent-cyan)' }))
+                ),
+                d.bearingOnNarrative && React.createElement('p', { className: 'news-card__bearing text-sm text-muted' }, d.bearingOnNarrative)
+              )
             )
           )
         )
@@ -299,22 +310,26 @@ function InputReview({ data, onApprove, theme }) {
       (directorNotes.entityNotes.shellAccountsReferenced || []).length > 0
     ) &&
       React.createElement('div', { className: 'checkpoint-section' },
-        React.createElement('h4', { className: 'checkpoint-section__title' }, 'Entity Notes'),
-        (directorNotes.entityNotes.npcsReferenced || []).length > 0 && React.createElement('div', { className: 'mb-sm' },
-          React.createElement('span', { className: 'text-sm text-muted' }, 'NPCs referenced: '),
-          React.createElement('div', { className: 'tag-list mt-sm' },
-            directorNotes.entityNotes.npcsReferenced.map(n =>
-              React.createElement(Badge, { key: n, label: n, color: 'var(--accent-amber)' })
+        React.createElement(window.Console.utils.CollapsibleSection, {
+          title: 'Entity Notes',
+          defaultOpen: false
+        },
+          (directorNotes.entityNotes.npcsReferenced || []).length > 0 && React.createElement('div', { className: 'mb-sm' },
+            React.createElement('span', { className: 'text-sm text-muted' }, 'NPCs referenced: '),
+            React.createElement('div', { className: 'tag-list mt-sm' },
+              directorNotes.entityNotes.npcsReferenced.map(n =>
+                React.createElement(Badge, { key: n, label: n, color: 'var(--accent-amber)' })
+              )
             )
-          )
-        ),
-        (directorNotes.entityNotes.shellAccountsReferenced || []).length > 0 && React.createElement('div', null,
-          React.createElement('span', { className: 'text-sm text-muted' }, 'Shell accounts flagged: '),
-          React.createElement('ul', { className: 'entity-shell-list' },
-            directorNotes.entityNotes.shellAccountsReferenced.map((s, i) =>
-              React.createElement('li', { key: i, className: 'text-sm' },
-                React.createElement('strong', null, s.account),
-                s.directorSuspicion && React.createElement('span', { className: 'text-muted' }, ' \u2014 ' + s.directorSuspicion)
+          ),
+          (directorNotes.entityNotes.shellAccountsReferenced || []).length > 0 && React.createElement('div', null,
+            React.createElement('span', { className: 'text-sm text-muted' }, 'Shell accounts flagged: '),
+            React.createElement('ul', { className: 'entity-shell-list' },
+              directorNotes.entityNotes.shellAccountsReferenced.map((s, i) =>
+                React.createElement('li', { key: i, className: 'text-sm' },
+                  React.createElement('strong', null, s.account),
+                  s.directorSuspicion && React.createElement('span', { className: 'text-muted' }, ' \u2014 ' + s.directorSuspicion)
+                )
               )
             )
           )
