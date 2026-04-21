@@ -215,3 +215,32 @@ describe('enrichDirectorNotes', () => {
     expect(sdk).not.toHaveBeenCalled();
   });
 });
+
+describe('buildEnrichmentPrompt — destructure defaults and accusation branches', () => {
+  it('applies defaults when optional fields are omitted entirely', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
+    expect(userPrompt).toContain('<ROSTER>\n(none provided)\n</ROSTER>');
+    expect(userPrompt).toContain('<ACCUSATION>\n(none provided)\n</ACCUSATION>');
+    expect(userPrompt).toContain('<NPCS>\n(none)\n</NPCS>');
+    expect(userPrompt).toContain('<SHELL_ACCOUNTS>\n(none)\n</SHELL_ACCOUNTS>');
+  });
+
+  it('uses "unspecified" fallbacks when accusation has missing sub-fields', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', accusation: {} });
+    expect(userPrompt).toContain('Accused: unspecified');
+    expect(userPrompt).toContain('Charge: unspecified');
+  });
+});
+
+describe('enrichDirectorNotes — normalizes missing optional fields on success', () => {
+  it('substitutes defaults for any omitted fields in the SDK result', async () => {
+    const sdk = jest.fn().mockResolvedValue({ rawProse: 'p' });
+    const result = await enrichDirectorNotes({ rawProse: 'p', roster: ['A'] }, sdk);
+    expect(result.rawProse).toBe('p');
+    expect(result.characterMentions).toEqual({});
+    expect(result.entityNotes).toEqual({ npcsReferenced: [], shellAccountsReferenced: [] });
+    expect(result.quotes).toEqual([]);
+    expect(result.transactionReferences).toEqual([]);
+    expect(result.postInvestigationDevelopments).toEqual([]);
+  });
+});
