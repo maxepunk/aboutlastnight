@@ -79,6 +79,10 @@ For data flow at each checkpoint, see `PIPELINE_DEEP_DIVE.md#phase-by-phase-brea
 | `outline` | 3.25 | Approve article structure and photo placements |
 | `article` | 4.25 | Final article approval before HTML assembly |
 
+**Session Config Inputs** (captured at session start, NOT extracted from director notes):
+- `reportingMode`: `'on-site' | 'remote'` (journalist theme only) — stamped from `rawInput` in `parseRawInput` (input-nodes.js:424).
+- `guestReporter`: `{name, ...} | null` — optional reporter identity override; displayed on InputReview checkpoint (gated on journalist theme).
+
 **Revision Loops:** Arcs (max 2), Outline (max 3), Article (max 3). See `PIPELINE_DEEP_DIVE.md#evaluation--revision-architecture` for structural vs advisory criteria.
 
 ### Key Files
@@ -106,6 +110,8 @@ lib/cache/
 └── notion-cache-store.js           # Persistent cache storage
 lib/notion-client.js                # Raw Notion API client
 lib/schema-validator.js             # JSON schema validation helpers
+lib/sdk-client/
+└── subagents.js                    # Programmatic SDK subagent defs (arc orchestrator, commits 8.8-8.11)
 lib/evidence-preprocessor.js        # Evidence batch preprocessing
 lib/image-preprocessor.js           # Image analysis preprocessing
 lib/image-prompt-builder.js         # Image prompt construction for Haiku
@@ -174,6 +180,11 @@ const result = await sdkQuery({
 ```
 
 **Model Timeouts:** Haiku 2min, Sonnet 5min, Opus 10min
+
+**Model Pins** (`lib/llm/client.js:39-41`):
+- `opus` → `claude-opus-4-7` (arc analysis, article validation)
+- `sonnet` → `claude-sonnet-4-6` (default for most content generation nodes)
+- `haiku` → `claude-haiku-4-5` (image analysis, evidence preprocessing)
 
 ### Arc Analysis Architecture (Commit 8.15+)
 
