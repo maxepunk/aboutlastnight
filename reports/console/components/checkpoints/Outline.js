@@ -128,8 +128,20 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
   function renderLede(lede) {
     if (!lede) return null;
+    const editing = isEditing('section', 'lede');
+
+    if (editing) {
+      return React.createElement('div', { className: 'outline-section outline-section--editing' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'LEDE'),
+        React.createElement(LedeEditor, { lede: lede, onSave: function (updated) { saveSectionEdit('lede', updated); }, onCancel: cancelEdit })
+      );
+    }
+
     return React.createElement('div', { className: 'outline-section' },
-      React.createElement('h4', { className: 'outline-section__title' }, 'LEDE'),
+      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'LEDE'),
+        editBtn(function () { setEditingBlock({ type: 'section', key: 'lede' }); })
+      ),
       React.createElement('div', { className: 'outline-section__content' },
         lede.hook && React.createElement('p', { className: 'text-sm mb-sm' },
           React.createElement('strong', null, 'Hook: '),
@@ -421,6 +433,37 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
         section.closingLine && React.createElement('p', { className: 'text-sm text-secondary text-italic' },
           typeof section.closingLine === 'string' ? section.closingLine : safeStringify(section.closingLine)
         )
+      )
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Editor components (inline editing)
+  // ═══════════════════════════════════════════════════════
+
+  function LedeEditor({ lede, onSave, onCancel }) {
+    const [hook, setHook] = React.useState(lede.hook || '');
+    const [keyTension, setKeyTension] = React.useState(lede.keyTension || '');
+    const [evidence, setEvidence] = React.useState(Array.isArray(lede.selectedEvidence) ? lede.selectedEvidence.join(', ') : (lede.selectedEvidence || ''));
+
+    function handleSave() {
+      onSave({
+        hook: hook,
+        keyTension: keyTension,
+        selectedEvidence: evidence.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+      });
+    }
+
+    return React.createElement('div', { className: 'article-block__edit-form' },
+      React.createElement('label', { className: 'text-xs text-muted' }, 'Hook'),
+      React.createElement('textarea', { className: 'input', value: hook, onChange: function (e) { setHook(e.target.value); }, rows: 2, autoFocus: true }),
+      React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Key Tension'),
+      React.createElement('textarea', { className: 'input', value: keyTension, onChange: function (e) { setKeyTension(e.target.value); }, rows: 2 }),
+      React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Selected Evidence (comma-separated IDs)'),
+      React.createElement('input', { className: 'input', value: evidence, onChange: function (e) { setEvidence(e.target.value); } }),
+      React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+        React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
+        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
       )
     );
   }
