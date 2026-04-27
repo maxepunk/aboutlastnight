@@ -77,6 +77,8 @@ function reducer(state, action) {
         checkpointData: action.data || {},
         phase: action.phase || state.phase,
         processing: false,
+        // Clear all checkpoint edit slots when a new checkpoint arrives
+        // (deliberate substitute for a dedicated RESET_PENDING_EDITS action)
         pendingEdits: {}
       };
 
@@ -140,6 +142,7 @@ function reducer(state, action) {
         completedResult: action.result,
         processing: false,
         checkpointType: null,
+        // Clear all checkpoint edit slots on workflow completion
         pendingEdits: {}
       };
 
