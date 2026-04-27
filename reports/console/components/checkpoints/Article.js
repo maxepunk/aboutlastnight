@@ -10,7 +10,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 
 // ── Editor components (module-level to isolate hooks from Article) ──
@@ -805,16 +805,6 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     return '/sessionphotos/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(filename);
   }
 
-  // -- Edit button helper --
-
-  function editBtn(onClick) {
-    return React.createElement('button', {
-      className: 'article-block__edit-btn',
-      onClick: function (e) { e.stopPropagation(); onClick(); },
-      'aria-label': 'Edit',
-      title: 'Edit'
-    }, '\u270E');
-  }
 
   // -- Block renderers --
 
