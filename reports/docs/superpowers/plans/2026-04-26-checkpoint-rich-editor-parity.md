@@ -118,6 +118,8 @@ function renderTextEditForm(value, onSave, multiline) {
 
 **Pendingedits dispatch:** the `SAVE_PENDING_EDITS` action already exists in `state.js` for Article — Outline and ArcSelection must use **different keys** in `state.pendingEdits` to avoid collision. Reducer change: `pendingEdits` becomes `{ article: ..., outline: ..., 'arc-selection': ... }` keyed by checkpoint type (keys must match the `CHECKPOINT_COMPONENTS` map keys in `console/app.js`). Plan covers this in Phase 1, Task 1.
 
+**Editor components must be at module scope, not closures inside the parent component.** React reconciles by component-function identity. A component defined inside another component creates a new function reference on every parent render, causing React to unmount/remount the inner tree and reset all `useState` hooks. For Outline (and ArcSelection in Phase 2), every editor component (`LedeEditor`, `ArcOutlineEditor`, `NamedSectionEditor`, etc.) MUST be defined at module scope (top-level in the file, outside the `Outline` / `ArcSelection` function). Editors do not need closure access — they receive `onSave` callbacks as props that wrap the parent's `saveSectionEdit` / `saveArcEdit`.
+
 **No UI test harness exists.** All UI changes verified manually with the manual test plan at the end of each phase. Server-side changes (Phase 2's `arcEdits` plumbing) get TDD via `__tests__/integration/api.test.js` and a new `buildResumePayload` unit test.
 
 ---
@@ -557,9 +559,9 @@ function renderLede(lede) {
 }
 ```
 
-- [ ] **Step 2: Add `LedeEditor` component**
+- [ ] **Step 2: Add `LedeEditor` component at module scope**
 
-After all the render functions, before the final return:
+`LedeEditor` must be at module scope (outside `function Outline(...)`), since defining it inside Outline would create a fresh function reference on each render, causing React to remount the editor and lose user input. Place it near the top of the file, after the `window.Console` setup and before the `Outline` function declaration.
 
 ```javascript
 function LedeEditor({ lede, onSave, onCancel }) {
@@ -707,9 +709,9 @@ function saveInterweaving(updatedText) {
 }
 ```
 
-- [ ] **Step 3: Add `ArcOutlineEditor` component**
+- [ ] **Step 3: Add `ArcOutlineEditor` component at module scope**
 
-After `LedeEditor`:
+At module scope, after `LedeEditor`:
 
 ```javascript
 function ArcOutlineEditor({ arc, onSave, onCancel }) {
@@ -848,9 +850,9 @@ renderNamedSection("WHAT'S MISSING", getCurrentOutline().whatsMissing, 'whatsMis
 
 Note: switch all section reads to `getCurrentOutline()` so edits show immediately. Do this for every section in the file (lede, theStory, namedSection×3, closing, pullQuotes for journalist; all 6 detective sections).
 
-- [ ] **Step 3: Add `NamedSectionEditor`**
+- [ ] **Step 3: Add `NamedSectionEditor` at module scope**
 
-After `ArcOutlineEditor`:
+At module scope, after `ArcOutlineEditor`:
 
 ```javascript
 function NamedSectionEditor({ section, onSave, onCancel }) {
@@ -1050,9 +1052,9 @@ The detective theme has six sections. Three are simple field updates (`executive
 
 **Files:** `console/components/checkpoints/Outline.js` — modify `renderExecutiveSummary` (224-246), `renderEvidenceLocker` (248-278), `renderMemoryAnalysis` (280-301), `renderSuspectNetwork` (305-342), `renderOutstandingQuestions` (344-362), `renderFinalAssessment` (364-381)
 
-- [ ] **Step 1: Add detective editors**
+- [ ] **Step 1: Add detective editors at module scope**
 
-Mirror the pattern from journalist sections. Add these closure components after `PullQuotesEditor`:
+Mirror the pattern from journalist sections. Add these module-scope components after `PullQuotesEditor`:
 
 - `ExecutiveSummaryEditor` — `hook` (textarea), `caseOverview` (textarea), `primaryFindings` (string list)
 - `EvidenceLockerEditor` — `evidenceGroups` array of `{theme, synthesis, evidenceIds[]}`
@@ -1455,9 +1457,9 @@ git commit -m "feat(console): scaffold ArcSelection edit state"
 
 **Files:** `console/components/checkpoints/ArcSelection.js`
 
-- [ ] **Step 1: Add `ArcEditor` component**
+- [ ] **Step 1: Add `ArcEditor` component at module scope**
 
-Before `window.Console.checkpoints.ArcSelection = ArcSelection;` at the bottom:
+At module scope, before `window.Console.checkpoints.ArcSelection = ArcSelection;` at the bottom:
 
 ```javascript
 function ArcEditor({ arc, onSave, onCancel }) {
