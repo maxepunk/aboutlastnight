@@ -117,62 +117,104 @@ function editBtn(onClick) {
 }
 
 /**
+ * Module-scope text edit form component
+ * Stable function reference preserves React reconciliation across parent re-renders
+ */
+function TextEditForm(props) {
+  const { value, multiline, onSave, onCancel, placeholder, rows } = props;
+  const [text, setText] = React.useState(value || '');
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    React.createElement(multiline ? 'textarea' : 'input', {
+      className: 'input',
+      value: text,
+      onChange: function (e) { setText(e.target.value); },
+      rows: rows || (multiline ? 4 : undefined),
+      placeholder: placeholder || '',
+      autoFocus: true
+    }),
+    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: function () { onSave(text); } }, 'Save'),
+      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+    )
+  );
+}
+
+/**
  * Render inline text/textarea edit form
+ * Thin factory wrapper for backward-compatible API
  * @param {{value: string, multiline?: boolean, onSave: function, onCancel: function, placeholder?: string, rows?: number}} props
  * @returns {React.ReactElement}
  */
-function renderTextEditForm({ value, multiline, onSave, onCancel, placeholder, rows }) {
-  function FormImpl() {
-    const [text, setText] = React.useState(value || '');
-    return React.createElement('div', { className: 'article-block__edit-form' },
-      React.createElement(multiline ? 'textarea' : 'input', {
-        className: 'input',
-        value: text,
-        onChange: function (e) { setText(e.target.value); },
-        rows: rows || (multiline ? 4 : undefined),
-        placeholder: placeholder || '',
-        autoFocus: true
-      }),
-      React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-        React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: function () { onSave(text); } }, 'Save'),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-      )
-    );
+function renderTextEditForm(props) {
+  return React.createElement(TextEditForm, props);
+}
+
+/**
+ * Module-scope list edit form component
+ * Tracks items with stable internal IDs to preserve input focus during removal
+ * Stable function reference preserves React reconciliation across parent re-renders
+ */
+function ListEditForm(props) {
+  const { items, onSave, onCancel, placeholder } = props;
+
+  // Generate stable IDs once per list item to prevent focus loss on removal
+  const [list, setList] = React.useState(function () {
+    return (Array.isArray(items) ? items : []).map(function (v, i) {
+      return { id: 'lif-' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 8), value: v };
+    });
+  });
+
+  function update(idx, val) {
+    const copy = list.slice();
+    copy[idx] = Object.assign({}, copy[idx], { value: val });
+    setList(copy);
   }
-  return React.createElement(FormImpl);
+
+  function remove(idx) {
+    setList(list.filter(function (_, i) { return i !== idx; }));
+  }
+
+  function add() {
+    setList(list.concat([{
+      id: 'lif-' + Date.now() + '-new-' + Math.random().toString(36).slice(2, 8),
+      value: ''
+    }]));
+  }
+
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    list.map(function (item, idx) {
+      return React.createElement('div', { key: item.id, className: 'flex gap-sm mb-sm' },
+        React.createElement('input', {
+          className: 'input flex-1',
+          value: item.value,
+          onChange: function (e) { update(idx, e.target.value); },
+          placeholder: placeholder || ''
+        }),
+        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { remove(idx); } }, '×')
+      );
+    }),
+    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: add }, '+ Add'),
+    React.createElement('div', { className: 'edit-form__actions flex gap-sm' },
+      React.createElement('button', {
+        className: 'btn btn-sm btn-primary',
+        onClick: function () {
+          // Strip ids before returning — callers expect string[]
+          onSave(list.map(function (it) { return it.value; }).filter(function (s) { return s && s.trim(); }));
+        }
+      }, 'Save'),
+      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+    )
+  );
 }
 
 /**
  * Render inline list item edit form
+ * Thin factory wrapper for backward-compatible API
  * @param {{items: string[], onSave: function, onCancel: function, placeholder?: string}} props
  * @returns {React.ReactElement}
  */
-function renderListEditForm({ items, onSave, onCancel, placeholder }) {
-  function FormImpl() {
-    const [list, setList] = React.useState(Array.isArray(items) ? items.slice() : []);
-    function update(idx, val) { const copy = list.slice(); copy[idx] = val; setList(copy); }
-    function remove(idx) { setList(list.filter(function (_, i) { return i !== idx; })); }
-    function add() { setList(list.concat([''])); }
-    return React.createElement('div', { className: 'article-block__edit-form' },
-      list.map(function (item, idx) {
-        return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
-          React.createElement('input', {
-            className: 'input flex-1',
-            value: item,
-            onChange: function (e) { update(idx, e.target.value); },
-            placeholder: placeholder || ''
-          }),
-          React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { remove(idx); } }, '×')
-        );
-      }),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: add }, '+ Add'),
-      React.createElement('div', { className: 'edit-form__actions flex gap-sm' },
-        React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: function () { onSave(list.filter(function (s) { return s && s.trim(); })); } }, 'Save'),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-      )
-    );
-  }
-  return React.createElement(FormImpl);
+function renderListEditForm(props) {
+  return React.createElement(ListEditForm, props);
 }
 
 const CHECKPOINT_ORDER = [
@@ -202,7 +244,9 @@ window.Console.utils = {
   JsonViewer,
   formatElapsed,
   editBtn,
+  TextEditForm,
   renderTextEditForm,
+  ListEditForm,
   renderListEditForm,
   CHECKPOINT_ORDER,
   CHECKPOINT_LABELS
