@@ -116,7 +116,7 @@ function renderTextEditForm(value, onSave, multiline) {
 
 **Reset-on-data-change discipline:** the `dataKey` effect must reset *every* edit-related state field. A common bug is forgetting one (e.g., `jsonError`), which leaks into the next session.
 
-**Pendingedits dispatch:** the `SAVE_PENDING_EDITS` action already exists in `state.js` for Article — Outline and ArcSelection must use **different keys** in `state.pendingEdits` to avoid collision. Suggest reducer change: `pendingEdits` becomes `{ article: ..., outline: ..., arcs: ... }` keyed by checkpoint type. Plan covers this in Phase 1, Task 1.
+**Pendingedits dispatch:** the `SAVE_PENDING_EDITS` action already exists in `state.js` for Article — Outline and ArcSelection must use **different keys** in `state.pendingEdits` to avoid collision. Reducer change: `pendingEdits` becomes `{ article: ..., outline: ..., 'arc-selection': ... }` keyed by checkpoint type (keys must match the `CHECKPOINT_COMPONENTS` map keys in `console/app.js`). Plan covers this in Phase 1, Task 1.
 
 **No UI test harness exists.** All UI changes verified manually with the manual test plan at the end of each phase. Server-side changes (Phase 2's `arcEdits` plumbing) get TDD via `__tests__/integration/api.test.js` and a new `buildResumePayload` unit test.
 
@@ -1429,7 +1429,7 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache, pend
   function handleSubmit() {
     const payload = { selectedArcs: Array.from(selectedArcs) };
     if (hasEdits && editedArcs) {
-      if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'arcs', edits: editedArcs });
+      if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'arc-selection', edits: editedArcs });
       payload.arcEdits = editedArcs;
     }
     onApprove(payload);
@@ -1697,7 +1697,7 @@ git commit -m "docs: clarify arc edit dataflow in checkpointArcSelection"
 
 **Type consistency:**
 - `editingBlock` discriminated union: `{ type: 'section', key: string }` (most cases), `{ type: 'theStoryArc', key: number }`, `{ type: 'theStoryInterweaving', key: 'interweaving' }`, `{ type: 'pullQuotesAll', key: 'all' }`, `{ type: 'namedSection', key: string }` for Outline. For ArcSelection: `editingArcId: string | null` (simpler scalar — no need for discriminated union since only one editor type per checkpoint). Consistent within each component.
-- `pendingEdits` shape: `{ article?: ContentBundle, outline?: Outline, arcs?: NarrativeArc[] }` after Task 1.1. All three checkpoint components read `pendingEdits.<key>` via the parent prop pass.
+- `pendingEdits` shape: `{ article?: ContentBundle, outline?: Outline, 'arc-selection'?: NarrativeArc[] }` after Task 1.1. The keys must exactly match the `CHECKPOINT_COMPONENTS` map keys in `console/app.js` — note that the ArcSelection slice key is `'arc-selection'` (with hyphen), not `'arcs'`.
 - `saveSectionEdit(sectionKey, updatedSection)` (Outline) replaces a top-level outline key. `saveTheStoryArc(arcIdx, updatedArc)` and `saveInterweaving(text)` are nested helpers. `saveArcEdit(arcId, updates)` (ArcSelection) finds-by-id and merges.
 - `onApprove` payload shapes:
   - Article: `{ article: true, articleEdits?: ContentBundle }`
