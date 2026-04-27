@@ -17,7 +17,7 @@
   - Humanize a character before damning revelation
   - Bridge between arcs with same character in different context
 --}}
-<figure class="article-photo article-photo--{{placement}}">
+<figure class="article-photo article-photo--{{#if placement}}{{placement}}{{else}}inline{{/if}}">
   <img
     src="{{src}}"
     alt="{{caption}}"

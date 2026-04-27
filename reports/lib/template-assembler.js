@@ -399,7 +399,13 @@ class TemplateAssembler {
 
     const parseAmount = (amount) => {
       if (typeof amount === 'number') return amount;
-      return parseFloat(String(amount).replace(/[$,]/g, '')) || 0;
+      const s = String(amount).replace(/[$,\s]/g, '');
+      const match = s.match(/^([\d.]+)([KkMmBb]?)$/);
+      if (!match) return parseFloat(s) || 0;
+      const n = parseFloat(match[1]);
+      const suffix = match[2].toLowerCase();
+      const mult = suffix === 'k' ? 1e3 : suffix === 'm' ? 1e6 : suffix === 'b' ? 1e9 : 1;
+      return (n * mult) || 0;
     };
 
     const amounts = entries.map(e => parseAmount(e.amount));

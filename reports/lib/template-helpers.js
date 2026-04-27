@@ -27,7 +27,15 @@
  */
 function parseDate(dateInput) {
   if (!dateInput) return null;
-  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (dateInput instanceof Date) {
+    return isNaN(dateInput.getTime()) ? null : dateInput;
+  }
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    const [y, m, d] = dateInput.split('-').map(Number);
+    const localDate = new Date(y, m - 1, d);
+    return isNaN(localDate.getTime()) ? null : localDate;
+  }
+  const date = new Date(dateInput);
   return isNaN(date.getTime()) ? null : date;
 }
 
