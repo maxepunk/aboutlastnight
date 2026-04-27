@@ -102,6 +102,79 @@ function formatElapsed(ms) {
   return `${seconds}s`;
 }
 
+/**
+ * Edit button (pencil icon)
+ * @param {function} onClick
+ * @returns {React.ReactElement}
+ */
+function editBtn(onClick) {
+  return React.createElement('button', {
+    className: 'article-block__edit-btn',
+    onClick: function (e) { e.stopPropagation(); onClick(); },
+    'aria-label': 'Edit',
+    title: 'Edit'
+  }, '✎');
+}
+
+/**
+ * Render inline text/textarea edit form
+ * @param {{value: string, multiline?: boolean, onSave: function, onCancel: function, placeholder?: string, rows?: number}} props
+ * @returns {React.ReactElement}
+ */
+function renderTextEditForm({ value, multiline, onSave, onCancel, placeholder, rows }) {
+  function FormImpl() {
+    const [text, setText] = React.useState(value || '');
+    return React.createElement('div', { className: 'article-block__edit-form' },
+      React.createElement(multiline ? 'textarea' : 'input', {
+        className: 'input',
+        value: text,
+        onChange: function (e) { setText(e.target.value); },
+        rows: rows || (multiline ? 4 : undefined),
+        placeholder: placeholder || '',
+        autoFocus: true
+      }),
+      React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+        React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: function () { onSave(text); } }, 'Save'),
+        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+      )
+    );
+  }
+  return React.createElement(FormImpl);
+}
+
+/**
+ * Render inline list item edit form
+ * @param {{items: string[], onSave: function, onCancel: function, placeholder?: string}} props
+ * @returns {React.ReactElement}
+ */
+function renderListEditForm({ items, onSave, onCancel, placeholder }) {
+  function FormImpl() {
+    const [list, setList] = React.useState(Array.isArray(items) ? items.slice() : []);
+    function update(idx, val) { const copy = list.slice(); copy[idx] = val; setList(copy); }
+    function remove(idx) { setList(list.filter(function (_, i) { return i !== idx; })); }
+    function add() { setList(list.concat([''])); }
+    return React.createElement('div', { className: 'article-block__edit-form' },
+      list.map(function (item, idx) {
+        return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
+          React.createElement('input', {
+            className: 'input flex-1',
+            value: item,
+            onChange: function (e) { update(idx, e.target.value); },
+            placeholder: placeholder || ''
+          }),
+          React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { remove(idx); } }, '×')
+        );
+      }),
+      React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: add }, '+ Add'),
+      React.createElement('div', { className: 'edit-form__actions flex gap-sm' },
+        React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: function () { onSave(list.filter(function (s) { return s && s.trim(); })); } }, 'Save'),
+        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+      )
+    );
+  }
+  return React.createElement(FormImpl);
+}
+
 const CHECKPOINT_ORDER = [
   'input-review', 'paper-evidence-selection', 'await-roster', 'character-ids',
   'await-full-context', 'pre-curation', 'evidence-and-photos', 'arc-selection',
@@ -128,6 +201,9 @@ window.Console.utils = {
   CollapsibleSection,
   JsonViewer,
   formatElapsed,
+  editBtn,
+  renderTextEditForm,
+  renderListEditForm,
   CHECKPOINT_ORDER,
   CHECKPOINT_LABELS
 };
