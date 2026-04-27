@@ -757,7 +757,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     if (hasEdits && editedBundle) {
       // Persist edits in reducer state so they survive unmount during processing
       if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', edits: editedBundle });
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
       }
       onApprove({ article: true, articleEdits: editedBundle });
     } else {
