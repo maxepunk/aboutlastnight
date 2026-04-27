@@ -42,6 +42,23 @@ const MODEL_IDS = {
 };
 
 /**
+ * Per-model effort defaults. Passed explicitly per query so the SDK
+ * doesn't fall through the legacy server-pushed taskIntensityOverride
+ * resolution chain (which returns null client_data for accounts on
+ * Opus 4.7's adaptive-thinking + new effort semantics).
+ *
+ * Per Anthropic's effort docs (https://platform.claude.com/docs/en/build-with-claude/effort):
+ *   - Haiku 4.5: effort not supported (omit)
+ *   - Sonnet 4.6: 'high' for intelligence-sensitive workloads
+ *   - Opus 4.7: 'xhigh' is the recommended starting point for coding/agentic work
+ */
+const EFFORT_LEVELS = {
+  opus: 'xhigh',
+  sonnet: 'high'
+  // haiku omitted — Haiku 4.5 doesn't support the effort parameter
+};
+
+/**
  * SDK wrapper for LangGraph nodes with timeout and progress streaming
  *
  * @param {Object} options - Query options
@@ -52,7 +69,8 @@ const MODEL_IDS = {
  * @param {string[]} [options.allowedTools=[]] - Tools the SDK can use (e.g., ['Read', 'Task'])
  * @param {boolean} [options.disableTools=false] - If true, disables ALL built-in tools for pure structured output.
  * @param {Object} [options.agents] - Custom agent definitions for Task tool invocation
- * @param {string} [options.workingDirectory] - Working directory for file operations
+ * @param {string} [options.cwd] - Current working directory for file operations
+ * @param {('low'|'medium'|'high'|'xhigh'|'max')} [options.effort] - Override the per-model effort default
  * @param {number} [options.timeoutMs] - Timeout in ms (defaults to model timeout)
  * @param {Function} [options.onProgress] - Callback for intermediate messages: (msg) => void
  * @param {string} [options.label] - Label for progress logging
@@ -66,7 +84,8 @@ async function sdkQueryImpl({
   jsonSchema,
   allowedTools = [],
   agents,
-  workingDirectory,
+  cwd,
+  effort,
   timeoutMs,
   onProgress,
   label,
@@ -88,6 +107,7 @@ async function sdkQueryImpl({
     systemPrompt,
     allowedTools,
     permissionMode: 'bypassPermissions',
+    allowDangerouslySkipPermissions: true,  // Required pair for bypassPermissions in SDK 0.2.x
     abortController
   };
 
@@ -97,12 +117,20 @@ async function sdkQueryImpl({
     options.betas = ['context-1m-2025-08-07'];
   }
 
+  // Pass effort explicitly so the SDK doesn't traverse the legacy
+  // server-pushed taskIntensityOverride chain (which returns null
+  // client_data for accounts using Opus 4.7's adaptive-thinking semantics).
+  const effectiveEffort = effort || EFFORT_LEVELS[model];
+  if (effectiveEffort) {
+    options.effort = effectiveEffort;
+  }
+
   // Set working directory for file operations
-  if (workingDirectory) {
-    options.workingDirectory = workingDirectory;
+  if (cwd) {
+    options.cwd = cwd;
   } else {
     // Default to the reports directory (parent of lib/)
-    options.workingDirectory = require('path').resolve(__dirname, '../..');
+    options.cwd = require('path').resolve(__dirname, '../..');
   }
 
   // Add custom agent definitions for Task tool invocation
