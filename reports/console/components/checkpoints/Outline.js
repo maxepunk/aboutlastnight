@@ -93,6 +93,55 @@ function ArcOutlineEditor({ arc, onSave, onCancel }) {
   // If a user wants to change which evidence an arc cites, they should reject and re-run.
 }
 
+function NamedSectionEditor({ section, onSave, onCancel }) {
+  const [focus, setFocus] = React.useState(typeof section.arcConnections === 'string' ? section.arcConnections : (typeof section.focus === 'string' ? section.focus : ''));
+  const [shellAccounts, setShellAccounts] = React.useState(Array.isArray(section.shellAccounts) ? section.shellAccounts.slice() : (section.shellAccounts ? [section.shellAccounts] : []));
+  const [characterHighlights, setCharacterHighlights] = React.useState(typeof section.characterHighlights === 'string' ? section.characterHighlights : '');
+  const [buriedItems, setBuriedItems] = React.useState(Array.isArray(section.buriedItems) ? section.buriedItems.slice() : (section.buriedItems ? [section.buriedItems] : []));
+
+  function updateList(setter, list, idx, val) { const c = list.slice(); c[idx] = val; setter(c); }
+  function removeFromList(setter, list, idx) { setter(list.filter(function (_, i) { return i !== idx; })); }
+  function addToList(setter, list) { setter(list.concat([''])); }
+
+  function handleSave() {
+    const updated = Object.assign({}, section, {
+      // Preserve original key (focus vs arcConnections) — write to whichever was present
+      [section.arcConnections != null ? 'arcConnections' : 'focus']: focus,
+      shellAccounts: shellAccounts.filter(function (s) { return s && s.trim(); }),
+      characterHighlights: characterHighlights,
+      buriedItems: buriedItems.filter(function (s) { return s && s.trim(); })
+    });
+    onSave(updated);
+  }
+
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    React.createElement('label', { className: 'text-xs text-muted' }, 'Focus'),
+    React.createElement('textarea', { className: 'input', value: focus, onChange: function (e) { setFocus(e.target.value); }, rows: 3, autoFocus: true }),
+    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Shell Accounts'),
+    shellAccounts.map(function (s, idx) {
+      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
+        React.createElement('input', { className: 'input flex-1', value: s, onChange: function (e) { updateList(setShellAccounts, shellAccounts, idx, e.target.value); } }),
+        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removeFromList(setShellAccounts, shellAccounts, idx); } }, '×')
+      );
+    }),
+    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: function () { addToList(setShellAccounts, shellAccounts); } }, '+ Add'),
+    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Character Highlights'),
+    React.createElement('textarea', { className: 'input', value: characterHighlights, onChange: function (e) { setCharacterHighlights(e.target.value); }, rows: 2 }),
+    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Buried Items'),
+    buriedItems.map(function (s, idx) {
+      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
+        React.createElement('input', { className: 'input flex-1', value: s, onChange: function (e) { updateList(setBuriedItems, buriedItems, idx, e.target.value); } }),
+        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removeFromList(setBuriedItems, buriedItems, idx); } }, '×')
+      );
+    }),
+    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: function () { addToList(setBuriedItems, buriedItems); } }, '+ Add'),
+    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
+      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+    )
+  );
+}
+
 function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pendingEdits }) {
   const outline = (data && data.outline) || {};
   const evaluationHistory = (data && data.evaluationHistory) || {};
@@ -317,11 +366,27 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     );
   }
 
-  function renderNamedSection(title, section) {
+  function renderNamedSection(title, section, sectionKey) {
     if (!section) return null;
+    const editing = isEditing('namedSection', sectionKey);
     const focus = section.arcConnections || section.focus || null;
+
+    if (editing) {
+      return React.createElement('div', { className: 'outline-section outline-section--editing' },
+        React.createElement('h4', { className: 'outline-section__title' }, title),
+        React.createElement(NamedSectionEditor, {
+          section: section,
+          onSave: function (updated) { saveSectionEdit(sectionKey, updated); },
+          onCancel: cancelEdit
+        })
+      );
+    }
+
     return React.createElement('div', { className: 'outline-section' },
-      React.createElement('h4', { className: 'outline-section__title' }, title),
+      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
+        React.createElement('h4', { className: 'outline-section__title' }, title),
+        editBtn(function () { setEditingBlock({ type: 'namedSection', key: sectionKey }); })
+      ),
       React.createElement('div', { className: 'outline-section__content' },
         focus && React.createElement('p', { className: 'text-sm mb-sm' },
           React.createElement('strong', null, 'Focus: '),
@@ -594,9 +659,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     return [
       renderLede(current.lede),
       renderTheStory(current.theStory),
-      renderNamedSection('FOLLOW THE MONEY', current.followTheMoney),
-      renderNamedSection('THE PLAYERS', current.thePlayers),
-      renderNamedSection('WHAT\'S MISSING', current.whatsMissing),
+      renderNamedSection('FOLLOW THE MONEY', current.followTheMoney, 'followTheMoney'),
+      renderNamedSection('THE PLAYERS', current.thePlayers, 'thePlayers'),
+      renderNamedSection('WHAT\'S MISSING', current.whatsMissing, 'whatsMissing'),
       renderClosing(current.closing),
       renderPullQuotes(current.pullQuotes)
     ];
