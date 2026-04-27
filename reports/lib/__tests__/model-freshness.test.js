@@ -36,6 +36,7 @@ if (require.main === module) {
             betas: shorthand !== 'haiku' ? ['context-1m-2025-08-07'] : undefined,
             tools: [],
             permissionMode: 'bypassPermissions',
+            allowDangerouslySkipPermissions: true,
             maxTurns: 1
           }
         })) {
