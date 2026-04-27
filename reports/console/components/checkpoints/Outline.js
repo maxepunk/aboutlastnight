@@ -142,6 +142,71 @@ function NamedSectionEditor({ section, onSave, onCancel }) {
   );
 }
 
+function ClosingEditor({ closing, onSave, onCancel }) {
+  const resolutionsKey = closing.arcResolutions != null ? 'arcResolutions' : 'theme';
+  const [resolutions, setResolutions] = React.useState(typeof closing[resolutionsKey] === 'string' ? closing[resolutionsKey] : '');
+  const [systemicAngle, setSystemicAngle] = React.useState(typeof closing.systemicAngle === 'string' ? closing.systemicAngle : '');
+  const [finalLine, setFinalLine] = React.useState(typeof closing.finalLine === 'string' ? closing.finalLine : '');
+
+  function handleSave() {
+    onSave(Object.assign({}, closing, {
+      [resolutionsKey]: resolutions,
+      systemicAngle: systemicAngle,
+      finalLine: finalLine
+    }));
+  }
+
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    React.createElement('label', { className: 'text-xs text-muted' }, resolutionsKey === 'arcResolutions' ? 'Arc Resolutions' : 'Theme'),
+    React.createElement('textarea', { className: 'input', value: resolutions, onChange: function (e) { setResolutions(e.target.value); }, rows: 3, autoFocus: true }),
+    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Systemic Angle'),
+    React.createElement('textarea', { className: 'input', value: systemicAngle, onChange: function (e) { setSystemicAngle(e.target.value); }, rows: 2 }),
+    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Final Line'),
+    React.createElement('textarea', { className: 'input', value: finalLine, onChange: function (e) { setFinalLine(e.target.value); }, rows: 2 }),
+    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
+      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+    )
+  );
+}
+
+function PullQuotesEditor({ pullQuotes, onSave, onCancel }) {
+  const [quotes, setQuotes] = React.useState(JSON.parse(safeStringify(pullQuotes)));
+
+  function update(idx, field, val) {
+    const c = JSON.parse(safeStringify(quotes));
+    c[idx][field] = val;
+    setQuotes(c);
+  }
+
+  function remove(idx) {
+    setQuotes(quotes.filter(function (_, i) { return i !== idx; }));
+  }
+
+  function add() {
+    setQuotes(quotes.concat([{ text: '', attribution: '', placement: '' }]));
+  }
+
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    quotes.map(function (q, idx) {
+      return React.createElement('div', { key: idx, className: 'mb-md' },
+        React.createElement('label', { className: 'text-xs text-muted' }, 'Quote ' + (idx + 1)),
+        React.createElement('textarea', { className: 'input', value: q.text || '', onChange: function (e) { update(idx, 'text', e.target.value); }, rows: 2 }),
+        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Attribution'),
+        React.createElement('input', { className: 'input', value: q.attribution || '', onChange: function (e) { update(idx, 'attribution', e.target.value); } }),
+        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Placement'),
+        React.createElement('input', { className: 'input', value: q.placement || '', onChange: function (e) { update(idx, 'placement', e.target.value); } }),
+        React.createElement('button', { className: 'btn btn-sm btn-ghost mt-sm', onClick: function () { remove(idx); } }, 'Remove')
+      );
+    }),
+    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: add }, '+ Add Quote'),
+    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: function () { onSave(quotes); } }, 'Save'),
+      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+    )
+  );
+}
+
 function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pendingEdits }) {
   const outline = (data && data.outline) || {};
   const evaluationHistory = (data && data.evaluationHistory) || {};
@@ -410,9 +475,21 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
   function renderClosing(closing) {
     if (!closing) return null;
+    const editing = isEditing('section', 'closing');
     const resolutions = closing.arcResolutions || closing.theme || null;
+
+    if (editing) {
+      return React.createElement('div', { className: 'outline-section outline-section--editing' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'CLOSING'),
+        React.createElement(ClosingEditor, { closing: closing, onSave: function (u) { saveSectionEdit('closing', u); }, onCancel: cancelEdit })
+      );
+    }
+
     return React.createElement('div', { className: 'outline-section' },
-      React.createElement('h4', { className: 'outline-section__title' }, 'CLOSING'),
+      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'CLOSING'),
+        editBtn(function () { setEditingBlock({ type: 'section', key: 'closing' }); })
+      ),
       React.createElement('div', { className: 'outline-section__content' },
         resolutions && React.createElement('p', { className: 'text-sm mb-sm' },
           React.createElement('strong', null, 'Resolutions: '),
@@ -432,21 +509,26 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   function renderPullQuotes(pullQuotes) {
     if (!pullQuotes || pullQuotes.length === 0) return null;
     return React.createElement('div', { className: 'outline-section' },
-      React.createElement('h4', { className: 'outline-section__title' }, 'PULL QUOTES'),
+      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'PULL QUOTES'),
+        editBtn(function () { setEditingBlock({ type: 'pullQuotesAll', key: 'all' }); })
+      ),
       React.createElement('div', { className: 'outline-section__content' },
-        pullQuotes.map(function (pq, i) {
-          return React.createElement('div', { key: 'pq-' + i, className: 'pull-quote' },
-            React.createElement('p', { className: 'pull-quote__text' },
-              '\u201C' + (pq.text || '') + '\u201D'
-            ),
-            (pq.attribution || pq.placement) && React.createElement('div', { className: 'pull-quote__attribution' },
-              pq.attribution && React.createElement('span', null, '\u2014 ' + pq.attribution),
-              pq.placement && React.createElement('span', { className: 'text-xs text-muted' },
-                ' [' + pq.placement + ']'
-              )
-            )
-          );
-        })
+        isEditing('pullQuotesAll', 'all')
+          ? React.createElement(PullQuotesEditor, { pullQuotes: pullQuotes, onSave: function (u) { saveSectionEdit('pullQuotes', u); }, onCancel: cancelEdit })
+          : pullQuotes.map(function (pq, i) {
+              return React.createElement('div', { key: 'pq-' + i, className: 'pull-quote' },
+                React.createElement('p', { className: 'pull-quote__text' },
+                  '"' + (pq.text || '') + '"'
+                ),
+                (pq.attribution || pq.placement) && React.createElement('div', { className: 'pull-quote__attribution' },
+                  pq.attribution && React.createElement('span', null, '— ' + pq.attribution),
+                  pq.placement && React.createElement('span', { className: 'text-xs text-muted' },
+                    ' [' + pq.placement + ']'
+                  )
+                )
+              );
+            })
       )
     );
   }
