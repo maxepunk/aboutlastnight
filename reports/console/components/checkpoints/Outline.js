@@ -11,10 +11,10 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn, renderTextEditForm, renderListEditForm } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 
-function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme }) {
+function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pendingEdits }) {
   const outline = (data && data.outline) || {};
   const evaluationHistory = (data && data.evaluationHistory) || {};
   const previousOutline = (revisionCache && revisionCache.outline) || null;
@@ -25,20 +25,59 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme }) 
   // Detect theme from outline data if not passed via props
   const isDetective = theme === 'detective' || (!theme && outline.executiveSummary != null);
 
-  // Internal state
-  const [mode, setMode] = React.useState('view');
-  const [editText, setEditText] = React.useState('');
-  const [feedbackText, setFeedbackText] = React.useState('');
+  // Edit state — mirrors Article.js
+  const [editedOutline, setEditedOutline] = React.useState(null);
+  const [editingBlock, setEditingBlock] = React.useState(null);
+  const [hasEdits, setHasEdits] = React.useState(false);
+  const [mode, setMode] = React.useState('view'); // 'view' | 'json' | 'reject'
+  const [jsonText, setJsonText] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
+  const [feedbackText, setFeedbackText] = React.useState('');
 
   // Reset state when data changes
   const dataKey = safeStringify(outline).slice(0, 100);
   React.useEffect(function () {
+    setEditedOutline(null);
+    setEditingBlock(null);
+    setHasEdits(false);
     setMode('view');
-    setEditText('');
-    setFeedbackText('');
+    setJsonText('');
     setJsonError('');
+    setFeedbackText('');
   }, [dataKey]);
+
+  // Restore pending edits from cache
+  React.useEffect(function () {
+    if (pendingEdits && !editedOutline) {
+      setEditedOutline(pendingEdits);
+      setHasEdits(true);
+    }
+  }, [pendingEdits]);
+
+  function getCurrentOutline() { return editedOutline || outline; }
+
+  function ensureEditedOutline() {
+    if (editedOutline) return editedOutline;
+    const clone = JSON.parse(safeStringify(outline));
+    setEditedOutline(clone);
+    return clone;
+  }
+
+  function isEditing(type, key) {
+    if (!editingBlock) return false;
+    return editingBlock.type === type && editingBlock.key === key;
+  }
+
+  function cancelEdit() { setEditingBlock(null); }
+
+  function saveSectionEdit(sectionKey, updatedSection) {
+    const next = ensureEditedOutline();
+    const clone = JSON.parse(safeStringify(next));
+    clone[sectionKey] = updatedSection;
+    setEditedOutline(clone);
+    setHasEdits(true);
+    setEditingBlock(null);
+  }
 
   function handleModeChange(newMode) {
     if (newMode === mode) {
@@ -46,8 +85,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme }) 
       return;
     }
     setMode(newMode);
-    if (newMode === 'edit') {
-      setEditText(safeStringify(outline, 2));
+    if (newMode === 'json') {
+      setJsonText(safeStringify(getCurrentOutline(), 2));
       setJsonError('');
     }
     if (newMode === 'reject') {
@@ -56,12 +95,17 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme }) 
   }
 
   function handleApprove() {
-    onApprove({ outline: true });
+    if (hasEdits && editedOutline) {
+      if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
+      onApprove({ outline: true, outlineEdits: editedOutline });
+    } else {
+      onApprove({ outline: true });
+    }
   }
 
-  function handleEditApprove() {
+  function handleJsonApprove() {
     try {
-      const parsed = JSON.parse(editText);
+      const parsed = JSON.parse(jsonText);
       setJsonError('');
       onApprove({ outline: true, outlineEdits: parsed });
     } catch (err) {
@@ -458,8 +502,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme }) 
         'aria-label': 'Approve outline'
       }, 'Approve'),
       React.createElement('button', {
-        className: 'action-modes__btn' + (mode === 'edit' ? ' action-modes__btn--active' : '') + ' btn btn-secondary',
-        onClick: function () { handleModeChange('edit'); },
+        className: 'action-modes__btn' + (mode === 'json' ? ' action-modes__btn--active' : '') + ' btn btn-secondary',
+        onClick: function () { handleModeChange('json'); },
         'aria-label': 'Edit outline before approving'
       }, 'Edit & Approve'),
       React.createElement('button', {
@@ -469,20 +513,20 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme }) 
       }, 'Reject')
     ),
 
-    // Edit mode
-    mode === 'edit' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
+    // JSON edit mode
+    mode === 'json' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
       React.createElement('label', { className: 'form-group__label' }, 'Edit Outline JSON'),
       React.createElement('textarea', {
         className: 'input input-mono edit-area',
-        value: editText,
-        onChange: function (e) { setEditText(e.target.value); setJsonError(''); },
+        value: jsonText,
+        onChange: function (e) { setJsonText(e.target.value); setJsonError(''); },
         rows: 20,
         'aria-label': 'Edit outline JSON'
       }),
       jsonError && React.createElement('p', { className: 'validation-error' }, jsonError),
       React.createElement('button', {
         className: 'btn btn-primary',
-        onClick: handleEditApprove,
+        onClick: handleJsonApprove,
         'aria-label': 'Save edits and approve'
       }, 'Save & Approve')
     ),
