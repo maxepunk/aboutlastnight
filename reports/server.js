@@ -1253,6 +1253,8 @@ app.get('/', (req, res) => {
 });
 
 // Start server with Claude Agent SDK health check
+// Only start in normal runtime (not during tests)
+if (require.main === module) {
 (async () => {
     console.log('Checking Claude Agent SDK availability...');
     const claudeAvailable = await isClaudeAvailable();
@@ -1310,6 +1312,7 @@ app.get('/', (req, res) => {
     server.keepAliveTimeout = SERVER_TIMEOUT_MS;
     server.headersTimeout = SERVER_TIMEOUT_MS + 1000; // Must be > keepAliveTimeout
 })();
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
@@ -1324,3 +1327,6 @@ process.on('SIGINT', () => {
     }
     process.exit(0);
 });
+
+// Export helpers for testing
+module.exports = { buildResumePayload };
