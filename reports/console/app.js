@@ -257,7 +257,7 @@ function App() {
               onReject: handleReject,
               dispatch: dispatch,
               revisionCache: state.revisionCache,
-              pendingEdits: state.pendingEdits
+              pendingEdits: state.pendingEdits[state.checkpointType]
             })
           : React.createElement(React.Fragment, null,
               // Generic checkpoint content (replaced by specific components in later batches)
