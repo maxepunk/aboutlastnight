@@ -453,25 +453,26 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   // ═══════════════════════════════════════════════════════
 
   function renderOutlineSections() {
+    const current = getCurrentOutline();
     if (isDetective) {
       return [
-        renderExecutiveSummary(outline.executiveSummary),
-        renderEvidenceLocker(outline.evidenceLocker),
-        renderMemoryAnalysis(outline.memoryAnalysis),
-        renderSuspectNetwork(outline.suspectNetwork),
-        renderOutstandingQuestions(outline.outstandingQuestions),
-        renderFinalAssessment(outline.finalAssessment)
+        renderExecutiveSummary(current.executiveSummary),
+        renderEvidenceLocker(current.evidenceLocker),
+        renderMemoryAnalysis(current.memoryAnalysis),
+        renderSuspectNetwork(current.suspectNetwork),
+        renderOutstandingQuestions(current.outstandingQuestions),
+        renderFinalAssessment(current.finalAssessment)
       ];
     }
     // Journalist (default)
     return [
-      renderLede(outline.lede),
-      renderTheStory(outline.theStory),
-      renderNamedSection('FOLLOW THE MONEY', outline.followTheMoney),
-      renderNamedSection('THE PLAYERS', outline.thePlayers),
-      renderNamedSection('WHAT\'S MISSING', outline.whatsMissing),
-      renderClosing(outline.closing),
-      renderPullQuotes(outline.pullQuotes)
+      renderLede(current.lede),
+      renderTheStory(current.theStory),
+      renderNamedSection('FOLLOW THE MONEY', current.followTheMoney),
+      renderNamedSection('THE PLAYERS', current.thePlayers),
+      renderNamedSection('WHAT\'S MISSING', current.whatsMissing),
+      renderClosing(current.closing),
+      renderPullQuotes(current.pullQuotes)
     ];
   }
 
