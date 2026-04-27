@@ -14,6 +14,37 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 const { Badge, CollapsibleSection, safeStringify, editBtn, renderTextEditForm, renderListEditForm } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 
+// ═══════════════════════════════════════════════════════
+// Editor components at module scope
+// ═══════════════════════════════════════════════════════
+
+function LedeEditor({ lede, onSave, onCancel }) {
+  const [hook, setHook] = React.useState(lede.hook || '');
+  const [keyTension, setKeyTension] = React.useState(lede.keyTension || '');
+  const [evidence, setEvidence] = React.useState(Array.isArray(lede.selectedEvidence) ? lede.selectedEvidence.join(', ') : (lede.selectedEvidence || ''));
+
+  function handleSave() {
+    onSave({
+      hook: hook,
+      keyTension: keyTension,
+      selectedEvidence: evidence.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+    });
+  }
+
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    React.createElement('label', { className: 'text-xs text-muted' }, 'Hook'),
+    React.createElement('textarea', { className: 'input', value: hook, onChange: function (e) { setHook(e.target.value); }, rows: 2, autoFocus: true }),
+    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Key Tension'),
+    React.createElement('textarea', { className: 'input', value: keyTension, onChange: function (e) { setKeyTension(e.target.value); }, rows: 2 }),
+    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Selected Evidence (comma-separated IDs)'),
+    React.createElement('input', { className: 'input', value: evidence, onChange: function (e) { setEvidence(e.target.value); } }),
+    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
+      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+    )
+  );
+}
+
 function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pendingEdits }) {
   const outline = (data && data.outline) || {};
   const evaluationHistory = (data && data.evaluationHistory) || {};
@@ -437,36 +468,6 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     );
   }
 
-  // ═══════════════════════════════════════════════════════
-  // Editor components (inline editing)
-  // ═══════════════════════════════════════════════════════
-
-  function LedeEditor({ lede, onSave, onCancel }) {
-    const [hook, setHook] = React.useState(lede.hook || '');
-    const [keyTension, setKeyTension] = React.useState(lede.keyTension || '');
-    const [evidence, setEvidence] = React.useState(Array.isArray(lede.selectedEvidence) ? lede.selectedEvidence.join(', ') : (lede.selectedEvidence || ''));
-
-    function handleSave() {
-      onSave({
-        hook: hook,
-        keyTension: keyTension,
-        selectedEvidence: evidence.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
-      });
-    }
-
-    return React.createElement('div', { className: 'article-block__edit-form' },
-      React.createElement('label', { className: 'text-xs text-muted' }, 'Hook'),
-      React.createElement('textarea', { className: 'input', value: hook, onChange: function (e) { setHook(e.target.value); }, rows: 2, autoFocus: true }),
-      React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Key Tension'),
-      React.createElement('textarea', { className: 'input', value: keyTension, onChange: function (e) { setKeyTension(e.target.value); }, rows: 2 }),
-      React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Selected Evidence (comma-separated IDs)'),
-      React.createElement('input', { className: 'input', value: evidence, onChange: function (e) { setEvidence(e.target.value); } }),
-      React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-        React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-      )
-    );
-  }
 
   // ═══════════════════════════════════════════════════════
   // Evaluation bar (shared)
