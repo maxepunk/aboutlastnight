@@ -149,18 +149,11 @@ function extractStructuredOutput({ structuredOutput, resultText, schema, label, 
     );
   }
 
-  if (!validate(extracted)) {
-    throw new StructuredOutputExtractionError(
-      `Extracted JSON does not match schema: ${ajv.errorsText(validate.errors)}`,
-      { schemaErrors: validate.errors || [], label, model, lastText: resultText }
-    );
-  }
-
+  // extracted passed the predicate inside tryExtractJson, so it is schema-valid here.
   return extracted;
 }
 
 module.exports = {
   extractStructuredOutput,
-  tryExtractJson,
   StructuredOutputExtractionError
 };
