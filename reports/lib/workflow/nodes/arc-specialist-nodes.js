@@ -28,6 +28,7 @@
  */
 
 const { PHASES } = require('../state');
+const { isSdkTimeoutError } = require('../../llm');
 const {
   buildValidEvidenceIds,
   validateRosterName,
@@ -790,7 +791,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         break; // Success — exit retry loop
 
       } catch (attemptError) {
-        const isTimeout = attemptError.message?.includes('timeout') && attemptError.message?.includes('limit');
+        const isTimeout = isSdkTimeoutError(attemptError);
 
         if (!isTimeout || attempt === MAX_GENERATION_ATTEMPTS) {
           // Non-timeout error OR final attempt exhausted: propagate to outer catch
@@ -862,7 +863,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     };
 
   } catch (error) {
-    const isTimeout = error.message?.includes('timeout') && error.message?.includes('limit');
+    const isTimeout = isSdkTimeoutError(error);
     console.error(`[analyzeArcsPlayerFocusGuided] ${isTimeout ? 'Timeout' : 'Error'}:`, error.message);
 
     return {

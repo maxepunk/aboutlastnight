@@ -24,6 +24,7 @@
 
 const { PHASES } = require('../state');
 const { SchemaValidator } = require('../../schema-validator');
+const { isSdkTimeoutError } = require('../../llm');
 const { createPromptBuilder } = require('../../prompt-builder');
 const outlineSchema = require('../../schemas/outline.schema.json');
 const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
@@ -212,16 +213,12 @@ Score each item and return the results.`;
       });
     }
 
-    function isTimeoutError(err) {
-      return err && typeof err.message === 'string' && /SDK timeout after/.test(err.message);
-    }
-
     try {
       let response;
       try {
         response = await attemptBatch();
       } catch (firstErr) {
-        if (isTimeoutError(firstErr)) {
+        if (isSdkTimeoutError(firstErr)) {
           console.warn(`[scorePaperEvidence] Batch ${batchIdx + 1} timed out, retrying once`);
           response = await attemptBatch();
         } else {

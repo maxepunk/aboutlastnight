@@ -19,6 +19,7 @@ const {
   query,
   getModelTimeout,
   isClaudeAvailable: isClaudeAvailableImpl,
+  isSdkTimeoutError,
   createSemaphore,
   MODEL_TIMEOUTS
 } = require('./client');
@@ -59,6 +60,7 @@ module.exports = {
   query,
   getModelTimeout,
   isClaudeAvailable,
+  isSdkTimeoutError,
   createSemaphore,
   createProgressLogger,
   MODEL_TIMEOUTS

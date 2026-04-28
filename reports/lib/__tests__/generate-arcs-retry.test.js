@@ -8,7 +8,8 @@
 // Mock LLM module
 jest.mock('../llm', () => ({
   sdkQuery: jest.fn(),
-  createProgressLogger: () => jest.fn()
+  createProgressLogger: () => jest.fn(),
+  isSdkTimeoutError: (err) => Boolean(err && typeof err.message === 'string' && /SDK timeout after/.test(err.message))
 }));
 
 // Mock observability
