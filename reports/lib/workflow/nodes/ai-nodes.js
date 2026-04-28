@@ -196,8 +196,11 @@ ${JSON.stringify(batch.map(p => ({
 
 Score each item and return the results.`;
 
-    try {
-      const response = await sdk({
+    // C4a: One retry on timeout to recover from transient throttling.
+    // Without this, half-batched timeout patterns silently flag up to N items
+    // as scoringError on a single SDK hiccup.
+    async function attemptBatch() {
+      return await sdk({
         prompt,
         systemPrompt: PAPER_SCORING_PROMPT,
         model: 'sonnet',
@@ -207,7 +210,24 @@ Score each item and return the results.`;
         label: `Paper evidence batch ${batchIdx + 1}/${batches.length}`,
         loadProjectSettings: false
       });
+    }
 
+    function isTimeoutError(err) {
+      return err && typeof err.message === 'string' && /SDK timeout after/.test(err.message);
+    }
+
+    try {
+      let response;
+      try {
+        response = await attemptBatch();
+      } catch (firstErr) {
+        if (isTimeoutError(firstErr)) {
+          console.warn(`[scorePaperEvidence] Batch ${batchIdx + 1} timed out, retrying once`);
+          response = await attemptBatch();
+        } else {
+          throw firstErr;
+        }
+      }
       return response.items || [];
     } catch (error) {
       console.error(`[scorePaperEvidence] Batch ${batchIdx + 1} failed: ${error.message}`);
