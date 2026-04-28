@@ -1,21 +1,20 @@
 /**
  * Jest Mock for @anthropic-ai/claude-agent-sdk
  *
- * This mock exists because the real SDK uses ESM syntax (.mjs)
- * which Jest cannot parse in CommonJS mode.
+ * The real SDK is ESM (.mjs) which Jest cannot parse in CommonJS mode.
+ * For unit tests that need to control SDK responses, use setMockQuery()
+ * to install a custom async-iterator implementation for one test.
  *
- * The actual SDK functionality is tested via integration tests
- * that don't run through Jest (e.g., manual testing with real API).
- *
- * For unit tests, nodes use dependency injection:
- *   config.configurable.sdkClient = createMockSdkClient(...)
+ * For workflow node tests that just need a simulated client, prefer
+ * dependency injection via config.configurable.sdkClient.
  */
 
-/**
- * Mock async generator for query results
- */
-async function* mockQueryGenerator(options) {
-  // Simulate SDK returning a result message
+let customQueryImpl = null;
+
+function setMockQuery(fn) { customQueryImpl = fn; }
+function clearMockQuery() { customQueryImpl = null; }
+
+async function* defaultMockQueryGenerator(options) {
   yield {
     type: 'result',
     subtype: 'success',
@@ -24,13 +23,9 @@ async function* mockQueryGenerator(options) {
   };
 }
 
-/**
- * Mock query function that returns an async iterable
- */
 function query(options) {
-  return mockQueryGenerator(options);
+  if (customQueryImpl) return customQueryImpl(options);
+  return defaultMockQueryGenerator(options);
 }
 
-module.exports = {
-  query
-};
+module.exports = { query, setMockQuery, clearMockQuery };
