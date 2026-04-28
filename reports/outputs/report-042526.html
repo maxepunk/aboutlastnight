@@ -1,0 +1,2356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="The first vote produced no killer. The re-vote convicted Alex Reeves, who wasn&#x27;t in the room to argue. The NeurAI board paid out $5,975,000 across the morning, the largest account in Sarah Blackwood&#x27;s name. The same board named her acting CEO before this article filed.">
+  <meta name="author" content="Cassandra Nova">
+  <meta property="og:title" content="The Murder Vote Was the Board Meeting.">
+  <meta property="og:description" content="The first vote produced no killer. The re-vote convicted Alex Reeves, who wasn&#x27;t in the room to argue. The NeurAI board paid out $5,975,000 across the morning, the largest account in Sarah Blackwood&#x27;s name. The same board named her acting CEO before this article filed.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="NovaNews">
+
+  <title>The Murder Vote Was the Board Meeting. | NovaNews</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+/**
+ * NovaNews Base Styles
+ *
+ * Reset, typography, and fundamental element styles.
+ */
+
+/* ============================================
+   RESET
+   ============================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 18px;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+body {
+  font-family: var(--nn-font-body);
+  background: var(--nn-bg-deep);
+  color: var(--nn-text-primary);
+  line-height: var(--nn-leading-relaxed);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Noir grain texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.03;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  z-index: var(--nn-z-grain);
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--nn-font-headline);
+  font-weight: 600;
+  line-height: var(--nn-leading-tight);
+  color: var(--nn-text-primary);
+}
+
+h1 {
+  font-size: clamp(var(--nn-text-3xl), 6vw, var(--nn-text-5xl));
+  font-weight: 700;
+  letter-spacing: var(--nn-tracking-tight);
+}
+
+h2 {
+  font-size: var(--nn-text-2xl);
+  margin-bottom: var(--nn-space-6);
+  padding-bottom: var(--nn-space-3);
+  border-bottom: 2px solid var(--nn-accent-crimson);
+  display: inline-block;
+}
+
+h3 {
+  font-size: var(--nn-text-xl);
+}
+
+p {
+  margin-bottom: var(--nn-space-5);
+}
+
+p:last-child {
+  margin-bottom: 0;
+}
+
+/* Links */
+a {
+  color: var(--nn-accent-crimson-light);
+  text-decoration: none;
+  transition: color var(--nn-transition-fast);
+}
+
+a:hover {
+  color: var(--nn-accent-amber);
+}
+
+/* Strong/Bold - character names on first mention */
+strong {
+  color: var(--nn-text-primary);
+  font-weight: 600;
+}
+
+/* Emphasis/Italics - memory content */
+em {
+  color: var(--nn-text-secondary);
+  font-style: italic;
+}
+
+/* Inline code / data */
+code {
+  font-family: var(--nn-font-mono);
+  font-size: 0.9em;
+  background: var(--nn-bg-elevated);
+  padding: 0.1em 0.3em;
+  border-radius: var(--nn-radius-sm);
+}
+
+/* Blockquotes */
+blockquote {
+  margin: var(--nn-space-8) 0;
+  padding-left: var(--nn-space-6);
+  border-left: 3px solid var(--nn-accent-crimson);
+  font-style: italic;
+  color: var(--nn-text-secondary);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Timestamps */
+.timestamp {
+  font-family: var(--nn-font-mono);
+  font-size: 0.9em;
+  color: var(--nn-accent-amber);
+  background: var(--nn-accent-amber-glow);
+  padding: 0.1em 0.4em;
+  border-radius: var(--nn-radius-sm);
+}
+
+/* Money amounts */
+.money {
+  font-family: var(--nn-font-mono);
+  font-weight: 500;
+  color: var(--nn-accent-amber);
+}
+
+/* Monospace labels */
+.mono-label {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  color: var(--nn-text-muted);
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================
+   FOCUS STATES (Accessibility)
+   ============================================ */
+
+:focus-visible {
+  outline: 2px solid var(--nn-accent-amber);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   SELECTION
+   ============================================ */
+
+::selection {
+  background: var(--nn-accent-crimson);
+  color: var(--nn-text-primary);
+}
+
+/* ============================================
+   SCROLLBAR (Webkit)
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--nn-bg-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--nn-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--nn-text-muted);
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  body::before {
+    display: none;
+  }
+
+  a {
+    color: black;
+    text-decoration: underline;
+  }
+
+  h2 {
+    border-bottom-color: black;
+  }
+}
+
+
+/**
+ * NovaNews Components
+ *
+ * Evidence cards, timeline markers, pull quotes, buried markers, and other
+ * visual components for investigative journalism articles.
+ */
+
+/* ============================================
+   EVIDENCE CARD
+   Leaked source material - memory content
+   ============================================ */
+
+.evidence-card {
+  background: var(--nn-bg-elevated);
+  border: 1px solid var(--nn-border);
+  border-left: 3px solid var(--nn-accent-crimson);
+  border-radius: var(--nn-radius-md);
+  padding: var(--nn-space-6);
+  margin: var(--nn-space-8) 0;
+  position: relative;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity var(--nn-transition-base), transform var(--nn-transition-base);
+}
+
+.evidence-card--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.evidence-card__label {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  color: var(--nn-accent-crimson);
+  margin-bottom: var(--nn-space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--nn-space-2);
+}
+
+.evidence-card__label::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--nn-accent-crimson);
+  border-radius: 50%;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--nn-accent-crimson-glow);
+  }
+  50% {
+    box-shadow: 0 0 8px 4px var(--nn-accent-crimson-glow);
+  }
+}
+
+.evidence-card__content {
+  font-style: italic;
+  color: var(--nn-text-secondary);
+  line-height: var(--nn-leading-relaxed);
+  margin-bottom: var(--nn-space-4);
+}
+
+.evidence-card__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nn-space-2);
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  color: var(--nn-text-muted);
+  padding-top: var(--nn-space-3);
+  border-top: 1px solid var(--nn-border);
+}
+
+.evidence-card__owner {
+  color: var(--nn-text-secondary);
+}
+
+.evidence-card__submitter {
+  color: var(--nn-accent-amber);
+}
+
+/* ============================================
+   PULL QUOTE
+   Emphasis moments - key statements
+   ============================================ */
+
+.pull-quote {
+  margin: var(--nn-space-10) 0;
+  padding: var(--nn-space-8) var(--nn-space-6);
+  background: linear-gradient(
+    135deg,
+    var(--nn-bg-elevated) 0%,
+    var(--nn-bg-surface) 100%
+  );
+  border-radius: var(--nn-radius-lg);
+  position: relative;
+  text-align: center;
+}
+
+.pull-quote::before {
+  content: '"';
+  font-family: var(--nn-font-headline);
+  font-size: 4rem;
+  color: var(--nn-accent-crimson);
+  opacity: 0.3;
+  position: absolute;
+  top: var(--nn-space-2);
+  left: var(--nn-space-4);
+  line-height: 1;
+}
+
+.pull-quote__text {
+  font-family: var(--nn-font-headline);
+  font-size: var(--nn-text-xl);
+  font-weight: 500;
+  line-height: var(--nn-leading-snug);
+  color: var(--nn-text-primary);
+  margin-bottom: var(--nn-space-4);
+}
+
+.pull-quote__attribution {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-wide);
+  color: var(--nn-text-muted);
+  text-transform: uppercase;
+}
+
+/* ============================================
+   ARTICLE PHOTO
+   Session photos embedded in article
+   ============================================ */
+
+.article-photo {
+  margin: var(--nn-space-8) 0;
+  background: var(--nn-bg-elevated);
+  border: 1px solid var(--nn-border);
+  border-radius: var(--nn-radius-md);
+  overflow: hidden;
+}
+
+.article-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.article-photo__caption {
+  padding: var(--nn-space-4);
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-muted);
+  line-height: var(--nn-leading-normal);
+  border-top: 1px solid var(--nn-border);
+}
+
+.article-photo__caption strong {
+  color: var(--nn-text-secondary);
+}
+
+/* Hero photo - full width above headline */
+.article-photo--hero {
+  margin: calc(-1 * var(--nn-space-12)) calc(-1 * var(--nn-gutter)) var(--nn-space-8);
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.article-photo--hero img {
+  max-height: 50vh;
+  /* Default crop bias toward the upper portion of the image. Hero photos
+     are typically portrait-orientation group shots where heads sit in the
+     upper third, and center-center crop bites into them on wide viewports.
+     Per-image overrides go via inline `style="object-position: ..."` on
+     the <img> when a specific shot needs different framing. */
+  object-position: center 20%;
+}
+
+/* Inline photo - within article flow */
+.article-photo--inline {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .article-photo {
+    margin: var(--nn-space-6) calc(-1 * var(--nn-space-2));
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .article-photo__caption {
+    padding: var(--nn-space-3);
+    font-size: var(--nn-text-xs);
+  }
+}
+
+/* ============================================
+   SECTION DIVIDER
+   Visual break between sections
+   ============================================ */
+
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--nn-space-4);
+  margin: var(--nn-space-12) 0;
+  color: var(--nn-text-muted);
+}
+
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--nn-border);
+}
+
+.section-divider__icon {
+  font-size: var(--nn-text-lg);
+}
+
+/* ============================================
+   INLINE HIGHLIGHTS
+   ============================================ */
+
+/* Redacted text effect */
+.redacted {
+  background: var(--nn-text-muted);
+  color: transparent;
+  border-radius: 2px;
+  padding: 0 var(--nn-space-1);
+  cursor: not-allowed;
+  user-select: none;
+}
+
+/* Classified stamp */
+.classified-stamp {
+  display: inline-block;
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  color: var(--nn-accent-crimson);
+  border: 2px solid var(--nn-accent-crimson);
+  padding: var(--nn-space-1) var(--nn-space-3);
+  transform: rotate(-3deg);
+  opacity: 0.8;
+}
+
+/* ============================================
+   MOBILE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+  .evidence-card {
+    padding: var(--nn-space-4);
+    margin: var(--nn-space-6) 0;
+  }
+
+  .evidence-card__meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pull-quote {
+    padding: var(--nn-space-6) var(--nn-space-4);
+  }
+
+  .pull-quote__text {
+    font-size: var(--nn-text-lg);
+  }
+
+  .pull-quote::before {
+    font-size: 3rem;
+  }
+}
+
+
+/**
+ * NovaNews Layout
+ *
+ * Two-column article layout with sticky sidebar, nav, and footer.
+ */
+
+/* ============================================
+   NAV HEADER
+   ============================================ */
+
+.nn-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--nn-nav-height);
+  background: var(--nn-bg-overlay);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--nn-border);
+  z-index: var(--nn-z-nav);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--nn-gutter);
+}
+
+.nn-nav__brand {
+  font-family: var(--nn-font-headline);
+  font-size: var(--nn-text-xl);
+  font-weight: 700;
+  color: var(--nn-text-primary);
+  text-decoration: none;
+  letter-spacing: var(--nn-tracking-wide);
+}
+
+.nn-nav__brand span {
+  color: var(--nn-accent-crimson);
+}
+
+.nn-nav__links {
+  display: flex;
+  gap: var(--nn-space-6);
+  list-style: none;
+}
+
+.nn-nav__link {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-wider);
+  text-transform: uppercase;
+  color: var(--nn-text-muted);
+  text-decoration: none;
+  transition: color var(--nn-transition-fast);
+  padding: var(--nn-space-2) 0;
+  position: relative;
+}
+
+.nn-nav__link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--nn-accent-crimson);
+  transition: width var(--nn-transition-base);
+}
+
+.nn-nav__link:hover {
+  color: var(--nn-text-primary);
+}
+
+.nn-nav__link:hover::after {
+  width: 100%;
+}
+
+.nn-nav__link--active {
+  color: var(--nn-accent-crimson-light);
+}
+
+.nn-nav__link--active::after {
+  width: 100%;
+}
+
+/* Mobile hamburger */
+.nn-nav__toggle {
+  display: none;
+  background: none;
+  border: none;
+  padding: var(--nn-space-2);
+  cursor: pointer;
+}
+
+.nn-nav__toggle-icon {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--nn-text-primary);
+  position: relative;
+}
+
+.nn-nav__toggle-icon::before,
+.nn-nav__toggle-icon::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 2px;
+  background: var(--nn-text-primary);
+  left: 0;
+  transition: transform var(--nn-transition-fast);
+}
+
+.nn-nav__toggle-icon::before {
+  top: -7px;
+}
+
+.nn-nav__toggle-icon::after {
+  top: 7px;
+}
+
+/* ============================================
+   MAIN CONTAINER
+   ============================================ */
+
+.nn-container {
+  max-width: var(--nn-container-max);
+  margin: 0 auto;
+  padding: calc(var(--nn-nav-height) + var(--nn-space-12)) var(--nn-gutter) var(--nn-space-16);
+  display: grid;
+  grid-template-columns: 1fr var(--nn-sidebar-width);
+  gap: var(--nn-space-12);
+  align-items: start;
+}
+
+/* ============================================
+   ARTICLE COLUMN
+   ============================================ */
+
+.nn-article {
+  max-width: var(--nn-article-width);
+  width: 100%;
+}
+
+.nn-article__header {
+  margin-bottom: var(--nn-space-12);
+  padding-bottom: var(--nn-space-8);
+  border-bottom: 1px solid var(--nn-border);
+}
+
+.nn-article__kicker {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  color: var(--nn-accent-crimson);
+  margin-bottom: var(--nn-space-4);
+}
+
+.nn-article__headline {
+  font-size: clamp(var(--nn-text-3xl), 5vw, var(--nn-text-5xl));
+  font-weight: 700;
+  line-height: var(--nn-leading-tight);
+  margin-bottom: var(--nn-space-6);
+}
+
+.nn-article__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nn-space-4);
+  align-items: center;
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-muted);
+}
+
+.nn-article__byline {
+  color: var(--nn-text-secondary);
+}
+
+.nn-article__byline a {
+  color: var(--nn-accent-crimson-light);
+}
+
+.nn-article__guest-reporter {
+  font-style: italic;
+  margin-left: 0.25em;
+}
+
+.nn-article__date {
+  color: var(--nn-text-muted);
+}
+
+.nn-article__divider {
+  color: var(--nn-border-light);
+}
+
+/* Section styling */
+.nn-section {
+  margin-bottom: var(--nn-space-16);
+}
+
+.nn-section__title {
+  font-size: var(--nn-text-2xl);
+  margin-bottom: var(--nn-space-6);
+  padding-bottom: var(--nn-space-3);
+  border-bottom: 2px solid var(--nn-accent-crimson);
+  display: inline-block;
+}
+
+/* ============================================
+   SIDEBAR COLUMN
+   ============================================ */
+
+.nn-sidebar {
+  position: sticky;
+  top: calc(var(--nn-nav-height) + var(--nn-space-8));
+  max-height: calc(100vh - var(--nn-nav-height) - var(--nn-space-16));
+  overflow-y: auto;
+  padding-right: var(--nn-space-2);
+}
+
+/* Custom scrollbar for sidebar */
+.nn-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nn-sidebar::-webkit-scrollbar-thumb {
+  background: var(--nn-border);
+  border-radius: 2px;
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+
+.nn-footer {
+  background: var(--nn-bg-elevated);
+  border-top: 1px solid var(--nn-border);
+  padding: var(--nn-space-10) var(--nn-gutter);
+  margin-top: var(--nn-space-20);
+}
+
+.nn-footer__inner {
+  max-width: var(--nn-container-max);
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nn-space-6);
+}
+
+.nn-footer__brand {
+  font-family: var(--nn-font-headline);
+  font-size: var(--nn-text-lg);
+  color: var(--nn-text-secondary);
+}
+
+.nn-footer__brand span {
+  color: var(--nn-accent-crimson);
+}
+
+.nn-footer__links {
+  display: flex;
+  gap: var(--nn-space-6);
+  list-style: none;
+}
+
+.nn-footer__link {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-wide);
+  color: var(--nn-text-muted);
+  text-decoration: none;
+  transition: color var(--nn-transition-fast);
+}
+
+.nn-footer__link:hover {
+  color: var(--nn-text-secondary);
+}
+
+.nn-footer__copyright {
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-muted);
+  width: 100%;
+  text-align: center;
+  margin-top: var(--nn-space-6);
+  padding-top: var(--nn-space-6);
+  border-top: 1px solid var(--nn-border);
+}
+
+/* ============================================
+   MOBILE LAYOUT
+   ============================================ */
+
+@media (max-width: 1024px) {
+  .nn-container {
+    grid-template-columns: 1fr;
+    gap: var(--nn-space-8);
+  }
+
+  .nn-sidebar {
+    position: static;
+    max-height: none;
+  }
+
+  .nn-article {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .nn-nav__links {
+    display: none;
+    position: absolute;
+    top: var(--nn-nav-height);
+    left: 0;
+    right: 0;
+    background: var(--nn-bg-overlay);
+    backdrop-filter: blur(10px);
+    flex-direction: column;
+    padding: var(--nn-space-4) var(--nn-gutter);
+    border-bottom: 1px solid var(--nn-border);
+  }
+
+  .nn-nav__links--open {
+    display: flex;
+  }
+
+  .nn-nav__toggle {
+    display: block;
+  }
+
+  .nn-footer__inner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .nn-footer__links {
+    justify-content: center;
+  }
+}
+
+/* ============================================
+   READING PROGRESS BAR (Mobile Top)
+   ============================================ */
+
+.nn-progress {
+  position: fixed;
+  top: var(--nn-nav-height);
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--nn-bg-elevated);
+  z-index: var(--nn-z-sticky);
+}
+
+.nn-progress__bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--nn-accent-crimson), var(--nn-accent-amber));
+  transition: width 100ms ease-out;
+}
+
+
+/**
+ * NovaNews Sidebar Components
+ *
+ * Case file box, financial tracker, and reading progress for sticky sidebar.
+ */
+
+/* ============================================
+   SIDEBAR BOX (Base)
+   ============================================ */
+
+.sidebar-box {
+  background: var(--nn-bg-elevated);
+  border: 1px solid var(--nn-border);
+  border-radius: var(--nn-radius-lg);
+  padding: var(--nn-space-5);
+  margin-bottom: var(--nn-space-6);
+}
+
+.sidebar-box__title {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  color: var(--nn-text-muted);
+  margin-bottom: var(--nn-space-4);
+  padding-bottom: var(--nn-space-3);
+  border-bottom: 1px solid var(--nn-border);
+  display: flex;
+  align-items: center;
+  gap: var(--nn-space-2);
+}
+
+.sidebar-box__title::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--nn-accent-crimson);
+  border-radius: 2px;
+}
+
+/* ============================================
+   CASE FILE BOX
+   Session metadata display
+   ============================================ */
+
+.case-file {
+  /* Uses sidebar-box base */
+}
+
+.case-file__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: var(--nn-space-2) 0;
+  border-bottom: 1px dotted var(--nn-border);
+}
+
+.case-file__item:last-child {
+  border-bottom: none;
+}
+
+.case-file__label {
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-muted);
+}
+
+.case-file__value {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-secondary);
+  text-align: right;
+}
+
+.case-file__value--highlight {
+  color: var(--nn-accent-crimson-light);
+}
+
+.case-file__accusation {
+  margin-top: var(--nn-space-4);
+  padding-top: var(--nn-space-4);
+  border-top: 1px solid var(--nn-border);
+}
+
+.case-file__accusation-label {
+  font-size: var(--nn-text-xs);
+  color: var(--nn-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--nn-tracking-wide);
+  margin-bottom: var(--nn-space-2);
+}
+
+.case-file__accusation-names {
+  font-family: var(--nn-font-headline);
+  font-size: var(--nn-text-lg);
+  color: var(--nn-accent-crimson-light);
+  font-weight: 600;
+}
+
+/* ============================================
+   FINANCIAL TRACKER
+   Black Market shell account visualization
+   ============================================ */
+
+.financial-tracker {
+  /* Uses sidebar-box base */
+}
+
+.financial-tracker__accounts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nn-space-3);
+}
+
+.account-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--nn-space-3);
+  align-items: center;
+}
+
+.account-row__name {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-row__bar-container {
+  flex: 1;
+  height: 6px;
+  background: var(--nn-bg-surface);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: var(--nn-space-1);
+  grid-column: 1 / -1;
+}
+
+.account-row__bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--nn-accent-crimson), var(--nn-accent-amber));
+  border-radius: 3px;
+  transition: width var(--nn-transition-slow);
+}
+
+.account-row__amount {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-sm);
+  color: var(--nn-accent-amber);
+  font-weight: 500;
+  text-align: right;
+}
+
+.financial-tracker__divider {
+  height: 1px;
+  background: var(--nn-border);
+  margin: var(--nn-space-4) 0;
+}
+
+.financial-tracker__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.financial-tracker__total-label {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  letter-spacing: var(--nn-tracking-wide);
+  text-transform: uppercase;
+  color: var(--nn-text-muted);
+}
+
+.financial-tracker__total-amount {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xl);
+  font-weight: 700;
+  color: var(--nn-accent-amber);
+  text-shadow: var(--nn-shadow-glow-amber);
+}
+
+/* ============================================
+   READING PROGRESS (Sidebar Version)
+   ============================================ */
+
+.reading-progress {
+  /* Uses sidebar-box base */
+}
+
+.reading-progress__bar-container {
+  height: 8px;
+  background: var(--nn-bg-surface);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: var(--nn-space-3);
+}
+
+.reading-progress__bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--nn-accent-crimson), var(--nn-accent-amber));
+  border-radius: 4px;
+  transition: width 100ms ease-out;
+}
+
+.reading-progress__text {
+  font-family: var(--nn-font-mono);
+  font-size: var(--nn-text-xs);
+  color: var(--nn-text-muted);
+  text-align: center;
+}
+
+/* ============================================
+   SECTION NAV (Optional)
+   Jump links to article sections
+   ============================================ */
+
+.section-nav {
+  /* Uses sidebar-box base */
+}
+
+.section-nav__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nn-space-1);
+}
+
+.section-nav__link {
+  display: block;
+  padding: var(--nn-space-2) var(--nn-space-3);
+  font-size: var(--nn-text-sm);
+  color: var(--nn-text-muted);
+  text-decoration: none;
+  border-radius: var(--nn-radius-sm);
+  transition: all var(--nn-transition-fast);
+  position: relative;
+}
+
+.section-nav__link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 0;
+  background: var(--nn-accent-crimson);
+  transition: height var(--nn-transition-fast);
+}
+
+.section-nav__link:hover {
+  color: var(--nn-text-secondary);
+  background: var(--nn-bg-surface);
+}
+
+.section-nav__link--active {
+  color: var(--nn-text-primary);
+  background: var(--nn-bg-surface);
+}
+
+.section-nav__link--active::before {
+  height: 60%;
+}
+
+/* ============================================
+   EVIDENCE CARD MINI (Sidebar)
+   Compact evidence summary for sidebar display
+   ============================================ */
+
+.evidence-card-mini {
+  background: var(--nn-bg-surface);
+  border: 1px solid var(--nn-border);
+  border-left: 3px solid var(--nn-accent-crimson);
+  border-radius: var(--nn-radius-sm);
+  padding: var(--nn-space-3);
+  margin-bottom: var(--nn-space-3);
+  transition: border-color var(--nn-transition-fast);
+}
+
+.evidence-card-mini:last-child {
+  margin-bottom: 0;
+}
+
+.evidence-card-mini:hover {
+  border-left-color: var(--nn-accent-crimson-light);
+}
+
+.evidence-card-mini__header {
+  display: flex;
+  align-items: center;
+  gap: var(--nn-space-2);
+  margin-bottom: var(--nn-space-2);
+}
+
+.evidence-card-mini__badge {
+  font-family: var(--nn-font-mono);
+  font-size: 0.625rem;
+  letter-spacing: var(--nn-tracking-widest);
+  text-transform: uppercase;
+  padding: var(--nn-space-1) var(--nn-space-2);
+  border-radius: var(--nn-radius-sm);
+  background: var(--nn-bg-elevated);
+  color: var(--nn-text-muted);
+}
+
+/* Significance modifiers */
+.evidence-card-mini.evidence-card--critical .evidence-card-mini__badge {
+  background: var(--nn-accent-crimson-glow);
+  color: var(--nn-accent-crimson-light);
+}
+
+.evidence-card-mini.evidence-card--supporting .evidence-card-mini__badge {
+  background: var(--nn-accent-amber-glow);
+  color: var(--nn-accent-amber);
+}
+
+.evidence-card-mini.evidence-card--contextual .evidence-card-mini__badge {
+  background: var(--nn-bg-elevated);
+  color: var(--nn-text-muted);
+}
+
+.evidence-card-mini__headline {
+  font-family: var(--nn-font-headline);
+  font-size: var(--nn-text-sm);
+  font-weight: 600;
+  color: var(--nn-text-primary);
+  line-height: var(--nn-leading-snug);
+  margin-bottom: var(--nn-space-2);
+}
+
+.evidence-card-mini__summary {
+  font-size: var(--nn-text-xs);
+  color: var(--nn-text-muted);
+  line-height: var(--nn-leading-normal);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ============================================
+   MOBILE: INLINE FINANCIAL TRACKER
+   Shown after FOLLOW THE MONEY section
+   ============================================ */
+
+.financial-tracker--inline {
+  display: none;
+  margin: var(--nn-space-8) 0;
+}
+
+@media (max-width: 1024px) {
+  .nn-sidebar .financial-tracker,
+  .nn-sidebar .reading-progress,
+  .nn-sidebar .section-nav {
+    display: none;
+  }
+
+  .financial-tracker--inline {
+    display: block;
+  }
+
+  .case-file {
+    display: block;
+  }
+}
+
+
+/**
+ * NovaNews Design Tokens
+ *
+ * Central source of truth for colors, typography, spacing, and breakpoints.
+ * Update these values to theme the entire publication.
+ */
+
+:root {
+  /* ============================================
+     COLOR PALETTE - Noir Cyberpunk
+     ============================================ */
+
+  /* Backgrounds - Dark to light */
+  --nn-bg-deep: #0a0908;
+  --nn-bg-elevated: #141210;
+  --nn-bg-surface: #1c1915;
+  --nn-bg-overlay: rgba(10, 9, 8, 0.95);
+
+  /* Text hierarchy */
+  --nn-text-primary: #f5f1eb;
+  --nn-text-secondary: #a8a29e;
+  --nn-text-muted: #6b6560;
+  --nn-text-inverse: #0a0908;
+
+  /* Accent colors */
+  --nn-accent-crimson: #9b1b30;
+  --nn-accent-crimson-light: #c42a45;
+  --nn-accent-crimson-glow: rgba(155, 27, 48, 0.3);
+  --nn-accent-amber: #c9a227;
+  --nn-accent-amber-light: #e0b82e;
+  --nn-accent-amber-glow: rgba(201, 162, 39, 0.2);
+  --nn-accent-cyan: #3dd9d6;
+
+  /* Borders and dividers */
+  --nn-border: #2a2520;
+  --nn-border-light: #3a3530;
+
+  /* ============================================
+     TYPOGRAPHY
+     ============================================ */
+
+  --nn-font-headline: 'Zilla Slab', serif;
+  --nn-font-body: 'Source Serif Pro', Georgia, serif;
+  --nn-font-mono: 'JetBrains Mono', monospace;
+
+  /* Type scale */
+  --nn-text-xs: 0.75rem;    /* 12px */
+  --nn-text-sm: 0.875rem;   /* 14px */
+  --nn-text-base: 1rem;     /* 16px */
+  --nn-text-lg: 1.125rem;   /* 18px */
+  --nn-text-xl: 1.25rem;    /* 20px */
+  --nn-text-2xl: 1.5rem;    /* 24px */
+  --nn-text-3xl: 2rem;      /* 32px */
+  --nn-text-4xl: 2.5rem;    /* 40px */
+  --nn-text-5xl: 3rem;      /* 48px */
+
+  /* Line heights */
+  --nn-leading-tight: 1.1;
+  --nn-leading-snug: 1.3;
+  --nn-leading-normal: 1.5;
+  --nn-leading-relaxed: 1.7;
+
+  /* Letter spacing */
+  --nn-tracking-tight: -0.02em;
+  --nn-tracking-normal: 0;
+  --nn-tracking-wide: 0.05em;
+  --nn-tracking-wider: 0.1em;
+  --nn-tracking-widest: 0.2em;
+
+  /* ============================================
+     SPACING
+     ============================================ */
+
+  --nn-space-1: 0.25rem;    /* 4px */
+  --nn-space-2: 0.5rem;     /* 8px */
+  --nn-space-3: 0.75rem;    /* 12px */
+  --nn-space-4: 1rem;       /* 16px */
+  --nn-space-5: 1.25rem;    /* 20px */
+  --nn-space-6: 1.5rem;     /* 24px */
+  --nn-space-8: 2rem;       /* 32px */
+  --nn-space-10: 2.5rem;    /* 40px */
+  --nn-space-12: 3rem;      /* 48px */
+  --nn-space-16: 4rem;      /* 64px */
+  --nn-space-20: 5rem;      /* 80px */
+
+  /* ============================================
+     LAYOUT
+     ============================================ */
+
+  --nn-article-width: 720px;
+  --nn-sidebar-width: 300px;
+  --nn-nav-height: 60px;
+  --nn-container-max: 1200px;
+  --nn-gutter: clamp(1rem, 4vw, 2rem);
+
+  /* ============================================
+     BREAKPOINTS (for reference in JS)
+     ============================================ */
+
+  --nn-bp-sm: 640px;
+  --nn-bp-md: 768px;
+  --nn-bp-lg: 1024px;
+  --nn-bp-xl: 1280px;
+
+  /* ============================================
+     EFFECTS
+     ============================================ */
+
+  /* Shadows */
+  --nn-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --nn-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --nn-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --nn-shadow-glow-crimson: 0 0 20px var(--nn-accent-crimson-glow);
+  --nn-shadow-glow-amber: 0 0 20px var(--nn-accent-amber-glow);
+
+  /* Transitions */
+  --nn-transition-fast: 150ms ease;
+  --nn-transition-base: 250ms ease;
+  --nn-transition-slow: 400ms ease;
+
+  /* Border radius */
+  --nn-radius-sm: 2px;
+  --nn-radius-md: 4px;
+  --nn-radius-lg: 8px;
+
+  /* Z-index scale */
+  --nn-z-base: 1;
+  --nn-z-dropdown: 100;
+  --nn-z-sticky: 200;
+  --nn-z-nav: 300;
+  --nn-z-modal: 400;
+  --nn-z-overlay: 500;
+  --nn-z-grain: 1000;
+}
+
+/* Dark mode is default, but we can add light mode later */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* Could override for light mode if needed */
+  }
+}
+
+  </style>
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZMWN885FWB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-ZMWN885FWB');
+  </script>
+</head>
+<body>
+  <div class="nn-progress" aria-hidden="true">
+    <div class="nn-progress__bar"></div>
+  </div>
+
+  <nav class="nn-nav" role="navigation" aria-label="Main navigation">
+    <span class="nn-nav__brand">Nova<span>News</span></span>
+  
+    <button class="nn-nav__toggle" aria-label="Toggle menu" aria-expanded="false">
+      <span class="nn-nav__toggle-icon"></span>
+    </button>
+  
+    <ul class="nn-nav__links">
+      <li><span class="nn-nav__link nn-nav__link--active">Investigations</span></li>
+      <li><span class="nn-nav__link">About</span></li>
+      <li><span class="nn-nav__link">Subscribe</span></li>
+    </ul>
+  </nav>
+
+  <div class="nn-container">
+
+    <article class="nn-article" role="main">
+
+      <header class="nn-article__header">
+        <div class="nn-article__kicker">Investigation</div>
+      
+        <h1 class="nn-article__headline">The Murder Vote Was the Board Meeting.</h1>
+      
+        <p class="nn-article__deck">The first vote produced no killer. The re-vote convicted Alex Reeves, who wasn&#x27;t in the room to argue. The NeurAI board paid out $5,975,000 across the morning, the largest account in Sarah Blackwood&#x27;s name. The same board named her acting CEO before this article filed.</p>
+      
+        <div class="nn-article__meta">
+          <span class="nn-article__byline">
+            Cassandra Nova | Senior Investigative Correspondent
+          </span>
+          <span class="nn-article__divider">·</span>
+      
+          <time class="nn-article__date" datetime="2027-02-22">
+            February 22, 2027
+          </time>
+      
+          <span class="nn-article__divider">·</span>
+      
+          <span class="nn-article__id">Article NNA-042526-26</span>
+        </div>
+      </header>
+
+      <figure class="article-photo article-photo--hero">
+        <img
+          src="sessionphotos/042526/aln0425 (4 of 10).jpg"
+          alt="Sarah Blackwood between Riley Torres and Mel Nilsson during the investigation. The widow who would be named acting CEO of NeurAI before lunch, flanked by the two who carried her case in accusations."
+          class="article-photo__image"
+        >
+        <figcaption class="article-photo__caption">Sarah Blackwood between Riley Torres and Mel Nilsson during the investigation. The widow who would be named acting CEO of NeurAI before lunch, flanked by the two who carried her case in accusations.</figcaption>
+      </figure>
+
+      <section class="nn-section nn-section--narrative" id="lede">
+
+        <p>Marcus Blackwood is dead, and the eighteen of us who gathered this morning to sift through his extracted memories spent four hours producing two outcomes the room only voted on one of.</p>
+
+        <p>The first vote split six ways. Six for Alex Reeves. Six for the theory that Marcus had overdosed on his own pharmacology. One each for Blake, for Quinn Sterling, and for Sarah and Jess Kane together. No majority. Riley Torres asked, in the middle of it, why anyone would accuse a grieving widow. The room went back to the question. Sarah Blackwood worked the second round for an Alex verdict. The re-vote came back ALEX:12, circled at the bottom of the whiteboard. The man wasn&#x27;t in the room to argue.</p>
+
+        <p>I was in that room for all of it. I watched the first vote split, and I watched the re-vote close it. I also watched, on the public Black Market ledger that ran behind the investigation all morning, the NeurAI board pay out five million nine hundred and seventy-five thousand dollars for the burial of twenty-seven extracted memories. The largest single recipient was an account bearing Sarah Blackwood&#x27;s name: one million nine hundred and eighty thousand dollars across nine transactions. By the time we packed up, the same board had named her acting CEO.</p>
+
+      </section>
+      <section class="nn-section nn-section--narrative" id="the-story">
+        <h2 class="nn-section__title">The Story</h2>
+
+        <p>Start a month before the punch. On January 28, 2027, the Patchwork Law Firm filed a cease and desist on Alex Reeves&#x27;s behalf with the NeurAI board, asserting that the entire intellectual-property foundation of NeurAI had been Alex&#x27;s, that Marcus Blackwood had no programming technique to speak of, and that the board should remove Marcus, install Alex as Chief Technology Officer, and name a neutral interim CEO. The deadline for compliance was February 28. The murder happened a week before the deadline ran out.</p>
+
+        <p>The board did not comply with Alex&#x27;s demand. The board was already addressing the question on its own terms. Three weeks after the cease and desist landed, Marcus emailed Quinn Sterling and demanded another batch of Psychotrophin-3A, the experimental memory-extraction drug Quinn had once tried to bury, and that Marcus was now using on himself in escalating doses. Marcus added the line that explained the rest of it: you can&#x27;t afford to say no, can you?</p>
+
+        <p>By the night of February 21, the room around Marcus had been arranging itself for weeks. At 2:08 AM that same day, hours before the rave, the lawyer Mel Nilsson took Sarah Blackwood as a client in her divorce. The retention email is in Mel&#x27;s own outbox. Mel had known Marcus longer, by Mel&#x27;s own admission, but Sarah&#x27;s case was, quote, better. Sarah had also told Riley Torres, by text, that she had finally kicked Marcus out and was going to the rave to confront him. Riley confirmed she would be there the whole time. The party was already a coordination point.</p>
+
+        <p>Nine PM, the rave is going. Alex sends a final text to Vic Kingsley.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="ale001">
+  <div class="evidence-card__label">The 9:18 PM Cease and Desist</div>
+  <div class="evidence-card__content">
+    ALEX.1 - 9:18PM - ALEX texts VIC: Look, you don&#x27;t want a lawsuit coming after NeurAI. This is the last chance to make things right / Cease &amp; Desist. Don&#x27;t want lawyers involved / M stole the idea &amp; design for NeurAI from me. just look at the code base architecture! Everyone knows MARCUS can&#x27;t code for shit / Still, he profits, while I&#x27;m rage-texting you like a crazy person / I just want some credit and MARCUS gone from from NeurAI / VIC texts : Okay, let&#x27;s talk. Meet me at the bar at 10:00?
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Alex Reeves</span>
+  </div>
+</aside>
+
+        <p>Cease and desist. Marcus stole the idea and the architecture. Just look at the code base. Vic answered: Okay, let&#x27;s talk. Meet me at the bar at 10:00. Whatever happened at the 10 PM bar meeting did not survive into the morning&#x27;s record.</p>
+
+        <p>The proof of what Alex was claiming was already in motion through other hands. At 9:37 PM, Remi Whitman followed Marcus into a secret room adjoining the party space. Marcus was high enough to wave Remi in and tell her to help herself. Remi grabbed a thumb drive of Marcus&#x27;s files and walked out. By 11:10 PM, Zia Bishara was telling Ashe Motoko, on the record, that Marcus had shown up at Zia&#x27;s doorstep one night, blitzed out of his mind, and begged to borrow the Oracle Ledger algorithm for a CyberLife demo. Marcus had been running it inside NeurAI&#x27;s proprietary indexing system ever since. Twenty-one minutes later, at 11:29 PM, Remi sent Vic an encrypted text: Have NeurAI IP theft proof. Oracle Ledger code. Shall we chat? Vic read it across the room and nodded.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="zia004">
+  <div class="evidence-card__label">Same Variable Names. Same Comments.</div>
+  <div class="evidence-card__content">
+    ZIA.4 - 12:31AM - REMI hands you the laptop. You punch in the default password for the Oracle Ledger and it works. Next, you pull up a code comparison. Left: your Oracle Ledger commit from 2023. Right: NeurAI&#x27;s &#x27;proprietary&#x27; system from 2027. Same variable names. Same logic flow. Same comments. MARCUS didn&#x27;t even bother changing your notes. Sloppy thief. Too bad the idiot didn&#x27;t catch the massive bug that you&#x27;ve since fixed.
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Zia Bishara</span>
+  </div>
+</aside>
+
+        <p>By 12:31 AM, Zia had compiled the side-by-side proof. Same variable names. Same logic flow. Same comments. Marcus did not even bother changing Zia&#x27;s notes. Whatever Vic Kingsley made of that proof he chose not to put on the public record this morning. Vic exposed zero of his own four memories of the night.</p>
+
+        <figure class="article-photo article-photo--inline">
+  <img
+    src="sessionphotos/042526/aln0425 (3 of 10).jpg"
+    alt="Riley Torres working her own vest open at the rave bar, alone. Whatever was sewn into the lining she would carry into the morning&#x27;s accusations as the question that closed ranks around the widow."
+    loading="lazy"
+    class="article-photo__image"
+  >
+  <figcaption class="article-photo__caption">Riley Torres working her own vest open at the rave bar, alone. Whatever was sewn into the lining she would carry into the morning&#x27;s accusations as the question that closed ranks around the widow.</figcaption>
+</figure>
+
+        <p>Two hours before that punch, Morgan Reed was on a hammock with Marcus, holding his own dossier.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="mor003">
+  <div class="evidence-card__label">Take Care of It, Just Like You Always Do</div>
+  <div class="evidence-card__content">
+    MORGAN.3 - 11:22PM - You&#x27;re both on the hammock. You show him proof: bribes, fraudulent reports, shell company records, stolen IP... You say: &quot;Go public about the insider trading and take full responsibility or I give all of this damning evidence to Senator Walsh.&quot; His face says he&#x27;s considering it. But there&#x27;s something else there. Instead of answering, he reaches into his bag and hands you a generous bribe. MARCUS: &quot;Take care of it, will you? Just like you always do,&quot; then leaves without giving you a chance to respond.
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Morgan Reed</span>
+  </div>
+</aside>
+
+        <p>Take care of it, just like you always do. Marcus had spent years using Morgan to bury his shell companies, fraudulent reports, and stolen-IP traffic. The morning of the investigation she was on Sarah&#x27;s flank, working me into a corner about which truth to publish. Seven minutes after the bribe on the hammock, Flip watched Marcus do it again, this time near the bar, this time openly handing Morgan a fat envelope of cash.</p>
+
+        <figure class="article-photo article-photo--inline">
+  <img
+    src="sessionphotos/042526/aln0425 (6 of 10).jpg"
+    alt="Cass Zhang reading NeurAI&#x27;s marketing materials in the foreground while Vic Kingsley and Morgan Reed negotiate behind her. The artist whose code was running inside the company, the venture capitalist with the largest stake in it, and the lobbyist who built the company&#x27;s shell architecture, in the same frame."
+    loading="lazy"
+    class="article-photo__image"
+  >
+  <figcaption class="article-photo__caption">Cass Zhang reading NeurAI&#x27;s marketing materials in the foreground while Vic Kingsley and Morgan Reed negotiate behind her. The artist whose code was running inside the company, the venture capitalist with the largest stake in it, and the lobbyist who built the company&#x27;s shell architecture, in the same frame.</figcaption>
+</figure>
+
+        <p>Eleven thirty-two PM. The punch.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="ale003">
+  <div class="evidence-card__label">Years of Stolen Work in Every Punch</div>
+  <div class="evidence-card__content">
+    ALEX.3 - 11:32PM - MARCUS brags about the BizAI sale. Again. &quot;Best deal I ever made!&quot; Waits for a response from you. Your fist moves before your brain. His jaw. Your knuckles. Years of stolen work in every punch. SARAH pulls you off. Worth it. Finally worth it.
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Alex Reeves</span>
+  </div>
+</aside>
+
+        <p>Sarah pulled Alex off her husband. Three minutes later Sarah&#x27;s voice was on the public record telling Alex, with a kind of horrible gentleness, that Marcus was an asshole, but he was her asshole, and Alex should go home. Seven minutes after that, Jamie &#x27;Volt&#x27; Woods was outside trying to smoke when the wind carried over a sentence the rest of the room would have given a lot to hear.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="jam003">
+  <div class="evidence-card__label">He&#x27;s Out. You&#x27;re In. It&#x27;s Done.</div>
+  <div class="evidence-card__content">
+    JAMIE.3 - 11:39PM - Can&#x27;t even get a peaceful smoke in. The dude who punched MARCUS is out here with that VC. They&#x27;re in a panic. Meeting outside, trying to be discreet, but the wind carries this sentence: &quot;He&#x27;s out. You&#x27;re in. Trust me. It&#x27;s done. Please just come inside.&quot; There&#x27;s some intense back and forth. You hear the name SARAH. Then they finally convince the punching man to head back inside.
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Jamie &#x27;Volt&#x27; Woods</span>
+  </div>
+</aside>
+
+        <p>He&#x27;s out. You&#x27;re in. Trust me. It&#x27;s done. Sarah&#x27;s name was mentioned. That is, by Jamie&#x27;s account, the venture capitalist in the room telling the dude who punched Marcus that the corporate succession had been completed. Vic Kingsley by every other identifier in the night. Alex Reeves, who would be voted Marcus&#x27;s killer in a different room twelve hours later, by every other identifier.</p>
+
+        <figure class="article-photo article-photo--inline">
+  <img
+    src="sessionphotos/042526/aln0425 (1 of 10).jpg"
+    alt="Jamie &#x27;Volt&#x27; Woods and Quinn Sterling at the rave bar during the investigation. The bartender Skyler had been paying $100 per recorded conversation, and the chemist Marcus was blackmailing for the drug, comparing notes alone."
+    loading="lazy"
+    class="article-photo__image"
+  >
+  <figcaption class="article-photo__caption">Jamie &#x27;Volt&#x27; Woods and Quinn Sterling at the rave bar during the investigation. The bartender Skyler had been paying $100 per recorded conversation, and the chemist Marcus was blackmailing for the drug, comparing notes alone.</figcaption>
+</figure>
+
+        <p>Twelve thirty-two AM. Skyler Iyer walks into the bar with a different kind of deadline.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="sky004">
+  <div class="evidence-card__label">Try Programming the Prototype With Your Memory Recordings Instead</div>
+  <div class="evidence-card__content">
+    SKYLER.4 - 12:32AM - It&#x27;s after midnight, so you go track MARCUS down at the bar. &quot;You missed our deadline. You were supposed to show me a working prototype by tonight.&quot; MARCUS deflects. He says the AI&#x27;s still buggy. &quot;So try programming the prototype I sent you with your memory recordings instead. What&#x27;s the worst that could happen?&quot; MARCUS deflects again. &quot;It&#x27;s untested technology. What if something goes wrong?&quot; But you&#x27;ve had enough of his delay tactics. It&#x27;s now or never.
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Skyler Iyer</span>
+  </div>
+</aside>
+
+        <p>What&#x27;s the worst that could happen. Jamie Woods was three feet behind the bar when the conversation happened, frozen in place, doing what bartenders learn to do. Per a text exchange between Jamie and Skyler that surfaced this morning, Skyler had been paying Jamie a hundred dollars a head for tech-savvy conversations recorded at Marcus&#x27;s parties since at least early February. The bartender did not need her own contract to know what to write down. The investor she was on retainer with was now looking her boss in the face and telling him to use the technology that had been failing on a roomful of people who did not know they were the test.</p>
+
+        <p>Eighteen minutes later, the Stanford Four called an emergency meeting without Marcus.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="nat004">
+  <div class="evidence-card__label">The AI Doesn&#x27;t Work</div>
+  <div class="evidence-card__content">
+    NAT.4 - 12:50AM - You, NAT and SAM gather together to talk about what to do with MARCUS. You&#x27;ve tried to convince those two to stop enabling him for years. But at this point, he might be too far gone. Now you&#x27;re learning that he&#x27;s lied about the AI that underpins his company. It doesn&#x27;t work. But instead of fixing it, he&#x27;s taking drugs and inventing techniques to steal people&#x27;s memories instead? Maybe his high pressure deal with CyberLife pushed him over the edge and into this weird, out-of-the-box thinking….
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Nat Francisco</span>
+  </div>
+</aside>
+
+        <p>The AI does not work. Marcus has been faking it. He has been taking Sam Thorne&#x27;s drug and inventing techniques to steal people&#x27;s memories instead. The four people in the room with the longest claim on Marcus had finally said the sentence out loud. None of them, in this morning&#x27;s record, did anything about it before he died.</p>
+
+        <p>Twenty-eight minutes after that meeting, in a bathroom on the other side of the warehouse, Sarah Blackwood found Jess Kane crying.</p>
+
+        <aside class="evidence-card evidence-card--critical" data-token="sar004">
+  <div class="evidence-card__label">We Both Do</div>
+  <div class="evidence-card__content">
+    SARAH.4 - 1:36AM - You find JESS in the bathroom, crying, and suddenly put it together. You squeak out between unexpected tears: &quot;MARCUS&#x27;s baby is yours?&quot; She&#x27;s sobbing so hard now that she can&#x27;t even speak, so she nods. You thought you&#x27;d be outraged, but seeing her here in front of you, you just feel resigned. You say: &quot;You can have him. But that baby deserves better. We both do.&quot;
+  </div>
+  <div class="evidence-card__meta">
+    <span class="evidence-card__owner">Sarah Blackwood</span>
+  </div>
+</aside>
+
+        <p>You can have him. But that baby deserves better. We both do. The presumed widow and the presumed mistress, in the only conversation in the night&#x27;s record where either of them sounds like a person making a decision instead of a person being acted upon. Fourteen minutes later, Marcus&#x27;s own final memory captured the chaos he was attempting to manage: drugged attendees wandering off mid-command, Sarah staring at a wall in tears, Sam unable to follow the simplest instruction Marcus tried to give him next. Marcus was dead by morning.</p>
+
+      </section>
+      <section class="nn-section nn-section--notes" id="follow-the-money">
+        <h2 class="nn-section__title">Follow the Money</h2>
+
+        <p>Five million nine hundred and seventy-five thousand dollars paid out by the NeurAI board across the morning. Twenty-seven extracted memories surrendered to burial in exchange. Seven shell accounts received the money. The Black Market display does not show me which memories went where. I can tell you what each account took, when, and how the timing tells you what kind of operation it was.</p>
+
+        <p>The largest single recipient is an account bearing Sarah Blackwood&#x27;s name. One million nine hundred and eighty thousand dollars across nine transactions. The first three closed at 9:43 AM. One minute later, an additional three hundred thousand dollars landed in the account, line item: Negotiated. I watched Sarah Blackwood at that same minute negotiating with the NeurAI board&#x27;s representative for double the standard rate. The premium and the negotiation matched within sixty seconds. Sarah&#x27;s other six payments came in across the next thirty minutes, in two clusters, the last one at 10:13 AM. Whoever held the account, the line items in it line up with a person in the room making a deal. I watched Sarah make it. The board paid one point nine eight million dollars for the deal to land.</p>
+
+        <p>Then the two anonymous compressions. Jo collected one million nine hundred and five thousand dollars in five transactions, every one of them inside the closing minute of the burial window at 10:18 AM. Five extracted memories surrendered together at the deadline. Whoever held Jo had been waiting for the closing bell with the receipts already in hand. Abc collected one million three hundred and sixty-seven thousand five hundred dollars in five transactions, every one of them at 9:35 AM, the opening minute of the window. Five memories at the door, before most of the room had even sat down. Two anonymous accounts, two strategic burials, three and a quarter million dollars combined, both built around moments the timing tells you mattered.</p>
+
+        <p>An account bearing Quinn Sterling&#x27;s name took two hundred and twenty-five thousand dollars across two transactions. Two extracted memories went into burial there. The Quinn accusation did not come from Sarah&#x27;s primary case in the room. It came late, in deliberations, from Ezra Sullivan, who suggested her own protégé might be the suspect. The room voted for Quinn once. Whoever held the account, the architecture had a name on it that matched a name surfaced in the room, even though the case the room would actually settle on was for someone else.</p>
+
+        <p>Mr Blockchain took three hundred and twenty-five thousand dollars for two transactions. The name reads as a tech-bro joke but the money is real. Jv took one hundred and thirty-five thousand for three smaller burials. Mjd took thirty-seven thousand five hundred for the smallest single transaction of the morning. Three accounts, half a million dollars combined, cleaning up around the edges.</p>
+
+        <p>I cannot tell you what was on any of the buried memories. The Black Market display does not show ownership. What I can tell you is who the buyer was. Across all twenty-seven transactions, the money came from one place: the NeurAI board. The same board that, before this article filed, named the morning&#x27;s largest recipient acting CEO of NeurAI.</p>
+
+      </section>
+      <section class="nn-section nn-section--narrative" id="the-players">
+        <h2 class="nn-section__title">The Players</h2>
+
+        <p>Eighteen of us in the room this morning. Eighteen ways of standing in relation to the truth. Some of us were on Sarah&#x27;s payroll by the time the vote happened. Some of us had been paid not to be.</p>
+
+        <p>Sarah Blackwood is the center of the morning. The widow whose retained lawyer Mel Nilsson had already sent the firm an email at 2:08 AM the day of the rave describing Sarah as the better client and the divorce as high-profile, complete with mention of a paternity test that had been anonymously mailed to the Blackwood home. By morning, the same Sarah was beaming in two photographs I took, walking the room with Riley Torres and Mel, and leading the case against the man who wasn&#x27;t in the room. Sarah had floated Jess Kane&#x27;s name early in the investigation and walked it back as the bathroom evidence reached the table. By the second round of voting, with the room split between the Alex case and the accident theory, Sarah was working both groups for an Alex verdict. The re-vote came back ALEX:12. By lunch, NeurAI had named her acting CEO. The board&#x27;s search for a permanent replacement is, per a leak from inside the company that reached me as I was filing, expected to be a formality.</p>
+
+        <p>Riley Torres asked the question that did the most work in the room: why would you accuse a grieving widow. Riley exposed zero of her own memories this morning. The loyalty card Riley had written for Sarah surfaced not through Riley&#x27;s own exposed evidence but through the props on Riley&#x27;s person, signed simply -R, with three handwritten lines about how Marcus had called therapy inefficient, talked Sarah out of her promotion, and made her cry at Christmas, and a closing line offering to help Sarah plan her brilliant future without him. Per a text thread between them that also reached the table, Sarah had told Riley before the rave that she had finally kicked Marcus out and was going to confront him. Riley promised to be there the whole time. Riley spent the morning in a teal hoodie working a vest open with paper inside it. Whatever was in the lining she carried into the accusations as the question that closed ranks around her best friend.</p>
+
+        <p>Mel Nilsson is Sarah&#x27;s lawyer, retained at 2:08 AM the day of the rave, hours before Sarah arrived at it. Of the Stanford Four, Mel was the one openly drawing the morning&#x27;s paychecks. I heard Mel, more than once, say out loud how much she would like some money. Mel was on Team Sarah in the accusations. Mel had drafted the firm-internal email saying she had known Marcus longer but Sarah&#x27;s case was, quote, better.</p>
+
+        <p>Morgan Reed took a bribe from Marcus on a hammock at 11:22 PM the night before, in exchange for keeping his shell-company architecture quiet. Marcus said it: take care of it, just like you always do. Morgan exposed two of her own four memories: the bribe, and Riley&#x27;s 10:12 PM confrontation. Morgan&#x27;s other two stayed below the line. I watched Morgan flip during the morning. She and Quinn Sterling had agreed early that Marcus&#x27;s death must have been a horrible accident from his pharmacology. By the second round of voting, Morgan was working with Sarah for the Alex verdict instead. Morgan&#x27;s lobbying letter to Senator Burns, in her own retained correspondence, is florid Washington prose with a hidden line in the margin about changing her briefcase code from triple zero. The architect of the laundering machine knows what gets read.</p>
+
+        <p>Vic Kingsley exposed zero of his own memories. The largest financial loser from last night&#x27;s revelations chose to expose nothing about how he had become one. The only direct trace of Vic in the morning&#x27;s public record is in Jamie&#x27;s witnessing of the post-fight handoff. He&#x27;s out. You&#x27;re in. It&#x27;s done. Sarah&#x27;s name was mentioned.</p>
+
+        <figure class="article-photo article-photo--inline">
+  <img
+    src="sessionphotos/042526/aln0425 (9 of 10).jpg"
+    alt="Quinn Sterling and Riley Torres on one side of the room. Sarah Blackwood and Morgan Reed on the other. Quinn wore a small button with Marcus&#x27;s face pinned to his chest all morning while pushing the theory that Marcus&#x27;s death had been an accident."
+    loading="lazy"
+    class="article-photo__image"
+  >
+  <figcaption class="article-photo__caption">Quinn Sterling and Riley Torres on one side of the room. Sarah Blackwood and Morgan Reed on the other. Quinn wore a small button with Marcus&#x27;s face pinned to his chest all morning while pushing the theory that Marcus&#x27;s death had been an accident.</figcaption>
+</figure>
+
+        <p>Quinn Sterling was the chemist Marcus had been blackmailing for Psychotrophin-3A. Marcus&#x27;s own retained email to Quinn, dated four days before the murder, asks for another batch and reminds Quinn: you can&#x27;t afford to say no, can you. Quinn pushed the horrible-accident theory through the morning, vocally and consistently. Wore a small button with Marcus&#x27;s face pinned to his blue sweater while doing it. Confessed his guilt about the drug to Ezra Sullivan at 12:02 AM in the only Quinn memory he exposed. Asked the only question the room never answered: I know what Alex looks like and he isn&#x27;t Blake, but no one in this room has actually seen Blake in person before today. The room voted for Quinn once.</p>
+
+        <p>Ezra Sullivan uncovered more of the morning&#x27;s evidence chains than anyone. Surfaced more of other people&#x27;s memories than anyone. Was the first person to suggest, on the record, that the suspect might be her own protégé. Ezra exposed zero of her own memories. Three of her four ended the morning underground. The mentor whose own night never reached the table named the protégé first.</p>
+
+        <figure class="article-photo article-photo--inline">
+  <img
+    src="sessionphotos/042526/aln0425 (10 of 10).jpg"
+    alt="Ezra Sullivan exposing a memory to this reporter, with Flip and Jamie &#x27;Volt&#x27; Woods passing through. Ezra exposed more of the morning&#x27;s evidence than anyone else in the room. None of the memories she exposed were her own."
+    loading="lazy"
+    class="article-photo__image"
+  >
+  <figcaption class="article-photo__caption">Ezra Sullivan exposing a memory to this reporter, with Flip and Jamie &#x27;Volt&#x27; Woods passing through. Ezra exposed more of the morning&#x27;s evidence than anyone else in the room. None of the memories she exposed were her own.</figcaption>
+</figure>
+
+        <p>Ashe Motoko is the journalist Taylor Chase got fired from the Silicon Valley Business Journal in 2025 by tipping Marcus off about her BizAI exposé before it could publish. Ashe surfaced her own confrontation with Taylor at 9:59 PM, exposed publicly, and her interview with Zia about the algorithm theft. She was racing the journalism in the room. So was Taylor. Taylor exposed nothing of his own. Talking to me, Taylor said no one tells him anything because no one likes him. By that point, the people working the morning&#x27;s narratives had run around him.</p>
+
+        <p>Zia Bishara invented the Oracle Ledger algorithm Marcus stole. Three of Zia&#x27;s four memories surfaced this morning, all on the IP-theft chain. The 12:31 AM compilation of the side-by-side proof, with the same variable names and the same comments, is the document that made the case for the fraud. Zia worked the public board with me late in the morning. Of the people in the room with the most direct claim on what NeurAI actually was, Zia was the only one who chose to expose every piece of it she had.</p>
+
+        <p>Cass Zhang invented the Synesthesia Engine. By Kai Andersen&#x27;s exposed account, Marcus had asked Kai to incorporate a last-minute installation at the party which Kai recognized, when she overheard Cass pitching the Engine to Skyler at 11:19 PM, as suspiciously familiar to what she had been told to install. Cass exposed zero of her own memories. The artist whose code may have been running on the party crowd as a stolen demo had nothing to put on the public record about it.</p>
+
+        <p>Kai Andersen was told by Marcus that she was hired to decorate, not think. She spent the night before folding a folding installation. The morning&#x27;s record has Kai exposing two of her own four memories: the 8:43 PM hustle to finish the install, and the 11:19 PM moment of recognition while overhearing Cass and Skyler. The artist who carried the suspect code into the party as part of her own work surfaced more of her own night than the artist whose code it was.</p>
+
+        <figure class="article-photo article-photo--inline">
+  <img
+    src="sessionphotos/042526/aln0425 (7 of 10).jpg"
+    alt="Skyler Iyer, Kai Andersen, and Ashe Motoko examining a memory pod together while Ezra Sullivan works alone in the background. Three people Marcus stole craft from, comparing notes; the mentor about to suggest her own protégé."
+    loading="lazy"
+    class="article-photo__image"
+  >
+  <figcaption class="article-photo__caption">Skyler Iyer, Kai Andersen, and Ashe Motoko examining a memory pod together while Ezra Sullivan works alone in the background. Three people Marcus stole craft from, comparing notes; the mentor about to suggest her own protégé.</figcaption>
+</figure>
+
+        <p>Sam Thorne supplied Marcus&#x27;s drug. Stanford Four. Sam exposed none of his own four memories. The chemist whose product was at the center of the night kept his own night underground. Nat Francisco, Marcus&#x27;s closest college friend by Nat&#x27;s own admission to me on the record, exposed two of his memories: the 11:04 PM moment of hearing Jess describe her own memory extraction, and the 12:50 AM Stanford Four conclusion that Marcus had been faking the AI. Nat carried the AI fraud into the room. The room consolidated the verdict around Alex anyway.</p>
+
+        <p>Jess Kane is Marcus&#x27;s pregnant lover. All four of Jess&#x27;s memories surfaced this morning. The 8:17 PM doorway rejection. The 9:42 PM overhearing of Sam and Nat. The 11:04 PM telling Nat about her own extraction. The 1:36 AM bathroom moment with Sarah, both crying, both his victims. Jess shared every piece of her own night the room would let her share.</p>
+
+        <p>Jamie &#x27;Volt&#x27; Woods is the bartender witness, on Skyler&#x27;s payroll at a hundred dollars per recorded interaction per the texts in evidence. Jamie&#x27;s third memory, the post-fight handoff with Sarah&#x27;s name in it, was exposed publicly. Three Jamie memories did not reach the table. Skyler Iyer exposed only the 12:32 AM deadline-dare. Three other Skyler memories went underground or never came up. Late in the investigation I watched Skyler disappear into the foyer with Blake. I cannot tell you what was said in the foyer. I can tell you Skyler had reasons not to want it overheard.</p>
+
+        <p>Flip is construction worker Phil Kowalski, in for thirty thousand to a bookie and an undefined favor to Marcus. Flip witnessed the 11:29 PM Marcus-Morgan envelope handoff and exposed it. Three of Flip&#x27;s other memories did not reach the table. Spent the late hours flirting with Riley, who had paid in advance for the morning&#x27;s loyalty card to Sarah. Flip, Volt, and Taylor talked money across the morning, the three of them visibly working in tandem. The shape of the periphery of Sarah&#x27;s coalition.</p>
+
+        <p>Eighteen of us. One absence convicted. One widow promoted. Sixteen people still in the same room with each other tomorrow.</p>
+
+      </section>
+      <section class="nn-section nn-section--notes" id="whats-missing">
+        <h2 class="nn-section__title">What&#x27;s Missing</h2>
+
+        <p>I cannot tell you what was on any of the twenty-seven memories the NeurAI board paid five million nine hundred and seventy-five thousand dollars to bury this morning. The Black Market display does not show ownership. What I can tell you is the shape of each transaction. The widow&#x27;s account took the most. The largest anonymous account took five memories in a single closing minute. The next largest anonymous account took five at the open. An account bearing the name of one of the morning&#x27;s floated suspects took two hundred and twenty-five thousand dollars across two transactions, even though that suspect&#x27;s accusation came late in deliberations and from his own mentor, not from the case Sarah Blackwood was actually building. Whoever held those accounts, the timing of what got bought and the timing of what got said in the room are still the only legible pattern.</p>
+
+        <p>I cannot tell you what was said in the foyer when Skyler Iyer disappeared into it with Blake late in the investigation. I watched them go. I did not follow. The morning has a Skyler-shaped silence on the receipts of the deal that started this whole machine.</p>
+
+        <p>I cannot tell you what was in the four Vic Kingsley memories that never reached the table. The largest single financial loser in the room from last night&#x27;s revelations exposed nothing about how he had become one. Whatever the encrypted text from Remi Whitman at 11:29 PM produced, whatever Vic learned between then and the punch seven minutes later, whatever Vic knew about NeurAI&#x27;s underlying code by the time Alex was outside being told he was in, Vic&#x27;s own night stayed off the public record. Vic&#x27;s morning behavior did not tell me, and the memories he chose not to share might have.</p>
+
+        <p>Of Marcus Blackwood&#x27;s own four memories, only the last one, the 1:50 AM chaos, surfaced. Three Marcus memories did not reach the table. The man at the center of the morning&#x27;s investigation kept three quarters of his own night out of his own funeral.</p>
+
+      </section>
+      <section class="nn-section nn-section--conclusion" id="closing">
+
+        <p>The room voted Alex Reeves. The first vote did not produce a killer. The re-vote produced a verdict against the man who was not in the room to argue. Riley Torres asked why anyone would accuse a grieving widow. The room arrived at an answer it could live with by the second round.</p>
+
+        <p>The other answer it arrived at was that the NeurAI board would pay five million nine hundred and seventy-five thousand dollars across the morning for the surrender of twenty-seven extracted memories, and would name Sarah Blackwood acting CEO of NeurAI before this article filed. The board&#x27;s two transactions ran in the same direction with the same parties. The first one cleaned up the receipts of how Marcus had run his company. The second one provided the company a CEO whose largest single deposit of the morning came from the same payor that had just installed her.</p>
+
+        <p>What Sarah inherited this morning is straightforward to inventory. NeurAI&#x27;s headline AI is a sham, on the public record now through Nat Francisco&#x27;s exposed memory of the 12:50 AM Stanford Four meeting. The codebase is Zia Bishara&#x27;s Oracle Ledger, run unsigned, on the public record now through Zia&#x27;s compiled side-by-side proof. The shell architecture that the NeurAI board used to pay one point nine eight million dollars into an account named for the new CEO this morning was built by Morgan Reed for Marcus, on the public record now through Riley Torres&#x27;s confrontation of Morgan and Marcus&#x27;s own bribe-on-the-hammock. The acting CEO walked into all of it.</p>
+
+        <p>The murder vote was the legitimacy ritual that ran concurrent with the corporate succession. Whether Marcus&#x27;s death was an accident, as Quinn Sterling vocally maintained, or Alex Reeves&#x27;s, as the room consolidated to in the second round, is a question the room and the police can continue to argue. The board has answered a different question. It has named who runs the machine now. The machine works.</p>
+
+      </section>
+
+      <div class="sidebar-box financial-tracker financial-tracker--inline">
+        <div class="sidebar-box__title">Black Market Transactions</div>
+      
+        <div class="financial-tracker__accounts">
+          <div class="account-row">
+            <span class="account-row__name">Sarah</span>
+            <span class="account-row__amount">$1,980,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 100%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Jo</span>
+            <span class="account-row__amount">$1,905,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 96%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Abc</span>
+            <span class="account-row__amount">$1,367,500</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 69%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Mr Blockchain</span>
+            <span class="account-row__amount">$325,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 16%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Quinn</span>
+            <span class="account-row__amount">$225,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 11%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Jv</span>
+            <span class="account-row__amount">$135,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 7%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Mjd</span>
+            <span class="account-row__amount">$37,500</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 2%"></div>
+            </div>
+          </div>
+        </div>
+      
+        <div class="financial-tracker__divider"></div>
+        <div class="financial-tracker__total">
+          <span class="financial-tracker__total-label">Total Buried</span>
+          <span class="financial-tracker__total-amount">$5,975,000</span>
+        </div>
+      </div>
+
+    </article>
+
+    <aside class="nn-sidebar" role="complementary">
+
+      <div class="sidebar-box financial-tracker">
+        <div class="sidebar-box__title">Black Market Transactions</div>
+      
+        <div class="financial-tracker__accounts">
+          <div class="account-row">
+            <span class="account-row__name">Sarah</span>
+            <span class="account-row__amount">$1,980,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 100%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Jo</span>
+            <span class="account-row__amount">$1,905,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 96%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Abc</span>
+            <span class="account-row__amount">$1,367,500</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 69%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Mr Blockchain</span>
+            <span class="account-row__amount">$325,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 16%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Quinn</span>
+            <span class="account-row__amount">$225,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 11%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Jv</span>
+            <span class="account-row__amount">$135,000</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 7%"></div>
+            </div>
+          </div>
+          <div class="account-row">
+            <span class="account-row__name">Mjd</span>
+            <span class="account-row__amount">$37,500</span>
+            <div class="account-row__bar-container">
+              <div class="account-row__bar" style="width: 2%"></div>
+            </div>
+          </div>
+        </div>
+      
+        <div class="financial-tracker__divider"></div>
+        <div class="financial-tracker__total">
+          <span class="financial-tracker__total-label">Total Buried</span>
+          <span class="financial-tracker__total-amount">$5,975,000</span>
+        </div>
+      </div>
+
+      <section class="sidebar-box evidence-summary">
+        <div class="sidebar-box__title">Key Evidence</div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="ale001">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">The 9:18 PM Cease and Desist</div>
+          <div class="evidence-card-mini__summary">Alex&#x27;s rage text to Vic, two hours before the punch. Cease and desist all work on NeurAI or this goes to court.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="ale003">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">Years of Stolen Work in Every Punch</div>
+          <div class="evidence-card-mini__summary">11:32 PM, Alex&#x27;s fist meets Marcus&#x27;s jaw. Worth it. Finally worth it.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="zia004">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">Same Variable Names. Same Comments.</div>
+          <div class="evidence-card-mini__summary">12:31 AM, Zia compiles the side-by-side proof. Marcus didn&#x27;t even change the notes.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="nat004">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">The AI Doesn&#x27;t Work</div>
+          <div class="evidence-card-mini__summary">12:50 AM, the Stanford Four learn Marcus has been faking the AI and stealing memories instead of fixing it.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="mor003">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">Take Care of It, Just Like You Always Do</div>
+          <div class="evidence-card-mini__summary">11:22 PM, Marcus bribes Morgan on the hammock instead of facing her shell-company evidence.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="jam003">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">He&#x27;s Out. You&#x27;re In. It&#x27;s Done.</div>
+          <div class="evidence-card-mini__summary">11:39 PM, Jamie overhears the post-fight handoff. Sarah&#x27;s name was mentioned.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="sky004">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">Try the Prototype With Your Memory Recordings Instead</div>
+          <div class="evidence-card-mini__summary">12:32 AM, Skyler enforces the deadline at the bar. The trigger for the chaos at 1:50.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--critical" data-token-id="sar004">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">critical</span>
+          </div>
+          <div class="evidence-card-mini__headline">We Both Do</div>
+          <div class="evidence-card-mini__summary">1:36 AM, Sarah finds Jess in the bathroom. Both crying. Both his victims.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--supporting" data-token-id="mor002">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">supporting</span>
+          </div>
+          <div class="evidence-card-mini__headline">Riley Traces the Shell Companies</div>
+          <div class="evidence-card-mini__summary">10:12 PM, Riley confronts Morgan with the documented shell-company paper trail.</div>
+        </div>
+        <div class="evidence-card-mini evidence-card--supporting" data-token-id="rem002">
+          <div class="evidence-card-mini__header">
+            <span class="evidence-card-mini__badge">supporting</span>
+          </div>
+          <div class="evidence-card-mini__headline">The Flash Drive From the Secret Lab</div>
+          <div class="evidence-card-mini__summary">9:37 PM, Remi follows Marcus into the secret lab and walks out with a thumb drive of his files.</div>
+        </div>
+      </section>
+
+      <nav class="sidebar-box section-nav" aria-label="Article sections">
+        <div class="sidebar-box__title">Sections</div>
+        <ul class="section-nav__list">
+          <li><a href="#the-story" class="section-nav__link">The Story</a></li>
+          <li><a href="#follow-the-money" class="section-nav__link">Follow the Money</a></li>
+          <li><a href="#the-players" class="section-nav__link">The Players</a></li>
+          <li><a href="#whats-missing" class="section-nav__link">What&#x27;s Missing</a></li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-box reading-progress">
+        <div class="sidebar-box__title">Reading Progress</div>
+        <div class="reading-progress__bar-container">
+          <div class="reading-progress__bar"></div>
+        </div>
+        <div class="reading-progress__text">0% complete</div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <footer class="nn-footer">
+    <div class="nn-footer__inner">
+      <div class="nn-footer__brand">Nova<span>News</span></div>
+      <ul class="nn-footer__links">
+        <li><span class="nn-footer__link">About</span></li>
+        <li><span class="nn-footer__link">Contact</span></li>
+        <li><span class="nn-footer__link">Privacy</span></li>
+        <li><span class="nn-footer__link">Subscribe</span></li>
+      </ul>
+      <p class="nn-footer__copyright">&copy; 2027 NovaNews. Independent tech accountability journalism.</p>
+    </div>
+  </footer>
+
+  <script>
+/**
+ * NovaNews Article Interactions
+ *
+ * Scroll-triggered animations, sticky sidebar management,
+ * reading progress tracking, and section navigation.
+ */
+
+(function() {
+  'use strict';
+
+  // ============================================
+  // CONFIGURATION
+  // ============================================
+
+  const CONFIG = {
+    // Scroll animation trigger threshold (0 = bottom of viewport, 1 = top)
+    animationThreshold: 0.15,
+    // Debounce delay for scroll events (ms)
+    scrollDebounce: 16,
+    // Progress bar update frequency (ms)
+    progressUpdateInterval: 50
+  };
+
+  // ============================================
+  // UTILITY FUNCTIONS
+  // ============================================
+
+  /**
+   * Debounce function calls
+   */
+  function debounce(fn, delay) {
+    let timeoutId;
+    return function(...args) {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  /**
+   * Check if element is in viewport
+   */
+  function isInViewport(element, threshold = 0) {
+    const rect = element.getBoundingClientRect();
+    const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+    const triggerPoint = windowHeight * (1 - threshold);
+    return rect.top <= triggerPoint && rect.bottom >= 0;
+  }
+
+  /**
+   * Get scroll percentage through article
+   */
+  function getScrollProgress() {
+    const article = document.querySelector('.nn-article');
+    if (!article) return 0;
+
+    const articleRect = article.getBoundingClientRect();
+    const articleTop = window.scrollY + articleRect.top;
+    const articleHeight = article.offsetHeight;
+    const windowHeight = window.innerHeight;
+    const scrollY = window.scrollY;
+
+    // Calculate progress from article start to article end
+    const scrollableDistance = articleHeight - windowHeight;
+    const scrolledDistance = scrollY - articleTop;
+    const progress = Math.max(0, Math.min(1, scrolledDistance / scrollableDistance));
+
+    return progress;
+  }
+
+  // ============================================
+  // SCROLL ANIMATIONS
+  // ============================================
+
+  const ScrollAnimations = {
+    elements: [],
+
+    init() {
+      // Find all animatable elements
+      this.elements = [
+        ...document.querySelectorAll('.evidence-card')
+      ];
+
+      // Initial check
+      this.checkVisibility();
+
+      // Listen for scroll
+      window.addEventListener('scroll', debounce(() => {
+        this.checkVisibility();
+      }, CONFIG.scrollDebounce), { passive: true });
+    },
+
+    checkVisibility() {
+      this.elements.forEach(el => {
+        if (isInViewport(el, CONFIG.animationThreshold)) {
+          el.classList.add('evidence-card--visible');
+        }
+      });
+    }
+  };
+
+  // ============================================
+  // READING PROGRESS
+  // ============================================
+
+  const ReadingProgress = {
+    progressBars: [],
+    lastProgress: 0,
+
+    init() {
+      // Find all progress bar elements
+      this.progressBars = [
+        document.querySelector('.nn-progress__bar'),
+        document.querySelector('.reading-progress__bar')
+      ].filter(Boolean);
+
+      this.progressText = document.querySelector('.reading-progress__text');
+
+      if (this.progressBars.length === 0) return;
+
+      // Update on scroll
+      window.addEventListener('scroll', debounce(() => {
+        this.update();
+      }, CONFIG.progressUpdateInterval), { passive: true });
+
+      // Initial update
+      this.update();
+    },
+
+    update() {
+      const progress = getScrollProgress();
+
+      // Only update if changed significantly
+      if (Math.abs(progress - this.lastProgress) < 0.005) return;
+      this.lastProgress = progress;
+
+      const percentage = Math.round(progress * 100);
+
+      this.progressBars.forEach(bar => {
+        bar.style.width = `${percentage}%`;
+      });
+
+      if (this.progressText) {
+        this.progressText.textContent = `${percentage}% complete`;
+      }
+    }
+  };
+
+  // ============================================
+  // SECTION NAVIGATION
+  // ============================================
+
+  const SectionNav = {
+    sections: [],
+    navLinks: [],
+    currentSection: null,
+
+    init() {
+      // Find sections with IDs
+      this.sections = [...document.querySelectorAll('.nn-section[id]')];
+      this.navLinks = [...document.querySelectorAll('.section-nav__link')];
+
+      if (this.sections.length === 0 || this.navLinks.length === 0) return;
+
+      // Listen for scroll
+      window.addEventListener('scroll', debounce(() => {
+        this.updateActiveSection();
+      }, CONFIG.scrollDebounce), { passive: true });
+
+      // Click handlers for smooth scrolling
+      this.navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const targetId = link.getAttribute('href').slice(1);
+          const target = document.getElementById(targetId);
+          if (target) {
+            const navHeight = document.querySelector('.nn-nav')?.offsetHeight || 60;
+            const targetPosition = target.offsetTop - navHeight - 20;
+            window.scrollTo({
+              top: targetPosition,
+              behavior: 'smooth'
+            });
+          }
+        });
+      });
+
+      // Initial update
+      this.updateActiveSection();
+    },
+
+    updateActiveSection() {
+      const navHeight = document.querySelector('.nn-nav')?.offsetHeight || 60;
+      const scrollY = window.scrollY + navHeight + 100;
+
+      let newActiveSection = null;
+
+      // Find current section (last section that starts before current scroll)
+      for (const section of this.sections) {
+        if (section.offsetTop <= scrollY) {
+          newActiveSection = section.id;
+        }
+      }
+
+      if (newActiveSection !== this.currentSection) {
+        this.currentSection = newActiveSection;
+        this.updateNavLinks();
+      }
+    },
+
+    updateNavLinks() {
+      this.navLinks.forEach(link => {
+        const targetId = link.getAttribute('href').slice(1);
+        if (targetId === this.currentSection) {
+          link.classList.add('section-nav__link--active');
+        } else {
+          link.classList.remove('section-nav__link--active');
+        }
+      });
+    }
+  };
+
+  // ============================================
+  // MOBILE NAV TOGGLE
+  // ============================================
+
+  const MobileNav = {
+    init() {
+      const toggle = document.querySelector('.nn-nav__toggle');
+      const links = document.querySelector('.nn-nav__links');
+
+      if (!toggle || !links) return;
+
+      toggle.addEventListener('click', () => {
+        links.classList.toggle('nn-nav__links--open');
+        toggle.setAttribute(
+          'aria-expanded',
+          links.classList.contains('nn-nav__links--open')
+        );
+      });
+
+      // Close on click outside
+      document.addEventListener('click', (e) => {
+        if (!toggle.contains(e.target) && !links.contains(e.target)) {
+          links.classList.remove('nn-nav__links--open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      // Close on escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          links.classList.remove('nn-nav__links--open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+  };
+
+  // ============================================
+  // SIDEBAR STICKY BEHAVIOR
+  // ============================================
+
+  const StickySidebar = {
+    sidebar: null,
+    footer: null,
+    isReleased: false,
+
+    init() {
+      this.sidebar = document.querySelector('.nn-sidebar');
+      this.footer = document.querySelector('.nn-footer');
+
+      if (!this.sidebar || !this.footer) return;
+
+      window.addEventListener('scroll', debounce(() => {
+        this.checkRelease();
+      }, CONFIG.scrollDebounce), { passive: true });
+    },
+
+    checkRelease() {
+      const footerRect = this.footer.getBoundingClientRect();
+      const sidebarRect = this.sidebar.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+
+      // If footer is about to overlap sidebar, release the sticky
+      if (footerRect.top < sidebarRect.bottom + 40) {
+        if (!this.isReleased) {
+          this.sidebar.style.position = 'absolute';
+          this.sidebar.style.top = `${window.scrollY + sidebarRect.top - this.sidebar.offsetParent.offsetTop}px`;
+          this.isReleased = true;
+        }
+      } else {
+        if (this.isReleased) {
+          this.sidebar.style.position = '';
+          this.sidebar.style.top = '';
+          this.isReleased = false;
+        }
+      }
+    }
+  };
+
+  // ============================================
+  // FINANCIAL TRACKER ANIMATION
+  // ============================================
+
+  const FinancialTracker = {
+    animated: false,
+
+    init() {
+      const tracker = document.querySelector('.financial-tracker');
+      if (!tracker) return;
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !this.animated) {
+            this.animateBars();
+            this.animated = true;
+          }
+        });
+      }, { threshold: 0.3 });
+
+      observer.observe(tracker);
+    },
+
+    animateBars() {
+      const bars = document.querySelectorAll('.account-row__bar');
+      bars.forEach((bar, index) => {
+        const targetWidth = bar.dataset.width || bar.style.width;
+        bar.style.width = '0%';
+
+        setTimeout(() => {
+          bar.style.width = targetWidth;
+        }, index * 100);
+      });
+    }
+  };
+
+  // ============================================
+  // INITIALIZE ALL MODULES
+  // ============================================
+
+  function init() {
+    ScrollAnimations.init();
+    ReadingProgress.init();
+    SectionNav.init();
+    MobileNav.init();
+    StickySidebar.init();
+    FinancialTracker.init();
+  }
+
+  // Run on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();
+
+  </script>
+</body>
+</html>
