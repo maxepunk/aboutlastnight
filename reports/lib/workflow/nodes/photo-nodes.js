@@ -255,7 +255,8 @@ async function analyzeSinglePhoto({
       jsonSchema: PHOTO_ANALYSIS_SCHEMA,
       allowedTools: ['Read'],
       timeoutMs,
-      label: originalFilename
+      label: originalFilename,
+      loadProjectSettings: false
     });
 
     // Ensure filename is set (use original, not processed)
@@ -876,7 +877,8 @@ async function finalizePhotoAnalyses(state, config) {
           systemPrompt,
           prompt: userPrompt,
           model: 'haiku',  // Fast model for simple text transformation
-          jsonSchema: ENRICHED_PHOTO_SCHEMA
+          jsonSchema: ENRICHED_PHOTO_SCHEMA,
+          loadProjectSettings: false
         });
 
         return {
