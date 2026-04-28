@@ -91,4 +91,26 @@ describe('extractStructuredOutput', () => {
     });
     expect(result).toEqual({ name: 'valid', count: 1 });
   });
+
+  test('extracts the schema-valid object when text contains multiple top-level objects', () => {
+    // Edge case from final review: "preamble {bad} prose {good}" — first object
+    // must be tried and discarded; second must succeed via balanced scan.
+    const text = 'Error context: {"unrelated": true, "extra": "stuff"}. Final answer: {"name": "winner", "count": 5}';
+    const result = extractStructuredOutput({
+      structuredOutput: undefined,
+      resultText: text,
+      schema: SIMPLE_SCHEMA
+    });
+    expect(result).toEqual({ name: 'winner', count: 5 });
+  });
+
+  test('handles JSON containing strings with braces inside', () => {
+    const text = '{"name": "has } brace", "count": 1, "nested": {"a": 1}}';
+    const result = extractStructuredOutput({
+      structuredOutput: undefined,
+      resultText: text,
+      schema: SIMPLE_SCHEMA
+    });
+    expect(result).toEqual({ name: 'has } brace', count: 1, nested: { a: 1 } });
+  });
 });

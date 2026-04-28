@@ -47,33 +47,58 @@ class StructuredOutputExtractionError extends Error {
 /**
  * Extract a JSON object from text, handling markdown fences and bare objects.
  *
+ * When `accept` is provided, returns the FIRST candidate that both parses AND
+ * satisfies the predicate. This handles multi-object texts where prose includes
+ * additional JSON-like content alongside the schema-valid response.
+ *
  * @param {string} text
- * @returns {Object|null} Parsed object or null if no JSON found
+ * @param {(obj: Object) => boolean} [accept] - Optional predicate. Defaults to "any parseable object".
+ * @returns {Object|null} Parsed object or null if no acceptable object found
  */
-function tryExtractJson(text) {
+function tryExtractJson(text, accept) {
   if (typeof text !== 'string' || text.length === 0) return null;
+  const isAcceptable = typeof accept === 'function' ? accept : () => true;
 
   // Try markdown fences first (```json ... ``` or ``` ... ```)
   const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
     try {
-      return JSON.parse(fenceMatch[1].trim());
+      const fenced = JSON.parse(fenceMatch[1].trim());
+      if (isAcceptable(fenced)) return fenced;
+      // Fence content not acceptable — fall through to bare-object scan
     } catch (_) {
-      // Fall through to bare-object scan
+      // Fall through
     }
   }
 
-  // Scan for the first balanced top-level JSON object
-  // (Greedy substring between first { and last } — works for flat outputs;
-  // for our use case the model emits a single top-level object.)
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    const candidate = text.slice(firstBrace, lastBrace + 1);
-    try {
-      return JSON.parse(candidate);
-    } catch (_) {
-      // Not valid JSON
+  // Scan for any balanced top-level JSON object. Handles multi-object texts
+  // like "preamble {bad} prose {good}" by finding the first '{' that opens a
+  // balanced, parseable, AND acceptable substring. String literals are tracked
+  // so braces inside quoted strings don't disturb the depth counter.
+  for (let start = text.indexOf('{'); start !== -1; start = text.indexOf('{', start + 1)) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          const candidate = text.slice(start, i + 1);
+          try {
+            const parsed = JSON.parse(candidate);
+            if (isAcceptable(parsed)) return parsed;
+          } catch (_) {
+            // Try the next '{' position
+          }
+          break;
+        }
+      }
     }
   }
 
@@ -103,9 +128,21 @@ function extractStructuredOutput({ structuredOutput, resultText, schema, label, 
     // Fall through to text-extraction; SDK output was schema-invalid
   }
 
-  // Path 2: Extract from resultText
-  const extracted = tryExtractJson(resultText);
+  // Path 2: Extract from resultText, preferring the first schema-valid candidate
+  // (handles multi-object texts where prose contains additional JSON-like content).
+  const extracted = tryExtractJson(resultText, (obj) => validate(obj));
   if (extracted === null) {
+    // No schema-valid candidate found — try once more without the predicate so
+    // we can produce a useful diagnostic about WHY validation failed (rather
+    // than the less helpful "no JSON found").
+    const anyParseable = tryExtractJson(resultText);
+    if (anyParseable !== null) {
+      validate(anyParseable); // populate validate.errors
+      throw new StructuredOutputExtractionError(
+        `Extracted JSON does not match schema: ${ajv.errorsText(validate.errors)}`,
+        { schemaErrors: validate.errors || [], label, model, lastText: resultText }
+      );
+    }
     throw new StructuredOutputExtractionError(
       `No JSON object found in result text (length=${(resultText || '').length})`,
       { label, model, lastText: resultText }
