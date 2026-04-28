@@ -163,7 +163,7 @@ function createProgressFromTrace(context, sessionId = null) {
           elapsed: msg.elapsed,
           response: {
             full: msg.result,
-            length: responseStr.length,
+            length: charCount,
             structured: !!msg.jsonSchema
           }
         });

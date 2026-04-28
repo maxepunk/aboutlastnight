@@ -248,7 +248,7 @@ function EvidenceBundle({ data, onApprove }) {
         'Excluded Items',
         React.createElement(Badge, {
           label: (function () {
-            const scoringErrorCount = excluded.filter(function (it) { return it.excludeReason === 'scoringError'; }).length;
+            const scoringErrorCount = excluded.filter(function (it) { return it.reason === 'scoringError'; }).length;
             const otherRescuableCount = rescuableCount - scoringErrorCount;
             const parts = [excluded.length + ' excluded'];
             if (scoringErrorCount > 0) parts.push(scoringErrorCount + ' never evaluated');
@@ -282,7 +282,7 @@ function EvidenceBundle({ data, onApprove }) {
               React.createElement('span', { className: 'evidence-item__name' }, name),
               React.createElement('div', { className: 'tag-list' },
                 isRescuable
-                  ? (item.excludeReason === 'scoringError'
+                  ? (item.reason === 'scoringError'
                       ? React.createElement(Badge, { label: 'never evaluated — recommend rescue', color: 'var(--accent-amber)' })
                       : React.createElement(Badge, { label: 'rescuable', color: 'var(--accent-green)' }))
                   : React.createElement(Badge, { label: 'excluded', color: 'var(--accent-red)' }),
