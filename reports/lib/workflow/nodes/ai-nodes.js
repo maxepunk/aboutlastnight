@@ -768,6 +768,24 @@ async function buildArcEvidencePackages(state, config) {
     };
   }).filter(Boolean);  // Filter out arcs that weren't found in narrativeArcs
 
+  // C3 invariant: every evidence item routed to an arc package should have
+  // fullContent populated. If any are empty, surface loudly so we can trace
+  // back to which preserve-merge point failed.
+  let emptyContentCount = 0;
+  for (const pkg of packages) {
+    for (const item of pkg.evidenceItems || []) {
+      if (!item.fullContent || item.fullContent.length === 0) {
+        emptyContentCount++;
+      }
+    }
+  }
+  if (emptyContentCount > 0) {
+    console.error(
+      `[buildArcEvidencePackages] INVARIANT VIOLATION: ${emptyContentCount} evidence items routed to arcs lack fullContent. ` +
+      `Evidence cards will render empty. Check preprocessor and scorePaperEvidence merge for field stripping.`
+    );
+  }
+
   console.log(`[buildArcEvidencePackages] Built ${packages.length} arc evidence packages`);
 
   return {
