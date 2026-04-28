@@ -810,6 +810,10 @@ async function buildArcEvidencePackages(state, config) {
 
   return {
     arcEvidencePackages: packages,
+    // C5: prune consumed state to reduce checkpoint size and LangSmith trace pressure.
+    // preprocessedEvidence is consumed by curateEvidenceBundle (already pruned there)
+    // but we re-prune defensively in case state was rehydrated from an older checkpoint.
+    preprocessedEvidence: null,
     currentPhase: PHASES.BUILD_ARC_PACKAGES
   };
 }
