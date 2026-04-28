@@ -108,4 +108,17 @@ describe('sdkQueryImpl contract', () => {
 
     expect(capturedOptions.settingSources).toBeUndefined();
   });
+
+  test('settingSources is omitted when loadProjectSettings is omitted (uses default)', async () => {
+    let capturedOptions = null;
+    setMockQuery(({ options }) => {
+      capturedOptions = options;
+      return makeAsyncIterable([
+        { type: 'result', subtype: 'success', result: 'ok' }
+      ]);
+    });
+
+    await sdkQueryImpl({ prompt: 'test', model: 'haiku' });
+    expect(capturedOptions.settingSources).toBeUndefined();
+  });
 });

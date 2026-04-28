@@ -69,6 +69,9 @@ const EFFORT_LEVELS = {
  * @param {Object} [options.jsonSchema] - JSON schema for structured output
  * @param {string[]} [options.allowedTools=[]] - Tools the SDK can use (e.g., ['Read', 'Task'])
  * @param {boolean} [options.disableTools=false] - If true, disables ALL built-in tools for pure structured output.
+ * @param {boolean} [options.loadProjectSettings=true] - If false, sets settingSources: [] to prevent
+ *   the SDK from auto-loading .claude/skills/ SKILL.md files from cwd. Pass false on utility calls
+ *   (photo, normalization) to avoid polluting system context with unrelated skills.
  * @param {Object} [options.agents] - Custom agent definitions for Task tool invocation
  * @param {string} [options.cwd] - Current working directory for file operations
  * @param {('low'|'medium'|'high'|'xhigh'|'max')} [options.effort] - Override the per-model effort default

@@ -14,12 +14,17 @@ let customQueryImpl = null;
 function setMockQuery(fn) { customQueryImpl = fn; }
 function clearMockQuery() { customQueryImpl = null; }
 
-async function* defaultMockQueryGenerator(options) {
+// The default generator cannot know any caller's schema. Emitting {} as
+// structured_output triggers extractor schema validation failures. Setting
+// it to undefined forces tests that route through client.js with a jsonSchema
+// to fail visibly via StructuredOutputExtractionError, signalling that they
+// must install a custom response via setMockQuery().
+async function* defaultMockQueryGenerator(_options) {
   yield {
     type: 'result',
     subtype: 'success',
     result: JSON.stringify({ success: true }),
-    structured_output: options.options?.outputFormat?.schema ? {} : undefined
+    structured_output: undefined
   };
 }
 
