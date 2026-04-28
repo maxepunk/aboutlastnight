@@ -19,6 +19,20 @@ const addFormats = require('ajv-formats');
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 
+// Cache compiled validators by schema object reference. WeakMap means stable
+// schema constants (the dominant pattern in our LangGraph nodes) get reused,
+// and one-off schemas are GC'd with their owning scope.
+const validatorCache = new WeakMap();
+
+function getValidator(schema) {
+  let validate = validatorCache.get(schema);
+  if (!validate) {
+    validate = ajv.compile(schema);
+    validatorCache.set(schema, validate);
+  }
+  return validate;
+}
+
 class StructuredOutputExtractionError extends Error {
   constructor(message, { schemaErrors = [], label, model, lastText } = {}) {
     super(message);
@@ -79,7 +93,7 @@ function tryExtractJson(text) {
  * @throws {StructuredOutputExtractionError} When no schema-valid object can be produced
  */
 function extractStructuredOutput({ structuredOutput, resultText, schema, label, model }) {
-  const validate = ajv.compile(schema);
+  const validate = getValidator(schema);
 
   // Path 1: SDK-provided structured output is valid
   if (structuredOutput !== undefined && structuredOutput !== null) {
