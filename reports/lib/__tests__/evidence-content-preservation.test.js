@@ -193,3 +193,65 @@ describe('scorePaperEvidence preserves fullContent through merge', () => {
     expect(merged[0].fullContent).toBe('Original full content body');
   });
 });
+
+const { buildArcEvidencePackages } = require('../workflow/nodes/ai-nodes');
+
+describe('buildArcEvidencePackages content invariant', () => {
+  test('logs INVARIANT VIOLATION when items lack fullContent', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const state = {
+      selectedArcs: ['arc-1'],
+      narrativeArcs: [{
+        id: 'arc-1',
+        title: 'Test Arc',
+        keyEvidence: ['p1', 'p2'],
+        characterPlacements: {}
+      }],
+      evidenceBundle: {
+        exposed: {
+          tokens: [],
+          paperEvidence: [
+            { id: 'p1', fullContent: 'Has content here', rawData: { name: 'Doc1' } },
+            { id: 'p2', fullContent: '', rawData: { name: 'Doc2' } }
+          ]
+        }
+      },
+      photoAnalyses: { analyses: [] }
+    };
+
+    await buildArcEvidencePackages(state, {});
+    const errorCalls = errorSpy.mock.calls.flat().join('\n');
+    expect(errorCalls).toMatch(/INVARIANT/i);
+    expect(errorCalls).toMatch(/fullContent/i);
+    errorSpy.mockRestore();
+  });
+
+  test('does not log INVARIANT when all items have fullContent', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const state = {
+      selectedArcs: ['arc-1'],
+      narrativeArcs: [{
+        id: 'arc-1',
+        title: 'Test Arc',
+        keyEvidence: ['p1'],
+        characterPlacements: {}
+      }],
+      evidenceBundle: {
+        exposed: {
+          tokens: [],
+          paperEvidence: [
+            { id: 'p1', fullContent: 'Has content', rawData: { name: 'Doc1' } }
+          ]
+        }
+      },
+      photoAnalyses: { analyses: [] }
+    };
+
+    await buildArcEvidencePackages(state, {});
+    const errorCalls = errorSpy.mock.calls.flat().join('\n');
+    expect(errorCalls).not.toMatch(/INVARIANT/);
+    errorSpy.mockRestore();
+  });
+});
