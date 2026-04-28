@@ -15,6 +15,7 @@
  */
 
 const { query } = require('@anthropic-ai/claude-agent-sdk');
+const { extractStructuredOutput, StructuredOutputExtractionError } = require('./structured-output-extractor');
 
 // Increase max listeners to support 8 concurrent SDK calls
 // Each SDK call adds exit listeners for subprocess cleanup
@@ -89,7 +90,8 @@ async function sdkQueryImpl({
   timeoutMs,
   onProgress,
   label,
-  disableTools = false
+  disableTools = false,
+  loadProjectSettings = true
 }) {
   const resolvedModel = MODEL_IDS[model] || model;
   const effectiveTimeout = timeoutMs || MODEL_TIMEOUTS[model] || MODEL_TIMEOUTS.sonnet;
@@ -110,6 +112,14 @@ async function sdkQueryImpl({
     allowDangerouslySkipPermissions: true,  // Required pair for bypassPermissions in SDK 0.2.x
     abortController
   };
+
+  // Control 2: scope filesystem-loaded skills/settings per call.
+  // Default true preserves SDK behavior (loads .claude/skills/ from cwd).
+  // Pass false on utility calls (photo, normalization) to avoid auto-loading
+  // unrelated skill prompts that pollute system context.
+  if (loadProjectSettings === false) {
+    options.settingSources = [];
+  }
 
   // Enable 1M context window for Opus and Sonnet (beta)
   // Haiku doesn't support 1M
@@ -238,7 +248,22 @@ async function sdkQueryImpl({
       // Handle successful result
       if (msg.type === 'result' && msg.subtype === 'success') {
         clearTimeout(timeoutId);
-        const finalResult = jsonSchema ? msg.structured_output : msg.result;
+
+        let finalResult;
+        if (jsonSchema) {
+          // Control 1: SDK contract enforcement.
+          // Per SDK bug #277, subtype='success' can arrive without structured_output.
+          // The extractor falls back to parsing JSON from msg.result text.
+          finalResult = extractStructuredOutput({
+            structuredOutput: msg.structured_output,
+            resultText: msg.result,
+            schema: jsonSchema,
+            label: progressLabel,
+            model: resolvedModel
+          });
+        } else {
+          finalResult = msg.result;
+        }
 
         // Emit llm_complete event with FULL response (no truncation)
         if (onProgress) {
@@ -272,6 +297,11 @@ async function sdkQueryImpl({
 
   } catch (error) {
     clearTimeout(timeoutId);
+
+    // Preserve structured-output extraction errors as-is (they carry diagnostics)
+    if (error instanceof StructuredOutputExtractionError) {
+      throw error;
+    }
 
     // Check if it was an abort/timeout
     if (error.name === 'AbortError' || abortController.signal.aborted) {
