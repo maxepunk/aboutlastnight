@@ -314,7 +314,8 @@ async function processBatch(batch, sdkClient, batchIndex) {
       prompt: userPrompt,
       systemPrompt: SYSTEM_PROMPT,
       model: 'haiku',
-      jsonSchema: BATCH_RESPONSE_SCHEMA
+      jsonSchema: BATCH_RESPONSE_SCHEMA,
+      loadProjectSettings: false
     });
 
     const items = parsed.items || [];

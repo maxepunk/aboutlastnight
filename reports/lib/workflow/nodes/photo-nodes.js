@@ -644,7 +644,8 @@ async function parseCharacterIds(state, config) {
       systemPrompt,
       prompt: userPrompt,
       model: 'sonnet',  // Complex table parsing requires sonnet (same as input-nodes.js:445)
-      jsonSchema: PARSED_CHARACTER_IDS_SCHEMA
+      jsonSchema: PARSED_CHARACTER_IDS_SCHEMA,
+      loadProjectSettings: false
     });
 
     const processingTimeMs = Date.now() - startTime;

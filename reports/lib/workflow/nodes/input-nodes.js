@@ -417,7 +417,8 @@ Return structured JSON matching the schema.`;
       prompt: sessionConfigPrompt,
       systemPrompt: 'You parse game session information into structured JSON. Be precise and accurate.',
       model: 'haiku',
-      jsonSchema: SESSION_CONFIG_SCHEMA
+      jsonSchema: SESSION_CONFIG_SCHEMA,
+      loadProjectSettings: false
     });
     result.rosterCount = result.roster?.length || 0;
     result.photosPath = sanitizePath(rawInput.photosPath);
@@ -462,7 +463,8 @@ Return structured JSON matching the schema.`;
         prompt: sessionReportPrompt,
         systemPrompt: 'You parse game session reports with token and transaction data. Be precise with numbers and IDs.',
         model: 'sonnet', // Use sonnet for complex table parsing
-        jsonSchema: SESSION_REPORT_SCHEMA
+        jsonSchema: SESSION_REPORT_SCHEMA,
+        loadProjectSettings: false
       });
     } catch (error) {
       console.warn('[parseRawInput] Error parsing session report:', error.message);
@@ -572,7 +574,8 @@ Return structured JSON matching the schema.`;
         systemPrompt: whiteboardSystemPrompt,
         model: 'sonnet', // Use sonnet for complex image analysis
         jsonSchema: WHITEBOARD_SCHEMA,
-        allowedTools: ['Read'] // Required for image viewing
+        allowedTools: ['Read'], // Required for image viewing
+        loadProjectSettings: false
       });
     } catch (error) {
       console.warn('[parseRawInput] Error analyzing whiteboard:', error.message);

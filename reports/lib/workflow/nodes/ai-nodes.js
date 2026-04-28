@@ -204,7 +204,8 @@ Score each item and return the results.`;
         timeoutMs: 2 * 60 * 1000,  // 2 minutes per batch
         jsonSchema: PAPER_SCORING_SCHEMA,
         disableTools: true,
-        label: `Paper evidence batch ${batchIdx + 1}/${batches.length}`
+        label: `Paper evidence batch ${batchIdx + 1}/${batches.length}`,
+        loadProjectSettings: false
       });
 
       return response.items || [];
