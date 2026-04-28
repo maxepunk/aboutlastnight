@@ -247,7 +247,14 @@ function EvidenceBundle({ data, onApprove }) {
       React.createElement('h4', { className: 'evidence-layer__title' },
         'Excluded Items',
         React.createElement(Badge, {
-          label: excluded.length + ' excluded' + (rescuableCount > 0 ? ', ' + rescuableCount + ' rescuable' : ''),
+          label: (function () {
+            const scoringErrorCount = excluded.filter(function (it) { return it.excludeReason === 'scoringError'; }).length;
+            const otherRescuableCount = rescuableCount - scoringErrorCount;
+            const parts = [excluded.length + ' excluded'];
+            if (scoringErrorCount > 0) parts.push(scoringErrorCount + ' never evaluated');
+            if (otherRescuableCount > 0) parts.push(otherRescuableCount + ' rescuable');
+            return parts.join(', ');
+          })(),
           color: 'var(--layer-excluded)'
         })
       ),
@@ -275,7 +282,9 @@ function EvidenceBundle({ data, onApprove }) {
               React.createElement('span', { className: 'evidence-item__name' }, name),
               React.createElement('div', { className: 'tag-list' },
                 isRescuable
-                  ? React.createElement(Badge, { label: 'rescuable', color: 'var(--accent-green)' })
+                  ? (item.excludeReason === 'scoringError'
+                      ? React.createElement(Badge, { label: 'never evaluated — recommend rescue', color: 'var(--accent-amber)' })
+                      : React.createElement(Badge, { label: 'rescuable', color: 'var(--accent-green)' }))
                   : React.createElement(Badge, { label: 'excluded', color: 'var(--accent-red)' }),
                 item.score != null && React.createElement(Badge, {
                   label: 'score: ' + item.score,
