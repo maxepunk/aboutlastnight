@@ -1,9 +1,19 @@
 const { createProgressFromTrace } = require('../progress-bridge');
 
-// Force progress enabled for the test
-process.env.SDK_PROGRESS = 'true';
-
 describe('progress-bridge llm_complete with undefined result', () => {
+  let originalSdkProgress;
+  beforeAll(() => {
+    originalSdkProgress = process.env.SDK_PROGRESS;
+    process.env.SDK_PROGRESS = 'true';
+  });
+
+  afterAll(() => {
+    if (originalSdkProgress === undefined) {
+      delete process.env.SDK_PROGRESS;
+    } else {
+      process.env.SDK_PROGRESS = originalSdkProgress;
+    }
+  });
   test('does not throw on undefined result (defense-in-depth)', () => {
     const logger = createProgressFromTrace('test-context', null);
     expect(() => logger({
