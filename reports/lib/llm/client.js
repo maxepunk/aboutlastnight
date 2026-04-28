@@ -317,6 +317,20 @@ async function sdkQueryImpl({
 }
 
 /**
+ * Detect whether an error came from this module's timeout path. The thrown
+ * message format is `SDK timeout after <s>s (limit: <s>s) - <label>` (see
+ * line 312). Callers wrapping sdkQueryImpl with retry-on-timeout logic
+ * should use this rather than ad-hoc substring matches that drift apart
+ * across call sites.
+ *
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isSdkTimeoutError(err) {
+  return Boolean(err && typeof err.message === 'string' && /SDK timeout after/.test(err.message));
+}
+
+/**
  * Get model timeout for compatibility with existing code
  *
  * @param {string} model - Model name
@@ -385,6 +399,7 @@ module.exports = {
   query,  // Export raw SDK query for subagent use
   getModelTimeout,
   isClaudeAvailable,
+  isSdkTimeoutError,
   createSemaphore,
   MODEL_TIMEOUTS
 };

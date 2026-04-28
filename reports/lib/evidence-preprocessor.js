@@ -155,6 +155,33 @@ const BATCH_RESPONSE_SCHEMA = {
 };
 
 /**
+ * Compute fields that may carry narrative content (rawData + fullContent),
+ * gated by the buried-data-leak boundary. SECURITY-CRITICAL: this is the single
+ * authoritative implementation of "what content fields a preprocessed item is
+ * allowed to expose." Buried items get neither rawData nor fullContent, since
+ * rawData would contain fullDescription and fullContent would contain the
+ * extracted body — both forbidden by the buried boundary. Exposed/non-buried
+ * items get both, with fullContent extracted via the documented fallback chain.
+ *
+ * @param {Object|undefined} rawData - The original item's rawData (the entire
+ *   pre-merge token or paper-evidence object).
+ * @param {string} disposition - 'exposed' | 'buried' (anything not 'buried'
+ *   is treated as exposed; defensive default).
+ * @returns {{ rawData?: Object, fullContent?: string }} Spread-ready object.
+ */
+function exposedContentFields(rawData, disposition) {
+  if (disposition === 'buried') return {};
+  const fullContent = rawData?.fullDescription
+    || rawData?.content
+    || rawData?.description
+    || rawData?.text
+    || rawData?.name
+    || rawData?.title
+    || '';
+  return { rawData, fullContent };
+}
+
+/**
  * Create an evidence preprocessor instance
  *
  * @param {Object} options - Configuration options
@@ -324,28 +351,13 @@ async function processBatch(batch, sdkClient, batchIndex) {
     const mergedItems = items.map(item => {
       const original = batch.find(b => b.id === item.id);
       if (original) {
-        // PHASE 1 FIX: Extract fullContent from raw data for verbatim quoting
-        // Priority: fullDescription (memory tokens) > content > description > name/title as fallback
-        const rawFullContent = original.rawData?.fullDescription
-          || original.rawData?.content
-          || original.rawData?.description
-          || original.rawData?.text
-          || original.rawData?.name
-          || original.rawData?.title
-          || '';
-
+        // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
+        // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
+        const disposition = original.disposition || item.disposition || 'buried';
         return {
           ...item,
-          // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
-          // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
-          disposition: original.disposition || item.disposition || 'buried',
-          // C3: preserve rawData for non-buried items so downstream nodes can
-          // access content/description/notionId/owners. Buried items must NOT
-          // carry rawData because it contains fullDescription (boundary violation).
-          ...(original.disposition !== 'buried' ? { rawData: original.rawData } : {}),
-          // Preserve full content for EXPOSED items only (defense-in-depth)
-          // Buried items must not carry narrative content — only transaction metadata
-          ...(original.disposition !== 'buried' ? { fullContent: rawFullContent } : {}),
+          disposition,
+          ...exposedContentFields(original.rawData, disposition),
           ownerLogline: item.ownerLogline || original.ownerLogline,
           narrativeTimelineContext: item.narrativeTimelineContext || original.timelineContext,
           sfFields: item.sfFields || original.sfFields,
@@ -368,26 +380,14 @@ async function processBatch(batch, sdkClient, batchIndex) {
 
     // Create fallback items with minimal normalization (no judgment fields)
     const fallbackItems = batch.map(item => {
-      // PHASE 1 FIX: Extract fullContent even in fallback case
-      // Priority: fullDescription (memory tokens) > content > description > name/title as fallback
-      const rawFullContent = item.rawData?.fullDescription
-        || item.rawData?.content
-        || item.rawData?.description
-        || item.rawData?.text
-        || item.rawData?.name
-        || item.rawData?.title
-        || '';
-
+      const disposition = item.disposition || 'buried';
       return {
         id: item.id,
         sourceType: item.sourceType,
         originalType: item.originalType,
-        disposition: item.disposition || 'buried', // Preserve disposition
+        disposition,
         summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
-        // C3: same disposition gate as fullContent
-        ...(item.disposition !== 'buried' ? { rawData: item.rawData } : {}),
-        // Preserve full content for EXPOSED items only (defense-in-depth)
-        ...(item.disposition !== 'buried' ? { fullContent: rawFullContent } : {}),
+        ...exposedContentFields(item.rawData, disposition),
         characterRefs: [],
         ownerLogline: item.ownerLogline,
         narrativeTimelineRef: null,
