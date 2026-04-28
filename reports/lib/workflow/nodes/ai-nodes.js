@@ -813,6 +813,8 @@ async function buildArcEvidencePackages(state, config) {
     // C5: prune consumed state to reduce checkpoint size and LangSmith trace pressure.
     // preprocessedEvidence is consumed by curateEvidenceBundle (already pruned there)
     // but we re-prune defensively in case state was rehydrated from an older checkpoint.
+    // Note: photoAnalyses.analyses is INTENTIONALLY not pruned here — evaluateOutline
+    // reads state.photoAnalyses?.analyses downstream (see evaluator-nodes.js).
     preprocessedEvidence: null,
     currentPhase: PHASES.BUILD_ARC_PACKAGES
   };

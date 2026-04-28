@@ -92,7 +92,8 @@ server.js                           # Express server + session REST API
 lib/api-helpers.js                  # Shared API helpers (rollback, graph config, error responses)
 lib/llm/
 ├── index.js                        # Public API: traced sdkQuery, createProgressLogger
-└── client.js                       # Raw SDK wrapper with timeouts, progress hooks
+├── client.js                       # Raw SDK wrapper with timeouts, progress hooks, structured-output contract
+└── structured-output-extractor.js  # JSON extraction + ajv validation; recovers from SDK bug #277
 lib/observability/
 ├── index.js                        # Public exports: traceNode, progressEmitter
 ├── config.js                       # isTracingEnabled(), getProject()
@@ -175,9 +176,14 @@ const result = await sdkQuery({
   timeoutMs: 300000,  // Optional, defaults by model
   onProgress: (msg) => console.log(msg.type, msg.elapsed),  // Optional streaming
   allowedTools: ['Read'],  // Optional, for images
-  label: 'Evidence analysis'  // For timeout error messages
+  label: 'Evidence analysis',  // For timeout error messages
+  loadProjectSettings: false  // Optional: false skips .claude/skills/ autoload (use on utility/normalization calls)
 });
 ```
+
+**Structured Output Contract:** When `jsonSchema` is provided, the call returns a schema-valid object or throws `StructuredOutputExtractionError`. The wrapper validates the SDK's `structured_output` field and falls back to extracting JSON from result text — recovers from [SDK bug #277](https://github.com/anthropics/claude-agent-sdk-typescript/issues/277) where `success` arrives without `structured_output`.
+
+**`loadProjectSettings` flag:** Default `true` preserves SDK behavior (autoloads `.claude/skills/` from cwd). Pass `false` on utility/normalization calls (photo, preprocess, score, parse) to prevent autoload of unrelated skill prompts that pollute system context. Narrative-generation calls keep the default.
 
 **Model Timeouts:** Haiku 2min, Sonnet 5min, Opus 10min
 
