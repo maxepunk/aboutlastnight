@@ -238,6 +238,10 @@ Score each item and return the results.`;
     return {
       ...scored,
       rawData: original?.rawData,
+      // C3: preserve fullContent set by preprocessor for non-buried items.
+      // Without this, evidenceBundle.exposed.paperEvidence ends up with empty
+      // fullContent and arc evidence cards render with no quotable content.
+      fullContent: original?.fullContent,
       narrativeThreads: original?.rawData?.narrativeThreads || original?.narrativeThreads
     };
   });

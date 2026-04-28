@@ -159,3 +159,37 @@ describe('evidence preprocessor preserves rawData', () => {
     expect(item.rawData.fullDescription).toBe('Visible exposed content');
   });
 });
+
+const { _testing } = require('../workflow/nodes/ai-nodes');
+
+describe('scorePaperEvidence preserves fullContent through merge', () => {
+  const fn = _testing?.scorePaperEvidence;
+
+  test('_testing.scorePaperEvidence is exported', () => {
+    expect(fn).toBeDefined();
+  });
+
+  test('merged result carries original.fullContent and original.rawData', async () => {
+    const sdk = async () => ({
+      items: [
+        { id: 'p1', name: 'Doc1', score: 3, include: true, criteriaMatched: ['ROSTER'] }
+      ]
+    });
+
+    const paperItems = [{
+      id: 'p1',
+      fullContent: 'Original full content body',
+      rawData: { name: 'Doc1', content: 'Original full content body', narrativeThreads: ['t1'] }
+    }];
+
+    const merged = await fn(paperItems, {
+      roster: ['Alice'],
+      suspects: [],
+      exposedTokenSummaries: [],
+      playerFocus: {}
+    }, sdk);
+
+    expect(merged[0].rawData).toBeDefined();
+    expect(merged[0].fullContent).toBe('Original full content body');
+  });
+});
