@@ -255,3 +255,20 @@ describe('buildArcEvidencePackages content invariant', () => {
     errorSpy.mockRestore();
   });
 });
+
+describe('buildArcEvidencePackages prunes consumed state', () => {
+  test('returns null for preprocessedEvidence after arc packages built', async () => {
+    const state = {
+      selectedArcs: ['arc-1'],
+      narrativeArcs: [{
+        id: 'arc-1', title: 'T', keyEvidence: [], characterPlacements: {}
+      }],
+      evidenceBundle: { exposed: { tokens: [], paperEvidence: [] } },
+      photoAnalyses: { analyses: [] },
+      preprocessedEvidence: { items: [{ id: 'x' }] }
+    };
+
+    const result = await buildArcEvidencePackages(state, {});
+    expect(result.preprocessedEvidence).toBe(null);
+  });
+});
