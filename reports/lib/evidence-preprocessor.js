@@ -339,6 +339,10 @@ async function processBatch(batch, sdkClient, batchIndex) {
           // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
           // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
           disposition: original.disposition || item.disposition || 'buried',
+          // C3: preserve rawData for non-buried items so downstream nodes can
+          // access content/description/notionId/owners. Buried items must NOT
+          // carry rawData because it contains fullDescription (boundary violation).
+          ...(original.disposition !== 'buried' ? { rawData: original.rawData } : {}),
           // Preserve full content for EXPOSED items only (defense-in-depth)
           // Buried items must not carry narrative content — only transaction metadata
           ...(original.disposition !== 'buried' ? { fullContent: rawFullContent } : {}),
@@ -380,6 +384,8 @@ async function processBatch(batch, sdkClient, batchIndex) {
         originalType: item.originalType,
         disposition: item.disposition || 'buried', // Preserve disposition
         summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
+        // C3: same disposition gate as fullContent
+        ...(item.disposition !== 'buried' ? { rawData: item.rawData } : {}),
         // Preserve full content for EXPOSED items only (defense-in-depth)
         ...(item.disposition !== 'buried' ? { fullContent: rawFullContent } : {}),
         characterRefs: [],
