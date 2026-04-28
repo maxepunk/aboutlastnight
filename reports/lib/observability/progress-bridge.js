@@ -148,8 +148,11 @@ function createProgressFromTrace(context, sessionId = null) {
     }
 
     if (msg.type === 'llm_complete') {
-      const responseStr = JSON.stringify(msg.result);
-      const logLine = `[${context}] [${msg.elapsed?.toFixed(1) || '?'}s] ${PROGRESS_ICONS.llm_complete} Completed (${responseStr.length} chars)`;
+      const responseStr = msg.result === undefined || msg.result === null
+        ? '<empty>'
+        : JSON.stringify(msg.result);
+      const charCount = responseStr === '<empty>' ? 0 : responseStr.length;
+      const logLine = `[${context}] [${msg.elapsed?.toFixed(1) || '?'}s] ${PROGRESS_ICONS.llm_complete} Completed (${charCount} chars)`;
       console.log(logLine);
 
       if (sessionId) {
