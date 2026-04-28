@@ -103,9 +103,11 @@ Only include data explicitly stated or strongly implied by the evidence. Do not 
       systemPrompt: 'You extract structured character data from narrative evidence. Be factual and precise. Only report what the evidence explicitly states.',
       model: 'haiku',
       jsonSchema: CHARACTER_EXTRACTION_SCHEMA,
-      timeoutMs: 60000,
+      // Removed timeoutMs: 60000 — inherits Haiku 120s default to avoid
+      // spurious timeouts on 16K-token inputs (Control 4b).
       disableTools: true,
-      label: 'Character data extraction'
+      label: 'Character data extraction',
+      loadProjectSettings: false
     });
 
     const charCount = Object.keys(result.characters || {}).length;
