@@ -77,6 +77,10 @@
         "date": {
           "type": "string",
           "description": "Publication date display string"
+        },
+        "guestReporter": {
+          "type": "string",
+          "description": "Optional guest-reporter credit (rendered by templates/journalist/partials/header.hbs). Produced by lib/prompt-builder.js when sessionConfig.guestReporter is set; emit as 'Name | Role'."
         }
       },
       "additionalProperties": false

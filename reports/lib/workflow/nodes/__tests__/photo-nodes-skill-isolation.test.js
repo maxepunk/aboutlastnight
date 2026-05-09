@@ -34,8 +34,7 @@ describe('photo-nodes skill isolation', () => {
       playerFocus: {},
       roster: [],
       processedPath: '/tmp/test.jpg',
-      originalFilename: 'test.jpg',
-      timeoutMs: 60000
+      originalFilename: 'test.jpg'
     });
 
     expect(sdk.calls.length).toBeGreaterThan(0);

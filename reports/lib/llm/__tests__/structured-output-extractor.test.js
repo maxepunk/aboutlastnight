@@ -1,4 +1,5 @@
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('../structured-output-extractor');
+const { STRUCTURED_OUTPUT_CHANNELS } = require('../../observability/constants');
 
 const SIMPLE_SCHEMA = {
   type: 'object',
@@ -10,23 +11,25 @@ const SIMPLE_SCHEMA = {
 };
 
 describe('extractStructuredOutput', () => {
-  test('returns valid structured output unchanged', () => {
+  test('returns valid structured output with structured_output channel', () => {
     const result = extractStructuredOutput({
       structuredOutput: { name: 'foo', count: 3 },
       resultText: 'ignored',
       schema: SIMPLE_SCHEMA
     });
-    expect(result).toEqual({ name: 'foo', count: 3 });
+    expect(result.value).toEqual({ name: 'foo', count: 3 });
+    expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.STRUCTURED_OUTPUT);
   });
 
-  test('extracts JSON from a markdown fence in resultText when structuredOutput missing', () => {
+  test('extracts JSON from markdown fence and reports text_fallback channel', () => {
     const text = 'Here is the answer:\n```json\n{"name": "bar", "count": 7}\n```\nDone.';
     const result = extractStructuredOutput({
       structuredOutput: undefined,
       resultText: text,
       schema: SIMPLE_SCHEMA
     });
-    expect(result).toEqual({ name: 'bar', count: 7 });
+    expect(result.value).toEqual({ name: 'bar', count: 7 });
+    expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK);
   });
 
   test('extracts a bare JSON object from resultText when no fence is present', () => {
@@ -36,7 +39,8 @@ describe('extractStructuredOutput', () => {
       resultText: text,
       schema: SIMPLE_SCHEMA
     });
-    expect(result).toEqual({ name: 'baz', count: 0 });
+    expect(result.value).toEqual({ name: 'baz', count: 0 });
+    expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK);
   });
 
   test('throws StructuredOutputExtractionError when text contains no JSON', () => {
@@ -80,7 +84,8 @@ describe('extractStructuredOutput', () => {
       resultText: '```json\n{"name": "from-text", "count": 2}\n```',
       schema: SIMPLE_SCHEMA
     });
-    expect(result).toEqual({ name: 'from-structured', count: 1 });
+    expect(result.value).toEqual({ name: 'from-structured', count: 1 });
+    expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.STRUCTURED_OUTPUT);
   });
 
   test('falls back to resultText when structuredOutput exists but is schema-invalid', () => {
@@ -89,7 +94,8 @@ describe('extractStructuredOutput', () => {
       resultText: '```json\n{"name": "valid", "count": 1}\n```',
       schema: SIMPLE_SCHEMA
     });
-    expect(result).toEqual({ name: 'valid', count: 1 });
+    expect(result.value).toEqual({ name: 'valid', count: 1 });
+    expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK);
   });
 
   test('extracts the schema-valid object when text contains multiple top-level objects', () => {
@@ -101,7 +107,8 @@ describe('extractStructuredOutput', () => {
       resultText: text,
       schema: SIMPLE_SCHEMA
     });
-    expect(result).toEqual({ name: 'winner', count: 5 });
+    expect(result.value).toEqual({ name: 'winner', count: 5 });
+    expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK);
   });
 
   test('handles JSON containing strings with braces inside', () => {
@@ -111,6 +118,7 @@ describe('extractStructuredOutput', () => {
       resultText: text,
       schema: SIMPLE_SCHEMA
     });
-    expect(result).toEqual({ name: 'has } brace', count: 1, nested: { a: 1 } });
+    expect(result.value).toEqual({ name: 'has } brace', count: 1, nested: { a: 1 } });
+    expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK);
   });
 });

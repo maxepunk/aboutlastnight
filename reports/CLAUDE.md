@@ -102,8 +102,7 @@ lib/observability/
 ├── node-tracer.js                  # traceNode() wrapper
 ├── llm-tracer.js                   # createTracedSdkQuery() with full visibility
 ├── progress-emitter.js             # SSE progress streaming via EventEmitter
-├── progress-bridge.js              # Unified progress/tracing (llm_start/llm_complete)
-└── message-formatter.js            # DRY formatting for console + SSE
+└── progress-bridge.js              # Console + SSE formatting; sole source of progress event icons/strings
 lib/cache/
 ├── index.js                        # Public API for Notion caching
 ├── cached-notion-client.js         # Cache-aware Notion client wrapper
@@ -173,7 +172,8 @@ const result = await sdkQuery({
   systemPrompt: '...',
   model: 'sonnet',  // 'haiku' | 'sonnet' | 'opus'
   jsonSchema: { type: 'object', properties: {...} },
-  timeoutMs: 300000,  // Optional, defaults by model
+  // timeoutMs: omitted — inherits the standardized 10-min model default.
+  // Per-call overrides have been removed across the codebase; tighten only with data (see Model Timeouts below).
   onProgress: (msg) => console.log(msg.type, msg.elapsed),  // Optional streaming
   allowedTools: ['Read'],  // Optional, for images
   label: 'Evidence analysis',  // For timeout error messages
@@ -185,9 +185,9 @@ const result = await sdkQuery({
 
 **`loadProjectSettings` flag:** Default `true` preserves SDK behavior (autoloads `.claude/skills/` from cwd). Pass `false` on utility/normalization calls (photo, preprocess, score, parse) to prevent autoload of unrelated skill prompts that pollute system context. Narrative-generation calls keep the default.
 
-**Model Timeouts:** Haiku 2min, Sonnet 5min, Opus 10min
+**Model Timeouts:** 10 min uniformly across Haiku, Sonnet, Opus. The cap is intended for genuinely-stuck calls only — steady-state latency is captured per-call via `duration_api_ms` on the `llm_complete` progress event (see `lib/observability/progress-bridge.js`). Per-call `timeoutMs` overrides have been removed across the codebase; tighten only when you have data showing it's safe.
 
-**Model Pins** (`lib/llm/client.js:39-41`):
+**Model Pins** (see `MODEL_IDS` in `lib/llm/client.js`):
 - `opus` → `claude-opus-4-7` (arc analysis, article validation)
 - `sonnet` → `claude-sonnet-4-6` (default for most content generation nodes)
 - `haiku` → `claude-haiku-4-5` (image analysis, evidence preprocessing)

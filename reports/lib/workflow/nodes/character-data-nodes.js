@@ -103,8 +103,9 @@ Only include data explicitly stated or strongly implied by the evidence. Do not 
       systemPrompt: 'You extract structured character data from narrative evidence. Be factual and precise. Only report what the evidence explicitly states.',
       model: 'haiku',
       jsonSchema: CHARACTER_EXTRACTION_SCHEMA,
-      // Removed timeoutMs: 60000 — inherits Haiku 120s default to avoid
-      // spurious timeouts on 16K-token inputs (Control 4b).
+      // Inherits the standardized 10-min model default (lib/llm/client.js).
+      // Per-call timeout overrides have been removed across the codebase — see
+      // git history for the failure cases that motivated standardization.
       disableTools: true,
       label: 'Character data extraction',
       loadProjectSettings: false

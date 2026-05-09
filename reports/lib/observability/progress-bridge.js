@@ -10,18 +10,18 @@
 
 const { progressEmitter } = require('./progress-emitter');
 const { isProgressEnabled } = require('./config');
-const { SSE_EVENT_TYPES } = require('./constants');
-const { formatProgressMessage } = require('./message-formatter');
+const { SSE_EVENT_TYPES, STRUCTURED_OUTPUT_CHANNELS } = require('./constants');
 
 const PROGRESS_ICONS = {
-  system: '\u2699\uFE0F',      // gear
-  assistant: '\uD83D\uDCAD',   // thought bubble
-  user: '\u2713',              // checkmark
-  tool_progress: '\u23F3',     // hourglass
-  result: '\u2705',            // white check mark
-  error: '\u274C',             // cross mark
-  llm_start: '\uD83D\uDE80',   // rocket
-  llm_complete: '\u2705'       // checkmark
+  system: '\u2699\uFE0F',          // gear
+  assistant: '\uD83D\uDCAD',       // thought bubble
+  user: '\u2713',                  // checkmark
+  tool_progress: '\u23F3',         // hourglass
+  result: '\u2705',                // white check mark
+  error: '\u274C',                 // cross mark
+  llm_start: '\uD83D\uDE80',       // rocket
+  llm_complete: '\u2705',          // checkmark
+  rate_limit_event: '\u23F1\uFE0F' // stopwatch
 };
 
 /**
@@ -41,14 +41,44 @@ function formatProgressEvent(msg) {
         detailText: `Model: ${msg.model}`
       };
 
-    case 'llm_complete':
+    case 'llm_complete': {
+      // Build a single-line diagnostic suffix from the SDK fields client.js now surfaces.
+      // These tell us at a glance: how long the API actually took, what channel produced
+      // the result (structured_output vs text fallback), why the model stopped, and token usage.
+      const parts = [`${msg.elapsed?.toFixed(1) || '?'}s`];
+      if (msg.durationApiMs != null) parts.push(`api=${(msg.durationApiMs / 1000).toFixed(1)}s`);
+      if (msg.channel === STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK) parts.push('channel=text-fallback');
+      if (msg.stopReason && msg.stopReason !== 'end_turn') parts.push(`stop=${msg.stopReason}`);
+      if (msg.usage?.output_tokens != null) parts.push(`out=${msg.usage.output_tokens}`);
       return {
         icon: PROGRESS_ICONS.llm_complete,
         shortText: `Completed ${msg.label || 'LLM call'}`,
-        detailText: `${msg.elapsed?.toFixed(1) || '?'}s`
+        detailText: parts.join(' ')
       };
+    }
 
-    case 'assistant':
+    case 'rate_limit_event': {
+      const info = msg.rateLimitInfo || {};
+      const segs = [info.status || 'unknown'];
+      if (info.utilization != null) segs.push(`util=${(info.utilization * 100).toFixed(0)}%`);
+      if (info.rateLimitType) segs.push(info.rateLimitType);
+      return {
+        icon: PROGRESS_ICONS.rate_limit_event,
+        shortText: 'rate limit',
+        detailText: segs.join(' ')
+      };
+    }
+
+    case 'assistant': {
+      // Surface assistant-level errors (max_output_tokens, rate_limit, server_error...)
+      // before falling through to tool-use / text-preview formatting.
+      if (msg.assistantError) {
+        return {
+          icon: PROGRESS_ICONS.error,
+          shortText: `assistant error: ${msg.assistantError}`,
+          detailText: ''
+        };
+      }
       if (msg.toolName) {
         let detail = '';
         if (msg.toolInput?.subagent_type) {
@@ -66,6 +96,7 @@ function formatProgressEvent(msg) {
         shortText: preview.slice(0, 100) || 'Thinking...',
         detailText: preview
       };
+    }
 
     case 'user':
       return {
@@ -152,7 +183,10 @@ function createProgressFromTrace(context, sessionId = null) {
         ? '<empty>'
         : JSON.stringify(msg.result);
       const charCount = responseStr === '<empty>' ? 0 : responseStr.length;
-      const logLine = `[${context}] [${msg.elapsed?.toFixed(1) || '?'}s] ${PROGRESS_ICONS.llm_complete} Completed (${charCount} chars)`;
+      // Reuse formatProgressEvent's diagnostic suffix (channel, stop reason, api time, tokens)
+      // so console + SSE see the same fields and we have one place to extend.
+      const { detailText } = formatProgressEvent(msg);
+      const logLine = `[${context}] [${detailText}] ${PROGRESS_ICONS.llm_complete} Completed (${charCount} chars)`;
       console.log(logLine);
 
       if (sessionId) {
@@ -165,6 +199,18 @@ function createProgressFromTrace(context, sessionId = null) {
             full: msg.result,
             length: charCount,
             structured: !!msg.jsonSchema
+          },
+          // SDK-supplied diagnostics — same fields client.js placed on the event.
+          // Frontends that don't consume these can ignore them; preserved on SSE
+          // so future debugging can reconstruct any call without server-side state.
+          diagnostics: {
+            channel: msg.channel ?? null,
+            stopReason: msg.stopReason ?? null,
+            durationApiMs: msg.durationApiMs ?? null,
+            numTurns: msg.numTurns ?? null,
+            usage: msg.usage ?? null,
+            apiErrorStatus: msg.apiErrorStatus ?? null,
+            terminalReason: msg.terminalReason ?? null
           }
         });
       }

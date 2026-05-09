@@ -13,7 +13,17 @@ const SDK_MESSAGE_TYPES = {
   TOOL_RESULT: 'tool_result',
   SYSTEM: 'system',
   ERROR: 'error',
-  RESULT: 'result'
+  RESULT: 'result',
+  RATE_LIMIT_EVENT: 'rate_limit_event'
+};
+
+// Channel that produced a structured-output result (see lib/llm/structured-output-extractor.js).
+// 'structured_output' = SDK populated msg.structured_output (model invoked StructuredOutput tool).
+// 'text_fallback'     = msg.structured_output absent/invalid; JSON parsed from result text.
+// Captured on llm_complete events so we can detect SDK bug #277 firings in the wild.
+const STRUCTURED_OUTPUT_CHANNELS = {
+  STRUCTURED_OUTPUT: 'structured_output',
+  TEXT_FALLBACK: 'text_fallback'
 };
 
 // SSE event types emitted to clients
@@ -28,5 +38,6 @@ const SSE_EVENT_TYPES = {
 
 module.exports = {
   SDK_MESSAGE_TYPES,
-  SSE_EVENT_TYPES
+  SSE_EVENT_TYPES,
+  STRUCTURED_OUTPUT_CHANNELS
 };
