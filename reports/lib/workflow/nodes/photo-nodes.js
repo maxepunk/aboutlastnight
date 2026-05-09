@@ -54,10 +54,7 @@ function getImagePromptBuilder(config) {
  */
 const PHOTO_CONFIG = {
   // Concurrency limit: max parallel SDK calls (each spawns a CLI process)
-  MAX_CONCURRENT: 8,
-
-  // Timeout for each photo analysis (2 min for haiku + overhead for preprocessing)
-  ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000  // 3 minutes
+  MAX_CONCURRENT: 8
 };
 
 /**
@@ -226,7 +223,6 @@ Remember: Use physical descriptions for people, NOT names.`;
  * @param {Array} params.roster - Character roster
  * @param {string} params.processedPath - Path to preprocessed image
  * @param {string} params.originalFilename - Original filename (for output)
- * @param {number} params.timeoutMs - Timeout in milliseconds
  * @returns {Promise<Object>} Analysis result or error placeholder
  */
 async function analyzeSinglePhoto({
@@ -235,8 +231,7 @@ async function analyzeSinglePhoto({
   playerFocus,
   roster,
   processedPath,
-  originalFilename,
-  timeoutMs
+  originalFilename
 }) {
   // Use ImagePromptBuilder for context-aware prompts
   const { systemPrompt, userPrompt } = await imagePromptBuilder.buildPhotoAnalysisPrompt({
@@ -254,7 +249,6 @@ async function analyzeSinglePhoto({
       model: 'haiku',
       jsonSchema: PHOTO_ANALYSIS_SCHEMA,
       allowedTools: ['Read'],
-      timeoutMs,
       label: originalFilename,
       loadProjectSettings: false
     });
@@ -457,8 +451,7 @@ async function analyzePhotos(state, config) {
         playerFocus: state.playerFocus,
         roster,
         processedPath: photoPath,
-        originalFilename,
-        timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS
+        originalFilename
       }));
     });
 
@@ -796,8 +789,7 @@ async function finalizePhotoAnalyses(state, config) {
         playerFocus: state.playerFocus,
         roster,
         processedPath: photoPath,
-        originalFilename: failed.filename,
-        timeoutMs: PHOTO_CONFIG.ANALYSIS_TIMEOUT_MS
+        originalFilename: failed.filename
       }));
     }));
 

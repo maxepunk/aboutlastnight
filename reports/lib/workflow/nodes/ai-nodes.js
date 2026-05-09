@@ -205,7 +205,6 @@ Score each item and return the results.`;
         prompt,
         systemPrompt: PAPER_SCORING_PROMPT,
         model: 'sonnet',
-        timeoutMs: 2 * 60 * 1000,  // 2 minutes per batch
         jsonSchema: PAPER_SCORING_SCHEMA,
         disableTools: true,
         label: `Paper evidence batch ${batchIdx + 1}/${batches.length}`,
@@ -1024,7 +1023,6 @@ async function reviseOutline(state, config) {
       systemPrompt: getOutlineRevisionSystemPrompt(),
       model: 'opus',  // Same as generateOutline
       jsonSchema: activeOutlineSchema,
-      timeoutMs: 5 * 60 * 1000,  // 5 minutes
       disableTools: true,
       label: `Outline revision ${revisionCount}`
     });
@@ -1448,7 +1446,6 @@ async function reviseContentBundle(state, config) {
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
       jsonSchema: contentBundleSchema,  // Use full schema (Fix 3)
-      timeoutMs: 10 * 60 * 1000,  // 10 minutes for Opus
       label: `Article revision ${revisionCount}`
     });
 

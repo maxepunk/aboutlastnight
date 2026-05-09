@@ -15,6 +15,7 @@
 
 const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
+const { STRUCTURED_OUTPUT_CHANNELS } = require('../observability/constants');
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -114,7 +115,9 @@ function tryExtractJson(text, accept) {
  * @param {Object} args.schema - JSON schema to validate against
  * @param {string} [args.label] - Call label for diagnostics
  * @param {string} [args.model] - Model name for diagnostics
- * @returns {Object} Schema-valid object
+ * @returns {{value: Object, channel: string}} Schema-valid object plus the channel it came from.
+ *   `channel` is one of STRUCTURED_OUTPUT_CHANNELS — lets the caller distinguish the SDK-native
+ *   path from the text-fallback path (which fires for SDK bug #277 and similar).
  * @throws {StructuredOutputExtractionError} When no schema-valid object can be produced
  */
 function extractStructuredOutput({ structuredOutput, resultText, schema, label, model }) {
@@ -123,7 +126,7 @@ function extractStructuredOutput({ structuredOutput, resultText, schema, label, 
   // Path 1: SDK-provided structured output is valid
   if (structuredOutput !== undefined && structuredOutput !== null) {
     if (validate(structuredOutput)) {
-      return structuredOutput;
+      return { value: structuredOutput, channel: STRUCTURED_OUTPUT_CHANNELS.STRUCTURED_OUTPUT };
     }
     // Fall through to text-extraction; SDK output was schema-invalid
   }
@@ -150,7 +153,7 @@ function extractStructuredOutput({ structuredOutput, resultText, schema, label, 
   }
 
   // extracted passed the predicate inside tryExtractJson, so it is schema-valid here.
-  return extracted;
+  return { value: extracted, channel: STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK };
 }
 
 module.exports = {

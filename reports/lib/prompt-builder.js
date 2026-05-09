@@ -624,7 +624,8 @@ ${JSON.stringify(outline, null, 2)}
 
 HERO IMAGE:
 Filename: ${heroImage || 'Use first available photo from outline'}
-- Use this exact filename in the "heroImage" field
+- Emit "heroImage" as an OBJECT: { "filename": "<exact filename>", "caption": "...", "characters": [...] }
+- Do NOT emit "heroImage" as a bare filename string — the schema requires an object.
 - Do NOT include this filename in the "photos" array
 
 ${arcEvidenceSection}
@@ -698,9 +699,17 @@ STRUCTURE:
    - "placement": "inline" or "sidebar"
    - "afterSection": Section ID after which photo appears
 
-5. "heroImage" - Hero image filename (same as HERO IMAGE above)
+5. "heroImage" - Featured image (OBJECT, not string):
+   - "filename": EXACT filename of the hero image (matches HERO IMAGE above)
+   - "caption": Hero image caption
+   - "characters": Array of character names visible in the image
 
-6. "voice_self_check" - Self-assessment:
+6. "metadata" - Required top-level metadata object:
+   - "sessionId": session identifier (will be overwritten by state value)
+   - "theme": "detective"
+   - "generatedAt": ISO 8601 timestamp
+
+7. "voice_self_check" - Self-assessment:
    - Is the tone professional and analytical with noir flair?
    - Does each section answer a DIFFERENT question?
    - Are names in <strong> tags, evidence in <em> tags?
@@ -721,7 +730,8 @@ ${JSON.stringify(outline, null, 2)}
 HERO IMAGE (CRITICAL - do NOT duplicate):
 Filename: ${heroImage || 'Use first available photo from outline'}
 This image is the HERO IMAGE at the top of the article.
-- Use this exact filename in the "heroImage" field
+- Emit "heroImage" as an OBJECT: { "filename": "<exact filename>", "caption": "...", "characters": [...] }
+- Do NOT emit "heroImage" as a bare filename string — the schema requires an object.
 - Do NOT include this filename in the "photos" array (it would cause duplication)
 - Inline photos must use DIFFERENT photos from the session
 
@@ -949,11 +959,24 @@ STRUCTURE:
    - "placement": "inline" or "sidebar"
    - "afterSection": Section ID after which photo appears
 
-5. "financialTracker" - Shell account entries (required for FOLLOW THE MONEY)
+5. "heroImage" - Featured image at top of article (OBJECT, not string):
+   - "filename": EXACT filename of the hero image (matches HERO IMAGE above)
+   - "caption": Hero image caption
+   - "characters": Array of character names visible in the image
 
-6. "headline" - Article headline with main, kicker, deck
+6. "financialTracker" - Shell account entries (required for FOLLOW THE MONEY):
+   - "entries": Array of { "date": "...", "description": "...", "amount": "...", "category": "..." }
+   - "totalExposed": Total amount on exposed transactions (e.g., "$4.06M")
+   - DO NOT add other top-level fields here — schema rejects unknown properties.
 
-7. "voice_self_check" - Self-assessment against ALL voice requirements:
+7. "headline" - Article headline with main, kicker, deck
+
+8. "metadata" - Required top-level metadata object:
+   - "sessionId": session identifier (will be overwritten by state value)
+   - "theme": "journalist"
+   - "generatedAt": ISO 8601 timestamp
+
+9. "voice_self_check" - Self-assessment against ALL voice requirements:
 
    VOICE INFLUENCES CHECK:
    - Hunter S. Thompson: Am I participatory, in-the-muck, part of the chaos? NOT observing from outside?
@@ -975,7 +998,7 @@ STRUCTURE:
    - Any game mechanics language?
    - Any generic praise or vague attribution?
 
-8. "byline" - Article byline object:
+10. "byline" - Article byline object:
    - "author": "${this.sessionConfig.journalistFirstName || 'Cassandra'} Nova | NovaNews"
    - "title": "Senior Investigative Correspondent"${this.sessionConfig.guestReporter ? `
    - "guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"` : ''}

@@ -174,7 +174,9 @@ describe('enrichDirectorNotes', () => {
     expect(call.model).toBe('opus');
     expect(call.disableTools).toBe(true);
     expect(call.jsonSchema).toBe(DIRECTOR_NOTES_ENRICHED_SCHEMA);
-    expect(call.timeoutMs).toBe(10 * 60 * 1000);
+    // No per-call timeout — the call inherits the standardized model default
+    // from lib/llm/client.js MODEL_TIMEOUTS (currently 10 min uniformly).
+    expect(call.timeoutMs).toBeUndefined();
     expect(call.label).toBe('Director notes enrichment');
   });
 

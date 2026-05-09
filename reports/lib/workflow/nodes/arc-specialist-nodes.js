@@ -500,7 +500,6 @@ async function generateCoreArcs(state, config) {
       systemPrompt: CORE_ARC_SYSTEM_PROMPT,
       model: 'opus',
       jsonSchema: CORE_ARC_SCHEMA,
-      timeoutMs: 10 * 60 * 1000, // 10 minutes — 31K+ char prompts need headroom for schema validation retries (observed: 170s generation + 130s retry)
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
       label: 'Core arc generation (Call 1)'
     });
@@ -555,7 +554,6 @@ async function enrichWithInterweaving(coreArcs, roster, config) {
       systemPrompt: INTERWEAVING_SYSTEM_PROMPT,
       model: 'opus',
       jsonSchema: INTERWEAVING_SCHEMA,
-      timeoutMs: 10 * 60 * 1000, // 10 minutes
       label: 'Interweaving enrichment (Call 2)'
     });
 
@@ -962,7 +960,6 @@ async function reviseArcs(state, config) {
       model: 'opus',
       jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
       disableTools: true,        // Pure analytical task — no tool access needed
-      timeoutMs: 10 * 60 * 1000, // 10 min — revision prompt is ~55K chars
       label: `Arc revision ${revisionCount}`
     });
 

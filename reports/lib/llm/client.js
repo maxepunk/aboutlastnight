@@ -22,12 +22,19 @@ const { extractStructuredOutput, StructuredOutputExtractionError } = require('./
 process.setMaxListeners(20);
 
 /**
- * Default timeouts per model (in milliseconds)
+ * Per-model abort cap (in milliseconds).
+ *
+ * Standardized at 10 minutes across all models so the AbortController fires only
+ * on genuinely-stuck calls. Per-call overrides have caused repeated production
+ * failures (see git history: e81a63b, 2830be7, character-data-nodes.js:106).
+ *
+ * Steady-state response timing is captured on every call via `duration_api_ms`
+ * in the llm_complete event — that's the data source for any future tightening.
  */
 const MODEL_TIMEOUTS = {
-  opus: 10 * 60 * 1000,    // 10 minutes
-  sonnet: 5 * 60 * 1000,   // 5 minutes
-  haiku: 2 * 60 * 1000     // 2 minutes
+  opus: 10 * 60 * 1000,
+  sonnet: 10 * 60 * 1000,
+  haiku: 10 * 60 * 1000
 };
 
 /**
@@ -237,6 +244,12 @@ async function sdkQueryImpl({
             toolInput: toolUseBlock.input
           }),
           ...(msg.type === 'error' && { error: msg.error }),
+          // Surface assistant-message errors (max_output_tokens, rate_limit, etc.) so
+          // the progress channel can distinguish them from the truncated text response.
+          ...(msg.type === 'assistant' && msg.error && { assistantError: msg.error }),
+          // Pass rate_limit_info (status, utilization, type) through so the formatter
+          // can render meaningful diagnostics rather than the bare event name.
+          ...(msg.type === 'rate_limit_event' && { rateLimitInfo: msg.rate_limit_info }),
           ...(contentPreview && { contentPreview })
         });
       }
@@ -253,28 +266,41 @@ async function sdkQueryImpl({
         clearTimeout(timeoutId);
 
         let finalResult;
+        let outputChannel = null;
         if (jsonSchema) {
           // Control 1: SDK contract enforcement.
           // Per SDK bug #277, subtype='success' can arrive without structured_output.
-          // The extractor falls back to parsing JSON from msg.result text.
-          finalResult = extractStructuredOutput({
+          // The extractor falls back to parsing JSON from msg.result text and reports
+          // which channel produced the value via the `channel` field.
+          const extracted = extractStructuredOutput({
             structuredOutput: msg.structured_output,
             resultText: msg.result,
             schema: jsonSchema,
             label: progressLabel,
             model: resolvedModel
           });
+          finalResult = extracted.value;
+          outputChannel = extracted.channel;
         } else {
           finalResult = msg.result;
         }
 
-        // Emit llm_complete event with FULL response (no truncation)
+        // Emit llm_complete event with FULL response (no truncation) plus the SDK's
+        // own diagnostic fields. These are the data source for diagnosing channel
+        // skips, max_output_tokens hits, latency outliers, and rate-limit pressure.
         if (onProgress) {
           onProgress({
             type: 'llm_complete',
             elapsed: (Date.now() - startTime) / 1000,
             result: finalResult,
-            jsonSchema
+            jsonSchema,
+            channel: outputChannel,
+            stopReason: msg.stop_reason ?? null,
+            durationApiMs: msg.duration_api_ms ?? null,
+            numTurns: msg.num_turns ?? null,
+            usage: msg.usage ?? null,
+            apiErrorStatus: msg.api_error_status ?? null,
+            terminalReason: msg.terminal_reason ?? null
           });
         }
 

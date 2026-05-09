@@ -236,7 +236,6 @@ async function enrichDirectorNotes(context, sdk) {
       model: 'opus',
       disableTools: true,
       jsonSchema: DIRECTOR_NOTES_ENRICHED_SCHEMA,
-      timeoutMs: 10 * 60 * 1000,
       label: 'Director notes enrichment'
     });
 
