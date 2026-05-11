@@ -76,9 +76,12 @@ const EFFORT_LEVELS = {
  * @param {Object} [options.jsonSchema] - JSON schema for structured output
  * @param {string[]} [options.allowedTools=[]] - Tools the SDK can use (e.g., ['Read', 'Task'])
  * @param {boolean} [options.disableTools=false] - If true, disables ALL built-in tools for pure structured output.
- * @param {boolean} [options.loadProjectSettings=true] - If false, sets settingSources: [] to prevent
- *   the SDK from auto-loading .claude/skills/ SKILL.md files from cwd. Pass false on utility calls
- *   (photo, normalization) to avoid polluting system context with unrelated skills.
+ * @param {boolean} [options.loadProjectSettings=true] - Controls filesystem-settings scope:
+ *   - true  → settingSources: ['project']  (loads project .claude/skills/ and project CLAUDE.md)
+ *   - false → settingSources: []           (no filesystem settings; pure SDK isolation)
+ *   We never load user/local sources — Phase 1A audit found those contribute ~86K tokens of
+ *   irrelevant context (superpowers meta-skill, MEMORY.md, MCP instructions) and correlate
+ *   with channel-skip failures on large structured-output calls.
  * @param {Object} [options.agents] - Custom agent definitions for Task tool invocation
  * @param {string} [options.cwd] - Current working directory for file operations
  * @param {('low'|'medium'|'high'|'xhigh'|'max')} [options.effort] - Override the per-model effort default
@@ -124,11 +127,22 @@ async function sdkQueryImpl({
   };
 
   // Control 2: scope filesystem-loaded skills/settings per call.
-  // Default true preserves SDK behavior (loads .claude/skills/ from cwd).
-  // Pass false on utility calls (photo, normalization) to avoid auto-loading
-  // unrelated skill prompts that pollute system context.
+  //
+  // SDK default (settingSources omitted) loads user + project + local — verified via
+  // probe to include ~86K tokens of context: superpowers meta-skill, user MEMORY.md,
+  // MCP server instructions, two CLAUDE.md files. None of that is needed by our
+  // SDK calls and the cognitive frame contamination correlates with channel-skip
+  // failures on generateContentBundle.
+  //
+  // Mapping:
+  //   loadProjectSettings: false → settingSources: []          (no filesystem context)
+  //   loadProjectSettings: true  → settingSources: ['project'] (project skill + project CLAUDE.md only)
+  //
+  // We never want the historical "all sources" behavior — see Phase 1A audit.
   if (loadProjectSettings === false) {
     options.settingSources = [];
+  } else {
+    options.settingSources = ['project'];
   }
 
   // Enable 1M context window for Opus and Sonnet (beta)
@@ -265,45 +279,72 @@ async function sdkQueryImpl({
       if (msg.type === 'result' && msg.subtype === 'success') {
         clearTimeout(timeoutId);
 
+        // Capture SDK diagnostics BEFORE attempting extraction so failures get
+        // the same envelope as successes. Otherwise extraction throws bury the
+        // single most useful signal (stop_reason, usage, terminal_reason, etc.)
+        // exactly when we need them.
+        const sdkDiagnostics = {
+          stopReason: msg.stop_reason ?? null,
+          durationApiMs: msg.duration_api_ms ?? null,
+          numTurns: msg.num_turns ?? null,
+          usage: msg.usage ?? null,
+          apiErrorStatus: msg.api_error_status ?? null,
+          terminalReason: msg.terminal_reason ?? null,
+          structuredOutputPresent: msg.structured_output !== undefined && msg.structured_output !== null,
+          resultTextLength: typeof msg.result === 'string' ? msg.result.length : 0
+        };
+
         let finalResult;
         let outputChannel = null;
+        let extractionError = null;
         if (jsonSchema) {
           // Control 1: SDK contract enforcement.
           // Per SDK bug #277, subtype='success' can arrive without structured_output.
           // The extractor falls back to parsing JSON from msg.result text and reports
           // which channel produced the value via the `channel` field.
-          const extracted = extractStructuredOutput({
-            structuredOutput: msg.structured_output,
-            resultText: msg.result,
-            schema: jsonSchema,
-            label: progressLabel,
-            model: resolvedModel
-          });
-          finalResult = extracted.value;
-          outputChannel = extracted.channel;
+          try {
+            const extracted = extractStructuredOutput({
+              structuredOutput: msg.structured_output,
+              resultText: msg.result,
+              schema: jsonSchema,
+              label: progressLabel,
+              model: resolvedModel
+            });
+            finalResult = extracted.value;
+            outputChannel = extracted.channel;
+          } catch (err) {
+            extractionError = err;
+          }
         } else {
           finalResult = msg.result;
         }
 
-        // Emit llm_complete event with FULL response (no truncation) plus the SDK's
-        // own diagnostic fields. These are the data source for diagnosing channel
-        // skips, max_output_tokens hits, latency outliers, and rate-limit pressure.
+        // Emit diagnostics for BOTH success and extraction-failure paths.
+        // llm_complete on success; llm_error on extraction failure. Same envelope.
         if (onProgress) {
-          onProgress({
-            type: 'llm_complete',
-            elapsed: (Date.now() - startTime) / 1000,
-            result: finalResult,
-            jsonSchema,
-            channel: outputChannel,
-            stopReason: msg.stop_reason ?? null,
-            durationApiMs: msg.duration_api_ms ?? null,
-            numTurns: msg.num_turns ?? null,
-            usage: msg.usage ?? null,
-            apiErrorStatus: msg.api_error_status ?? null,
-            terminalReason: msg.terminal_reason ?? null
-          });
+          if (extractionError) {
+            onProgress({
+              type: 'llm_error',
+              elapsed: (Date.now() - startTime) / 1000,
+              error: extractionError.message,
+              errorName: extractionError.name,
+              schemaErrors: extractionError.schemaErrors || null,
+              jsonSchema,
+              ...sdkDiagnostics
+            });
+          } else {
+            onProgress({
+              type: 'llm_complete',
+              elapsed: (Date.now() - startTime) / 1000,
+              result: finalResult,
+              jsonSchema,
+              channel: outputChannel,
+              ...sdkDiagnostics
+            });
+          }
         }
 
+        if (extractionError) throw extractionError;
         return finalResult;
       }
 

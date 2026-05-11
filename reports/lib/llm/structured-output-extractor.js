@@ -35,13 +35,26 @@ function getValidator(schema) {
 }
 
 class StructuredOutputExtractionError extends Error {
-  constructor(message, { schemaErrors = [], label, model, lastText } = {}) {
+  constructor(message, {
+    schemaErrors = [],
+    label,
+    model,
+    lastText,
+    structuredOutputPresent = false,
+    resultTextLength = 0
+  } = {}) {
     super(message);
     this.name = 'StructuredOutputExtractionError';
     this.schemaErrors = schemaErrors;
     this.label = label;
     this.model = model;
     this.lastText = lastText;
+    // Distinguish three failure modes:
+    //   - structuredOutputPresent=false, resultTextLength=0 → SDK emitted nothing
+    //   - structuredOutputPresent=false, resultTextLength>0 → model wrote text, no tool call
+    //   - structuredOutputPresent=true                       → SDK emitted invalid structured output
+    this.structuredOutputPresent = structuredOutputPresent;
+    this.resultTextLength = resultTextLength;
   }
 }
 
@@ -122,9 +135,12 @@ function tryExtractJson(text, accept) {
  */
 function extractStructuredOutput({ structuredOutput, resultText, schema, label, model }) {
   const validate = getValidator(schema);
+  const structuredOutputPresent = structuredOutput !== undefined && structuredOutput !== null;
+  const resultTextLength = typeof resultText === 'string' ? resultText.length : 0;
+  const diagnostics = { label, model, lastText: resultText, structuredOutputPresent, resultTextLength };
 
   // Path 1: SDK-provided structured output is valid
-  if (structuredOutput !== undefined && structuredOutput !== null) {
+  if (structuredOutputPresent) {
     if (validate(structuredOutput)) {
       return { value: structuredOutput, channel: STRUCTURED_OUTPUT_CHANNELS.STRUCTURED_OUTPUT };
     }
@@ -143,12 +159,12 @@ function extractStructuredOutput({ structuredOutput, resultText, schema, label, 
       validate(anyParseable); // populate validate.errors
       throw new StructuredOutputExtractionError(
         `Extracted JSON does not match schema: ${ajv.errorsText(validate.errors)}`,
-        { schemaErrors: validate.errors || [], label, model, lastText: resultText }
+        { ...diagnostics, schemaErrors: validate.errors || [] }
       );
     }
     throw new StructuredOutputExtractionError(
-      `No JSON object found in result text (length=${(resultText || '').length})`,
-      { label, model, lastText: resultText }
+      `No JSON object found in result text (length=${resultTextLength})`,
+      diagnostics
     );
   }
 

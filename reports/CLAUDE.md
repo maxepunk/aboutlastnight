@@ -183,7 +183,13 @@ const result = await sdkQuery({
 
 **Structured Output Contract:** When `jsonSchema` is provided, the call returns a schema-valid object or throws `StructuredOutputExtractionError`. The wrapper validates the SDK's `structured_output` field and falls back to extracting JSON from result text — recovers from [SDK bug #277](https://github.com/anthropics/claude-agent-sdk-typescript/issues/277) where `success` arrives without `structured_output`.
 
-**`loadProjectSettings` flag:** Default `true` preserves SDK behavior (autoloads `.claude/skills/` from cwd). Pass `false` on utility/normalization calls (photo, preprocess, score, parse) to prevent autoload of unrelated skill prompts that pollute system context. Narrative-generation calls keep the default.
+**Channel skip is structural for large structured-output calls.** Phase 3 probes (see `scripts/probe-content-bundle-channel.js`) confirmed that `generateContentBundle`-class calls (Opus, ~150K-char prompt, deep schema with `oneOf` content blocks) reliably go down the text-fallback path with `stop_reason: end_turn` — the model finishes its turn naturally by writing inline JSON instead of invoking the `StructuredOutput` tool. This is NOT a truncation issue. Treat the text-fallback path as the primary path for these calls and keep the prompt schema-coherent (every field requested, every enum value spelled out, explicit "do not invent" warnings) so the fallback is bulletproof. The `channel` field on `llm_complete`/`llm_error` events tells you which path actually fired.
+
+**`loadProjectSettings` flag:** Controls filesystem-settings scope:
+- `true` (default) → `settingSources: ['project']` — loads project `.claude/skills/` and project `CLAUDE.md` only
+- `false` → `settingSources: []` — pure SDK isolation; pass on utility/normalization calls
+
+We never load user-level (`~/.claude/`) or local sources. Phase 1A probe found those contribute ~86K tokens of unrelated context (superpowers meta-skill, MEMORY.md, MCP server instructions, two CLAUDE.md files) and correlate with channel-skip pressure on large calls.
 
 **Model Timeouts:** 10 min uniformly across Haiku, Sonnet, Opus. The cap is intended for genuinely-stuck calls only — steady-state latency is captured per-call via `duration_api_ms` on the `llm_complete` progress event (see `lib/observability/progress-bridge.js`). Per-call `timeoutMs` overrides have been removed across the codebase; tighten only when you have data showing it's safe.
 

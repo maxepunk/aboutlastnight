@@ -78,6 +78,53 @@ describe('extractStructuredOutput', () => {
     }
   });
 
+  test('error distinguishes "text path, no structured_output" from "structured_output invalid"', () => {
+    // Case 1: SDK emitted nothing — text fallback parsed JSON but schema-invalid.
+    try {
+      extractStructuredOutput({
+        structuredOutput: undefined,
+        resultText: '```json\n{"name": 42}\n```',
+        schema: SIMPLE_SCHEMA,
+        label: 'no-structured-output',
+        model: 'opus'
+      });
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err.structuredOutputPresent).toBe(false);
+      expect(err.resultTextLength).toBeGreaterThan(0);
+    }
+
+    // Case 2: SDK emitted invalid structured_output, fallback text also invalid.
+    try {
+      extractStructuredOutput({
+        structuredOutput: { name: 42 },
+        resultText: '```json\n{"name": 99}\n```',
+        schema: SIMPLE_SCHEMA,
+        label: 'invalid-structured-output',
+        model: 'opus'
+      });
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err.structuredOutputPresent).toBe(true);
+      expect(err.resultTextLength).toBeGreaterThan(0);
+    }
+
+    // Case 3: SDK emitted nothing AND no parseable text.
+    try {
+      extractStructuredOutput({
+        structuredOutput: undefined,
+        resultText: 'no json here',
+        schema: SIMPLE_SCHEMA,
+        label: 'nothing-at-all',
+        model: 'opus'
+      });
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err.structuredOutputPresent).toBe(false);
+      expect(err.resultTextLength).toBe(12);
+    }
+  });
+
   test('prefers structuredOutput when both are present and valid', () => {
     const result = extractStructuredOutput({
       structuredOutput: { name: 'from-structured', count: 1 },

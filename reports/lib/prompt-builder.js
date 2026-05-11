@@ -903,26 +903,32 @@ ${constraints.voiceQuestion}
 <GENERATION_INSTRUCTION>
 Generate structured article content as JSON matching the ContentBundle schema.
 
+SCHEMA STRICTNESS — READ THIS FIRST:
+The ContentBundle schema sets "additionalProperties: false" at every level. Any field name not listed below causes rejection. Do NOT invent top-level fields (no "subtitle", "summary", "lede") or per-block fields ("loopFunction", "afterParagraph", "advancesArc" — those belong to the OUTLINE, not the bundle). Do NOT invent content-block "type" values (no "callout", "epigraph", "divider", "pullquote", "subheading"). Stick to the exact field names and exact enum values listed below.
+
 TARGET LENGTH: 1000-1500 words of prose (excluding visual component markup). Quality over quantity.
 
 STRUCTURE:
 1. "sections" - Array of article sections, each with:
    - "id": Section identifier (lede, the-story, follow-the-money, the-players, whats-missing, closing)
-   - "type": Section type for styling (narrative, evidence-highlight, investigation-notes, conclusion)
+   - "type": EXACT one of "narrative" | "evidence-highlight" | "investigation-notes" | "conclusion"
    - "heading": Optional section heading
-   - "content": Array of content blocks:
-     * {"type": "paragraph", "text": "..."} - Prose text
-     * {"type": "quote", "text": "...", "attribution": "..."} - Inline quotes
-     * {"type": "evidence-reference", "tokenId": "xxx", "caption": "..."} - Reference to evidence card
-     * {"type": "list", "items": [...], "ordered": false} - Lists
+   - "content": Array of content blocks. Each block must match EXACTLY one of these 6 shapes — schema rejects any other "type":
+     * {"type": "paragraph", "text": "..."}
+     * {"type": "quote", "text": "...", "attribution": "..."}   ← attribution REQUIRED
+     * {"type": "evidence-reference", "tokenId": "...", "caption": "..."}
+     * {"type": "list", "items": ["..."], "ordered": false}
+     * {"type": "photo", "filename": "...", "caption": "...", "characters": [...]}   ← INLINE photo block; only "filename" is required here
+     * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "VERBATIM full text", "owner": "...", "significance": "critical"|"supporting"|"contextual"}
 
-2. "evidenceCards" - Array of evidence card content:
+2. "evidenceCards" - Array of sidebar/inline evidence card content:
    - "tokenId": ID matching evidence-reference blocks
    - "headline": Card headline (compelling, not just descriptive)
    - "content": VERBATIM full text - COPY EXACTLY from arcEvidencePackages fullContent, include tokenId/timestamp prefix
    - "summary": Brief 100-char summary for sidebar display
    - "owner": Character canonical full name
-   - "significance": "critical" | "supporting" | "contextual"
+   - "significance": EXACT one of "critical" | "supporting" | "contextual"
+   - "placement": EXACT one of "sidebar" | "inline" (default "sidebar"). DO NOT use outline-style placement vocabulary like "after para 2" here — that belongs to the outline, not the bundle.
 
    CRITICAL: Cards are VISUAL COMPONENTS for compulsive readability:
    - Each card is a CLOSER (proves what was hinted) or OPENER (raises new question)
@@ -950,13 +956,18 @@ STRUCTURE:
    - Sidebar: 5-8 cards as navigation/reference
    - Body: Reference only cards already in evidenceCards array
 
-3. "pullQuotes" - Featured quotes for sidebar (distribute across 2+ sections)
+3. "pullQuotes" - Featured quotes for sidebar (distribute across 2+ sections):
+   - "type": EXACT lowercase "verbatim" or "crystallization" (do NOT use uppercase)
+   - "text": The quote text
+   - "attribution": Character name (string) for verbatim; null for crystallization
+   - "sourceTokenId": Optional. For verbatim quotes only; the tokenId being quoted
+   - "placement": EXACT one of "left" | "right" | "center" (default "right"). Do NOT use "sidebar" or "inline" here.
 
-4. "photos" - Session photos with placement:
-   - "filename": EXACT filename from available photos (do NOT include hero image here)
-   - "caption": Caption text
+4. "photos" - Top-level session photos array (DIFFERENT shape than the inline "photo" content block in sections):
+   - "filename": EXACT filename from available photos (do NOT include hero image filename here)
+   - "caption": REQUIRED at top level
    - "characters": Array of character names visible
-   - "placement": "inline" or "sidebar"
+   - "placement": EXACT one of "inline" | "sidebar"
    - "afterSection": Section ID after which photo appears
 
 5. "heroImage" - Featured image at top of article (OBJECT, not string):
@@ -976,7 +987,16 @@ STRUCTURE:
    - "theme": "journalist"
    - "generatedAt": ISO 8601 timestamp
 
-9. "voice_self_check" - Self-assessment against ALL voice requirements:
+9. "voice_self_check" - Self-assessment OBJECT (not a string, not an array). Emit as:
+   {
+     "influences_check": { "thompson": "...", "swisher": "...", "newton": "...", "richardson": "...", "kabas": "..." },
+     "mechanics_check": { "first_person": "...", "rhythm": "...", "em_dashes": "...", "tokens_language": "...", "moral_clarity": "...", "systemic_critique": "..." },
+     "anti_pattern_check": { "passive_voice": "...", "game_mechanics": "...", "generic_praise": "..." },
+     "issues_found": ["short string of any issue to fix"],
+     "overall_assessment": "one-sentence summary"
+   }
+
+   Use the bullet criteria below as guidance for what to populate in each sub-object's string values.
 
    VOICE INFLUENCES CHECK:
    - Hunter S. Thompson: Am I participatory, in-the-muck, part of the chaos? NOT observing from outside?
