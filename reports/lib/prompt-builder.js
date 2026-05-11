@@ -984,9 +984,14 @@ STRUCTURE:
    - "caption": Hero image caption
    - "characters": Array of character names visible in the image
 
-6. "financialTracker" - Shell account entries (required for FOLLOW THE MONEY):
-   - "entries": Array of { "date": "...", "description": "...", "amount": "...", "category": "..." }
-   - "totalExposed": Total amount on exposed transactions (e.g., "$4.06M")
+6. "financialTracker" - Shell-account LEDGER (required for FOLLOW THE MONEY).
+   Each entry represents ONE shell account, NOT a narrative description.
+   - "entries": Array — one entry per row of AUTHORITATIVE SHELL ACCOUNT DATA above. Map 1:1:
+     * "description": the account NAME exactly as listed (e.g., "Jamie", "Person", "Sarah"). NOT prose.
+     * "amount": the clean dollar string from the authoritative data (e.g., "$1,299,997"). NOT prose like "largest concentration" or "substantial routing".
+     * "category": optional, "shell-account".
+   - "totalExposed": the "Total buried: $X,XXX,XXX" value from AUTHORITATIVE SHELL ACCOUNT DATA. Clean dollar string.
+   - The template renders a bar chart with bar widths computed from "amount" — if amount isn't a parseable dollar string, the chart breaks.
    - DO NOT add other top-level fields here — schema rejects unknown properties.
 
 7. "headline" - Article headline with main, kicker, deck

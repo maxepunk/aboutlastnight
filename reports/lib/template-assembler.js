@@ -353,35 +353,43 @@ class TemplateAssembler {
   }
 
   /**
-   * Override LLM-generated financial tracker with deterministic shell account data
-   * Preserves LLM-generated labels/descriptions but replaces amounts with authoritative values
+   * Override LLM-generated financial tracker with authoritative shell-account data.
    *
-   * @param {Object} financialTracker - LLM-generated financial tracker
-   * @param {Array} shellAccounts - Authoritative shell account data
-   * @returns {Object} Financial tracker with corrected amounts
+   * When `shellAccounts` has positive-total accounts, this REPLACES the LLM's entries
+   * with deterministic ones derived directly from `shellAccounts`. The LLM's financial
+   * tracker has always been decorative — the schema permits any string in `description`
+   * and `amount`, and the model has emitted prose there often enough that we can't trust
+   * the LLM data to drive the bar-chart visualization (which parses amount numerically).
+   *
+   * The prior behavior of this function looked up `entry.name`/`entry.account` to merge
+   * with LLM-provided labels, but the content-bundle schema doesn't permit those field
+   * names (additionalProperties: false), so the merge path could never fire — the LLM
+   * data was flowing straight through with broken bar widths.
+   *
+   * When `shellAccounts` is empty (e.g., orchestrator skipped transaction parsing), the
+   * function passes through the LLM's tracker unchanged so the field is at least present.
+   *
+   * @param {Object} financialTracker - LLM-generated financial tracker (may be ignored)
+   * @param {Array} shellAccounts - Authoritative shell account data: [{name, total, tokenCount}]
+   * @returns {Object} Financial tracker with clean entries derived from shellAccounts
    */
   overrideFinancialTracker(financialTracker, shellAccounts) {
-    if (!financialTracker?.entries?.length || !shellAccounts?.length) return financialTracker;
+    const validAccounts = (shellAccounts || []).filter(a => a && a.total > 0 && a.name);
+    if (validAccounts.length === 0) return financialTracker;
 
-    const accountMap = new Map(
-      shellAccounts.filter(a => a.total > 0).map(a => [a.name.toLowerCase(), a])
-    );
+    // Sort by total descending so the bar chart reads largest-to-smallest.
+    const sorted = [...validAccounts].sort((a, b) => (b.total || 0) - (a.total || 0));
 
-    const entries = financialTracker.entries.map(entry => {
-      const name = entry.name || entry.account || '';
-      const authoritative = accountMap.get(name.toLowerCase());
-      if (!authoritative) return entry;
+    const entries = sorted.map(a => ({
+      description: a.name,
+      amount: `$${a.total.toLocaleString('en-US')}`,
+      category: 'shell-account'
+    }));
 
-      return {
-        ...entry,
-        amount: `$${authoritative.total.toLocaleString('en-US')}`
-      };
-    });
-
-    const totalExposed = shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0);
+    const totalExposed = sorted.reduce((sum, a) => sum + (a.total || 0), 0);
 
     return {
-      ...financialTracker,
+      ...(financialTracker || {}),
       entries,
       totalExposed: `$${totalExposed.toLocaleString('en-US')}`
     };

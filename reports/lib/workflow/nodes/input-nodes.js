@@ -443,18 +443,37 @@ Return structured JSON matching the schema.`;
     }
 
     console.log('[parseRawInput] Step 2: Parsing session report');
-    const sessionReportPrompt = `Parse the following session gameplay report into structured JSON:
+    const sessionReportPrompt = `Parse the following session gameplay report into structured JSON.
 
 SESSION REPORT:
 ${rawInput.sessionReport}
 
-Rules for parsing:
-1. Extract token IDs from the Detective Scans table (these are "exposed" tokens)
-2. Extract token data from Black Market Scans table (these are "buried" tokens)
-3. For buried tokens, include the shell account name, amount, and time
-4. Extract shell account standings with name, total, token count, and rank
-5. Extract the session UUID from "Session ID" field
-6. Extract team names from "Teams Registered"
+Section names vary between session-report generations. Recognize ALL of these patterns:
+
+EXPOSED tokens (sold to Detective, become public evidence):
+- "Detective Evidence Log" table (current orchestrator format)
+- "Detective Scans" table (older format)
+- Token IDs appear in the leftmost "Token" column
+
+BURIED tokens (sold to Black Market, buried in shell accounts):
+- "Scoring Timeline" table rows where Type = "Sale" (current orchestrator format)
+- "Black Market Scans" table (older format)
+- For each Sale row: Detail column contains "<tokenId>/<Character Name>", Team column = shell account name, Amount column = dollar amount
+- Adjustment rows on the Scoring Timeline are NOT buried tokens — skip them
+- Only count true buries: rows whose Detail field begins with a tokenId like "fli001/" or "sar002/"
+
+SHELL ACCOUNTS:
+- "Final Standings" or "Final Totals" section (current orchestrator format)
+- "Shell Account Standings" section (older format)
+- Each shell account has a name, a total dollar amount, and a rank
+- tokenCount = number of unique buried tokens routed to that account (count from the Scoring Timeline; if unavailable, use 0)
+- IMPORTANT: only include team names that appear in BOTH Final Standings AND as a Sale-target in the Scoring Timeline. Skip placeholder/bonus rows like "First Burial Bonus" if they don't represent a player shell account.
+
+OTHER FIELDS:
+- "Session ID" / "session UUID" → sessionId
+- "Teams Registered" or the comma-separated team list under "Session Summary" → teamsRegistered
+
+If you can't find a section, return an empty array for that field rather than failing. The downstream pipeline tolerates missing data better than wrong data.
 
 Return structured JSON matching the schema.`;
 
