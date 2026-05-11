@@ -183,13 +183,20 @@ const result = await sdkQuery({
 
 **Structured Output Contract:** When `jsonSchema` is provided, the call returns a schema-valid object or throws `StructuredOutputExtractionError`. The wrapper validates the SDK's `structured_output` field and falls back to extracting JSON from result text — recovers from [SDK bug #277](https://github.com/anthropics/claude-agent-sdk-typescript/issues/277) where `success` arrives without `structured_output`.
 
-**Channel skip is structural for large structured-output calls.** Phase 3 probes (see `scripts/probe-content-bundle-channel.js`) confirmed that `generateContentBundle`-class calls (Opus, ~150K-char prompt, deep schema with `oneOf` content blocks) reliably go down the text-fallback path with `stop_reason: end_turn` — the model finishes its turn naturally by writing inline JSON instead of invoking the `StructuredOutput` tool. This is NOT a truncation issue. Treat the text-fallback path as the primary path for these calls and keep the prompt schema-coherent (every field requested, every enum value spelled out, explicit "do not invent" warnings) so the fallback is bulletproof. The `channel` field on `llm_complete`/`llm_error` events tells you which path actually fired.
+**Channel skip on `generateContentBundle` is a known SDK bug.** [anthropics/claude-agent-sdk-typescript#277](https://github.com/anthropics/claude-agent-sdk-typescript/issues/277) (OPEN, `bug` label): the SDK's `outputFormat` constrained-decoding layer fails silently for non-trivial schemas — specifically nested objects with `additionalProperties: false` at multiple levels, schemas using `oneOf`, and schemas with `$ref`. Our `content-bundle.schema.json` matches that failure pattern. When it fires, the SDK returns `subtype: 'success'` with `structured_output: undefined` and `stop_reason: end_turn`; the model produces correct JSON in `result` text instead. The model isn't "choosing" text over tool — the SDK didn't wire the tool channel for this schema.
+
+The community-validated workaround (per the issue's comment thread) is to (a) embed the JSON schema textually in the system prompt and (b) parse JSON from the `result` field with a markdown-fence-extraction fallback. Both are implemented:
+- `lib/prompt-builder.js` `buildArticlePrompt` / `buildRevisionPrompt` embed `JSON.stringify(contentBundleSchema)` under a `<SCHEMA>` tag inside `<RULES>`.
+- `lib/llm/structured-output-extractor.js` path 2 handles the text-extraction with schema validation.
+- The `channel` field on `llm_complete`/`llm_error` events tells you which path fired (`structured_output` = SDK tool channel; `text_fallback` = SDK bug, we extracted from text).
+
+Watch issue #277 — if/when the SDK fixes constrained decoding for complex schemas, we can simplify.
 
 **`loadProjectSettings` flag:** Controls filesystem-settings scope:
 - `true` (default) → `settingSources: ['project']` — loads project `.claude/skills/` and project `CLAUDE.md` only
 - `false` → `settingSources: []` — pure SDK isolation; pass on utility/normalization calls
 
-We never load user-level (`~/.claude/`) or local sources. Phase 1A probe found those contribute ~86K tokens of unrelated context (superpowers meta-skill, MEMORY.md, MCP server instructions, two CLAUDE.md files) and correlate with channel-skip pressure on large calls.
+We never load user-level (`~/.claude/`) or local sources. A probe found those contribute ~86K tokens of irrelevant context (superpowers meta-skill, MEMORY.md, MCP server instructions, two `CLAUDE.md` files) that none of our SDK calls use. This is pure context hygiene — it does NOT prevent the channel skip described above; that's a separate SDK bug.
 
 **Model Timeouts:** 10 min uniformly across Haiku, Sonnet, Opus. The cap is intended for genuinely-stuck calls only — steady-state latency is captured per-call via `duration_api_ms` on the `llm_complete` progress event (see `lib/observability/progress-bridge.js`). Per-call `timeoutMs` overrides have been removed across the codebase; tighten only when you have data showing it's safe.
 

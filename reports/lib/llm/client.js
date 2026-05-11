@@ -128,17 +128,20 @@ async function sdkQueryImpl({
 
   // Control 2: scope filesystem-loaded skills/settings per call.
   //
-  // SDK default (settingSources omitted) loads user + project + local — verified via
-  // probe to include ~86K tokens of context: superpowers meta-skill, user MEMORY.md,
-  // MCP server instructions, two CLAUDE.md files. None of that is needed by our
-  // SDK calls and the cognitive frame contamination correlates with channel-skip
-  // failures on generateContentBundle.
+  // SDK default (settingSources omitted) loads user + project + local. A probe of
+  // a real article-generation call found user-level autoload alone contributes
+  // ~86K tokens of context our SDK calls don't use (superpowers meta-skill, user
+  // MEMORY.md, MCP server instructions, two CLAUDE.md files). Trimming to project
+  // scope is pure context hygiene — removes irrelevant priming without losing
+  // anything the pipeline actually depends on.
   //
   // Mapping:
   //   loadProjectSettings: false → settingSources: []          (no filesystem context)
   //   loadProjectSettings: true  → settingSources: ['project'] (project skill + project CLAUDE.md only)
   //
-  // We never want the historical "all sources" behavior — see Phase 1A audit.
+  // Note on channel skip: this does NOT prevent the structured-output channel skip
+  // we see on generateContentBundle. That's caused by a known SDK bug (#277) in
+  // constrained decoding for complex schemas — see CLAUDE.md "Channel skip".
   if (loadProjectSettings === false) {
     options.settingSources = [];
   } else {

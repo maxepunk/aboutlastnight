@@ -7,6 +7,7 @@
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
 const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
+const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
 /**
@@ -642,6 +643,14 @@ ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 
 ${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
+
+<SCHEMA>
+Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
+
+\`\`\`json
+${JSON.stringify(contentBundleSchema, null, 2)}
+\`\`\`
+</SCHEMA>
 </RULES>
 
 <SECTION_GUIDANCE>
@@ -792,6 +801,14 @@ LANGUAGE RULES:
 - NEVER treat a party event and investigation event as simultaneous.
 - NEVER say "tonight" — the party was last night, the investigation was this morning.
 </TEMPORAL_DISCIPLINE>
+
+<SCHEMA>
+Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
+
+\`\`\`json
+${JSON.stringify(contentBundleSchema, null, 2)}
+\`\`\`
+</SCHEMA>
 </RULES>
 
 <ARC_FLOW>
@@ -1080,6 +1097,14 @@ ${articleContent}
 <ANTI_PATTERNS_REFERENCE>
 ${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
 </ANTI_PATTERNS_REFERENCE>
+
+<SCHEMA>
+Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
+
+\`\`\`json
+${JSON.stringify(contentBundleSchema, null, 2)}
+\`\`\`
+</SCHEMA>
 
 <REVISION_INSTRUCTION>
 ${revisionChecklist}
