@@ -195,6 +195,25 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('<html>{{content}}</html>');
     });
 
+    // Workaround for SDK constrained-decoding bug #277: embed the full schema in
+    // the prompt so the model has an authoritative shape contract when the SDK
+    // falls back to text output. Without this, the prose field descriptions are
+    // the only spec the model sees, which has been brittle.
+    it('embeds the content-bundle JSON schema under a <SCHEMA> tag', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
+        mockOutline, mockTemplate
+      );
+
+      expect(userPrompt).toContain('<SCHEMA>');
+      expect(userPrompt).toContain('"$id": "content-bundle"');
+      // Schema content should be present at the field level so the model
+      // sees enum values and additionalProperties constraints, not just names.
+      expect(userPrompt).toContain('"evidenceCards"');
+      expect(userPrompt).toContain('"financialTracker"');
+      expect(userPrompt).toContain('"additionalProperties": false');
+      expect(userPrompt).toContain('anthropics/claude-agent-sdk-typescript#277');
+    });
+
     it('should include anti-patterns in user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline, mockTemplate
@@ -436,9 +455,14 @@ describe('PromptBuilder', () => {
         expect(userPrompt).not.toContain('THE PLAYERS');
         expect(userPrompt).not.toContain('VISUAL_DISTRIBUTION');
         expect(userPrompt).not.toContain('ARC_FLOW');
-        // pullQuotes/financialTracker appear as schema fields in journalist but only as exclusion warnings in detective
-        expect(userPrompt).not.toContain('"pullQuotes"');
-        expect(userPrompt).not.toContain('"financialTracker"');
+        // Detective branch must NOT instruct the model to populate pullQuotes/financialTracker.
+        // Note: the embedded <SCHEMA> block (SDK#277 workaround) is intentionally the
+        // full ContentBundle schema for both themes — those fields appear in the schema
+        // as allowed properties, but the detective prompt explicitly excludes them.
+        expect(userPrompt).toContain('Do NOT include pullQuotes, evidenceCards, or financialTracker');
+        // Journalist-specific GENERATION_INSTRUCTION patterns must be absent.
+        expect(userPrompt).not.toContain('pullQuotes" - Featured quotes for sidebar');
+        expect(userPrompt).not.toContain('financialTracker" - Shell account entries');
       });
 
       it('detective user prompt includes detective section IDs', async () => {
