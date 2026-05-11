@@ -643,14 +643,6 @@ ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 
 ${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
-
-<SCHEMA>
-Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
-
-\`\`\`json
-${JSON.stringify(contentBundleSchema, null, 2)}
-\`\`\`
-</SCHEMA>
 </RULES>
 
 <SECTION_GUIDANCE>
@@ -729,6 +721,14 @@ STRUCTURE:
 Do NOT include pullQuotes, evidenceCards, or financialTracker — these are journalist-specific components.
 
 TARGET LENGTH: ~750 words (+-50 words acceptable). Be economical. Every sentence earns its place.
+
+<SCHEMA>
+Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields. Note: the schema permits pullQuotes/evidenceCards/financialTracker as optional properties, but the detective theme excludes them per the rule above; if anything else contradicts the schema, the schema wins.
+
+\`\`\`json
+${JSON.stringify(contentBundleSchema, null, 2)}
+\`\`\`
+</SCHEMA>
 </GENERATION_INSTRUCTION>`;
     } else {
       // Journalist (NovaNews article) prompt — full article with visual components
@@ -801,14 +801,6 @@ LANGUAGE RULES:
 - NEVER treat a party event and investigation event as simultaneous.
 - NEVER say "tonight" — the party was last night, the investigation was this morning.
 </TEMPORAL_DISCIPLINE>
-
-<SCHEMA>
-Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
-
-\`\`\`json
-${JSON.stringify(contentBundleSchema, null, 2)}
-\`\`\`
-</SCHEMA>
 </RULES>
 
 <ARC_FLOW>
@@ -1039,6 +1031,14 @@ STRUCTURE:
    - "author": "${this.sessionConfig.journalistFirstName || 'Cassandra'} Nova | NovaNews"
    - "title": "Senior Investigative Correspondent"${this.sessionConfig.guestReporter ? `
    - "guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"` : ''}
+
+<SCHEMA>
+Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields. If anything above this point contradicts the schema, the schema wins.
+
+\`\`\`json
+${JSON.stringify(contentBundleSchema, null, 2)}
+\`\`\`
+</SCHEMA>
 </GENERATION_INSTRUCTION>`;
     }
 

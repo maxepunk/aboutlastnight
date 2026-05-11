@@ -23,14 +23,38 @@ const { sdkQuery } = require('../lib/llm');
 const { createPromptBuilder } = require('../lib/prompt-builder');
 const contentBundleSchema = require('../lib/schemas/content-bundle.schema.json');
 
-const SESSION_ID = '050926';
+const SESSION_ID = process.env.PROBE_SESSION_ID || '050926';
 const DATA_DIR = path.join(__dirname, '..', 'data', SESSION_ID);
+
+const REQUIRED_FILES = [
+  'inputs/session-config.json',
+  'inputs/director-notes.json',
+  'fetched/tokens.json',
+  'fetched/paper-evidence.json'
+];
 
 function loadJson(file) {
   return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
 }
 
 (async function main() {
+  // Verify session data exists before doing any work. The probe needs a real
+  // session's inputs to build a representative prompt; failing fast with a
+  // useful message beats crashing inside loadJson with ENOENT.
+  if (!fs.existsSync(DATA_DIR)) {
+    console.error(`Session data not found at ${DATA_DIR}`);
+    console.error(`Set PROBE_SESSION_ID=<session> to use a different session, or`);
+    console.error(`run a session to completion first to populate inputs/ and fetched/.`);
+    process.exit(1);
+  }
+  const missing = REQUIRED_FILES.filter(f => !fs.existsSync(path.join(DATA_DIR, f)));
+  if (missing.length > 0) {
+    console.error(`Session ${SESSION_ID} is missing required files:`);
+    missing.forEach(f => console.error(`  - ${f}`));
+    console.error(`The probe needs a session that has at least reached the curation phase.`);
+    process.exit(1);
+  }
+
   console.log(`Probing generateContentBundle channel choice with session ${SESSION_ID} inputs...\n`);
 
   // Load saved session inputs

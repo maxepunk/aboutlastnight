@@ -1547,7 +1547,17 @@ ${previousOutputSection}
 4. PRESERVE everything that's working well (high-scoring criteria)
 5. Return the complete updated article in the same JSON format
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.
+
+---
+
+## OUTPUT SCHEMA (authoritative)
+
+The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277). When that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
+
+\`\`\`json
+${JSON.stringify(contentBundleSchema, null, 2)}
+\`\`\``;
 }
 
 // ═══════════════════════════════════════════════════════

@@ -356,7 +356,7 @@
           "description": "Summary of voice compliance"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "_revisionHistory": {
       "type": "array",

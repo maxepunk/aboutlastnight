@@ -106,6 +106,21 @@ function App() {
                 elapsed: event.data.elapsed || null
               });
               break;
+            case 'llm_error':
+              // Emitted by client.js when the SDK returned success but structured-output
+              // extraction failed (typically SDK#277 with a schema-invalid text response).
+              // Treat like llm_complete from a UI-spinner perspective (the LLM call is over)
+              // and surface the diagnostic envelope as a progress message so the dev sees it.
+              dispatch({
+                type: APP_ACTIONS.SSE_LLM_COMPLETE,
+                response: null,
+                elapsed: event.data.elapsed || null
+              });
+              dispatch({
+                type: APP_ACTIONS.SSE_PROGRESS,
+                message: `Extraction failed: ${event.data.error || 'unknown'} (channel=text_fallback, stop=${event.data.diagnostics?.stopReason || '?'}, structuredOutputPresent=${event.data.diagnostics?.structuredOutputPresent})`
+              });
+              break;
             case 'complete':
               // Close SSE connection
               eventSource.close();
