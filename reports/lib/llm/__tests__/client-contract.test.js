@@ -91,7 +91,7 @@ describe('sdkQueryImpl contract', () => {
     expect(capturedOptions.settingSources).toEqual([]);
   });
 
-  test('settingSources is omitted when loadProjectSettings is true (SDK default)', async () => {
+  test("settingSources is ['project'] when loadProjectSettings is true (project-only scope)", async () => {
     let capturedOptions = null;
     setMockQuery(({ options }) => {
       capturedOptions = options;
@@ -106,10 +106,10 @@ describe('sdkQueryImpl contract', () => {
       loadProjectSettings: true
     });
 
-    expect(capturedOptions.settingSources).toBeUndefined();
+    expect(capturedOptions.settingSources).toEqual(['project']);
   });
 
-  test('settingSources is omitted when loadProjectSettings is omitted (uses default)', async () => {
+  test("settingSources is ['project'] when loadProjectSettings is omitted (default)", async () => {
     let capturedOptions = null;
     setMockQuery(({ options }) => {
       capturedOptions = options;
@@ -119,6 +119,6 @@ describe('sdkQueryImpl contract', () => {
     });
 
     await sdkQueryImpl({ prompt: 'test', model: 'haiku' });
-    expect(capturedOptions.settingSources).toBeUndefined();
+    expect(capturedOptions.settingSources).toEqual(['project']);
   });
 });

@@ -210,7 +210,44 @@ function createProgressFromTrace(context, sessionId = null) {
             numTurns: msg.numTurns ?? null,
             usage: msg.usage ?? null,
             apiErrorStatus: msg.apiErrorStatus ?? null,
-            terminalReason: msg.terminalReason ?? null
+            terminalReason: msg.terminalReason ?? null,
+            structuredOutputPresent: msg.structuredOutputPresent ?? null,
+            resultTextLength: msg.resultTextLength ?? null
+          }
+        });
+      }
+      return;
+    }
+
+    if (msg.type === 'llm_error') {
+      // Same diagnostic envelope as llm_complete, plus the error context.
+      // This is the data we lost on the 050926 and 050826 failures.
+      const apiSec = msg.durationApiMs != null ? `api=${(msg.durationApiMs / 1000).toFixed(1)}s` : '';
+      const stop = msg.stopReason ? `stop=${msg.stopReason}` : '';
+      const sop = `structuredOutputPresent=${msg.structuredOutputPresent}`;
+      const textLen = `resultTextLength=${msg.resultTextLength}`;
+      const tokens = msg.usage?.output_tokens != null ? `out=${msg.usage.output_tokens}` : '';
+      const summary = [apiSec, stop, sop, textLen, tokens].filter(Boolean).join(' ');
+      console.log(`[${context}] [${msg.elapsed?.toFixed(1) || '?'}s ${summary}] ${PROGRESS_ICONS.error} Extraction failed: ${msg.error}`);
+
+      if (sessionId) {
+        progressEmitter.emitProgress(sessionId, {
+          type: SSE_EVENT_TYPES.LLM_ERROR,
+          timestamp,
+          context,
+          elapsed: msg.elapsed,
+          error: msg.error,
+          errorName: msg.errorName,
+          schemaErrors: msg.schemaErrors,
+          diagnostics: {
+            stopReason: msg.stopReason ?? null,
+            durationApiMs: msg.durationApiMs ?? null,
+            numTurns: msg.numTurns ?? null,
+            usage: msg.usage ?? null,
+            apiErrorStatus: msg.apiErrorStatus ?? null,
+            terminalReason: msg.terminalReason ?? null,
+            structuredOutputPresent: msg.structuredOutputPresent ?? null,
+            resultTextLength: msg.resultTextLength ?? null
           }
         });
       }
