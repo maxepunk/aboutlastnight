@@ -450,19 +450,22 @@ describe('PromptBuilder', () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
           mockOutline, mockTemplate, [], null
         );
-        // These are journalist-specific structural concepts
-        expect(userPrompt).not.toContain('FOLLOW THE MONEY');
-        expect(userPrompt).not.toContain('THE PLAYERS');
-        expect(userPrompt).not.toContain('VISUAL_DISTRIBUTION');
-        expect(userPrompt).not.toContain('ARC_FLOW');
-        // Detective branch must NOT instruct the model to populate pullQuotes/financialTracker.
-        // Note: the embedded <SCHEMA> block (SDK#277 workaround) is intentionally the
-        // full ContentBundle schema for both themes — those fields appear in the schema
-        // as allowed properties, but the detective prompt explicitly excludes them.
+        // The embedded <SCHEMA> (SDK#277 workaround) contains the full schema for both
+        // themes — including the financialTracker description which mentions "FOLLOW THE
+        // MONEY". So substring checks for those names hit the schema text. Strip the
+        // schema block before the negative-presence assertions.
+        const promptWithoutSchema = userPrompt.replace(/<SCHEMA>[\s\S]*?<\/SCHEMA>/g, '');
+        // These are journalist-specific structural concepts that must not appear in
+        // detective prompt instructions.
+        expect(promptWithoutSchema).not.toContain('FOLLOW THE MONEY');
+        expect(promptWithoutSchema).not.toContain('THE PLAYERS');
+        expect(promptWithoutSchema).not.toContain('VISUAL_DISTRIBUTION');
+        expect(promptWithoutSchema).not.toContain('ARC_FLOW');
+        // Detective branch must explicitly exclude journalist-only output fields.
         expect(userPrompt).toContain('Do NOT include pullQuotes, evidenceCards, or financialTracker');
         // Journalist-specific GENERATION_INSTRUCTION patterns must be absent.
-        expect(userPrompt).not.toContain('pullQuotes" - Featured quotes for sidebar');
-        expect(userPrompt).not.toContain('financialTracker" - Shell account entries');
+        expect(promptWithoutSchema).not.toContain('pullQuotes" - Featured quotes for sidebar');
+        expect(promptWithoutSchema).not.toContain('financialTracker" - Shell-account LEDGER');
       });
 
       it('detective user prompt includes detective section IDs', async () => {

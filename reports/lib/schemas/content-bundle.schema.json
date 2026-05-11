@@ -253,7 +253,7 @@
     },
     "financialTracker": {
       "type": "object",
-      "description": "Money trail tracking for journalist theme",
+      "description": "Shell-account ledger for FOLLOW THE MONEY. Each entry is ONE shell account, not a narrative description. Values are server-overridden from authoritative shellAccounts when available (see lib/template-assembler.js#overrideFinancialTracker).",
       "properties": {
         "entries": {
           "type": "array",
@@ -261,15 +261,15 @@
             "type": "object",
             "required": ["description", "amount"],
             "properties": {
-              "date": { "type": "string" },
-              "description": { "type": "string" },
-              "amount": { "type": "string" },
-              "category": { "type": "string" }
+              "date": { "type": "string", "description": "Optional. Usually omitted for shell-account entries." },
+              "description": { "type": "string", "description": "The shell-account NAME exactly as it appears in AUTHORITATIVE SHELL ACCOUNT DATA — e.g., 'Jamie', 'Person', 'Sarah'. Not a narrative description." },
+              "amount": { "type": "string", "description": "Clean dollar string parseable as currency — e.g., '$1,299,997', '$385,003'. Not prose like 'largest concentration'." },
+              "category": { "type": "string", "description": "Optional. Usually 'shell-account'." }
             },
             "additionalProperties": false
           }
         },
-        "totalExposed": { "type": "string" }
+        "totalExposed": { "type": "string", "description": "Sum of all entries as a clean dollar string — e.g., '$3,569,997'." }
       },
       "additionalProperties": false
     },
