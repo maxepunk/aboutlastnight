@@ -353,6 +353,7 @@ console/
 ├── api.js                          # REST client + SSE-before-POST pattern
 ├── state.js                        # useReducer: 18 actions, initialState, RESET_SESSION
 ├── utils.js                        # Badge, CollapsibleSection, JsonViewer, safeStringify, etc.
+├── outline-edit-logic.js          # Dual-export PURE module: all Outline-editor init/build/merge/validate/reset logic (browser: window.Console.outlineEditLogic; node: module.exports). Unit-tested in node-env. Must load before Outline.js/Article.js.
 ├── app.js                          # Root: auth gate, checkpoint routing, rollback flow
 ├── console.css                     # All styles (~1800 lines, BEM naming, noir theme)
 └── components/
@@ -387,6 +388,16 @@ Each checkpoint component follows the same pattern:
 4. Calls `onApprove(payload)` or `onReject(payload)` with checkpoint-specific payload
 
 **Conventions:** `const` not `var`, direct destructured imports (no aliasing), `safeStringify` instead of `JSON.stringify`, CSS utility classes over inline styles, aria-labels on interactive elements, functional state updaters for Set manipulation, `useEffect` reset on data change.
+
+### Outline Editor Architecture (`Outline.js` + `outline-edit-logic.js`)
+
+The Outline checkpoint's per-section editors (journalist LEDE / THE STORY / FOLLOW THE MONEY / THE PLAYERS / WHAT'S MISSING / CLOSING, and the 5 detective sections) are **thin wrappers**: each seeds `useState` from `EditLogic.init*(section)`, composes shared module-scope widgets (`TextField`, `EnumSelect`, `StringListEditor`, `ObjectListEditor`, `KeyValueEditor`, `actionsRow`), and on save calls `onSave(EditLogic.build*Payload(state, originalSection))` → `saveSectionEdit('<sectionKey>', payload)`. `EditLogic` = `window.Console.outlineEditLogic` (aliased at module scope in both `Outline.js` and `Article.js`).
+
+- **All save/build/merge/validate logic is PURE and lives in `outline-edit-logic.js`, not in the React components.** Builders `deepClone` the original section, so untouched required/extra keys are preserved and NO stray keys are emitted (every section is `additionalProperties:false`). Builders keep blank rows — pruning/non-empty enforcement is the validation layer's job.
+- **Edited outlines are schema-validated before article generation** (the B7 gate): client-side via `EditLogic.validateOutlineShape(outline, theme)` (dependency-free — blocks Approve + renders `.validation-error`) and server-side in `buildResumePayload` (`SchemaValidator` against `outline` / `detective-outline`, rejects invalid edits). Distinct from the generation-time `validateOutlineStructure` removed in 8.23 — this specifically gates HUMAN edits.
+- **Reset effect** is keyed on `EditLogic.computeResetKey(data, revisionCount)` (collision-resistant) in both `Outline.js` and `Article.js`. Do NOT revert to a truncated `safeStringify(...).slice(0, N)` — it collides across revisions and leaks stale edits.
+- **Wiring debugging:** the section→editor→builder→`saveSectionEdit` key→schema map is documented in `docs/superpowers/plans/2026-05-28-outline-rich-editor-fixes.md` (the implementation plan + bug→task table).
+- **Known minor:** the list widgets key rows by array index, so removing a mid-list row can momentarily drop input focus (no data-correctness impact).
 
 ## State Management
 
@@ -434,6 +445,8 @@ cp .env.example .env
 **Mocks:** anthropic-sdk.mock.js, llm-client.mock.js, checkpoint-helpers.mock.js
 
 See test files for mock usage examples.
+
+**Console has NO DOM/React test harness** (node test env only — no jsdom/testing-library/babel-jest, by design). Test console logic by extracting it into a **dual-export** module (`window.Console.X` for the browser + an `if (typeof module !== 'undefined' && module.exports)` node guard) and unit-testing the pure functions in node-env — see `outline-edit-logic.test.js` and `server-build-resume-payload.test.js` (which `require('../../server.js')`; `server.js` is guarded by `require.main === module` so requiring it doesn't start the server). React component **wiring** (which control opens which editor, save routing, error rendering) has no automated test — verify it with a manual browser click-through.
 
 ## Troubleshooting
 
