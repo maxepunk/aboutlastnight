@@ -11,7 +11,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, safeStringify, editBtn, renderTextEditForm } = window.Console.utils;
+const { Badge, safeStringify, editBtn } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const EditLogic = window.Console.outlineEditLogic;
 
@@ -188,51 +188,27 @@ function LedeEditor({ lede, onSave, onCancel }) {
 }
 
 function ArcOutlineEditor({ arc, onSave, onCancel }) {
-  const [name, setName] = React.useState(arc.name || '');
-  const [paragraphCount, setParagraphCount] = React.useState(arc.paragraphCount != null ? String(arc.paragraphCount) : '');
-  const [keyPoints, setKeyPoints] = React.useState(Array.isArray(arc.keyPoints) ? arc.keyPoints.slice() : (arc.keyPoints ? [arc.keyPoints] : []));
-  const [photoPlacement, setPhotoPlacement] = React.useState(typeof arc.photoPlacement === 'string' ? arc.photoPlacement : (arc.photoPlacement ? safeStringify(arc.photoPlacement) : ''));
-
-  function updateKeyPoint(idx, val) { const c = keyPoints.slice(); c[idx] = val; setKeyPoints(c); }
-  function removeKeyPoint(idx) { setKeyPoints(keyPoints.filter(function (_, i) { return i !== idx; })); }
-  function addKeyPoint() { setKeyPoints(keyPoints.concat([''])); }
-
-  function handleSave() {
-    const updated = Object.assign({}, arc, {
-      name: name,
-      keyPoints: keyPoints.filter(function (s) { return s && s.trim(); }),
-      photoPlacement: photoPlacement
-    });
-    if (paragraphCount !== '') {
-      const n = parseInt(paragraphCount, 10);
-      if (!isNaN(n)) updated.paragraphCount = n;
-    }
-    onSave(updated);
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initArc(arc); });
+  function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildArcPayload(state, arc)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Name'),
-    React.createElement('input', { className: 'input', value: name, onChange: function (e) { setName(e.target.value); }, autoFocus: true }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Paragraph Count'),
-    React.createElement('input', { className: 'input', type: 'number', value: paragraphCount, onChange: function (e) { setParagraphCount(e.target.value); } }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Key Points'),
-    keyPoints.map(function (kp, idx) {
-      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
-        React.createElement('input', { className: 'input flex-1', value: kp, onChange: function (e) { updateKeyPoint(idx, e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removeKeyPoint(idx); } }, '×')
-      );
-    }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: addKeyPoint }, '+ Add point'),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Photo Placement'),
-    React.createElement('input', { className: 'input', value: photoPlacement, onChange: function (e) { setPhotoPlacement(e.target.value); } }),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    React.createElement(TextField, { label: 'Arc Name', value: state.name, onChange: function (v) { set('name', v); } }),
+    React.createElement(TextField, { label: 'Paragraph Count', value: state.paragraphCount, onChange: function (v) { set('paragraphCount', v); } }),
+    React.createElement('p', { className: 'text-xs text-muted' }, 'Evidence cards and photo placement are preserved automatically and not editable here.'),
+    actionsRow(handleSave, onCancel)
   );
+}
 
-  // Note: evidenceCards intentionally not editable — IDs come from evidence bundle.
-  // If a user wants to change which evidence an arc cites, they should reject and re-run.
+function ArcInterweavingEditor({ interweaving, onSave, onCancel }) {
+  const [state, setState] = React.useState(function () { return EditLogic.initArcInterweaving(interweaving); });
+  function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildArcInterweavingPayload(state, interweaving)); }
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    React.createElement(TextField, { label: 'Interleaving Plan', value: state.interleavingPlan, multiline: true, onChange: function (v) { set('interleavingPlan', v); } }),
+    React.createElement(TextField, { label: 'Convergence Point', value: state.convergencePoint, multiline: true, onChange: function (v) { set('convergencePoint', v); } }),
+    React.createElement('p', { className: 'text-xs text-muted' }, 'Callback opportunities are preserved automatically and not editable here.'),
+    actionsRow(handleSave, onCancel)
+  );
 }
 
 function FollowTheMoneyEditor({ section, onSave, onCancel }) {
@@ -678,21 +654,14 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
   function saveTheStoryArc(arcIdx, updatedArc) {
     const next = ensureEditedOutline();
-    const clone = JSON.parse(safeStringify(next));
-    if (!clone.theStory) clone.theStory = { arcs: [], arcInterweaving: '' };
-    if (!Array.isArray(clone.theStory.arcs)) clone.theStory.arcs = [];
-    clone.theStory.arcs[arcIdx] = updatedArc;
-    setEditedOutline(clone);
+    setEditedOutline(EditLogic.mergeArc(next, arcIdx, updatedArc));
     setHasEdits(true);
     setEditingBlock(null);
   }
 
-  function saveInterweaving(updatedText) {
+  function saveInterweaving(updatedInterweaving) {
     const next = ensureEditedOutline();
-    const clone = JSON.parse(safeStringify(next));
-    if (!clone.theStory) clone.theStory = { arcs: [], arcInterweaving: '' };
-    clone.theStory.arcInterweaving = updatedText;
-    setEditedOutline(clone);
+    setEditedOutline(EditLogic.mergeArcInterweaving(next, updatedInterweaving));
     setHasEdits(true);
     setEditingBlock(null);
   }
@@ -800,11 +769,6 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
               ),
               editBtn(function () { setEditingBlock({ type: 'theStoryArc', key: i }); })
             ),
-            arc.keyPoints && React.createElement('ul', { className: 'checkpoint-section__list text-xs text-secondary' },
-              (Array.isArray(arc.keyPoints) ? arc.keyPoints : [arc.keyPoints]).map(function (point, j) {
-                return React.createElement('li', { key: 'kp-' + j }, typeof point === 'string' ? point : safeStringify(point));
-              })
-            ),
             arc.evidenceCards && React.createElement('div', { className: 'tag-list mt-sm' },
               (Array.isArray(arc.evidenceCards) ? arc.evidenceCards : [arc.evidenceCards]).map(function (card, j) {
                 return React.createElement(Badge, { key: 'ec-' + j, label: typeof card === 'string' ? card : (card.id || card.title || 'Card ' + (j + 1)), color: 'var(--accent-amber)' });
@@ -817,20 +781,20 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
         }),
         // Arc interweaving — edit affordance
         isEditing('theStoryInterweaving', 'interweaving')
-          ? renderTextEditForm({
-              value: typeof theStory.arcInterweaving === 'string' ? theStory.arcInterweaving : safeStringify(theStory.arcInterweaving || ''),
-              multiline: true,
-              rows: 3,
-              onSave: function (val) { saveInterweaving(val); },
+          ? React.createElement(ArcInterweavingEditor, {
+              interweaving: theStory.arcInterweaving,
+              onSave: function (u) { saveInterweaving(u); },
               onCancel: cancelEdit
             })
-          : (theStory.arcInterweaving && React.createElement('div', { className: 'flex items-center gap-sm mt-sm' },
-              React.createElement('p', { className: 'text-xs text-muted flex-1' },
-                React.createElement('strong', null, 'Arc Interweaving: '),
-                typeof theStory.arcInterweaving === 'string' ? theStory.arcInterweaving : safeStringify(theStory.arcInterweaving)
+          : React.createElement('div', { className: 'flex items-center gap-sm mt-sm' },
+              React.createElement('div', { className: 'outline-section__content flex-1' },
+                React.createElement('p', { className: 'text-xs text-muted' }, 'Interleaving Plan:'),
+                React.createElement('p', null, (theStory.arcInterweaving && theStory.arcInterweaving.interleavingPlan) || ''),
+                React.createElement('p', { className: 'text-xs text-muted' }, 'Convergence Point:'),
+                React.createElement('p', null, (theStory.arcInterweaving && theStory.arcInterweaving.convergencePoint) || '')
               ),
               editBtn(function () { setEditingBlock({ type: 'theStoryInterweaving', key: 'interweaving' }); })
-            ))
+            )
       )
     );
   }
