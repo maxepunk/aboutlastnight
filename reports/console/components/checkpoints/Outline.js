@@ -449,7 +449,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   // Detect theme from outline data if not passed via props
   const isDetective = theme === 'detective' || (!theme && outline.executiveSummary != null);
 
-  // Edit state — mirrors Article.js
+  // Edit state - mirrors Article.js
   const [editedOutline, setEditedOutline] = React.useState(null);
   const [editingBlock, setEditingBlock] = React.useState(null);
   const [hasEdits, setHasEdits] = React.useState(false);
@@ -457,6 +457,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   const [jsonText, setJsonText] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
   const [feedbackText, setFeedbackText] = React.useState('');
+  const [editError, setEditError] = React.useState('');
 
   // Reset state when data changes
   const dataKey = EditLogic.computeResetKey(outline, revisionCount);
@@ -468,6 +469,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     setJsonText('');
     setJsonError('');
     setFeedbackText('');
+    setEditError('');
   }, [dataKey]);
 
   // Restore pending edits from cache
@@ -481,6 +483,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   function getCurrentOutline() { return editedOutline || outline; }
 
   function ensureEditedOutline() {
+    setEditError('');
     if (editedOutline) return editedOutline;
     const clone = JSON.parse(safeStringify(outline));
     setEditedOutline(clone);
@@ -534,6 +537,14 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
   function handleApprove() {
     if (hasEdits && editedOutline) {
+      const themeForValidation = isDetective ? 'detective' : 'journalist';
+      const result = EditLogic.validateOutlineShape(editedOutline, themeForValidation);
+      if (!result.valid) {
+        setEditError('Cannot approve, edited outline is invalid: ' +
+          result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
+        return;
+      }
+      setEditError('');
       if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
       onApprove({ outline: true, outlineEdits: editedOutline });
     } else {
@@ -549,10 +560,15 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       setJsonError('Invalid JSON: ' + err.message);
       return;
     }
-    setJsonError('');
-    if (dispatch) {
-      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: parsed });
+    const themeForValidation = isDetective ? 'detective' : 'journalist';
+    const result = EditLogic.validateOutlineShape(parsed, themeForValidation);
+    if (!result.valid) {
+      setJsonError('Outline is invalid: ' +
+        result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
+      return;
     }
+    setJsonError('');
+    if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: parsed });
     onApprove({ outline: true, outlineEdits: parsed });
   }
 
@@ -635,7 +651,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
             )
           );
         }),
-        // Arc interweaving — edit affordance
+        // Arc interweaving - edit affordance
         isEditing('theStoryInterweaving', 'interweaving')
           ? React.createElement(ArcInterweavingEditor, {
               interweaving: theStory.arcInterweaving,
@@ -1038,6 +1054,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
     // Outline sections (theme-aware)
     ...renderOutlineSections(),
+
+    // Inline validation error (shown when approve is blocked)
+    editError && React.createElement('p', { className: 'validation-error', role: 'alert' }, editError),
 
     // Action mode buttons
     React.createElement('div', { className: 'action-modes mt-md' },
