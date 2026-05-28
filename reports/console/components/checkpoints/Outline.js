@@ -542,13 +542,18 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   }
 
   function handleJsonApprove() {
+    let parsed;
     try {
-      const parsed = JSON.parse(jsonText);
-      setJsonError('');
-      onApprove({ outline: true, outlineEdits: parsed });
+      parsed = JSON.parse(jsonText);
     } catch (err) {
       setJsonError('Invalid JSON: ' + err.message);
+      return;
     }
+    setJsonError('');
+    if (dispatch) {
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: parsed });
+    }
+    onApprove({ outline: true, outlineEdits: parsed });
   }
 
   function handleReject() {

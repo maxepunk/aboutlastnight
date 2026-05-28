@@ -770,6 +770,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     try {
       var parsed = JSON.parse(jsonText);
       setJsonError('');
+      if (dispatch) {
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: parsed });
+      }
       onApprove({ article: true, articleEdits: parsed });
     } catch (err) {
       setJsonError('Invalid JSON: ' + err.message);
