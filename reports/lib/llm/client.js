@@ -44,7 +44,7 @@ const MODEL_TIMEOUTS = {
  * guarantees we run on the intended model version.
  */
 const MODEL_IDS = {
-  opus: 'claude-opus-4-7',
+  opus: 'claude-opus-4-8',
   sonnet: 'claude-sonnet-4-6',
   haiku: 'claude-haiku-4-5'
 };
@@ -53,12 +53,12 @@ const MODEL_IDS = {
  * Per-model effort defaults. Passed explicitly per query so the SDK
  * doesn't fall through the legacy server-pushed taskIntensityOverride
  * resolution chain (which returns null client_data for accounts on
- * Opus 4.7's adaptive-thinking + new effort semantics).
+ * Opus 4.8's adaptive-thinking + new effort semantics).
  *
  * Per Anthropic's effort docs (https://platform.claude.com/docs/en/build-with-claude/effort):
  *   - Haiku 4.5: effort not supported (omit)
  *   - Sonnet 4.6: 'high' for intelligence-sensitive workloads
- *   - Opus 4.7: 'xhigh' is the recommended starting point for coding/agentic work
+ *   - Opus 4.8: 'xhigh' is the recommended starting point for coding/agentic work
  */
 const EFFORT_LEVELS = {
   opus: 'xhigh',
@@ -156,7 +156,7 @@ async function sdkQueryImpl({
 
   // Pass effort explicitly so the SDK doesn't traverse the legacy
   // server-pushed taskIntensityOverride chain (which returns null
-  // client_data for accounts using Opus 4.7's adaptive-thinking semantics).
+  // client_data for accounts using Opus 4.8's adaptive-thinking semantics).
   const effectiveEffort = effort || EFFORT_LEVELS[model];
   if (effectiveEffort) {
     options.effort = effectiveEffort;

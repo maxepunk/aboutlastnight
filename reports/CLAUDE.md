@@ -202,7 +202,7 @@ We never load user-level (`~/.claude/`) or local sources. A probe found those co
 **Model Timeouts:** 10 min uniformly across Haiku, Sonnet, Opus. The cap is intended for genuinely-stuck calls only — steady-state latency is captured per-call via `duration_api_ms` on the `llm_complete` progress event (see `lib/observability/progress-bridge.js`). Per-call `timeoutMs` overrides have been removed across the codebase; tighten only when you have data showing it's safe.
 
 **Model Pins** (see `MODEL_IDS` in `lib/llm/client.js`):
-- `opus` → `claude-opus-4-7` (arc analysis, article validation)
+- `opus` → `claude-opus-4-8` (arc analysis, article validation)
 - `sonnet` → `claude-sonnet-4-6` (default for most content generation nodes)
 - `haiku` → `claude-haiku-4-5` (image analysis, evidence preprocessing)
 
@@ -493,3 +493,36 @@ the server pipeline). Output is structurally identical across both paths.
 | `output/` | Final deliverables | article.html, article-metadata.json |
 
 For complete directory structure and file descriptions, see `PIPELINE_DEEP_DIVE.md#data-directory-structure`.
+
+## Top-Level Directory Map
+
+| Path | Purpose |
+|------|---------|
+| `data/{session-id}/` | Per-session pipeline state (inputs/fetched/analysis/summaries/output) — one folder per `--session` ID |
+| `outputs/` | Published reports (`report-MMDDYY.html`) and refinement working files (`-refsheet`, `-findings`, `-editplan`, `-draft`, `-copyedit`) — see "Refining Generated Reports" below |
+| `assets/images/{MMDDYY}/` | Per-session photos used in published reports (`notion/`, `photos/`, `whiteboard.jpg`) |
+| `sessionphotos/{MMDDYY}/` | Raw session photo dumps before curation into `assets/images/` |
+| `archive/` | Retired prompts, deprecated reports, and superseded remote-access docs — read-only history |
+| `lib/`, `console/`, `templates/`, `scripts/`, `__tests__/` | See sections above |
+| `report*.html` (root) | Loose published reports kept at root for direct browser access; new reports go in `outputs/` |
+
+## Refining Generated Reports
+
+Pipeline-generated reports contain systematic factual errors that read as plausible. The repo has a structured **two-pass refinement workflow** driven by the user-level `refining-aln-reports` skill (auto-loads when you mention reviewing/editing a session report).
+
+**Working-file convention** (in `outputs/`, all prefixed `report-MMDDYY-`):
+
+| Suffix | Pass | Purpose |
+|--------|------|---------|
+| `-refsheet.md` | Pre-read | Ground truth built from source data (`data/{id}/`) BEFORE reading the article. Roster, pronouns, accounts, transactions, accusation. |
+| `-findings.md` | Pass 1 (fact-check) | Claim-by-claim verification against refsheet. Flags fabrications, evidence-boundary violations, pronoun errors. |
+| `-editplan.md` | Pass 1 (fact-check) | Section-by-section rewrite plan addressing findings. |
+| `-draft.md` | Pass 1 output | Revised prose (Markdown, not HTML) after applying editplan. |
+| `-findings-copyedit.md` | Pass 2 (copy-edit) | Examines the **fact-corrected** article (not the original) for pacing, redundancy, throat-clearing, abstract→specific. |
+| `-editplan-copyedit.md` | Pass 2 (copy-edit) | Structural and sentence-level polish plan. |
+
+**Two-pass discipline:** Fact-check and copy-edit are separate cycles. Copy-edit always operates on the fact-corrected article, never the original. Don't pattern-match em-dashes from older reference reports (they predate the no-em-dash rule).
+
+**Final HTML output:** Published as `outputs/report-MMDDYY.html`. The matching `assets/images/MMDDYY/` directory must exist before publishing.
+
+**Editorial intent fetch:** If the pipeline server is running, the refinement skill pulls the director's checkpoint feedback (`_arcFeedback`, `_outlineFeedback`, `_articleFeedback`, `selectedArcs`, `_rescuedItems`) from `/api/session/:id/state/:field` to inform the refsheet.
