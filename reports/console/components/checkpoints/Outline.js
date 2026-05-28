@@ -11,8 +11,164 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify, editBtn, renderTextEditForm, renderListEditForm } = window.Console.utils;
+const { Badge, safeStringify, editBtn, renderTextEditForm } = window.Console.utils;
 const { RevisionDiff } = window.Console;
+const EditLogic = window.Console.outlineEditLogic;
+
+// ═══════════════════════════════════════════════════════
+// Shared edit widgets (pure-presentational; call EditLogic primitives)
+// ═══════════════════════════════════════════════════════
+
+function actionsRow(onSave, onCancel) {
+  return React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
+    React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: onSave }, 'Save'),
+    React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
+  );
+}
+
+function TextField(props) {
+  const label = props.label;
+  const value = props.value || '';
+  const onChange = props.onChange;
+  const multiline = props.multiline;
+  const placeholder = props.placeholder || '';
+  return React.createElement('label', { className: 'flex flex-col gap-sm mb-sm' },
+    label && React.createElement('span', { className: 'text-xs text-muted' }, label),
+    React.createElement(multiline ? 'textarea' : 'input', {
+      className: 'input',
+      value: value,
+      placeholder: placeholder,
+      rows: multiline ? 3 : undefined,
+      onChange: function (e) { onChange(e.target.value); }
+    })
+  );
+}
+
+function EnumSelect(props) {
+  const label = props.label;
+  const value = props.value;
+  const options = props.options || [];
+  const onChange = props.onChange;
+  const includeBlank = props.includeBlank;
+  const opts = (includeBlank ? [''] : []).concat(options);
+  return React.createElement('label', { className: 'flex flex-col gap-sm mb-sm' },
+    label && React.createElement('span', { className: 'text-xs text-muted' }, label),
+    React.createElement('select', {
+      className: 'input',
+      value: value == null ? '' : value,
+      onChange: function (e) { onChange(e.target.value); }
+    }, opts.map(function (opt, i) {
+      return React.createElement('option', { key: i, value: opt }, opt === '' ? '(none)' : opt);
+    }))
+  );
+}
+
+function StringListEditor(props) {
+  const label = props.label;
+  const items = Array.isArray(props.value) ? props.value : [];
+  const onChange = props.onChange;
+  const placeholder = props.placeholder || '';
+  return React.createElement('div', { className: 'flex flex-col gap-sm mb-sm' },
+    label && React.createElement('span', { className: 'text-xs text-muted' }, label),
+    items.map(function (item, idx) {
+      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
+        React.createElement('input', {
+          className: 'input flex-1',
+          value: item || '',
+          placeholder: placeholder,
+          onChange: function (e) {
+            const next = items.slice();
+            next[idx] = e.target.value;
+            onChange(next);
+          }
+        }),
+        React.createElement('button', {
+          className: 'btn btn-sm btn-ghost',
+          'aria-label': 'Remove item',
+          onClick: function () { onChange(EditLogic.removeRow(items, idx)); }
+        }, '×')
+      );
+    }),
+    React.createElement('button', {
+      className: 'btn btn-sm btn-ghost mb-sm',
+      onClick: function () { onChange(EditLogic.addRow(items, '')); }
+    }, '+ Add')
+  );
+}
+
+function ObjectListEditor(props) {
+  const label = props.label;
+  const rows = Array.isArray(props.value) ? props.value : [];
+  const onChange = props.onChange;
+  const renderRow = props.renderRow; // (row, idx, setField) => ReactElement
+  const makeRow = props.makeRow;     // () => object
+  function setField(idx, field, val) { onChange(EditLogic.setRowField(rows, idx, field, val)); }
+  return React.createElement('div', { className: 'flex flex-col gap-sm mb-sm' },
+    label && React.createElement('span', { className: 'text-xs text-muted' }, label),
+    rows.map(function (row, idx) {
+      return React.createElement('div', { key: idx, className: 'article-block--editing mb-sm' },
+        renderRow(row, idx, setField),
+        React.createElement('button', {
+          className: 'btn btn-sm btn-ghost',
+          'aria-label': 'Remove row',
+          onClick: function () { onChange(EditLogic.removeRow(rows, idx)); }
+        }, '× Remove')
+      );
+    }),
+    React.createElement('button', {
+      className: 'btn btn-sm btn-ghost mb-sm',
+      onClick: function () { onChange(EditLogic.addRow(rows, makeRow())); }
+    }, '+ Add')
+  );
+}
+
+function ObjectEditor(props) {
+  const obj = props.value || {};
+  const renderFields = props.renderFields; // (obj, setField) => ReactElement
+  const onChange = props.onChange;
+  function setField(field, val) {
+    const next = Object.assign({}, obj);
+    next[field] = val;
+    onChange(next);
+  }
+  return React.createElement('div', { className: 'flex flex-col gap-sm mb-sm' }, renderFields(obj, setField));
+}
+
+function KeyValueEditor(props) {
+  const label = props.label;
+  const rows = Array.isArray(props.value) ? props.value : [];
+  const onChange = props.onChange;
+  return React.createElement('div', { className: 'flex flex-col gap-sm mb-sm' },
+    label && React.createElement('span', { className: 'text-xs text-muted' }, label),
+    rows.map(function (row, idx) {
+      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
+        React.createElement('input', {
+          className: 'input flex-1',
+          value: row.key || '',
+          placeholder: 'name',
+          'aria-label': 'Key',
+          onChange: function (e) { onChange(EditLogic.setRowField(rows, idx, 'key', e.target.value)); }
+        }),
+        React.createElement('input', {
+          className: 'input flex-1',
+          value: row.value || '',
+          placeholder: 'highlight',
+          'aria-label': 'Value',
+          onChange: function (e) { onChange(EditLogic.setRowField(rows, idx, 'value', e.target.value)); }
+        }),
+        React.createElement('button', {
+          className: 'btn btn-sm btn-ghost',
+          'aria-label': 'Remove pair',
+          onClick: function () { onChange(EditLogic.removeRow(rows, idx)); }
+        }, '×')
+      );
+    }),
+    React.createElement('button', {
+      className: 'btn btn-sm btn-ghost mb-sm',
+      onClick: function () { onChange(EditLogic.addRow(rows, { key: '', value: '' })); }
+    }, '+ Add')
+  );
+}
 
 // ═══════════════════════════════════════════════════════
 // Editor components at module scope
