@@ -16,7 +16,7 @@ if (require.main === module) {
   const { query } = require('@anthropic-ai/claude-agent-sdk');
 
   const MODEL_IDS = {
-    opus: 'claude-opus-4-7',
+    opus: 'claude-opus-4-8',
     sonnet: 'claude-sonnet-4-6',
     haiku: 'claude-haiku-4-5'
   };
@@ -26,14 +26,20 @@ if (require.main === module) {
 
     for (const [shorthand, expectedId] of Object.entries(MODEL_IDS)) {
       let resolvedModel = null;
-      let betas = null;
+      // The 1M context beta is requested for everything except haiku (matches
+      // client.js). The SDK does NOT echo requested betas back in the init
+      // message, so we report what was REQUESTED, not what init claims —
+      // reading msg.betas always yields undefined and would mislabel every
+      // model as 200K. (Whether the window is active is verified at the API
+      // layer, not here; this script only checks model-ID resolution.)
+      const requested1m = shorthand !== 'haiku';
 
       try {
         for await (const msg of query({
           prompt: 'Reply with OK',
           options: {
             model: expectedId,
-            betas: shorthand !== 'haiku' ? ['context-1m-2025-08-07'] : undefined,
+            betas: requested1m ? ['context-1m-2025-08-07'] : undefined,
             tools: [],
             permissionMode: 'bypassPermissions',
             allowDangerouslySkipPermissions: true,
@@ -42,14 +48,13 @@ if (require.main === module) {
         })) {
           if (msg.type === 'system' && msg.subtype === 'init') {
             resolvedModel = msg.model;
-            betas = msg.betas;
           }
           if (msg.type === 'result') break;
         }
 
         const status = resolvedModel === expectedId ? '✓' : '✗';
-        const betaStatus = (betas || []).includes('context-1m-2025-08-07') ? '1M' : '200K';
-        console.log(`  ${status} ${shorthand}: ${expectedId} → ${resolvedModel} (${betaStatus} context)`);
+        const betaStatus = requested1m ? '1M requested' : '200K';
+        console.log(`  ${status} ${shorthand}: ${expectedId} → ${resolvedModel} (${betaStatus})`);
 
         if (resolvedModel !== expectedId) {
           console.error(`    ⚠️  MODEL_IDS.${shorthand} may need updating!`);
