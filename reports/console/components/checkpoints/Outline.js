@@ -459,7 +459,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   const [feedbackText, setFeedbackText] = React.useState('');
 
   // Reset state when data changes
-  const dataKey = safeStringify(outline).slice(0, 100);
+  const dataKey = EditLogic.computeResetKey(outline, revisionCount);
   React.useEffect(function () {
     setEditedOutline(null);
     setEditingBlock(null);
