@@ -175,29 +175,15 @@ function KeyValueEditor(props) {
 // ═══════════════════════════════════════════════════════
 
 function LedeEditor({ lede, onSave, onCancel }) {
-  const [hook, setHook] = React.useState(lede.hook || '');
-  const [keyTension, setKeyTension] = React.useState(lede.keyTension || '');
-  const [evidence, setEvidence] = React.useState(Array.isArray(lede.selectedEvidence) ? lede.selectedEvidence.join(', ') : (lede.selectedEvidence || ''));
-
-  function handleSave() {
-    onSave({
-      hook: hook,
-      keyTension: keyTension,
-      selectedEvidence: evidence.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
-    });
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initLede(lede); });
+  function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildLedePayload(state, lede)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Hook'),
-    React.createElement('textarea', { className: 'input', value: hook, onChange: function (e) { setHook(e.target.value); }, rows: 2, autoFocus: true }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Key Tension'),
-    React.createElement('textarea', { className: 'input', value: keyTension, onChange: function (e) { setKeyTension(e.target.value); }, rows: 2 }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Selected Evidence (comma-separated IDs)'),
-    React.createElement('input', { className: 'input', value: evidence, onChange: function (e) { setEvidence(e.target.value); } }),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    React.createElement(TextField, { label: 'Hook', value: state.hook, multiline: true, onChange: function (v) { set('hook', v); } }),
+    React.createElement(TextField, { label: 'Key Tension', value: state.keyTension, multiline: true, onChange: function (v) { set('keyTension', v); } }),
+    React.createElement(TextField, { label: 'Primary Arc', value: state.primaryArc, onChange: function (v) { set('primaryArc', v); } }),
+    React.createElement(StringListEditor, { label: 'Selected Evidence (optional)', value: state.selectedEvidence, placeholder: 'token id', onChange: function (v) { set('selectedEvidence', v); } }),
+    actionsRow(handleSave, onCancel)
   );
 }
 
@@ -249,117 +235,123 @@ function ArcOutlineEditor({ arc, onSave, onCancel }) {
   // If a user wants to change which evidence an arc cites, they should reject and re-run.
 }
 
-function NamedSectionEditor({ section, onSave, onCancel }) {
-  const [focus, setFocus] = React.useState(typeof section.arcConnections === 'string' ? section.arcConnections : (typeof section.focus === 'string' ? section.focus : ''));
-  const [shellAccounts, setShellAccounts] = React.useState(Array.isArray(section.shellAccounts) ? section.shellAccounts.slice() : (section.shellAccounts ? [section.shellAccounts] : []));
-  const [characterHighlights, setCharacterHighlights] = React.useState(typeof section.characterHighlights === 'string' ? section.characterHighlights : '');
-  const [buriedItems, setBuriedItems] = React.useState(Array.isArray(section.buriedItems) ? section.buriedItems.slice() : (section.buriedItems ? [section.buriedItems] : []));
-
-  function updateList(setter, list, idx, val) { const c = list.slice(); c[idx] = val; setter(c); }
-  function removeFromList(setter, list, idx) { setter(list.filter(function (_, i) { return i !== idx; })); }
-  function addToList(setter, list) { setter(list.concat([''])); }
-
-  function handleSave() {
-    const updated = Object.assign({}, section, {
-      // Preserve original key (focus vs arcConnections) — write to whichever was present
-      [section.arcConnections != null ? 'arcConnections' : 'focus']: focus,
-      shellAccounts: shellAccounts.filter(function (s) { return s && s.trim(); }),
-      characterHighlights: characterHighlights,
-      buriedItems: buriedItems.filter(function (s) { return s && s.trim(); })
-    });
-    onSave(updated);
-  }
-
+function FollowTheMoneyEditor({ section, onSave, onCancel }) {
+  const [state, setState] = React.useState(function () { return EditLogic.initFollowTheMoney(section); });
+  function setList(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildFollowTheMoneyPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Focus'),
-    React.createElement('textarea', { className: 'input', value: focus, onChange: function (e) { setFocus(e.target.value); }, rows: 3, autoFocus: true }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Shell Accounts'),
-    shellAccounts.map(function (s, idx) {
-      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
-        React.createElement('input', { className: 'input flex-1', value: s, onChange: function (e) { updateList(setShellAccounts, shellAccounts, idx, e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removeFromList(setShellAccounts, shellAccounts, idx); } }, '×')
-      );
+    React.createElement(ObjectListEditor, {
+      label: 'Arc Connections (required)',
+      value: state.arcConnections,
+      makeRow: function () { return { arcName: '', financialAngle: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(TextField, { label: 'Arc Name', value: row.arcName, onChange: function (v) { setField(idx, 'arcName', v); } }),
+          React.createElement(TextField, { label: 'Financial Angle', value: row.financialAngle, multiline: true, onChange: function (v) { setField(idx, 'financialAngle', v); } })
+        );
+      },
+      onChange: function (v) { setList('arcConnections', v); }
     }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: function () { addToList(setShellAccounts, shellAccounts); } }, '+ Add'),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Character Highlights'),
-    React.createElement('textarea', { className: 'input', value: characterHighlights, onChange: function (e) { setCharacterHighlights(e.target.value); }, rows: 2 }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Buried Items'),
-    buriedItems.map(function (s, idx) {
-      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
-        React.createElement('input', { className: 'input flex-1', value: s, onChange: function (e) { updateList(setBuriedItems, buriedItems, idx, e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removeFromList(setBuriedItems, buriedItems, idx); } }, '×')
-      );
+    React.createElement(ObjectListEditor, {
+      label: 'Shell Accounts (optional)',
+      value: state.shellAccounts,
+      makeRow: function () { return { name: '', total: '', inference: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(TextField, { label: 'Name', value: row.name, onChange: function (v) { setField(idx, 'name', v); } }),
+          React.createElement(TextField, { label: 'Total (number or text e.g. $1.2M)', value: row.total == null ? '' : String(row.total), onChange: function (v) { setField(idx, 'total', v); } }),
+          React.createElement(TextField, { label: 'Inference', value: row.inference, multiline: true, onChange: function (v) { setField(idx, 'inference', v); } }),
+          React.createElement(TextField, { label: 'Related Arc (optional)', value: row.relatedArc || '', onChange: function (v) { setField(idx, 'relatedArc', v); } })
+        );
+      },
+      onChange: function (v) { setList('shellAccounts', v); }
     }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: function () { addToList(setBuriedItems, buriedItems); } }, '+ Add'),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    actionsRow(handleSave, onCancel)
+  );
+}
+
+function ThePlayersEditor({ section, onSave, onCancel }) {
+  const [state, setState] = React.useState(function () { return EditLogic.initThePlayers(section); });
+  function setList(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildThePlayersPayload(state, section)); }
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    React.createElement(ObjectListEditor, {
+      label: 'Arc Connections (required)',
+      value: state.arcConnections,
+      makeRow: function () { return { arcName: '', characterAngle: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(TextField, { label: 'Arc Name', value: row.arcName, onChange: function (v) { setField(idx, 'arcName', v); } }),
+          React.createElement(TextField, { label: 'Character Angle', value: row.characterAngle, multiline: true, onChange: function (v) { setField(idx, 'characterAngle', v); } })
+        );
+      },
+      onChange: function (v) { setList('arcConnections', v); }
+    }),
+    React.createElement(StringListEditor, { label: 'Exposed (optional)', value: state.exposed, placeholder: 'character name', onChange: function (v) { setList('exposed', v); } }),
+    React.createElement(StringListEditor, { label: 'Buried (optional)', value: state.buried, placeholder: 'topic', onChange: function (v) { setList('buried', v); } }),
+    React.createElement(ObjectListEditor, {
+      label: 'Pull Quotes (optional)',
+      value: state.pullQuotes,
+      makeRow: function () { return { type: 'verbatim', text: '', attribution: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(EnumSelect, { label: 'Type', value: row.type || 'verbatim', options: ['verbatim', 'insight', 'crystallization'], onChange: function (v) { setField(idx, 'type', v); } }),
+          React.createElement(TextField, { label: 'Text', value: row.text, multiline: true, onChange: function (v) { setField(idx, 'text', v); } }),
+          React.createElement(TextField, { label: 'Attribution (optional)', value: row.attribution == null ? '' : row.attribution, onChange: function (v) { setField(idx, 'attribution', v); } }),
+          React.createElement(TextField, { label: 'Advances Arc (optional)', value: row.advancesArc || '', onChange: function (v) { setField(idx, 'advancesArc', v); } })
+        );
+      },
+      onChange: function (v) { setList('pullQuotes', v); }
+    }),
+    React.createElement(KeyValueEditor, { label: 'Character Highlights (optional, name → note)', value: state.characterHighlights, onChange: function (v) { setList('characterHighlights', v); } }),
+    actionsRow(handleSave, onCancel)
+  );
+}
+
+function WhatsMissingEditor({ section, onSave, onCancel }) {
+  const [state, setState] = React.useState(function () { return EditLogic.initWhatsMissing(section); });
+  function setList(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildWhatsMissingPayload(state, section)); }
+  return React.createElement('div', { className: 'article-block__edit-form' },
+    React.createElement(ObjectListEditor, {
+      label: 'Arc Connections (required)',
+      value: state.arcConnections,
+      makeRow: function () { return { arcName: '', openQuestion: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(TextField, { label: 'Arc Name', value: row.arcName, onChange: function (v) { setField(idx, 'arcName', v); } }),
+          React.createElement(TextField, { label: 'Open Question', value: row.openQuestion, multiline: true, onChange: function (v) { setField(idx, 'openQuestion', v); } })
+        );
+      },
+      onChange: function (v) { setList('arcConnections', v); }
+    }),
+    React.createElement(StringListEditor, { label: 'Known Unknowns (optional)', value: state.knownUnknowns, onChange: function (v) { setList('knownUnknowns', v); } }),
+    React.createElement(TextField, { label: 'Narrative Purpose (optional)', value: state.narrativePurpose, multiline: true, onChange: function (v) { setList('narrativePurpose', v); } }),
+    React.createElement(StringListEditor, { label: 'Buried Items (optional)', value: state.buriedItems, placeholder: 'token id', onChange: function (v) { setList('buriedItems', v); } }),
+    actionsRow(handleSave, onCancel)
   );
 }
 
 function ClosingEditor({ closing, onSave, onCancel }) {
-  const resolutionsKey = closing.arcResolutions != null ? 'arcResolutions' : 'theme';
-  const [resolutions, setResolutions] = React.useState(typeof closing[resolutionsKey] === 'string' ? closing[resolutionsKey] : '');
-  const [systemicAngle, setSystemicAngle] = React.useState(typeof closing.systemicAngle === 'string' ? closing.systemicAngle : '');
-  const [finalLine, setFinalLine] = React.useState(typeof closing.finalLine === 'string' ? closing.finalLine : '');
-
-  function handleSave() {
-    onSave(Object.assign({}, closing, {
-      [resolutionsKey]: resolutions,
-      systemicAngle: systemicAngle,
-      finalLine: finalLine
-    }));
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initClosing(closing); });
+  function setList(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildClosingPayload(state, closing)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, resolutionsKey === 'arcResolutions' ? 'Arc Resolutions' : 'Theme'),
-    React.createElement('textarea', { className: 'input', value: resolutions, onChange: function (e) { setResolutions(e.target.value); }, rows: 3, autoFocus: true }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Systemic Angle'),
-    React.createElement('textarea', { className: 'input', value: systemicAngle, onChange: function (e) { setSystemicAngle(e.target.value); }, rows: 2 }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Final Line'),
-    React.createElement('textarea', { className: 'input', value: finalLine, onChange: function (e) { setFinalLine(e.target.value); }, rows: 2 }),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
-  );
-}
-
-function PullQuotesEditor({ pullQuotes, onSave, onCancel }) {
-  const [quotes, setQuotes] = React.useState(JSON.parse(safeStringify(pullQuotes)));
-
-  function update(idx, field, val) {
-    const c = JSON.parse(safeStringify(quotes));
-    c[idx][field] = val;
-    setQuotes(c);
-  }
-
-  function remove(idx) {
-    setQuotes(quotes.filter(function (_, i) { return i !== idx; }));
-  }
-
-  function add() {
-    setQuotes(quotes.concat([{ text: '', attribution: '', placement: '' }]));
-  }
-
-  return React.createElement('div', { className: 'article-block__edit-form' },
-    quotes.map(function (q, idx) {
-      return React.createElement('div', { key: idx, className: 'mb-md' },
-        React.createElement('label', { className: 'text-xs text-muted' }, 'Quote ' + (idx + 1)),
-        React.createElement('textarea', { className: 'input', value: q.text || '', onChange: function (e) { update(idx, 'text', e.target.value); }, rows: 2 }),
-        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Attribution'),
-        React.createElement('input', { className: 'input', value: q.attribution || '', onChange: function (e) { update(idx, 'attribution', e.target.value); } }),
-        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Placement'),
-        React.createElement('input', { className: 'input', value: q.placement || '', onChange: function (e) { update(idx, 'placement', e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost mt-sm', onClick: function () { remove(idx); } }, 'Remove')
-      );
+    React.createElement(ObjectListEditor, {
+      label: 'Arc Resolutions (required)',
+      value: state.arcResolutions,
+      makeRow: function () { return { arcName: '', resolution: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(TextField, { label: 'Arc Name', value: row.arcName, onChange: function (v) { setField(idx, 'arcName', v); } }),
+          React.createElement(TextField, { label: 'Resolution', value: row.resolution, multiline: true, onChange: function (v) { setField(idx, 'resolution', v); } })
+        );
+      },
+      onChange: function (v) { setList('arcResolutions', v); }
     }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: add }, '+ Add Quote'),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: function () { onSave(quotes); } }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    React.createElement(TextField, { label: 'Systemic Angle (optional)', value: state.systemicAngle, multiline: true, onChange: function (v) { setList('systemicAngle', v); } }),
+    React.createElement(TextField, { label: 'Final Line (optional)', value: state.finalLine, onChange: function (v) { setList('finalLine', v); } }),
+    actionsRow(handleSave, onCancel)
   );
 }
 
@@ -843,45 +835,48 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     );
   }
 
-  function renderNamedSection(title, section, sectionKey) {
+  function renderFollowTheMoney(section) {
     if (!section) return null;
-    const editing = isEditing('namedSection', sectionKey);
-    const focus = section.arcConnections || section.focus || null;
-
-    if (editing) {
-      return React.createElement('div', { className: 'outline-section outline-section--editing' },
-        React.createElement('h4', { className: 'outline-section__title' }, title),
-        React.createElement(NamedSectionEditor, {
-          section: section,
-          onSave: function (updated) { saveSectionEdit(sectionKey, updated); },
-          onCancel: cancelEdit
-        })
-      );
-    }
-
-    return React.createElement('div', { className: 'outline-section' },
+    const editing = isEditing('section', 'followTheMoney');
+    return React.createElement('div', { key: 'followTheMoney', className: 'outline-section' + (editing ? ' outline-section--editing' : '') },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
-        React.createElement('h4', { className: 'outline-section__title' }, title),
-        editBtn(function () { setEditingBlock({ type: 'namedSection', key: sectionKey }); })
+        React.createElement('h4', { className: 'outline-section__title' }, 'FOLLOW THE MONEY'),
+        !editing && editBtn(function () { setEditingBlock({ type: 'section', key: 'followTheMoney' }); })
       ),
-      React.createElement('div', { className: 'outline-section__content' },
-        focus && React.createElement('p', { className: 'text-sm mb-sm' },
-          React.createElement('strong', null, 'Focus: '),
-          typeof focus === 'string' ? focus : safeStringify(focus)
-        ),
-        section.shellAccounts && React.createElement('p', { className: 'text-sm mb-sm' },
-          React.createElement('strong', null, 'Shell Accounts: '),
-          Array.isArray(section.shellAccounts) ? section.shellAccounts.join(', ') : section.shellAccounts
-        ),
-        section.characterHighlights && React.createElement('p', { className: 'text-sm mb-sm' },
-          React.createElement('strong', null, 'Character Highlights: '),
-          typeof section.characterHighlights === 'string' ? section.characterHighlights : safeStringify(section.characterHighlights)
-        ),
-        section.buriedItems && React.createElement('p', { className: 'text-sm mb-sm' },
-          React.createElement('strong', null, 'Buried Items: '),
-          Array.isArray(section.buriedItems) ? section.buriedItems.join(', ') : section.buriedItems
-        )
-      )
+      editing
+        ? React.createElement(FollowTheMoneyEditor, { section: section, onSave: function (u) { saveSectionEdit('followTheMoney', u); }, onCancel: cancelEdit })
+        : React.createElement('div', { className: 'outline-section__content' },
+            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' arc connection(s), ' + ((section.shellAccounts || []).length) + ' shell account(s)'))
+    );
+  }
+
+  function renderThePlayers(section) {
+    if (!section) return null;
+    const editing = isEditing('section', 'thePlayers');
+    return React.createElement('div', { key: 'thePlayers', className: 'outline-section' + (editing ? ' outline-section--editing' : '') },
+      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'THE PLAYERS'),
+        !editing && editBtn(function () { setEditingBlock({ type: 'section', key: 'thePlayers' }); })
+      ),
+      editing
+        ? React.createElement(ThePlayersEditor, { section: section, onSave: function (u) { saveSectionEdit('thePlayers', u); }, onCancel: cancelEdit })
+        : React.createElement('div', { className: 'outline-section__content' },
+            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' arc connection(s), ' + ((section.pullQuotes || []).length) + ' pull quote(s)'))
+    );
+  }
+
+  function renderWhatsMissing(section) {
+    if (!section) return null;
+    const editing = isEditing('section', 'whatsMissing');
+    return React.createElement('div', { key: 'whatsMissing', className: 'outline-section' + (editing ? ' outline-section--editing' : '') },
+      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
+        React.createElement('h4', { className: 'outline-section__title' }, "WHAT'S MISSING"),
+        !editing && editBtn(function () { setEditingBlock({ type: 'section', key: 'whatsMissing' }); })
+      ),
+      editing
+        ? React.createElement(WhatsMissingEditor, { section: section, onSave: function (u) { saveSectionEdit('whatsMissing', u); }, onCancel: cancelEdit })
+        : React.createElement('div', { className: 'outline-section__content' },
+            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' open question(s)'))
     );
   }
 
@@ -914,33 +909,6 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
         closing.finalLine && React.createElement('p', { className: 'text-sm text-secondary text-italic' },
           typeof closing.finalLine === 'string' ? closing.finalLine : safeStringify(closing.finalLine)
         )
-      )
-    );
-  }
-
-  function renderPullQuotes(pullQuotes) {
-    if (!pullQuotes || pullQuotes.length === 0) return null;
-    return React.createElement('div', { className: 'outline-section' },
-      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
-        React.createElement('h4', { className: 'outline-section__title' }, 'PULL QUOTES'),
-        editBtn(function () { setEditingBlock({ type: 'pullQuotesAll', key: 'all' }); })
-      ),
-      React.createElement('div', { className: 'outline-section__content' },
-        isEditing('pullQuotesAll', 'all')
-          ? React.createElement(PullQuotesEditor, { pullQuotes: pullQuotes, onSave: function (u) { saveSectionEdit('pullQuotes', u); }, onCancel: cancelEdit })
-          : pullQuotes.map(function (pq, i) {
-              return React.createElement('div', { key: 'pq-' + i, className: 'pull-quote' },
-                React.createElement('p', { className: 'pull-quote__text' },
-                  '"' + (pq.text || '') + '"'
-                ),
-                (pq.attribution || pq.placement) && React.createElement('div', { className: 'pull-quote__attribution' },
-                  pq.attribution && React.createElement('span', null, '— ' + pq.attribution),
-                  pq.placement && React.createElement('span', { className: 'text-xs text-muted' },
-                    ' [' + pq.placement + ']'
-                  )
-                )
-              );
-            })
       )
     );
   }
@@ -1225,11 +1193,10 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     return [
       renderLede(current.lede),
       renderTheStory(current.theStory),
-      renderNamedSection('FOLLOW THE MONEY', current.followTheMoney, 'followTheMoney'),
-      renderNamedSection('THE PLAYERS', current.thePlayers, 'thePlayers'),
-      renderNamedSection('WHAT\'S MISSING', current.whatsMissing, 'whatsMissing'),
-      renderClosing(current.closing),
-      renderPullQuotes(current.pullQuotes)
+      renderFollowTheMoney(current.followTheMoney),
+      renderThePlayers(current.thePlayers),
+      renderWhatsMissing(current.whatsMissing),
+      renderClosing(current.closing)
     ];
   }
 
