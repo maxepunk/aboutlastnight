@@ -336,254 +336,105 @@ function ClosingEditor({ closing, onSave, onCancel }) {
 // ═══════════════════════════════════════════════════════
 
 function ExecutiveSummaryEditor({ section, onSave, onCancel }) {
-  const [hook, setHook] = React.useState(typeof section.hook === 'string' ? section.hook : '');
-  const [caseOverview, setCaseOverview] = React.useState(typeof section.caseOverview === 'string' ? section.caseOverview : '');
-  const [primaryFindings, setPrimaryFindings] = React.useState(Array.isArray(section.primaryFindings) ? section.primaryFindings.slice() : (section.primaryFindings ? [section.primaryFindings] : []));
-
-  function updateFinding(idx, val) { const c = primaryFindings.slice(); c[idx] = val; setPrimaryFindings(c); }
-  function removeFinding(idx) { setPrimaryFindings(primaryFindings.filter(function (_, i) { return i !== idx; })); }
-  function addFinding() { setPrimaryFindings(primaryFindings.concat([''])); }
-
-  function handleSave() {
-    onSave(Object.assign({}, section, {
-      hook: hook,
-      caseOverview: caseOverview,
-      primaryFindings: primaryFindings.filter(function (s) { return s && s.trim(); })
-    }));
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initExecutiveSummary(section); });
+  function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildExecutiveSummaryPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Hook'),
-    React.createElement('textarea', { className: 'input', value: hook, onChange: function (e) { setHook(e.target.value); }, rows: 2, autoFocus: true }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Case Overview'),
-    React.createElement('textarea', { className: 'input', value: caseOverview, onChange: function (e) { setCaseOverview(e.target.value); }, rows: 3 }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Primary Findings'),
-    primaryFindings.map(function (f, idx) {
-      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
-        React.createElement('input', { className: 'input flex-1', value: f, onChange: function (e) { updateFinding(idx, e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removeFinding(idx); } }, '×')
-      );
-    }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: addFinding }, '+ Add Finding'),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    React.createElement(TextField, { label: 'Hook', value: state.hook, multiline: true, onChange: function (v) { set('hook', v); } }),
+    React.createElement(TextField, { label: 'Case Overview', value: state.caseOverview, multiline: true, onChange: function (v) { set('caseOverview', v); } }),
+    React.createElement(StringListEditor, { label: 'Primary Findings (required)', value: state.primaryFindings, onChange: function (v) { set('primaryFindings', v); } }),
+    actionsRow(handleSave, onCancel)
   );
 }
 
 function EvidenceLockerEditor({ section, onSave, onCancel }) {
-  const [groups, setGroups] = React.useState(JSON.parse(safeStringify(Array.isArray(section.evidenceGroups) ? section.evidenceGroups : [])));
-
-  function updateGroup(idx, field, val) {
-    const c = JSON.parse(safeStringify(groups));
-    c[idx][field] = val;
-    setGroups(c);
-  }
-
-  function updateGroupEvidenceIds(idx, val) {
-    const c = JSON.parse(safeStringify(groups));
-    c[idx].evidenceIds = val.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-    setGroups(c);
-  }
-
-  function removeGroup(idx) {
-    setGroups(groups.filter(function (_, i) { return i !== idx; }));
-  }
-
-  function addGroup() {
-    setGroups(groups.concat([{ theme: '', synthesis: '', evidenceIds: [] }]));
-  }
-
-  function handleSave() {
-    onSave(Object.assign({}, section, { evidenceGroups: groups }));
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initEvidenceLocker(section); });
+  function setGroups(val) { setState(Object.assign({}, state, { evidenceGroups: val })); }
+  function handleSave() { onSave(EditLogic.buildEvidenceLockerPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    groups.map(function (g, idx) {
-      return React.createElement('div', { key: idx, className: 'mb-md' },
-        React.createElement('label', { className: 'text-xs text-muted' }, 'Group ' + (idx + 1) + ' — Theme'),
-        React.createElement('input', { className: 'input', value: g.theme || '', onChange: function (e) { updateGroup(idx, 'theme', e.target.value); }, autoFocus: idx === 0 }),
-        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Synthesis'),
-        React.createElement('textarea', { className: 'input', value: g.synthesis || '', onChange: function (e) { updateGroup(idx, 'synthesis', e.target.value); }, rows: 2 }),
-        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Evidence IDs (comma-separated)'),
-        React.createElement('input', { className: 'input', value: Array.isArray(g.evidenceIds) ? g.evidenceIds.join(', ') : (g.evidenceIds || ''), onChange: function (e) { updateGroupEvidenceIds(idx, e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost mt-sm', onClick: function () { removeGroup(idx); } }, 'Remove Group')
-      );
+    React.createElement(ObjectListEditor, {
+      label: 'Evidence Groups (required)',
+      value: state.evidenceGroups,
+      makeRow: function () { return { theme: '', evidenceIds: [], synthesis: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(TextField, { label: 'Theme', value: row.theme, onChange: function (v) { setField(idx, 'theme', v); } }),
+          React.createElement(StringListEditor, { label: 'Evidence IDs', value: Array.isArray(row.evidenceIds) ? row.evidenceIds : [], placeholder: 'token id', onChange: function (v) { setField(idx, 'evidenceIds', v); } }),
+          React.createElement(TextField, { label: 'Synthesis', value: row.synthesis, multiline: true, onChange: function (v) { setField(idx, 'synthesis', v); } })
+        );
+      },
+      onChange: setGroups
     }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: addGroup }, '+ Add Group'),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    actionsRow(handleSave, onCancel)
   );
 }
 
 function MemoryAnalysisEditor({ section, onSave, onCancel }) {
-  const [focus, setFocus] = React.useState(typeof section.focus === 'string' ? section.focus : '');
-  const [keyPatterns, setKeyPatterns] = React.useState(Array.isArray(section.keyPatterns) ? section.keyPatterns.slice() : (section.keyPatterns ? [section.keyPatterns] : []));
-  const [significance, setSignificance] = React.useState(typeof section.significance === 'string' ? section.significance : '');
-
-  function updatePattern(idx, val) { const c = keyPatterns.slice(); c[idx] = val; setKeyPatterns(c); }
-  function removePattern(idx) { setKeyPatterns(keyPatterns.filter(function (_, i) { return i !== idx; })); }
-  function addPattern() { setKeyPatterns(keyPatterns.concat([''])); }
-
-  function handleSave() {
-    onSave(Object.assign({}, section, {
-      focus: focus,
-      keyPatterns: keyPatterns.filter(function (s) { return s && s.trim(); }),
-      significance: significance
-    }));
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initMemoryAnalysis(section); });
+  function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildMemoryAnalysisPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Focus'),
-    React.createElement('textarea', { className: 'input', value: focus, onChange: function (e) { setFocus(e.target.value); }, rows: 3, autoFocus: true }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Key Patterns'),
-    keyPatterns.map(function (p, idx) {
-      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
-        React.createElement('input', { className: 'input flex-1', value: p, onChange: function (e) { updatePattern(idx, e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removePattern(idx); } }, '×')
-      );
-    }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: addPattern }, '+ Add Pattern'),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Significance'),
-    React.createElement('textarea', { className: 'input', value: significance, onChange: function (e) { setSignificance(e.target.value); }, rows: 2 }),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    React.createElement(TextField, { label: 'Focus', value: state.focus, multiline: true, onChange: function (v) { set('focus', v); } }),
+    React.createElement(StringListEditor, { label: 'Key Patterns (optional)', value: state.keyPatterns, onChange: function (v) { set('keyPatterns', v); } }),
+    React.createElement(TextField, { label: 'Significance', value: state.significance, multiline: true, onChange: function (v) { set('significance', v); } }),
+    actionsRow(handleSave, onCancel)
   );
 }
 
 function SuspectNetworkEditor({ section, onSave, onCancel }) {
-  const [relationships, setRelationships] = React.useState(JSON.parse(safeStringify(Array.isArray(section.keyRelationships) ? section.keyRelationships : [])));
-  const [assessments, setAssessments] = React.useState(JSON.parse(safeStringify(Array.isArray(section.assessments) ? section.assessments : [])));
-
-  function updateRel(idx, field, val) {
-    const c = JSON.parse(safeStringify(relationships));
-    c[idx][field] = val;
-    setRelationships(c);
-  }
-
-  function updateRelCharacters(idx, val) {
-    const c = JSON.parse(safeStringify(relationships));
-    c[idx].characters = val.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-    setRelationships(c);
-  }
-
-  function removeRel(idx) { setRelationships(relationships.filter(function (_, i) { return i !== idx; })); }
-  function addRel() { setRelationships(relationships.concat([{ characters: [], nature: '' }])); }
-
-  function updateAssess(idx, field, val) {
-    const c = JSON.parse(safeStringify(assessments));
-    c[idx][field] = val;
-    setAssessments(c);
-  }
-
-  function removeAssess(idx) { setAssessments(assessments.filter(function (_, i) { return i !== idx; })); }
-  function addAssess() { setAssessments(assessments.concat([{ name: '', role: '', suspicionLevel: 'low' }])); }
-
-  function handleSave() {
-    onSave(Object.assign({}, section, {
-      keyRelationships: relationships,
-      assessments: assessments
-    }));
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initSuspectNetwork(section); });
+  function setList(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildSuspectNetworkPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Key Relationships'),
-    relationships.map(function (rel, idx) {
-      return React.createElement('div', { key: idx, className: 'mb-md' },
-        React.createElement('label', { className: 'text-xs text-muted' }, 'Characters (comma-separated)'),
-        React.createElement('input', { className: 'input', value: Array.isArray(rel.characters) ? rel.characters.join(', ') : (rel.characters || ''), onChange: function (e) { updateRelCharacters(idx, e.target.value); }, autoFocus: idx === 0 }),
-        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Nature'),
-        React.createElement('input', { className: 'input', value: rel.nature || '', onChange: function (e) { updateRel(idx, 'nature', e.target.value); } }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost mt-sm', onClick: function () { removeRel(idx); } }, 'Remove Relationship')
-      );
+    React.createElement(ObjectListEditor, {
+      label: 'Assessments (required)',
+      value: state.assessments,
+      makeRow: function () { return { name: '', role: '', suspicionLevel: 'low' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(TextField, { label: 'Name', value: row.name, onChange: function (v) { setField(idx, 'name', v); } }),
+          React.createElement(TextField, { label: 'Role', value: row.role, onChange: function (v) { setField(idx, 'role', v); } }),
+          React.createElement(EnumSelect, { label: 'Suspicion Level (optional)', value: row.suspicionLevel, options: ['high', 'moderate', 'low'], includeBlank: true, onChange: function (v) { setField(idx, 'suspicionLevel', v); } })
+        );
+      },
+      onChange: function (v) { setList('assessments', v); }
     }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: addRel }, '+ Add Relationship'),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Suspect Assessments'),
-    assessments.map(function (a, idx) {
-      return React.createElement('div', { key: idx, className: 'mb-md' },
-        React.createElement('label', { className: 'text-xs text-muted' }, 'Name'),
-        React.createElement('input', { className: 'input', value: a.name || '', onChange: function (e) { updateAssess(idx, 'name', e.target.value); } }),
-        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Role'),
-        React.createElement('input', { className: 'input', value: a.role || '', onChange: function (e) { updateAssess(idx, 'role', e.target.value); } }),
-        React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Suspicion Level'),
-        React.createElement('select', { className: 'input', value: a.suspicionLevel || 'low', onChange: function (e) { updateAssess(idx, 'suspicionLevel', e.target.value); } },
-          React.createElement('option', { value: 'low' }, 'low'),
-          React.createElement('option', { value: 'moderate' }, 'moderate'),
-          React.createElement('option', { value: 'high' }, 'high')
-        ),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost mt-sm', onClick: function () { removeAssess(idx); } }, 'Remove Assessment')
-      );
+    React.createElement(ObjectListEditor, {
+      label: 'Key Relationships (optional)',
+      value: state.keyRelationships,
+      makeRow: function () { return { characters: [], nature: '' }; },
+      renderRow: function (row, idx, setField) {
+        return React.createElement('div', { className: 'flex flex-col gap-sm' },
+          React.createElement(StringListEditor, { label: 'Characters', value: Array.isArray(row.characters) ? row.characters : [], placeholder: 'character name', onChange: function (v) { setField(idx, 'characters', v); } }),
+          React.createElement(TextField, { label: 'Nature', value: row.nature, multiline: true, onChange: function (v) { setField(idx, 'nature', v); } })
+        );
+      },
+      onChange: function (v) { setList('keyRelationships', v); }
     }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: addAssess }, '+ Add Assessment'),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    actionsRow(handleSave, onCancel)
   );
 }
 
 function OutstandingQuestionsEditor({ section, onSave, onCancel }) {
-  const [questions, setQuestions] = React.useState(Array.isArray(section.questions) ? section.questions.slice() : (section.questions ? [section.questions] : []));
-  const [investigativeGaps, setInvestigativeGaps] = React.useState(typeof section.investigativeGaps === 'string' ? section.investigativeGaps : '');
-
-  function updateQuestion(idx, val) { const c = questions.slice(); c[idx] = val; setQuestions(c); }
-  function removeQuestion(idx) { setQuestions(questions.filter(function (_, i) { return i !== idx; })); }
-  function addQuestion() { setQuestions(questions.concat([''])); }
-
-  function handleSave() {
-    onSave(Object.assign({}, section, {
-      questions: questions.filter(function (s) { return s && s.trim(); }),
-      investigativeGaps: investigativeGaps
-    }));
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initOutstandingQuestions(section); });
+  function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildOutstandingQuestionsPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Questions'),
-    questions.map(function (q, idx) {
-      return React.createElement('div', { key: idx, className: 'flex gap-sm mb-sm' },
-        React.createElement('input', { className: 'input flex-1', value: q, onChange: function (e) { updateQuestion(idx, e.target.value); }, autoFocus: idx === 0 }),
-        React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: function () { removeQuestion(idx); } }, '×')
-      );
-    }),
-    React.createElement('button', { className: 'btn btn-sm btn-ghost mb-sm', onClick: addQuestion }, '+ Add Question'),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Investigative Gaps'),
-    React.createElement('textarea', { className: 'input', value: investigativeGaps, onChange: function (e) { setInvestigativeGaps(e.target.value); }, rows: 3 }),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    React.createElement(StringListEditor, { label: 'Questions (required)', value: state.questions, onChange: function (v) { set('questions', v); } }),
+    React.createElement(TextField, { label: 'Investigative Gaps (optional)', value: state.investigativeGaps, multiline: true, onChange: function (v) { set('investigativeGaps', v); } }),
+    actionsRow(handleSave, onCancel)
   );
 }
 
 function FinalAssessmentEditor({ section, onSave, onCancel }) {
-  const [accusationHandling, setAccusationHandling] = React.useState(typeof section.accusationHandling === 'string' ? section.accusationHandling : '');
-  const [verdict, setVerdict] = React.useState(typeof section.verdict === 'string' ? section.verdict : '');
-  const [closingLine, setClosingLine] = React.useState(typeof section.closingLine === 'string' ? section.closingLine : '');
-
-  function handleSave() {
-    onSave(Object.assign({}, section, {
-      accusationHandling: accusationHandling,
-      verdict: verdict,
-      closingLine: closingLine
-    }));
-  }
-
+  const [state, setState] = React.useState(function () { return EditLogic.initFinalAssessment(section); });
+  function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
+  function handleSave() { onSave(EditLogic.buildFinalAssessmentPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'text-xs text-muted' }, 'Accusation Handling'),
-    React.createElement('textarea', { className: 'input', value: accusationHandling, onChange: function (e) { setAccusationHandling(e.target.value); }, rows: 3, autoFocus: true }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Verdict'),
-    React.createElement('textarea', { className: 'input', value: verdict, onChange: function (e) { setVerdict(e.target.value); }, rows: 2 }),
-    React.createElement('label', { className: 'text-xs text-muted mt-sm' }, 'Closing Line'),
-    React.createElement('textarea', { className: 'input', value: closingLine, onChange: function (e) { setClosingLine(e.target.value); }, rows: 2 }),
-    React.createElement('div', { className: 'edit-form__actions flex gap-sm mt-sm' },
-      React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: handleSave }, 'Save'),
-      React.createElement('button', { className: 'btn btn-sm btn-ghost', onClick: onCancel }, 'Cancel')
-    )
+    React.createElement(TextField, { label: 'Verdict', value: state.verdict, multiline: true, onChange: function (v) { set('verdict', v); } }),
+    React.createElement(TextField, { label: 'Closing Line', value: state.closingLine, onChange: function (v) { set('closingLine', v); } }),
+    React.createElement(TextField, { label: 'Accusation Handling (optional)', value: state.accusationHandling, multiline: true, onChange: function (v) { set('accusationHandling', v); } }),
+    actionsRow(handleSave, onCancel)
   );
 }
 
