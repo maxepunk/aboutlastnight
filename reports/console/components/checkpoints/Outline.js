@@ -122,18 +122,6 @@ function ObjectListEditor(props) {
   );
 }
 
-function ObjectEditor(props) {
-  const obj = props.value || {};
-  const renderFields = props.renderFields; // (obj, setField) => ReactElement
-  const onChange = props.onChange;
-  function setField(field, val) {
-    const next = Object.assign({}, obj);
-    next[field] = val;
-    onChange(next);
-  }
-  return React.createElement('div', { className: 'flex flex-col gap-sm mb-sm' }, renderFields(obj, setField));
-}
-
 function KeyValueEditor(props) {
   const label = props.label;
   const rows = Array.isArray(props.value) ? props.value : [];
