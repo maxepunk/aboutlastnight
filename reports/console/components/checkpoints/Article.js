@@ -12,6 +12,7 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, CollapsibleSection, safeStringify, editBtn } = window.Console.utils;
 const { RevisionDiff } = window.Console;
+const ArticleEditLogic = window.Console.outlineEditLogic;
 
 // ── Editor components (module-level to isolate hooks from Article) ──
 
@@ -618,7 +619,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [expandedPhoto, setExpandedPhoto] = React.useState(null);
 
   // Reset when data changes
-  const dataKey = safeStringify(contentBundle).slice(0, 100);
+  const dataKey = ArticleEditLogic.computeResetKey(contentBundle, revisionCount);
   React.useEffect(function () {
     setEditedBundle(null);
     setEditingBlock(null);
