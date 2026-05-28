@@ -30,6 +30,8 @@ const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require('./lib/api-helpers');
+const { SchemaValidator } = require('./lib/schema-validator');
+const outlineValidator = new SchemaValidator();
 
 // Shared checkpointer instance - must persist across API calls for resume to work
 const sharedCheckpointer = new MemorySaver();
@@ -131,7 +133,7 @@ function getCheckpointData(checkpointType, state) {
  * @param {object} currentState - Current graph state values (for merging incremental inputs)
  * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
  */
-function buildResumePayload(approvals, currentState = {}) {
+function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist')) {
     const resume = {};
     const stateUpdates = {};
     let error = null;
@@ -200,6 +202,15 @@ function buildResumePayload(approvals, currentState = {}) {
         validApprovalDetected = true;
         resume.approved = true;
         if (approvals.outlineEdits && typeof approvals.outlineEdits === 'object') {
+            const schemaName = theme === 'detective' ? 'detective-outline' : 'outline';
+            const { valid, errors } = outlineValidator.validate(schemaName, approvals.outlineEdits);
+            if (!valid) {
+                const detail = (errors || [])
+                    .map(function (e) { return (e.path || '/') + ' ' + e.message; })
+                    .join('; ');
+                error = 'Edited outline failed schema validation (' + schemaName + '): ' + detail;
+                return { resume, stateUpdates, error };
+            }
             stateUpdates.outline = approvals.outlineEdits;
         }
     } else if (approvals.outline === false && typeof approvals.outlineFeedback === 'string' && approvals.outlineFeedback.trim()) {
@@ -544,7 +555,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
         // Apply approval decisions using shared helper (DRY - Commit 8.10+)
         if (approvals) {
-            const { stateUpdates, error: validationError } = buildResumePayload(approvals);
+            const { stateUpdates, error: validationError } = buildResumePayload(approvals, {}, theme);
             if (validationError) {
                 return res.status(400).json({ error: validationError });
             }
@@ -944,7 +955,7 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         config.configurable.theme = theme;
 
         // Build resume payload from approvals (pass current state for incremental input merging)
-        const { resume, stateUpdates, error: validationError } = buildResumePayload(approvals, graphState.values);
+        const { resume, stateUpdates, error: validationError } = buildResumePayload(approvals, graphState.values, theme);
         if (validationError) {
             return res.status(400).json({ sessionId, error: validationError });
         }
