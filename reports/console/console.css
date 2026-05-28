@@ -621,6 +621,7 @@ textarea.input {
 .mb-lg { margin-bottom: var(--space-lg); }
 .p-xl { padding: var(--space-xl) var(--space-lg); }
 .flex { display: flex; }
+.flex-1 { flex: 1; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
 .gap-sm { gap: var(--space-sm); }
