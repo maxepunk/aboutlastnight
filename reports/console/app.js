@@ -272,7 +272,10 @@ function App() {
               onReject: handleReject,
               dispatch: dispatch,
               revisionCache: state.revisionCache,
-              pendingEdits: state.pendingEdits
+              // pendingEdits is keyed by checkpointType (matches CHECKPOINT_COMPONENTS map keys above).
+              // New checkpoints adding edit support must dispatch SAVE_PENDING_EDITS with
+              // checkpoint: '<exact CHECKPOINT_COMPONENTS key>' (e.g., 'arc-selection', not 'arcs').
+              pendingEdits: state.pendingEdits[state.checkpointType]
             })
           : React.createElement(React.Fragment, null,
               // Generic checkpoint content (replaced by specific components in later batches)
