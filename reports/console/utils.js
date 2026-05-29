@@ -102,6 +102,20 @@ function formatElapsed(ms) {
   return `${seconds}s`;
 }
 
+/**
+ * Edit button (pencil icon)
+ * @param {function} onClick
+ * @returns {React.ReactElement}
+ */
+function editBtn(onClick) {
+  return React.createElement('button', {
+    className: 'article-block__edit-btn',
+    onClick: function (e) { e.stopPropagation(); onClick(); },
+    'aria-label': 'Edit',
+    title: 'Edit'
+  }, '✎');
+}
+
 const CHECKPOINT_ORDER = [
   'input-review', 'paper-evidence-selection', 'await-roster', 'character-ids',
   'await-full-context', 'pre-curation', 'evidence-and-photos', 'arc-selection',
@@ -128,6 +142,7 @@ window.Console.utils = {
   CollapsibleSection,
   JsonViewer,
   formatElapsed,
+  editBtn,
   CHECKPOINT_ORDER,
   CHECKPOINT_LABELS
 };

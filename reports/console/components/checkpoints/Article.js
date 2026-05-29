@@ -10,8 +10,9 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn } = window.Console.utils;
 const { RevisionDiff } = window.Console;
+const ArticleEditLogic = window.Console.outlineEditLogic;
 
 // ── Editor components (module-level to isolate hooks from Article) ──
 
@@ -618,7 +619,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [expandedPhoto, setExpandedPhoto] = React.useState(null);
 
   // Reset when data changes
-  const dataKey = safeStringify(contentBundle).slice(0, 100);
+  const dataKey = ArticleEditLogic.computeResetKey(contentBundle, revisionCount);
   React.useEffect(function () {
     setEditedBundle(null);
     setEditingBlock(null);
@@ -757,7 +758,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     if (hasEdits && editedBundle) {
       // Persist edits in reducer state so they survive unmount during processing
       if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', edits: editedBundle });
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
       }
       onApprove({ article: true, articleEdits: editedBundle });
     } else {
@@ -769,6 +770,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     try {
       var parsed = JSON.parse(jsonText);
       setJsonError('');
+      if (dispatch) {
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: parsed });
+      }
       onApprove({ article: true, articleEdits: parsed });
     } catch (err) {
       setJsonError('Invalid JSON: ' + err.message);
@@ -805,16 +809,6 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     return '/sessionphotos/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(filename);
   }
 
-  // -- Edit button helper --
-
-  function editBtn(onClick) {
-    return React.createElement('button', {
-      className: 'article-block__edit-btn',
-      onClick: function (e) { e.stopPropagation(); onClick(); },
-      'aria-label': 'Edit',
-      title: 'Edit'
-    }, '\u270E');
-  }
 
   // -- Block renderers --
 
