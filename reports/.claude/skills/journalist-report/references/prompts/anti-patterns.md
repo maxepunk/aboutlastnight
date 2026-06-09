@@ -380,7 +380,6 @@ End on a session-specific systemic insight that connects THIS group's experience
 | Pad thin evidence | Acknowledge gaps, move on |
 | Game mechanics language | In-world language only |
 | Vague attributions | Specific, documented sources |
-| "guests" | "people," "those present," "partygoers" |
 
 ---
 
@@ -396,8 +395,6 @@ These terms break immersion by revealing the game structure:
 | "Final call" | "In the final minutes" |
 | "Token scan" | "Memory exposed" |
 | "Orchestrator" | (don't reference at all) |
-| "guests" | "people," "those present," "partygoers" |
-| "transactions" | "purchases," "payments," "the ledger" |
 | "first-buried bonus" | (don't reference at all) |
 
 ---
