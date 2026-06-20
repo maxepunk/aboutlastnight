@@ -131,7 +131,6 @@ describe('PromptBuilder', () => {
       lede: { hook: 'Something is rotten...' },
       theStory: { arcs: [] }
     };
-    const mockTemplate = '<html>{{content}}</html>';
 
     beforeEach(() => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
@@ -148,7 +147,7 @@ describe('PromptBuilder', () => {
 
     it('should return system and user prompts', async () => {
       const result = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(result).toHaveProperty('systemPrompt');
@@ -157,7 +156,7 @@ describe('PromptBuilder', () => {
 
     it('should load articleGeneration phase prompts', async () => {
       await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('articleGeneration');
@@ -165,7 +164,7 @@ describe('PromptBuilder', () => {
 
     it('should include character-voice in user prompt (VOICE_CHECKPOINT)', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('Be NovaGlade');
@@ -173,7 +172,7 @@ describe('PromptBuilder', () => {
 
     it('should include writing-principles in user prompt (VOICE_CHECKPOINT)', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('Show dont tell');
@@ -181,18 +180,10 @@ describe('PromptBuilder', () => {
 
     it('should include approved outline in user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('Something is rotten');
-    });
-
-    it('should include template in user prompt', async () => {
-      const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
-      );
-
-      expect(userPrompt).toContain('<html>{{content}}</html>');
     });
 
     // Workaround for SDK constrained-decoding bug #277: embed the full schema in
@@ -201,7 +192,7 @@ describe('PromptBuilder', () => {
     // the only spec the model sees, which has been brittle.
     it('embeds the content-bundle JSON schema under a <SCHEMA> tag', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('<SCHEMA>');
@@ -216,7 +207,7 @@ describe('PromptBuilder', () => {
 
     it('should include anti-patterns in user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('No em-dashes');
@@ -224,7 +215,7 @@ describe('PromptBuilder', () => {
 
     it('journalist prompt includes LEDE, THE STORY, FOLLOW THE MONEY sections', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('LEDE');
@@ -234,7 +225,7 @@ describe('PromptBuilder', () => {
 
     it('journalist prompt includes pullQuotes and financialTracker', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('pullQuotes');
@@ -243,7 +234,7 @@ describe('PromptBuilder', () => {
 
     it('journalist prompt includes VISUAL_DISTRIBUTION and ARC_FLOW', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline, mockTemplate
+        mockOutline
       );
 
       expect(userPrompt).toContain('VISUAL_DISTRIBUTION');
@@ -252,7 +243,7 @@ describe('PromptBuilder', () => {
 
     it('journalist article prompt includes explicit word target in GENERATION_INSTRUCTION', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'test' } }, '<html></html>', [], null
+        { lede: { hook: 'test' } }, [], null
       );
       const generationInstruction = userPrompt.split('<GENERATION_INSTRUCTION>')[1] || '';
       expect(generationInstruction).toContain('1000-1500 words');
@@ -414,7 +405,7 @@ describe('PromptBuilder', () => {
 
     it('buildArticlePrompt uses detective voice, not Nova', async () => {
       const { systemPrompt } = await detectiveBuilder.buildArticlePrompt(
-        {}, '', [], null
+        {}, [], null
       );
       expect(systemPrompt).not.toContain('You are Nova');
       expect(systemPrompt).not.toContain('Hunter S. Thompson');
@@ -435,7 +426,7 @@ describe('PromptBuilder', () => {
 
     it('detective article prompt includes detective constraints', async () => {
       const { systemPrompt } = await detectiveBuilder.buildArticlePrompt(
-        {}, '', [], null
+        {}, [], null
       );
       expect(systemPrompt).toContain('SYNTHESIZE');
       expect(systemPrompt).toContain('750 words');
@@ -444,11 +435,10 @@ describe('PromptBuilder', () => {
 
     describe('buildArticlePrompt detective user prompt', () => {
       const mockOutline = { executiveSummary: { hook: 'Case opened...' } };
-      const mockTemplate = '<html>detective-template</html>';
 
       it('detective user prompt does NOT include journalist sections', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         // The embedded <SCHEMA> (SDK#277 workaround) contains the full schema for both
         // themes — including the financialTracker description which mentions "FOLLOW THE
@@ -470,7 +460,7 @@ describe('PromptBuilder', () => {
 
       it('detective user prompt includes detective section IDs', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('executive-summary');
         expect(userPrompt).toContain('evidence-locker');
@@ -480,7 +470,7 @@ describe('PromptBuilder', () => {
 
       it('detective user prompt includes SECTION_GUIDANCE', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('SECTION_GUIDANCE');
         expect(userPrompt).toContain('EXECUTIVE SUMMARY');
@@ -491,17 +481,15 @@ describe('PromptBuilder', () => {
 
       it('detective user prompt includes DATA_CONTEXT with outline and evidence', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('DATA_CONTEXT');
         expect(userPrompt).toContain('Case opened');
-        expect(userPrompt).toContain('TEMPLATE');
-        expect(userPrompt).toContain('detective-template');
       });
 
       it('detective user prompt includes voice checkpoint with detective constraints', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('VOICE_CHECKPOINT');
         expect(userPrompt).toContain('Detective Anondono');
@@ -509,7 +497,7 @@ describe('PromptBuilder', () => {
 
       it('detective user prompt references Detective Anondono as author', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('Detective Anondono');
         expect(userPrompt).toContain('Lead Investigator');
@@ -517,7 +505,7 @@ describe('PromptBuilder', () => {
 
       it('detective user prompt explicitly excludes pullQuotes, evidenceCards, financialTracker', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('Do NOT include pullQuotes');
         expect(userPrompt).toContain('evidenceCards');
@@ -526,14 +514,14 @@ describe('PromptBuilder', () => {
 
       it('detective user prompt specifies ~750 word target', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('750 words');
       });
 
       it('detective user prompt includes ANTI_PATTERNS', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('ANTI_PATTERNS');
         expect(userPrompt).toContain('Section differentiation');
@@ -541,7 +529,7 @@ describe('PromptBuilder', () => {
 
       it('detective user prompt includes RULES section with prompt references', async () => {
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, [], null
+          mockOutline, [], null
         );
         expect(userPrompt).toContain('RULES');
         expect(userPrompt).toContain('Evidence Locker');   // section-rules
@@ -556,7 +544,7 @@ describe('PromptBuilder', () => {
           photos: []
         }];
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, mockTemplate, arcEvidence, null
+          mockOutline, arcEvidence, null
         );
         expect(userPrompt).toContain('financial-trail');
         expect(userPrompt).toContain('Money moved');
@@ -707,7 +695,7 @@ describe('PromptBuilder', () => {
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
 
       const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'Hook' } }, '<html></html>'
+        { lede: { hook: 'Hook' } }
       );
       expect(userPrompt).toContain('Athena Nova reporting.');
       expect(userPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
@@ -725,7 +713,7 @@ describe('PromptBuilder', () => {
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
       const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, 'template', [], 'hero.jpg'
+        { sections: [] }, [], 'hero.jpg'
       );
 
       expect(userPrompt).toContain('LAST NIGHT');
@@ -743,7 +731,7 @@ describe('PromptBuilder', () => {
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
       const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, 'template', [], 'hero.jpg'
+        { sections: [] }, [], 'hero.jpg'
       );
 
       expect(userPrompt).toContain('received real-time tips');
@@ -762,7 +750,7 @@ describe('PromptBuilder', () => {
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
       const { systemPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, 'template', [], 'hero.jpg'
+        { sections: [] }, [], 'hero.jpg'
       );
 
       expect(systemPrompt).toContain('LAST NIGHT');
@@ -805,7 +793,7 @@ describe('PromptBuilder', () => {
       });
 
       const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, 'template', [], 'hero.jpg'
+        { sections: [] }, [], 'hero.jpg'
       );
 
       expect(userPrompt).toContain('"byline"');
@@ -827,7 +815,7 @@ describe('PromptBuilder', () => {
       });
 
       const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, 'template', [], 'hero.jpg'
+        { sections: [] }, [], 'hero.jpg'
       );
 
       expect(userPrompt).toContain('Ashe Motoko');
@@ -888,7 +876,7 @@ describe('PromptBuilder', () => {
       ];
 
       const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'Hook' } }, '<html></html>', [], 'hero.jpg', shellAccounts
+        { lede: { hook: 'Hook' } }, [], 'hero.jpg', shellAccounts
       );
 
       expect(userPrompt).toContain('FINANCIAL_SUMMARY');
@@ -907,7 +895,7 @@ describe('PromptBuilder', () => {
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'Hook' } }, '<html></html>', [], 'hero.jpg', []
+        { lede: { hook: 'Hook' } }, [], 'hero.jpg', []
       );
 
       expect(userPrompt).not.toContain('FINANCIAL_SUMMARY');
@@ -987,7 +975,6 @@ describe('PromptBuilder', () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
         {}, // outline
-        '<template>',
         [], // arcEvidencePackages
         null, // heroImage
         [], // shellAccounts
@@ -1008,7 +995,7 @@ describe('PromptBuilder', () => {
     it('should omit SESSION_FACTS when sessionFacts is null', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, '<template>', [], null, [], null
+        {}, [], null, [], null
       );
       expect(userPrompt).not.toContain('<SESSION_FACTS>');
     });
@@ -1035,7 +1022,7 @@ describe('PromptBuilder', () => {
         whiteboard: { suspects: ['Vic'] }  // Should NOT be included
       };
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, '<template>', [], null, [], null, directorNotes
+        {}, [], null, [], null, directorNotes
       );
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('Blake solicited Vic three times');
@@ -1047,7 +1034,7 @@ describe('PromptBuilder', () => {
     it('should omit INVESTIGATION_OBSERVATIONS when directorNotes is null', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, '<template>', [], null, [], null, null
+        {}, [], null, [], null, null
       );
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
@@ -1055,7 +1042,7 @@ describe('PromptBuilder', () => {
     it('should omit INVESTIGATION_OBSERVATIONS when rawProse is empty', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, '<template>', [], null, [], null, { rawProse: '', quotes: [], transactionReferences: [], postInvestigationDevelopments: [] }
+        {}, [], null, [], null, { rawProse: '', quotes: [], transactionReferences: [], postInvestigationDevelopments: [] }
       );
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
@@ -1115,7 +1102,6 @@ describe('PromptBuilder', () => {
     });
 
     const outline = { theStory: { arcs: [] } };
-    const template = '<template/>';
 
     it('injects rawProse inside <INVESTIGATION_OBSERVATIONS>', async () => {
       const directorNotes = {
@@ -1124,7 +1110,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('I watched Alex and Sam in the corner.');
       expect(userPrompt).not.toContain('"behaviorPatterns"');
@@ -1137,7 +1123,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).toContain('<QUOTE_BANK>');
       expect(userPrompt).toContain('we had to act');
     });
@@ -1151,7 +1137,7 @@ describe('PromptBuilder', () => {
         }],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).toContain('<TRANSACTION_LINKS>');
       expect(userPrompt).toContain('tay004');
     });
@@ -1163,7 +1149,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'Just been announced' }]
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).toContain('<POST_INVESTIGATION_NEWS>');
       expect(userPrompt).toContain('Sarah named interim CEO');
       // This tag must be DISTINCT from general observations so Nova writes "It has just been announced..."
@@ -1177,14 +1163,14 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).not.toContain('<QUOTE_BANK>');
       expect(userPrompt).not.toContain('<TRANSACTION_LINKS>');
       expect(userPrompt).not.toContain('<POST_INVESTIGATION_NEWS>');
     });
 
     it('handles null directorNotes gracefully', async () => {
-      const { userPrompt } = await builder.buildArticlePrompt(outline, template, [], null, [], null, null, null);
+      const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, null, null);
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
   });

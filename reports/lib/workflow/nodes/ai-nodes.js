@@ -1156,12 +1156,6 @@ async function generateContentBundle(state, config) {
   const sdk = getSdkClient(config, 'generateContent');
   const promptBuilder = getPromptBuilder(config, state);
 
-  // Load template for context (optional - article generation can proceed without it)
-  const template = await promptBuilder.theme.loadTemplate().catch(err => {
-    console.warn(`[generateContentBundle] Template load failed, proceeding without template context: ${err.message}`);
-    return '';
-  });
-
   // PHASE 1 FIX: Pass arcEvidencePackages with fullContent for verbatim quoting
   const arcEvidencePackages = state.arcEvidencePackages || [];
 
@@ -1192,7 +1186,6 @@ async function generateContentBundle(state, config) {
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     state.outline || {},
-    template,
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     state.heroImage,  // Hero image filename (prevents duplicate in photos array)
     shellAccounts,  // Deterministic shell account data for financial summary

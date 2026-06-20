@@ -195,11 +195,8 @@ function loadJson(file) {
     characterData: {}
   });
 
-  const template = await promptBuilder.theme.loadTemplate().catch(() => '');
-
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     outline,
-    template,
     arcEvidencePackages,
     'aln0509 (10 of 10).jpg',
     shellAccounts,

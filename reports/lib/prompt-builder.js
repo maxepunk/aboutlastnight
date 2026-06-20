@@ -576,7 +576,7 @@ Return JSON with the following structure:
    * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, template, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null) {
+  async buildArticlePrompt(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null) {
     const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -631,10 +631,6 @@ Filename: ${heroImage || 'Use first available photo from outline'}
 
 ${arcEvidenceSection}
 </DATA_CONTEXT>
-
-<TEMPLATE>
-${template}
-</TEMPLATE>
 
 <RULES>
 ${labelPromptSection('section-rules', prompts['section-rules'])}
@@ -775,9 +771,6 @@ into the narrative where appropriate:
 ${narrativeTensions.tensions.map(t => `- [${t.type}] ${t.narrativeNote}`).join('\n')}
 </NARRATIVE_TENSIONS>` : ''}
 </DATA_CONTEXT>
-<TEMPLATE>
-${template}
-</TEMPLATE>
 
 <RULES>
 ${labelPromptSection('section-rules', prompts['section-rules'])}
