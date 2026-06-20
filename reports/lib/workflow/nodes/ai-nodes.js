@@ -93,7 +93,6 @@ SCORING CRITERIA (include if total >= 2):
 AUTO-EXCLUDE (regardless of score):
 - Paper evidence with ONLY puzzle/mechanical content (lock combos, container descriptions)
 - Paper evidence with empty or minimal description
-- Paper evidence that would introduce entirely NEW narrative threads not touched by exposed tokens, player focus, or suspects
 
 For each item, return:
 - id: the item's ID (must match input exactly)
