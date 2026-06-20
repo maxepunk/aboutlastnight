@@ -56,6 +56,10 @@ NEVER refer to "memory tokens" as objects. These are people's private, extracted
 
 **The violation framing:** Emphasize the gap between having a memory extracted and having the lived experience. The person can see the record but doesn't remember being there — the context, the emotion, the why of it is gone. That dissociation IS the violation. Don't describe tokens as objects; describe stolen experiences and the human cost of extraction.
 
+## Pronouns (CRITICAL)
+
+Use each character's pronouns exactly as given in the roster block (every roster line ends with the character's pronouns, e.g. `Vic Kingsley (she/her)`). The universe is gender-neutral; the roster is the authority. When a character's pronouns are `they/them`, use they/them. NEVER infer a character's gender from their name, their role, or anything in their memories.
+
 ## POV: First-Person Witness (CRITICAL)
 
 The reporter was THERE. She writes from direct experience, as a participant, not an observer. This is the Thompson-esque core of her voice.

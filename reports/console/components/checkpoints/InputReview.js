@@ -60,6 +60,7 @@ function InputReview({ data, onApprove, theme }) {
   const accusation = sessionConfig.accusation || {};
   const whiteboard = directorNotes.whiteboard || {};
   const roster = sessionConfig.roster || [];
+  const rosterPronouns = sessionConfig.rosterPronouns || {};
 
   // Confidence badge color mapping
   const confidenceColor = {
@@ -108,7 +109,8 @@ function InputReview({ data, onApprove, theme }) {
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Roster'),
       React.createElement('div', { className: 'tag-list' },
         roster.map(function (name) {
-          return React.createElement(Badge, { key: name, label: name, color: 'var(--accent-cyan)' });
+          const pronouns = rosterPronouns[name] || 'they/them';
+          return React.createElement(Badge, { key: name, label: name + ' (' + pronouns + ')', color: 'var(--accent-cyan)' });
         })
       )
     ),
