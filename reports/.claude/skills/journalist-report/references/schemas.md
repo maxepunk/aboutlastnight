@@ -133,7 +133,7 @@ The master data structure enforcing privacy boundaries through structure.
       }
     ],
     "totalExposed": 31,
-    "exposedTokenIds": ["tok001", "asm031", "tok003", ...]
+    "exposedTokenIds": ["tok001", "tok002", "tok003", ...]
   },
 
   // ═══════════════════════════════════════════════════════════════

@@ -93,8 +93,8 @@ Return ONLY valid JSON (no markdown, no explanation):
   "voice_score": 4,
   "voice_notes": "Strong participatory voice throughout. One passive construction at line 89.",
   "roster_coverage": {
-    "featured": ["Alex", "James", "Victoria"],
-    "mentioned": ["Jamie", "Rachel"],
+    "featured": ["Alex", "Remi", "Vic"],
+    "mentioned": ["Jamie", "Riley"],
     "missing": ["Kai"]
   },
   "systemic_critique_present": true,
