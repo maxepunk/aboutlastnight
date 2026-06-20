@@ -197,7 +197,7 @@ AskUserQuestion({
 Extract from orchestrator text:
 ```javascript
 {
-  exposed_tokens: ["jam001", "alr001", ...],  // Token IDs brought to Detective
+  exposed_tokens: ["jam001", "tok001", ...],  // Token IDs brought to Detective
   buried_tokens: [
     { token_id: "mor021", amount: 150000, shell_account: "Offbeat" },
     ...
@@ -268,13 +268,13 @@ AskUserQuestion({
   // OBSERVATIONS - director's authoritative notes (PRIMARY WEIGHT)
   observations: {
     behaviorPatterns: [
-      "Taylor and Diana interacted with Valet early together, then separately later (falling out?)",
-      "James NEVER spoke to Blake despite Blake's efforts to establish rapport",
+      "Taylor and Mel interacted with Valet early together, then separately later (falling out?)",
+      "Remi NEVER spoke to Blake despite Blake's efforts to establish rapport",
       "Kai spotted doing last-minute transactions while others monitored shell accounts"
     ],
     suspiciousCorrelations: [
       "ChaseT account = Taylor Chase's pseudonym (Taylor's last name is Chase)",
-      "Victoria and Morgan appeared to be colluding throughout the investigation"
+      "Vic and Morgan appeared to be colluding throughout the investigation"
     ],
     notableMoments: [
       "Kai's last transaction at 11:49 PM while being watched"
@@ -282,20 +282,20 @@ AskUserQuestion({
   },
   // WHITEBOARD - player conclusions (interpreted through observations above)
   whiteboard: {
-    suspects: ["Derek (heavily emphasized)", "Victoria", "Morgan"],
+    suspects: ["Sam (heavily emphasized)", "Vic", "Morgan"],
     evidenceConnections: [
-      "Victoria + Morgan → 'permanent solution' to Marcus's criminal liability",
+      "Vic + Morgan → 'permanent solution' to Marcus's criminal liability",
       "Alex: got offer from Black Market",
-      "James: saw Marcus enter secret room"
+      "Remi: saw Marcus enter secret room"
     ],
     factsEstablished: [
       "Memory tokens return if not purchased",
-      "Stanford glow rave 4: Sofia, Diana (2009), Derek, Marcus"
+      "Stanford glow rave 4: Nat, Mel (2009), Sam, Marcus"
     ],
     keyPhrases: ["permanent solution", "criminal liability"]
   },
   accusationContext: {
-    accused: "Victoria and Morgan",
+    accused: "Vic and Morgan",
     reasoning: "Group concluded they colluded on 'permanent solution'"
   }
 }
@@ -311,7 +311,7 @@ AskUserQuestion({
 Run the fetch script with exposed token IDs, **saving to file** to avoid truncation:
 ```bash
 node scripts/fetch-notion-tokens.js \
-  --token-ids=jam001,alr001,... \
+  --token-ids=jam001,tok001,... \
   --pretty \
   --output=data/{session-date}/fetched/tokens.json
 ```
@@ -351,12 +351,12 @@ PAPER EVIDENCE AVAILABLE (53 items total)
 Props (physical items):
   [ ] Cease & Desist Letter - Legal letter from Patchwork Law Firm
   [ ] NeurAI One-Pager - Company positioning document
-  [ ] James One-Pager - Character background document
-  [ ] Victoria <> Alex Texts - Text message screenshots
+  [ ] Remi One-Pager - Character background document
+  [ ] Vic <> Alex Texts - Text message screenshots
   ...
 
 Documents (digital evidence):
-  [ ] James <> Alex Emails - Email thread about algorithm
+  [ ] Remi <> Alex Emails - Email thread about algorithm
   [ ] Board Meeting Minutes - NeurAI corporate records
   [ ] Lab Access Logs - Facility entry records
   ...
@@ -384,7 +384,7 @@ AskUserQuestion({
     multiSelect: true,
     options: [
       // Generate from fetched items where basicType == "Document"
-      { label: "James <> Alex Emails", description: "Algorithm ownership" },
+      { label: "Remi <> Alex Emails", description: "Algorithm ownership" },
       { label: "Board Meeting Minutes", description: "Corporate records" },
       // ... all Documents
     ]
@@ -400,7 +400,7 @@ Write `inputs/selected-paper-evidence.json`:
   "unlockedItems": [
     "Cease & Desist Letter",
     "NeurAI One-Pager",
-    "James <> Alex Emails"
+    "Remi <> Alex Emails"
   ],
   "totalAvailable": 53,
   "totalUnlocked": 3,
@@ -415,7 +415,7 @@ Write `inputs/selected-paper-evidence.json`:
 Paper Evidence Selection Complete:
 - 3 of 53 items unlocked this session
 - Props: Cease & Desist Letter, NeurAI One-Pager
-- Documents: James <> Alex Emails
+- Documents: Remi <> Alex Emails
 
 Proceed to download images for these items? [Yes / Edit selection]
 ```
@@ -489,9 +489,9 @@ If automated download fails, use manual curl:
    Document Images Found:
    - patchworklawfirm.png (Cease & Desist Letter)
    - neuraionepager.png (NeurAI one-pager)
-   - jamesonepager.png (James one-pager)
-   - vic_alex_texts.png (Victoria <> Alex texts)
-   - sarahtext.png (Sarah <> Rachel texts)
+   - remionepager.png (Remi one-pager)
+   - vic_alex_texts.png (Vic <> Alex texts)
+   - sarahtext.png (Sarah <> Riley texts)
    Total: 5 document images
    ```
 
@@ -658,9 +658,9 @@ AskUserQuestion({
     options: [
       // All roster members as options
       { label: "Morgan", description: "" },
-      { label: "Oliver", description: "" },
-      { label: "Victoria", description: "" },
-      { label: "James", description: "" },
+      { label: "Quinn", description: "" },
+      { label: "Vic", description: "" },
+      { label: "Remi", description: "" },
       { label: "Taylor", description: "" },
       // ... full roster
       { label: "Cassandra Nova (NPC)", description: "Journalist character" }
@@ -789,8 +789,8 @@ Present the evidence bundle to user, highlighting ENRICHMENTS that need verifica
 > **Memory Tokens (exposed):**
 > | Token | Owner | Summary | Value | Narrative Relevance |
 > |-------|-------|---------|-------|---------------------|
-> | alr001 | Alex | Algorithm theft proof | 4/5 | ⚠️ VERIFY: "IP theft origin story" |
-> | jam001 | James | NeurAI founding docs | 3/5 | ⚠️ VERIFY: "Corporate founding" |
+> | tok001 | Alex | Algorithm theft proof | 4/5 | ⚠️ VERIFY: "IP theft origin story" |
+> | jam001 | Jamie | NeurAI founding docs | 3/5 | ⚠️ VERIFY: "Corporate founding" |
 > | ... | ... | ... | ... | ... |
 >
 > **Paper Evidence (unlocked):**
@@ -803,7 +803,7 @@ Present the evidence bundle to user, highlighting ENRICHMENTS that need verifica
 > **Session Photos (with character IDs):**
 > | Photo | Characters | Narrative Moment | Caption |
 > |-------|------------|------------------|---------|
-> | 194306.jpg | Morgan, Oliver, Victoria, James | early_investigation | ⚠️ VERIFY caption |
+> | 194306.jpg | Morgan, Quinn, Vic, Remi | early_investigation | ⚠️ VERIFY caption |
 > | ... | ... | ... | ... |
 >
 > **Buried Evidence (content unknown, amounts known):**
@@ -845,8 +845,8 @@ AskUserQuestion({
     multiSelect: true,
     options: [
       // Dynamically generated from evidence bundle
-      { label: "alr001 - narrative relevance", description: "Currently: 'IP theft origin story'" },
-      { label: "Photo 194306 - characters", description: "Currently: Morgan, Oliver, Victoria, James" },
+      { label: "tok001 - narrative relevance", description: "Currently: 'IP theft origin story'" },
+      { label: "Photo 194306 - characters", description: "Currently: Morgan, Quinn, Vic, Remi" },
       { label: "Gorlan account - thread inference", description: "Currently: 'Funding & Espionage'" },
       // ... one option per enriched item
     ]
@@ -946,21 +946,21 @@ Present arcs to user, then use AskUserQuestion for structured selection:
 
 > "I've identified these narrative arcs from the evidence:
 >
-> 1. **Victoria + Morgan Collusion** (Player Emphasis: HIGH) - Director observed collusion throughout...
+> 1. **Vic + Morgan Collusion** (Player Emphasis: HIGH) - Director observed collusion throughout...
 > 2. **IP Theft Trail** (Player Emphasis: HIGH) - Whiteboard connections to Alex's algorithm...
-> 3. **Derek's Emphasized Role** (Player Emphasis: HIGH) - Heavily emphasized on whiteboard...
+> 3. **Sam's Emphasized Role** (Player Emphasis: HIGH) - Heavily emphasized on whiteboard...
 > 4. **The Black Market Threat** (Player Emphasis: HIGH) - ChaseT = Taylor Chase...
 > 5. **Shell Account Conspiracy** (Player Emphasis: MEDIUM) - $4M across 6 accounts...
 > [etc.]
 >
 > **Character Placement Opportunities:**
-> - Diana: Early Taylor collab that dissolved, Derek standoff in photo
+> - Mel: Early Taylor collab that dissolved, Sam standoff in photo
 > - Kai: Late-game Black Market activity at 11:49 PM
-> - James: Avoided Blake throughout (director observed)
+> - Remi: Avoided Blake throughout (director observed)
 >
 > **Visual assets available:**
 > - 6 session photos (early investigation, Black Market station, final deliberation)
-> - 3 document images (NeurAI one-pager, James one-pager, law firm letterhead)"
+> - 3 document images (NeurAI one-pager, Remi one-pager, law firm letterhead)"
 
 **Use AskUserQuestion for arc and photo selection:**
 
@@ -972,9 +972,9 @@ AskUserQuestion({
     multiSelect: true,
     options: [
       // Dynamically generated from arc_analysis, player emphasis first
-      { label: "Victoria + Morgan Collusion (Recommended)", description: "HIGH emphasis - director observed collusion" },
+      { label: "Vic + Morgan Collusion (Recommended)", description: "HIGH emphasis - director observed collusion" },
       { label: "IP Theft Trail", description: "HIGH emphasis - whiteboard connections" },
-      { label: "Derek's Emphasized Role", description: "HIGH emphasis - heavily emphasized" },
+      { label: "Sam's Emphasized Role", description: "HIGH emphasis - heavily emphasized" },
       { label: "The Black Market Threat", description: "HIGH emphasis - ChaseT discovery" },
       // ... one option per identified arc
     ]
@@ -1011,7 +1011,7 @@ After user selects arcs in checkpoint 2, update `arc-analysis.json` with:
 ```javascript
 {
   userSelections: {
-    selectedArcs: ["Victoria + Morgan Collusion", "IP Theft Trail"],
+    selectedArcs: ["Vic + Morgan Collusion", "IP Theft Trail"],
     heroImageConfirmed: "20251221_205807.jpg",
     photoPreferences: { exclude: [], feature: [] }
   }
@@ -1067,20 +1067,20 @@ Present outline to user in readable format:
 >
 > **HERO IMAGE:** Deliberation at whiteboard (full-width above headline)
 >
-> **LEDE:** Marcus is dead. Victoria and Morgan accused...
+> **LEDE:** Marcus is dead. Vic and Morgan accused...
 >
 > **THE STORY:**
 > - Arc 1: IP Theft Trail (3 paragraphs, 2 evidence cards)
 >   - 📷 Photo: Early investigation on couch (after para 2)
-> - Arc 2: Victoria's Double Game (2 paragraphs, 1 evidence card)
+> - Arc 2: Vic's Double Game (2 paragraphs, 1 evidence card)
 > - Transition to money section
 >
 > **FOLLOW THE MONEY:** Financial tracker with 6 accounts, $4.06M total
 > - 📷 Photo: Valet's Black Market station (near tracker)
 >
-> **THE PLAYERS:** Alex/James/Jamie (exposed) vs Taylor/Diana/Derek (buried)
+> **THE PLAYERS:** Alex/Remi/Jamie (exposed) vs Taylor/Mel/Sam (buried)
 >
-> **WHAT'S MISSING:** 2 buried markers (Victoria's knowledge, Derek's lab access)
+> **WHAT'S MISSING:** 2 buried markers (Vic's knowledge, Sam's lab access)
 >
 > **CLOSING:** Systemic critique on memory as commodity
 >
@@ -1115,8 +1115,8 @@ AskUserQuestion({
     question: "What order should the arcs appear in THE STORY?",
     multiSelect: false,
     options: [
-      { label: "Keep current order", description: "IP Theft Trail → Victoria's Double Game → ..." },
-      { label: "Lead with Victoria", description: "Victoria's Double Game → IP Theft Trail → ..." },
+      { label: "Keep current order", description: "IP Theft Trail → Vic's Double Game → ..." },
+      { label: "Lead with Vic", description: "Vic's Double Game → IP Theft Trail → ..." },
       { label: "Lead with Morgan", description: "Morgan's Secret → IP Theft Trail → ..." }
       // Dynamically generated based on selected arcs
     ]
@@ -1221,8 +1221,7 @@ Task(subagent_type="journalist-article-validator", instruction=`
 
   Article HTML file: reports/report20251221ALL15.html
 
-  Character roster: James, Taylor, Sarah, Kai, Rachel, Jamie, Derek, Victoria,
-                    Tori, Oliver, Morgan, Jessicah, Diana, Ashe, Alex
+  Character roster: <the actual session roster, first names>
 
   Check for: em-dashes, game mechanics language, vague attribution,
   voice consistency, roster coverage, systemic critique presence.
@@ -1263,7 +1262,7 @@ Task(subagent_type="journalist-article-validator", instruction=`
 > | 3 | missing_character | - | Kai | Add mention in THE PLAYERS section |
 >
 > **Voice Score:** 4/5 - "Strong participatory voice throughout"
-> **Roster Coverage:** Featured: Alex, James | Mentioned: Jamie, Rachel | Missing: Kai
+> **Roster Coverage:** Featured: Alex, Remi | Mentioned: Jamie, Riley | Missing: Kai
 
 **Use AskUserQuestion for handling strategy:**
 

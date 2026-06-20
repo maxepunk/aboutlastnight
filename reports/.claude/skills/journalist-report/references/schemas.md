@@ -10,7 +10,7 @@ JSON structure definitions for all intermediate pipeline outputs.
 
 ```javascript
 {
-  exposed_tokens: ["jam001", "alr001", ...],  // Token IDs brought to Detective
+  exposed_tokens: ["jam001", "tok001", ...],  // Token IDs brought to Detective
   buried_tokens: [
     { token_id: "mor021", amount: 150000, shell_account: "Offbeat" },
     ...
@@ -58,7 +58,7 @@ Universal schema for batch-summarized evidence items before curation. See `lib/s
     originalType: "Memory Token Video",  // or "Prop", "Document"
     summary: "Alex's algorithm presentation to NeurAI board",  // max 150 chars
     significance: "critical",  // critical|supporting|contextual|background
-    characterRefs: ["Alex", "James"],
+    characterRefs: ["Alex", "Remi"],
     ownerLogline: "Tech genius whose algorithm was stolen",
     timelineRef: "2009-2010",
     timelineContext: {
@@ -68,7 +68,7 @@ Universal schema for batch-summarized evidence items before curation. See `lib/s
     },
     narrativeRelevance: true,
     tags: ["financial", "relationship", "ip-theft"],
-    groupCluster: "Marcus-Victoria dealings",
+    groupCluster: "Marcus-Vic dealings",
     sfFields: { /* structured data from SF_ fields */ }
   }],
   preprocessedAt: "2025-12-21T20:30:00Z",
@@ -76,7 +76,7 @@ Universal schema for batch-summarized evidence items before curation. See `lib/s
   playerFocus: {
     primaryInvestigation: "Who killed Marcus?",
     emotionalHook: "Betrayal among friends",
-    openQuestions: ["What did Victoria know?", "Why did Morgan bury those memories?"]
+    openQuestions: ["What did Vic know?", "Why did Morgan bury those memories?"]
   },
   stats: {
     totalItems: 47,
@@ -110,13 +110,13 @@ The master data structure enforcing privacy boundaries through structure.
   "exposedEvidence": {
     "memoryTokens": [
       {
-        "tokenId": "alr001",
+        "tokenId": "tok001",
         "fullDescription": "The memory shows Alex presenting his algorithm...",
         "summary": "Alex's algorithm presentation",
         "owners": ["Alex"],
         "valueRating": "4",
         "memoryType": "Incriminating",
-        "exposedBy": "James",           // WHO brought this to Detective
+        "exposedBy": "Remi",           // WHO brought this to Detective
         "narrativeRelevance": "IP theft origin story"
       }
     ],
@@ -133,7 +133,7 @@ The master data structure enforcing privacy boundaries through structure.
       }
     ],
     "totalExposed": 31,
-    "exposedTokenIds": ["alr001", "asm031", "jav042", ...]
+    "exposedTokenIds": ["tok001", "asm031", "tok003", ...]
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -182,27 +182,27 @@ The master data structure enforcing privacy boundaries through structure.
   // ═══════════════════════════════════════════════════════════════
   "directorNotes": {
     "whiteboard": {
-      "knownAttendees": ["James", "Taylor", "Sarah", ...],
+      "knownAttendees": ["Remi", "Taylor", "Sarah", ...],
       "evidenceConnections": [
-        "Victoria + Morgan → 'permanent solution to Marcus's criminal liability'",
+        "Vic + Morgan → 'permanent solution to Marcus's criminal liability'",
         "NeurAI founded by Stanford Four on stolen IP"
       ],
       "factsEstablished": [
         "Memory tokens return to owners if not purchased",
-        "Stanford Four: Marcus, Oliver, Victoria, Morgan"
+        "Stanford Four: Marcus, Quinn, Vic, Morgan"
       ],
-      "suspects": ["Derek (emphasized)", "Victoria", "Morgan"]
+      "suspects": ["Sam (emphasized)", "Vic", "Morgan"]
     },
     "observations": {
       "behaviorPatterns": [
-        "Taylor and Diana REFUSED to purchase buried memories back",
+        "Taylor and Mel REFUSED to purchase buried memories back",
         "Kai waited until final minutes, then buried multiple memories"
       ],
       "suspiciousCorrelations": ["ChaseT = Taylor Chase?"],
-      "notableMoments": ["James NEVER spoke with Blake"]
+      "notableMoments": ["Remi NEVER spoke with Blake"]
     },
     "accusation": {
-      "accused": "Victoria and Morgan",
+      "accused": "Vic and Morgan",
       "reasoning": "Group concluded they colluded on 'permanent solution'"
     }
   },
@@ -212,7 +212,7 @@ The master data structure enforcing privacy boundaries through structure.
   // ═══════════════════════════════════════════════════════════════
   "sessionContext": {
     "sessionDate": "2025-12-21",
-    "roster": ["James", "Taylor", "Sarah", ...],
+    "roster": ["Remi", "Taylor", "Sarah", ...],
     "journalistFirstName": "Cassandra",
     "guestCount": "{{roster.length}}"
   },
@@ -225,10 +225,10 @@ The master data structure enforcing privacy boundaries through structure.
       "filename": "20251221_194306.jpg",
       "localPath": "images/photos/...",
       "timestamp": "7:43 PM",
-      "identifiedCharacters": ["Morgan", "Oliver", "Victoria", "James"],
+      "identifiedCharacters": ["Morgan", "Quinn", "Vic", "Remi"],
       "location": "Room 1 Party Space",
       "narrativeMoment": "early_investigation",
-      "finalCaption": "Morgan, Oliver, Victoria, and James piece together the first clues"
+      "finalCaption": "Morgan, Quinn, Vic, and Remi piece together the first clues"
     }
   ],
 
@@ -250,17 +250,17 @@ Written alongside evidence-bundle.json for parent agent checkpoint presentation.
     "sessionPhotos": 6
   },
   "narrativeThreads": [
-    { "name": "IP Theft", "tokenCount": 8, "keyToken": "alr001" },
-    { "name": "Funding Conspiracy", "tokenCount": 5, "keyToken": "vik002" }
+    { "name": "IP Theft", "tokenCount": 8, "keyToken": "tok001" },
+    { "name": "Funding Conspiracy", "tokenCount": 5, "keyToken": "tok002" }
   ],
   "shellAccountPatterns": [
     { "account": "ChaseT", "amount": 750000, "suspicion": "Taylor's last name is Chase" }
   ],
   "photosWithCharacterIds": [
-    { "filename": "194306.jpg", "characters": ["Morgan", "Oliver", "Victoria", "James"] }
+    { "filename": "194306.jpg", "characters": ["Morgan", "Quinn", "Vic", "Remi"] }
   ],
-  "accusation": "Victoria and Morgan",
-  "suspects": ["Derek", "Victoria", "Morgan"]
+  "accusation": "Vic and Morgan",
+  "suspects": ["Sam", "Vic", "Morgan"]
 }
 ```
 
@@ -274,7 +274,7 @@ Written alongside evidence-bundle.json for parent agent checkpoint presentation.
     {
       name: "IP Theft Trail",
       description: "Alex's stolen algorithm forms the foundation of NeurAI",
-      evidence: ["alr001", "Cease & Desist Letter", "James <> Alex emails"],
+      evidence: ["tok001", "Cease & Desist Letter", "Remi <> Alex emails"],
       strength: 5,                                    // 1-5 scale
       systemic_angle: "Tech companies built on stolen labor",
       key_quote: "I'm the one who got screwed over in that deal",
@@ -283,9 +283,9 @@ Written alongside evidence-bundle.json for parent agent checkpoint presentation.
       ]
     },
     {
-      name: "Victoria's Double Game",
+      name: "Vic's Double Game",
       description: "VC playing both sides of competing companies",
-      evidence: ["jav042", "Silicon Valley Business Journal", "vik002"],
+      evidence: ["tok003", "Silicon Valley Business Journal", "tok002"],
       strength: 4,
       systemic_angle: "Investor interests over innovation",
       key_quote: null,
@@ -335,20 +335,20 @@ Written alongside evidence-bundle.json for parent agent checkpoint presentation.
       "Lab Experiments": { count: 2, total_value: 575000 }
     },
     inference_opportunities: [
-      "Victoria's buried memories cost $900K combined - she knew something",
-      "Derek buried 2 memories worth $575K - lab connections?"
+      "Vic's buried memories cost $900K combined - she knew something",
+      "Sam buried 2 memories worth $575K - lab connections?"
     ]
   },
 
   roster_coverage: {
-    featured: ["Alex", "James", "Victoria", "Morgan"],
-    mentioned: ["Jamie", "Rachel", "Sarah"],
-    needs_placement: ["Kai", "Tori", "Oliver", "Diana"]
+    featured: ["Alex", "Remi", "Vic", "Morgan"],
+    mentioned: ["Jamie", "Riley", "Sarah"],
+    needs_placement: ["Kai", "Cass", "Quinn", "Mel"]
   },
 
   // User selections (saved after checkpoint)
   user_selections: {
-    selected_arcs: ["IP Theft Trail", "Victoria's Double Game", "Morgan's Secret"],
+    selected_arcs: ["IP Theft Trail", "Vic's Double Game", "Morgan's Secret"],
     excluded_arcs: ["Minor Arc Name"],
     hero_image_confirmed: "20251221_205807.jpg",
     photo_preferences: { exclude: [], feature: ["20251221_205807.jpg"] },
@@ -368,7 +368,7 @@ Written alongside arc-analysis.json for parent agent checkpoint presentation.
   "arcsIdentified": 5,
   "playerFocusedArcs": [
     {
-      "name": "Victoria + Morgan Collusion",
+      "name": "Vic + Morgan Collusion",
       "playerEmphasis": "HIGH",           // HIGH = on whiteboard, tied to accusation
       "whiteboardMention": true,
       "evidenceCount": 3
@@ -381,7 +381,7 @@ Written alongside arc-analysis.json for parent agent checkpoint presentation.
     }
   ],
   "recommendedArcs": [
-    "Victoria + Morgan Collusion",        // Order by player emphasis, NOT evidence volume
+    "Vic + Morgan Collusion",        // Order by player emphasis, NOT evidence volume
     "IP Theft Trail",
     "Burial Conspiracy"
   ],
@@ -389,7 +389,7 @@ Written alongside arc-analysis.json for parent agent checkpoint presentation.
     "filename": "205807.jpg",
     "reason": "Deliberation at whiteboard"
   },
-  "rosterGaps": ["Kai", "Tori", "Diana"]
+  "rosterGaps": ["Kai", "Cass", "Mel"]
 }
 ```
 
@@ -402,7 +402,7 @@ The approved structure that Phase 4 generates from.
 ```javascript
 {
   lede: {
-    hook: "Marcus is dead. Victoria and Morgan accused. [N] people's memories extracted.",
+    hook: "Marcus is dead. Vic and Morgan accused. [N] people's memories extracted.",
     key_tension: "Murder mystery + systemic critique",
     evidence_to_reference: []  // Lede is pure prose, no evidence cards
   },
@@ -413,21 +413,21 @@ The approved structure that Phase 4 generates from.
         name: "IP Theft Trail",
         paragraphs: 3,
         evidence_cards: [
-          { token: "alr001", placement: "after paragraph 1" },
+          { token: "tok001", placement: "after paragraph 1" },
           { paper: "Cease & Desist Letter", placement: "after paragraph 2" }
         ],
         inline_photo: {
           filename: "20251221_194306.jpg",
           after_paragraph: 2,
-          caption: "Morgan, Oliver, Victoria, and James piece together clues"
+          caption: "Morgan, Quinn, Vic, and Remi piece together clues"
         },
         timeline_marker: { text: "As the investigation deepened", placement: "after paragraph 3" }
       },
       {
-        name: "Victoria's Double Game",
+        name: "Vic's Double Game",
         paragraphs: 2,
         evidence_cards: [
-          { token: "jav042", placement: "after paragraph 1" }
+          { token: "tok003", placement: "after paragraph 1" }
         ],
         inline_photo: null,
         timeline_marker: null
@@ -457,11 +457,11 @@ The approved structure that Phase 4 generates from.
 
   the_players: {
     who_exposed: {
-      heroes: ["Alex", "James", "Jamie"],
+      heroes: ["Alex", "Remi", "Jamie"],
       evaluation_angle: "Why they chose transparency"
     },
     who_buried: {
-      names: ["Taylor", "Diana", "Derek"],
+      names: ["Taylor", "Mel", "Sam"],
       evaluation_angle: "Understand, don't judge"
     },
     pull_quote: {
@@ -472,19 +472,19 @@ The approved structure that Phase 4 generates from.
 
   whats_missing: {
     buried_categories: [
-      { thread: "Victoria's knowledge", count: 2, value: 900000 },
+      { thread: "Vic's knowledge", count: 2, value: 900000 },
       { thread: "Lab experiments", count: 2, value: 575000 }
     ],
     buried_markers: [
-      { description: "Victoria's memories", shell_account: "Gorlan", amount: 900000 },
-      { description: "Derek's lab access", shell_account: "Dominic", amount: 575000 }
+      { description: "Vic's memories", shell_account: "Gorlan", amount: 900000 },
+      { description: "Sam's lab access", shell_account: "Dominic", amount: 575000 }
     ],
     inference_text: "I can tell you the shape of the silence. I can't tell you what's inside it."
   },
 
   closing: {
     systemic_angle: "Memory as commodity - from clicks to conversations to memories",
-    accusation_handling: "Victoria and Morgan - the group decided",
+    accusation_handling: "Vic and Morgan - the group decided",
     final_tone: "Urgent, consequential, participatory",
     optional_pull_quote: "First they wanted your clicks. Then your conversations. Now they want what it felt like to be you."
   },
@@ -541,7 +541,7 @@ Written alongside article-outline.json for parent agent checkpoint presentation.
 ```javascript
 {
   "sectionSummary": {
-    "lede": "Hook: Marcus dead, Victoria+Morgan accused",
+    "lede": "Hook: Marcus dead, Vic+Morgan accused",
     "theStory": "2 arcs, 5 paragraphs, 3 evidence cards",
     "followTheMoney": "$4.06M across 6 accounts",
     "thePlayers": "3 exposed, 3 buried",
@@ -554,11 +554,11 @@ Written alongside article-outline.json for parent agent checkpoint presentation.
     "evidenceCards": 4,
     "pullQuotes": 2
   },
-  "arcOrder": ["Victoria + Morgan Collusion", "IP Theft Trail"],
+  "arcOrder": ["Vic + Morgan Collusion", "IP Theft Trail"],
   "rosterCoverage": {
-    "featured": ["Alex", "James", "Victoria", "Morgan"],
-    "mentioned": ["Taylor", "Diana", "Derek", "Jamie"],
-    "unmentioned": ["Kai", "Tori"]
+    "featured": ["Alex", "Remi", "Vic", "Morgan"],
+    "mentioned": ["Taylor", "Mel", "Sam", "Jamie"],
+    "unmentioned": ["Kai", "Cass"]
   }
 }
 ```
@@ -586,8 +586,8 @@ Written alongside article-outline.json for parent agent checkpoint presentation.
   voice_score: 4,               // 1-5 scale
   voice_notes: "Strong participatory voice throughout. One passive construction at line 89.",
   roster_coverage: {
-    featured: ["Alex", "James", "Victoria"],
-    mentioned: ["Jamie", "Rachel"],
+    featured: ["Alex", "Remi", "Vic"],
+    mentioned: ["Jamie", "Riley"],
     missing: ["Kai"]
   },
   systemic_critique_present: true,
@@ -649,7 +649,7 @@ shape, see `references/prompts/formatting.md` § Complete Content Block Referenc
   },
   "byline": {
     "author": "Cassandra Nova",
-    "title": "Senior Investigative Reporter",
+    "title": "Senior Investigative Correspondent",
     "location": "Fremont, CA",
     "date": "December 21, 2025"
   },

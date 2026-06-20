@@ -148,7 +148,7 @@ what they lost.
 **In-game:** "I'll email you my article once I work my way through all this evidence."
 **Article voice:**
 ```
-You brought me this. Derek, Sarah, James. Everyone who walked
+You brought me this. Sam, Sarah, Remi. Everyone who walked
 evidence over to my board instead of Blake's ledger. This article
 exists because you made a choice.
 ```

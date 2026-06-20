@@ -66,7 +66,7 @@ Write TWO files:
   "exposedEvidence": {
     "memoryTokens": [
       {
-        "tokenId": "alr001",
+        "tokenId": "tok001",
         "fullDescription": "The memory shows...",
         "summary": "Brief summary",
         "owners": ["Alex"],
@@ -78,7 +78,7 @@ Write TWO files:
     ],
     "paperEvidence": [...],
     "totalExposed": 31,
-    "exposedTokenIds": ["alr001", ...]
+    "exposedTokenIds": ["tok001", ...]
   },
   "buriedPatterns": {
     "transactions": [
@@ -123,16 +123,16 @@ Write TWO files:
     "sessionPhotos": 6
   },
   "narrativeThreads": [
-    { "name": "IP Theft", "tokenCount": 8, "keyToken": "alr001" }
+    { "name": "IP Theft", "tokenCount": 8, "keyToken": "tok001" }
   ],
   "shellAccountPatterns": [
     { "account": "ChaseT", "amount": 750000, "suspicion": "Taylor's last name is Chase" }
   ],
   "photosWithCharacterIds": [
-    { "filename": "194306.jpg", "characters": ["Morgan", "Oliver", "Victoria", "James"] }
+    { "filename": "194306.jpg", "characters": ["Morgan", "Quinn", "Vic", "Remi"] }
   ],
-  "accusation": "Victoria and Morgan",
-  "suspects": ["Derek", "Victoria", "Morgan"]
+  "accusation": "Vic and Morgan",
+  "suspects": ["Sam", "Vic", "Morgan"]
 }
 ```
 
@@ -169,17 +169,17 @@ When building `sessionPhotos` in evidence bundle:
    ```json
    {
      "filename": "20251221_194306.png",
-     "identifiedCharacters": ["Morgan", "Oliver", "Victoria"],  // FROM character-ids.json
+     "identifiedCharacters": ["Morgan", "Quinn", "Vic"],  // FROM character-ids.json
      "visualContent": "Three people examining documents...",     // FROM image analysis
      "narrativeMoment": "early_investigation",
-     "finalCaption": "Morgan, Oliver, and Victoria piece together early clues"  // MERGED with names
+     "finalCaption": "Morgan, Quinn, and Vic piece together early clues"  // MERGED with names
    }
    ```
 3. Update `finalCaption` to use character NAMES, not generic descriptions like "investigators" or "people"
 4. If character-ids.json is missing or incomplete for a photo, preserve original analysis but flag in summary:
    ```json
    "photosWithCharacterIds": [
-     { "filename": "194306.png", "characters": ["Morgan", "Oliver", "Victoria"], "identified": true },
+     { "filename": "194306.png", "characters": ["Morgan", "Quinn", "Vic"], "identified": true },
      { "filename": "201826.png", "characters": [], "identified": false, "note": "needs character ID" }
    ]
    ```
@@ -189,5 +189,5 @@ When building `sessionPhotos` in evidence bundle:
 Return a concise summary for the parent agent:
 
 ```
-"31 exposed tokens across 5 threads, 16 buried ($4.06M total). Key suspects: Derek, Victoria, Morgan. Accusation: Victoria and Morgan."
+"31 exposed tokens across 5 threads, 16 buried ($4.06M total). Key suspects: Sam, Vic, Morgan. Accusation: Vic and Morgan."
 ```
