@@ -156,13 +156,17 @@ No prompt files needed. This phase uses scripts to collect all evidence.
 ### 1.1 Gather Session Inputs (HARD GATE)
 
 **REQUIRED inputs - STOP AND ASK if not provided:**
-- **Character roster** - Who was present (list of first names)
+- **Character roster** - Who was present (first names) AND each character's pronouns (default they/them; the universe is gender-neutral and the roster is the authority, never infer gender from a name)
 - **Murder accusation** - Who the group blamed
 - **Session photos path** - Directory containing session photos
 - **Director notes** - Observations from game director AND whiteboard content
 
 **Optional inputs (ask if not provided, but can proceed without):**
 - **Journalist first name** - Default: Cassandra
+- **Reporting mode** - `on-site` (default) or `remote`. On-site: Nova was physically present at the investigation. Remote: she received tips remotely (adjust participatory voice accordingly, see character-voice "REPORTING MODE OVERRIDE").
+- **Guest reporter** - Optional name + role credited as co-reporter (omit if none).
+
+> **Canonical names:** Use the actual session roster's names. Do NOT use names from examples in this skill or its reference files. Those examples are illustrative and may be retired. If unsure of a last name, use the first name only (never invent one).
 
 **CRITICAL:** If any REQUIRED input is missing, use AskUserQuestion immediately:
 
