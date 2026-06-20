@@ -96,28 +96,28 @@ Return JSON with these fields:
 {
   "characterDynamics": [
     {
-      "description": "Taylor and Diana interacted early at Valet together, then separately later",
+      "description": "Taylor and Mel interacted early at Valet together, then separately later",
       "pattern": "Alliance dissolution",
       "evidence": ["Director observation: 'falling out?'"],
       "confidence": "high",
-      "characters": ["Taylor", "Diana"],
+      "characters": ["Taylor", "Mel"],
       "narrativeValue": "Relationship evolution during investigation"
     }
   ],
   "behaviorCorrelations": [
     {
-      "description": "James NEVER spoke to Blake despite Blake's efforts",
+      "description": "Remi NEVER spoke to Blake despite Blake's efforts",
       "behavior": "Active avoidance",
       "transactionLink": null,
       "evidence": ["Director observation"],
       "confidence": "high",
-      "characters": ["James", "Blake"],
+      "characters": ["Remi", "Blake"],
       "narrativeValue": "Suspicious distance from Black Market operator"
     }
   ],
   "zeroFootprintCharacters": [
     {
-      "character": "Derek",
+      "character": "Sam",
       "description": "Mentioned heavily on whiteboard, no visible Valet activity",
       "evidence": ["Whiteboard: 'DEREK (heavily emphasized)'", "No account linked", "Never seen at Valet"],
       "confidence": "high",
@@ -126,10 +126,10 @@ Return JSON with these fields:
   ],
   "behavioralInsights": [
     {
-      "description": "Victoria and Morgan appeared to be colluding throughout",
+      "description": "Vic and Morgan appeared to be colluding throughout",
       "evidence": ["Director observation throughout investigation"],
       "confidence": "high",
-      "characters": ["Victoria", "Morgan"],
+      "characters": ["Vic", "Morgan"],
       "whiteboardMention": true,
       "playerEmphasis": "HIGH",
       "narrativeValue": "Key player focus - accusation target"
@@ -143,8 +143,8 @@ Return JSON with these fields:
     }
   ],
   "rosterCoverage": {
-    "directlyObserved": ["Taylor", "Diana", "James", "Blake", "Victoria", "Morgan", "Kai"],
-    "whiteboardMentioned": ["Derek", "Victoria", "Morgan"],
+    "directlyObserved": ["Taylor", "Mel", "Remi", "Blake", "Vic", "Morgan", "Kai"],
+    "whiteboardMentioned": ["Sam", "Vic", "Morgan"],
     "noObservations": ["Alex", "Sarah"],
     "placementOpportunities": {
       "Alex": "Was present but no specific moments noted - general participation",

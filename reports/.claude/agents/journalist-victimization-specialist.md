@@ -133,10 +133,10 @@ Return JSON with these fields:
   ],
   "selfBurialPatterns": [
     {
-      "character": "Diana",
+      "character": "Mel",
       "account": "Fun",
       "ownTokensCount": 3,
-      "evidence": ["Token ownership shows Diana's own memories in Fun account"],
+      "evidence": ["Token ownership shows Mel's own memories in Fun account"],
       "confidence": "high",
       "reportable": false,
       "reportableProxy": "Fun account received 3 transactions - a self-protective pattern",
@@ -156,8 +156,8 @@ Return JSON with these fields:
       "narrativeValue": "Predator-prey dynamic for arc construction"
     },
     {
-      "description": "Victoria high-confidence operator of John D. (anonymity pattern)",
-      "operator": "Victoria",
+      "description": "Vic high-confidence operator of John D. (anonymity pattern)",
+      "operator": "Vic",
       "victim": "Multiple witnesses",
       "evidence": ["John Doe anonymity pattern", "Witness management behavior"],
       "confidence": "medium",
@@ -172,7 +172,7 @@ Return JSON with these fields:
     "otherBurialCount": 5,
     "operatorsIdentified": {
       "confirmed": ["Taylor (director observation)"],
-      "inferred": ["Victoria (high confidence)", "Morgan (medium confidence)"]
+      "inferred": ["Vic (high confidence)", "Morgan (medium confidence)"]
     }
   }
 }

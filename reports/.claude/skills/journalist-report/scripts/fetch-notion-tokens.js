@@ -99,9 +99,9 @@ async function fetchFromNotion(endpoint, method = 'GET', body = null) {
  * 2. SF_ metadata fields at the end
  *
  * Format example:
- *   "The memory shows James entering the lab at 3:15 AM. He appears nervous...
+ *   "The memory shows Remi entering the lab at 3:15 AM. He appears nervous...
  *    SF_RFID: [jam001]
- *    SF_Summary: [James enters lab nervously]
+ *    SF_Summary: [Remi enters lab nervously]
  *    SF_ValueRating: [4]
  *    SF_MemoryType: [Incriminating]
  *    SF_Group: [Lab Access]"

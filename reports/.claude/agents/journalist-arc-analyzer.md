@@ -120,15 +120,15 @@ Read from the session data directory:
 Read `director-notes.json` and start with the `observations` section:
 
 **behaviorPatterns:**
-- Individual character dynamics (e.g., "Taylor and Diana interacted early together, then separately later")
+- Individual character dynamics (e.g., "Taylor and Mel interacted early together, then separately later")
 - Relationship evolutions during play (e.g., "falling out?")
-- Notable avoidances or engagements (e.g., "James NEVER spoke to Blake")
+- Notable avoidances or engagements (e.g., "Remi NEVER spoke to Blake")
 - Late-game activity (e.g., "Kai spotted doing last-minute transactions")
 
 **suspiciousCorrelations:**
 - Pseudonym discoveries (e.g., "ChaseT = Taylor Chase")
 - Account patterns the director noticed
-- Collusion observations (e.g., "Victoria and Morgan appeared to be colluding throughout")
+- Collusion observations (e.g., "Vic and Morgan appeared to be colluding throughout")
 
 **notableMoments:**
 - Specific timestamps and activities
@@ -159,7 +159,7 @@ Perform these cross-referencing techniques to extract maximum insight:
 
 **Behavioral → Transaction Correlation:**
 - Match director observations about Valet activity to transaction timestamps
-- "Taylor and Diana at Valet early together" → Check for early transactions, likely account creators
+- "Taylor and Mel at Valet early together" → Check for early transactions, likely account creators
 - "Kai seen at Valet at 11:49 PM" → Cross-reference with late transaction times
 - This helps identify WHO was operating accounts (REPORTABLE via observation)
 
@@ -170,14 +170,14 @@ Perform these cross-referencing techniques to extract maximum insight:
 
 **Victimization Analysis (ARC CONTEXT ONLY - not directly reportable):**
 From orchestrator data, we can see:
-- Whose memories were buried by others (victims like Kai, Leila, Rachel)
-- Whose memories they chose to bury themselves (self-protection like Diana)
+- Whose memories were buried by others (victims like Kai, Leila, Riley)
+- Whose memories they chose to bury themselves (self-protection like Mel)
 - This informs arc emphasis but Nova can't report specific ownership
 
 **Zero-Footprint Analysis:**
 - Who has NO visible transaction involvement at all?
-- Derek: Mentioned on whiteboard, never seen at Valet, no account linked to him
-- This is REPORTABLE: "Derek's name appears nowhere in the ledger"
+- Sam: Mentioned on whiteboard, never seen at Valet, no account linked to him
+- This is REPORTABLE: "Sam's name appears nowhere in the ledger"
 - Contrast with high-activity operators for narrative tension
 
 **Timing Clusters:**
@@ -187,7 +187,7 @@ From orchestrator data, we can see:
 
 **Self-Burial vs Other-Burial:**
 From full data, identify:
-- Diana operated Fun to bury her OWN memories (self-protection)
+- Mel operated Fun to bury her OWN memories (self-protection)
 - Taylor operated ChaseT to bury Kai's memories (targeting someone else)
 - This distinction matters for arc construction, though Nova can only report the observable patterns
 
@@ -232,43 +232,43 @@ Write TWO files:
 
 ```json
 {
-  "sessionRoster": ["Alex", "Diana", ...],
+  "sessionRoster": ["Alex", "Mel", ...],
   "directorObservationsSummary": {
     "totalObservations": 8,
-    "characterMoments": ["Taylor/Diana early collab then separate", "James avoided Blake", "Kai late-game dealings"],
-    "keyCorrelations": ["ChaseT = Taylor Chase", "Victoria+Morgan collusion throughout"]
+    "characterMoments": ["Taylor/Mel early collab then separate", "Remi avoided Blake", "Kai late-game dealings"],
+    "keyCorrelations": ["ChaseT = Taylor Chase", "Vic+Morgan collusion throughout"]
   },
   "narrativeArcs": [
     {
-      "name": "Victoria + Morgan Collusion",
-      "description": "Players concluded Victoria and Morgan worked together on 'permanent solution'...",
+      "name": "Vic + Morgan Collusion",
+      "description": "Players concluded Vic and Morgan worked together on 'permanent solution'...",
       "playerEmphasis": "HIGH",
       "whiteboardMention": true,
       "directorObservationSupport": "Director noted they 'appeared to be colluding throughout the investigation'",
-      "evidence": ["jav042", "mor042", "vik002"],
+      "evidence": ["tok003", "mor042", "tok002"],
       "strength": 4,
       "systemicAngle": "Corporate power enabling cover-ups",
-      "keyQuote": "Victoria + Morgan = permanent solution",
-      "rosterMembersInvolved": ["Victoria", "Morgan"],
+      "keyQuote": "Vic + Morgan = permanent solution",
+      "rosterMembersInvolved": ["Vic", "Morgan"],
       "supportingImages": []
     }
   ],
   "characterPlacementOpportunities": {
-    "Diana": {
+    "Mel": {
       "primaryArc": null,
       "directorObservations": [
         "Interacted with Taylor at Valet early together, then separately later (falling out?)"
       ],
-      "recommendedMention": "Diana's early partnership with Taylor at the Valet dissolved as the investigation progressed, each pursuing separate threads...",
+      "recommendedMention": "Mel's early partnership with Taylor at the Valet dissolved as the investigation progressed, each pursuing separate threads...",
       "photoMoment": "20251221_XXXXXX.jpg",
       "evidenceConnection": "Listed on whiteboard as 'lawyer, college friends w/ Marcus'"
     },
-    "James": {
+    "Remi": {
       "primaryArc": "IP Theft Trail",
       "directorObservations": [
         "NEVER spoke to Blake despite Blake's efforts to establish rapport"
       ],
-      "recommendedMention": "James maintained careful distance from certain attendees, his silence speaking volumes...",
+      "recommendedMention": "Remi maintained careful distance from certain attendees, his silence speaking volumes...",
       "photoMoment": null,
       "evidenceConnection": "Saw Marcus enter secret room"
     },
@@ -287,10 +287,10 @@ Write TWO files:
     {
       "filename": "20251221_205807.jpg",
       "timestamp": "8:58 PM",
-      "charactersVisible": ["Cassandra Nova", "Derek", "Jessicah", "Diana", "Kai", "Oliver", "Taylor", "Sarah"],
+      "charactersVisible": ["Cassandra Nova", "Sam", "Jess", "Mel", "Kai", "Quinn", "Taylor", "Sarah"],
       "directorContext": "Final deliberation at whiteboard",
       "narrativeMoment": "The moment of accusation crystallized as investigators gathered...",
-      "arcConnection": "Victoria + Morgan Collusion"
+      "arcConnection": "Vic + Morgan Collusion"
     }
   ],
   "imageAnalysis": {
@@ -312,29 +312,29 @@ Write TWO files:
       {"account": "ChaseT", "operator": "Taylor Chase", "evidence": "Director confirmation + name match", "reportable": true}
     ],
     "hypothesizedOperators": [
-      {"account": "John D.", "operator": "Victoria (HIGH confidence)", "evidence": "John Doe anonymity + witness management pattern", "reportable": false},
-      {"account": "Gorlan", "operator": "Morgan (HIGH confidence)", "evidence": "Rachel silencing pattern", "reportable": false}
+      {"account": "John D.", "operator": "Vic (HIGH confidence)", "evidence": "John Doe anonymity + witness management pattern", "reportable": false},
+      {"account": "Gorlan", "operator": "Morgan (HIGH confidence)", "evidence": "Riley silencing pattern", "reportable": false}
     ],
-    "earlyValetCorrelation": "Taylor+Diana at Valet early → Offbeat account created (first transaction)",
+    "earlyValetCorrelation": "Taylor+Mel at Valet early → Offbeat account created (first transaction)",
     "lateActivityCorrelation": "Kai 11:49 PM activity → fighting back against targeting",
     "victimizationPatterns": [
       {"victim": "Kai", "account": "ChaseT", "tokenCount": 5, "note": "ARC CONTEXT ONLY - not reportable"},
-      {"victim": "Rachel", "account": "Gorlan", "tokenCount": 6, "note": "ARC CONTEXT ONLY - not reportable"}
+      {"victim": "Riley", "account": "Gorlan", "tokenCount": 6, "note": "ARC CONTEXT ONLY - not reportable"}
     ],
     "selfBurialPatterns": [
-      {"operator": "Diana", "account": "Fun", "ownTokens": 3, "note": "Self-protection strategy"}
+      {"operator": "Mel", "account": "Fun", "ownTokens": 3, "note": "Self-protection strategy"}
     ],
-    "zeroFootprintCharacters": ["Derek"],
+    "zeroFootprintCharacters": ["Sam"],
     "analysisNotes": "Full transaction data used for arc context. Nova can only report: account names, totals, timestamps, and director observations of Valet activity."
   },
   "rosterCoverage": {
     "totalRoster": 15,
-    "featured": ["Victoria", "Morgan", "Derek"],
-    "mentioned": ["Alex", "James", "Sarah"],
+    "featured": ["Vic", "Morgan", "Sam"],
+    "mentioned": ["Alex", "Remi", "Sarah"],
     "placementOpportunities": {
-      "Diana": "Taylor collab falling out",
+      "Mel": "Taylor collab falling out",
       "Kai": "Late-game Black Market dealings",
-      "Tori": "Victoria meeting re: Synesthesia Engine"
+      "Cass": "Vic meeting re: Synesthesia Engine"
     },
     "evidenceOnlyCharacters": ["Howie", "Flip", "Skyler", "Leila", "Sofia"]
   },
@@ -351,7 +351,7 @@ Write TWO files:
   "directorObservationsUsed": 8,
   "playerFocusedArcs": [
     {
-      "name": "Victoria + Morgan Collusion",
+      "name": "Vic + Morgan Collusion",
       "playerEmphasis": "HIGH",
       "whiteboardMention": true,
       "directorSupport": true,
@@ -359,7 +359,7 @@ Write TWO files:
     }
   ],
   "recommendedArcs": [
-    "Victoria + Morgan Collusion",
+    "Vic + Morgan Collusion",
     "IP Theft Trail",
     "Black Market Threat"
   ],
@@ -374,12 +374,12 @@ Write TWO files:
     "placementOpportunitiesIdentified": 9
   },
   "characterHighlights": [
-    "Diana: Early Taylor collab that dissolved (director observed)",
-    "James: Avoided Blake entirely (director observed)",
+    "Mel: Early Taylor collab that dissolved (director observed)",
+    "Remi: Avoided Blake entirely (director observed)",
     "Kai: Late-game Black Market activity at 11:49 PM (director observed)"
   ],
   "keyAccusation": {
-    "accused": "Victoria and Morgan",
+    "accused": "Vic and Morgan",
     "charge": "Collusion on 'permanent solution'",
     "playerConclusion": "Group connected evidence threads to conclude collaboration"
   }
@@ -397,5 +397,5 @@ Write TWO files:
 Return a concise summary for the parent agent:
 
 ```
-"7 arcs identified from 8 director observations + whiteboard analysis. Top 3 by player focus: Victoria+Morgan Collusion (HIGH, director-supported), IP Theft Trail (HIGH), Derek's Role (HIGH, heavily emphasized). All 15 roster members have placement opportunities. Character highlights: Diana/Taylor collab dissolved, James avoided Blake, Kai late-game dealings. Hero image: 205807.jpg."
+"7 arcs identified from 8 director observations + whiteboard analysis. Top 3 by player focus: Vic+Morgan Collusion (HIGH, director-supported), IP Theft Trail (HIGH), Sam's Role (HIGH, heavily emphasized). All 15 roster members have placement opportunities. Character highlights: Mel/Taylor collab dissolved, Remi avoided Blake, Kai late-game dealings. Hero image: 205807.jpg."
 ```

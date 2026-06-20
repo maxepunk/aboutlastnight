@@ -43,7 +43,7 @@ Check `arc-analysis.json` for `userSelections`:
 ```json
 {
   "userSelections": {
-    "selectedArcs": ["IP Theft Trail", "Victoria's Double Game"],
+    "selectedArcs": ["IP Theft Trail", "Vic's Double Game"],
     "heroImageConfirmed": "20251221_205807.jpg",
     "photoPreferences": { "exclude": [], "feature": [] }
   }
@@ -59,7 +59,7 @@ Write TWO files:
 ```json
 {
   "lede": {
-    "hook": "Marcus is dead. Victoria and Morgan accused...",
+    "hook": "Marcus is dead. Vic and Morgan accused...",
     "keyTension": "Murder mystery + systemic critique",
     "heroImage": {
       "filename": "20251221_205807.jpg",
@@ -70,16 +70,16 @@ Write TWO files:
   "theStory": {
     "arcSequence": [
       {
-        "name": "Victoria + Morgan Collusion",
+        "name": "Vic + Morgan Collusion",
         "paragraphs": 3,
         "evidenceCards": [
-          { "token": "jav042", "placement": "after paragraph 1" },
+          { "token": "tok003", "placement": "after paragraph 1" },
           { "token": "mor042", "placement": "after paragraph 2" }
         ],
         "inlinePhoto": {
           "filename": "20251221_194306.jpg",
           "afterParagraph": 2,
-          "caption": "Morgan, Oliver, Victoria, and James...",
+          "caption": "Morgan, Quinn, Vic, and Remi...",
           "size": "medium"
         },
         "timelineMarker": null
@@ -114,11 +114,11 @@ Write TWO files:
   },
   "thePlayers": {
     "whoExposed": {
-      "names": ["Alex", "James", "Jamie"],
+      "names": ["Alex", "Remi", "Jamie"],
       "evaluationAngle": "Why they chose transparency"
     },
     "whoBuried": {
-      "names": ["Taylor", "Diana", "Derek"],
+      "names": ["Taylor", "Mel", "Sam"],
       "evaluationAngle": "Understand, don't judge"
     },
     "pullQuote": {
@@ -128,14 +128,14 @@ Write TWO files:
   },
   "whatsMissing": {
     "buriedMarkers": [
-      { "thread": "Victoria's memories", "account": "Gorlan", "amount": 900000 },
-      { "thread": "Derek's lab access", "account": "Dominic", "amount": 575000 }
+      { "thread": "Vic's memories", "account": "Gorlan", "amount": 900000 },
+      { "thread": "Sam's lab access", "account": "Dominic", "amount": 575000 }
     ],
     "inferenceText": "I can tell you the shape of the silence..."
   },
   "closing": {
     "systemicAngle": "Memory as commodity - from clicks to memories",
-    "accusationHandling": "Victoria and Morgan - the group decided",
+    "accusationHandling": "Vic and Morgan - the group decided",
     "finalTone": "Urgent, consequential, participatory",
     "optionalPullQuote": "First they wanted your clicks..."
   },
@@ -158,7 +158,7 @@ Write TWO files:
 ```json
 {
   "sectionSummary": {
-    "lede": "Hook: Marcus dead, Victoria+Morgan accused",
+    "lede": "Hook: Marcus dead, Vic+Morgan accused",
     "theStory": "2 arcs, 5 paragraphs, 3 evidence cards",
     "followTheMoney": "$4.06M across 6 accounts",
     "thePlayers": "3 exposed, 3 buried",
@@ -171,11 +171,11 @@ Write TWO files:
     "evidenceCards": 4,
     "pullQuotes": 2
   },
-  "arcOrder": ["Victoria + Morgan Collusion", "IP Theft Trail"],
+  "arcOrder": ["Vic + Morgan Collusion", "IP Theft Trail"],
   "rosterCoverage": {
-    "featured": ["Alex", "James", "Victoria", "Morgan"],
-    "mentioned": ["Taylor", "Diana", "Derek", "Jamie"],
-    "unmentioned": ["Kai", "Tori"]
+    "featured": ["Alex", "Remi", "Vic", "Morgan"],
+    "mentioned": ["Taylor", "Mel", "Sam", "Jamie"],
+    "unmentioned": ["Kai", "Cass"]
   }
 }
 ```
@@ -202,5 +202,5 @@ Never more than 3 consecutive paragraphs without a visual break.
 Return a concise summary for the parent agent:
 
 ```
-"Outline complete: 6 sections, 2 arcs in sequence, 4 evidence cards, 3 photos placed. Unmentioned roster: Kai, Tori."
+"Outline complete: 6 sections, 2 arcs in sequence, 4 evidence cards, 3 photos placed. Unmentioned roster: Kai, Cass."
 ```

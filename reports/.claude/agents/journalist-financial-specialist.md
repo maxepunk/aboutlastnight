@@ -132,10 +132,10 @@ Return JSON with these fields:
   ],
   "financialConnections": [
     {
-      "description": "Taylor and Diana at Valet early together, then separately",
+      "description": "Taylor and Mel at Valet early together, then separately",
       "evidence": ["Director observation", "Offbeat created early (first transaction)"],
       "confidence": "medium",
-      "characters": ["Taylor", "Diana"],
+      "characters": ["Taylor", "Mel"],
       "reportable": true
     }
   ],
