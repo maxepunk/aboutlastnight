@@ -332,4 +332,15 @@ describe('theme-config', () => {
       expect(typeof THEME_CONFIGS).toBe('object');
     });
   });
+
+  // Anti-drift: journalist NPCs must stay consistent with hardcoded NPC sets in
+  // evaluator-nodes.js (NPC_DESCRIPTIONS ~line 284) and character-data-nodes.js (~line 81-85).
+  // If this test fails after changing one of those, update ALL THREE locations together.
+  describe('journalist NPC anti-drift', () => {
+    it('getThemeNPCs(journalist) is exactly the canonical 4-NPC set', () => {
+      const npcs = getThemeNPCs('journalist');
+      expect(npcs).toHaveLength(4);
+      expect(npcs).toEqual(expect.arrayContaining(['Marcus', 'Nova', 'Blake', 'Valet']));
+    });
+  });
 });
