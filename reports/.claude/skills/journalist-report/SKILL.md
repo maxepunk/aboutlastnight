@@ -210,10 +210,10 @@ Extract from orchestrator text:
 }
 ```
 
-**Shell Account Calculation:**
-- Base amount = sum of individual token sale prices
-- First-token bonus = +$50,000 for FIRST token to each account
-- Total = base + bonus
+**Shell Account Totals (AUTHORITATIVE, do not recompute):**
+- Use the shell-account totals exactly as they appear in the session report's Final Standings / Final Totals. Do NOT recompute from individual sale prices or add bonuses yourself.
+- In-world adjustments already baked into a posted total (first-burial bonus, transfers, settlements) are diegetic, keep them. Only an explicit out-of-world GM correction (e.g. an "Aledupmistake"-type note) is set aside.
+- If Final Standings is missing, report the figures you can see and say so; never fabricate a total.
 
 #### 1.2.2 Analyze Director Notes (CRITICAL - TWO-LAYER HIERARCHY)
 
