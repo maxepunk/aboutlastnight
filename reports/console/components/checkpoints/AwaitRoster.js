@@ -15,6 +15,9 @@ function AwaitRoster({ data, onApprove }) {
   const genericPhotoAnalyses = Array.isArray(rawAnalyses) ? rawAnalyses : (rawAnalyses && rawAnalyses.analyses) || [];
   const whiteboardPhotoPath = (data && data.whiteboardPhotoPath) || null;
 
+  const PRONOUN_OPTIONS = ['they/them', 'she/her', 'he/him'];
+
+  // Each tag: { name, pronouns }. Roster stays string[]; pronouns travel separately.
   const [tags, setTags] = React.useState([]);
   const [inputValue, setInputValue] = React.useState('');
 
@@ -22,19 +25,20 @@ function AwaitRoster({ data, onApprove }) {
     const name = raw.trim();
     if (!name) return;
     setTags(function (prev) {
-      // Prevent duplicates (case-insensitive) using prev, not stale closure
-      const exists = prev.some(function (t) {
-        return t.toLowerCase() === name.toLowerCase();
-      });
+      const exists = prev.some(function (t) { return t.name.toLowerCase() === name.toLowerCase(); });
       if (exists) return prev;
-      return prev.concat([name]);
+      return prev.concat([{ name: name, pronouns: 'they/them' }]);
     });
     setInputValue('');
   }
 
   function removeTag(index) {
+    setTags(function (prev) { return prev.filter(function (_, i) { return i !== index; }); });
+  }
+
+  function setPronouns(index, pronouns) {
     setTags(function (prev) {
-      return prev.filter(function (_, i) { return i !== index; });
+      return prev.map(function (t, i) { return i === index ? { name: t.name, pronouns: pronouns } : t; });
     });
   }
 
@@ -43,7 +47,6 @@ function AwaitRoster({ data, onApprove }) {
       e.preventDefault();
       addTag(inputValue);
     }
-    // Backspace on empty input removes last tag
     if (e.key === 'Backspace' && inputValue === '' && tags.length > 0) {
       removeTag(tags.length - 1);
     }
@@ -51,43 +54,40 @@ function AwaitRoster({ data, onApprove }) {
 
   function handleChange(e) {
     const val = e.target.value;
-    // If user types a comma, treat it as a delimiter
     if (val.includes(',')) {
       const parts = val.split(',');
-      parts.forEach(function (part, i) {
-        if (i < parts.length - 1) {
-          addTag(part);
-        }
-      });
+      parts.forEach(function (part, i) { if (i < parts.length - 1) { addTag(part); } });
       setInputValue(parts[parts.length - 1]);
     } else {
       setInputValue(val);
     }
   }
 
+  function buildPayload(allTags) {
+    const roster = allTags.map(function (t) { return t.name; });
+    const rosterPronouns = {};
+    allTags.forEach(function (t) { rosterPronouns[t.name] = t.pronouns; });
+    return { roster: roster, rosterPronouns: rosterPronouns };
+  }
+
   function handleSubmit() {
-    // Add any remaining text as a tag before submitting
-    if (inputValue.trim()) {
-      const finalTags = tags.concat([inputValue.trim()]);
-      onApprove({ roster: finalTags });
-    } else {
-      onApprove({ roster: tags });
-    }
+    const finalTags = inputValue.trim()
+      ? tags.concat([{ name: inputValue.trim(), pronouns: 'they/them' }])
+      : tags;
+    onApprove(buildPayload(finalTags));
   }
 
   const previewAnalyses = genericPhotoAnalyses.slice(0, 3);
 
   return React.createElement('div', { className: 'flex flex-col gap-md' },
 
-    // Explanation
     React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Why Roster Is Needed'),
       React.createElement('p', { className: 'text-sm text-secondary' },
-        'The roster maps real player names to character identities. This enables the article to reference players by name and track individual narrative arcs through the investigation.'
+        'The roster maps real player names to character identities and sets each character\u2019s pronouns (the universe is gender-neutral; the roster is the authority). This drives article references and prevents pronoun errors.'
       )
     ),
 
-    // Generic photo analyses (first 3)
     previewAnalyses.length > 0 && React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' },
         'Photo Analyses (' + genericPhotoAnalyses.length + ' total)'
@@ -95,10 +95,7 @@ function AwaitRoster({ data, onApprove }) {
       React.createElement('div', { className: 'flex flex-col gap-sm' },
         previewAnalyses.map(function (analysis, i) {
           const content = (analysis && analysis.visualContent) || (typeof analysis === 'string' ? analysis : '');
-          return React.createElement('div', {
-            key: 'analysis-' + i,
-            className: 'evidence-item'
-          },
+          return React.createElement('div', { key: 'analysis-' + i, className: 'evidence-item' },
             React.createElement('div', { className: 'evidence-item__header' },
               React.createElement('span', { className: 'evidence-item__number' }, '#' + (i + 1)),
               React.createElement('span', { className: 'text-sm text-secondary' },
@@ -113,7 +110,6 @@ function AwaitRoster({ data, onApprove }) {
       )
     ),
 
-    // Whiteboard status
     React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Whiteboard Status'),
       React.createElement('div', { className: 'flex gap-sm items-center' },
@@ -124,25 +120,12 @@ function AwaitRoster({ data, onApprove }) {
       )
     ),
 
-    // Tag input area
     React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Enter Player Names'),
       React.createElement('p', { className: 'text-xs text-muted mb-sm' },
-        'Type a name and press Enter or comma to add. Click \u2715 to remove.'
+        'Type a name and press Enter or comma to add. Set pronouns per name (defaults to they/them). Click \u2715 to remove.'
       ),
       React.createElement('div', { className: 'tag-input' },
-        // Existing tags
-        tags.map(function (tag, i) {
-          return React.createElement('span', { key: tag + '-' + i, className: 'tag-chip' },
-            React.createElement('span', null, tag),
-            React.createElement('button', {
-              className: 'tag-chip__remove',
-              onClick: function () { removeTag(i); },
-              'aria-label': 'Remove ' + tag
-            }, '\u2715')
-          );
-        }),
-        // Input field
         React.createElement('input', {
           className: 'tag-input__field',
           type: 'text',
@@ -151,10 +134,33 @@ function AwaitRoster({ data, onApprove }) {
           onKeyDown: handleKeyDown,
           placeholder: tags.length === 0 ? 'e.g., Alice, Bob, Charlie' : 'Add another name...'
         })
+      ),
+      tags.length > 0 && React.createElement('div', { className: 'flex flex-col gap-sm mt-sm' },
+        tags.map(function (tag, i) {
+          return React.createElement('div', { key: tag.name + '-' + i, className: 'flex gap-sm items-center' },
+            React.createElement('span', { className: 'tag-chip' },
+              React.createElement('span', null, tag.name),
+              React.createElement('button', {
+                className: 'tag-chip__remove',
+                onClick: function () { removeTag(i); },
+                'aria-label': 'Remove ' + tag.name
+              }, '\u2715')
+            ),
+            React.createElement('select', {
+              className: 'input',
+              value: tag.pronouns,
+              onChange: function (e) { setPronouns(i, e.target.value); },
+              'aria-label': 'Pronouns for ' + tag.name
+            },
+              PRONOUN_OPTIONS.map(function (p) {
+                return React.createElement('option', { key: p, value: p }, p);
+              })
+            )
+          );
+        })
       )
     ),
 
-    // Submit button
     React.createElement('div', { className: 'flex gap-md mt-md' },
       React.createElement('button', {
         className: 'btn btn-primary',
