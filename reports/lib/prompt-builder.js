@@ -68,6 +68,11 @@ ${content.trim()}
 </${filename}>`;
 }
 
+// Default reporter first name when the director provides none. The pipeline's
+// authoritative stamp is input-nodes.js (parseRawInput); this fallback only
+// covers PromptBuilder instances constructed without that stamp (e.g. tests, skill).
+const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
+
 // Theme-specific system prompt framing
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
@@ -1019,7 +1024,7 @@ STRUCTURE:
    - Any generic praise or vague attribution?
 
 10. "byline" - Article byline object:
-   - "author": "${this.sessionConfig.journalistFirstName || 'Cassandra'} Nova | NovaNews"
+   - "author": "${this.sessionConfig.journalistFirstName || DEFAULT_JOURNALIST_FIRST_NAME} Nova | NovaNews"
    - "title": "Senior Investigative Correspondent"${this.sessionConfig.guestReporter ? `
    - "guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"` : ''}
 
@@ -1226,7 +1231,7 @@ ${validationReturnFormat}`;
     if (!text) return '';
 
     const variables = {
-      JOURNALIST_FIRST_NAME: this.sessionConfig.journalistFirstName || 'Cassandra',
+      JOURNALIST_FIRST_NAME: this.sessionConfig.journalistFirstName || DEFAULT_JOURNALIST_FIRST_NAME,
       REPORTING_MODE: this.sessionConfig.reportingMode || 'on-site'
     };
 
