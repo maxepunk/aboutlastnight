@@ -567,7 +567,6 @@ Return JSON with the following structure:
    * - Voice self-check: model assesses own output
    *
    * @param {Object} outline - Approved article outline
-   * @param {string} template - HTML template content
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent (Phase 1 Fix)
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @param {Array} shellAccounts - Shell account data for financial summary

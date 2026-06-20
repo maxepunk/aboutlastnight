@@ -709,8 +709,6 @@ describe('PromptBuilder', () => {
         'section-rules': '', 'editorial-design': '', 'formatting': '',
         'anti-patterns': ''
       });
-      mockThemeLoader.loadTemplate.mockResolvedValue('template');
-
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
       const { userPrompt } = await builder.buildArticlePrompt(
         { sections: [] }, [], 'hero.jpg'
@@ -727,8 +725,6 @@ describe('PromptBuilder', () => {
         'section-rules': '', 'editorial-design': '', 'formatting': '',
         'anti-patterns': ''
       });
-      mockThemeLoader.loadTemplate.mockResolvedValue('template');
-
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
       const { userPrompt } = await builder.buildArticlePrompt(
         { sections: [] }, [], 'hero.jpg'
@@ -746,8 +742,6 @@ describe('PromptBuilder', () => {
         'section-rules': '', 'editorial-design': '', 'formatting': '',
         'anti-patterns': ''
       });
-      mockThemeLoader.loadTemplate.mockResolvedValue('template');
-
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
       const { systemPrompt } = await builder.buildArticlePrompt(
         { sections: [] }, [], 'hero.jpg'
@@ -785,8 +779,6 @@ describe('PromptBuilder', () => {
         'section-rules': '', 'editorial-design': '', 'formatting': '',
         'anti-patterns': ''
       });
-      mockThemeLoader.loadTemplate.mockResolvedValue('template');
-
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {
         journalistFirstName: 'Cassandra',
         guestReporter: null
@@ -807,8 +799,6 @@ describe('PromptBuilder', () => {
         'section-rules': '', 'editorial-design': '', 'formatting': '',
         'anti-patterns': ''
       });
-      mockThemeLoader.loadTemplate.mockResolvedValue('template');
-
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {
         journalistFirstName: 'Cassandra',
         guestReporter: { name: 'Ashe Motoko', role: 'Guest Reporter' }
@@ -968,7 +958,6 @@ describe('PromptBuilder', () => {
         'writing-principles': 'writing principles',
         'photo-analysis': 'photo analysis'
       });
-      mockThemeLoader.loadTemplate.mockResolvedValue('<template>');
     });
 
     it('should include SESSION_FACTS when sessionFacts provided', async () => {
@@ -1009,7 +998,6 @@ describe('PromptBuilder', () => {
         'section-rules': 'rules', 'formatting': 'formatting',
         'editorial-design': 'editorial', 'writing-principles': 'writing', 'photo-analysis': 'photo'
       });
-      mockThemeLoader.loadTemplate.mockResolvedValue('<template>');
     });
 
     it('should include INVESTIGATION_OBSERVATIONS when directorNotes has rawProse', async () => {

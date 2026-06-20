@@ -1595,7 +1595,7 @@ function createMockPromptBuilder() {
       };
     },
 
-    async buildArticlePrompt(outline, template, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions) {
+    async buildArticlePrompt(outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions) {
       return {
         systemPrompt: 'Mock system prompt for article generation',
         userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`
