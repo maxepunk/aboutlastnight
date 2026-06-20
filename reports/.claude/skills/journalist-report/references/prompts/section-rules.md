@@ -127,7 +127,7 @@ following a party at his residence.
 - Chronological OR thematic organization (choose based on evidence)
 - Each exposed memory becomes a narrative beat
 - Connect evidence to the dual story (murder + systemic critique)
-- Name characters who exposed evidence (celebrate sources)
+- Name the OWNER of each memory (whose experience it records). Treat who EXPOSED it as anonymous by default; credit an exposer by name only when director notes or the record show they took credit. Never assume the owner exposed their own memory.
 - Acknowledge where evidence is thin
 
 **Temporal Discipline:**
@@ -355,7 +355,7 @@ didn't trust where the money was coming from.
 - Use pull quotes only for genuinely impactful moments
 
 **Visual Components:**
-- **Pull quotes** for particularly impactful choices (1-2 MAX)
+- **Inline quote blocks** for particularly impactful choices (optional; use a `quote` content block with attribution)
 - Keep prose flowing, not list-like
 - Quotes must EARN their visual prominence
 
@@ -472,7 +472,7 @@ Zia's 5 tokens went to Dominic.
 ```
 WHY: Nova cannot see whose memories went to which accounts.
 
-**Pull Quote (if used):**
+**Inline quote block (crystallization, if used):**
 Must be a CRYSTALLIZATION (no attribution) that echoes earlier prose:
 ```
 > The shape of silence has a price tag. This one cost $4.11 million.
@@ -494,9 +494,9 @@ Must be a CRYSTALLIZATION (no attribution) that echoes earlier prose:
 - Otherwise, pure prose for emotional landing
 
 **Content:**
-- Connect back to dual story (murder resolved? + system exposed)
-- The surveillance capitalism thread made explicit
-- What this case represents beyond itself
+- Land the session's bespoke gap: the tension between the room's verdict and what the record implies
+- Make the larger resonance explicit ONLY through THIS session's specifics (the systemic pattern this particular evidence exposed), never a generic surveillance-capitalism statement
+- What this case represents beyond itself, grounded in what this room actually did
 - End on the reporter's voice, not neutral summary
 
 **ANTI-REPETITION:** Do NOT summarize the murder or the investigation. That's done. Focus on:
@@ -555,4 +555,4 @@ See `<character-voice>` for the authoritative voice and language rules:
 - No em-dashes (line 319+)
 - "Extracted memories" not "tokens" (lines 84-95)
 - First-person participatory voice (lines 97-128)
-- Systemic critique woven throughout (lines 182-197)
+- Bespoke gap (verdict vs. record) threaded through every section as a different angle, never restated
