@@ -2,9 +2,9 @@
 
 ## Temporal Discipline
 
-The system prompt contains the authoritative two-timeline framework (PARTY = last night, INVESTIGATION = this morning). Evidence items carry a `temporalContext` field (PARTY/INVESTIGATION/BACKGROUND) that reinforces this at the data level.
+The system prompt contains the authoritative stage framework: THE PARTY (last night) -> THE INVESTIGATION (this morning) -> THE DELIBERATION (this morning, when the room settled on its verdict) -> THE ARTICLE (now). Evidence items carry a `temporalContext` field (PARTY/INVESTIGATION/BACKGROUND) that reinforces this at the data level.
 
-Key principle: Memory CONTENT describes party events from last night. Director observations describe investigation events from this morning. Never conflate them.
+Key principle: Memory CONTENT describes party events from last night (Nova was not there). Director observations describe this-morning events: the investigation and the deliberation (Nova was there). The verdict is a deliberation outcome, and it may diverge from what the record implies; that gap is the article's spine. Never conflate the party with this morning.
 
 ---
 
@@ -31,13 +31,13 @@ seeing a pattern.
 
 Evidence supports narrative. Narrative is not a list of evidence.
 
-## Every Section Serves Both Stories
+## Every Section Serves the Bespoke Gap
 
-Remember the dual structure: murder mystery hook + systemic critique.
+The organizing thesis is THIS session's gap: what the room concluded vs. what the record implies. Every section examines that gap from a different angle (see `<section-rules>` for the per-section questions), never restating it.
 
 Each piece of evidence should:
 1. Advance the "what happened that night" question
-2. Connect to the larger "this is what surveillance capitalism becomes" theme
+2. Sharpen the session's specific gap, and where the evidence supports it, connect to the larger pattern (a company turning human experience into inventory). Use the systemic lens when it deepens THIS gap; do not force it into every paragraph.
 
 ```
 The memory from Marcus's lab showed the extraction equipment.
@@ -95,8 +95,8 @@ Every character who was in the session should appear somewhere in the article. W
 **Never fabricate quoted dialogue.** All direct quotes must come from evidence content (memory text, paper evidence text) or director notes. If no verbatim quote exists, paraphrase or describe the action instead. Attributed quotes that don't exist in the evidence are the highest-risk fabrication — they put specific false words in a character's mouth.
 
 Ways to include characters using only documented evidence:
-- Who exposed which memories (from exposed evidence list)
-- Who buried which memories (from buried evidence list)
+- Whose memories were exposed (name the OWNER; the exposed-evidence list identifies owners, not who chose to expose)
+- Which characters are connected to buried threads (by topic and account patterns only, never claiming who buried what)
 - Who is mentioned IN someone else's exposed memory
 - Who the group accused (from session outcome)
 - Who earned money from shell accounts (from financial data)
