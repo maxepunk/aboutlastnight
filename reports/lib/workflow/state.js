@@ -199,6 +199,17 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Per-character pronouns provided alongside the roster (F1)
+   * Map of first name -> pronoun string, e.g. { 'Vic': 'she/her' }
+   * Parallel to roster (which stays string[]); default they/them resolved at prompt time.
+   * Set by checkpointAwaitRoster, carried into sessionConfig.rosterPronouns by parseRawInput.
+   */
+  rosterPronouns: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
    * Generic photo analyses (before roster is available)
    * Created by analyzePhotosGeneric - descriptions use visual markers, not names
    * Character names resolved later via characterIdMappings
@@ -673,6 +684,7 @@ function getDefaultState() {
     sessionPhotos: [],
     // Incremental input (parallel branch architecture)
     roster: null,
+    rosterPronouns: null,
     genericPhotoAnalyses: null,
     // Photo processing (parallel branch architecture)
     whiteboardPhotoPath: null,

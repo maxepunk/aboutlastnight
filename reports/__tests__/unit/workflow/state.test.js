@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 57 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 58 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -255,6 +255,7 @@ describe('ReportStateAnnotation', () => {
         'sessionPhotos',
         // Incremental input (Parallel branch architecture)
         'roster',
+        'rosterPronouns',  // F1: parallel pronoun map (first name -> pronoun string)
         'genericPhotoAnalyses',
         // Photo analysis (Commit 8.6)
         'photoAnalyses',
@@ -745,6 +746,13 @@ describe('ReportStateAnnotation', () => {
 
     test('ROLLBACK_CLEARS article includes _articleFeedback', () => {
       expect(ROLLBACK_CLEARS['article']).toContain('_articleFeedback');
+    });
+  });
+
+  describe('rosterPronouns state field (F1)', () => {
+    it('getDefaultState includes rosterPronouns defaulting to null', () => {
+      const { getDefaultState } = require('../../../lib/workflow/state');
+      expect(getDefaultState().rosterPronouns).toBeNull();
     });
   });
 
