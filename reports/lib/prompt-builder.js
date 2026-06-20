@@ -19,11 +19,19 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
  * @param {Object|null} characterData - Optional character metadata (groups, roles, relationships) from extractCharacterData node
  * @returns {string} Formatted roster section for prompts
  */
-function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null) {
+function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null, rosterPronouns = null) {
   const characters = canonicalCharacters || {};
+  const pronounMap = rosterPronouns || {};
+
+  // Case-insensitive pronoun lookup by first name; default they/them.
+  const resolvePronouns = (first) => {
+    if (pronounMap[first]) return pronounMap[first];
+    const key = Object.keys(pronounMap).find(k => k.toLowerCase() === String(first).toLowerCase());
+    return key ? pronounMap[key] : 'they/them';
+  };
 
   const lines = Object.entries(characters)
-    .map(([first, full]) => `- ${first} → ${full}`)
+    .map(([first, full]) => `- ${first} → ${full} (${resolvePronouns(first)})`)
     .join('\n');
 
   let result = `CANONICAL CHARACTER ROSTER:
@@ -591,7 +599,7 @@ Return JSON with the following structure:
     const constraints = THEME_CONSTRAINTS[this.themeName];
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}
 
 ${constraints.hardConstraints}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
@@ -641,7 +649,7 @@ ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}
 </RULES>
 
 <SECTION_GUIDANCE>
@@ -781,7 +789,7 @@ ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}
 
 <TEMPORAL_DISCIPLINE>
 CRITICAL: THREE TIMELINES — get them right or the article makes no sense.
@@ -1065,7 +1073,7 @@ REVISION RULES:
 
 ${revisionConstraints.revisionVoice}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData)}`;
+${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}`;
 
     const revisionChecklist = this.themeName === 'detective'
       ? `Fix the issues you identified in your self-check. Also check for:

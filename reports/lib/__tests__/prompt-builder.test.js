@@ -1068,6 +1068,22 @@ describe('PromptBuilder', () => {
       expect(result).toContain('Alex → Alex Reeves');
       expect(result).toContain('Alex Reeves: Role: CEO | Member of: Board');
     });
+
+    it('appends pronouns from rosterPronouns, defaulting to they/them', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const canonical = { Vic: 'Vic Kingsley', Sam: 'Sam Rivera' };
+      const pronouns = { Vic: 'she/her' };
+      const result = generateRosterSection('journalist', canonical, null, pronouns);
+      expect(result).toContain('Vic Kingsley (she/her)');
+      expect(result).toContain('Sam Rivera (they/them)');
+    });
+
+    it('defaults all to they/them when no pronoun map is given', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const canonical = { Vic: 'Vic Kingsley' };
+      const result = generateRosterSection('journalist', canonical);
+      expect(result).toContain('Vic Kingsley (they/them)');
+    });
   });
 
   describe('buildArticlePrompt — enriched director notes', () => {
