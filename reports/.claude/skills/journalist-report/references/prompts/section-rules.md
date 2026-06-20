@@ -132,7 +132,7 @@ following a party at his residence.
 
 **Temporal Discipline:**
 
-See system prompt for the authoritative two-timeline framework. Per-section application:
+See system prompt for the authoritative four-stage framework. Per-section application:
 - **THE STORY** spans both timelines: memory content (party) + director observations (investigation)
 - **FOLLOW THE MONEY** is investigation-era only: burial transactions happened this morning
 - **THE PLAYERS** mixes both: character actions at the party (from memories) + behavior during the investigation (from director notes)

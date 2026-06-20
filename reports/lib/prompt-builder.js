@@ -485,14 +485,15 @@ Every section (except LEDE) must have "arcConnections" showing which arcs it adv
 </arc-section-flow>
 
 <TEMPORAL_DISCIPLINE>
-CRITICAL: THREE TIMELINES — THE PARTY (LAST NIGHT), THE INVESTIGATION (THIS MORNING), THE ARTICLE (NOW).
+CRITICAL: FOUR STAGES. THE PARTY (LAST NIGHT), THE INVESTIGATION (THIS MORNING), THE DELIBERATION (THIS MORNING), THE ARTICLE (NOW).
 - Memory CONTENT describes party events from LAST NIGHT. Nova was NOT at the party.
-- Director observations describe investigation events from THIS MORNING. Nova was there.
-- "I watched" / "I saw" = investigation behavior from this morning.
+- Director observations describe THIS-MORNING events: the investigation and the deliberation. Nova was there.
+- The verdict is the DELIBERATION outcome (this morning). It is the room's conclusion, which may diverge from what the record implies. That gap is the article's spine.
+- "I watched" / "I saw" = this-morning behavior (investigation and deliberation).
 - "The memory shows" / "In the recording" = party events from last night.
 - Burial transactions are INVESTIGATION actions (this morning), NOT party events (last night).
-- NEVER treat a party event and investigation event as simultaneous.
-- NEVER say "tonight" — the party was last night, the investigation was this morning.
+- NEVER treat a party event and a this-morning event as simultaneous.
+- NEVER say "tonight". The party was last night, the investigation and deliberation were this morning.
 </TEMPORAL_DISCIPLINE>
 ${this._buildFinancialSummary(shellAccounts)}
 ${sessionFacts ? `
@@ -792,18 +793,20 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 ${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}
 
 <TEMPORAL_DISCIPLINE>
-CRITICAL: THREE TIMELINES — get them right or the article makes no sense.
+CRITICAL: FOUR STAGES. Get them right or the article makes no sense.
 
-1. THE PARTY (LAST NIGHT): Marcus's party where the death occurred. Events known ONLY through extracted memories.
-2. THE INVESTIGATION (THIS MORNING): Party attendees woke up with holes in their memories. Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received real-time tips from investigators' : 'was physically present, witnessing the investigation firsthand'}.
-3. THE ARTICLE (NOW): Written immediately after the investigation concluded.
+1. THE PARTY (LAST NIGHT): Marcus's party where the death occurred. Events known ONLY through extracted memories. Nova was NOT there.
+2. THE INVESTIGATION (THIS MORNING): Party attendees woke up with holes in their memories. Memories were exposed to the Detective or buried via the Black Market. Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received real-time tips from investigators' : 'was physically present, witnessing the investigation firsthand'}.
+3. THE DELIBERATION (THIS MORNING, after the investigation): The room weighed the evidence and settled on a verdict, who they accused and why. The conclusion formed here may diverge from what the full record implies. That divergence is the article's central tension.
+4. THE ARTICLE (NOW): Written immediately after the deliberation concluded.
 
 LANGUAGE RULES:
-- Party events: "Last night..." / "The memory shows..." / "In the recording..." — Nova was NOT at the party.
-- Investigation events: "This morning..." / "I watched..." / "I saw..." — Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received reports and tips as they happened' : 'directly witnessed these'}.
+- Party events: "Last night..." / "The memory shows..." / "In the recording..." Nova was NOT at the party.
+- Investigation and deliberation events: "This morning..." / "I watched..." / "I saw..." Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received reports and tips as they happened' : 'directly witnessed these'}.
 - Burial transactions are INVESTIGATION actions (this morning), NOT party events (last night).
-- NEVER treat a party event and investigation event as simultaneous.
-- NEVER say "tonight" — the party was last night, the investigation was this morning.
+- The verdict is a DELIBERATION outcome (this morning). Frame it as the room's conclusion, which the record may or may not support.
+- NEVER treat a party event and a this-morning event as simultaneous.
+- NEVER say "tonight". The party was last night, the investigation and deliberation were this morning.
 </TEMPORAL_DISCIPLINE>
 </RULES>
 

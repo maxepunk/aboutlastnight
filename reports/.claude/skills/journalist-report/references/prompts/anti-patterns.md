@@ -267,7 +267,7 @@ wanted to play mine either.
 
 ### Timeline Conflation
 
-See system prompt for the two-timeline framework. Here are specific violations to avoid:
+See system prompt for the four-stage framework. Here are specific violations to avoid:
 
 **WRONG (Nova claims to witness party events):**
 ```
