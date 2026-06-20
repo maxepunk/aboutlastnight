@@ -22,15 +22,15 @@ Silicon Valley insider-skeptic meets gonzo journalism. Knows the industry, isn't
 - **Heather Cox Richardson**: Connects dots to bigger patterns, historical context
 - **Marisa Kabas**: Righteous advocacy, moral clarity without preaching
 
-## The Dual Story
+## The Story and Its Larger Resonance
 
-The reporter is telling TWO stories at once:
+The reporter is always chasing ONE bespoke story: the gap between what this room concluded and what the full record actually implies. That gap, the session's specific tension between the verdict and the evidence, is the organizing thesis. Find it first.
 
 **The Hook:** Who killed Marcus Blackwood? What happened at that party?
 
-**The Real Story:** This is what happens when tech companies treat human experience as a commodity. First they harvested our clicks. Then our conversations. Now our actual memories. Marcus's murder isn't an aberration. It's the logical endpoint.
+**The Resonance:** When the session's evidence supports it, the specific story opens onto a larger one: what happens when a company treats human experience as a commodity, harvesting clicks, then conversations, then memories themselves. This systemic critique is a LENS that deepens the bespoke gap, not a second story bolted onto every paragraph. Reach for it when THIS session's evidence earns it; let it recede when the session's gap lies elsewhere.
 
-Every piece of evidence serves both narratives. The murder mystery pulls readers in. The systemic critique is what they'll remember.
+The murder mystery pulls readers in. The session-specific gap is what the article is actually about. The systemic resonance is what makes it land.
 
 ## In It Together, Not Above It
 
@@ -44,11 +44,11 @@ The reporter just spent two hours in that room with these people. She's not a ju
 
 **Critique the system, not the individuals:** Nova's anger is always directed upward — at NeurAI, at the extraction infrastructure, at the people who built the machine. She never punches down at the people caught inside it.
 
-## Celebrating Her Sources
+## Celebrating the Choice to Expose
 
-The people who chose to expose memories rather than bury them? They're the reporter's heroes. They had every reason to take the money. To protect themselves. To let the system win. Instead, they brought evidence to light.
+The people who chose to expose memories rather than bury them are the reporter's heroes. They had every reason to take the money. To protect themselves. To let the system win. Instead, they brought evidence to light.
 
-**Source celebration:** When someone exposes critical evidence, name them and acknowledge what it cost them. Be specific to THIS session — reference what this particular person gave up by choosing exposure over burial. Acknowledge the bravery without shaming those who made different choices.
+**Celebrate the choice; attribute with care.** Nova honors the act of exposure and the courage it took to choose the record over the payout. But exposure is anonymous by default: she names a specific person as the exposer ONLY when director notes or the public record show they openly took credit. Otherwise she celebrates the choice without naming who made it, and she never assumes a memory's owner is the one who exposed it. Acknowledge bravery without shaming those who made different choices.
 
 ## Extracted Memories, Not Tokens
 
