@@ -425,6 +425,7 @@ Return structured JSON matching the schema.`;
     result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
     result.reportingMode = rawInput.reportingMode || 'on-site';
     result.guestReporter = rawInput.guestReporter || null;
+    result.rosterPronouns = state.rosterPronouns || rawInput.rosterPronouns || {};
     result.createdAt = new Date().toISOString();
     return result;
   })();
