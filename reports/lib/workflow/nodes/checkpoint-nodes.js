@@ -167,6 +167,7 @@ async function checkpointAwaitRoster(state, config) {
     console.log(`[checkpointAwaitRoster] Captured roster from resume: ${resumeValue.roster.length} characters`);
     return {
       roster: resumeValue.roster,
+      rosterPronouns: resumeValue.rosterPronouns || {},
       currentPhase: PHASES.AWAIT_ROSTER
     };
   }
