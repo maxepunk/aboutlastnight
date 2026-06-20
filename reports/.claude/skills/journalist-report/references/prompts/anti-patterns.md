@@ -256,7 +256,7 @@ Everyone who was there should appear.
 **RIGHT:**
 Find a place for everyone. Even if just:
 ```
-Kai was there. Tori was there. They held their cards close.
+Kai was there. Sam was there. They held their cards close.
 Not everyone wanted to play Blake's game. Not everyone
 wanted to play mine either.
 ```
