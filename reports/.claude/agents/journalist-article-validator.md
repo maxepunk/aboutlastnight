@@ -23,8 +23,7 @@ You validate NovaNews investigative articles against anti-patterns and voice req
 | Pattern | Issue | Fix |
 |---------|-------|-----|
 | Em-dashes (`—` or `--`) | Breaks voice style | Use periods or restructure |
-| "token" / "tokens" | Game mechanics language | Use "extracted memory" |
-| "guest" / "guests" | Game mechanics language | Use "party-goers", "attendees", "those present" |
+| bare "token" / "tokens" (NOT "memory token") | System-label language | Use "memory token" or "extracted memory" |
 | "lock code" / "combination" | Game mechanics language | Describe evidence content, not retrieval method |
 | "puzzle" / "solve" | Game mechanics language | Use "discovered", "uncovered", "revealed" |
 | "Act 3 unlock" | Game mechanics language | "The investigation broke open" |
