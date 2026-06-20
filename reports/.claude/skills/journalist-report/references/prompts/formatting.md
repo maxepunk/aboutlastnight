@@ -42,7 +42,7 @@ Place visual components (evidence cards, photos, pull quotes) to maintain scroll
 
 **Purpose:** Visual emphasis on key revelations or statements.
 
-**When to use:** Impactful moments, systemic critique statements, emotional peaks.
+**When to use:** Impactful moments, systemic critique statements, emotional peaks. Emit as an inline `quote` content block (the legacy top-level `pullQuotes[]` array is not rendered). Optional, no minimum.
 
 > **Pull Quote Types**: See `<narrative-structure>` Section 8 for authoritative guidance on:
 > - VERBATIM quotes (exact evidence text WITH character attribution)
@@ -64,7 +64,7 @@ Visual components EARN their place. These are soft guidelines, not quotas.
 |-----------|-----------|----------|
 | Evidence Cards | Sidebar (~10) + Inline (3-5) | Sidebar: concise catalog. Inline: full verbatim at climax moments |
 | Photos | Inline only | Woven into sections for emotional pacing |
-| Pull Quotes | Inline | 2-3 for crystallization moments |
+| Inline Quotes | Inline | Optional; `quote` blocks for crystallization or verbatim moments |
 | Financial Tracker | Sidebar (required) | Always in FOLLOW THE MONEY |
 
 **The goal is a compelling GIFT for players, not quota compliance.**
@@ -84,7 +84,7 @@ Visual components are emitted as **content blocks within section content arrays*
 ### Evidence Card Content Block
 
 ```json
-{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Chase", "significance": "critical" }
+{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Kingsley", "significance": "critical" }
 ```
 
 ### Sidebar vs Inline Evidence
@@ -116,7 +116,7 @@ The authoritative field list (required vs. optional) lives in
 ```
 
 ```json
-{ "type": "quote", "text": "The job is yours.", "attribution": "Vic Chase" }
+{ "type": "quote", "text": "The job is yours.", "attribution": "Vic Kingsley" }
 ```
 
 ```json
@@ -132,15 +132,15 @@ The authoritative field list (required vs. optional) lives in
 ```
 
 ```json
-{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Chase", "significance": "critical" }
+{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Kingsley", "significance": "critical" }
 ```
 
 ### Top-Level Arrays
 
-`pullQuotes[]` — two shapes:
+`pullQuotes[]` (OPTIONAL legacy array, not rendered by the current template; prefer inline `quote` content blocks). Two shapes if used:
 
 ```json
-{ "type": "verbatim", "text": "The job is yours.", "attribution": "Vic Chase", "sourceTokenId": "rat031", "placement": "right" }
+{ "type": "verbatim", "text": "The job is yours.", "attribution": "Vic Kingsley", "sourceTokenId": "rat031", "placement": "right" }
 ```
 
 ```json
@@ -150,7 +150,7 @@ The authoritative field list (required vs. optional) lives in
 `evidenceCards[]` — sidebar catalog entries (summary, not full content):
 
 ```json
-{ "tokenId": "rat031", "headline": "The Offer", "summary": "Vic Chase takes Marcus's chair before his body is cold.", "owner": "Vic Chase", "significance": "critical", "placement": "sidebar" }
+{ "tokenId": "rat031", "headline": "The Offer", "summary": "Vic Kingsley takes Marcus's chair before his body is cold.", "owner": "Vic Kingsley", "significance": "critical", "placement": "sidebar" }
 ```
 
 ---
@@ -192,17 +192,23 @@ Example section with inline photo:
 
 ## Headline Rules
 
-If director doesn't provide headline, generate one that:
-- Is punchy and specific (not generic)
-- Hints at the systemic critique
-- Avoids clickbait
+If the director doesn't provide a headline, generate one that does real journalism work:
+- **Names names.** Use proper nouns from THIS session: the victim, the accused, NeurAI, a specific shell account or dollar figure. No abstractions.
+- **Active verb.** Something happened; say what, in the active voice.
+- **Specific stakes.** Point at the concrete consequence this session exposed, not a generic theme.
+- **Genre signal.** It should read as investigative journalism, a headline a tech-accountability outlet would actually run, not a tagline or a poem.
+- Avoid clickbait, all-caps, and thesis-fragment poetry. Do not reuse a previous session's headline shape.
+
+The examples below are illustrative SHAPES (proper noun + active verb + specific stake). Fill them with THIS session's real names and numbers.
 
 **Good headlines:**
-- "Marcus Blackwood Is Dead. His Memory Machine Is Just Getting Started."
-- "The Party That Stole Your Mind"
-- "What NeurAI Doesn't Want You to Remember"
+- "Marcus Blackwood Is Dead. The Room Blamed Vic Kingsley. The Money Says Otherwise."
+- "Six Shell Accounts, $4.1 Million, and the Memories NeurAI Paid to Bury"
+- "The Night Alex Reeves Lost His Algorithm and Marcus Blackwood Lost His Life"
 
 **Bad headlines:**
-- "Murder at Tech Company"
-- "SHOCKING: CEO Found Dead!"
-- "An Investigation into Recent Events"
+- "Murder at Tech Company" (no names, no stakes)
+- "SHOCKING: CEO Found Dead!" (clickbait, all-caps)
+- "An Investigation into Recent Events" (generic, no genre signal)
+- "The Party That Stole Your Mind" (thesis-fragment poetry: no proper nouns, no event)
+- "What NeurAI Doesn't Want You to Remember" (tagline, not a headline)
