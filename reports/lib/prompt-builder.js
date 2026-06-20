@@ -872,13 +872,13 @@ EVIDENCE-CARD INLINE EXAMPLE:
   ]
 }
 
-PULL QUOTES (2 types):
-- VERBATIM: Exact quote from evidence WITH character attribution ("— Victoria Kingsley")
-- CRYSTALLIZATION: Journalist insight, NO attribution (NEVER "— Nova")
+CRYSTALLIZATION & VERBATIM MOMENTS:
+- For a damning verbatim line from evidence, use an inline "quote" content block (type: "quote", with attribution) inside the relevant section — it renders in the article body.
+- For a crystallizing journalist insight, use an inline "quote" content block with attribution omitted (no "— Nova").
+- These are OPTIONAL. Use them where a line earns a pause, not to fill a quota.
 
 MINIMUM REQUIREMENTS:
 - At least 3 evidence-card blocks across sections (in sections[].content[], NOT just evidenceCards[])
-- At least 2 pull quotes distributed across 2+ sections
 - No two evidence-cards adjacent (separate with prose)
 </VISUAL_COMPONENT_TYPES>
 
@@ -965,12 +965,7 @@ STRUCTURE:
    - Sidebar: 5-8 cards as navigation/reference
    - Body: Reference only cards already in evidenceCards array
 
-3. "pullQuotes" - Featured quotes for sidebar (distribute across 2+ sections):
-   - "type": EXACT lowercase "verbatim" or "crystallization" (do NOT use uppercase)
-   - "text": The quote text
-   - "attribution": Character name (string) for verbatim; null for crystallization
-   - "sourceTokenId": Optional. For verbatim quotes only; the tokenId being quoted
-   - "placement": EXACT one of "left" | "right" | "center" (default "right"). Do NOT use "sidebar" or "inline" here.
+3. "pullQuotes" - OPTIONAL legacy array; NOT rendered by the current template. Prefer inline "quote" content blocks (see VISUAL_COMPONENT_TYPES) for crystallization and verbatim moments. May be omitted entirely.
 
 4. "photos" - Top-level session photos array (DIFFERENT shape than the inline "photo" content block in sections):
    - "filename": EXACT filename from available photos (do NOT include hero image filename here)
