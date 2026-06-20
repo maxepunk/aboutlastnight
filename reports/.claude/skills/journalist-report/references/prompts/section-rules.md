@@ -126,7 +126,7 @@ following a party at his residence.
 **Content:**
 - Chronological OR thematic organization (choose based on evidence)
 - Each exposed memory becomes a narrative beat
-- Connect evidence to the dual story (murder + systemic critique)
+- Connect evidence to the session's gap (what the room concluded vs. what the record implies), reaching for the systemic angle where the evidence earns it
 - Name the OWNER of each memory (whose experience it records). Treat who EXPOSED it as anonymous by default; credit an exposer by name only when director notes or the record show they took credit. Never assume the owner exposed their own memory.
 - Acknowledge where evidence is thin
 
