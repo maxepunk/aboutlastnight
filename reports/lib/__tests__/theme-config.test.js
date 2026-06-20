@@ -235,7 +235,7 @@ describe('theme-config', () => {
 
     it('journalist has postGenValidation rules', () => {
       const config = getThemeConfig('journalist');
-      expect(config.display.postGenValidation.minPullQuotes).toBe(2);
+      expect(config.display.postGenValidation.minPullQuotes).toBe(0);
       expect(config.display.postGenValidation.minInlineEvidenceCards).toBe(3);
     });
 

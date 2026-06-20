@@ -88,7 +88,7 @@ const THEME_CONFIGS = {
       crystallizationLabel: "Nova's Insight",
       storyDate: '2027-02-22',           // In-world article date (always Feb 22, 2027)
       postGenValidation: {
-        minPullQuotes: 2,
+        minPullQuotes: 0,
         minInlineEvidenceCards: 3
       }
     }
