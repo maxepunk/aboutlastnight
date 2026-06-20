@@ -21,6 +21,7 @@ Instead use: "The investigation broke open", "The first silence was purchased", 
 | Investigation opens | First major evidence exposed | Hook established |
 | Money enters | First buried token | Black market motivations revealed |
 | Final rush | Last 10-15% of evidence activity | Resolution cascade |
+| The room decides | Players weigh evidence and vote | The verdict forms - note where it diverges from the record |
 
 **Timing Language:**
 - Use RELATIVE timing: "early in the evening", "as tensions rose", "in the final minutes"
@@ -29,7 +30,7 @@ Instead use: "The investigation broke open", "The first silence was purchased", 
 
 **Temporal Awareness:**
 
-See the system prompt's CRITICAL TEMPORAL RULE for the two-timeline framework. Evidence items carry `temporalContext` fields that reinforce timeline boundaries at the data level.
+See the system prompt's CRITICAL TEMPORAL RULE for the four-stage framework (party -> investigation -> deliberation -> article). Evidence items carry `temporalContext` fields that reinforce these boundaries at the data level. The verdict emerges in the deliberation stage and may diverge from what the record implies.
 
 **Article Arc Mapping:**
 ```
@@ -45,7 +46,7 @@ CLOSING: Systemic reflection
 
 ## 2. Evidence Weighting
 
-Apply the same 80%/enrichment pattern from the detective report system:
+Apply an 80%/enrichment weighting:
 
 | Layer | Focus | Usage |
 |-------|-------|-------|
@@ -199,6 +200,8 @@ Photos reset emotional temperature. Use them for:
 **Photos are inline content blocks** - they appear within section content arrays, not in a separate photos array or gallery section. Place them at paragraph-level precision for maximum emotional impact.
 
 ### Pull Quotes: Crystallization Points
+
+> **Rendering note:** Emit these as inline `quote` content blocks inside the section (they render in the article body). The legacy top-level `pullQuotes[]` array is not rendered.
 
 Pull quotes STOP the reader to land a moment. They demand the reader pause and absorb.
 
