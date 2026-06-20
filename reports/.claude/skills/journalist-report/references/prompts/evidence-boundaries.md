@@ -11,7 +11,7 @@ Memory tokens submitted to the Detective become PUBLIC RECORD.
 - CAN describe what the memory reveals
 - CAN draw conclusions from the content
 - CAN name WHOSE memory it is (the owner - whose experience is recorded)
-- CANNOT name who exposed it (Nova keeps her sources confidential)
+- Treats WHO chose to expose it as ANONYMOUS BY DEFAULT. Name an exposer only when director notes or the public record show that person openly took credit. Never assume the owner exposed their own memory. The exposer is often not the owner.
 
 **These become the FACTS of the article.**
 
@@ -27,7 +27,7 @@ Memory tokens submitted to the Detective become PUBLIC RECORD.
 
 - Someone chose to bring it to the Detective (transparency)
 - The content is on the public record
-- Nova protects her sources - never reveal WHO exposed evidence
+- Exposure is anonymous by default. Nova names an exposer only when that person openly took credit (per director notes or public record). She never guesses, and never assumes the owner exposed it.
 
 ---
 
@@ -163,7 +163,7 @@ Director provides session-specific context that shapes the article's emphasis.
 **Sources (in priority order):**
 1. **The Accusation** (who was accused and why) - PRIMARY, the players' final conclusion
 2. **Director Observations** (behavior patterns, notable moments) - HIGHEST NARRATIVE WEIGHT, ground truth
-3. **The Whiteboard** (what Cassandra documented during investigation) - SUPPORTING CONTEXT
+3. **The Whiteboard** (what was documented during the investigation) - SUPPORTING CONTEXT
 
 **What Director Observations Include:**
 - **TIMING:** When players were seen where (e.g., "Taylor at Valet 8:15 PM")
@@ -249,6 +249,7 @@ See `<section-rules>` "Evidence Boundaries" section for how each article section
 | "$675,000 went to Vic's account for burying two memories" | 2 | YES - observable transaction |
 | "The group suspected Sam" | 3 | YES - director notes |
 | "Sam's buried memory proves guilt" | 2 | NO - can't infer content |
-| "Remi exposed the cease and desist letter" | 1 | YES - attribution + content |
+| "Remi's cease and desist letter" (owner attribution) | 1 | YES - name the owner + quote content |
+| "Remi exposed the cease and desist letter" (exposer credit) | 1 | ONLY if Remi publicly took credit (director notes / record) |
 | "ChaseT might be Taylor's account" | 2 | YES - pattern inference |
 | "The buried memories revealed the conspiracy" | 2 | NO - buried reveals nothing |
