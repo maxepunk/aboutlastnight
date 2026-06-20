@@ -148,6 +148,16 @@ describe('theme-config', () => {
       expect(gameMechanics.isRegex).toBe(true);
     });
 
+    it('token-term ban flags bare "token" but NOT "memory token"', () => {
+      const rules = getArticleRules('journalist');
+      const tokenTerm = rules.bannedPatterns.find(p => p.name === 'token-term');
+      expect(tokenTerm).toBeDefined();
+      expect(tokenTerm.isRegex).toBe(true);
+      const re = new RegExp(tokenTerm.pattern, tokenTerm.caseSensitive ? '' : 'i');
+      expect(re.test('they handed me a token')).toBe(true);
+      expect(re.test('her memory token surfaced')).toBe(false);
+    });
+
     it('should include min roster mentions', () => {
       const rules = getArticleRules('journalist');
       expect(rules.minRosterMentions).toBe(1);

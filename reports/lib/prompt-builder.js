@@ -95,7 +95,7 @@ const THEME_CONSTRAINTS = {
     hardConstraints: `HARD CONSTRAINTS (violations = failure):
 - NO em-dashes (use commas or periods)
 - NO "tokens" - say "extracted memories" or "memories"
-- NO game mechanics ("buried memories", "first-buried bonus", "guests")
+- NO game mechanics ("buried memories", "first-buried bonus")
 - NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
 - NO third-person self-reference ("The Detective noted") - you ARE the detective
 - NO countable memories ("5 memories") - memories are experiences, not inventory
@@ -114,7 +114,6 @@ VOICE MECHANICS:
 - NOT observer mode: "The group decided", "They concluded", "It was noted"
 - Transform: "The group came to a conclusion" -> "I watched them reach their conclusion"
 - Transform: "From my notes that night" -> remove attribution or use "- Nova"
-- Transform: "guests" -> "people" or "those present" or "partygoers"
 - Sentence rhythm: Short punchy, then longer building, then short again`
   },
   detective: {
@@ -1071,7 +1070,6 @@ ${generateRosterSection(this.themeName, this.canonicalCharacters, this.character
 - Any first-person voice that slipped in ("I saw", "I discovered")
 - Section headings that don't clearly signal different analytical angles`
       : `Fix the issues you identified in your self-check. Also check for:
-- "guests" -> "people" or "those present" or "partygoers"
 - "From my notes that night" -> "- Nova" or remove
 - Any remaining passive/observer voice patterns
 - Any em-dashes that slipped through
@@ -1142,7 +1140,7 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
       : `Check for:
 1. Em-dashes (— or --)
 2. "token/tokens" instead of "extracted memory"
-3. Game mechanics language ("Act 3", "final call", "first burial", "guest/guests")
+3. Game mechanics language ("Act 3", "final call", "first burial")
 4. Vague attribution ("from my notes", "sources say")
 5. Passive/neutral voice (should be participatory)
 6. Missing roster members

@@ -56,7 +56,7 @@ const THEME_CONFIGS = {
         // Typography
         { pattern: '—', name: 'em-dash', description: 'Use hyphen (-) not em-dash (—)' },
         // Game mechanics terminology
-        { pattern: 'token', name: 'token-term', caseSensitive: false, description: 'Game mechanic terminology' },
+        { pattern: '(?<!memory\\s)\\btokens?\\b', name: 'token-term', isRegex: true, caseSensitive: false, description: 'Bare "token" as a system label - use "memory token" or "extracted memory"' },
         { pattern: 'Act \\d', name: 'game-mechanics', isRegex: true, description: 'Game structure references' },
         { pattern: 'script beat', name: 'script-beat', caseSensitive: false, description: 'Game structure terminology' },
         { pattern: 'final call', name: 'final-call', caseSensitive: false, description: 'Game structure terminology' },
