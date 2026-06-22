@@ -30,7 +30,7 @@ const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require('./lib/api-helpers');
-const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome } = require('./lib/session-outcome');
+const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
 const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
 const { SchemaValidator } = require('./lib/schema-validator');
 const outlineValidator = new SchemaValidator();
@@ -708,6 +708,7 @@ for (const endpoint of RESOURCE_ENDPOINTS) {
  */
 app.post('/api/session/:id/start', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
+    clearSessionOutcome(sessionId); // DEL-1: a fresh start wipes any prior run's outcome for this id
     const { theme = 'journalist', rawSessionInput } = req.body;
 
     // Validate theme
@@ -996,6 +997,8 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
         }
 
         const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
+
+        clearSessionOutcome(sessionId); // DEL-1: a rolled-back session's prior terminal outcome is now stale
 
         // Check if graph is interrupted at a checkpoint
         const graphState = await graph.getState(config);
