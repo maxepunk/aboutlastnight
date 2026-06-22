@@ -6756,20 +6756,21 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```
   > A Secure cookie requires `trust proxy` set (above), otherwise Express judges the proxied request as insecure and silently drops the cookie — locking every user out behind the tunnel. We use `secure: 'auto'` rather than a `NODE_ENV==='production'` gate **on purpose**: the launch path (`start-everything.bat` → `npm start`) never sets `NODE_ENV` (verified — the `.bat` sets only `SCRIPT_DIR`; `package.json` `start` is `node scripts/kill-port.js 3001 && node server.js`), so a `NODE_ENV` gate would leave `secure` permanently `false` and the `Secure` flag would never land behind the tunnel. `'auto'` ties Secure to the real request protocol (HTTPS via the tunnel's `x-forwarded-proto`), so it is correct behind the tunnel and still allows plain `http://localhost:3001` dev.
 
-- [ ] **Step 2: Verify fail-fast behavior.** Because the session config runs at module load (before the `require.main` listen guard), requiring `server.js` with no secret would call `process.exit(1)` and break the existing `server-build-resume-payload.test.js`. Confirm that test currently sets a secret, and if not, ensure the test env provides one. Run:
-  ```bash
-  node -e "const c=require('fs').readFileSync('__tests__/unit/server-build-resume-payload.test.js','utf8'); console.log(/SESSION_SECRET/.test(c)?'test sets secret':'TEST DOES NOT SET SECRET')"
-  ```
-  If it prints `TEST DOES NOT SET SECRET`, add a guard at the very top of `__tests__/unit/server-build-resume-payload.test.js:1` (before the `require('../../server.js')`):
+- [ ] **Step 2: Guard EVERY server-requiring test against the new fail-fast.** The session config runs at module load (live `server.js:392`, BEFORE the `require.main` listen guard), so `require('../../server.js')` with no secret now calls `process.exit(1)` and kills the Jest worker. Jest loads no `.env` (no `setupFiles`/dotenv in `jest.config.js` — **verified 2026-06-22**), so `SESSION_SECRET` is undefined in tests. **Four** test files require `server.js` at top level (complete set — verified via `grep -rln "require(['\"].*\.\./server"`): they pull `shapeSessionState`/`probeNotionReachable`/`drainAndClose`/`buildResumePayload` and none set the secret. Add this guard as the **first line** (before any `require`) of **all four**:
   ```javascript
   process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used-for-signing-in-tests';
   ```
+  Files to edit (all four — NOT just the first):
+  - `__tests__/unit/server-build-resume-payload.test.js`
+  - `__tests__/unit/get-session-state.test.js`
+  - `__tests__/unit/notion-reachability-probe.test.js`
+  - `__tests__/unit/sigint-drain.test.js`
 
-- [ ] **Step 3: Confirm the existing server test still passes (proves no module-load regression).**
+- [ ] **Step 3: Confirm all four server-requiring tests still pass (proves no module-load regression).**
   ```bash
-  npx jest __tests__/unit/server-build-resume-payload.test.js
+  npx jest __tests__/unit/server-build-resume-payload.test.js __tests__/unit/get-session-state.test.js __tests__/unit/notion-reachability-probe.test.js __tests__/unit/sigint-drain.test.js
   ```
-  Expected: all green.
+  Expected: all green (no Jest worker crash from `process.exit`).
 
 - [ ] **Step 4: Manual fail-fast check.**
   ```bash
@@ -6792,7 +6793,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 5: Commit.**
   ```bash
-  git add server.js __tests__/unit/server-build-resume-payload.test.js && git commit -m "fix(security): fail-fast on unset SESSION_SECRET; secure cookies behind tunnel (SEC-4)
+  git add server.js __tests__/unit/server-build-resume-payload.test.js __tests__/unit/get-session-state.test.js __tests__/unit/notion-reachability-probe.test.js __tests__/unit/sigint-drain.test.js && git commit -m "fix(security): fail-fast on unset SESSION_SECRET; secure cookies behind tunnel (SEC-4)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```
@@ -7031,6 +7032,21 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```
   > The client (`console/components/LoginOverlay.js:25-29`) already reads `result.message` and shows it on any non-`success` response (and `api.login` returns `res.json()` regardless of status — `console/api.js:22`), so the 429 message renders with no frontend change. `req.ip` is meaningful because Task 7.3 set `app.set('trust proxy', 1)`, so it reflects the Cloudflare-forwarded client IP, not the tunnel hop.
 
+- [ ] **Step 5b: Bind the listener to loopback so the tunnel is the sole ingress (SEC-A-3).** The per-IP limiter is only sound if a client cannot bypass Cloudflare and spoof `X-Forwarded-For` (which `trust proxy` from Task 7.3 trusts). `server.js` currently binds all interfaces (`app.listen(PORT)` → `0.0.0.0`). The tunnel's ingress targets `localhost` (`cloudflared-config-template.yml`), so binding loopback keeps the tunnel + local dev working while removing the direct-LAN path. In the startup IIFE (live `server.js:1250`), change:
+  ```javascript
+  httpServer = app.listen(PORT, () => {
+  ```
+  to:
+  ```javascript
+  // SEC-A-3: bind loopback only — the Cloudflare tunnel (→ localhost) is the
+  // sole remote ingress. Prevents a direct-LAN client from spoofing
+  // X-Forwarded-For (trusted via `trust proxy`, Task 7.3) to rotate req.ip and
+  // evade the SEC-5 login rate-limiter. Console is reachable via the public
+  // tunnel URL or http://localhost:3001 — NOT via the host's LAN IP.
+  httpServer = app.listen(PORT, '127.0.0.1', () => {
+  ```
+  > No automated test covers the bind host (server.js does not export `app`); verify manually that `curl localhost:3001/api/auth/check` still answers after the change (loopback dev unaffected).
+
 - [ ] **Step 6: Re-run limiter tests + server load test.**
   ```bash
   npx jest lib/__tests__/login-rate-limiter.test.js __tests__/unit/server-build-resume-payload.test.js
@@ -7039,7 +7055,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 7: Commit.**
   ```bash
-  git add lib/login-rate-limiter.js lib/__tests__/login-rate-limiter.test.js server.js && git commit -m "feat(security): zero-dep per-IP login rate limiter with lockout (SEC-5)
+  git add lib/login-rate-limiter.js lib/__tests__/login-rate-limiter.test.js server.js && git commit -m "feat(security): zero-dep per-IP login rate limiter with lockout + loopback bind (SEC-5/SEC-A-3)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```
@@ -7085,7 +7101,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```
   Expected: `{"notionConfigured":true}` — no `notionToken` field (was: `{"notionToken":"ntn_..."}`).
 
-- [ ] **Step 4: Update the docs that describe the old contract.** `ENV_SETUP.md` documents `/api/config` returning the token (e.g. `ENV_SETUP.md:172`). Edit those lines to reflect that the token stays server-side and `/api/config` now returns `{notionConfigured: boolean}`. (Mechanical doc edit — match the new response shape; do not leave the `Should return: {"notionToken":"ntn_..."}` line.)
+- [ ] **Step 4: Update the docs that describe the old contract.** `ENV_SETUP.md` documents `/api/config` returning the token at ~9 places (verified 2026-06-22: lines 10, 31, 137, 143, 146–147, 155, 171, 172, 275 — including a code sample around 155 and the `Should return: {"notionToken":"ntn_..."}` line at 172). Edit the contract-describing lines to reflect that the token stays server-side and `/api/config` now returns `{notionConfigured: boolean}`. (Mechanical doc edit — match the new response shape; do not leave any `notionToken` example in the `/api/config` description. Setup steps that mention setting `NOTION_TOKEN` in `.env` stay as-is — only the lines claiming `/api/config` *returns* the token change.)
 
 - [ ] **Step 5: Commit.**
   ```bash
