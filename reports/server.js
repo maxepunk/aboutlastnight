@@ -568,7 +568,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
         // Run graph until it pauses at checkpoint or completes
         console.log(`[${new Date().toISOString()}] Invoking graph with initialState:`, JSON.stringify(initialState));
-        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
+        const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
 
         // Check if graph is interrupted at a checkpoint
         const graphState = await graph.getState(config);
@@ -891,7 +891,7 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         // CRITICAL: theme must be in state (not just config) because initializeSession
         // and all nodes read state.theme, which defaults to 'journalist' in the annotation.
         const initialState = { theme, rawSessionInput, ...buildRollbackState('input-review') };
-        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
+        const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
 
         // Check if graph is interrupted at a checkpoint
         const graphState = await graph.getState(config);
@@ -983,7 +983,7 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                 // Resume graph with Command - resume value becomes the return of interrupt()
                 // Also pass stateUpdates for any direct state modifications
                 const command = new Command({ resume, update: stateUpdates });
-                const result = await graph.invoke(command, { ...config, recursionLimit: RECURSION_LIMIT });
+                const result = await graph.invoke(command, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
 
                 // Check if graph paused at another checkpoint
                 const newGraphState = await graph.getState(config);
@@ -1090,7 +1090,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             Object.assign(initialState, stateOverrides);
         }
 
-        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
+        const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
 
         // Check if graph is interrupted at a checkpoint
         const graphState = await graph.getState(config);
@@ -1147,7 +1147,7 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
             Object.assign(initialState, stateOverrides);
         }
 
-        const result = await graph.invoke(initialState, { ...config, recursionLimit: RECURSION_LIMIT });
+        const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
         const graphState = await graph.getState(config);
         const interrupted = isGraphInterrupted(graphState);
 
