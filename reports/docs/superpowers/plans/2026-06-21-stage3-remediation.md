@@ -5070,6 +5070,10 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
             if (!state.sessionId) return;
             dispatch({ type: APP_ACTIONS.PROCESSING_START });
             try {
+              // NOTE: retry is intentionally STREAMLESS — /resume is a blocking JSON call
+              // (no SSE-before-POST), so the live token stream/liveness is absent during the
+              // re-run. The ribbon sits at 'preparing' until /resume returns. Deliberate
+              // (P2 re-run semantics via /resume); a streaming retry would change the contract.
               const result = await appApi.resume(state.sessionId);
               if (result.error) {
                 dispatch({ type: APP_ACTIONS.SET_ERROR, message: result.error });
@@ -5082,6 +5086,18 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
                 });
               } else if (result.currentPhase === 'complete') {
                 dispatch({ type: APP_ACTIONS.WORKFLOW_COMPLETE, result });
+              } else if (result.currentPhase === 'error') {
+                // ⚠️ CORRECTED 2026-06-22 (P5.4 opus review BLOCKER): a retry that RE-FAILS
+                // via the graph-error path returns { currentPhase:'error', errors:[...] } with
+                // NO flat result.error, so without this branch NONE of the above fire and the
+                // spinner hangs forever (processing stays true). Re-drive the inline failure
+                // card (mirrors handleApprove's case 'failed') so the streamless window
+                // terminates in a visible, actionable card rather than a dead 'preparing' ribbon.
+                dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
+                dispatch({
+                  type: APP_ACTIONS.SSE_LLM_FAILURE,
+                  error: (result.errors && result.errors[0] && result.errors[0].message) || 'Workflow failed'
+                });
               }
             } catch (err) {
               dispatch({ type: APP_ACTIONS.SSE_ERROR, message: 'Retry failed: ' + (err.message || 'Unknown error') });
@@ -5114,7 +5130,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```
   Leave the deprecated `progressMessages: []` field in `initialState` (now never written; a future P12 cleanup can remove the field). Re-run `node --check console/state.js`.
 
-- [ ] **Step 5: Append CSS.** Add to the end of `console/console.css`:
+- [ ] **Step 4c: Defensively reset `llmActivity` on terminal-state transitions (P5 capstone hardening).** The failure card is kept mounted by `llmActivity.phase === 'failed'`. Today a stale failed card cannot co-render with a checkpoint/completion because every transition into them is preceded by `PROCESSING_START` (which nulls `llmActivity`). But `CHECKPOINT_RECEIVED` and `WORKFLOW_COMPLETE` do NOT themselves reset `llmActivity` — a latent fragility (any future dispatch of them without a preceding `PROCESSING_START` would resurrect a stale failed card). Add `llmActivity: null` to BOTH reducer cases in `console/state.js` so a terminal state fully clears the transient live-call state. In `CHECKPOINT_RECEIVED` (alongside `processing: false, pendingEdits: {}`) add `llmActivity: null,`; in `WORKFLOW_COMPLETE` (alongside `completedResult, processing: false, checkpointType: null, pendingEdits: {}`) add `llmActivity: null,`. `lastLlmActivity` is left untouched (the collapsible "Last call details" still works). `node --check console/state.js`.
+
+- [ ] **Step 5: Append CSS — AND delete the superseded styles the rewrite orphaned (P5 capstone cleanup).** First, remove the dead rules left behind when Step 3 replaced the old ProgressStream body — the old component's spinner / elapsed / rolling-messages / panel-heading classes are no longer emitted. `grep -n "progress-spinner\|progress-elapsed\|progress-messages\|progress-llm-panel__heading" console/console.css`, confirm ZERO references in `console/**/*.js` (`grep -rn "<class>" console/components console/*.js`), then delete the `.progress-spinner`, `.progress-spinner__dot`, `.progress-elapsed`, `.progress-messages`, `.progress-messages__item` (+ its `:last-child` / `--latest`), and `.progress-llm-panel__heading` (+ its `:first-child`) rule blocks. KEEP `.progress-stream`, `.progress-operation*`, and `.progress-llm-panel__content` (still used by the new component). THEN append to the end of `console/console.css`:
   ```css
   /* ── P5: live LLM stream UI ───────────────────────────────────────────── */
   .progress-phases {
@@ -5154,11 +5172,6 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
     margin: 4px 0 10px;
   }
   .progress-liveness__sep { opacity: 0.5; }
-  .progress-retry-note {
-    font-size: 0.8rem;
-    color: var(--accent-amber, #fbbf24);
-    margin-bottom: 8px;
-  }
   .progress-stream__raw {
     max-height: 240px;
     overflow-y: auto;
@@ -5722,6 +5735,16 @@ const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessio
   `git add server.js __tests__/unit/clear-session-outcome-wiring.test.js && git commit -m 'fix(server): clear session-outcome store on rollback + fresh-start (DEL-1 staleness, #17)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>'`
+
+---
+
+### Task P6.6: `await-full-context` is a checkpoint but not a valid rollback point (ROLL-4 — P5 capstone finding)
+
+> **Provenance:** surfaced by the P5 capstone (the failure-card "Roll back" exercises `state.checkpointType` → `/rollback`), but the gap is PRE-EXISTING and independent of P5: `await-full-context` is in `CHECKPOINT_ORDER` (`console/utils.js`) and is emitted as a `checkpointType` (`checkpoint-nodes.js`), and the `PipelineProgress` stepper already makes every checkpoint dot clickable for rollback — yet `await-full-context` is **absent** from `ROLLBACK_CLEARS` (`lib/workflow/state.js`), hence absent from `VALID_ROLLBACK_POINTS` / `ROLLBACK_COUNTER_RESETS` / `buildRollbackState`. Result: rolling back TO Full Context (from the stepper dot OR the new failure card) returns **HTTP 400 `Invalid rollbackTo`** — a dead-end recovery affordance at exactly one checkpoint. Verified: `CHECKPOINT_ORDER` minus `VALID_ROLLBACK_POINTS` = exactly `['await-full-context']`.
+
+**Decision required (resolve when implementing P6):** EITHER (a) make `await-full-context` a real rollback point — add it to `ROLLBACK_CLEARS` (it sits between `character-ids` and `pre-curation`) with the correct clear-list (clear `accusation`, `sessionReport`, `directorNotes`/parsed-input fields + everything downstream: `preprocessedEvidence`, `characterData`, `narrativeTensions`, `preCurationApproved`, `evidenceBundle`, `_evidenceApproved`, `specialistAnalyses`, `narrativeArcs`, `selectedArcs`, `_arcAnalysisCache`, `_arcFeedback`, `heroImage`, `outline`, `outlineApproved`, `_outlineFeedback`, `contentBundle`, `articleApproved`, `_articleFeedback`, `assembledHtml`, `validationResults`, `evaluationHistory`) + a matching `ROLLBACK_COUNTER_RESETS` entry (reset all four revision counters) — **verify exact field names against `inputs/` first**; this auto-propagates to `VALID_ROLLBACK_POINTS`/`buildRollbackState` and `P6.3`'s completeness test will then cover it; OR (b) if Full Context is intentionally NOT rollback-able, make it non-clickable in `PipelineProgress` AND have the failure card's `onRollback` fall back to the nearest valid prior rollback point — so the UI never offers an impossible rollback. **Prefer (a)** unless there's a product reason re-collecting accusation/report/notes must be blocked. Add a test mirroring `P6.4` (rolling back to `await-full-context` actually re-pauses `checkpointAwaitFullContext`).
+
+> **Also surfaced by the capstone (PRE-EXISTING, out of P5 scope, no task here — noted for awareness):** the `llm_start` SSE event emits `prompt: { system, user, schema }` (an object) while `app.js` reads `event.data.systemPrompt` (always `undefined`→`null`) and stores the object under `prompt`; and `llm_complete` emits `response: { full, length, structured }` (an object) which the "Last call details" panel `safeStringify`s wrapper-and-all. Both are pre-P5 (commit `9d1eebf`) and latent/cosmetic (the new ProgressStream doesn't render `prompt`/`systemPrompt`); fix opportunistically if a future panel needs those fields (`prompt: event.data.prompt?.user`, `systemPrompt: event.data.prompt?.system`, `response: event.data.response?.full`).
 
 ---
 
