@@ -110,6 +110,20 @@ function createStubAssembler() {
  * @returns {Object} Partial state update with assembledHtml, outputPath, currentPhase
  */
 async function assembleHtml(state, config) {
+  // N8 backstop — this is the FINAL node after the human article approval; no operator
+  // follows it. Refuse to publish a hollow/fabricated report to outputs/. Validate the
+  // bundle is structurally non-empty BEFORE any file write.
+  const bundle = state.contentBundle;
+  const sections = bundle && Array.isArray(bundle.sections) ? bundle.sections : null;
+  const hasContent = sections && sections.length > 0 &&
+    sections.some(s => Array.isArray(s.content) && s.content.length > 0);
+  if (!hasContent) {
+    throw new Error(
+      '[assembleHtml] Refusing to publish: contentBundle is empty or has no content ' +
+      'blocks. This backstop prevents a hollow report from reaching outputs/.'
+    );
+  }
+
   const theme = state.theme || config?.configurable?.theme || 'journalist';
   const assembler = getTemplateAssembler(config, theme);
 
