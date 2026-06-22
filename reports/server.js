@@ -32,6 +32,7 @@ const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require('./lib/api-helpers');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome } = require('./lib/session-outcome');
+const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
 const { SchemaValidator } = require('./lib/schema-validator');
 const outlineValidator = new SchemaValidator();
 
@@ -989,6 +990,8 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
 
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve:`, JSON.stringify(approvals));
 
+    let lockAcquired = false;
+
     try {
         // Create graph and config (theme resolved from state below)
         const { graph, config } = createGraphAndConfig(sessionId, 'journalist', {
@@ -1027,6 +1030,17 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         if (validationError) {
             return res.status(400).json({ sessionId, error: validationError });
         }
+
+        // CONC-1: reject a second concurrent approve on this session. After all 400
+        // paths (so they never leak the lock); before res.json(processing) (so the
+        // loser gets a 409, not a 200 'processing').
+        if (!acquireSessionLock(sessionId)) {
+            return res.status(409).json({
+                sessionId,
+                error: 'An approval is already in progress for this session. Please wait for it to finish.'
+            });
+        }
+        lockAcquired = true;
 
         // NOTE: Background pipelines now start earlier with staggered timing (Phase 3 optimization):
         // - Evidence pipeline: starts at session start (context-free, no playerFocus needed)
@@ -1103,13 +1117,19 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                 recordSessionOutcome(sessionId, buildOutcomeRecord(failedResponse));
                 progressEmitter.emitComplete(sessionId, failedResponse);
             } finally {
-                resolve();
+                releaseSessionLock(sessionId);   // CONC-1 (P4.3)
+                resolve();                       // DUR-2 drain (P1.4)
             }
         });
         }).finally(() => inFlightTasks.delete(task));
         inFlightTasks.add(task);
 
     } catch (error) {
+        // If we acquired the lock but the background task never started (e.g. res.json
+        // threw before setImmediate was scheduled), release it so the session isn't
+        // permanently locked. Guarded by lockAcquired so a pre-acquire throw never
+        // releases a DIFFERENT in-flight request's lock for this session.
+        if (lockAcquired) releaseSessionLock(sessionId);
         // This only catches errors BEFORE the background task starts (validation, etc.)
         console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve error:`, error);
 
