@@ -20,16 +20,18 @@ jest.mock('../observability', () => ({
 const { finalizeInput } = require('../workflow/nodes/input-nodes');
 
 describe('state pruning - finalizeInput', () => {
-  test('prunes rawSessionInput on approval', async () => {
+  test('preserves rawSessionInput on approval (ROLL-4)', async () => {
     const state = {
       rawSessionInput: 'a very long input string that takes up space',
       sessionConfig: { roster: ['Alex'] }
     };
     const result = await finalizeInput(state, { configurable: {} });
-    expect(result.rawSessionInput).toBeNull();
+    // ROLL-4: finalizeInput no longer prunes rawSessionInput (it carries the
+    // at-start config — photosPath etc. — needed if a later rollback re-parses).
+    expect(result.rawSessionInput).toBeUndefined();
   });
 
-  test('prunes rawSessionInput on approval with edits', async () => {
+  test('preserves rawSessionInput on approval with edits (ROLL-4)', async () => {
     const os = require('os');
     const fs = require('fs/promises');
     const path = require('path');
@@ -55,7 +57,7 @@ describe('state pruning - finalizeInput', () => {
       }
     };
     const result = await finalizeInput(state, config);
-    expect(result.rawSessionInput).toBeNull();
+    expect(result.rawSessionInput).toBeUndefined();
 
     // Cleanup
     await fs.rm(tmpDir, { recursive: true, force: true });

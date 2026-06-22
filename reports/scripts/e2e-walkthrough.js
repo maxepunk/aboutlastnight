@@ -647,17 +647,26 @@ function loadInputFile(filePath) {
       throw new Error(`Missing required fields: ${missing.join(', ')}`);
     }
 
-    // Normalize structure
-    const rawSessionInput = data.rawSessionInput || {
-      roster: data.roster,
-      accusation: data.accusation,
-      sessionReport: data.sessionReport,
-      directorNotes: data.directorNotes,
-      photosPath: data.photosPath,
-      whiteboardPhotoPath: data.whiteboardPhotoPath
+    // ROLL-4: /start no longer splits accusation/sessionReport/directorNotes out of
+    // rawSessionInput into channels — those are now collected at the await-full-context
+    // checkpoint. Route the 3 thesis-critical fields through incrementalInputData (the
+    // SAME shape loadSessionInput builds), so the checkpoint delivers them via the
+    // fullContext payload, and leave ONLY the photo paths in rawSessionInput for /start.
+    const src = data.rawSessionInput || data;
+    incrementalInputData = {
+      roster: src.roster,
+      rosterPronouns: src.rosterPronouns || {},
+      accusation: src.accusation,
+      sessionReport: src.sessionReport,
+      directorNotes: src.directorNotes
     };
 
-    console.log(color(`  ✓ Loaded raw session input`, 'green'));
+    const rawSessionInput = {
+      photosPath: src.photosPath,
+      whiteboardPhotoPath: src.whiteboardPhotoPath
+    };
+
+    console.log(color(`  ✓ Loaded raw session input (full-context routed through await-full-context)`, 'green'));
     return {
       sessionId: data.sessionId,
       rawSessionInput

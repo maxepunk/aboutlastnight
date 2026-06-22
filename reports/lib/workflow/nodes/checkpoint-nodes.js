@@ -189,38 +189,39 @@ async function checkpointAwaitRoster(state, config) {
  * @returns {Object} Partial state update with currentPhase
  */
 async function checkpointAwaitContext(state, config) {
-  // Skip if full context already provided
-  const hasFullContext = state.rawSessionInput?.accusation &&
-                         state.rawSessionInput?.sessionReport &&
-                         state.rawSessionInput?.directorNotes;
+  // ROLL-4: gate on the first-class channels (not rawSessionInput sub-fields) so a
+  // rollback that nulls them re-pauses here. parseRawInput reads these top-level too.
+  const hasFullContext = state.accusation && state.sessionReport && state.directorNotesRaw;
 
-  const skipCondition = hasFullContext
-    ? state.rawSessionInput
-    : null;
+  const skipCondition = hasFullContext ? true : null;
 
   const resumeValue = checkpointInterrupt(
     CHECKPOINT_TYPES.AWAIT_FULL_CONTEXT,
     {
       roster: state.roster,
       whiteboardAnalysis: state.whiteboardAnalysis,
+      previousFullContext: state._previousFullContext,  // ROLL-4: pre-fill on rollback re-collection
       message: 'Provide accusation, sessionReport, and directorNotes to continue'
     },
     skipCondition
   );
 
-  // If resumed with fullContext data, capture it in state return
-  // This ensures parseRawInput sees the data (Command({ update }) may not persist)
+  // If resumed with fullContext data, capture it into the first-class channels.
   if (resumeValue?.fullContext && !skipCondition) {
-    const existingRawInput = state.rawSessionInput || {};
-    const newRawSessionInput = {
-      ...existingRawInput,
+    console.log(`[checkpointAwaitContext] Captured fullContext: accusation=${!!resumeValue.fullContext.accusation}, report=${!!resumeValue.fullContext.sessionReport}, notes=${!!resumeValue.fullContext.directorNotes}`);
+    return {
       accusation: resumeValue.fullContext.accusation,
       sessionReport: resumeValue.fullContext.sessionReport,
-      directorNotes: resumeValue.fullContext.directorNotes
-    };
-    console.log(`[checkpointAwaitContext] Captured fullContext from resume: accusation=${!!newRawSessionInput.accusation}, report=${!!newRawSessionInput.sessionReport}, notes=${!!newRawSessionInput.directorNotes}`);
-    return {
-      rawSessionInput: newRawSessionInput,
+      directorNotesRaw: resumeValue.fullContext.directorNotes,
+      // ROLL-4 re-parse: null the parse OUTPUTS here so parseRawInput (next node, skips
+      // when sessionConfig is populated) actually re-parses the re-collected inputs.
+      // This runs AFTER loadDirectorNotes may have rehydrated stale sessionConfig/
+      // directorNotes from inputs/*.json on the rollback replay — the clear-list alone
+      // is defeated by that disk reload, so re-null them here, right before parseRawInput.
+      sessionConfig: null,
+      directorNotes: null,
+      playerFocus: null,
+      _previousFullContext: null,  // consumed — clear the pre-fill stash
       currentPhase: PHASES.AWAIT_FULL_CONTEXT
     };
   }
@@ -461,7 +462,7 @@ module.exports = {
     stateFields: ['photoAnalyses', 'roster', 'whiteboardPhotoPath']
   }),
   checkpointAwaitContext: traceNode(checkpointAwaitContext, 'checkpointAwaitContext', {
-    stateFields: ['rawSessionInput', 'roster']
+    stateFields: ['accusation', 'sessionReport', 'directorNotesRaw', 'roster']
   }),
 
   // Join node for parallel branches

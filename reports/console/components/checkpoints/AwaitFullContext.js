@@ -13,10 +13,19 @@ const { Badge } = window.Console.utils;
 function AwaitFullContext({ data, onApprove }) {
   const roster = (data && data.roster) || [];
   const whiteboardAnalysis = (data && data.whiteboardAnalysis) || null;
+  const prev = (data && data.previousFullContext) || null;  // ROLL-4: pre-fill on rollback
 
-  const [accusation, setAccusation] = React.useState('');
-  const [sessionReport, setSessionReport] = React.useState('');
-  const [directorNotes, setDirectorNotes] = React.useState('');
+  const [accusation, setAccusation] = React.useState((prev && prev.accusation) || '');
+  const [sessionReport, setSessionReport] = React.useState((prev && prev.sessionReport) || '');
+  const [directorNotes, setDirectorNotes] = React.useState((prev && prev.directorNotes) || '');
+
+  // Re-seed when the checkpoint data changes (e.g., a fresh rollback delivers new prefill).
+  React.useEffect(function () {
+    const p = (data && data.previousFullContext) || null;
+    setAccusation((p && p.accusation) || '');
+    setSessionReport((p && p.sessionReport) || '');
+    setDirectorNotes((p && p.directorNotes) || '');
+  }, [data]);
 
   const isValid = accusation.trim() !== '' &&
     sessionReport.trim() !== '' &&

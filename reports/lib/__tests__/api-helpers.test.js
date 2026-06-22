@@ -164,6 +164,18 @@ describe('buildRollbackState re-pause correctness', () => {
       expect(state).toHaveProperty('arcEvidencePackages', null);
     }
   });
+
+  test('await-full-context is a valid rollback point that clears the 3 raw inputs (ROLL-4)', () => {
+    const state = buildRollbackState('await-full-context'); // must NOT throw
+    expect(state).toHaveProperty('accusation', null);
+    expect(state).toHaveProperty('sessionReport', null);
+    expect(state).toHaveProperty('directorNotesRaw', null);
+    expect(state).toHaveProperty('sessionConfig', null);     // parse output cleared -> re-parse triggers
+    expect(state).toHaveProperty('preprocessedEvidence', null);
+    expect(state).toHaveProperty('evidenceBundle', null);
+    expect(state).not.toHaveProperty('roster');            // upstream — preserved
+    expect(state).not.toHaveProperty('characterIdMappings'); // upstream — preserved
+  });
 });
 
 // ═══════════════════════════════════════════════════════

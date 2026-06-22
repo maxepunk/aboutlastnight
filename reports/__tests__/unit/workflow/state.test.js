@@ -236,7 +236,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 58 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 64 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -256,6 +256,9 @@ describe('ReportStateAnnotation', () => {
         // Incremental input (Parallel branch architecture)
         'roster',
         'rosterPronouns',  // F1: parallel pronoun map (first name -> pronoun string)
+        'accusation',          // ROLL-4: first-class full-context channel
+        'sessionReport',       // ROLL-4: first-class full-context channel
+        'directorNotesRaw',    // ROLL-4: first-class full-context channel
         'genericPhotoAnalyses',
         // Photo analysis (Commit 8.6)
         'photoAnalyses',
@@ -318,6 +321,7 @@ describe('ReportStateAnnotation', () => {
         '_previousArcs',
         '_previousOutline',
         '_previousContentBundle',
+        '_previousFullContext',  // ROLL-4: stash for AwaitFullContext pre-fill on rollback
         // Arc validation routing (Commit 8.xx)
         '_arcValidation',
         // Human rejection feedback (consumed by revision nodes, cleared after use)
@@ -635,8 +639,8 @@ describe('ReportStateAnnotation', () => {
   });
 
   describe('ROLLBACK_CLEARS constant (Phase 4f)', () => {
-    it('defines 9 rollback points (Parallel branch: added await-roster)', () => {
-      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(9);
+    it('defines 10 rollback points (ROLL-4: added await-full-context)', () => {
+      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(10);
     });
 
     it('includes all expected rollback points', () => {
@@ -645,6 +649,7 @@ describe('ReportStateAnnotation', () => {
         'paper-evidence-selection',
         'await-roster',  // Parallel branch architecture
         'character-ids',
+        'await-full-context',  // ROLL-4: re-collect accusation/sessionReport/directorNotes
         'pre-curation',
         'evidence-and-photos',
         'arc-selection',

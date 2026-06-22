@@ -191,7 +191,7 @@ function getCheckpointData(checkpointType, state) {
  * The payload becomes the return value of interrupt() in the paused node.
  *
  * @param {object} approvals - Approval decisions from request body
- * @param {object} currentState - Current graph state values (for merging incremental inputs)
+ * @param {object} currentState - Current graph state values (used for the theme default)
  * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
  */
 function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist')) {
@@ -311,20 +311,18 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     }
 
     // Await full context checkpoint (Parallel branch architecture)
-    // User provides accusation, sessionReport, directorNotes for input parsing
-    // CRITICAL: Merge with existing rawSessionInput to preserve photosPath from /start
+    // ROLL-4: full-context is now written as first-class channels (accusation/
+    // sessionReport/directorNotesRaw); rawSessionInput (with photosPath from /start)
+    // is left untouched so it still carries the at-start config.
     if (approvals.fullContext) {
         const { accusation, sessionReport, directorNotes } = approvals.fullContext;
         if (accusation && sessionReport && directorNotes) {
             validApprovalDetected = true;
-            // Merge with existing rawSessionInput to preserve photosPath from /start
-            const existingRawInput = currentState.rawSessionInput || {};
-            stateUpdates.rawSessionInput = {
-                ...existingRawInput,
-                accusation,
-                sessionReport,
-                directorNotes
-            };
+            // ROLL-4: write first-class channels (no rawSessionInput merge). parseRawInput
+            // and the checkpoint gate read these top-level.
+            stateUpdates.accusation = accusation;
+            stateUpdates.sessionReport = sessionReport;
+            stateUpdates.directorNotesRaw = directorNotes;
             resume.fullContext = approvals.fullContext;
         }
     }
@@ -975,6 +973,22 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
 
         // Build rollback state
         let initialState = buildRollbackState(rollbackTo);
+
+        // ROLL-4: stash prior full-context so AwaitFullContext pre-fills the re-collection
+        // form whenever the rollback CLEARS those channels — await-full-context, OR any
+        // upstream point whose clear list includes them (paper-evidence-selection / await-roster /
+        // character-ids, added by P6.4's per-point re-pause fix). Gating on the clear list itself
+        // (not a literal rollbackTo === 'await-full-context') makes the pre-fill automatically
+        // track which points clear full-context, so re-collection stays one-click (no re-typing
+        // a long sessionReport) regardless of how far back the director rolled.
+        // buildRollbackState nulls the channels; capture their current values first.
+        if (ROLLBACK_CLEARS[rollbackTo]?.includes('accusation')) {
+            initialState._previousFullContext = {
+                accusation: session.state.accusation || null,
+                sessionReport: session.state.sessionReport || null,
+                directorNotes: session.state.directorNotesRaw || null
+            };
+        }
 
         // Apply overrides
         if (stateOverrides) {

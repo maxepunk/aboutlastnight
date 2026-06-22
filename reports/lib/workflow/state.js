@@ -210,6 +210,17 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Full-context raw inputs (ROLL-4) — promoted from rawSessionInput sub-fields to
+   * first-class channels so rollback to await-full-context can clear them and the
+   * checkpoint re-pauses. Collected at checkpointAwaitContext; read by parseRawInput.
+   */
+  accusation: Annotation({ reducer: replaceReducer, default: () => null }),
+  sessionReport: Annotation({ reducer: replaceReducer, default: () => null }),
+  // 'Raw' suffix: the parsed `directorNotes` channel is separate (see below).
+  // Same raw-vs-parsed convention as characterIdsRaw -> characterIdMappings.
+  directorNotesRaw: Annotation({ reducer: replaceReducer, default: () => null }),
+
+  /**
    * Generic photo analyses (before roster is available)
    * Created by analyzePhotosGeneric - descriptions use visual markers, not names
    * Character names resolved later via characterIdMappings
@@ -619,6 +630,14 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Stash of the prior full-context values during a rollback to await-full-context,
+   * so AwaitFullContext pre-fills the re-collection form. Transient scratch (sibling
+   * of _previousArcs/_previousOutline); nulled when new context is captured. EXEMPT
+   * from ROLLBACK_CLEARS (owned by the checkpoint), like the other _previous* fields.
+   */
+  _previousFullContext: Annotation({ reducer: replaceReducer, default: () => null }),
+
+  /**
    * Human feedback for outline rejection (triggers revision loop)
    * Set by server approval handler, consumed by reviseOutline
    * Cleared after revision completes — follows _previousOutline pattern
@@ -685,6 +704,9 @@ function getDefaultState() {
     // Incremental input (parallel branch architecture)
     roster: null,
     rosterPronouns: null,
+    accusation: null,
+    sessionReport: null,
+    directorNotesRaw: null,
     genericPhotoAnalyses: null,
     // Photo processing (parallel branch architecture)
     whiteboardPhotoPath: null,
@@ -745,6 +767,7 @@ function getDefaultState() {
     _previousArcs: null,
     _previousOutline: null,
     _previousContentBundle: null,
+    _previousFullContext: null,
     // Arc validation routing (Commit 8.xx)
     _arcValidation: null,
     // Human rejection feedback (consumed by revision nodes, cleared after use)
@@ -905,6 +928,27 @@ const ROLLBACK_CLEARS = {
     'evaluationHistory'
   ],
 
+  // Phase 1.52: Await full context — re-collect accusation/sessionReport/directorNotes.
+  // ROLL-4: the three raw inputs are first-class channels; clearing them re-pauses
+  // checkpointAwaitContext, and re-collection overwrites them. The parse OUTPUTS
+  // (sessionConfig/directorNotes/playerFocus) are listed here too, BUT loadDirectorNotes
+  // rehydrates sessionConfig/directorNotes from inputs/*.json on the replay (files are the
+  // source of truth) — so the DURABLE re-parse trigger is checkpointAwaitContext's capture
+  // branch (Step 8), which re-nulls these AFTER loadDirectorNotes and immediately before
+  // parseRawInput (which skips when sessionConfig is populated). (rawSessionInput is EXEMPT
+  // and no longer pruned — its at-start config survives so the re-parse can read
+  // photosPath/journalistFirstName/etc.) Upstream collected inputs (roster,
+  // characterIdMappings, photoAnalyses, selectedPaperEvidence) are PRESERVED.
+  'await-full-context': [
+    'accusation', 'sessionReport', 'directorNotesRaw',
+    'sessionConfig', 'directorNotes', 'playerFocus',
+    'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+
   // Phase 1.75: Pre-curation checkpoint (Phase 4f)
   'pre-curation': [
     'preCurationApproved', 'characterData', 'narrativeTensions',
@@ -965,6 +1009,7 @@ const ROLLBACK_COUNTER_RESETS = {
   'paper-evidence-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'await-roster': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'character-ids': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'await-full-context': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'pre-curation': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'evidence-and-photos': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'arc-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },

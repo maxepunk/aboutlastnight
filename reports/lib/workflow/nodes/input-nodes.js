@@ -358,9 +358,13 @@ function mergeDirectorOverrides(sessionConfig, directorNotes) {
 }
 
 async function parseRawInput(state, config) {
-  // Skip if no raw input provided (resume case or pre-populated files)
-  if (!state.rawSessionInput) {
-    console.log('[parseRawInput] No rawSessionInput, skipping to loadDirectorNotes');
+  // ROLL-4: gate the skip on the parsed OUTPUT (sessionConfig), not the raw input, so a
+  // rollback to await-full-context (which clears sessionConfig) re-parses; a normal resume
+  // past input-review (sessionConfig populated) still skips; a from-files start (no
+  // rawSessionInput) still skips. rawSessionInput is no longer pruned (Step 12b), so the
+  // config reads below (photosPath/journalistFirstName/etc.) survive the rollback replay.
+  if ((state.sessionConfig && Object.keys(state.sessionConfig).length > 0) || !state.rawSessionInput) {
+    console.log('[parseRawInput] sessionConfig populated or no rawSessionInput — skipping parse');
     return {
       currentPhase: PHASES.LOAD_DIRECTOR_NOTES
     };
@@ -386,7 +390,7 @@ async function parseRawInput(state, config) {
   // Use config sessionId if provided, otherwise try to derive from session report
   const sessionIdHint = configSessionId
     ? `Use sessionId: "${configSessionId}" (provided by caller)`
-    : `Derive sessionId from: ${rawInput.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'current date'}`;
+    : `Derive sessionId from: ${state.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'current date'}`;
 
   // Use state.roster if available (from await-roster checkpoint), otherwise fall back to rawInput.roster
   const rosterForParsing = state.roster?.length > 0 ? state.roster : rawInput.roster;
@@ -400,7 +404,7 @@ ROSTER OF CHARACTERS:
 ${Array.isArray(rosterForParsing) ? rosterForParsing.join(', ') : (rosterForParsing || 'Not provided')}
 
 MURDER ACCUSATION:
-${rawInput.accusation || 'Not provided'}
+${state.accusation || 'Not provided'}
 
 SESSION ID INSTRUCTION:
 ${sessionIdHint}
@@ -432,22 +436,19 @@ Return structured JSON matching the schema.`;
 
   // Step 2 Promise: Parse session report (tokens, shell accounts)
   const step2Promise = (async () => {
-    if (!rawInput.sessionReport) {
-      return {
-        exposedTokens: [],
-        buriedTokens: [],
-        shellAccounts: [],
-        exposedCount: 0,
-        buriedCount: 0,
-        totalBuried: 0
-      };
+    // ROLL-4 + N1 fail-loud: the await-full-context gate guarantees presence before
+    // parseRawInput runs; a null here means the gate was bypassed. An empty session
+    // report makes every token default to buried and drops shell accounts -> the
+    // generator fabricates the investigation/amounts. Throw instead of degrading.
+    if (!state.sessionReport) {
+      throw new Error('parseRawInput: sessionReport is required but missing (await-full-context gate invariant violated)');
     }
 
     console.log('[parseRawInput] Step 2: Parsing session report');
     const sessionReportPrompt = `Parse the following session gameplay report into structured JSON.
 
 SESSION REPORT:
-${rawInput.sessionReport}
+${state.sessionReport}
 
 Section names vary between session-report generations. Recognize ALL of these patterns:
 
@@ -527,20 +528,15 @@ Return structured JSON matching the schema.`;
   const theme = config?.configurable?.theme || 'journalist';
   const themeNPCs = getThemeNPCs(theme);
 
+  // ROLL-4 + N1 fail-loud: gate guarantees presence (see sessionReport above).
+  if (!state.directorNotesRaw) {
+    throw new Error('parseRawInput: directorNotesRaw is required but missing (await-full-context gate invariant violated)');
+  }
   let directorNotes;
-  if (!rawInput.directorNotes) {
-    directorNotes = {
-      rawProse: '',
-      characterMentions: {},
-      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
-      quotes: [],
-      transactionReferences: [],
-      postInvestigationDevelopments: []
-    };
-  } else {
+  {
     console.log('[parseRawInput] Step 3: Enriching director notes with Opus');
     directorNotes = await enrichDirectorNotes({
-      rawProse: rawInput.directorNotes,
+      rawProse: state.directorNotesRaw,
       roster: sessionConfig.roster || [],
       accusation: sessionConfig.accusation || null,
       npcs: themeNPCs,
@@ -755,7 +751,6 @@ async function finalizeInput(state, config) {
       directorNotes: editedInput.directorNotes || state.directorNotes,
       playerFocus: editedInput.playerFocus || state.playerFocus,
       shellAccounts: editedInput.orchestratorParsed?.shellAccounts || state.shellAccounts,
-      rawSessionInput: null,  // Prune: parsed into sessionConfig/directorNotes/playerFocus
       currentPhase: PHASES.LOAD_DIRECTOR_NOTES
     };
   }
@@ -764,7 +759,6 @@ async function finalizeInput(state, config) {
   console.log('[finalizeInput] Input approved, proceeding to workflow');
 
   return {
-    rawSessionInput: null,  // Prune: parsed into sessionConfig/directorNotes/playerFocus
     currentPhase: PHASES.LOAD_DIRECTOR_NOTES
   };
 }
