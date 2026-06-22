@@ -85,17 +85,39 @@ async function drainAndClose({ inFlight, checkpointer, server, closeTimeoutMs = 
  * @param {string} sessionId - The session/thread ID
  * @returns {object|null} - { checkpointId, timestamp, state } or null if not found
  */
-async function getSessionState(sessionId) {
-    const config = { configurable: { thread_id: sessionId } };
-    const tuple = await sharedCheckpointer.getTuple(config);
-
-    if (!tuple) return null;
-
+/**
+ * Pure shaper: turn a graph.getState() snapshot (+ persisted outcome) into the
+ * /state response body. Interrupt-aware (READ-1) and outcome-aware (DEL-1).
+ * @param {object} graphState - result of graph.getState(config)
+ * @param {object|null} outcome - getSessionOutcome(sessionId) result
+ * @returns {object}
+ */
+function shapeSessionState(graphState, outcome) {
+    const interruptTask = (graphState.tasks || []).find(t => t.interrupts && t.interrupts.length > 0);
+    const interrupted = !!interruptTask;
+    const checkpointType = interrupted
+        ? (interruptTask.interrupts[0]?.value?.type || null)
+        : null;
     return {
-        checkpointId: tuple.checkpoint?.id,
-        timestamp: tuple.checkpoint?.ts,
-        state: tuple.checkpoint?.channel_values || {}
+        checkpointId: graphState.config?.configurable?.checkpoint_id || null,
+        timestamp: graphState.createdAt || null,
+        interrupted,
+        checkpointType,
+        state: graphState.values || {},
+        lastOutcome: outcome || null
     };
+}
+
+async function getSessionState(sessionId) {
+    const graph = createReportGraphWithCheckpointer(sharedCheckpointer);
+    const config = { configurable: { thread_id: sessionId } };
+    const graphState = await graph.getState(config);
+
+    if (!graphState || !graphState.values || Object.keys(graphState.values).length === 0) {
+        return null;
+    }
+
+    return shapeSessionState(graphState, getSessionOutcome(sessionId));
 }
 
 /**
@@ -715,6 +737,9 @@ app.get('/api/session/:id/state', requireAuth, async (req, res) => {
             sessionId,
             checkpointId: session.checkpointId,
             timestamp: session.timestamp,
+            interrupted: session.interrupted,
+            checkpointType: session.checkpointType,
+            lastOutcome: session.lastOutcome,
             state: session.state
         });
 
@@ -1447,4 +1472,4 @@ process.on('SIGINT', async () => {
 });
 
 // Export helpers for testing
-module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
