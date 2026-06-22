@@ -70,10 +70,11 @@ async function drainAndClose({ inFlight, checkpointer, server, closeTimeoutMs = 
     // keep-alive / SSE connections (the /progress stream is long-lived), so its callback
     // may never fire. Backstop with a timeout so SIGINT still exits cleanly — by this point
     // the checkpoint write + db handle close are already done, so nothing is lost.
-    await Promise.race([
-      new Promise(resolve => server.close(resolve)),
-      new Promise(resolve => setTimeout(resolve, closeTimeoutMs))
-    ]);
+    // (clear the timer when close() does call back, so we never leave a dangling handle.)
+    await new Promise(resolve => {
+      const timer = setTimeout(resolve, closeTimeoutMs);
+      server.close(() => { clearTimeout(timer); resolve(); });
+    });
   }
 }
 
