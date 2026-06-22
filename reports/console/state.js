@@ -6,6 +6,10 @@
 
 window.Console = window.Console || {};
 
+// Pure transition logic for the live LLM stream (dual-export, node-tested).
+// Must load BEFORE state.js in index.html (script-tag order).
+const StreamLogic = window.Console.llmStreamLogic;
+
 const initialState = {
   // Auth
   authenticated: false,
@@ -19,8 +23,9 @@ const initialState = {
   // Processing
   processing: false,
   sseConnected: false,
-  progressMessages: [],
-  llmActivity: null,       // { label, model, startTime, prompt, systemPrompt, response } or null
+  progressMessages: [],    // DEPRECATED: retained for any legacy reader; eventLog is authoritative
+  eventLog: [],            // unbounded scrollable macro feed (retires the .slice(-49) cap)
+  llmActivity: null,       // { label, model, startTime, phase, streamText, tokenCount, ttftMs, lastEventAt, error, response } or null
   lastLlmActivity: null,   // Last completed LLM call (with response) for panel display
   // Revision tracking (client-side cache for diff display)
   revisionCache: { outline: null, article: null },
@@ -41,7 +46,9 @@ const ACTIONS = {
   SSE_CONNECTED: 'SSE_CONNECTED',
   SSE_PROGRESS: 'SSE_PROGRESS',
   SSE_LLM_START: 'SSE_LLM_START',
+  SSE_LLM_DELTA: 'SSE_LLM_DELTA',
   SSE_LLM_COMPLETE: 'SSE_LLM_COMPLETE',
+  SSE_LLM_FAILURE: 'SSE_LLM_FAILURE',
   SSE_COMPLETE: 'SSE_COMPLETE',
   SSE_ERROR: 'SSE_ERROR',
   WORKFLOW_COMPLETE: 'WORKFLOW_COMPLETE',
@@ -87,6 +94,7 @@ function reducer(state, action) {
         ...state,
         processing: true,
         progressMessages: [],
+        eventLog: [],
         llmActivity: null,
         error: null
       };
@@ -97,32 +105,49 @@ function reducer(state, action) {
     case ACTIONS.SSE_PROGRESS:
       return {
         ...state,
+        eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'progress', message: action.message }),
+        // Capped legacy mirror — drop in P5.4 once ProgressStream reads eventLog.
         progressMessages: [...state.progressMessages.slice(-49), action.message]
       };
 
     case ACTIONS.SSE_LLM_START:
       return {
         ...state,
-        llmActivity: {
+        llmActivity: StreamLogic.applyLlmStart(state.llmActivity, {
           label: action.label,
           model: action.model,
           startTime: Date.now(),
-          prompt: action.prompt || null,
-          systemPrompt: action.systemPrompt || null,
-          response: null
-        }
+          prompt: action.prompt,
+          systemPrompt: action.systemPrompt
+        })
+      };
+
+    case ACTIONS.SSE_LLM_DELTA:
+      return {
+        ...state,
+        llmActivity: StreamLogic.applyLlmDelta(state.llmActivity, {
+          phase: action.phase,
+          deltaText: action.deltaText,
+          tokenCount: action.tokenCount,
+          ttftMs: action.ttftMs,
+          lastEventAt: Date.now()
+        })
+      };
+
+    case ACTIONS.SSE_LLM_FAILURE:
+      return {
+        ...state,
+        llmActivity: StreamLogic.applyLlmFailure(state.llmActivity, { error: action.error }),
+        eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'error', message: action.error })
       };
 
     case ACTIONS.SSE_LLM_COMPLETE:
       return {
         ...state,
-        // Preserve last LLM activity with response for the collapsible panel
-        lastLlmActivity: state.llmActivity ? {
-          ...state.llmActivity,
-          response: action.response || null,
-          completedElapsed: action.elapsed || null
-        } : state.lastLlmActivity,
-        llmActivity: null
+        ...StreamLogic.applyLlmComplete(state, {
+          response: action.response,
+          elapsed: action.elapsed
+        })
       };
 
     case ACTIONS.SSE_COMPLETE:
