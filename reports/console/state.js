@@ -165,10 +165,11 @@ function reducer(state, action) {
       };
 
     case ACTIONS.SET_ERROR:
-      return { ...state, error: action.message };
+      // UX-1: also clears `processing` so an early-400 approve can't hang the spinner.
+      return window.Console.sessionStatusLogic.applySetError(state, action.message);
 
     case ACTIONS.CLEAR_ERROR:
-      return { ...state, error: null };
+      return window.Console.sessionStatusLogic.applyClearError(state);
 
     default:
       console.warn('[state] Unknown action:', action.type);
