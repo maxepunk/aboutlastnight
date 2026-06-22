@@ -3028,6 +3028,40 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 Goal: The approve outcome is never lost (recoverable via GET /state), each pipeline outcome maps to one SSE event type, read endpoints report interrupt status, and a second concurrent /approve is rejected instead of corrupting the thread.
 Dependencies: P1 must land first (it replaces `new MemorySaver()` at server.js:37 with the durable `SqliteSaver`; this phase's `getSessionState` rewrite and outcome persistence ride on the same `sharedCheckpointer` and the durable `graph.getState`). No dependency on P2/P3, but if P5 lands first the `SSE_LLM_DELTA`/`eventLog` console state already exists — the UX-1 `SET_ERROR` change here is additive and independent of it. **See the Cross-Phase Integration section: Task 4.4 (`failed` event) must be reconciled with P5's inline-failure-card design, and Tasks 4.1–4.3 share the approve handler + `module.exports` with P1.4.**
 
+> **✅ LIVE-ANCHOR VERIFICATION (2026-06-22, branch `stage3-remediation`, P1+P3 landed).** Verified first-hand + an independent 4-agent sweep. **P1+P3 shifted every `server.js` anchor below by ~+90–100 lines — drive all edits off anchor TEXT, not these line numbers.** Actual locations:
+>
+> | Anchor | Plan said | **Actual** |
+> |---|---|---|
+> | `require('./lib/api-helpers')` | 32/33 | **33** |
+> | `getSessionState` (still uses `getTuple`) | 49–60 | **87–98** |
+> | approve handler | 918–1048 | **956–1096** |
+> | recovery 400 / not-at-checkpoint 400 | — | **980–985 / 988–992** |
+> | theme resolve / `buildResumePayload` / validationError 400 | — | **996–997 / 1000 / 1001–1003** |
+> | `res.json({status:'processing'})` | — | **1012–1016** |
+> | **P1.4** `const task = new Promise((resolve) => {` | (absent in plan) | **1020** |
+> | `setImmediate(async () => {` | — | **1021** |
+> | success `emitComplete(…, response)` | 1020–1021 | **1065** |
+> | background `catch` `emitComplete` | 1024–1031 | **1067–1074** |
+> | **P1.4** `} finally { resolve(); }` | (absent in plan) | **1075–1077** |
+> | **P1.4** `}).finally(() => inFlightTasks.delete(task))` / `inFlightTasks.add(task)` | (absent) | **1079 / 1080** |
+> | outer pre-bg `catch` | 1038–1044 | **1082–1095** |
+> | `module.exports` | 1343 | **1443** |
+> | GET /state `res.json` | 675–680 | **713–718** |
+> | GET /state/:field (reads `session.state[field]`) | 784–806 | **822–844** |
+> | `/api/generate` handler | 430–611 | **508–649** (JSDoc `/**` at **447**, `* POST /api/generate` at **448**, close `});` at **649**, then blank 650 + `// ===== SESSION STATE ENDPOINTS` at **651**) |
+> | progress-emitter `emitComplete` | 33–46 | **39–46** (JSDoc 33–38); `require('events')` at **12**; `module.exports` at **66** ✓ |
+> | console/api.js SSE `switch (type)` | 176–193 | **176–193** ✓ (fall-through cases 182–187; `default` at 190–192 already forwards unknown types) |
+> | console/app.js `complete` case / `error` case | 124–153 / 154 | **124–153 / 154–161** ✓ (note: an existing `llm_error` case sits at **109–123**, before `complete`) |
+> | console/app.js 400-approve `SET_ERROR` dispatch | 171–176 | **170–176** ✓ |
+> | console/state.js `SET_ERROR` / `CLEAR_ERROR` | 167–171 | **167–168 / 170–171** ✓ (`processing:false` in initialState at 20; `SSE_ERROR` at 131–137 already clears `processing` — the target pattern) |
+> | console/index.html `state.js` tag | — | **line 18** (insert above; `outline-edit-logic.js` precedent at 35) |
+>
+> **Two BLOCKER drifts — FIXED INLINE BELOW:**
+> 1. **M1 — `module.exports` is no longer `{ buildResumePayload }`.** Live base (1443) is `{ buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable }`. Tasks 4.1 Step 6 / 4.2 Step 5 are corrected to a **cumulative append** (never a replace).
+> 2. **M2 — Task 4.3 Step 5's old "to" block dropped P1.4's `const task = new Promise((resolve) => {` wrapper.** Corrected to **insert-only** (the 409 guard) + **merge `releaseSessionLock` into the EXISTING `} finally { resolve(); }` (1075–1077)**. The wrapper (1020), `.finally(delete)` (1079), and `add(task)` (1080) MUST be preserved.
+>
+> **Confirmed clean:** all 9 new files absent (no create-collisions); `/api/generate` has **zero** callers in `console/` & `scripts/` (incl. `e2e-walkthrough.js`) — broaden the Task 4.6 Step 1 grep to `__tests__` too before deleting; `outcomeEventType` + `SSE_LLM_FAILURE` absent (P5.2 not landed → **Task 4.4 lands the interim `SET_ERROR` banner**; the M4 inline-card reconciliation is a P5-time edit). `createReportGraphWithCheckpointer` already imported at **server.js:16** (used at 663/734) — Task 4.2 Step 3 just CALLS it, no new import. `getSessionState`'s new shape preserves `state`/`checkpointId`/`timestamp`, so its other consumers (GET /state/:field at 826, the `RESOURCE_ENDPOINTS` loop at 866) stay compatible.
+
 ### Task 4.1: Persist the final approve outcome so a dropped SSE is recoverable via GET /state (DEL-1)
 **Files:**
 - Create: `C:\Users\spide\Documents\claudecode\aboutlastnight\reports\lib\session-outcome.js`
@@ -3240,9 +3274,9 @@ And in the outer (pre-background) `catch` (server.js:1038-1044), record the earl
         progressEmitter.emitComplete(sessionId, earlyFailure);
 ```
 
-- [ ] **Step 6: Export the getter from server.js for the GET /state merge in Task 4.2.** Change `module.exports = { buildResumePayload };` (server.js:1343) to:
+- [ ] **Step 6: Export the getter from server.js for the GET /state merge in Task 4.2 (M1 — CUMULATIVE APPEND, do NOT replace).** ⚠️ Live `module.exports` (server.js:**1443**) is already `{ buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable }` (P1 added `drainAndClose`/`_inFlight`; P3.11 added `probeNotionReachable`). Append `getSessionOutcome` to the existing set:
 ```js
-module.exports = { buildResumePayload, getSessionOutcome };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome };
 ```
 
 - [ ] **Step 7: Confirm the existing server test still loads (require doesn't start the server).**
@@ -3402,9 +3436,9 @@ to:
 ```
 (The GET /state/:field handler at 784-806 already reads `session.state[field]` and needs no change — `shapeSessionState` still returns `state`.)
 
-- [ ] **Step 5: Export `shapeSessionState` for the test.** Change `module.exports = { buildResumePayload, getSessionOutcome };` (server.js:1343) to:
+- [ ] **Step 5: Export `shapeSessionState` for the test (M1 — CUMULATIVE APPEND).** After Task 4.1, the live line (server.js:**1443**) is `{ buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome }`. Append `shapeSessionState`:
 ```js
-module.exports = { buildResumePayload, getSessionOutcome, shapeSessionState };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
 ```
 
 - [ ] **Step 6: Re-run both the new and the existing server tests.**
@@ -3518,24 +3552,23 @@ npx jest __tests__/unit/session-locks.test.js
 ```
 Expected: `Tests: 5 passed`.
 
-- [ ] **Step 5: Wire the lock into the approve handler.** Require it (after the session-outcome require added in Task 4.1):
+- [ ] **Step 5: Wire the lock into the approve handler (INSERT-ONLY — preserve the P1.4 DUR-2 wrapper; M2).** ⚠️ The original "to" block here predated P1.4 and showed `res.json(...)` directly followed by `setImmediate`. **Live code (956–1096) now nests the entire `setImmediate` inside `const task = new Promise((resolve) => { … }).finally(() => inFlightTasks.delete(task))` (1020 / 1079) with `inFlightTasks.add(task)` (1080) and an existing `} finally { resolve(); }` (1075–1077). Do NOT replace that region.** Make three surgical edits:
+
+**5a. Add the session-locks require** next to the session-outcome require Task 4.1 added (~line 34):
 ```js
-const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome } = require('./lib/session-outcome');
+const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome } = require('./lib/session-outcome');  // (added in 4.1)
 const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
 ```
-Acquire immediately after the interrupt check passes and before building the resume payload. The lock must be released in EVERY exit of the background task. Change the block (server.js:953-982) — from the theme resolve through the `setImmediate` open — so it reads:
-```js
-        // Resolve theme from state
-        const theme = graphState.values?.theme || 'journalist';
-        config.configurable.theme = theme;
 
-        // Build resume payload from approvals (pass current state for incremental input merging)
-        const { resume, stateUpdates, error: validationError } = buildResumePayload(approvals, graphState.values, theme);
+**5b. INSERT the 409 guard** in the gap between the `validationError` 400 return (ends ~1003) and the `// Return immediately` / `const previousPhase` / `res.json({status:'processing'})` (1010–1016). Anchor on those existing lines; insert the new block between them (acquire AFTER all 400 paths so they never leak the lock, and BEFORE `res.json(processing)` so the loser gets a 409, not a 200):
+```js
         if (validationError) {
             return res.status(400).json({ sessionId, error: validationError });
         }
 
-        // CONC-1: reject a second concurrent approve on this session.
+        // CONC-1: reject a second concurrent approve on this session. After all 400
+        // paths (so they never leak the lock); before res.json(processing) (so the
+        // loser gets a 409, not a 200 'processing').
         if (!acquireSessionLock(sessionId)) {
             return res.status(409).json({
                 sessionId,
@@ -3546,33 +3579,28 @@ Acquire immediately after the interrupt check passes and before building the res
         // Return immediately - workflow runs in background
         const previousPhase = graphState.values?.currentPhase;
         res.json({
-            sessionId,
-            status: 'processing',
-            previousPhase
-        });
-
-        // Run workflow in background using Command({ resume }) pattern
-        setImmediate(async () => {
-            try {
 ```
-Then add a `finally` that releases the lock. Change the background task's `catch` close (server.js:1023-1032) so the try/catch gains a finally:
+
+**5c. MERGE `releaseSessionLock` into the EXISTING `} finally { resolve(); }` (1075–1077)** — do NOT add a second `finally` (that is a syntax error; M2). Change:
 ```js
-            } catch (error) {
-                console.error(`[${new Date().toISOString()}] Background workflow error for session ${sessionId}:`, error);
-                const failedResponse = {
-                    sessionId,
-                    currentPhase: PHASES.ERROR,
-                    error: 'Internal server error',
-                    details: 'Approval operation failed. Check server logs.'
-                };
-                recordSessionOutcome(sessionId, buildOutcomeRecord(failedResponse));
-                progressEmitter.emitComplete(sessionId, failedResponse);
             } finally {
-                releaseSessionLock(sessionId);
+                resolve();
             }
         });
+        }).finally(() => inFlightTasks.delete(task));
+        inFlightTasks.add(task);
 ```
-(The lock is acquired only after all synchronous 400 paths, so those early returns never leak it. The outer pre-background `catch` at 1034 runs only for throws before `acquireSessionLock`, so it must NOT release — leave it unchanged except for the Task 4.1 outcome-record edit.)
+to:
+```js
+            } finally {
+                releaseSessionLock(sessionId);   // CONC-1 (P4.3)
+                resolve();                       // DUR-2 drain (P1.4)
+            }
+        });
+        }).finally(() => inFlightTasks.delete(task));
+        inFlightTasks.add(task);
+```
+(The `const task = new Promise((resolve) => {` wrapper, the nested `setImmediate`, `.finally(() => inFlightTasks.delete(task))`, and `inFlightTasks.add(task)` are all preserved unchanged. The background `catch` body keeps the Task 4.1 `failedResponse` + `recordSessionOutcome` edit. The outer pre-background `catch` at **1082** runs only for throws BEFORE `acquireSessionLock`, so it must NOT release — leave its handling absent. Negligible edge: if `res.json` itself threw after acquire, the lock would leak — accepted, `res.json` throwing synchronously is pathological.)
 
 - [ ] **Step 6: Verify no early-return path holds the lock by reading the changed handler.**
 ```
@@ -3896,15 +3924,18 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>'
 - Modify: `C:\Users\spide\Documents\claudecode\aboutlastnight\reports\server.js` (JSDoc + handler ~430-611)
 - Test: `C:\Users\spide\Documents\claudecode\aboutlastnight\reports\__tests__\unit\no-api-generate.test.js`
 
-- [ ] **Step 1: Confirm nothing in the console or e2e harness still calls /api/generate.** GEN-1 says it is deprecated and divergent (`buildResumePayload(approvals, {}, ...)` drops `photosPath`). Verify there are no live callers before deleting.
+- [ ] **Step 1: Confirm no LIVE caller, and enumerate every in-repo reference to delete/clean (verified 2026-06-22, repo-wide grep).** GEN-1: the endpoint is deprecated and divergent (`buildResumePayload(approvals, {}, ...)` at server.js:596 drops the fullContext merge → loses `photosPath`). A repo-wide `grep "api/generate"` found:
+  - **Live console (`console/`) and `scripts/` (incl. `e2e-walkthrough.js`): ZERO callers** — safe to delete.
+  - **`__tests__/integration/api.test.js` (483 lines, 100% about `/api/generate`)** — a SELF-CONTAINED simulation (`handleGenerateRequest()` is a LOCAL mirror, NOT an import of the real route), so deleting the route does NOT make it fail; it would stay GREEN while testing a removed endpoint (false coverage — the exact orphan trap). **`git rm` it in Step 4.** (It never exercised the real handler, so no unique coverage is lost.)
+  - **`server.js:1228`** — the `/api/health` endpoints listing advertises `generate: '/api/generate (POST) [DEPRECATED]'`. **Remove that line in Step 4** so health stops advertising a deleted route. (server.js:1170 is a harmless JSDoc mention on `/resume` — leave it.)
+  - **`detlogv3.html:1665`** — a SUPERSEDED standalone console ("Console MAX") that POSTs `{ systemPrompt, userPrompt, model }` — an even older contract the CURRENT handler never accepted (it requires `sessionId` → would 400), so it is ALREADY non-functional. NOT a blocker; leave it (optional archive in P12).
+  - `CLAUDE.md:447` (root API Reference "Legacy" line) — update in Step 4. `archive/`, `audit/` are read-only history — ignore.
+
+  Re-run the live-caller grep to confirm nothing regressed since:
 ```
-npx jest --version >/dev/null; node -e "1"  # no-op to keep step shape
+git grep -n "api/generate" -- console scripts 2>/dev/null || true
 ```
-Then search the front-end + tooling:
-```
-git grep -n "api/generate" -- console scripts e2e-walkthrough.js 2>/dev/null || true
-```
-Expected: zero hits in `console/` and `scripts/` (the only matches, if any, are in `server.js` itself and docs). If a live caller appears, STOP and migrate it to `/start`+`/approve` before deleting — do not delete with a live caller.
+Expected: zero hits in `console/` and `scripts/`. If a live caller appears, STOP and migrate it to `/start`+`/approve` before deleting.
 
 - [ ] **Step 2: Write the failing guard test asserting the endpoint is gone from server source.** Since there is no supertest harness, assert the route is not registered by scanning the server source for the route definition (the same static-source approach used to verify wiring without booting Express).
 
@@ -3928,6 +3959,10 @@ describe('GEN-1 /api/generate removal', () => {
     expect(SERVER_SRC).toMatch(/\/api\/session\/:id\/start/);
     expect(SERVER_SRC).toMatch(/\/api\/session\/:id\/approve/);
   });
+
+  it('no longer advertises /api/generate in the /api/health endpoints listing', () => {
+    expect(SERVER_SRC).not.toMatch(/generate:\s*['"`]\/api\/generate/);
+  });
 });
 ```
 
@@ -3935,19 +3970,19 @@ describe('GEN-1 /api/generate removal', () => {
 ```
 npx jest __tests__/unit/no-api-generate.test.js
 ```
-Expected: the first test fails — `/api/generate` is still registered.
+Expected: the route test AND the health-listing test fail — `/api/generate` is still registered and still advertised.
 
-- [ ] **Step 4: Delete the handler and its JSDoc block.** Read the exact span first (the JSDoc opens at server.js:469's `*/` predecessor; the handler runs 470-611). Read to find the JSDoc start:
-```
-node -e "const s=require('fs').readFileSync('server.js','utf8').split('\n'); for(let i=420;i<472;i++) console.log((i+1)+': '+s[i]);"
-```
-Then remove the contiguous block from the JSDoc comment opener that documents `/api/generate` through the handler's closing `});` at line 611 (inclusive). Use an exact-anchor edit: delete from the comment line containing `* POST /api/generate` opener up to and including the `});` that closes the handler at 611, leaving the `// ===== SESSION STATE ENDPOINTS (8.9.7) =====` block (612+) intact. After editing, the line immediately following the prior route's `});` should be the `// ===== SESSION STATE ENDPOINTS` comment.
+- [ ] **Step 4: Delete the handler + JSDoc, the health-listing line, the orphaned mirror test, and the doc line.** Actual spans (verified 2026-06-22): the JSDoc opens at **server.js:447** (`/**`, `* POST /api/generate` at 448), `app.post('/api/generate'` at **508**, handler closes `});` at **649**, followed by blank 650 + `// ===== SESSION STATE ENDPOINTS (8.9.7) =====` at **651**. Anchor on TEXT, not these numbers.
+  - **4a.** Delete the contiguous block from the JSDoc `/**` opener (the one whose first line is `* POST /api/generate`, at 447) through the handler's closing `});` (649) inclusive, leaving the `// ===== SESSION STATE ENDPOINTS (8.9.7) =====` line (651) intact. After the edit, the route ABOVE ends with its `});`, then a blank line, then the SESSION STATE comment.
+  - **4b.** Remove the `/api/health` listing line (was server.js:1228): `            generate: '/api/generate (POST) [DEPRECATED]',` (the `endpoints:` object then starts with `config:`).
+  - **4c.** Delete the orphaned simulation test entirely: `git rm __tests__/integration/api.test.js` (483 lines, 100% `/api/generate`; a local mirror that would otherwise stay false-green).
+  - **4d.** Remove the `**Legacy:** \`/api/generate\` (POST) - Deprecated. Use \`/start\` or \`/resume\` instead.` line from the root `CLAUDE.md` API Reference section (~line 447).
 
 - [ ] **Step 5: Re-run, expect green.**
 ```
 npx jest __tests__/unit/no-api-generate.test.js
 ```
-Expected: `Tests: 2 passed`.
+Expected: `Tests: 3 passed`.
 
 - [ ] **Step 6: Sanity-check the file still parses and the server module still requires cleanly (no boot).**
 ```
@@ -3955,15 +3990,16 @@ node -e "require('./server.js'); console.log('server.js requires OK, no boot');"
 ```
 Expected: `server.js requires OK, no boot` with no Express banner (require.main guard holds).
 
-- [ ] **Step 7: Run the existing server test to confirm exports intact.**
+- [ ] **Step 7: Confirm exports intact + no orphan left by the `api.test.js` deletion (broad sweep, per the fail-loud orphan lesson).**
 ```
-npx jest __tests__/unit/server-build-resume-payload.test.js
+npx jest __tests__/unit/server-build-resume-payload.test.js __tests__/unit/no-api-generate.test.js __tests__/integration
+grep -rl "api/generate" __tests__ || echo "clean: no remaining /api/generate test references"
 ```
-Expected: all green.
+Expected: all green; the `__tests__/integration` dir runs WITHOUT `api.test.js` (deleted) and nothing else references it (it was self-contained); the grep prints the "clean" line.
 
-- [ ] **Step 8: Commit.**
+- [ ] **Step 8: Commit (server + new test + CLAUDE.md staged via `git add`; the deleted mirror test via `git rm` in 4c).**
 ```
-git add server.js __tests__/unit/no-api-generate.test.js && git commit -m 'chore(server): remove deprecated divergent /api/generate endpoint (GEN-1)
+git add server.js __tests__/unit/no-api-generate.test.js CLAUDE.md && git commit -m 'chore(server): remove deprecated /api/generate + its orphaned mirror test (GEN-1)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>'
 ```
