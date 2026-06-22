@@ -172,8 +172,8 @@ const result = await sdkQuery({
   systemPrompt: '...',
   model: 'sonnet',  // 'haiku' | 'sonnet' | 'opus'
   jsonSchema: { type: 'object', properties: {...} },
-  // timeoutMs: omitted — inherits the standardized 10-min model default.
-  // Per-call overrides have been removed across the codebase; tighten only with data (see Model Timeouts below).
+  // timeoutMs: omitted — inherits the 15-min IDLE/stall default (re-armed on every streamed
+  // message, NOT a total-duration cap). Pass a smaller idle window only with data (see Model Call Limits below).
   onProgress: (msg) => console.log(msg.type, msg.elapsed),  // Optional streaming
   allowedTools: ['Read'],  // Optional, for images
   label: 'Evidence analysis',  // For timeout error messages
@@ -199,7 +199,7 @@ Watch issue #277 — if/when the SDK fixes constrained decoding for complex sche
 
 We never load user-level (`~/.claude/`) or local sources. A probe found those contribute ~86K tokens of irrelevant context (superpowers meta-skill, MEMORY.md, MCP server instructions, two `CLAUDE.md` files) that none of our SDK calls use. This is pure context hygiene — it does NOT prevent the channel skip described above; that's a separate SDK bug.
 
-**Model Timeouts:** 10 min uniformly across Haiku, Sonnet, Opus. The cap is intended for genuinely-stuck calls only — steady-state latency is captured per-call via `duration_api_ms` on the `llm_complete` progress event (see `lib/observability/progress-bridge.js`). Per-call `timeoutMs` overrides have been removed across the codebase; tighten only when you have data showing it's safe.
+**Model Call Limits (idle timeout + cost ceiling):** SDK calls use a **15-min IDLE/stall timeout**, not a total-duration cap — the timer is re-armed on every streamed message (including the token-level `includePartialMessages` deltas emitted as `llm_delta`), so a legitimately long call (big prompt + extended thinking) survives as long as it keeps producing; only a genuine stall (no streamed activity for 15 min) aborts. A stall throws `SDK timeout after … idle … with no streamed activity`, which `isSdkTimeoutError` recognizes and `isTransientError` (`lib/llm/retry.js`) classifies **transient** (the node-level `retryPolicy` consumes this to auto-retry transient SDK failures). Cost is bounded separately by a **per-call `maxBudgetUsd` ceiling** (`MODEL_BUDGETS` in `lib/llm/client.js`: opus $5, sonnet $2, haiku $0.5) — a generous backstop, not a tight cap; an overrun throws a labeled **non-transient** `error_max_budget_usd` that is never auto-retried (the budget is per-CALL, so N node-retries can cost up to N× the ceiling). Steady-state latency is still captured per-call via `duration_api_ms` on the `llm_complete` event (`lib/observability/progress-bridge.js`).
 
 **Model Pins** (see `MODEL_IDS` in `lib/llm/client.js`):
 - `opus` → `claude-opus-4-8` (arc analysis, article validation)
