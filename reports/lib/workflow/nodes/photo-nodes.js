@@ -695,19 +695,11 @@ async function parseCharacterIds(state, config) {
     };
 
   } catch (parseError) {
+    // Fail-loud: empty character-ID mappings discard the director's just-approved
+    // character-ids selection and yield mis-identified photos. Throw so retryPolicy +
+    // the pre-node snapshot handle it.
     console.error('[parseCharacterIds] Error parsing character IDs:', parseError.message);
-
-    // Return empty mappings on error, allow workflow to continue
-    return {
-      characterIdMappings: {},
-      errors: [{
-        type: 'CHARACTER_ID_PARSE_ERROR',
-        message: `Failed to parse character IDs: ${parseError.message}`,
-        phase: PHASES.PARSE_CHARACTER_IDS,
-        timestamp: new Date().toISOString()
-      }],
-      currentPhase: PHASES.PARSE_CHARACTER_IDS
-    };
+    throw new Error(`Failed to parse character IDs: ${parseError.message}`);
   }
 }
 

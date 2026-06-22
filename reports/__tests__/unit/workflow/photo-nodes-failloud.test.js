@@ -23,6 +23,7 @@ jest.mock('../../../lib/workflow/checkpoint-helpers',
 
 const photoNodes = require('../../../lib/workflow/nodes/photo-nodes');
 const analyzePhotos = photoNodes.analyzePhotos;
+const parseCharacterIds = photoNodes.parseCharacterIds;
 const { createMockImagePromptBuilder } = require('../../../lib/image-prompt-builder');
 
 const mockImagePromptBuilder = createMockImagePromptBuilder();
@@ -57,5 +58,36 @@ describe('analyzePhotos fail-loud (N2)', () => {
 
     expect(result.photoAnalyses).toBeDefined();
     expect(result.photoAnalyses.stats.totalPhotos).toBe(0);
+  });
+});
+
+describe('parseCharacterIds fail-loud', () => {
+  test('throws when ID parsing fails (no empty mapping fallthrough)', async () => {
+    // sdk rejects → the parse catch must re-throw rather than return
+    // { characterIdMappings: {}, errors:[CHARACTER_ID_PARSE_ERROR] }, which would
+    // discard the director's just-approved character-ids selection.
+    const mockSdk = jest.fn().mockRejectedValue(new Error('overloaded_error'));
+
+    // State must pass all THREE legitimate early-skip guards to reach the SDK call:
+    //   - characterIdsRaw truthy        → passes the no-raw-input skip (line ~603)
+    //   - characterIdMappings null       → passes the structured-mappings skip (line ~611)
+    //   - photoAnalyses.analyses.length  → passes the no-photos skip (line ~619)
+    const state = {
+      characterIdsRaw: 'Alex appears in photo a.jpg',
+      characterIdMappings: null,
+      _characterIdsParsed: false,
+      photoAnalyses: { analyses: [{ filename: 'a.jpg' }] },
+      sessionConfig: { roster: ['Alex'] },
+      sessionId: 'TEST'
+    };
+
+    await expect(
+      parseCharacterIds(state, {
+        configurable: { sdkClient: mockSdk, imagePromptBuilder: mockImagePromptBuilder }
+      })
+    ).rejects.toThrow(/character id|overloaded/i);
+
+    // Confirm the SDK was actually exercised (guard reached, not an early skip-return)
+    expect(mockSdk).toHaveBeenCalledTimes(1);
   });
 });
