@@ -62,15 +62,19 @@ describe('state pruning - finalizeInput', () => {
   });
 });
 
-describe('state pruning - curateEvidenceBundle (empty bundle path)', () => {
-  test('prunes memoryTokens, paperEvidence, preprocessedEvidence on empty bundle', async () => {
+describe('state pruning - curateEvidenceBundle (empty evidence now throws)', () => {
+  // N3 fail-loud (P3.4): empty preprocessedEvidence.items means an upstream
+  // fetch/preprocess failure, NOT a legitimate empty session. The node now THROWS
+  // instead of pruning fields and returning a polished empty three-layer bundle.
+  // (Previously asserted the now-removed empty-bundle prune path.)
+  test('throws on empty preprocessedEvidence instead of pruning to an empty bundle', async () => {
     const { curateEvidenceBundle } = require('../workflow/nodes/ai-nodes');
 
     const state = {
       evidenceBundle: null,
       memoryTokens: [{ id: 't1', disposition: 'exposed', ownerLogline: 'Alex', summary: 'test' }],
       paperEvidence: [{ id: 'p1', name: 'Paper 1' }],
-      preprocessedEvidence: { items: [] },  // Empty items triggers empty bundle path
+      preprocessedEvidence: { items: [] },  // Empty items now triggers a fail-loud throw
       sessionConfig: { roster: ['Alex'] },
       directorNotes: {},
       playerFocus: { accusation: {} },
@@ -79,12 +83,8 @@ describe('state pruning - curateEvidenceBundle (empty bundle path)', () => {
     };
     const config = { configurable: {} };
 
-    const result = await curateEvidenceBundle(state, config);
-
-    expect(result.memoryTokens).toBeNull();
-    expect(result.paperEvidence).toBeNull();
-    expect(result.preprocessedEvidence).toBeNull();
-    expect(result.evidenceBundle).toBeDefined();
+    await expect(curateEvidenceBundle(state, config))
+      .rejects.toThrow(/no preprocessed evidence|empty/i);
   });
 
   test('does NOT prune on skip path (evidenceBundle already exists)', async () => {

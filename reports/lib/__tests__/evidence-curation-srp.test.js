@@ -21,19 +21,25 @@ describe('curateEvidenceBundle SRP', () => {
     // The function should be accessible - check both exports and _testing
     const curateEvidenceBundle = aiNodes.curateEvidenceBundle || aiNodes._testing?.curateEvidenceBundle;
 
-    // With empty preprocessed evidence, it should create an empty bundle and return
-    // WITHOUT calling interrupt() (which would throw GraphInterrupt)
+    // SRP guarantee: curateEvidenceBundle runs the REAL curation path and returns a
+    // bundle WITHOUT calling interrupt() (which would throw GraphInterrupt).
+    //
+    // N3 fail-loud (P3.4) removed the empty-items fast-path this test used as a
+    // shortcut, so we now exercise a POPULATED preprocessedEvidence fixture with an
+    // injected mock sdkClient (matching the working populated-curation test in
+    // __tests__/unit/workflow/ai-nodes.test.js 'calls SDK ... batched curation').
+    const mockPreprocessedEvidence = require('../../__tests__/fixtures/mock-responses/preprocessed-evidence.json');
+    const mockEvidenceBundle = require('../../__tests__/fixtures/mock-responses/evidence-bundle.json');
+    const { createMockSdkClient } = require('../../__tests__/mocks/llm-client.mock');
+
     const state = {
-      preprocessedEvidence: {
-        items: [],
-        playerFocus: {}
-      },
+      preprocessedEvidence: mockPreprocessedEvidence,
       sessionId: 'test-session'
     };
 
     const config = {
       configurable: {
-        sdkClient: jest.fn()
+        sdkClient: createMockSdkClient({ evidenceBundle: mockEvidenceBundle })
       }
     };
 

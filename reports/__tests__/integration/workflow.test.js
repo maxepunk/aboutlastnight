@@ -228,7 +228,12 @@ describe('workflow integration', () => {
       // NOTE: With checkpoint-helpers mocked, checkpointInterrupt() returns data
       // instead of throwing GraphInterrupt. This test now verifies that:
       // 1. The graph can complete with mocked checkpoints
-      // 2. evidenceBundle is created (even if empty for test data)
+      // 2. evidenceBundle is created from POPULATED preprocessed evidence
+      //
+      // N3 fail-loud (P3.4): curateEvidenceBundle now THROWS on empty
+      // preprocessedEvidence.items instead of emitting a polished empty bundle, so we
+      // seed mockPreprocessedEvidence (same as the other full-pipeline tests below) to
+      // exercise the real populated curation path that produces a defined bundle.
       const graph = createReportGraph();
       const config = createMockConfig('test-session');
 
@@ -239,12 +244,13 @@ describe('workflow integration', () => {
           roster: [{ name: 'Alice' }, { name: 'Bob' }],
           accusation: { accused: ['Blake'] }
         },
+        preprocessedEvidence: mockPreprocessedEvidence,  // Populated so curation runs (N3: empty now throws)
         preCurationApproved: true  // Phase 4f: skip pre-curation checkpoint
       };
 
       // With mocked checkpointInterrupt, graph should complete
       const result = await graph.invoke(initialState, config);
-      // evidenceBundle is created (possibly empty) during pipeline
+      // evidenceBundle is created from the populated preprocessed evidence
       expect(result.evidenceBundle).toBeDefined();
     });
 
