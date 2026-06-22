@@ -5769,8 +5769,14 @@ test('capture branch nulls sessionConfig/directorNotes/playerFocus so parseRawIn
 
 ```javascript
         // ROLL-4: stash prior full-context so AwaitFullContext pre-fills the re-collection
-        // form. buildRollbackState nulls the 3 channels; capture their current values first.
-        if (rollbackTo === 'await-full-context') {
+        // form whenever the rollback CLEARS those channels — await-full-context, OR any
+        // upstream point whose clear list includes them (paper-evidence-selection / await-roster /
+        // character-ids, added by P6.4's per-point re-pause fix). Gating on the clear list itself
+        // (not a literal rollbackTo === 'await-full-context') makes the pre-fill automatically
+        // track which points clear full-context, so re-collection stays one-click (no re-typing
+        // a long sessionReport) regardless of how far back the director rolled.
+        // buildRollbackState nulls the channels; capture their current values first.
+        if (ROLLBACK_CLEARS[rollbackTo]?.includes('accusation')) {
             initialState._previousFullContext = {
                 accusation: session.state.accusation || null,
                 sessionReport: session.state.sessionReport || null,
@@ -5779,7 +5785,7 @@ test('capture branch nulls sessionConfig/directorNotes/playerFocus so parseRawIn
         }
 ```
 
-  (`session` is already fetched via `getSessionState(sessionId)` at ~967; `session.state` holds the live channel values.)
+  (`session` is already fetched via `getSessionState(sessionId)` at ~967; `session.state` holds the live channel values. `ROLLBACK_CLEARS` is already imported in `server.js` — it is read at ~997/1006 for `fieldsCleared`. At P6.3-land time only `await-full-context` clears `accusation`, so this behaves exactly like the literal check; once P6.4 adds the channels to the three upstream lists, the pre-fill covers them with no further change. This is the forward-compatible form of the stash.)
 
 - [ ] **Step 15: Pre-fill the AwaitFullContext form.** In `console/components/checkpoints/AwaitFullContext.js`, change the state seeding + add a reset effect:
 
@@ -5876,8 +5882,10 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task P6.4: Completeness test — enumerate every node-written state field and assert each is in a clear list or a documented EXEMPT set (ROOT-1)
 
 **Files:**
-- Modify: `lib/workflow/state.js:850` (add an exported `ROLLBACK_CLEARS_EXEMPT` Set + JSDoc immediately above `ROLLBACK_CLEARS`; export it in `module.exports`; **also** add `outputPath`/`photosCopied` to all 10 clear lists — see Step 2b)
+- Modify: `lib/workflow/state.js:850` (add an exported `ROLLBACK_CLEARS_EXEMPT` Set + JSDoc immediately above `ROLLBACK_CLEARS`; export it in `module.exports`; **also** add `outputPath`/`photosCopied` to all 10 clear lists — see Step 2b; **also** close the 4 per-point re-pause gaps — see Step 2c)
 - Create: `lib/__tests__/rollback-clears-completeness.test.js`
+
+> **⚠️ EXTENDED 2026-06-22 (post-P6.1 audit — per-point re-pause completeness).** The union-based completeness guard below (Step 3) checks each field is cleared *somewhere*, which CANNOT catch a per-point gap: a rollback point that fails to clear an incremental input captured at a *downstream* checkpoint, so that checkpoint skips and silently reuses stale input on the replay (the ROLL-1 class, at a third+ point). An Opus audit of all rollback points against the checkpoint skip-field map found exactly **4 net-new gaps** (all the same class, all Medium — they defeat part of the rollback contract but do NOT corrupt the article; no Type-B stale-data leaks remain after P6.2): (1) `paper-evidence-selection` does not clear `roster`/`rosterPronouns` → `await-roster` skips; (2) `paper-evidence-selection`, (3) `await-roster`, (4) `character-ids` do not clear `accusation`/`sessionReport`/`directorNotesRaw` → `await-full-context` skips. The codebase already commits to the positional invariant (`state.js:843` "clears its own outputs plus all downstream phases") — `paper-evidence-selection` already clears every *other* downstream checkpoint's skip-field (`preCurationApproved`/`_evidenceApproved`/`selectedArcs`/`outlineApproved`/`articleApproved`); roster + full-context were just missed because those channels were promoted later (P6.1/P6.3). **Step 2c** closes the 4 gaps (consistency, not a new philosophy); **Step 3b** adds a structural per-point guard so the class can't silently regress when a future incremental-input channel is added. The generalized pre-fill stash (P6.3 Step 14, `ROLLBACK_CLEARS[rollbackTo]?.includes('accusation')`) keeps full-context re-collection one-click at the 3 new clear points.
 
 > **⚠️ CORRECTED 2026-06-22 (P6 pre-flight verification vs live source).** The original EXEMPT set and `getDefaultState()`-based enumeration **failed two of the guard's own assertions** when run against the real channel set (`ReportStateAnnotation.spec`): (1) `uncovered = ['outputPath','photosCopied']` — both written by the terminal `assembleHtml` node (`template-nodes.js:185-186`) but in no clear list and not exempt; (2) disjoint-violation `both = ['sessionPhotos','whiteboardAnalysis']` — placed in EXEMPT yet already cleared (`input-review`/`await-roster`). The corrected Step 1 EXEMPT set, the new Step 2b (clear `outputPath`/`photosCopied`), and the `.spec`-based enumeration in Step 3 make all four assertions pass. **This task lands AFTER P6.3**, so the channel set is 65 (61 + P6.3's `accusation`/`sessionReport`/`directorNotesRaw`/`_previousFullContext`): the 3 raw inputs are covered (cleared by `await-full-context`) and `_previousFullContext` is EXEMPT — re-verified by script (all four assertions `[]`). Enumeration uses `ReportStateAnnotation.spec`, not `getDefaultState()`, because the latter silently omits `shellAccounts` — a real drift blind spot the guard must not have.
 
@@ -5963,6 +5971,59 @@ with:
 
 Verify exactly 10: `grep -c "'outputPath'" lib/workflow/state.js` → `10`, and `grep -c "'photosCopied'" lib/workflow/state.js` → `10`. (The `assembledHtml:`/`validationResults:` Annotation definitions are separate lines and are NOT matched by the paired-quote substring.)
 
+- [ ] **Step 2c: Close the 4 per-point re-pause gaps (audit finding).** Three upstream rollback points fail to clear an incremental input captured at a downstream checkpoint, so that checkpoint silently skips on the replay. Add the missing skip-fields with three **context-anchored** edits (each list block is unique by its opening comment/first line — do NOT `replace_all`). The new Step 3b guard locks these.
+
+  **(i) `paper-evidence-selection`** — add `roster`/`rosterPronouns` (await-roster is downstream) AND `accusation`/`sessionReport`/`directorNotesRaw` (await-full-context is downstream). Replace:
+```javascript
+  // Phase 1.35: Paper evidence selection (8.9.4)
+  'paper-evidence-selection': [
+    'selectedPaperEvidence',
+    'photoAnalyses', 'characterIdMappings',
+```
+  with:
+```javascript
+  // Phase 1.35: Paper evidence selection (8.9.4)
+  'paper-evidence-selection': [
+    'selectedPaperEvidence',
+    // Per-point re-pause: await-roster + await-full-context are DOWNSTREAM of this point;
+    // clear their captured inputs so they re-pause when rolling back here (else they skip on
+    // stale roster/full-context). Mirrors the already-cleared downstream characterIdMappings.
+    'roster', 'rosterPronouns', 'accusation', 'sessionReport', 'directorNotesRaw',
+    'photoAnalyses', 'characterIdMappings',
+```
+
+  **(ii) `await-roster`** — add `accusation`/`sessionReport`/`directorNotesRaw` (await-full-context is downstream). Its `roster`/`rosterPronouns` were added by P6.1. Replace:
+```javascript
+  'await-roster': [
+    'roster', 'rosterPronouns',
+    'whiteboardAnalysis',
+```
+  with:
+```javascript
+  'await-roster': [
+    'roster', 'rosterPronouns',
+    // Per-point re-pause: await-full-context is downstream — clear full-context so it re-pauses.
+    'accusation', 'sessionReport', 'directorNotesRaw',
+    'whiteboardAnalysis',
+```
+
+  **(iii) `character-ids`** — add `accusation`/`sessionReport`/`directorNotesRaw` (await-full-context is downstream). Replace:
+```javascript
+  'character-ids': [
+    'characterIdMappings',
+    // Note: photoAnalyses preserved - only mappings need re-entry
+```
+  with:
+```javascript
+  'character-ids': [
+    'characterIdMappings',
+    // Per-point re-pause: await-full-context is downstream — clear full-context so it re-pauses.
+    'accusation', 'sessionReport', 'directorNotesRaw',
+    // Note: photoAnalyses preserved - only mappings need re-entry
+```
+
+  These keep `accusation`/`sessionReport`/`directorNotesRaw` in `clearedSomewhere` (already true via `await-full-context`) and are NOT in `ROLLBACK_CLEARS_EXEMPT`, so the union guard (Step 3) stays green; the disjoint test stays green (none are exempt).
+
 - [ ] **Step 3: Write the completeness test FIRST in its real form** (it will pass once Steps 1–2b land + P6.1/P6.2/P6.3 fixes are in; if a field is mis-classified the test fails loudly). Create `lib/__tests__/rollback-clears-completeness.test.js`:
 
 ```javascript
@@ -6038,25 +6099,112 @@ describe('ROLLBACK_CLEARS completeness (ROOT-1)', () => {
 });
 ```
 
+- [ ] **Step 3b: Add the per-point re-pause completeness guard** (the structural guard the union test cannot provide). Append a second `describe` to `lib/__tests__/rollback-clears-completeness.test.js`:
+
+```javascript
+describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extension)', () => {
+  // GRAPH EXECUTION / REPLAY order (derived from graph.js edges) — deliberately NOT the
+  // frontend DISPLAY order in console/utils.js (which lists 'input-review' first). On
+  // rollback the graph replays from START in THIS order, so a field captured at checkpoint C
+  // is "downstream" of every point at-or-before C here. 'input-review' is an interrupt INSIDE
+  // parseRawInput and executes LATE (after await-full-context) despite its 0.2 label —
+  // edge checkpointAwaitContext -> parseRawInput.
+  const CHECKPOINT_SEQUENCE = [
+    'paper-evidence-selection',
+    'await-roster',
+    'character-ids',
+    'await-full-context',
+    'input-review',
+    'pre-curation',
+    'evidence-and-photos',
+    'arc-selection',
+    'outline',
+    'article'
+  ];
+
+  // The human-captured skip-field(s) whose presence makes each checkpoint SKIP (silently reuse
+  // stale input) on the replay — verified against checkpoint-nodes.js + input-nodes.js skip
+  // conditions. 'input-review' is intentionally [] : its skip-field (sessionConfig) is
+  // RE-DERIVED deterministically by parseRawInput on every replay, so it is not a stale-input
+  // reuse risk and upstream points need not clear it. (rosterPronouns travels with roster:
+  // both are captured at await-roster and cleared as a unit.)
+  const SKIP_FIELDS = {
+    'paper-evidence-selection': ['selectedPaperEvidence'],
+    'await-roster': ['roster', 'rosterPronouns'],
+    'character-ids': ['characterIdMappings'],
+    'await-full-context': ['accusation', 'sessionReport', 'directorNotesRaw'],
+    'input-review': [],
+    'pre-curation': ['preCurationApproved'],
+    'evidence-and-photos': ['_evidenceApproved'],
+    'arc-selection': ['selectedArcs'],
+    'outline': ['outlineApproved'],
+    'article': ['articleApproved']
+  };
+
+  test('every rollback point clears its own + every downstream checkpoint skip-field', () => {
+    const gaps = [];
+    CHECKPOINT_SEQUENCE.forEach((checkpoint, idx) => {
+      for (const field of SKIP_FIELDS[checkpoint]) {
+        // Every point at-or-upstream of `checkpoint` must clear `field`, else rolling back to
+        // that point lets `checkpoint` skip on stale input (the ROLL-1 class).
+        for (let p = 0; p <= idx; p++) {
+          const point = CHECKPOINT_SEQUENCE[p];
+          if (!(ROLLBACK_CLEARS[point] || []).includes(field)) {
+            gaps.push(`${point} does not clear '${field}' (captured at ${checkpoint})`);
+          }
+        }
+      }
+    });
+    // If this fails, a rollback point omits a skip-field of itself or a downstream checkpoint —
+    // that checkpoint will SKIP on stale input instead of re-pausing. Add the field to that
+    // point's ROLLBACK_CLEARS list (and, for full-context channels, the generalized pre-fill
+    // stash in server.js already covers it).
+    expect(gaps).toEqual([]);
+  });
+
+  test('every checkpoint in the sequence is a real rollback point', () => {
+    for (const cp of CHECKPOINT_SEQUENCE) {
+      expect(ROLLBACK_CLEARS).toHaveProperty(cp);
+    }
+  });
+
+  test('every skip-field is a real state channel (no stale fixture)', () => {
+    const all = Object.keys(ReportStateAnnotation.spec);
+    const ghosts = [...new Set(Object.values(SKIP_FIELDS).flat())].filter(f => !all.includes(f));
+    expect(ghosts).toEqual([]);
+  });
+});
+```
+
+  This passes once Step 2c lands (run `npx jest lib/__tests__/rollback-clears-completeness.test.js` → all green). If Step 2c were absent, the first test fails listing exactly the 4 gaps (`paper-evidence-selection does not clear 'roster'…`, `…'accusation'…`, `await-roster does not clear 'accusation'…`, `character-ids does not clear 'accusation'…`). The `SKIP_FIELDS` map is the one new hand-maintained fixture, but it is small, stable, and self-guarded (the third test catches a renamed/removed channel).
+
 - [ ] **Step 4: Run the completeness test.**
   - Command: `npx jest lib/__tests__/rollback-clears-completeness.test.js`
-  - Expected: all 7 tests pass. If the first test fails with a non-empty `uncovered` array, EACH listed field must be triaged: a genuinely node-written downstream field → add to the appropriate `ROLLBACK_CLEARS` list; a stable/transient field → add to `ROLLBACK_CLEARS_EXEMPT` with the matching category comment. (With P6.1 + P6.2 + P6.3 + Step 2b applied and the corrected EXEMPT set above, `uncovered` is empty — verified against `ReportStateAnnotation.spec`, 65 channels.)
+  - Expected: all **10** tests pass (7 union-guard from Step 3 + 3 per-point-guard from Step 3b). If the union test fails with a non-empty `uncovered` array, EACH listed field must be triaged: a genuinely node-written downstream field → add to the appropriate `ROLLBACK_CLEARS` list; a stable/transient field → add to `ROLLBACK_CLEARS_EXEMPT` with the matching category comment. If the per-point test fails with a non-empty `gaps` array, add each named field to the named point's clear list. (With P6.1 + P6.2 + P6.3 + Step 2b + Step 2c applied and the corrected EXEMPT set above, both `uncovered` and `gaps` are empty — verified against `ReportStateAnnotation.spec`, 65 channels.)
 
-- [ ] **Step 5: Prove the guard actually bites (negative check, temporary).** Temporarily remove `'arcEvidencePackages'` from the `arc-selection` clear list and from one upstream list, re-run, and confirm the test now fails:
-  - Command: `npx jest lib/__tests__/rollback-clears-completeness.test.js -t "every state field is either cleared"`
-  - Expected: FAILS with `Expected: []  Received: ["arcEvidencePackages"]`. Then restore the removed entries and confirm green again with the same command. (This verifies the test is not vacuously passing.)
+- [ ] **Step 5: Prove BOTH guards actually bite (negative check, temporary).**
+  - **Union guard:** temporarily remove `'arcEvidencePackages'` from the `arc-selection` clear list and from one upstream list, re-run `npx jest lib/__tests__/rollback-clears-completeness.test.js -t "every state field is either cleared"` → FAILS with `Received: ["arcEvidencePackages"]`. Restore and confirm green.
+  - **Per-point guard:** temporarily remove `'accusation'` from the `character-ids` clear list (added in Step 2c), re-run `npx jest lib/__tests__/rollback-clears-completeness.test.js -t "every rollback point clears its own"` → FAILS with `gaps` containing `character-ids does not clear 'accusation' (captured at await-full-context)`. Restore and confirm green. (This verifies neither guard is vacuously passing.)
 
 - [ ] **Step 6: Run the broader state + api-helpers suites to confirm the new export breaks nothing.**
   - Command: `npx jest lib/__tests__/api-helpers.test.js __tests__/unit/workflow/state.test.js lib/__tests__/rollback-clears-completeness.test.js`
   - Expected: all pass.
 
 - [ ] **Step 7: Commit.**
-  - Command: `git add lib/workflow/state.js lib/__tests__/rollback-clears-completeness.test.js && git commit -m "test(rollback): completeness guard for ROLLBACK_CLEARS denylist (ROOT-1)
+  - Command: `git add lib/workflow/state.js lib/__tests__/rollback-clears-completeness.test.js && git commit -m "test(rollback): completeness guards + per-point re-pause gap fixes (ROOT-1)
 
-Enumerate every state channel and assert each is cleared by a rollback point or
-listed in a documented ROLLBACK_CLEARS_EXEMPT set. This is the root-cause guard for
-ROLL-1/ROLL-2: a new node-written field added without rollback semantics now fails
-CI instead of silently reusing stale state.
+Two guards over the hand-maintained ROLLBACK_CLEARS denylist:
+- Union guard: every state channel is cleared by some rollback point or listed in a
+  documented ROLLBACK_CLEARS_EXEMPT set (catches a new node-written field added
+  without rollback semantics).
+- Per-point guard: every rollback point clears the skip-field of itself and every
+  DOWNSTREAM checkpoint, so no checkpoint silently skips on stale input after a
+  rollback (the ROLL-1 class the union guard cannot see).
+
+Also closes 4 per-point gaps the per-point guard surfaced: paper-evidence-selection
+now clears roster/rosterPronouns + accusation/sessionReport/directorNotesRaw, and
+await-roster/character-ids clear the full-context channels (await-roster/
+await-full-context are downstream of those points and were skipping on stale input).
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"`
 
