@@ -444,8 +444,6 @@ The Outline checkpoint's per-section editors (journalist LEDE / THE STORY / FOLL
 - `/api/browse` (GET) - List session data files
 - `/api/file` (GET) - Read session data file
 
-**Legacy:** `/api/generate` (POST) - Deprecated. Use `/start` or `/resume` instead.
-
 See `server.js` for detailed usage and request/response shapes.
 
 ## Environment Setup
