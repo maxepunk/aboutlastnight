@@ -51,11 +51,11 @@ Each phase edits *different functions/lines* of a shared file unless a merge (M#
 ## The six shared-file merges
 
 ### M1 — `server.js` `module.exports` is cumulative
-P1.4, P4.1, and P4.2 each rewrite `module.exports = { buildResumePayload };` from the *original* baseline. Applied naively, the later phase drops the earlier exports. **Each phase ADDS to the current export object.** After P1+P4 the line must be:
+P1.4, **P3.11**, P4.1, and P4.2 each rewrite `module.exports = { buildResumePayload };` from the *original* baseline. Applied naively, the later phase drops the earlier exports. **Each phase ADDS to the current export object.** After P1+P3+P4 the line must be:
 ```js
-module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, getSessionOutcome, shapeSessionState };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
 ```
-(When you reach P4.1/P4.2, read the current `module.exports` and append `getSessionOutcome`/`shapeSessionState` rather than replacing it with `{ buildResumePayload, ... }`.)
+(P3.11 appends `probeNotionReachable`; P4.1/P4.2 append `getSessionOutcome`/`shapeSessionState`. Always read the current `module.exports` and append, rather than replacing it with `{ buildResumePayload, ... }`.)
 
 ### M2 — one `finally` in the approve background task
 P1.4 Step 4 wraps the `setImmediate` in a tracked Promise and adds `finally { resolve(); }` to its inner `try/catch`. P4.3 Step 5 adds `finally { releaseSessionLock(sessionId); }` to the **same** `try/catch`. Two `finally` clauses are a syntax error — **merge into one** (do P1 first, then in P4.3 add the release as the first line of the finally P1.4 created):
@@ -1589,7 +1589,7 @@ Create `lib/workflow/__tests__/graph-retry-policy.test.js`:
  * P3.1 — every LLM-calling node carries retryPolicy{maxAttempts,retryOn:isTransientError};
  * pure/programmatic nodes carry none.
  */
-const { createGraphBuilder } = require('../graph');
+const { createGraphBuilder } = require('../graph')._testing; // NOTE: exported under _testing, not top-level
 const { isTransientError } = require('../../llm/retry');
 
 const LLM_NODES = [
@@ -1635,9 +1635,9 @@ describe('graph retryPolicy wiring', () => {
 ```bash
 npx jest lib/workflow/__tests__/graph-retry-policy.test.js -t 'has retryPolicy'
 ```
-If `spec` is `undefined` for ALL nodes, the internal accessor is wrong — fall back by reading the field name:
+CONFIRMED 2026-06-22: the accessor is `builder.nodes` (43 entries; every spec already carries a `retryPolicy` key whose value is `undefined` pre-wiring, so `toBeUndefined()`/`toBeDefined()` both work). If you still want to re-verify the field name:
 ```bash
-cd "C:/Users/spide/Documents/claudecode/aboutlastnight/reports" && node -e "const {createGraphBuilder}=require('./lib/workflow/graph'); const b=createGraphBuilder(); console.log(Object.keys(b)); console.log(JSON.stringify(Object.keys(b.nodes||b._nodes||{})).slice(0,200));"
+cd "C:/Users/spide/Documents/claudecode/aboutlastnight/reports" && node -e "const {createGraphBuilder}=require('./lib/workflow/graph')._testing; const b=createGraphBuilder(); console.log(Object.keys(b)); console.log(JSON.stringify(Object.keys(b.nodes||b._nodes||{})).slice(0,200));"
 ```
 Use whichever of `b.nodes` / `b._nodes` is populated, and update `specOf` accordingly. Expected (before implementation): test FAILS with `spec.retryPolicy` undefined for the LLM nodes.
 
@@ -2921,13 +2921,13 @@ Then inside the startup IIFE, after `console.log('Claude Agent SDK available ✓
     }
     console.log('Notion reachable ✓');
 ```
-And extend the export at server.js:1343 from:
+And extend the `module.exports` (CUMULATIVE — M1-class merge). After P1.4 it is already (server.js:1405, NOT 1343):
 ```javascript
-module.exports = { buildResumePayload };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks };
 ```
-to:
+**APPEND** `probeNotionReachable` (do NOT replace with `{ buildResumePayload, probeNotionReachable }` — that would drop P1.4's `drainAndClose`/`_inFlight`). Read the current line first, then:
 ```javascript
-module.exports = { buildResumePayload, probeNotionReachable };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable };
 ```
 (Confirm `require('./lib/notion-client')` exports the class directly — `lib/notion-client.js` uses `module.exports = NotionClient;`; verify:)
 ```bash
@@ -2967,7 +2967,7 @@ A focused integration assertion that ties the phase together: the `retryOn` clas
 
 Create `__tests__/unit/workflow/retry-classifier-integration.test.js`:
 ```javascript
-const { createGraphBuilder } = require('../../../lib/workflow/graph');
+const { createGraphBuilder } = require('../../../lib/workflow/graph')._testing; // exported under _testing
 const { isTransientError } = require('../../../lib/llm/retry');
 
 describe('retryPolicy classifier integration (P3 acceptance)', () => {
