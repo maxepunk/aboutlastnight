@@ -152,4 +152,79 @@ describe('sdkQueryImpl contract', () => {
       sdkQueryImpl({ prompt: 'test', model: 'haiku', label: 'idle-test' })
     ).rejects.toThrow(/idle .* with no streamed activity/);
   });
+
+  test('passes includePartialMessages: true to the SDK', async () => {
+    let capturedOptions = null;
+    setMockQuery(({ options }) => {
+      capturedOptions = options;
+      return makeAsyncIterable([{ type: 'result', subtype: 'success', result: 'ok' }]);
+    });
+    await sdkQueryImpl({ prompt: 'test', model: 'haiku' });
+    expect(capturedOptions.includePartialMessages).toBe(true);
+  });
+
+  test('emits llm_delta with phase=writing for a text_delta stream_event', async () => {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'stream_event', event: { type: 'message_start' } },
+      { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' } } },
+      { type: 'result', subtype: 'success', result: 'Hello world' }
+    ]));
+
+    await sdkQueryImpl({
+      prompt: 'test', model: 'sonnet',
+      onProgress: (m) => { if (m.type === 'llm_delta') events.push(m); }
+    });
+
+    expect(events).toHaveLength(2);
+    expect(events[0].phase).toBe('preparing');
+    expect(events[0].ttftMs).toBeNull();  // message_start carries no non-empty delta yet
+    expect(events[1].phase).toBe('writing');
+    expect(events[1].deltaText).toBe('Hello');
+    expect(events[1].tokenCount).toBeGreaterThan(0);
+    expect(typeof events[1].ttftMs).toBe('number');
+  });
+
+  test('emits llm_delta with phase=thinking for a thinking_delta stream_event', async () => {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'reasoning...' } } },
+      { type: 'result', subtype: 'success', result: 'done' }
+    ]));
+
+    await sdkQueryImpl({
+      prompt: 'test', model: 'opus',
+      onProgress: (m) => { if (m.type === 'llm_delta') events.push(m); }
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].phase).toBe('thinking');
+    expect(events[0].deltaText).toBe('reasoning...');
+  });
+
+  test('ttftMs is set by the first non-empty delta of any kind (thinking) and held across later deltas', async () => {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'stream_event', event: { type: 'message_start' } },
+      { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'reason' } } },
+      { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } } },
+      { type: 'result', subtype: 'success', result: 'Hi' }
+    ]));
+
+    await sdkQueryImpl({
+      prompt: 'test', model: 'opus',
+      onProgress: (m) => { if (m.type === 'llm_delta') events.push(m); }
+    });
+
+    expect(events).toHaveLength(3);
+    // preparing: no non-empty delta yet
+    expect(events[0].phase).toBe('preparing');
+    expect(events[0].ttftMs).toBeNull();
+    // thinking: first non-empty delta sets TTFT (before any text)
+    expect(events[1].phase).toBe('thinking');
+    expect(typeof events[1].ttftMs).toBe('number');
+    // writing: TTFT is held, not reset by the later text delta
+    expect(events[2].phase).toBe('writing');
+    expect(events[2].ttftMs).toBe(events[1].ttftMs);
+  });
 });

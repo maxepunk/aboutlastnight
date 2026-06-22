@@ -139,7 +139,10 @@ async function sdkQueryImpl({
     allowedTools,
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,  // Required pair for bypassPermissions in SDK 0.2.x
-    abortController
+    abortController,
+    // Stream token-level deltas so the operator sees thinking/writing live and the
+    // idle timer is fed by real activity (SDK 0.2.119: SDKPartialAssistantMessage).
+    includePartialMessages: true
   };
 
   // Control 2: scope filesystem-loaded skills/settings per call.
@@ -206,6 +209,8 @@ async function sdkQueryImpl({
 
   try {
     let messageCount = 0;
+    let deltaCharCount = 0;   // running streamed-char total for the token-count cue
+    let ttftMs = null;        // time-to-first-token (first non-empty delta)
 
     // Emit llm_start event with FULL prompt (no truncation)
     if (onProgress) {
@@ -224,6 +229,41 @@ async function sdkQueryImpl({
       resetIdle();  // any message = activity → re-arm the stall timer
       messageCount++;
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      // Token-level partial streaming (includePartialMessages). Feed the idle timer
+      // (resetIdle already ran above) and forward a coalesce-able llm_delta to the
+      // progress channel. phase is derived from the raw stream event type.
+      if (msg.type === 'stream_event' && onProgress) {
+        const ev = msg.event || {};
+        let phase = null;
+        let deltaText = '';
+        if (ev.type === 'message_start') {
+          phase = 'preparing';
+        } else if (ev.type === 'content_block_delta') {
+          const d = ev.delta || {};
+          if (d.type === 'thinking_delta') { phase = 'thinking'; deltaText = d.thinking || ''; }
+          else if (d.type === 'text_delta') { phase = 'writing'; deltaText = d.text || ''; }
+        }
+        if (phase) {
+          deltaCharCount += deltaText.length;
+          // TTFT = first non-empty delta of ANY kind (thinking counts) — the live feed should
+          // register activity the moment the model starts producing, not only at first text.
+          if (deltaText.length > 0 && ttftMs === null) {
+            ttftMs = Date.now() - startTime;
+          }
+          onProgress({
+            type: 'llm_delta',
+            phase,
+            deltaText,
+            // Rough char/4 token estimate — a liveness cue, not billing. The server
+            // coalescer (P5) is the throttle; we emit one event per stream_event.
+            tokenCount: Math.ceil(deltaCharCount / 4),
+            ttftMs,
+            elapsed: parseFloat(elapsed)
+          });
+        }
+        continue;  // partials are not assistant/result messages; skip the rest of the loop body
+      }
 
       // Log context window on session init (verify 1M beta is active)
       if (msg.type === 'system' && msg.subtype === 'init' && msg.model_usage) {
