@@ -202,25 +202,23 @@ describe('ai-nodes', () => {
     const mockClient = createMockSdkClient({ evidenceBundle: mockEvidenceBundle });
     const config = { configurable: { sdkClient: mockClient } };
 
-    it('returns evidenceBundle in state update', async () => {
+    // N3 fail-loud (P3.4): no preprocessedEvidence means upstream fetch/preprocess
+    // produced zero items — the node now THROWS instead of returning an empty bundle.
+    // (Previously asserted a defined empty evidenceBundle; that codified the bug.)
+    it('throws when preprocessedEvidence is missing (upstream failure)', async () => {
       const state = {
         memoryTokens: [{ tokenId: 'test001' }],
         paperEvidence: [{ notionId: 'ev001' }],
         playerFocus: { primaryInvestigation: 'Test' }
       };
 
-      const result = await curateEvidenceBundle(state, config);
-
-      expect(result.evidenceBundle).toBeDefined();
-      expect(result.evidenceBundle.exposed).toBeDefined();
-      expect(result.evidenceBundle.buried).toBeDefined();
-      expect(result.evidenceBundle.context).toBeDefined();
+      await expect(curateEvidenceBundle(state, config))
+        .rejects.toThrow(/no preprocessed evidence|empty/i);
     });
 
-    it('sets currentPhase to CURATE_EVIDENCE', async () => {
-      const result = await curateEvidenceBundle({}, config);
-
-      expect(result.currentPhase).toBe(PHASES.CURATE_EVIDENCE);
+    it('throws on empty state (no preprocessedEvidence) instead of emitting an empty bundle', async () => {
+      await expect(curateEvidenceBundle({}, config))
+        .rejects.toThrow(/no preprocessed evidence|empty/i);
     });
 
     // NOTE: awaitingApproval/approvalType tests removed in interrupt() migration
@@ -710,11 +708,11 @@ describe('ai-nodes', () => {
       }
     };
 
-    it('handles empty state for curateEvidenceBundle', async () => {
-      const result = await curateEvidenceBundle({}, config);
-
-      expect(result.evidenceBundle).toBeDefined();
-      expect(result.currentPhase).toBe(PHASES.CURATE_EVIDENCE);
+    // N3 fail-loud (P3.4): empty state has no preprocessedEvidence, so curation now
+    // throws rather than masking the upstream hole with an empty bundle.
+    it('throws on empty state for curateEvidenceBundle', async () => {
+      await expect(curateEvidenceBundle({}, config))
+        .rejects.toThrow(/no preprocessed evidence|empty/i);
     });
 
     it('handles missing sessionPhotos', async () => {

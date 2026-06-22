@@ -327,30 +327,15 @@ async function curateEvidenceBundle(state, config) {
     playerFocus: state.playerFocus || {}
   };
 
-  // If no preprocessed items, create empty evidence bundle
+  // N3 fail-loud: empty preprocessed evidence means an upstream fetch/preprocess
+  // failure, NOT a legitimate empty session. Returning a polished empty three-layer
+  // bundle masks the hole and the generator authors an article with zero grounding.
+  // Throw so retryPolicy/operator recovery handles it against the pre-node snapshot.
   if (!preprocessed.items || preprocessed.items.length === 0) {
-    console.log('[curateEvidenceBundle] No preprocessed evidence - creating empty bundle');
-    const emptyBundle = {
-      exposed: { tokens: [], paperEvidence: [] },
-      buried: { transactions: [], relationships: [] },
-      context: {
-        timeline: {},
-        playerFocus: state.playerFocus || {},
-        sessionMetadata: { sessionId: state.sessionId }
-      },
-      curatorNotes: {
-        layerRationale: 'No evidence to curate',
-        characterCoverage: {}
-      }
-    };
-
-    return {
-      evidenceBundle: emptyBundle,
-      memoryTokens: null,          // Prune: data now in evidenceBundle.exposed.tokens
-      paperEvidence: null,          // Prune: data now in evidenceBundle.exposed.paperEvidence
-      preprocessedEvidence: null,   // Prune: consumed to build evidenceBundle
-      currentPhase: PHASES.CURATE_EVIDENCE
-    };
+    throw new Error(
+      '[curateEvidenceBundle] No preprocessed evidence to curate — upstream ' +
+      'fetch/preprocess produced zero items. Refusing to emit an empty bundle.'
+    );
   }
 
   // Count items by type for logging
