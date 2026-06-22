@@ -861,7 +861,7 @@ const ROLLBACK_CLEARS = {
     // Preprocessing and curation
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // Generation
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
@@ -874,7 +874,7 @@ const ROLLBACK_CLEARS = {
     'selectedPaperEvidence',
     'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -888,7 +888,7 @@ const ROLLBACK_CLEARS = {
     'whiteboardAnalysis',
     'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -899,7 +899,7 @@ const ROLLBACK_CLEARS = {
     'characterIdMappings',
     // Note: photoAnalyses preserved - only mappings need re-entry
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -910,7 +910,7 @@ const ROLLBACK_CLEARS = {
     'preCurationApproved', 'characterData', 'narrativeTensions',
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle', '_evidenceApproved',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
@@ -923,15 +923,19 @@ const ROLLBACK_CLEARS = {
   'evidence-and-photos': [
     'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData', 'narrativeTensions',
     'evidenceBundle', '_evidenceApproved',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
     'evaluationHistory'
   ],
 
   // Phase 2.3: Arc selection - most common rollback point
+  // ROLL-2: arcEvidencePackages is built post-selection (buildArcEvidencePackages
+  // skips when non-empty); re-picking arcs must clear it or the article quotes the
+  // wrong storyline's evidence.
   'arc-selection': [
     'narrativeTensions',
+    'arcEvidencePackages',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback',
