@@ -765,43 +765,18 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
 
   try {
     // ═══════════════════════════════════════════════════════════════════════
-    // CALL 1: Core Arc Generation with retry-at-source
-    // Up to 3 attempts on timeout (transient SDK/schema validation failures)
-    // Non-timeout errors fail immediately. generateCoreArcs stays single-attempt.
+    // CALL 1: Core Arc Generation — SINGLE attempt (TRC-2 de-layering).
+    // Any failure (timeout or not) propagates to the node's outer catch, which throws;
+    // the graph-level retryPolicy on this node is the sole retrier (no in-node ×
+    // graph attempt multiplication).
     // ═══════════════════════════════════════════════════════════════════════
-    const MAX_GENERATION_ATTEMPTS = 3;
-    let coreResult = null;
-    let retryCount = 0;
-    let call1Duration = '0';
-
-    for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
-      try {
-        const call1Start = Date.now();
-        coreResult = await generateCoreArcs(state, config);
-        call1Duration = ((Date.now() - call1Start) / 1000).toFixed(1);
-
-        // Validate we got arcs
-        if (!coreResult || !coreResult.narrativeArcs || coreResult.narrativeArcs.length === 0) {
-          throw new Error('Call 1 returned no arcs');
-        }
-
-        console.log(`[analyzeArcsPlayerFocusGuided] Call 1 complete: ${coreResult.narrativeArcs.length} arcs in ${call1Duration}s${retryCount > 0 ? ` (after ${retryCount} retries)` : ''}`);
-        break; // Success — exit retry loop
-
-      } catch (attemptError) {
-        const isTimeout = isSdkTimeoutError(attemptError);
-
-        if (!isTimeout || attempt === MAX_GENERATION_ATTEMPTS) {
-          // Non-timeout error OR final attempt exhausted: propagate to outer catch
-          throw attemptError;
-        }
-
-        // Timeout on non-final attempt: retry
-        retryCount++;
-        console.warn(`[analyzeArcsPlayerFocusGuided] Call 1 timeout on attempt ${attempt}/${MAX_GENERATION_ATTEMPTS}: ${attemptError.message}`);
-        console.log(`[analyzeArcsPlayerFocusGuided] Retrying (attempt ${attempt + 1}/${MAX_GENERATION_ATTEMPTS})...`);
-      }
+    const call1Start = Date.now();
+    const coreResult = await generateCoreArcs(state, config);
+    const call1Duration = ((Date.now() - call1Start) / 1000).toFixed(1);
+    if (!coreResult || !coreResult.narrativeArcs || coreResult.narrativeArcs.length === 0) {
+      throw new Error('Call 1 returned no arcs');
     }
+    console.log(`[analyzeArcsPlayerFocusGuided] Call 1 complete: ${coreResult.narrativeArcs.length} arcs in ${call1Duration}s`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // CALL 2: Interweaving Enrichment (2 min timeout, graceful degradation)
@@ -854,34 +829,20 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
           call1: `${call1Duration}s`,
           call2: `${call2Duration}s`,
           total: `${totalDuration}s`,
-          retries: retryCount
+          retries: 0
         }
       },
       currentPhase: PHASES.ARC_SYNTHESIS,
     };
 
   } catch (error) {
+    // N7 fail-loud: returning [] arcs makes an outage indistinguishable from
+    // "genuinely no arcs" at the selection screen, and force-forward can carry [] into
+    // the article. Throw so retryPolicy retries transient failures and a persistent
+    // one surfaces against the clean pre-node snapshot for operator /resume.
     const isTimeout = isSdkTimeoutError(error);
     console.error(`[analyzeArcsPlayerFocusGuided] ${isTimeout ? 'Timeout' : 'Error'}:`, error.message);
-
-    return {
-      narrativeArcs: [],
-      _arcAnalysisCache: {
-        synthesizedAt: new Date().toISOString(),
-        _error: error.message,
-        _generationTimedOut: isTimeout,
-        architecture: 'split-call'
-      },
-      errors: [{
-        phase: PHASES.ARC_SYNTHESIS,
-        type: isTimeout ? 'split-call-timeout' : 'split-call-failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
-      }],
-      // Use ARC_SYNTHESIS (not ERROR) — let routing handle the 0-arc case
-      // ERROR phase would bypass validateArcs entirely but then there's no route to checkpoint
-      currentPhase: PHASES.ARC_SYNTHESIS
-    };
+    throw new Error(`Arc analysis failed${isTimeout ? ' (timeout)' : ''}: ${error.message}`);
   }
 }
 

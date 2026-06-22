@@ -1,8 +1,13 @@
 /**
- * generateCoreArcs retry-at-source test
+ * Core arc generation — single-attempt + fail-loud (TRC-2 / N7)
  *
- * Verifies that analyzeArcsPlayerFocusGuided retries on timeout errors
- * (up to 3 attempts) but fails immediately on non-timeout errors.
+ * The in-node MAX_GENERATION_ATTEMPTS retry loop was REMOVED (TRC-2 de-layering):
+ * analyzeArcsPlayerFocusGuided now makes a SINGLE Core arc generation call, and any
+ * failure (timeout or not) propagates to the node's outer catch, which THROWS rather
+ * than returning narrativeArcs: []. The graph-level retryPolicy is the sole retrier.
+ *
+ * These tests verify the single-attempt success path (no retry) and that every failure
+ * mode throws (no [] arcs masking an outage).
  */
 
 // Mock LLM module
@@ -32,10 +37,9 @@ const makeState = () => ({
   theme: 'journalist'
 });
 
-describe('generateCoreArcs retry-at-source', () => {
-  test('retries on first timeout, succeeds on second attempt', async () => {
+describe('core arc generation — single attempt + fail-loud', () => {
+  test('succeeds in a single attempt (no in-node retry)', async () => {
     const mockSdk = jest.fn()
-      .mockRejectedValueOnce(new Error('SDK timeout after 600.0s (limit: 600s) - Core arc generation (Call 1)'))
       .mockResolvedValueOnce({
         narrativeArcs: [{ id: 'arc-1', title: 'Test', arcSource: 'accusation', keyEvidence: ['t1'], characterPlacements: {}, analysisNotes: {} }],
         synthesisNotes: 'test'
@@ -45,45 +49,39 @@ describe('generateCoreArcs retry-at-source', () => {
     const result = await analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } });
 
     expect(result.narrativeArcs.length).toBe(1);
-    expect(result._arcAnalysisCache.timing.retries).toBe(1);
-    expect(result._arcAnalysisCache._generationTimedOut).toBeUndefined();
-    expect(mockSdk).toHaveBeenCalledTimes(3); // 1 timeout + 1 Call 1 success + 1 Call 2 interweaving
+    expect(result._arcAnalysisCache.timing.retries).toBe(0);
+    expect(mockSdk).toHaveBeenCalledTimes(2); // 1 Call 1 success + 1 Call 2 interweaving — no retry
   });
 
-  test('all 3 attempts fail with timeout', async () => {
+  test('throws on timeout (single attempt — retryPolicy is the sole retrier)', async () => {
     const timeoutError = new Error('SDK timeout after 600.0s (limit: 600s) - Core arc generation (Call 1)');
-    const mockSdk = jest.fn()
-      .mockRejectedValueOnce(timeoutError)
-      .mockRejectedValueOnce(timeoutError)
-      .mockRejectedValueOnce(timeoutError);
+    const mockSdk = jest.fn().mockRejectedValue(timeoutError);
 
-    const result = await analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } });
+    await expect(
+      analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } })
+    ).rejects.toThrow(/arc analysis failed \(timeout\)/i);
 
-    expect(result.narrativeArcs).toEqual([]);
-    expect(result._arcAnalysisCache._generationTimedOut).toBe(true);
-    expect(mockSdk).toHaveBeenCalledTimes(3);
+    expect(mockSdk).toHaveBeenCalledTimes(1); // single attempt, no in-node retry
   });
 
-  test('does NOT retry on non-timeout error', async () => {
-    const mockSdk = jest.fn()
-      .mockRejectedValueOnce(new Error('Connection refused'));
+  test('throws on non-timeout error', async () => {
+    const mockSdk = jest.fn().mockRejectedValueOnce(new Error('Connection refused'));
 
-    const result = await analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } });
+    await expect(
+      analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } })
+    ).rejects.toThrow(/arc analysis failed/i);
 
-    expect(result.narrativeArcs).toEqual([]);
-    expect(result._arcAnalysisCache._generationTimedOut).toBe(false);
     expect(mockSdk).toHaveBeenCalledTimes(1);
   });
 
-  test('does NOT retry when SDK returns valid JSON but 0 arcs', async () => {
-    // generateCoreArcs throws "Call 1 returned no arcs" which is not a timeout
-    const mockSdk = jest.fn()
-      .mockResolvedValueOnce({ narrativeArcs: [], synthesisNotes: 'empty' });
+  test('throws when SDK returns valid JSON but 0 arcs', async () => {
+    // generateCoreArcs returns 0 arcs → "Call 1 returned no arcs" → outer catch throws
+    const mockSdk = jest.fn().mockResolvedValueOnce({ narrativeArcs: [], synthesisNotes: 'empty' });
 
-    const result = await analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } });
+    await expect(
+      analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } })
+    ).rejects.toThrow(/arc analysis failed/i);
 
-    expect(result.narrativeArcs).toEqual([]);
-    expect(result._arcAnalysisCache._generationTimedOut).toBe(false);
-    expect(mockSdk).toHaveBeenCalledTimes(1); // No retry — "no arcs" is not a timeout
+    expect(mockSdk).toHaveBeenCalledTimes(1); // No retry — "no arcs" still single attempt
   });
 });
