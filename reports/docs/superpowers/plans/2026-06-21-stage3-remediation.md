@@ -4581,13 +4581,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 8: Add the script tag before state.js.** In `console/index.html`, find the `<script type="text/babel" src="state.js">` tag and add the new module immediately before it. Run this to locate the exact line:
   ```bash
-  grep -n "state.js\|outline-edit-logic.js" console/index.html
+  grep -n "state.js\|session-status-logic.js" console/index.html
   ```
   Then add, on the line BEFORE the `state.js` script tag:
   ```html
       <script type="text/babel" src="llm-stream-logic.js"></script>
   ```
-  (Mirror the indentation and `type` of the adjacent `outline-edit-logic.js` tag found by the grep — `outline-edit-logic.js` already loads before `state.js`, so place `llm-stream-logic.js` alongside it.)
+  ⚠️ **CORRECTED 2026-06-22 (pre-P5 live verification):** place it immediately before `state.js` — in the live `index.html` that is **right after `session-status-logic.js`** (the tag *directly* above `state.js`@19). Mirror the indentation and `type` of `session-status-logic.js`. Do **NOT** "place it alongside `outline-edit-logic.js`" as an earlier draft of this step said — `outline-edit-logic.js` is at line **36**, which loads *after* `state.js`@19 (it sits just above `Outline.js`/`Article.js`, its only consumers; `state.js` does not consume it). `state.js` Step 5 captures `const StreamLogic = window.Console.llmStreamLogic;` at **module-eval time**, so `llm-stream-logic.js` MUST have executed before `state.js` runs, or every `StreamLogic.*` reducer delegation throws `Cannot read properties of undefined`. This is exactly why P4.5 placed `session-status-logic.js` immediately before `state.js` (state.js's `SET_ERROR`/`CLEAR_ERROR` delegate to `window.Console.sessionStatusLogic`).
 
 - [ ] **Step 9: Commit.**
   ```bash
