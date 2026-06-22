@@ -99,7 +99,17 @@ P4.4 Step 5 adds `'failed'`; P5.3 Step 1 adds `'llm_delta'`/`'llm_error'`. Both 
               dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
               dispatch({
                 type: APP_ACTIONS.SSE_LLM_FAILURE,
-                error: (event.data.error || 'Workflow failed') +
+                // ⚠️ CORRECTED 2026-06-22 (P5.3 opus review): there are TWO server failure
+                // shapes for a type:'failed' event. A THROWN exception (server.js catch)
+                // carries flat `error`/`details` strings. A node that RETURNS
+                // `{ currentPhase:'error', errors:[{phase,type,message,timestamp}] }`
+                // (ai/arc/evaluator/preprocess nodes) carries the real message ONLY in
+                // `errors[0].message` — no flat `error`/`details`. Without the errors[]
+                // fallback the card shows a bare "Workflow failed" and drops the diagnostic
+                // the server explicitly forwarded (server.js:894-895).
+                error: (event.data.error
+                  || (event.data.errors && event.data.errors[0] && event.data.errors[0].message)
+                  || 'Workflow failed') +
                   (event.data.details ? ' — ' + event.data.details : '')
               });
               break;
