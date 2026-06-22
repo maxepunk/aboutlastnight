@@ -24,7 +24,6 @@
 
 const { PHASES } = require('../state');
 const { SchemaValidator } = require('../../schema-validator');
-const { isSdkTimeoutError } = require('../../llm');
 const { createPromptBuilder } = require('../../prompt-builder');
 const outlineSchema = require('../../schemas/outline.schema.json');
 const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
@@ -196,9 +195,6 @@ ${JSON.stringify(batch.map(p => ({
 
 Score each item and return the results.`;
 
-    // C4a: One retry on timeout to recover from transient throttling.
-    // Without this, half-batched timeout patterns silently flag up to N items
-    // as scoringError on a single SDK hiccup.
     async function attemptBatch() {
       return await sdk({
         prompt,
@@ -211,34 +207,15 @@ Score each item and return the results.`;
       });
     }
 
-    try {
-      let response;
-      try {
-        response = await attemptBatch();
-      } catch (firstErr) {
-        if (isSdkTimeoutError(firstErr)) {
-          console.warn(`[scorePaperEvidence] Batch ${batchIdx + 1} timed out, retrying once`);
-          response = await attemptBatch();
-        } else {
-          throw firstErr;
-        }
-      }
-      return response.items || [];
-    } catch (error) {
-      console.error(`[scorePaperEvidence] Batch ${batchIdx + 1} failed: ${error.message}`);
-      // Return items as excluded on error (recoverable at checkpoint)
-      return batch.map(p => ({
-        id: p.id,
-        // Fallback chain for name to prevent undefined
-        name: p.name || p.rawData?.name || p.id || 'Unknown Item',
-        score: 0,
-        include: false,
-        criteriaMatched: [],
-        excludeReason: 'scoringError',
-        excludeNote: `Scoring failed: ${error.message}`,
-        rescuable: true
-      }));
-    }
+    // N5 fail-loud + SINGLE retry layer (TRC-2): do NOT swallow a persistent batch
+    // failure into scoringError placeholders (that silently drops real exposed
+    // evidence and disguises it as "low relevance" at the rescue checkpoint), and do
+    // NOT retry in-node — curateEvidenceBundle's graph retryPolicy is the SOLE
+    // retrier, so a transient batch failure throws and re-runs the node against the
+    // pre-node snapshot (avoids the in-node × graph attempt multiplication). One
+    // attempt; on failure it propagates out of the Promise.all and the node throws.
+    const response = await attemptBatch();
+    return response.items || [];
   });
 
   // Flatten results and merge with original data

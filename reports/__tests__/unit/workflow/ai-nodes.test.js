@@ -785,20 +785,16 @@ describe('ai-nodes', () => {
       };
     }
 
-    it('curateEvidenceBundle handles SDK errors gracefully', async () => {
-      // Commit 8.11+: curateEvidenceBundle now handles SDK errors gracefully
-      // instead of throwing - items are marked as rescuable with scoring errors
+    it('curateEvidenceBundle propagates SDK errors (N5: no scoringError masking)', async () => {
+      // N5/TRC-2: a persistent paper-scoring batch failure must THROW, not be
+      // swallowed into scoringError placeholders (which silently drop real exposed
+      // evidence and disguise it as "low relevance" at the rescue checkpoint). The
+      // graph retryPolicy is the sole retrier and re-runs against the pre-node snapshot.
       const config = { configurable: { sdkClient: createErrorClient('SDK connection failed') } };
       const state = { preprocessedEvidence: mockPreprocessedEvidence };
 
-      const result = await curateEvidenceBundle(state, config);
-
-      // Should return valid result with excluded items marked as scoring errors
-      expect(result.evidenceBundle).toBeDefined();
-      // NOTE: awaitingApproval removed in interrupt() migration
-      // All items should be excluded due to scoring failure
-      expect(result.evidenceBundle.curationReport.excluded.length).toBeGreaterThan(0);
-      expect(result.evidenceBundle.curationReport.excluded[0].reason).toBe('scoringError');
+      await expect(curateEvidenceBundle(state, config))
+        .rejects.toThrow(/SDK connection failed/);
     });
 
     it('generateOutline propagates SDK errors', async () => {

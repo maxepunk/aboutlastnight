@@ -26,4 +26,24 @@ describe('curateEvidenceBundle fail-loud (N3)', () => {
     const result = await curateEvidenceBundle(state, { configurable: {} });
     expect(result.currentPhase).toBeDefined();
   });
+
+  test('curateEvidenceBundle throws when a paper-scoring batch fails persistently', async () => {
+    const mockSdk = jest.fn().mockRejectedValue(new Error('api_error: internal'));
+    const state = {
+      evidenceBundle: null,
+      preprocessedEvidence: {
+        items: [
+          { id: 'p1', sourceType: 'paper-evidence', name: 'Letter', disposition: 'exposed',
+            summary: 'A letter', fullContent: 'Dear X...' }
+        ],
+        playerFocus: {}
+      },
+      playerFocus: {},
+      sessionConfig: { roster: ['Alex'] },
+      canonicalCharacters: {},
+      sessionId: 'TEST'
+    };
+    await expect(curateEvidenceBundle(state, { configurable: { sdkClient: mockSdk } }))
+      .rejects.toThrow(/api_error|scoring/i);
+  });
 });
