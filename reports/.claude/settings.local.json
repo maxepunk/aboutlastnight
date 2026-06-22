@@ -25,7 +25,11 @@
       "Bash(npx jest:*)",
       "Read(//c/Users/spide/.claude/skills/**)",
       "Read(//c/Users/spide/documents/claudecode/aboutlastnight/.claude/skills/**)",
-      "Bash(curl -s -m 3 http://localhost:3001/api/health)"
+      "Bash(curl -s -m 3 http://localhost:3001/api/health)",
+      "mcp__4ea893b9-176f-40c0-a128-f0706cef40b2__read_file_content",
+      "mcp__4ea893b9-176f-40c0-a128-f0706cef40b2__search_files",
+      "mcp__dd080882-62d1-4245-99b6-1f241445cc35__notion-search",
+      "mcp__dd080882-62d1-4245-99b6-1f241445cc35__notion-fetch"
     ]
   }
 }
