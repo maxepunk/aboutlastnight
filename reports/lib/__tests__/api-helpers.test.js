@@ -123,6 +123,32 @@ describe('buildRollbackState', () => {
 });
 
 // ═══════════════════════════════════════════════════════
+// buildRollbackState — re-pause correctness (ROLL-1/ROLL-3)
+// ═══════════════════════════════════════════════════════
+
+describe('buildRollbackState re-pause correctness', () => {
+  test("await-roster nulls roster so checkpointAwaitRoster re-pauses (ROLL-1)", () => {
+    const state = buildRollbackState('await-roster');
+    // checkpointAwaitRoster skips on state.roster?.length > 0 — must be cleared
+    expect(state).toHaveProperty('roster', null);
+    expect(state).toHaveProperty('rosterPronouns', null);
+  });
+
+  test('input-review nulls roster + rosterPronouns (ROLL-3 — compounds ROLL-1)', () => {
+    const state = buildRollbackState('input-review');
+    expect(state).toHaveProperty('roster', null);
+    expect(state).toHaveProperty('rosterPronouns', null);
+  });
+
+  test('await-roster still clears its existing downstream fields', () => {
+    const state = buildRollbackState('await-roster');
+    expect(state).toHaveProperty('whiteboardAnalysis', null);
+    expect(state).toHaveProperty('evidenceBundle', null);
+    expect(state).toHaveProperty('selectedArcs', null);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
 // createGraphAndConfig
 // ═══════════════════════════════════════════════════════
 

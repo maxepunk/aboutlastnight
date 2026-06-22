@@ -852,6 +852,8 @@ const ROLLBACK_CLEARS = {
   'input-review': [
     // Input phase outputs
     'sessionConfig', 'directorNotes', 'playerFocus',
+    // ROLL-3: incremental-input roster must clear too, else await-roster reuses stale roster
+    'roster', 'rosterPronouns',
     // Fetch phase outputs
     'memoryTokens', 'paperEvidence', 'selectedPaperEvidence', 'sessionPhotos',
     // Photo analysis
@@ -879,7 +881,10 @@ const ROLLBACK_CLEARS = {
   ],
 
   // Phase 1.51: Await roster (incremental input)
+  // ROLL-1: clear roster + rosterPronouns so checkpointAwaitRoster (skip on
+  // state.roster?.length > 0) re-pauses instead of silently reusing stale input.
   'await-roster': [
+    'roster', 'rosterPronouns',
     'whiteboardAnalysis',
     'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
