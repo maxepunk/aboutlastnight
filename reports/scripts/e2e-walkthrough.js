@@ -610,9 +610,10 @@ async function loadSessionInput(sessionId) {
     console.log(color(`  ✓ Pre-loaded session data for checkpoints`, 'green'));
     incrementalInputData = {
       roster: sessionConfig.roster,
+      rosterPronouns: sessionConfig.rosterPronouns || {},
       accusation: sessionConfig.accusation,
       sessionReport: directorNotes.sessionReport || sessionConfig.sessionReport,
-      directorNotes: JSON.stringify(directorNotes, null, 2)
+      directorNotes: directorNotes.rawProse || JSON.stringify(directorNotes, null, 2)
     };
   } else {
     // Files not required - checkpoints will gather data interactively
@@ -1980,16 +1981,18 @@ async function handleAwaitRoster(checkpoint, currentPhase) {
     console.log(color(`\nWhiteboard detected: ${checkpoint.whiteboardPhotoPath}`, 'green'));
   }
 
+  // Prefer pre-loaded incremental data (roster + pronouns from session-config) when available
+  if (incrementalInputData?.roster) {
+    const roster = incrementalInputData.roster;
+    const rosterPronouns = incrementalInputData.rosterPronouns || {};
+    if (AUTO_MODE) console.log(color('\n[AUTO] Providing roster + pronouns...', 'yellow'));
+    console.log(color(`[INCREMENTAL] Using pre-loaded roster: ${roster.join(', ')}`, 'green'));
+    return { roster, rosterPronouns };
+  }
+
   // DRY: Use centralized helpers
   const autoApproval = handleAutoApproval('await-roster', checkpoint, '[AUTO] Providing roster...');
   if (autoApproval) return autoApproval;
-
-  // Check for pre-loaded incremental data (from loadSessionInput)
-  if (incrementalInputData?.roster) {
-    const roster = incrementalInputData.roster;
-    console.log(color(`\n[INCREMENTAL] Using pre-loaded roster: ${roster.join(', ')}`, 'green'));
-    return { roster };
-  }
 
   // Fall back to interactive input
   console.log(color('\nEnter character names (comma-separated):', 'cyan'));
@@ -3435,6 +3438,13 @@ async function runWalkthrough() {
   // Main checkpoint loop
   while (iteration < maxIterations) {
     iteration++;
+
+    // Guard: the workflow can end without a checkpoint state (e.g. error routing to END).
+    // Avoid crashing on currentData.checkpoint; let post-loop output handling run.
+    if (!currentData) {
+      console.error(color('\n[harness] currentData undefined (workflow ended without a checkpoint state); breaking loop.', 'yellow'));
+      break;
+    }
 
     // Display current phase
     // NEW FORMAT: Use 'interrupted' and 'checkpoint.type' instead of 'awaitingApproval'/'approvalType'
