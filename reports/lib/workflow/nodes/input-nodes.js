@@ -588,6 +588,9 @@ Return structured JSON matching the schema.`;
         whiteboardPhotoPath: rawInput.whiteboardPhotoPath
       });
 
+    // N4 fail-loud: the whiteboard drives playerFocus (Layer 3), which grounds arc
+    // analysis in the players' own conclusions. A swallowed failure leaves an empty
+    // player-focus and the arcs get invented. Let it propagate (retryPolicy + snapshot).
     try {
       whiteboardData = await sdk({
         prompt: whiteboardUserPrompt,
@@ -598,8 +601,9 @@ Return structured JSON matching the schema.`;
         loadProjectSettings: false
       });
     } catch (error) {
-      console.warn('[parseRawInput] Error analyzing whiteboard:', error.message);
-      // Continue without whiteboard data - not critical but reduces quality
+      // N4 fail-loud: re-throw with phase context; do NOT continue with empty player-focus.
+      console.error('[parseRawInput] Error analyzing whiteboard:', error.message);
+      throw new Error(`Failed to analyze whiteboard: ${error.message}`);
     }
   }
 

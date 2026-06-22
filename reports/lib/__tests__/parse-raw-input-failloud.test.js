@@ -39,3 +39,23 @@ describe('parseRawInput fail-loud (N1)', () => {
     await expect(parseRawInput(makeState(), cfg)).rejects.toThrow(/session report/i);
   });
 });
+
+describe('parseRawInput fail-loud (N4)', () => {
+  test('whiteboard analysis failure REJECTS (no silent empty player-focus)', async () => {
+    const { sdkQuery } = require('../llm');
+    // SDK consumption order for this fixture (no directorNotes => enrichDirectorNotes
+    // is skipped): (1) step1 config parse, (2) step2 session-report parse,
+    // (3) step4 whiteboard analysis (gated on whiteboardPhotoPath). The whiteboard
+    // call is the third, so it is the one that rejects.
+    sdkQuery
+      .mockResolvedValueOnce({ sessionId: 'TEST', roster: ['Alex'], reportingMode: 'on-site' }) // step1 config
+      .mockResolvedValueOnce({ exposedTokens: [], buriedTokens: [], shellAccounts: [],          // step2 report
+        exposedCount: 0, buriedCount: 0, totalBuried: 0 })
+      .mockRejectedValueOnce(new Error('api_error: internal'));                                  // step4 whiteboard
+
+    const state = makeState();
+    state.rawSessionInput.whiteboardPhotoPath = '/tmp/whiteboard.jpg';
+    const cfg = { configurable: { sdkClient: sdkQuery, dataDir: require('os').tmpdir() } };
+    await expect(parseRawInput(state, cfg)).rejects.toThrow(/whiteboard/i);
+  });
+});
