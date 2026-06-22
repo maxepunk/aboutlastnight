@@ -227,4 +227,64 @@ describe('sdkQueryImpl contract', () => {
     expect(events[2].phase).toBe('writing');
     expect(events[2].ttftMs).toBe(events[1].ttftMs);
   });
+
+  test('passes a per-model maxBudgetUsd to the SDK', async () => {
+    let capturedOptions = null;
+    setMockQuery(({ options }) => {
+      capturedOptions = options;
+      return makeAsyncIterable([{ type: 'result', subtype: 'success', result: 'ok' }]);
+    });
+    await sdkQueryImpl({ prompt: 'test', model: 'opus' });
+    expect(typeof capturedOptions.maxBudgetUsd).toBe('number');
+    expect(capturedOptions.maxBudgetUsd).toBeGreaterThan(0);
+  });
+
+  test('explicit maxBudgetUsd option overrides the model default', async () => {
+    let capturedOptions = null;
+    setMockQuery(({ options }) => {
+      capturedOptions = options;
+      return makeAsyncIterable([{ type: 'result', subtype: 'success', result: 'ok' }]);
+    });
+    await sdkQueryImpl({ prompt: 'test', model: 'haiku', maxBudgetUsd: 0.42 });
+    expect(capturedOptions.maxBudgetUsd).toBe(0.42);
+  });
+
+  test('error_max_budget_usd result throws a labeled, non-transient error', async () => {
+    const { isTransientError } = require('../retry');
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'result', subtype: 'error_max_budget_usd', total_cost_usd: 5.01, errors: ['budget exceeded'] }
+    ]));
+
+    let thrown;
+    try {
+      await sdkQueryImpl({ prompt: 'test', model: 'opus', label: 'budget-test' });
+    } catch (e) { thrown = e; }
+
+    expect(thrown).toBeDefined();
+    expect(thrown.message).toMatch(/budget/i);
+    expect(thrown.sdkSubtype).toBe('error_max_budget_usd');
+    expect(isTransientError(thrown)).toBe(false);
+  });
+
+  test('a budget error racing the idle abort is preserved, not reclassified as a transient timeout', async () => {
+    const { isTransientError } = require('../retry');
+    // Simulate the race: the idle timer fires (abortController.signal.aborted === true)
+    // in the SAME tick the buffered budget result arrives from the stream loop. The
+    // budget branch throws budgetErr; the catch sees signal.aborted true and would —
+    // without Fix 1 — rewrite it as "SDK timeout after ..." (transient).
+    setMockQuery(({ options }) => (async function* () {
+      options.abortController.abort();
+      yield { type: 'result', subtype: 'error_max_budget_usd', total_cost_usd: 5.01, errors: ['budget exceeded'] };
+    })());
+
+    let thrown;
+    try {
+      await sdkQueryImpl({ prompt: 'test', model: 'opus', label: 'budget-race' });
+    } catch (e) { thrown = e; }
+
+    expect(thrown).toBeDefined();
+    expect(thrown.sdkSubtype).toBe('error_max_budget_usd');
+    expect(thrown.message).not.toMatch(/SDK timeout after/);
+    expect(isTransientError(thrown)).toBe(false);
+  });
 });

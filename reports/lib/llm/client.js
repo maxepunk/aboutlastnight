@@ -42,6 +42,23 @@ const MODEL_TIMEOUTS = {
 };
 
 /**
+ * Per-call spend ceiling (USD), passed to the SDK as maxBudgetUsd. A backstop so a
+ * runaway call (or an auto-retried long Opus call) cannot bonfire tokens unattended.
+ * Generous by design — tune only from billing data. Opus arc-analysis is the most
+ * expensive call, hence the highest ceiling.
+ *
+ * NOTE: this is a PER-CALL ceiling, not aggregate. LangGraph's node retryPolicy
+ * (Task P3.1) re-runs a failed node up to `maxAttempts` times, each a FRESH SDK call
+ * with its own budget — so N retries can cost up to N× this ceiling. The TRC-2
+ * de-layering (one retry layer, ≤3 attempts) keeps that bound predictable.
+ */
+const MODEL_BUDGETS = {
+  opus: 5.0,
+  sonnet: 2.0,
+  haiku: 0.5
+};
+
+/**
  * Resolve shorthand model names to explicit model IDs.
  * The Agent SDK's shorthand resolution lags behind latest releases
  * (e.g., 'sonnet' resolves to 4.5 instead of 4.6). Using explicit IDs
@@ -90,6 +107,7 @@ const EFFORT_LEVELS = {
  * @param {string} [options.cwd] - Current working directory for file operations
  * @param {('low'|'medium'|'high'|'xhigh'|'max')} [options.effort] - Override the per-model effort default
  * @param {number} [options.timeoutMs] - Idle/stall window in ms — aborts only if NO streamed message arrives within this window (NOT a total-duration cap). Defaults to the per-model idle value (15 min).
+ * @param {number} [options.maxBudgetUsd] - Per-call spend ceiling override (defaults to per-model MODEL_BUDGETS)
  * @param {Function} [options.onProgress] - Callback for intermediate messages: (msg) => void
  * @param {string} [options.label] - Label for progress logging
  * @returns {Promise<Object|string>} - Parsed result (object if schema, string otherwise)
@@ -105,6 +123,7 @@ async function sdkQueryImpl({
   cwd,
   effort,
   timeoutMs,
+  maxBudgetUsd,
   onProgress,
   label,
   disableTools = false,
@@ -144,6 +163,9 @@ async function sdkQueryImpl({
     // idle timer is fed by real activity (SDK 0.2.119: SDKPartialAssistantMessage).
     includePartialMessages: true
   };
+
+  // Per-call cost ceiling. Explicit param wins; else the per-model default.
+  options.maxBudgetUsd = maxBudgetUsd ?? MODEL_BUDGETS[model] ?? MODEL_BUDGETS.sonnet;
 
   // Control 2: scope filesystem-loaded skills/settings per call.
   //
@@ -408,7 +430,24 @@ async function sdkQueryImpl({
         return finalResult;
       }
 
-      // Handle error results
+      // Cost ceiling tripped — explicit, non-transient. isTransientError matches
+      // `error_max_budget_usd` in the subtype/message and returns false; the operator
+      // must decide, we never auto-retry spend.
+      // MUST precede the generic subtype.includes('error') branch (error_max_budget_usd also matches it).
+      if (msg.type === 'result' && msg.subtype === 'error_max_budget_usd') {
+        clearTimeout(timeoutId);
+        const spent = typeof msg.total_cost_usd === 'number' ? msg.total_cost_usd.toFixed(2) : '?';
+        const budgetErr = new Error(
+          `SDK error_max_budget_usd: per-call budget exceeded ` +
+          `($${spent} spent, limit $${Number(options.maxBudgetUsd).toFixed(2)}) - ${progressLabel}`
+        );
+        budgetErr.sdkSubtype = msg.subtype;
+        budgetErr.sdkErrors = msg.errors || [];
+        throw budgetErr;
+      }
+
+      // Handle error results (generic) — KEEP Task 2.1's enrichment so a sustained
+      // upstream overload (error_during_execution / overloaded_error) stays auto-retryable.
       if (msg.type === 'result' && msg.subtype && msg.subtype.includes('error')) {
         clearTimeout(timeoutId);
         const errorDetails = msg.errors?.join(', ') || 'Unknown error';
@@ -435,6 +474,11 @@ async function sdkQueryImpl({
     if (error instanceof StructuredOutputExtractionError) {
       throw error;
     }
+
+    // Our own enriched SDK errors (budget overrun / generic error-result) were thrown from the
+    // stream loop, NOT by the idle abort — preserve them so a concurrent abort can't reclassify
+    // a PERMANENT budget error as a retryable timeout (the cost ceiling must never auto-retry).
+    if (error && error.sdkSubtype) throw error;
 
     // Check if it was an idle/stall abort. Message must still start with
     // "SDK timeout after" so isSdkTimeoutError (and thus isTransientError) keeps
@@ -546,5 +590,6 @@ module.exports = {
   isClaudeAvailable,
   isSdkTimeoutError,
   createSemaphore,
-  MODEL_TIMEOUTS
+  MODEL_TIMEOUTS,
+  MODEL_BUDGETS
 };
