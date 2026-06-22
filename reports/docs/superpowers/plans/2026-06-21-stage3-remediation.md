@@ -5560,6 +5560,56 @@ ROLL-1 regression at the node level without a full graph invoke.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"`
 
+### Task P6.5: Clear the in-memory session-outcome store on rollback + fresh-start (DEL-1 staleness — folds deferral #17)
+
+The DEL-1 store (`lib/session-outcome.js`, added in P4.1) records the LAST terminal outcome per `sessionId` and is surfaced as `lastOutcome` by GET /state (P4.2). It is never cleared, so after a rollback — or a fresh re-run of the same `sessionId` — GET /state reports a STALE `lastOutcome` (e.g. a prior `complete`/`failed`) next to the freshly rolled-back `interrupted`/`state`. `clearSessionOutcome` is already defined, exported, and unit-tested (P4.1) but has **zero callers**. Wire it into the two handlers that reset a session's lifecycle. (Low severity — `lastOutcome` is a recovery hint, not load-bearing for the console UI, which keys on `interrupted`/`checkpointType` — but it is a correctness nit on the DEL-1 surface, and P6/recovery-correctness is its home.)
+
+**Files:**
+- Modify: `server.js` (the `./lib/session-outcome` require; the `POST /api/session/:id/rollback` handler; the `POST /api/session/:id/start` handler)
+- Test: `__tests__/unit/clear-session-outcome-wiring.test.js` (static-source guard — the console has no supertest harness; mirrors `no-api-generate.test.js`)
+
+- [ ] **Step 1: Failing static-source guard test.** Create `__tests__\unit\clear-session-outcome-wiring.test.js`:
+```js
+const fs = require('fs');
+const path = require('path');
+const SERVER_SRC = fs.readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8');
+
+describe('DEL-1 staleness: clearSessionOutcome wired on rollback + fresh-start (#17)', () => {
+  it('imports clearSessionOutcome from lib/session-outcome', () => {
+    expect(SERVER_SRC).toMatch(/require\(['"`]\.\/lib\/session-outcome['"`]\)/);
+    expect(SERVER_SRC).toMatch(/clearSessionOutcome/);
+  });
+  it('calls clearSessionOutcome(sessionId) at least twice (rollback + fresh-start)', () => {
+    const calls = SERVER_SRC.match(/clearSessionOutcome\(sessionId\)/g) || [];
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+```
+
+- [ ] **Step 2: Run, expect failure.** `npx jest __tests__/unit/clear-session-outcome-wiring.test.js` — the second test fails (zero calls).
+
+- [ ] **Step 3: Append `clearSessionOutcome` to the existing session-outcome require** (do NOT replace the other names; P4.1 added the line):
+```js
+const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
+```
+
+- [ ] **Step 4: Clear on rollback.** In the `POST /api/session/:id/rollback` handler, after the rollback is applied successfully (alongside the success `res.json`), add:
+```js
+        clearSessionOutcome(sessionId); // DEL-1: a rolled-back session's prior terminal outcome is now stale
+```
+
+- [ ] **Step 5: Clear on fresh start.** In the `POST /api/session/:id/start` handler (every `/start` is a fresh invoke seeded with `buildRollbackState('input-review')`), add near the top of the handler right after `const { id: sessionId } = req.params;`:
+```js
+        clearSessionOutcome(sessionId); // DEL-1: a fresh start wipes any prior run's outcome for this id
+```
+
+- [ ] **Step 6: Re-run + regression check.** `npx jest __tests__/unit/clear-session-outcome-wiring.test.js __tests__/unit/session-outcome.test.js __tests__/unit/get-session-state.test.js` → all green. `node -e "require('./server.js'); console.log('no boot')"` → prints, no banner. Broad sweep `npx jest __tests__ lib/__tests__` stays green.
+
+- [ ] **Step 7: Commit.**
+  `git add server.js __tests__/unit/clear-session-outcome-wiring.test.js && git commit -m 'fix(server): clear session-outcome store on rollback + fresh-start (DEL-1 staleness, #17)
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>'`
+
 ---
 
 ## Phase P7: Security hardening (Workstream A — SEC-1…SEC-6)
@@ -7982,7 +8032,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 Goal: The e2e harness reports completed runs (reads the flat completion payload), `parseRawInput` fails loud on an empty-but-required pronoun map instead of silently shadowing `rawInput`, and pronoun annotations stop leaking into the detective prompt.
 Dependencies: None of these depend on B-spine work. The F1 pronoun *key-namespace* normalization (CR-1/X-1/X-4) is a separate phase; P11 only fixes the *precedence* bug (CR-4) and the *theme-gate* (X-6), which are orthogonal and can land before or after F1. Land P11 independently.
 
-### Task 11.1: Harness reads the flat completion payload (CR-3) + restore structured directorNotes (X-8) + drop the band-aid guard
+### Task 11.1: Harness reads the flat completion payload (CR-3) + restore structured directorNotes (X-8) + drop the band-aid guard + handle the SSE-1 `failed` event (folds deferral #18)
+
+> **NOTE (2026-06-22):** The three uncommitted working-tree edits in `scripts/e2e-walkthrough.js` that were "dirty" through the P1–P4 work ARE the in-progress starting point of THIS task — Step 6's and Step 7's "BEFORE" blocks are written to match them verbatim (the added `rosterPronouns`/`directorNotes.rawProse` line at `:611` and the band-aid `!currentData` guard at `:3439`). The third edit (roster+pronouns plumbing in `handleAwaitRoster` at `:1981`) is additive incremental-input plumbing kept as-is. Completing this task finalizes that WIP and yields a clean tree. **Step 5b is the folded #18 harness regression** (P4.4's SSE-1 split made failures emit `type:'failed'`, which the harness must now handle).
 
 **Files:**
 - Create: `C:\Users\spide\Documents\claudecode\aboutlastnight\reports\scripts\lib\sse-complete.js`
@@ -8073,6 +8125,18 @@ Root cause (verified by read): `progress-emitter.js:39 emitComplete` spreads `re
                 break;
   ```
 
+- [ ] **Step 5b: Add the `failed` SSE case so a workflow FAILURE resolves the harness (SSE-1 — folds deferral #18).** P4.4 (commit `01302a5`) split the overloaded `complete` event: a background `/approve`|`/start`|`/resume` FAILURE now arrives as `type:'failed'`, NOT `type:'complete'`. `connectSSE`'s switch has no `'failed'` case, so a failure falls through to `default`, never resolves `sseCompletionPromise` (`:354`), and the run only unblocks when the inactivity timeout fires `controller.abort()` → a misleading `{status:408}` instead of surfacing the failure. Add a `failed` case immediately after the `complete` case (same switch):
+  ```javascript
+              case 'failed':
+                // SSE-1 (P4.4): a workflow FAILURE arrives as a distinct 'failed' event.
+                // Resolve the completion promise with the flat error payload so the run
+                // ends promptly and visibly instead of timing out at 408.
+                console.error(color(`\n  [SSE] Workflow FAILED: ${data.error || 'unknown'}${data.details ? ' — ' + data.details : ''}`, 'red'));
+                if (onComplete) onComplete(resolveCompletePayload(data));
+                break;
+  ```
+  The flat `failed` payload carries `currentPhase:'error'` + `error`/`details`; it flows through the same `onComplete` → main loop → post-loop output/error handling, and the Step 7 assertion guarantees `currentData` is defined. (A dedicated `onFailure` surface is possible later but out of scope.)
+
 - [ ] **Step 6: Restore structured directorNotes in loadSessionInput (X-8).**
   In `scripts\e2e-walkthrough.js`, the `--fresh`/normal path currently flattens director notes to prose at `:616`, dropping the structured whiteboard/quotes/transactions for the 11 enriched sessions. Replace the `incrementalInputData` assignment block at `:611-617`:
   ```javascript
@@ -8126,7 +8190,7 @@ Root cause (verified by read): `progress-emitter.js:39 emitComplete` spreads `re
   Expected: the run reaches `header('Pipeline Complete!')` and prints `HTML saved to: ...` (from `:3463-3467`) — NOT `[harness] currentData undefined`. Confirm the printed `outputPath` matches an actual file under `outputs/`.
 
 - [ ] **Step 9: Commit.**
-  `git add scripts/lib/sse-complete.js __tests__/unit/scripts/sse-complete.test.js scripts/e2e-walkthrough.js && git commit -m 'fix(harness): read flat SSE completion payload, restore structured directorNotes, drop band-aid guard (CR-3, X-8)'`
+  `git add scripts/lib/sse-complete.js __tests__/unit/scripts/sse-complete.test.js scripts/e2e-walkthrough.js && git commit -m 'fix(harness): read flat SSE completion payload, restore structured directorNotes, handle SSE-1 failed event, drop band-aid guard (CR-3, X-8, #18)'`
 
 ### Task 11.2: parseRawInput precedence — empty `{}` must not shadow rawInput (CR-4)
 
