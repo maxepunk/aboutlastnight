@@ -11,7 +11,8 @@ const path = require('path');
 const fs = require('fs');
 
 // LangGraph workflow modules
-const { MemorySaver, Command } = require('@langchain/langgraph');
+const { Command } = require('@langchain/langgraph');
+const { SqliteSaver } = require('@langchain/langgraph-checkpoint-sqlite');
 const { createReportGraphWithCheckpointer, RECURSION_LIMIT } = require('./lib/workflow/graph');
 const {
   PHASES,
@@ -33,8 +34,11 @@ const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require(
 const { SchemaValidator } = require('./lib/schema-validator');
 const outlineValidator = new SchemaValidator();
 
-// Shared checkpointer instance - must persist across API calls for resume to work
-const sharedCheckpointer = new MemorySaver();
+// Shared checkpointer instance - DURABLE (DUR-1): sessions survive restart/crash/deploy.
+// SqliteSaver.fromConnString opens (and creates) the db; .db is the better-sqlite3 handle.
+const CHECKPOINT_DB_PATH = path.join(__dirname, 'data', 'checkpoints.sqlite');
+fs.mkdirSync(path.dirname(CHECKPOINT_DB_PATH), { recursive: true });
+const sharedCheckpointer = SqliteSaver.fromConnString(CHECKPOINT_DB_PATH);
 
 // Shared promptBuilder - created at startup, injected into workflow config (Commit 8.18)
 // Persists cache across all graph invocations for efficient prompt loading
