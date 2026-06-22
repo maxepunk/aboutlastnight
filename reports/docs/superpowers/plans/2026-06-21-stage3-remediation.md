@@ -35,9 +35,9 @@ Each phase edits *different functions/lines* of a shared file unless a merge (M#
 |---|---|---|
 | `server.js` | P1 → P4 → P7 → P8 | P1 establishes the `SqliteSaver` line + module-scope singletons; **M1** (`module.exports`), **M2** (approve `finally`). P7 anchors module-scope additions on the post-P1 checkpointer (stale-anchor note). |
 | `lib/api-helpers.js` | P7 (source) ; P6 (test only) | P7 adds `confineToBase` + `path` require + export. P6 only appends to `api-helpers.test.js`. |
-| `lib/workflow/state.js` | P6 → P12 | P6 adds `ROLLBACK_CLEARS` entries + `ROLLBACK_CLEARS_EXEMPT`; **M6** — P12.5 must also strip `supervisorNarrativeCompass` from `EXEMPT`. |
+| `lib/workflow/state.js` | P6 → P12 | P6.1/P6.2 add `ROLLBACK_CLEARS` entries; **P6.3** adds 4 channels (`accusation`/`sessionReport`/`directorNotesRaw`/`_previousFullContext`) + the `await-full-context` clear list; P6.4 adds `ROLLBACK_CLEARS_EXEMPT`; **M6** — P12.5 must also strip `supervisorNarrativeCompass` from `EXEMPT`. |
 | `lib/workflow/graph.js` | P3 → P12 | P3 adds `retryPolicy` to `addNode` calls; P12 rewrites adjacent comments. |
-| `lib/workflow/nodes/input-nodes.js` | P3, P8 → P11 | P3 at ~489/520/591 (fail-loud); **M5** — P8 (`:428` normalize) then P11 (`:428` precedence) merge into one line. |
+| `lib/workflow/nodes/input-nodes.js` | P3, **P6.3**, P8 → P11 | P3 at ~489/520/591 (fail-loud); **P6.3** moves `parseRawInput`'s full-context reads to top-level channels (389-543, disjoint from `:428`) + hardens 2 missing-input branches; **M5** — P8 (`:428` normalize) then P11 (`:428` precedence) merge into one line. |
 | `lib/workflow/nodes/ai-nodes.js` | P3, P9, P12 | P3 at 214–354; P9 at ~1213–1233; P12 at ~1573. Disjoint. |
 | `lib/prompt-builder.js` | P9, P10, P11, then CR-7 | P9 `buildOutlinePrompt`; P10 example + `buildValidationPrompt`; P11 `generateRosterSection`; CR-7 collapses the 4 call sites (last). Disjoint functions. |
 | `lib/workflow/nodes/arc-specialist-nodes.js` | P3, P12 | P3 at ~863 (N7); P12 at 56–58/1769. Disjoint. |
@@ -135,7 +135,7 @@ Both helpers are required: `resolveRosterPronouns` (P11, defined above `parseRaw
 ### M6 — P12 must update P6's `ROLLBACK_CLEARS_EXEMPT`
 > **✅ FOLDED (2026-06-21 verification):** now folded directly into Task 12.5 as **Step 4b** (remove the field from `ROLLBACK_CLEARS_EXEMPT`) and the amended **Step 5** (which also runs `rollback-clears-completeness.test.js`). No separate action needed; the rationale below is retained.
 
-P6.3 adds `'supervisorNarrativeCompass'` to `ROLLBACK_CLEARS_EXEMPT`. P12.5 deletes that field from `state.js`. Task 12.5 Step 4b also removes the `'supervisorNarrativeCompass'` line from `ROLLBACK_CLEARS_EXEMPT`, or P6's `rollback-clears-completeness.test.js` ("every EXEMPT entry is a real state field") fails. (The "every field cleared or exempt" test still passes — one fewer field and one fewer exemption.)
+Task P6.4 adds `'supervisorNarrativeCompass'` to `ROLLBACK_CLEARS_EXEMPT`. P12.5 deletes that field from `state.js`. Task 12.5 Step 4b also removes the `'supervisorNarrativeCompass'` line from `ROLLBACK_CLEARS_EXEMPT`, or P6's `rollback-clears-completeness.test.js` ("every EXEMPT entry is a real state field") fails. (The "every field cleared or exempt" test still passes — one fewer field and one fewer exemption.)
 
 ### M7 — `client.js` error branch: Task 2.1 enrichment + Task 2.4 budget case (same lines)
 Both Task 2.1 (MUST-FIX 3 enrichment — adds `sdkSubtype`/`sdkErrors` to the generic error throw) and Task 2.4 Step 5 (inserts the explicit `error_max_budget_usd` case) edit the SAME `client.js:354–359` error-result branch. **P2.1 runs first** and enriches the generic branch; **P2.4 then inserts the budget case BEFORE it and keeps the enrichment** on the generic fallthrough. Task 2.4 Step 5's "from"/"to" blocks already reflect the post-2.1 enriched shape — apply them as written. Net (both landed): a budget case (enriched, non-transient) followed by the enriched generic branch (keeps `overloaded_error` auto-retryable).
@@ -5438,11 +5438,448 @@ storyline. Add arcEvidencePackages to every clear list at/upstream of arc-select
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"`
 
-### Task P6.3: Completeness test — enumerate every node-written state field and assert each is in a clear list or a documented EXEMPT set (ROOT-1)
+### Task P6.3: Make `await-full-context` a true rollback point — promote the three full-context inputs to first-class channels + pre-fill on re-collection (ROLL-4)
+
+> **Design rationale (2026-06-22 brainstorm + verification).** `accusation`, `sessionReport`, and `directorNotes` are the three most thesis-critical ground-truth inputs (they drive the parse → `sessionConfig`/`directorNotes`/`playerFocus`/`shellAccounts` → arcs/thesis). Today they are sub-fields of the single `rawSessionInput` object (a `replaceReducer` channel), so rollback — which only nulls whole channels — cannot clear them, and `await-full-context` is the ONE checkpoint that 400s on rollback (`CHECKPOINT_ORDER` − `VALID_ROLLBACK_POINTS` = exactly `['await-full-context']`). It is also the only incremental-input checkpoint whose data is NOT a first-class channel (roster/rosterPronouns/characterIdMappings/selectedPaperEvidence all are). **Fix:** promote the three to top-level channels (gate the checkpoint on them, read them top-level in `parseRawInput`, clear them on rollback → the checkpoint re-pauses and re-collection overwrites them). A `_previousFullContext` stash captured at rollback time pre-fills the form so the director edits rather than re-types a long `sessionReport`. **Verified execution order** (graph.js edges): `…→checkpointAwaitContext→parseRawInput[input-review]→preprocessEvidence→…` — so `parseRawInput` and everything from `preprocessEvidence` on are DOWNSTREAM (cleared); `roster`/`characterIdMappings`/`photoAnalyses`/`selectedPaperEvidence`/fetched data are UPSTREAM (preserved). **Fail-loud (Stage-1) lens:** the checkpoint gate is the sole guarantor that all three are present before `parseRawInput`; while moving the reads, harden `parseRawInput`'s two dead fall-soft "missing input" branches (it currently returns empty on a missing `sessionReport`/`directorNotes` — the exact silent fabrication N1 names) into throws. **Naming:** `directorNotesRaw` takes the `Raw` suffix (the parsed `directorNotes` channel already exists; same convention as `characterIdsRaw`→`characterIdMappings`); `accusation`/`sessionReport` have no parsed twin, so no suffix. **Lands before P6.4** so the completeness guard enforces the new channels (verified: 65 channels, all guard assertions green with the EXEMPT set in P6.4 Step 1). **Prune + re-parse (review-found, critical — two layers):** `finalizeInput` prunes `rawSessionInput→null` after input-review (input-nodes.js:758/767) AND `loadDirectorNotes` rehydrates `sessionConfig`/`directorNotes` from `inputs/*.json` (the durable source of truth, fetch-nodes.js:183-240) on every replay — so a naive rollback both skips the re-parse (null `rawSessionInput`) and, even after re-gating, reuses the STALE parsed config reloaded from disk. Fix: (1) stop pruning `rawSessionInput` (now just small at-start config the re-parse still needs); (2) re-gate `parseRawInput`'s skip on `sessionConfig` presence; (3) have `checkpointAwaitContext`'s capture branch null `sessionConfig`/`directorNotes`/`playerFocus` — it runs AFTER `loadDirectorNotes`'s disk rehydrate and immediately BEFORE `parseRawInput`, so the re-collected inputs genuinely re-parse (clear-list entries alone are insufficient because `loadDirectorNotes` repopulates from disk). **Downstream upside (review-confirmed):** the three channels then become addressable via the unwhitelisted `GET /state/:field` (`/state/accusation` etc.), giving the `refining-aln-reports` refsheet an authoritative raw-input source it currently lacks — a follow-up can add them to that skill's `/state/` fetch loop.
 
 **Files:**
-- Modify: `lib/workflow/state.js:850` (add an exported `ROLLBACK_CLEARS_EXEMPT` Set + JSDoc immediately above `ROLLBACK_CLEARS`; export it in `module.exports`)
+- Modify: `lib/workflow/state.js` (add 4 `Annotation` channels + `getDefaultState` entries; add `ROLLBACK_CLEARS['await-full-context']` between `character-ids` and `pre-curation`; add `ROLLBACK_COUNTER_RESETS['await-full-context']`)
+- Modify: `lib/workflow/nodes/checkpoint-nodes.js` (`checkpointAwaitContext` ~191-231; traced `stateFields` ~463-464)
+- Modify: `lib/workflow/nodes/input-nodes.js` (`parseRawInput`: re-gate skip on `sessionConfig` ~362, move 6 reads at ~389/403/435/450/531/543 → top-level, harden missing-`sessionReport`/`directorNotes` branches to throw; `finalizeInput`: stop pruning `rawSessionInput` at ~758/767)
+- Modify: `server.js` (`/approve` fullContext branch ~316-330 → write top-level channels; `/rollback` handler ~977 → stash `_previousFullContext`)
+- Modify: `console/components/checkpoints/AwaitFullContext.js` (seed the 3 `useState` from `data.previousFullContext`)
+- Modify: `scripts/e2e-walkthrough.js` (`--input` path routes full-context through the await-full-context approval, not `/start` — Step 16c)
+- Test: `lib/__tests__/parse-raw-input-failloud.test.js` (rewrite `makeState` to top-level; skip-gate + fail-loud tests; fix N4)
+- Test: `lib/workflow/__tests__/await-full-context-rollback.test.js` (Create — re-pause + buildRollbackState)
+- Test: `lib/__tests__/api-helpers.test.js` (extend the `re-pause correctness` describe from P6.1)
+- Test: `__tests__/unit/workflow/state.test.js` (add the 4 channels to the `expectedFields` exact-match array + title — Step 16b)
+- Test: `lib/workflow/__tests__/await-full-context-capture.test.js` (Create — capture-branch re-parse trigger, Step 11b)
+- Test: `lib/__tests__/state-pruning.test.js` (update the 2 `rawSessionInput` prune assertions — Step 12c)
+
+> **Shared-file note:** this edits `input-nodes.js#parseRawInput` (the full-context READS at 389-543), disjoint from P8/P11's `:428` `rosterPronouns` stamp and P3's landed fail-loud at 489/520/591. P6 lands before workstream C, so P8/P11 anchor on `:428` afterward. Also coordinates with `state.js` (P6→P12, M6) — the new channels do not affect M6 (it still only strips `supervisorNarrativeCompass`).
+
+- [ ] **Step 1: Add the four channels to `state.js`.** In `lib/workflow/state.js`, in the `INCREMENTAL INPUT` section (immediately after the `rosterPronouns` Annotation block, ~line 210), insert:
+
+```javascript
+  /**
+   * Full-context raw inputs (ROLL-4) — promoted from rawSessionInput sub-fields to
+   * first-class channels so rollback to await-full-context can clear them and the
+   * checkpoint re-pauses. Collected at checkpointAwaitContext; read by parseRawInput.
+   */
+  accusation: Annotation({ reducer: replaceReducer, default: () => null }),
+  sessionReport: Annotation({ reducer: replaceReducer, default: () => null }),
+  // 'Raw' suffix: the parsed `directorNotes` channel is separate (see below).
+  // Same raw-vs-parsed convention as characterIdsRaw -> characterIdMappings.
+  directorNotesRaw: Annotation({ reducer: replaceReducer, default: () => null }),
+```
+
+  Then in the `REVISION CONTEXT` section (after the `_previousContentBundle` Annotation block, ~line 619), insert:
+
+```javascript
+  /**
+   * Stash of the prior full-context values during a rollback to await-full-context,
+   * so AwaitFullContext pre-fills the re-collection form. Transient scratch (sibling
+   * of _previousArcs/_previousOutline); nulled when new context is captured. EXEMPT
+   * from ROLLBACK_CLEARS (owned by the checkpoint), like the other _previous* fields.
+   */
+  _previousFullContext: Annotation({ reducer: replaceReducer, default: () => null }),
+```
+
+- [ ] **Step 2: Add the four `getDefaultState()` entries.** In `lib/workflow/state.js` `getDefaultState()`, after `rosterPronouns: null,` (~line 687) add `accusation: null,`, `sessionReport: null,`, `directorNotesRaw: null,`; and after `_previousContentBundle: null,` (~line 747) add `_previousFullContext: null,`.
+
+- [ ] **Step 3: Write the failing rollback test FIRST.** Append to the `buildRollbackState re-pause correctness` describe block (added in P6.1) in `lib/__tests__/api-helpers.test.js`:
+
+```javascript
+  test('await-full-context is a valid rollback point that clears the 3 raw inputs (ROLL-4)', () => {
+    const state = buildRollbackState('await-full-context'); // must NOT throw
+    expect(state).toHaveProperty('accusation', null);
+    expect(state).toHaveProperty('sessionReport', null);
+    expect(state).toHaveProperty('directorNotesRaw', null);
+    expect(state).toHaveProperty('sessionConfig', null);     // parse output cleared -> re-parse triggers
+    // downstream cleared, upstream preserved
+    expect(state).toHaveProperty('preprocessedEvidence', null);
+    expect(state).toHaveProperty('evidenceBundle', null);
+    expect(state).not.toHaveProperty('roster');            // upstream — preserved
+    expect(state).not.toHaveProperty('characterIdMappings'); // upstream — preserved
+  });
+```
+
+- [ ] **Step 4: Run it, confirm it fails.** `npx jest lib/__tests__/api-helpers.test.js -t "ROLL-4"` → FAILS: `buildRollbackState('await-full-context')` throws `Invalid rollback point` (not yet in `ROLLBACK_CLEARS`).
+
+- [ ] **Step 5: Add `ROLLBACK_CLEARS['await-full-context']`.** In `lib/workflow/state.js`, insert this block immediately AFTER the `'character-ids': [...]` block and BEFORE the `// Phase 1.75: Pre-curation` comment:
+
+```javascript
+  // Phase 1.52: Await full context — re-collect accusation/sessionReport/directorNotes.
+  // ROLL-4: the three raw inputs are first-class channels; clearing them re-pauses
+  // checkpointAwaitContext, and re-collection overwrites them. The parse OUTPUTS
+  // (sessionConfig/directorNotes/playerFocus) are listed here too, BUT loadDirectorNotes
+  // rehydrates sessionConfig/directorNotes from inputs/*.json on the replay (files are the
+  // source of truth) — so the DURABLE re-parse trigger is checkpointAwaitContext's capture
+  // branch (Step 8), which re-nulls these AFTER loadDirectorNotes and immediately before
+  // parseRawInput (which skips when sessionConfig is populated). (rawSessionInput is EXEMPT
+  // and no longer pruned — its at-start config survives so the re-parse can read
+  // photosPath/journalistFirstName/etc.) Upstream collected inputs (roster,
+  // characterIdMappings, photoAnalyses, selectedPaperEvidence) are PRESERVED.
+  'await-full-context': [
+    'accusation', 'sessionReport', 'directorNotesRaw',
+    'sessionConfig', 'directorNotes', 'playerFocus',
+    'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
+    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'evaluationHistory'
+  ],
+```
+
+  **Note:** write `'assembledHtml', 'validationResults'` BARE here (no `outputPath`/`photosCopied`) — P6.4 Step 2b's `replace_all` adds those uniformly across all lists (its expected count becomes 10 because this 10th list now carries the pair).
+
+- [ ] **Step 6: Add the counter-reset entry.** In `lib/workflow/state.js` `ROLLBACK_COUNTER_RESETS`, insert after the `'character-ids':` line:
+
+```javascript
+  'await-full-context': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+```
+
+- [ ] **Step 7: Re-run, confirm pass.** `npx jest lib/__tests__/api-helpers.test.js -t "ROLL-4"` → PASS.
+
+- [ ] **Step 8: Rewrite `checkpointAwaitContext` to gate on the channels + carry the pre-fill stash.** In `lib/workflow/nodes/checkpoint-nodes.js`, replace the body of `checkpointAwaitContext` (the `hasFullContext`/`skipCondition`/`checkpointInterrupt`/capture block, ~lines 192-230) with:
+
+```javascript
+  // ROLL-4: gate on the first-class channels (not rawSessionInput sub-fields) so a
+  // rollback that nulls them re-pauses here. parseRawInput reads these top-level too.
+  const hasFullContext = state.accusation && state.sessionReport && state.directorNotesRaw;
+
+  const skipCondition = hasFullContext ? true : null;
+
+  const resumeValue = checkpointInterrupt(
+    CHECKPOINT_TYPES.AWAIT_FULL_CONTEXT,
+    {
+      roster: state.roster,
+      whiteboardAnalysis: state.whiteboardAnalysis,
+      previousFullContext: state._previousFullContext,  // ROLL-4: pre-fill on rollback re-collection
+      message: 'Provide accusation, sessionReport, and directorNotes to continue'
+    },
+    skipCondition
+  );
+
+  // If resumed with fullContext data, capture it into the first-class channels.
+  if (resumeValue?.fullContext && !skipCondition) {
+    console.log(`[checkpointAwaitContext] Captured fullContext: accusation=${!!resumeValue.fullContext.accusation}, report=${!!resumeValue.fullContext.sessionReport}, notes=${!!resumeValue.fullContext.directorNotes}`);
+    return {
+      accusation: resumeValue.fullContext.accusation,
+      sessionReport: resumeValue.fullContext.sessionReport,
+      directorNotesRaw: resumeValue.fullContext.directorNotes,
+      // ROLL-4 re-parse: null the parse OUTPUTS here so parseRawInput (next node, skips
+      // when sessionConfig is populated) actually re-parses the re-collected inputs.
+      // This runs AFTER loadDirectorNotes may have rehydrated stale sessionConfig/
+      // directorNotes from inputs/*.json on the rollback replay — the clear-list alone
+      // is defeated by that disk reload, so re-null them here, right before parseRawInput.
+      sessionConfig: null,
+      directorNotes: null,
+      playerFocus: null,
+      _previousFullContext: null,  // consumed — clear the pre-fill stash
+      currentPhase: PHASES.AWAIT_FULL_CONTEXT
+    };
+  }
+
+  return {
+    currentPhase: PHASES.AWAIT_FULL_CONTEXT
+  };
+```
+
+- [ ] **Step 9: Update the traced `stateFields` for the node.** In `lib/workflow/nodes/checkpoint-nodes.js` (~line 463-464), change `stateFields: ['rawSessionInput', 'roster']` to `stateFields: ['accusation', 'sessionReport', 'directorNotesRaw', 'roster']`.
+
+- [ ] **Step 10: Write the failing node re-pause test FIRST.** Create `lib/workflow/__tests__/await-full-context-rollback.test.js`:
+
+```javascript
+/**
+ * ROLL-4 end-to-end: rolling back to await-full-context must RE-PAUSE the checkpoint.
+ * checkpointAwaitContext now gates on the first-class channels; buildRollbackState
+ * nulls them, so the merged post-rollback state causes the checkpoint to interrupt.
+ */
+const { buildRollbackState } = require('../../api-helpers');
+const { _testing } = require('../nodes/checkpoint-nodes');
+const { GraphInterrupt } = require('@langchain/langgraph');
+
+function applyRollback(prior, patch) {
+  const merged = { ...prior };
+  for (const [k, v] of Object.entries(patch)) merged[k] = v; // replace semantics (null clears)
+  return merged;
+}
+
+describe('ROLL-4 await-full-context re-pause', () => {
+  const populated = {
+    accusation: 'Players accused Marcus.',
+    sessionReport: '# Session Report ...',
+    directorNotesRaw: 'Notes ...',
+    roster: ['Alice', 'Bob'],
+    evidenceBundle: { exposed: {} }
+  };
+
+  test('before rollback: checkpointAwaitContext SKIPS (full context present)', () => {
+    return expect(_testing.checkpointAwaitContext(populated, {}))
+      .resolves.toMatchObject({ currentPhase: expect.any(String) });
+  });
+
+  test('after rollback: 3 channels nulled, stash carried, checkpoint RE-PAUSES', async () => {
+    const patch = buildRollbackState('await-full-context');
+    const rolledBack = applyRollback(populated, patch);
+    expect(rolledBack.accusation).toBeNull();
+    expect(rolledBack.sessionReport).toBeNull();
+    expect(rolledBack.directorNotesRaw).toBeNull();
+    await expect(_testing.checkpointAwaitContext(rolledBack, {})).rejects.toThrow(GraphInterrupt);
+  });
+});
+```
+
+- [ ] **Step 11: Run it.** `npx jest lib/workflow/__tests__/await-full-context-rollback.test.js` → both pass (Steps 5/8 already landed). If `GraphInterrupt` is undefined in this langgraph version, switch the matcher to `.rejects.toThrow()` (it is exported — verified `typeof === 'function'`).
+
+- [ ] **Step 11b: Test the capture-branch re-parse trigger.** This locks the fix for the `loadDirectorNotes` disk-rehydrate problem — the capture branch must null `sessionConfig`/`directorNotes`/`playerFocus` so `parseRawInput` re-parses. It needs `checkpointInterrupt` MOCKED (to take the capture path), which conflicts with Step 10's real-`GraphInterrupt` test, so use a separate file. Create `lib/workflow/__tests__/await-full-context-capture.test.js`:
+
+```javascript
+jest.mock('../checkpoint-helpers', () => {
+  const actual = jest.requireActual('../checkpoint-helpers');
+  return { ...actual, checkpointInterrupt: jest.fn() };
+});
+const { checkpointInterrupt } = require('../checkpoint-helpers');
+const { _testing } = require('../nodes/checkpoint-nodes');
+
+test('capture branch nulls sessionConfig/directorNotes/playerFocus so parseRawInput re-parses (ROLL-4)', async () => {
+  checkpointInterrupt.mockReturnValue({ fullContext: { accusation: 'a', sessionReport: 'r', directorNotes: 'n' } });
+  const result = await _testing.checkpointAwaitContext(
+    { accusation: null, sessionReport: null, directorNotesRaw: null }, {}
+  );
+  expect(result.accusation).toBe('a');
+  expect(result.directorNotesRaw).toBe('n');     // payload .directorNotes -> channel directorNotesRaw
+  expect(result.sessionConfig).toBeNull();        // <- the re-parse trigger
+  expect(result.directorNotes).toBeNull();
+  expect(result.playerFocus).toBeNull();
+});
+```
+  Run `npx jest lib/workflow/__tests__/await-full-context-capture.test.js` → green. (Confirm `checkpoint-nodes.js` imports `checkpointInterrupt` from `'../checkpoint-helpers'` so the mock intercepts it.)
+
+- [ ] **Step 12: Re-gate `parseRawInput`'s skip, move its six reads to top-level, + harden the two missing-input branches.** In `lib/workflow/nodes/input-nodes.js`, inside `parseRawInput`:
+  - **~360 (skip guard) — re-gate on the parsed OUTPUT so a rollback that clears `sessionConfig` re-parses (without this the re-collection silently no-ops — see Step 12b).** Replace:
+```javascript
+  // Skip if no raw input provided (resume case or pre-populated files)
+  if (!state.rawSessionInput) {
+    console.log('[parseRawInput] No rawSessionInput, skipping to loadDirectorNotes');
+    return {
+      currentPhase: PHASES.LOAD_DIRECTOR_NOTES
+    };
+  }
+```
+  with:
+```javascript
+  // ROLL-4: gate the skip on the parsed OUTPUT (sessionConfig), not the raw input, so a
+  // rollback to await-full-context (which clears sessionConfig) re-parses; a normal resume
+  // past input-review (sessionConfig populated) still skips; a from-files start (no
+  // rawSessionInput) still skips. rawSessionInput is no longer pruned (Step 12b), so the
+  // config reads below (photosPath/journalistFirstName/etc.) survive the rollback replay.
+  if ((state.sessionConfig && Object.keys(state.sessionConfig).length > 0) || !state.rawSessionInput) {
+    console.log('[parseRawInput] sessionConfig populated or no rawSessionInput — skipping parse');
+    return {
+      currentPhase: PHASES.LOAD_DIRECTOR_NOTES
+    };
+  }
+```
+  - ~389: `rawInput.sessionReport?.match(` → `state.sessionReport?.match(`
+  - ~403: `${rawInput.accusation || 'Not provided'}` → `${state.accusation || 'Not provided'}`
+  - ~450: `${rawInput.sessionReport}` → `${state.sessionReport}`
+  - ~543: `rawProse: rawInput.directorNotes,` → `rawProse: state.directorNotesRaw,`
+  - ~435 (harden) — replace:
+```javascript
+    if (!rawInput.sessionReport) {
+      return {
+        exposedTokens: [],
+        buriedTokens: [],
+        shellAccounts: [],
+        exposedCount: 0,
+        buriedCount: 0,
+        totalBuried: 0
+      };
+    }
+```
+  with:
+```javascript
+    // ROLL-4 + N1 fail-loud: the await-full-context gate guarantees presence before
+    // parseRawInput runs; a null here means the gate was bypassed. An empty session
+    // report makes every token default to buried and drops shell accounts -> the
+    // generator fabricates the investigation/amounts. Throw instead of degrading.
+    if (!state.sessionReport) {
+      throw new Error('parseRawInput: sessionReport is required but missing (await-full-context gate invariant violated)');
+    }
+```
+  - ~531 (harden) — replace:
+```javascript
+  let directorNotes;
+  if (!rawInput.directorNotes) {
+    directorNotes = {
+      rawProse: '',
+      characterMentions: {},
+      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [],
+      transactionReferences: [],
+      postInvestigationDevelopments: []
+    };
+  } else {
+    console.log('[parseRawInput] Step 3: Enriching director notes with Opus');
+    directorNotes = await enrichDirectorNotes({
+      rawProse: rawInput.directorNotes,
+```
+  with:
+```javascript
+  // ROLL-4 + N1 fail-loud: gate guarantees presence (see sessionReport above).
+  if (!state.directorNotesRaw) {
+    throw new Error('parseRawInput: directorNotesRaw is required but missing (await-full-context gate invariant violated)');
+  }
+  let directorNotes;
+  {
+    console.log('[parseRawInput] Step 3: Enriching director notes with Opus');
+    directorNotes = await enrichDirectorNotes({
+      rawProse: state.directorNotesRaw,
+```
+  (Leave `journalistFirstName`/`reportingMode`/`guestReporter`/`photosPath`/`rosterPronouns` at ~424-428 reading `rawInput.*` — they are at-start config, NOT moved.)
+
+- [ ] **Step 12b: Stop pruning `rawSessionInput` in `finalizeInput`.** The prune existed because the large raw text lived in `rawSessionInput`; after Step 1 that text is in the `sessionReport` channel, so `rawSessionInput` is now small at-start config that `parseRawInput` must still read on a rollback replay (photosPath/journalistFirstName/reportingMode/guestReporter/whiteboardPhotoPath). In `lib/workflow/nodes/input-nodes.js` `finalizeInput`, remove the prune line at BOTH return paths:
+  - Edited-input path (~758): delete the line `rawSessionInput: null,  // Prune: parsed into sessionConfig/directorNotes/playerFocus`.
+  - Approved path (~767): delete the line `rawSessionInput: null,  // Prune: parsed into sessionConfig/directorNotes/playerFocus`.
+
+  Leave the rest of both return objects unchanged. The parse-skip is now controlled by `sessionConfig` presence (Step 12), so dropping the prune does NOT re-parse on resume (sessionConfig stays populated → skip); it only ensures the config survives a rollback replay. Verify: `grep -n "rawSessionInput: null" lib/workflow/nodes/input-nodes.js` → no matches.
+
+- [ ] **Step 12c: Fix the orphaned prune assertions in `state-pruning.test.js`.** `lib/__tests__/state-pruning.test.js` has two tests that call `finalizeInput` and assert `expect(result.rawSessionInput).toBeNull()` ("prunes rawSessionInput on approval" and "...on approval with edits"). Step 12b removes that prune, so both now fail. Update them to assert the field is NO LONGER pruned (e.g. `expect(result.rawSessionInput).toBeUndefined()` — `finalizeInput` no longer returns the key — or delete the two assertions) and rename the test titles (e.g. "preserves rawSessionInput on approval (ROLL-4)"). This is the cross-dir orphan hazard — confirm with the broad sweep in Step 17, not a scoped per-file run, and `grep -rn "rawSessionInput.*toBeNull\|toBeNull.*rawSessionInput" __tests__ lib/__tests__` → no remaining prune assertions.
+
+- [ ] **Step 13: Update the `/approve` fullContext branch.** In `server.js` (~316-330), replace the `stateUpdates.rawSessionInput = {...existingRawInput, accusation, sessionReport, directorNotes}` merge with first-class writes:
+
+```javascript
+    if (approvals.fullContext) {
+        const { accusation, sessionReport, directorNotes } = approvals.fullContext;
+        if (accusation && sessionReport && directorNotes) {
+            validApprovalDetected = true;
+            // ROLL-4: write first-class channels (no rawSessionInput merge). parseRawInput
+            // and the checkpoint gate read these top-level.
+            stateUpdates.accusation = accusation;
+            stateUpdates.sessionReport = sessionReport;
+            stateUpdates.directorNotesRaw = directorNotes;
+            resume.fullContext = approvals.fullContext;
+        }
+    }
+```
+
+- [ ] **Step 14: Stash prior full-context on rollback.** In `server.js` `/rollback` handler, immediately AFTER `let initialState = buildRollbackState(rollbackTo);` (~977) and BEFORE the `if (stateOverrides)` block, add:
+
+```javascript
+        // ROLL-4: stash prior full-context so AwaitFullContext pre-fills the re-collection
+        // form. buildRollbackState nulls the 3 channels; capture their current values first.
+        if (rollbackTo === 'await-full-context') {
+            initialState._previousFullContext = {
+                accusation: session.state.accusation || null,
+                sessionReport: session.state.sessionReport || null,
+                directorNotes: session.state.directorNotesRaw || null
+            };
+        }
+```
+
+  (`session` is already fetched via `getSessionState(sessionId)` at ~967; `session.state` holds the live channel values.)
+
+- [ ] **Step 15: Pre-fill the AwaitFullContext form.** In `console/components/checkpoints/AwaitFullContext.js`, change the state seeding + add a reset effect:
+
+```javascript
+function AwaitFullContext({ data, onApprove }) {
+  const roster = (data && data.roster) || [];
+  const whiteboardAnalysis = (data && data.whiteboardAnalysis) || null;
+  const prev = (data && data.previousFullContext) || null;  // ROLL-4: pre-fill on rollback
+
+  const [accusation, setAccusation] = React.useState((prev && prev.accusation) || '');
+  const [sessionReport, setSessionReport] = React.useState((prev && prev.sessionReport) || '');
+  const [directorNotes, setDirectorNotes] = React.useState((prev && prev.directorNotes) || '');
+
+  // Re-seed when the checkpoint data changes (e.g., a fresh rollback delivers new prefill).
+  React.useEffect(function () {
+    const p = (data && data.previousFullContext) || null;
+    setAccusation((p && p.accusation) || '');
+    setSessionReport((p && p.sessionReport) || '');
+    setDirectorNotes((p && p.directorNotes) || '');
+  }, [data]);
+```
+
+  (The `onApprove({ fullContext: {...} })` payload is unchanged — the `/approve` handler maps it to the channels.)
+
+- [ ] **Step 16: Rework `parse-raw-input-failloud.test.js` for top-level channels + the new skip gate + fail-loud.** In `lib/__tests__/parse-raw-input-failloud.test.js`:
+  - **(a) Rewrite `makeState`** (currently ~20-28; takes no args and nests fields under `rawSessionInput`) to accept top-level overrides and emit the full-context fields as top-level channels:
+```javascript
+function makeState(overrides = {}) {
+  return {
+    accusation: 'Players accused Marcus.',
+    sessionReport: '# Session Report\n...',
+    directorNotesRaw: 'Director notes prose...',
+    sessionConfig: {},                                  // empty -> parseRawInput does NOT skip
+    rawSessionInput: { photosPath: 'data/x/photos' },   // at-start config only
+    ...overrides
+  };
+}
+```
+  Update the existing N1 fixture (~21-27) to this shape (full-context at top level, not under `rawSessionInput`).
+  - **(b) Fix the N4 whiteboard test (~43-61).** Its fixture set NO directorNotes, relying on the old fall-soft skip; after Step 12 hardens the missing-`directorNotesRaw` guard (input-nodes.js:531) it now THROWS `/directorNotesRaw is required/` BEFORE the whiteboard step, so the test's `.rejects.toThrow(/whiteboard/i)` fails. Give its state a non-empty `directorNotesRaw` so the whiteboard path is reachable — this makes `enrichDirectorNotes` (Step 3) fire an SDK call BEFORE the whiteboard call, so add a 4th `mockResolvedValueOnce` (the enrichment) between the step-2 mock and the whiteboard rejection, and fix the SDK-mock-ordering comment (~46-48: now step1, step2, step3-enrich, step4-whiteboard). Make the enrichment mock return `{ rawProse: <the SAME string as the fixture's directorNotesRaw>, characterMentions: {}, quotes: [], transactionReferences: [], postInvestigationDevelopments: [] }` so `enrichDirectorNotes` does NOT hit its non-verbatim fallback (`director-enricher.js:247-250`) — harmless here (the test only asserts the whiteboard reject) but avoids surprising a future author.
+  - **(c) Add skip-gate tests** (lock Step 12's re-gate):
+```javascript
+  test('parseRawInput SKIPS when sessionConfig is already populated (resume)', async () => {
+    const result = await parseRawInput(makeState({ sessionConfig: { roster: ['A'] } }), cfg);
+    expect(result.currentPhase).toBe(PHASES.LOAD_DIRECTOR_NOTES); // skipped — no parse
+    expect(sdkMock).not.toHaveBeenCalled();
+  });
+  test('parseRawInput RE-PARSES when sessionConfig is empty even with rawSessionInput present (rollback replay)', async () => {
+    await parseRawInput(makeState({ sessionConfig: {} }), cfg); // mocks: step1/step2/step3
+    expect(sdkMock).toHaveBeenCalled();                          // proves it did NOT skip
+  });
+```
+  - **(d) Add the two fail-loud tests:**
+```javascript
+  test('parseRawInput THROWS when sessionReport is missing (ROLL-4 gate invariant)', async () => {
+    await expect(parseRawInput(makeState({ sessionReport: undefined }), cfg)).rejects.toThrow(/sessionReport is required/);
+  });
+  test('parseRawInput THROWS when directorNotesRaw is missing (ROLL-4 gate invariant)', async () => {
+    await expect(parseRawInput(makeState({ directorNotesRaw: undefined }), cfg)).rejects.toThrow(/directorNotesRaw is required/);
+  });
+```
+  (Adapt `cfg`/`sdkMock`/`PHASES` to the file's existing helpers + SDK-mock harness. Audit every other test for fixtures still nesting the 3 fields under `rawSessionInput` and move them top-level.)
+
+- [ ] **Step 16b: Update the `getDefaultState` field-list test for the 4 new channels.** `__tests__/unit/workflow/state.test.js` (~239-329) has a hand-maintained `expectedFields` array (currently **60** entries) asserted via exact match `expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort())`. The 4 new `getDefaultState` keys make `Object.keys` 64 vs 60 → FAIL. Add to `expectedFields`: `'accusation'`, `'sessionReport'`, `'directorNotesRaw'` near the incremental-input group (after `'rosterPronouns'`, ~258) and `'_previousFullContext'` near the revision-context group (after `'_previousContentBundle'`, ~320). Update the describe title `'includes all 58 state fields ...'` → `'includes all 64 state fields ...'` (it was already stale at 58 vs the real 60; 60 + 4 = 64). Run `npx jest __tests__/unit/workflow/state.test.js` → green. (Task 12.5 later removes `supervisorNarrativeCompass` → 63; Task 12.6 fixes the state.js comment counts to 63.)
+
+- [ ] **Step 16c: Keep the e2e `--input` path working (test-harness only).** `scripts/e2e-walkthrough.js` `loadInputFile` (~651-658) bundles `accusation`/`sessionReport`/`directorNotes` INTO `rawSessionInput` and POSTs it to `/start`; after this change `/start` no longer splits them into channels, so they'd be silently dropped and the await-full-context gate would re-prompt. Route them through the checkpoint instead: have `loadInputFile` populate `incrementalInputData = { roster, accusation, sessionReport, directorNotes }` (the same shape `loadSessionInput` builds at ~611-617) and leave only `photosPath`/`whiteboardPhotoPath` in the `rawSessionInput` sent to `/start`, so await-full-context delivers the 3 fields via the `fullContext` payload (the path Step 13 supports). Verify: `node scripts/e2e-walkthrough.js --input <file> --auto` reaches and auto-approves await-full-context from the file. (The PRE-EXISTING `--session`-from-files `sessionReport` gap — the raw report is never persisted to disk — is OUT OF SCOPE; track as a separate e2e-harness ticket.)
+
+- [ ] **Step 17: Run the full affected suite.**
+  - `npx jest lib/__tests__/api-helpers.test.js lib/workflow/__tests__/await-full-context-rollback.test.js lib/workflow/__tests__/await-full-context-capture.test.js lib/__tests__/parse-raw-input-failloud.test.js lib/__tests__/state-pruning.test.js __tests__/unit/workflow/state.test.js` → all green.
+  - `node -e "require('./server.js'); console.log('server requires OK')"` → prints (no boot).
+  - Broad sweep: `npx jest __tests__ lib/__tests__ lib/workflow/__tests__` → green (catches any fixture still constructing `rawSessionInput.{accusation,sessionReport,directorNotes}` and the `state.test.js` field-list exact match).
+
+- [ ] **Step 18: Manual UI verification (no React harness).** `npm start`; run a session to `await-full-context`; submit; advance; then roll back to Full Context (stepper dot or failure-card "Roll back"). Confirm: no 400; the form re-appears **pre-filled** with the prior accusation/report/notes; enter a **CHANGED** accusation/report and Submit; confirm the pipeline re-runs and the regenerated `sessionConfig`/article reflects the CHANGE (this is the real test of the re-parse — a stale-reuse bug would show the OLD parse). Spot-check the server log for `[parseRawInput] Processing raw session input` (not `…skipping…`) after the re-collection. Note: input-review will NOT re-pause on the replay (its interrupt skips once `sessionConfig.roster` is populated, which it is right after the re-parse — input-nodes.js:690), so verify via the regenerated article/`sessionConfig`, not a second input-review prompt — this matches normal resume semantics.
+
+- [ ] **Step 19: Commit (one atomic feature commit).**
+
+```bash
+git add lib/workflow/state.js lib/workflow/nodes/checkpoint-nodes.js lib/workflow/nodes/input-nodes.js server.js console/components/checkpoints/AwaitFullContext.js lib/__tests__/api-helpers.test.js lib/workflow/__tests__/await-full-context-rollback.test.js lib/workflow/__tests__/await-full-context-capture.test.js lib/__tests__/parse-raw-input-failloud.test.js lib/__tests__/state-pruning.test.js __tests__/unit/workflow/state.test.js scripts/e2e-walkthrough.js
+git commit -m "feat(rollback): await-full-context true re-collection — promote 3 inputs to first-class channels + pre-fill (ROLL-4)
+
+accusation/sessionReport/directorNotes were buried in rawSessionInput, so rollback
+could not clear them and await-full-context 400'd. Promote them to first-class
+channels (gate the checkpoint + parseRawInput read them top-level), add
+await-full-context to ROLLBACK_CLEARS, and stash _previousFullContext on rollback so
+the form pre-fills. Stop pruning rawSessionInput + re-gate parseRawInput's skip on
+sessionConfig so re-collection actually re-parses (not a silent no-op). Harden
+parseRawInput's missing-sessionReport/directorNotes branches to throw (fail-loud, N1).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+```
+
+---
+
+### Task P6.4: Completeness test — enumerate every node-written state field and assert each is in a clear list or a documented EXEMPT set (ROOT-1)
+
+**Files:**
+- Modify: `lib/workflow/state.js:850` (add an exported `ROLLBACK_CLEARS_EXEMPT` Set + JSDoc immediately above `ROLLBACK_CLEARS`; export it in `module.exports`; **also** add `outputPath`/`photosCopied` to all 10 clear lists — see Step 2b)
 - Create: `lib/__tests__/rollback-clears-completeness.test.js`
+
+> **⚠️ CORRECTED 2026-06-22 (P6 pre-flight verification vs live source).** The original EXEMPT set and `getDefaultState()`-based enumeration **failed two of the guard's own assertions** when run against the real channel set (`ReportStateAnnotation.spec`): (1) `uncovered = ['outputPath','photosCopied']` — both written by the terminal `assembleHtml` node (`template-nodes.js:185-186`) but in no clear list and not exempt; (2) disjoint-violation `both = ['sessionPhotos','whiteboardAnalysis']` — placed in EXEMPT yet already cleared (`input-review`/`await-roster`). The corrected Step 1 EXEMPT set, the new Step 2b (clear `outputPath`/`photosCopied`), and the `.spec`-based enumeration in Step 3 make all four assertions pass. **This task lands AFTER P6.3**, so the channel set is 65 (61 + P6.3's `accusation`/`sessionReport`/`directorNotesRaw`/`_previousFullContext`): the 3 raw inputs are covered (cleared by `await-full-context`) and `_previousFullContext` is EXEMPT — re-verified by script (all four assertions `[]`). Enumeration uses `ReportStateAnnotation.spec`, not `getDefaultState()`, because the latter silently omits `shellAccounts` — a real drift blind spot the guard must not have.
 
 - [ ] **Step 1: Add the documented EXEMPT set to `state.js`.** In `lib/workflow/state.js`, insert immediately BEFORE the `const ROLLBACK_CLEARS = {` declaration (currently at line 850):
 
@@ -5450,21 +5887,23 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"`
 /**
  * Fields intentionally NOT subject to the downstream-clear denylist (ROOT-1).
  *
- * Every field in getDefaultState() must either appear in at least one
- * ROLLBACK_CLEARS list OR be listed here with a reason. The completeness test
- * (rollback-clears-completeness.test.js) enforces this so the hand-maintained
- * denylist cannot silently drift behind new node-written state.
+ * Every Annotation channel (Object.keys(ReportStateAnnotation.spec)) must either
+ * appear in at least one ROLLBACK_CLEARS list OR be listed here with a reason. The
+ * completeness test (rollback-clears-completeness.test.js) enforces this so the
+ * hand-maintained denylist cannot silently drift behind new node-written state.
  *
  * Categories:
  *  - Session identity / config: stable for the whole run; rollback never re-derives.
- *  - Fetched-but-re-derivable: fetch nodes re-derive on replay even without an
- *    explicit clear (canonicalCharacters), or are cleared transitively via their
- *    source field.
- *  - Incremental raw input: rawSessionInput is owned by the await-* checkpoints'
- *    own skip semantics, not the clear lists (the await-roster/input-review fixes
- *    in P6.1 handle roster/rosterPronouns explicitly).
+ *  - Fetched / parsed, re-derivable: nodes re-derive on replay even without an
+ *    explicit clear (canonicalCharacters from fetchMemoryTokens; shellAccounts from
+ *    parseRawInput's re-parse).
+ *  - Incremental raw input: rawSessionInput is owned by the await-* checkpoints' own
+ *    skip semantics, not the clear lists. (The full-context raw inputs accusation/
+ *    sessionReport/directorNotesRaw ARE first-class channels cleared by
+ *    await-full-context — P6.3 — so they are NOT exempt.)
  *  - Transient per-revision scratch: '_'-prefixed caches that nodes null out
- *    themselves at end of use; no rollback owns them.
+ *    themselves at end of use (incl. _previousFullContext, the await-full-context
+ *    pre-fill stash); no rollback owns them.
  *  - Default-only / never written by a node: dead-but-defaulted channels.
  *  - Control + counters: currentPhase + *RevisionCount handled by
  *    buildRollbackState directly / ROLLBACK_COUNTER_RESETS, not the field list.
@@ -5474,17 +5913,17 @@ const ROLLBACK_CLEARS_EXEMPT = new Set([
   'sessionId', 'theme',
   // Incremental raw input — owned by await-* checkpoint skip logic
   'rawSessionInput',
-  // Fetched, re-derived by fetch nodes on replay (fetch-nodes.js:285 re-derives)
-  'canonicalCharacters',
+  // Fetched / parsed, re-derived on replay (fetchMemoryTokens + parseRawInput re-runs)
+  'canonicalCharacters', 'shellAccounts',
   // Photo branch inputs cleared transitively / re-discovered on replay
-  'sessionPhotos', 'genericPhotoAnalyses', 'whiteboardPhotoPath', 'preprocessStats',
-  // Default-only channels never written by any node return (consolidated into photoAnalyses)
-  'whiteboardAnalysis', 'preCurationSummary', 'supervisorNarrativeCompass',
+  'genericPhotoAnalyses', 'whiteboardPhotoPath', 'preprocessStats',
+  // Default-only channels never written by any node return
+  'preCurationSummary', 'supervisorNarrativeCompass',
   // Raw character-ID text — paired with characterIdMappings (which IS cleared)
   'characterIdsRaw',
   // Transient per-revision scratch — nodes null these themselves after use
   '_rescuedItems', '_excludedItemsCache', '_rescueWarnings',
-  '_previousArcs', '_previousOutline', '_previousContentBundle', '_arcValidation',
+  '_previousArcs', '_previousOutline', '_previousContentBundle', '_arcValidation', '_previousFullContext',
   // Control flow + counters — handled by buildRollbackState / ROLLBACK_COUNTER_RESETS
   'currentPhase', 'voiceRevisionCount',
   'arcRevisionCount', 'humanArcRevisionCount', 'outlineRevisionCount', 'articleRevisionCount',
@@ -5510,7 +5949,21 @@ to:
   VALID_ROLLBACK_POINTS,
 ```
 
-- [ ] **Step 3: Write the completeness test FIRST in its real form** (it will pass once Steps 1–2 land + P6.1/P6.2 fixes are in; if a field is mis-classified the test fails loudly). Create `lib/__tests__/rollback-clears-completeness.test.js`:
+- [ ] **Step 2b: Clear `outputPath` + `photosCopied` in every clear list.** These are written by the terminal `assembleHtml` node (`template-nodes.js:185-186`), exactly like `assembledHtml`/`validationResults`, so they must clear wherever those do (else a rolled-back session reports a stale output path / photo count). The substring `'assembledHtml', 'validationResults'` appears once per clear list — **10 lists** after P6.3 added `await-full-context` — so a single `replace_all` is safe and preserves trailing commas. In `lib/workflow/state.js`, replace every occurrence of:
+
+```javascript
+    'assembledHtml', 'validationResults'
+```
+
+with:
+
+```javascript
+    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+```
+
+Verify exactly 10: `grep -c "'outputPath'" lib/workflow/state.js` → `10`, and `grep -c "'photosCopied'" lib/workflow/state.js` → `10`. (The `assembledHtml:`/`validationResults:` Annotation definitions are separate lines and are NOT matched by the paired-quote substring.)
+
+- [ ] **Step 3: Write the completeness test FIRST in its real form** (it will pass once Steps 1–2b land + P6.1/P6.2/P6.3 fixes are in; if a field is mis-classified the test fails loudly). Create `lib/__tests__/rollback-clears-completeness.test.js`:
 
 ```javascript
 /**
@@ -5520,14 +5973,14 @@ to:
  * previously asserted that the denylist actually COVERS every field a node writes —
  * which is exactly how ROLL-1 (roster) and ROLL-2 (arcEvidencePackages) slipped in.
  *
- * This test enumerates every state channel (getDefaultState keys === Annotation
- * channels) and asserts each one is EITHER cleared by some rollback point OR
- * explicitly listed in ROLLBACK_CLEARS_EXEMPT with a documented reason. A new
- * node-written field added without a clear-list entry (and not exempted) fails here.
+ * This test enumerates every Annotation channel (ReportStateAnnotation.spec) and
+ * asserts each one is EITHER cleared by some rollback point OR explicitly listed in
+ * ROLLBACK_CLEARS_EXEMPT with a documented reason. A new node-written field added
+ * without a clear-list entry (and not exempted) fails here.
  */
 
 const {
-  getDefaultState,
+  ReportStateAnnotation,
   ROLLBACK_CLEARS,
   ROLLBACK_CLEARS_EXEMPT
 } = require('../workflow/state');
@@ -5538,7 +5991,9 @@ describe('ROLLBACK_CLEARS completeness (ROOT-1)', () => {
     Object.values(ROLLBACK_CLEARS).flat()
   );
 
-  const allStateFields = Object.keys(getDefaultState());
+  // Enumerate the TRUE channel set (Annotation.spec), not getDefaultState() —
+  // getDefaultState omits shellAccounts, so it would miss that channel's drift.
+  const allStateFields = Object.keys(ReportStateAnnotation.spec);
 
   test('every state field is either cleared by a rollback point or explicitly exempt', () => {
     const uncovered = allStateFields.filter(
@@ -5573,12 +6028,19 @@ describe('ROLLBACK_CLEARS completeness (ROOT-1)', () => {
   test('arcEvidencePackages is cleared somewhere (ROLL-2 guard)', () => {
     expect(clearedSomewhere.has('arcEvidencePackages')).toBe(true);
   });
+
+  test('full-context raw inputs cleared + _previousFullContext exempt (ROLL-4 guard)', () => {
+    expect(clearedSomewhere.has('accusation')).toBe(true);
+    expect(clearedSomewhere.has('sessionReport')).toBe(true);
+    expect(clearedSomewhere.has('directorNotesRaw')).toBe(true);
+    expect(ROLLBACK_CLEARS_EXEMPT.has('_previousFullContext')).toBe(true);
+  });
 });
 ```
 
 - [ ] **Step 4: Run the completeness test.**
   - Command: `npx jest lib/__tests__/rollback-clears-completeness.test.js`
-  - Expected: all 6 tests pass. If the first test fails with a non-empty `uncovered` array, EACH listed field must be triaged: a genuinely node-written downstream field → add to the appropriate `ROLLBACK_CLEARS` list; a stable/transient field → add to `ROLLBACK_CLEARS_EXEMPT` with the matching category comment. (With P6.1 + P6.2 applied and the EXEMPT set above, `uncovered` is empty.)
+  - Expected: all 7 tests pass. If the first test fails with a non-empty `uncovered` array, EACH listed field must be triaged: a genuinely node-written downstream field → add to the appropriate `ROLLBACK_CLEARS` list; a stable/transient field → add to `ROLLBACK_CLEARS_EXEMPT` with the matching category comment. (With P6.1 + P6.2 + P6.3 + Step 2b applied and the corrected EXEMPT set above, `uncovered` is empty — verified against `ReportStateAnnotation.spec`, 65 channels.)
 
 - [ ] **Step 5: Prove the guard actually bites (negative check, temporary).** Temporarily remove `'arcEvidencePackages'` from the `arc-selection` clear list and from one upstream list, re-run, and confirm the test now fails:
   - Command: `npx jest lib/__tests__/rollback-clears-completeness.test.js -t "every state field is either cleared"`
@@ -5598,7 +6060,9 @@ CI instead of silently reusing stale state.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"`
 
-### Task P6.4: Integration assertion — rolling back to `await-roster` actually re-pauses `checkpointAwaitRoster` (ROLL-1 end-to-end)
+### Task P6.5: Integration assertion — rolling back to `await-roster` actually re-pauses `checkpointAwaitRoster` (ROLL-1 end-to-end)
+
+> **Note:** the parallel ROLL-4 assertion (rolling back to `await-full-context` re-pauses `checkpointAwaitContext`) is already created in **Task P6.3 Step 10** (`lib/workflow/__tests__/await-full-context-rollback.test.js`); this task remains the `await-roster` equivalent.
 
 **Files:**
 - Test: `lib/workflow/__tests__/rollback-repause.test.js` (Create)
@@ -5686,7 +6150,7 @@ ROLL-1 regression at the node level without a full graph invoke.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"`
 
-### Task P6.5: Clear the in-memory session-outcome store on rollback + fresh-start (DEL-1 staleness — folds deferral #17)
+### Task P6.6: Clear the in-memory session-outcome store on rollback + fresh-start (DEL-1 staleness — folds deferral #17)
 
 The DEL-1 store (`lib/session-outcome.js`, added in P4.1) records the LAST terminal outcome per `sessionId` and is surfaced as `lastOutcome` by GET /state (P4.2). It is never cleared, so after a rollback — or a fresh re-run of the same `sessionId` — GET /state reports a STALE `lastOutcome` (e.g. a prior `complete`/`failed`) next to the freshly rolled-back `interrupted`/`state`. `clearSessionOutcome` is already defined, exported, and unit-tested (P4.1) but has **zero callers**. Wire it into the two handlers that reset a session's lifecycle. (Low severity — `lastOutcome` is a recovery hint, not load-bearing for the console UI, which keys on `interrupted`/`checkpointType` — but it is a correctness nit on the DEL-1 surface, and P6/recovery-correctness is its home.)
 
@@ -5738,13 +6202,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>'`
 
 ---
 
-### Task P6.6: `await-full-context` is a checkpoint but not a valid rollback point (ROLL-4 — P5 capstone finding)
+### ROLL-4 (`await-full-context` rollback gap) — RESOLVED, folded into Task P6.3
 
-> **Provenance:** surfaced by the P5 capstone (the failure-card "Roll back" exercises `state.checkpointType` → `/rollback`), but the gap is PRE-EXISTING and independent of P5: `await-full-context` is in `CHECKPOINT_ORDER` (`console/utils.js`) and is emitted as a `checkpointType` (`checkpoint-nodes.js`), and the `PipelineProgress` stepper already makes every checkpoint dot clickable for rollback — yet `await-full-context` is **absent** from `ROLLBACK_CLEARS` (`lib/workflow/state.js`), hence absent from `VALID_ROLLBACK_POINTS` / `ROLLBACK_COUNTER_RESETS` / `buildRollbackState`. Result: rolling back TO Full Context (from the stepper dot OR the new failure card) returns **HTTP 400 `Invalid rollbackTo`** — a dead-end recovery affordance at exactly one checkpoint. Verified: `CHECKPOINT_ORDER` minus `VALID_ROLLBACK_POINTS` = exactly `['await-full-context']`.
+The original P6.6 asked whether to (a) make `await-full-context` a real rollback point or (b) add a UI-only fallback. **Decision (2026-06-22, after pre-flight verification): option (a)** — implemented as **Task P6.3** above (promote the three full-context inputs to first-class channels + pre-fill). Verification confirmed the gap (`CHECKPOINT_ORDER` − `VALID_ROLLBACK_POINTS` = exactly `['await-full-context']`) and the original sketch's blind spot — `accusation`/`sessionReport`/`directorNotes` were *not* clearable top-level fields (sub-fields of `rawSessionInput`), which is why P6.3 promotes them first. `await-full-context` is now a valid rollback point that re-pauses and re-collects; Task P6.4's completeness guard covers the new channels.
 
-**Decision required (resolve when implementing P6):** EITHER (a) make `await-full-context` a real rollback point — add it to `ROLLBACK_CLEARS` (it sits between `character-ids` and `pre-curation`) with the correct clear-list (clear `accusation`, `sessionReport`, `directorNotes`/parsed-input fields + everything downstream: `preprocessedEvidence`, `characterData`, `narrativeTensions`, `preCurationApproved`, `evidenceBundle`, `_evidenceApproved`, `specialistAnalyses`, `narrativeArcs`, `selectedArcs`, `_arcAnalysisCache`, `_arcFeedback`, `heroImage`, `outline`, `outlineApproved`, `_outlineFeedback`, `contentBundle`, `articleApproved`, `_articleFeedback`, `assembledHtml`, `validationResults`, `evaluationHistory`) + a matching `ROLLBACK_COUNTER_RESETS` entry (reset all four revision counters) — **verify exact field names against `inputs/` first**; this auto-propagates to `VALID_ROLLBACK_POINTS`/`buildRollbackState` and `P6.3`'s completeness test will then cover it; OR (b) if Full Context is intentionally NOT rollback-able, make it non-clickable in `PipelineProgress` AND have the failure card's `onRollback` fall back to the nearest valid prior rollback point — so the UI never offers an impossible rollback. **Prefer (a)** unless there's a product reason re-collecting accusation/report/notes must be blocked. Add a test mirroring `P6.4` (rolling back to `await-full-context` actually re-pauses `checkpointAwaitFullContext`).
-
-> **Also surfaced by the capstone (PRE-EXISTING, out of P5 scope, no task here — noted for awareness):** the `llm_start` SSE event emits `prompt: { system, user, schema }` (an object) while `app.js` reads `event.data.systemPrompt` (always `undefined`→`null`) and stores the object under `prompt`; and `llm_complete` emits `response: { full, length, structured }` (an object) which the "Last call details" panel `safeStringify`s wrapper-and-all. Both are pre-P5 (commit `9d1eebf`) and latent/cosmetic (the new ProgressStream doesn't render `prompt`/`systemPrompt`); fix opportunistically if a future panel needs those fields (`prompt: event.data.prompt?.user`, `systemPrompt: event.data.prompt?.system`, `response: event.data.response?.full`).
+> **Capstone awareness note (PRE-EXISTING, out of scope, NOT a task):** the `llm_start` SSE event emits `prompt: { system, user, schema }` (an object) while `app.js` reads `event.data.systemPrompt` (always `undefined`→`null`) and stores the object under `prompt`; and `llm_complete` emits `response: { full, length, structured }` (an object) which the "Last call details" panel `safeStringify`s wrapper-and-all. Both are pre-P5 (commit `9d1eebf`) and latent/cosmetic (the ProgressStream doesn't render `prompt`/`systemPrompt`); fix opportunistically if a future panel needs those fields (`prompt: event.data.prompt?.user`, `systemPrompt: event.data.prompt?.system`, `response: event.data.response?.full`).
 
 ---
 
@@ -8902,7 +9364,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `lib/workflow/state.js:462-474` (annotation + JSDoc), `:723-724` (getDefaultState entry), `:25` (header comment line)
-- Modify: `__tests__/unit/workflow/state.test.js:293-294` (expectedFields entry), `:392-396` (the supervisor defaults describe block), `:239` (the "58" count comment)
+- Modify: `__tests__/unit/workflow/state.test.js:293-294` (remove the `supervisorNarrativeCompass` expectedFields entry), `:392-396` (the supervisor defaults describe block), `:239` (the count title — set to 64 by P6.3 Step 16b; this task → 63)
 
 - [ ] **Step 1: Confirm zero writers.** 
   ```bash
@@ -8927,15 +9389,20 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
           });
         });
     ```
-  - Fix the stale count in the test title (line 239) to the real post-removal count. After removing this one field, getDefaultState has 59 fields:
+  - Remove the `supervisorNarrativeCompass` entry from the `expectedFields` array (~line 294) AND fix the title count (line 239). P6.3 Step 16b already set the array to 64 entries and the title to 64; removing this one field → 63:
+    ```javascript
+    // DELETE from expectedFields (state.test.js ~293-294):
+        // Supervisor (Commit 8.6)
+        'supervisorNarrativeCompass',
+    ```
     ```javascript
     // BEFORE (state.test.js:239):
-        it('includes all 58 state fields (includes revision context + human feedback fields)', () => {
+        it('includes all 64 state fields (includes revision context + human feedback fields)', () => {
     // AFTER:
-        it('includes all 59 state fields (includes revision context + human feedback fields)', () => {
+        it('includes all 63 state fields (includes revision context + human feedback fields)', () => {
     ```
-  Run: `npx jest __tests__/unit/workflow/state.test.js -t "includes all 59 state fields"`
-  Expected: FAIL — `Object.keys(defaultState).sort()` still contains `supervisorNarrativeCompass`, which is no longer in `expectedFields`, so the arrays differ.
+  Run: `npx jest __tests__/unit/workflow/state.test.js -t "includes all 63 state fields"`
+  Expected: FAIL — `Object.keys(defaultState).sort()` still contains `supervisorNarrativeCompass` (just removed from `expectedFields` here; removed from `getDefaultState` in Steps 3-4), so the arrays differ until Step 4 lands.
 
 - [ ] **Step 3: Delete the annotation.** In `lib/workflow/state.js`, remove lines 462-474:
   ```javascript
@@ -8967,12 +9434,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
    *   - Supervisor (8.6): supervisorNarrativeCompass
   ```
 
-- [ ] **Step 4b: Remove the field from `ROLLBACK_CLEARS_EXEMPT` (M6 — folds the integration-section note into this task).** P6.3 added `'supervisorNarrativeCompass'` to `ROLLBACK_CLEARS_EXEMPT` in `lib/workflow/state.js` — it sits on the `// Default-only channels never written by any node return` line alongside `'whiteboardAnalysis', 'preCurationSummary'`. Removing the field from `getDefaultState` (Step 4) WITHOUT removing it here makes `rollback-clears-completeness.test.js`'s "every EXEMPT entry is a real state field" assertion fail (the exemption would point at a field that no longer exists). Delete it:
+- [ ] **Step 4b: Remove the field from `ROLLBACK_CLEARS_EXEMPT` (M6 — folds the integration-section note into this task).** Task P6.4 added `'supervisorNarrativeCompass'` to `ROLLBACK_CLEARS_EXEMPT` in `lib/workflow/state.js` — it sits on the `// Default-only channels never written by any node return` line alongside `'preCurationSummary'`. Removing the field from `state.js` (Step 4) WITHOUT removing it here makes `rollback-clears-completeness.test.js`'s "every EXEMPT entry is a real state field" assertion fail (the exemption would point at a channel that no longer exists). Delete it:
   ```javascript
   // BEFORE (state.js — the "Default-only channels" line inside ROLLBACK_CLEARS_EXEMPT):
-    'whiteboardAnalysis', 'preCurationSummary', 'supervisorNarrativeCompass',
+    'preCurationSummary', 'supervisorNarrativeCompass',
   // AFTER:
-    'whiteboardAnalysis', 'preCurationSummary',
+    'preCurationSummary',
   ```
 
 - [ ] **Step 5: Re-run with require-load smoke + the rollback completeness guard.**
@@ -8980,7 +9447,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   node -e "const {getDefaultState}=require('./lib/workflow/state.js'); const k=Object.keys(getDefaultState()); console.log('field count:', k.length, '| supervisorNarrativeCompass gone:', !k.includes('supervisorNarrativeCompass'));"
   npx jest __tests__/unit/workflow/state.test.js lib/__tests__/rollback-clears-completeness.test.js
   ```
-  Expected: `field count: 59 | supervisorNarrativeCompass gone: true`; `state.test.js` passes; `rollback-clears-completeness.test.js` — all tests pass (the "no stale exemptions" test is green because Step 4b removed the now-nonexistent exemption; "every field cleared or exempt" stays green with one fewer field and one fewer exemption).
+  Expected: `field count: 63 | supervisorNarrativeCompass gone: true` (60 baseline + 4 channels added by P6.3 − 1 removed here); `state.test.js` passes; `rollback-clears-completeness.test.js` — all tests pass (the "no stale exemptions" test is green because Step 4b removed the now-nonexistent exemption; "every field cleared or exempt" stays green with one fewer channel and one fewer exemption).
 
 - [ ] **Step 6: Commit.**
   ```bash
@@ -9003,24 +9470,24 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```bash
   node -e "const {getDefaultState}=require('./lib/workflow/state.js'); console.log('CURRENT FIELD COUNT:', Object.keys(getDefaultState()).length);"
   ```
-  Expected: `CURRENT FIELD COUNT: 59` (60 minus `supervisorNarrativeCompass`; `mergeReducer` was never a state field so it doesn't affect this count). Use whatever number this prints as N below — this command is the source of truth, not a hardcoded guess.
+  Expected: `CURRENT FIELD COUNT: 63` (60 baseline + 4 channels from P6.3 − 1 (`supervisorNarrativeCompass`) from Task 12.5; `mergeReducer` was never a state field so it doesn't affect this count). Use whatever number this prints as N below — this command is the source of truth, not a hardcoded guess.
 
 - [ ] **Step 2: Write the failing guard test FIRST.** This pins the count so it can't silently drift again. Append to `__tests__/unit/workflow/state.test.js` inside the `getDefaultState` describe:
   ```javascript
   it('getDefaultState field count matches the documented count (S12)', () => {
     // Update this number AND the comments in state.js:12 / :664 / :995 together.
-    expect(Object.keys(getDefaultState()).length).toBe(59);
+    expect(Object.keys(getDefaultState()).length).toBe(63);
   });
   ```
   Run: `npx jest __tests__/unit/workflow/state.test.js -t "matches the documented count"`
-  Expected: PASS at 59 if 12.5 landed (this test documents the invariant; if Step 1 printed a different N, set the literal to N and the test passes — it is the anchor the comments must match).
+  Expected: PASS at 63 if 12.5 landed (this test documents the invariant; if Step 1 printed a different N, set the literal to N and the test passes — it is the anchor the comments must match).
 
-- [ ] **Step 3: Update the three stale comments to N (=59).** In `lib/workflow/state.js`:
+- [ ] **Step 3: Update the three stale comments to N (=63).** In `lib/workflow/state.js`:
   ```javascript
   // BEFORE (state.js:12):
    * State Fields (55 total - includes revision context + human feedback):
   // AFTER:
-   * State Fields (59 total - includes revision context + human feedback):
+   * State Fields (63 total - includes revision context + human feedback):
   ```
   ```javascript
   // BEFORE (state.js:663-665):
@@ -9029,14 +9496,14 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
    * Useful for testing and initialization
   // AFTER:
   /**
-   * Get default state with all fields initialized (59 fields after human feedback + revision budget additions)
+   * Get default state with all fields initialized (63 fields after human feedback + revision budget additions)
    * Useful for testing and initialization
   ```
   ```javascript
   // BEFORE (state.js:995):
     console.log('Default state keys:', Object.keys(defaultState).length); // Should be 53
   // AFTER:
-    console.log('Default state keys:', Object.keys(defaultState).length); // Should be 59
+    console.log('Default state keys:', Object.keys(defaultState).length); // Should be 63
   ```
 
 - [ ] **Step 4: Re-run + self-test smoke.**
@@ -9044,12 +9511,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   node lib/workflow/state.js 2>&1 | grep "Default state keys"
   npx jest __tests__/unit/workflow/state.test.js
   ```
-  Expected: `Default state keys: 59`, suite passes.
+  Expected: `Default state keys: 63`, suite passes.
 
 - [ ] **Step 5: Commit.**
   ```bash
   git add lib/workflow/state.js __tests__/unit/workflow/state.test.js
-  git commit -m "docs(state): correct stale getDefaultState field-count comments to 59 (S12)
+  git commit -m "docs(state): correct stale getDefaultState field-count comments to 63 (S12)
 
 The 55/53 counts in the header, getDefaultState JSDoc, and self-test were
 all stale. Pinned the real count with a guard test so it can't drift again.
