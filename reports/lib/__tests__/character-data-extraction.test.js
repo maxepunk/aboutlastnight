@@ -42,17 +42,16 @@ describe('extractCharacterData', () => {
     expect(result.characterData).toBeUndefined();
   });
 
-  test('returns empty on error (non-fatal)', async () => {
-    const mockSdk = jest.fn().mockRejectedValueOnce(new Error('timeout'));
+  test('throws on extraction error (fail-loud — empty character data drifts affiliations)', async () => {
+    const mockSdk = jest.fn().mockRejectedValueOnce(new Error('overloaded_error'));
     const state = {
       characterData: null,
       paperEvidence: [{ name: 'Test', description: 'test content here for length requirement', owners: [] }],
       memoryTokens: [],
       sessionConfig: { roster: ['Test'] }
     };
-    const result = await extractCharacterData(state, { configurable: { sdkClient: mockSdk } });
-    expect(result.characterData.source).toBe('error');
-    expect(result.characterData.characters).toEqual({});
+    await expect(extractCharacterData(state, { configurable: { sdkClient: mockSdk } }))
+      .rejects.toThrow(/character data|overloaded/i);
   });
 
   test('returns empty when no evidence available', async () => {

@@ -123,11 +123,10 @@ Only include data explicitly stated or strongly implied by the evidence. Do not 
       }
     };
   } catch (error) {
+    // N6 fail-loud: empty character data silences the "don't infer group composition"
+    // guard, drifting affiliations. Throw so retryPolicy + the pre-node snapshot handle it.
     console.error('[extractCharacterData] Error:', error.message);
-    // Non-fatal — pipeline can proceed without character data
-    return {
-      characterData: { characters: {}, source: 'error', error: error.message }
-    };
+    throw new Error(`Failed to extract character data: ${error.message}`);
   }
 }
 
