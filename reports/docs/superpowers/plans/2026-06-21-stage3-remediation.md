@@ -4564,12 +4564,21 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
           progressMessages: [...state.progressMessages.slice(-49), action.message]
         };
   ```
-  with (retire the cap into the unbounded eventLog):
+  with (eventLog is the new uncapped authoritative log; ALSO keep the capped
+  `progressMessages` mirror so the not-yet-rewritten `ProgressStream` feed keeps
+  rendering until P5.4 switches it to `eventLog` — ⚠️ CORRECTED 2026-06-22 per the
+  P5.2 opus review: dropping the `progressMessages` write here while a legacy reader
+  still exists darkens the live progress feed + the `llm_error` diagnostic at this exact
+  commit. The plan's own initialState comment calls `progressMessages` "retained for any
+  legacy reader," so writing it until that reader is gone is the consistent behavior.
+  P5.4 removes this mirror line when `ProgressStream` starts reading `eventLog`.):
   ```js
       case ACTIONS.SSE_PROGRESS:
         return {
           ...state,
-          eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'progress', message: action.message })
+          eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'progress', message: action.message }),
+          // Capped legacy mirror — drop in P5.4 once ProgressStream reads eventLog.
+          progressMessages: [...state.progressMessages.slice(-49), action.message]
         };
   ```
   Replace the `SSE_LLM_START` case (lines 103–114):
@@ -4796,6 +4805,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Modify: `console/components/ProgressStream.js` (full rewrite of the body — currently lines 13–105; add phase ribbon, raw stream pane with auto-scroll, liveness counter, failure card)
 - Modify: `console/app.js` (lines 235–242 — render `PipelineProgress` ABOVE `ProgressStream` during processing; pass the new props + handlers)
 - Modify: `console/console.css` (append the `progress-stream__*` phase/stream/failure styles)
+- Modify: `console/state.js` (Step 4b — drop the temporary `progressMessages` mirror from `SSE_PROGRESS` now that `ProgressStream` reads `eventLog`; added by the P5.2 review fix)
 - Test: manual browser verification (component rendering has no node-env harness). The phase-label/derived-state helper is extracted into the pure module and node-tested below.
 
 - [ ] **Step 1: Add a pure phase-presentation helper to the dual-export module (node-tested).** Append to `console/llm-stream-logic.js`'s `api` surface a `describePhase` helper so the label/derivation logic is testable. First add the failing test to `__tests__/unit/llm-stream-logic.test.js`:
@@ -5073,6 +5083,26 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
       );
     } else if (state.completedResult) {
   ```
+
+- [ ] **Step 4b: Drop the temporary `progressMessages` mirror (P5.2-review cleanup).** Now that `ProgressStream` reads `eventLog` (Step 3) and `app.js` no longer passes `progressMessages` (Step 4), the capped `progressMessages` mirror added to `SSE_PROGRESS` in P5.2 has no remaining reader. Revert that case in `console/state.js` back to writing only `eventLog`. Change:
+  ```js
+      case ACTIONS.SSE_PROGRESS:
+        return {
+          ...state,
+          eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'progress', message: action.message }),
+          // Capped legacy mirror — drop in P5.4 once ProgressStream reads eventLog.
+          progressMessages: [...state.progressMessages.slice(-49), action.message]
+        };
+  ```
+  to:
+  ```js
+      case ACTIONS.SSE_PROGRESS:
+        return {
+          ...state,
+          eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'progress', message: action.message })
+        };
+  ```
+  Leave the deprecated `progressMessages: []` field in `initialState` (now never written; a future P12 cleanup can remove the field). Re-run `node --check console/state.js`.
 
 - [ ] **Step 5: Append CSS.** Add to the end of `console/console.css`:
   ```css
