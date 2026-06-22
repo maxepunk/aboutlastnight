@@ -181,7 +181,9 @@ const api = {
             break;
           case 'progress':
           case 'llm_start':
+          case 'llm_delta':
           case 'llm_complete':
+          case 'llm_error':
           case 'complete':
           case 'failed':
           case 'error':

@@ -99,6 +99,15 @@ function App() {
                 systemPrompt: event.data.systemPrompt || null
               });
               break;
+            case 'llm_delta':
+              dispatch({
+                type: APP_ACTIONS.SSE_LLM_DELTA,
+                phase: event.data.phase || 'writing',
+                deltaText: event.data.deltaText || '',
+                tokenCount: event.data.tokenCount,
+                ttftMs: event.data.ttftMs
+              });
+              break;
             case 'llm_complete':
               dispatch({
                 type: APP_ACTIONS.SSE_LLM_COMPLETE,
@@ -152,17 +161,22 @@ function App() {
               }
               break;
             case 'failed':
-              // SSE-1: distinct terminal failure. Close the stream, stop the
-              // spinner, and surface a retry affordance (retry == re-/approve
-              // or rollback from the same checkpoint).
+              // P4 SSE-1 emits type:'failed' for an error outcome. Reconciled failure
+              // UX (M4): close the stream, clear `processing` (SSE_COMPLETE), and drive
+              // the INLINE failure card (Retry=/resume, Roll back) via SSE_LLM_FAILURE —
+              // NOT a SET_ERROR banner. ProgressStream stays mounted while
+              // llmActivity.phase==='failed', so the card renders with processing=false.
               eventSource.close();
               sseRef.current = null;
               dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
               dispatch({
-                type: APP_ACTIONS.SET_ERROR,
-                message: (event.data.error || 'Workflow failed') +
-                  (event.data.details ? ' ' + event.data.details : '') +
-                  ' You can retry from this checkpoint, or use rollback.'
+                type: APP_ACTIONS.SSE_LLM_FAILURE,
+                // errors[0].message covers nodes that RETURN {currentPhase:'error', errors:[...]}
+                // (server.js graph-error path) with no flat error/details field.
+                error: (event.data.error
+                  || (event.data.errors && event.data.errors[0] && event.data.errors[0].message)
+                  || 'Workflow failed') +
+                  (event.data.details ? ' — ' + event.data.details : '')
               });
               break;
             case 'error':
