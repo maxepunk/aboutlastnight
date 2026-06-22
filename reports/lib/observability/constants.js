@@ -31,6 +31,7 @@ const SSE_EVENT_TYPES = {
   CONNECTED: 'connected',      // SSE connection established
   PROGRESS: 'progress',        // Standard progress update
   LLM_START: 'llm_start',      // LLM call starting (full prompt)
+  LLM_DELTA: 'llm_delta',      // Token-level partial-message delta (phase/ttft/tokenCount); coalesced server-side (P5)
   LLM_COMPLETE: 'llm_complete', // LLM call complete (full response)
   LLM_ERROR: 'llm_error',      // LLM call returned success but extraction failed (carries same diagnostics as llm_complete)
   COMPLETE: 'complete',        // Workflow complete or checkpoint reached
