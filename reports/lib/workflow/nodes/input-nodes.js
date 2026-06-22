@@ -478,26 +478,19 @@ If you can't find a section, return an empty array for that field rather than fa
 
 Return structured JSON matching the schema.`;
 
-    try {
-      return await sdk({
-        prompt: sessionReportPrompt,
-        systemPrompt: 'You parse game session reports with token and transaction data. Be precise with numbers and IDs.',
-        model: 'sonnet', // Use sonnet for complex table parsing
-        jsonSchema: SESSION_REPORT_SCHEMA,
-        loadProjectSettings: false
-      });
-    } catch (error) {
-      console.warn('[parseRawInput] Error parsing session report:', error.message);
-      // Continue with empty orchestrator data - not critical
-      return {
-        exposedTokens: [],
-        buriedTokens: [],
-        shellAccounts: [],
-        exposedCount: 0,
-        buriedCount: 0,
-        totalBuried: 0
-      };
-    }
+    // N1 fail-loud: the session report is the AUTHORITATIVE token-disposition +
+    // financial source. An empty fallback makes every token default to buried and
+    // drops all shell accounts, so the generator fabricates the investigation and
+    // amounts. Let the error propagate: graph retryPolicy retries transient SDK
+    // failures, and a persistent failure throws against the clean pre-node snapshot
+    // for operator-driven /resume.
+    return await sdk({
+      prompt: sessionReportPrompt,
+      systemPrompt: 'You parse game session reports with token and transaction data. Be precise with numbers and IDs.',
+      model: 'sonnet', // Use sonnet for complex table parsing
+      jsonSchema: SESSION_REPORT_SCHEMA,
+      loadProjectSettings: false
+    });
   })();
 
   // Wait for Steps 1-2 to complete in parallel (Step 3 enrichment depends on
@@ -517,9 +510,16 @@ Return structured JSON matching the schema.`;
     throw new Error(`Failed to parse session config: ${step1Result.reason?.message}`);
   }
 
-  const orchestratorParsed = step2Result.status === 'fulfilled'
-    ? step2Result.value
-    : { exposedTokens: [], buriedTokens: [], shellAccounts: [], exposedCount: 0, buriedCount: 0, totalBuried: 0 };
+  // N1 fail-loud: do NOT substitute empty orchestrator data — that is the silent
+  // degradation that lets the generator invent the investigation. Step 2 is as
+  // critical as step 1.
+  let orchestratorParsed;
+  if (step2Result.status === 'fulfilled') {
+    orchestratorParsed = step2Result.value;
+  } else {
+    console.error('[parseRawInput] Error parsing session report:', step2Result.reason?.message);
+    throw new Error(`Failed to parse session report: ${step2Result.reason?.message}`);
+  }
 
   console.log('[parseRawInput] Steps 1-2 complete');
 
@@ -677,6 +677,9 @@ Return structured JSON matching the schema.`;
   // Interrupt for input review - skip if sessionConfig already populated (resume case)
   // NOTE: On resume, interrupt() returns the user's approval/edits
   // Spread parsedData directly so e2e-walkthrough can access checkpoint.sessionConfig, checkpoint.playerFocus
+  // IDEM-3: everything above this interrupt (the step1/step2/whiteboard SDK calls and the
+  // file writes) RE-RUNS on every /resume — keep it idempotent (writes overwrite; SDK calls
+  // are read-only). Do not introduce a non-idempotent side effect before this point.
   checkpointInterrupt(
     CHECKPOINT_TYPES.INPUT_REVIEW,
     parsedData,
