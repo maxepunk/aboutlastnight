@@ -260,14 +260,59 @@ function App() {
   if (!state.sessionId) {
     // No session: show session start
     content = React.createElement(SessionStart, { dispatch, theme: state.theme });
-  } else if (state.processing) {
-    // Processing: show ProgressStream with real-time SSE data
-    content = React.createElement(ProgressStream, {
-      processing: state.processing,
-      llmActivity: state.llmActivity,
-      lastLlmActivity: state.lastLlmActivity,
-      progressMessages: state.progressMessages
-    });
+  } else if (state.processing || (state.llmActivity && state.llmActivity.phase === 'failed')) {
+    // Processing (or a terminal failure card): macro stepper ABOVE the live feed.
+    content = React.createElement(React.Fragment, null,
+      // Keep the macro stepper anchored on the operator's current phase.
+      state.checkpointType && React.createElement(PipelineProgress, {
+        currentCheckpoint: state.checkpointType,
+        onRollback: (target) => setRollbackTarget(target)
+      }),
+      React.createElement(ProgressStream, {
+        processing: state.processing,
+        llmActivity: state.llmActivity,
+        lastLlmActivity: state.lastLlmActivity,
+        eventLog: state.eventLog,
+        // [Retry] = re-run the failed node (P2 resume semantics).
+        onRetry: async () => {
+          if (!state.sessionId) return;
+          dispatch({ type: APP_ACTIONS.PROCESSING_START });
+          try {
+            // NOTE: retry is intentionally STREAMLESS — /resume is a blocking JSON call
+            // (no SSE-before-POST), so the live token stream/liveness is absent during the
+            // re-run. The ribbon sits at 'preparing' until /resume returns. Deliberate
+            // (P2 re-run semantics via /resume); a streaming retry would change the contract.
+            const result = await appApi.resume(state.sessionId);
+            if (result.error) {
+              dispatch({ type: APP_ACTIONS.SET_ERROR, message: result.error });
+            } else if (result.interrupted && result.checkpoint) {
+              dispatch({
+                type: APP_ACTIONS.CHECKPOINT_RECEIVED,
+                checkpointType: result.checkpoint.type,
+                data: result.checkpoint,
+                phase: result.currentPhase
+              });
+            } else if (result.currentPhase === 'complete') {
+              dispatch({ type: APP_ACTIONS.WORKFLOW_COMPLETE, result });
+            } else if (result.currentPhase === 'error') {
+              // A retry that RE-FAILS via the graph-error path returns
+              // { currentPhase:'error', errors:[...] } with no flat result.error; without
+              // this branch nothing dispatches and the spinner hangs. Re-drive the inline
+              // failure card (mirrors handleApprove's case 'failed').
+              dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
+              dispatch({
+                type: APP_ACTIONS.SSE_LLM_FAILURE,
+                error: (result.errors && result.errors[0] && result.errors[0].message) || 'Workflow failed'
+              });
+            }
+          } catch (err) {
+            dispatch({ type: APP_ACTIONS.SSE_ERROR, message: 'Retry failed: ' + (err.message || 'Unknown error') });
+          }
+        },
+        // [Roll back] = open the existing rollback modal at the current checkpoint.
+        onRollback: () => setRollbackTarget(state.checkpointType)
+      })
+    );
   } else if (state.completedResult) {
     // Complete: show CompletionView
     content = React.createElement(CompletionView, {

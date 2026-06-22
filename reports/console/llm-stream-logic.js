@@ -66,12 +66,42 @@
     return [...list, { seq: _seq++, ts: Date.now(), ...entry }];
   }
 
+  const PHASE_LABELS = {
+    preparing: 'Preparing',
+    thinking: 'Thinking',
+    writing: 'Writing',
+    done: 'Done',
+    failed: 'Failed'
+  };
+  const PHASE_ORDER = ['preparing', 'thinking', 'writing', 'done'];
+
+  function describePhase(phase) {
+    return {
+      key: phase,
+      label: PHASE_LABELS[phase] || 'Processing',
+      isError: phase === 'failed',
+      isDone: phase === 'done'
+    };
+  }
+  function phaseOrder() {
+    return PHASE_ORDER.slice();
+  }
+  function isPhaseReached(currentPhase, candidatePhase) {
+    const ci = PHASE_ORDER.indexOf(currentPhase);
+    const pi = PHASE_ORDER.indexOf(candidatePhase);
+    if (ci === -1 || pi === -1) return false;
+    return pi <= ci;
+  }
+
   const api = {
     applyLlmStart,
     applyLlmDelta,
     applyLlmComplete,
     applyLlmFailure,
-    appendEvent
+    appendEvent,
+    describePhase,
+    phaseOrder,
+    isPhaseReached
   };
 
   if (typeof window !== 'undefined') {

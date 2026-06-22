@@ -79,3 +79,24 @@ describe('appendEvent (eventLog, no cap)', () => {
     expect(log[1].seq).toBeGreaterThan(log[0].seq);
   });
 });
+
+describe('describePhase', () => {
+  test('maps each phase to label + active flags', () => {
+    expect(L.describePhase('preparing').label).toBe('Preparing');
+    expect(L.describePhase('thinking').label).toBe('Thinking');
+    expect(L.describePhase('writing').label).toBe('Writing');
+    expect(L.describePhase('done').label).toBe('Done');
+    expect(L.describePhase('failed').label).toBe('Failed');
+    expect(L.describePhase('failed').isError).toBe(true);
+    expect(L.describePhase('writing').isError).toBe(false);
+  });
+  test('ordered phase list for the ribbon, failed excluded from the happy path', () => {
+    expect(L.phaseOrder()).toEqual(['preparing', 'thinking', 'writing', 'done']);
+  });
+  test('isPhaseReached: writing reaches preparing+thinking but not done', () => {
+    expect(L.isPhaseReached('writing', 'preparing')).toBe(true);
+    expect(L.isPhaseReached('writing', 'thinking')).toBe(true);
+    expect(L.isPhaseReached('writing', 'writing')).toBe(true);
+    expect(L.isPhaseReached('writing', 'done')).toBe(false);
+  });
+});

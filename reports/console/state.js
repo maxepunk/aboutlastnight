@@ -84,6 +84,7 @@ function reducer(state, action) {
         checkpointData: action.data || {},
         phase: action.phase || state.phase,
         processing: false,
+        llmActivity: null,
         // Clear all checkpoint edit slots when a new checkpoint arrives
         // (deliberate substitute for a dedicated RESET_PENDING_EDITS action)
         pendingEdits: {}
@@ -105,9 +106,7 @@ function reducer(state, action) {
     case ACTIONS.SSE_PROGRESS:
       return {
         ...state,
-        eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'progress', message: action.message }),
-        // Capped legacy mirror — drop in P5.4 once ProgressStream reads eventLog.
-        progressMessages: [...state.progressMessages.slice(-49), action.message]
+        eventLog: StreamLogic.appendEvent(state.eventLog, { kind: 'progress', message: action.message })
       };
 
     case ACTIONS.SSE_LLM_START:
@@ -167,6 +166,7 @@ function reducer(state, action) {
         completedResult: action.result,
         processing: false,
         checkpointType: null,
+        llmActivity: null,
         // Clear all checkpoint edit slots on workflow completion
         pendingEdits: {}
       };
