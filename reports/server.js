@@ -31,6 +31,7 @@ const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require('./lib/api-helpers');
+const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome } = require('./lib/session-outcome');
 const { SchemaValidator } = require('./lib/schema-validator');
 const outlineValidator = new SchemaValidator();
 
@@ -1061,17 +1062,21 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                     }
                 }
 
+                // Persist the outcome FIRST so a dropped SSE is recoverable via GET /state (DEL-1)
+                recordSessionOutcome(sessionId, buildOutcomeRecord(response));
                 // Emit completion via SSE
                 progressEmitter.emitComplete(sessionId, response);
 
             } catch (error) {
                 console.error(`[${new Date().toISOString()}] Background workflow error for session ${sessionId}:`, error);
-                progressEmitter.emitComplete(sessionId, {
+                const failedResponse = {
                     sessionId,
                     currentPhase: PHASES.ERROR,
                     error: 'Internal server error',
                     details: 'Approval operation failed. Check server logs.'
-                });
+                };
+                recordSessionOutcome(sessionId, buildOutcomeRecord(failedResponse));
+                progressEmitter.emitComplete(sessionId, failedResponse);
             } finally {
                 resolve();
             }
@@ -1084,12 +1089,14 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve error:`, error);
 
         // Emit SSE completion for sync errors so client doesn't hang waiting
-        progressEmitter.emitComplete(sessionId, {
+        const earlyFailure = {
             sessionId,
             currentPhase: PHASES.ERROR,
             error: 'Internal server error',
             details: 'Approval operation failed. Check server logs.'
-        });
+        };
+        recordSessionOutcome(sessionId, buildOutcomeRecord(earlyFailure));
+        progressEmitter.emitComplete(sessionId, earlyFailure);
 
         sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/approve`);
     }
@@ -1440,4 +1447,4 @@ process.on('SIGINT', async () => {
 });
 
 // Export helpers for testing
-module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome };
