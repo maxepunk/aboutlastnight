@@ -3600,7 +3600,20 @@ to:
         }).finally(() => inFlightTasks.delete(task));
         inFlightTasks.add(task);
 ```
-(The `const task = new Promise((resolve) => {` wrapper, the nested `setImmediate`, `.finally(() => inFlightTasks.delete(task))`, and `inFlightTasks.add(task)` are all preserved unchanged. The background `catch` body keeps the Task 4.1 `failedResponse` + `recordSessionOutcome` edit. The outer pre-background `catch` at **1082** runs only for throws BEFORE `acquireSessionLock`, so it must NOT release — leave its handling absent. Negligible edge: if `res.json` itself threw after acquire, the lock would leak — accepted, `res.json` throwing synchronously is pathological.)
+(The `const task = new Promise((resolve) => {` wrapper, the nested `setImmediate`, `.finally(() => inFlightTasks.delete(task))`, and `inFlightTasks.add(task)` are all preserved unchanged. The background `catch` body keeps the Task 4.1 `failedResponse` + `recordSessionOutcome` edit.)
+
+- [ ] **Step 5d: Release the lock in the outer pre-background `catch` ONLY if THIS request acquired it (ownership flag — closes the `res.json`-throw leak without clobbering a concurrent holder).** The outer `catch` runs for throws BOTH before AND after `acquireSessionLock` (e.g. a client/proxy disconnect making `res.json({status:'processing'})` throw after a successful acquire but before the `setImmediate` is scheduled → the inner `finally` never runs → the lock would be held forever, permanently 409-ing that session). But an UNCONDITIONAL release here is WRONG: a *different* request that throws BEFORE its own acquire (e.g. `graph.getState` throws) would `Set.delete` a lock currently HELD by another in-flight approve — re-opening the CONC-1 race. So track per-request ownership with a local flag:
+  - Declare `let lockAcquired = false;` immediately before the handler's `try {` (after the `shuttingDown` check / `console.log`).
+  - Set `lockAcquired = true;` on the line immediately AFTER the successful `acquireSessionLock` 409 guard (i.e. once this request owns the lock).
+  - As the FIRST line of the outer pre-background `catch (error) {` (the one commented "This only catches errors BEFORE the background task starts"), add:
+```js
+        // If we acquired the lock but the background task never started (e.g. res.json
+        // threw before setImmediate was scheduled), release it so the session isn't
+        // permanently locked. Guarded by lockAcquired so a pre-acquire throw never
+        // releases a DIFFERENT in-flight request's lock for this session.
+        if (lockAcquired) releaseSessionLock(sessionId);
+```
+  No double-release: if the task WAS scheduled the `try` completes (the outer `catch` doesn't run) and the inner `finally` releases; if `res.json` threw the task was never scheduled (inner `finally` never runs) and only this `catch` releases.
 
 - [ ] **Step 6: Verify no early-return path holds the lock by reading the changed handler.**
 ```
