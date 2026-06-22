@@ -121,4 +121,35 @@ describe('sdkQueryImpl contract', () => {
     await sdkQueryImpl({ prompt: 'test', model: 'haiku' });
     expect(capturedOptions.settingSources).toEqual(['project']);
   });
+
+  test('idle timer resets on each streamed message (long-but-active call does not abort)', async () => {
+    jest.useFakeTimers();
+    // A generator that yields an intermediate assistant message after a long gap,
+    // then the success result after another long gap. Each gap is < the idle window
+    // only because the timer is reset per message.
+    setMockQuery(() => (async function* () {
+      // advance 14 min, then emit activity (resets idle)
+      jest.advanceTimersByTime(14 * 60 * 1000);
+      yield { type: 'assistant', message: { content: [{ type: 'text', text: 'working' }] } };
+      // advance another 14 min, then the result (idle never hit 15 min between events)
+      jest.advanceTimersByTime(14 * 60 * 1000);
+      yield { type: 'result', subtype: 'success', result: 'done' };
+    })());
+
+    const p = sdkQueryImpl({ prompt: 'test', model: 'sonnet' });
+    await expect(p).resolves.toBe('done');
+    jest.useRealTimers();
+  });
+
+  test('abort message reports idle stall, not total limit', async () => {
+    // Force an abort by aborting from inside the loop before a result arrives.
+    setMockQuery(({ options }) => (async function* () {
+      options.abortController.abort();
+      yield { type: 'assistant', message: { content: [] } };
+    })());
+
+    await expect(
+      sdkQueryImpl({ prompt: 'test', model: 'haiku', label: 'idle-test' })
+    ).rejects.toThrow(/idle .* with no streamed activity/);
+  });
 });

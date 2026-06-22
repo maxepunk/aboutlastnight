@@ -22,19 +22,23 @@ const { extractStructuredOutput, StructuredOutputExtractionError } = require('./
 process.setMaxListeners(20);
 
 /**
- * Per-model abort cap (in milliseconds).
+ * Idle (stall) window in milliseconds — the maximum time we tolerate with NO
+ * streamed activity from the SDK before aborting. This is NOT a total-duration
+ * cap: a healthy long call (Opus thinking for 20 min while emitting deltas) never
+ * trips it because the timer is re-armed on every streamed message (see resetIdle
+ * below). Only genuine silence — a hung subprocess, a stuck upstream — fires it.
  *
- * Standardized at 10 minutes across all models so the AbortController fires only
- * on genuinely-stuck calls. Per-call overrides have caused repeated production
- * failures (see git history: e81a63b, 2830be7, character-data-nodes.js:106).
+ * Generous by design; tune only DOWN, only from data. duration_api_ms on every
+ * llm_complete event is the data source.
  *
- * Steady-state response timing is captured on every call via `duration_api_ms`
- * in the llm_complete event — that's the data source for any future tightening.
+ * Kept named MODEL_TIMEOUTS and exported for backward compatibility (getModelTimeout,
+ * llm/index.js re-export), but the semantics are now idle-between-events.
  */
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const MODEL_TIMEOUTS = {
-  opus: 10 * 60 * 1000,
-  sonnet: 10 * 60 * 1000,
-  haiku: 10 * 60 * 1000
+  opus: IDLE_TIMEOUT_MS,
+  sonnet: IDLE_TIMEOUT_MS,
+  haiku: IDLE_TIMEOUT_MS
 };
 
 /**
@@ -85,7 +89,7 @@ const EFFORT_LEVELS = {
  * @param {Object} [options.agents] - Custom agent definitions for Task tool invocation
  * @param {string} [options.cwd] - Current working directory for file operations
  * @param {('low'|'medium'|'high'|'xhigh'|'max')} [options.effort] - Override the per-model effort default
- * @param {number} [options.timeoutMs] - Timeout in ms (defaults to model timeout)
+ * @param {number} [options.timeoutMs] - Idle/stall window in ms — aborts only if NO streamed message arrives within this window (NOT a total-duration cap). Defaults to the per-model idle value (15 min).
  * @param {Function} [options.onProgress] - Callback for intermediate messages: (msg) => void
  * @param {string} [options.label] - Label for progress logging
  * @returns {Promise<Object|string>} - Parsed result (object if schema, string otherwise)
@@ -107,15 +111,27 @@ async function sdkQueryImpl({
   loadProjectSettings = true
 }) {
   const resolvedModel = MODEL_IDS[model] || model;
-  const effectiveTimeout = timeoutMs || MODEL_TIMEOUTS[model] || MODEL_TIMEOUTS.sonnet;
+  const idleTimeoutMs = timeoutMs || MODEL_TIMEOUTS[model] || MODEL_TIMEOUTS.sonnet;
   const abortController = new AbortController();
   const startTime = Date.now();
   const progressLabel = label || prompt.slice(0, 25).replace(/\n/g, ' ');
 
-  // Set up timeout
-  const timeoutId = setTimeout(() => {
-    abortController.abort();
-  }, effectiveTimeout);
+  // Idle (stall) timer: abort only after idleTimeoutMs of NO streamed activity.
+  // resetIdle() is called once before the loop and again on EVERY message inside
+  // it, so a healthy long-running call that keeps streaming never aborts — only a
+  // genuinely silent/hung call does. Replaces the old total-duration cap.
+  let lastActivityAt = Date.now();
+  let idleAbortedAt = null;
+  let timeoutId = null;
+  const resetIdle = () => {
+    lastActivityAt = Date.now();
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      idleAbortedAt = Date.now();
+      abortController.abort();
+    }, idleTimeoutMs);
+  };
+  resetIdle();
 
   const options = {
     model: resolvedModel,
@@ -205,6 +221,7 @@ async function sdkQueryImpl({
     }
 
     for await (const msg of query({ prompt, options })) {
+      resetIdle();  // any message = activity → re-arm the stall timer
       messageCount++;
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -379,10 +396,19 @@ async function sdkQueryImpl({
       throw error;
     }
 
-    // Check if it was an abort/timeout
+    // Check if it was an idle/stall abort. Message must still start with
+    // "SDK timeout after" so isSdkTimeoutError (and thus isTransientError) keeps
+    // classifying it as transient — the wording past that is diagnostic.
     if (error.name === 'AbortError' || abortController.signal.aborted) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      throw new Error(`SDK timeout after ${elapsed}s (limit: ${effectiveTimeout / 1000}s) - ${progressLabel}`);
+      // Measure idle from the abort instant (captured in the timer callback), not
+      // from the catch block which runs after iterator teardown — otherwise a real
+      // stall reads e.g. "idle 900.1s (idle limit: 900s)", slightly self-contradictory.
+      const idleSec = (((idleAbortedAt ?? Date.now()) - lastActivityAt) / 1000).toFixed(1);
+      throw new Error(
+        `SDK timeout after ${elapsed}s idle ${idleSec}s with no streamed activity ` +
+        `(idle limit: ${idleTimeoutMs / 1000}s) - ${progressLabel}`
+      );
     }
 
     throw error;
@@ -390,11 +416,12 @@ async function sdkQueryImpl({
 }
 
 /**
- * Detect whether an error came from this module's timeout path. The thrown
- * message format is `SDK timeout after <s>s (limit: <s>s) - <label>` (see
- * line 312). Callers wrapping sdkQueryImpl with retry-on-timeout logic
- * should use this rather than ad-hoc substring matches that drift apart
- * across call sites.
+ * Detect whether an error came from this module's idle/stall abort path. The
+ * thrown message format is:
+ *   `SDK timeout after <elapsed>s idle <idleSec>s with no streamed activity (idle limit: <limit>s) - <label>`
+ * (built in the abort branch of sdkQueryImpl's catch). Callers wrapping
+ * sdkQueryImpl with retry-on-timeout logic should use this rather than ad-hoc
+ * substring matches that drift apart across call sites.
  *
  * @param {unknown} err
  * @returns {boolean}
@@ -404,10 +431,15 @@ function isSdkTimeoutError(err) {
 }
 
 /**
- * Get model timeout for compatibility with existing code
+ * Get the model's idle (stall) window for compatibility with existing code.
+ *
+ * NOTE: the returned value is now an IDLE-window duration (15 min) — the max time
+ * tolerated with NO streamed activity before aborting — NOT a total-duration cap.
+ * A healthy long call that keeps streaming runs well past this. Callers must not
+ * treat it as a hard end-to-end SLA.
  *
  * @param {string} model - Model name
- * @returns {number} - Timeout in milliseconds
+ * @returns {number} - Idle window in milliseconds
  */
 function getModelTimeout(model) {
   return MODEL_TIMEOUTS[model] || MODEL_TIMEOUTS.sonnet;
