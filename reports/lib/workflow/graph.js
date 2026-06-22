@@ -58,6 +58,14 @@
 const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
 const { ReportStateAnnotation, PHASES, REVISION_CAPS } = require('./state');
 const nodes = require('./nodes');
+const { isTransientError } = require('../llm/retry');
+
+// P3.1 — Transient-only auto-retry for LLM-calling nodes.
+// initialInterval is MILLISECONDS in @langchain/langgraph 1.0.7 (verified against
+// node_modules/@langchain/langgraph/dist/pregel/utils/index.d.ts), so 2000 = 2s.
+// retryOn is the FIXED-INTERFACE classifier: rate-limit/5xx/overloaded/timeouts retry;
+// auth/permission/invalid-request/StructuredOutputExtractionError throw straight through.
+const LLM_RETRY = { retryPolicy: { maxAttempts: 3, initialInterval: 2000, retryOn: isTransientError } };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ROUTING FUNCTIONS
@@ -357,7 +365,7 @@ function createGraphBuilder() {
   // ADD NODES - Phase 0: Input Parsing (Commit 8.9)
   // ═══════════════════════════════════════════════════════
 
-  builder.addNode('parseRawInput', nodes.parseRawInput);
+  builder.addNode('parseRawInput', nodes.parseRawInput, LLM_RETRY);
   builder.addNode('finalizeInput', nodes.finalizeInput);
 
   // ═══════════════════════════════════════════════════════
@@ -394,12 +402,12 @@ function createGraphBuilder() {
   builder.addNode('checkpointAwaitRoster', nodes.checkpointAwaitRoster);
 
   // Photo analysis (pure - no checkpoint, runs in parallel branch)
-  builder.addNode('analyzePhotos', nodes.analyzePhotos);
+  builder.addNode('analyzePhotos', nodes.analyzePhotos, LLM_RETRY);
 
   // Checkpoint: Character IDs (after parallel join)
   builder.addNode('checkpointCharacterIds', nodes.checkpointCharacterIds);
-  builder.addNode('parseCharacterIds', nodes.parseCharacterIds);
-  builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses);
+  builder.addNode('parseCharacterIds', nodes.parseCharacterIds, LLM_RETRY);
+  builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses, LLM_RETRY);
 
   // Checkpoint: Await full context (incremental input - Phase 4f)
   // Pauses for user to provide accusation, sessionReport, directorNotes via /approve
@@ -409,16 +417,16 @@ function createGraphBuilder() {
   builder.addNode('tagTokenDispositions', nodes.tagTokenDispositions);
 
   // Evidence preprocessing (pure - no checkpoint)
-  builder.addNode('preprocessEvidence', nodes.preprocessEvidence);
+  builder.addNode('preprocessEvidence', nodes.preprocessEvidence, LLM_RETRY);
 
   // Character data extraction (pre-curation, Haiku-powered)
-  builder.addNode('extractCharacterData', nodes.extractCharacterData);
+  builder.addNode('extractCharacterData', nodes.extractCharacterData, LLM_RETRY);
 
   // Checkpoint: Pre-curation approval
   builder.addNode('checkpointPreCuration', nodes.checkpointPreCuration);
 
   // Evidence curation (pure data node - no interrupt, SRP)
-  builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle);
+  builder.addNode('curateEvidenceBundle', nodes.curateEvidenceBundle, LLM_RETRY);
   // Evidence checkpoint (SRP: interrupt separated from curateEvidenceBundle)
   builder.addNode('checkpointEvidenceAndPhotos', nodes.checkpointEvidenceAndPhotos);
   builder.addNode('processRescuedItems', nodes.processRescuedItems);
@@ -433,14 +441,14 @@ function createGraphBuilder() {
   // Arc analysis with player-focus-guided single-call architecture (Commit 8.15)
   // Player conclusions (accusation/whiteboard) drive arc generation
   // Single SDK call replaces 4-call parallel specialist pattern
-  builder.addNode('analyzeArcs', nodes.analyzeArcsPlayerFocusGuided);
+  builder.addNode('analyzeArcs', nodes.analyzeArcsPlayerFocusGuided, LLM_RETRY);
 
   // Arc structure validation - programmatic, no LLM (Commit 8.12)
   // Validates keyEvidence IDs exist in bundle, characterPlacements use roster names
   builder.addNode('validateArcs', nodes.validateArcStructure);
 
   // Arc evaluation (no interrupt - SRP: checkpoint separate)
-  builder.addNode('evaluateArcs', nodes.evaluateArcs);
+  builder.addNode('evaluateArcs', nodes.evaluateArcs, LLM_RETRY);
 
   // Arc selection checkpoint - interrupt() here (Commit 8.26: SRP separation)
   builder.addNode('checkpointArcSelection', nodes.checkpointArcSelection);
@@ -449,7 +457,7 @@ function createGraphBuilder() {
   // NOTE: setArcSelectionCheckpoint removed - interrupt() now in evaluateArcs
   builder.addNode('incrementArcRevision', incrementArcRevision);
   // Revision node - uses buildRevisionContext helper for targeted fixes
-  builder.addNode('reviseArcs', nodes.reviseArcs);
+  builder.addNode('reviseArcs', nodes.reviseArcs, LLM_RETRY);
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 2.4: Arc Evidence Packages (Phase 1 Fix)
@@ -463,34 +471,34 @@ function createGraphBuilder() {
   // ADD NODES - Phase 3: Outline Generation
   // ═══════════════════════════════════════════════════════
 
-  builder.addNode('generateOutline', nodes.generateOutline);
+  builder.addNode('generateOutline', nodes.generateOutline, LLM_RETRY);
   // NOTE: validateOutlineStructure removed in Commit 8.23 - trust Opus evaluators instead
   // Outline evaluation (no interrupt - SRP: checkpoint separate)
-  builder.addNode('evaluateOutline', nodes.evaluateOutline);
+  builder.addNode('evaluateOutline', nodes.evaluateOutline, LLM_RETRY);
 
   // Outline checkpoint - interrupt() here (Commit 8.26: SRP separation)
   builder.addNode('checkpointOutline', nodes.checkpointOutline);
   // NOTE: setOutlineCheckpoint removed - interrupt() now in evaluateOutline
   builder.addNode('incrementOutlineRevision', incrementOutlineRevision);
   // Revision node - uses buildRevisionContext helper for targeted fixes
-  builder.addNode('reviseOutline', nodes.reviseOutline);
+  builder.addNode('reviseOutline', nodes.reviseOutline, LLM_RETRY);
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 4: Article Generation
   // ═══════════════════════════════════════════════════════
 
-  builder.addNode('generateContentBundle', nodes.generateContentBundle);
+  builder.addNode('generateContentBundle', nodes.generateContentBundle, LLM_RETRY);
   // NOTE: validateArticleContent removed in Commit 8.23 - trust Opus evaluators instead
   // Article evaluation (no interrupt - SRP: checkpoint separate)
-  builder.addNode('evaluateArticle', nodes.evaluateArticle);
+  builder.addNode('evaluateArticle', nodes.evaluateArticle, LLM_RETRY);
 
   // Article checkpoint - interrupt() here (Commit 8.26: SRP separation)
   builder.addNode('checkpointArticle', nodes.checkpointArticle);
   // NOTE: setArticleCheckpoint removed - interrupt() now in evaluateArticle
   builder.addNode('incrementArticleRevision', incrementArticleRevision);
   // Revision node - uses buildRevisionContext helper for targeted fixes
-  builder.addNode('reviseContentBundle', nodes.reviseContentBundle);
-  builder.addNode('validateContentBundle', nodes.validateContentBundle);
+  builder.addNode('reviseContentBundle', nodes.reviseContentBundle, LLM_RETRY);
+  builder.addNode('validateContentBundle', nodes.validateContentBundle, LLM_RETRY);
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 5: Assembly
