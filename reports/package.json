@@ -20,8 +20,9 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.119",
-    "@langchain/core": "^1.1.8",
+    "@langchain/core": "^1.1.44",
     "@langchain/langgraph": "^1.0.7",
+    "@langchain/langgraph-checkpoint-sqlite": "1.0.3",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "better-sqlite3": "^12.5.0",
