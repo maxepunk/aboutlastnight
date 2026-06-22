@@ -44,6 +44,32 @@ const sharedCheckpointer = SqliteSaver.fromConnString(CHECKPOINT_DB_PATH);
 // Persists cache across all graph invocations for efficient prompt loading
 let sharedPromptBuilder = null;
 
+// In-flight background tasks (DUR-2): the /approve handler runs the graph in a
+// setImmediate; SIGINT must await these (and refuse new ones) before exit so a
+// resume's checkpoint write + SSE emit are never severed mid-flight.
+const inFlightTasks = new Set();
+let shuttingDown = false;
+let httpServer = null; // hoisted so SIGINT (module scope) can drain + close it
+
+/**
+ * Drain in-flight background tasks, then close the durable checkpointer's
+ * sqlite handle, then close the HTTP server — in that order. Pure + injectable
+ * so it is unit-testable (the SIGINT handler itself calls process.exit).
+ * @param {{inFlight:Set<Promise>, checkpointer:{db:{close:Function}}, server?:{close:Function}}} deps
+ */
+async function drainAndClose({ inFlight, checkpointer, server }) {
+  if (inFlight && inFlight.size > 0) {
+    // allSettled: a rejected resume must not abort the drain of the others
+    await Promise.allSettled(Array.from(inFlight));
+  }
+  if (checkpointer && checkpointer.db && typeof checkpointer.db.close === 'function') {
+    checkpointer.db.close();
+  }
+  if (server && typeof server.close === 'function') {
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
 /**
  * Get session state from checkpointer without invoking the graph
  * Used by read-only endpoints to inspect state at any checkpoint
@@ -923,6 +949,10 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
     const approvals = req.body;
 
+    if (shuttingDown) {
+        return res.status(503).json({ sessionId, error: 'Server is shutting down; retry shortly' });
+    }
+
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve:`, JSON.stringify(approvals));
 
     try {
@@ -977,7 +1007,9 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
             previousPhase
         });
 
-        // Run workflow in background using Command({ resume }) pattern
+        // Run workflow in background using Command({ resume }) pattern.
+        // Wrap in a tracked promise so SIGINT can drain it (DUR-2).
+        const task = new Promise((resolve) => {
         setImmediate(async () => {
             try {
                 // Resume graph with Command - resume value becomes the return of interrupt()
@@ -1032,8 +1064,12 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                     error: 'Internal server error',
                     details: 'Approval operation failed. Check server logs.'
                 });
+            } finally {
+                resolve();
             }
         });
+        }).finally(() => inFlightTasks.delete(task));
+        inFlightTasks.add(task);
 
     } catch (error) {
         // This only catches errors BEFORE the background task starts (validation, etc.)
@@ -1302,7 +1338,7 @@ if (require.main === module) {
         console.log(`Theme files validated (${sharedPromptBuilder.theme.cache.size} cached) ✓`);
     }
 
-    const server = app.listen(PORT, () => {
+    httpServer = app.listen(PORT, () => {
         console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
@@ -1322,16 +1358,30 @@ if (require.main === module) {
     });
 
     // Configure server timeouts (default 2min is too short for workflow steps)
-    server.timeout = SERVER_TIMEOUT_MS;
-    server.requestTimeout = SERVER_TIMEOUT_MS;  // Node 18+ default is 5min, we need 20min
-    server.keepAliveTimeout = SERVER_TIMEOUT_MS;
-    server.headersTimeout = SERVER_TIMEOUT_MS + 1000; // Must be > keepAliveTimeout
+    httpServer.timeout = SERVER_TIMEOUT_MS;
+    httpServer.requestTimeout = SERVER_TIMEOUT_MS;  // Node 18+ default is 5min, we need 20min
+    httpServer.keepAliveTimeout = SERVER_TIMEOUT_MS;
+    httpServer.headersTimeout = SERVER_TIMEOUT_MS + 1000; // Must be > keepAliveTimeout
 })();
 }
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     console.log('\n\nShutting down gracefully...');
+    shuttingDown = true; // refuse new /approve resumes (DUR-2)
+    try {
+        if (inFlightTasks.size > 0) {
+            console.log(`Draining ${inFlightTasks.size} in-flight task(s)...`);
+        }
+        await drainAndClose({
+            inFlight: inFlightTasks,
+            checkpointer: sharedCheckpointer,
+            server: httpServer
+        });
+        console.log('Drained in-flight work; closed checkpointer + server.');
+    } catch (err) {
+        console.warn('Drain/close error:', err.message);
+    }
     // Close cached Notion client (SQLite connection)
     try {
         const { resetCachedNotionClient } = require('./lib/cache');
@@ -1344,4 +1394,4 @@ process.on('SIGINT', () => {
 });
 
 // Export helpers for testing
-module.exports = { buildResumePayload };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks };
