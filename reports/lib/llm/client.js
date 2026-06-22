@@ -355,7 +355,10 @@ async function sdkQueryImpl({
       if (msg.type === 'result' && msg.subtype && msg.subtype.includes('error')) {
         clearTimeout(timeoutId);
         const errorDetails = msg.errors?.join(', ') || 'Unknown error';
-        throw new Error(`SDK ${msg.subtype}: ${errorDetails}`);
+        const sdkErr = new Error(`SDK ${msg.subtype}: ${errorDetails}`);
+        sdkErr.sdkSubtype = msg.subtype;     // e.g. 'error_during_execution', 'error_max_budget_usd'
+        sdkErr.sdkErrors = msg.errors || []; // e.g. ['overloaded_error']
+        throw sdkErr;
       }
 
       // Handle other result types (e.g., cancelled, interrupted)

@@ -24,6 +24,8 @@ const {
   MODEL_TIMEOUTS
 } = require('./client');
 
+const { isTransientError } = require('./retry');
+
 const {
   createTracedSdkQuery,
   createProgressFromTrace
@@ -61,6 +63,7 @@ module.exports = {
   getModelTimeout,
   isClaudeAvailable,
   isSdkTimeoutError,
+  isTransientError,
   createSemaphore,
   createProgressLogger,
   MODEL_TIMEOUTS
