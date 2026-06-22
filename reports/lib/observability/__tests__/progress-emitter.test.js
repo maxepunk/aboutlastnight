@@ -65,7 +65,9 @@ describe('ProgressEmitter', () => {
       emitter.emitComplete('test-123', response);
     });
 
-    it('always sets type to "complete" even if result has a type field', (done) => {
+    it('overrides any inbound type field with the outcome-derived type (SSE-1)', (done) => {
+      // An error response is stamped 'failed' (distinct), and the inbound
+      // 'something-else' type is overridden because the emitter's type is last.
       const response = {
         sessionId: 'test-456',
         type: 'something-else',
@@ -73,7 +75,7 @@ describe('ProgressEmitter', () => {
       };
 
       emitter.subscribe('test-456', (data) => {
-        expect(data.type).toBe('complete');
+        expect(data.type).toBe('failed');
         expect(data.sessionId).toBe('test-456');
         expect(data.currentPhase).toBe('error');
         done();
@@ -91,7 +93,9 @@ describe('ProgressEmitter', () => {
       };
 
       emitter.subscribe('err-sess', (data) => {
-        expect(data.type).toBe('complete');
+        // SSE-1: a workflow failure (currentPhase 'error') emits the distinct
+        // 'failed' type so the client can show a retry affordance.
+        expect(data.type).toBe('failed');
         expect(data.currentPhase).toBe('error');
         expect(data.error).toBe('Internal server error');
         expect(data.details).toBe('Approval operation failed.');

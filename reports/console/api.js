@@ -183,6 +183,7 @@ const api = {
           case 'llm_start':
           case 'llm_complete':
           case 'complete':
+          case 'failed':
           case 'error':
           case 'heartbeat':
             if (onProgress) onProgress({ type, data });

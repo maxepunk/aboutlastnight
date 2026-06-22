@@ -151,6 +151,20 @@ function App() {
                 // Don't clear checkpointType — let the user retry from the same checkpoint
               }
               break;
+            case 'failed':
+              // SSE-1: distinct terminal failure. Close the stream, stop the
+              // spinner, and surface a retry affordance (retry == re-/approve
+              // or rollback from the same checkpoint).
+              eventSource.close();
+              sseRef.current = null;
+              dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
+              dispatch({
+                type: APP_ACTIONS.SET_ERROR,
+                message: (event.data.error || 'Workflow failed') +
+                  (event.data.details ? ' ' + event.data.details : '') +
+                  ' You can retry from this checkpoint, or use rollback.'
+              });
+              break;
             case 'error':
               eventSource.close();
               sseRef.current = null;

@@ -11,6 +11,18 @@
 
 const EventEmitter = require('events');
 
+/**
+ * Map a terminal workflow response to its SSE event type (SSE-1).
+ * - error  -> 'failed' (distinct; client renders a retry affordance)
+ * - interrupted / complete -> 'complete' (client disambiguates on the payload)
+ * @param {object} result
+ * @returns {'complete'|'failed'}
+ */
+function outcomeEventType(result = {}) {
+  if (!result.interrupted && result.currentPhase === 'error') return 'failed';
+  return 'complete';
+}
+
 class ProgressEmitter extends EventEmitter {
   constructor() {
     super();
@@ -41,7 +53,10 @@ class ProgressEmitter extends EventEmitter {
     this.emit(`progress:${sessionId}`, {
       timestamp: new Date().toISOString(),
       ...result,
-      type: 'complete'  // Must be last to override any 'type' in result
+      // SSE-1: failures get a DISTINCT type so the client can show a retry
+      // affordance; interrupted/complete stay 'complete' (client disambiguates
+      // on interrupted/currentPhase). Must be last to override any inbound type.
+      type: outcomeEventType(result)
     });
   }
 
@@ -63,4 +78,4 @@ class ProgressEmitter extends EventEmitter {
 // Singleton instance shared across all nodes and server
 const progressEmitter = new ProgressEmitter();
 
-module.exports = { progressEmitter, ProgressEmitter };
+module.exports = { progressEmitter, ProgressEmitter, outcomeEventType };
