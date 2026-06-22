@@ -390,7 +390,7 @@ describe('photo-nodes', () => {
         expect(failedAnalysis.storyRelevance).toBe('contextual');
       });
 
-      it('returns error state when all photos fail', async () => {
+      it('throws when all photos fail (N2 fail-loud, no empty fallthrough)', async () => {
         const mockClient = jest.fn().mockRejectedValue(new Error('Service unavailable'));
 
         const state = {
@@ -399,14 +399,13 @@ describe('photo-nodes', () => {
         };
         const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
-        const result = await analyzePhotos(state, config);
-
-        // Should have placeholder for failed photo, not ERROR phase
-        // (individual failures are graceful, only total failure = ERROR)
-        expect(result.photoAnalyses.analyses[0]._error).toBeDefined();
+        // N2: a total failure (every photo errored) is an outage, not graceful degradation.
+        // analyzePhotos must throw rather than return an empty/placeholder result that
+        // flows onward and yields mis-attributed captions.
+        await expect(analyzePhotos(state, config)).rejects.toThrow(/photo analysis failed/i);
       });
 
-      it('error includes phase information', async () => {
+      it('throws on total failure even when the SDK throws synchronously', async () => {
         const mockClient = jest.fn().mockImplementation(() => {
           throw new Error('Complete failure');
         });
@@ -417,10 +416,9 @@ describe('photo-nodes', () => {
         };
         const config = { configurable: { sdkClient: mockClient, imagePromptBuilder: mockImagePromptBuilder } };
 
-        const result = await analyzePhotos(state, config);
-
-        // Individual photo failure is graceful
-        expect(result.photoAnalyses.analyses[0]._error).toBe('Complete failure');
+        // analyzeSinglePhoto's catch still converts the sync throw into a placeholder, so the
+        // single-photo batch ends with analyzedPhotos === 0 → the N2 guard throws.
+        await expect(analyzePhotos(state, config)).rejects.toThrow(/photo analysis failed/i);
       });
     });
 

@@ -470,6 +470,16 @@ async function analyzePhotos(state, config) {
       }
     };
 
+    // N2 fail-loud: per-photo placeholders (analyzeSinglePhoto) are acceptable
+    // cosmetic degradation AS LONG AS some photos succeeded. If EVERY photo failed,
+    // that is an outage (e.g. auth error applied uniformly), not "no faces detected".
+    if (photos.length > 0 && photoAnalyses.stats.analyzedPhotos === 0) {
+      const firstErr = analyses.find(a => a._error)?._error || 'unknown error';
+      throw new Error(
+        `Photo analysis failed: all ${photos.length} photos errored (e.g. "${firstErr}").`
+      );
+    }
+
     console.log(`[analyzePhotos] Complete: ${photoAnalyses.stats.analyzedPhotos}/${photos.length} in ${(processingTimeMs / 1000).toFixed(1)}s`);
 
     return {
@@ -478,18 +488,11 @@ async function analyzePhotos(state, config) {
     };
 
   } catch (error) {
+    // N2 fail-loud: a batch-wide failure must not return an empty photoAnalyses that
+    // flows onward and yields mis-attributed captions. Throw so retryPolicy + the
+    // pre-node snapshot handle it (covers a hard reject like an auth error).
     console.error('[analyzePhotos] Error:', error.message);
-
-    return {
-      photoAnalyses: createEmptyPhotoAnalysisResult(state.sessionId),
-      errors: [{
-        phase: PHASES.ANALYZE_PHOTOS,
-        type: 'photo-analysis-failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
-      }],
-      currentPhase: PHASES.ERROR
-    };
+    throw new Error(`Photo analysis failed: ${error.message}`);
   }
 }
 
