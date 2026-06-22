@@ -19,7 +19,7 @@ jest.mock('../workflow/graph', () => ({
 }));
 
 const { createReportGraphWithCheckpointer } = require('../workflow/graph');
-const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require('../api-helpers');
+const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('../api-helpers');
 
 // ═══════════════════════════════════════════════════════
 // buildRollbackState
@@ -305,5 +305,52 @@ describe('sendErrorResponse', () => {
     expect(response.error).toBe('Internal server error');
     expect(response).not.toHaveProperty('sessionId');
     expect(response).not.toHaveProperty('currentPhase');
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// confineToBase
+// ═══════════════════════════════════════════════════════
+
+const path = require('path');
+
+describe('confineToBase', () => {
+  const base = path.join(__dirname, '..', '..', 'data');
+
+  test('returns the resolved path for a child file', () => {
+    const resolved = confineToBase(base, path.join(base, '1221', 'fetched', 'tokens.json'));
+    expect(resolved).toBe(path.resolve(base, '1221', 'fetched', 'tokens.json'));
+  });
+
+  test('returns the resolved path for a relative child', () => {
+    const resolved = confineToBase(base, path.join('1221', 'photos', 'a.jpg'));
+    expect(resolved).toBe(path.resolve(base, '1221', 'photos', 'a.jpg'));
+  });
+
+  test('allows the base dir itself', () => {
+    expect(confineToBase(base, base)).toBe(path.resolve(base));
+  });
+
+  test('throws on ../ escape', () => {
+    expect(() => confineToBase(base, path.join(base, '..', 'CLAUDE.md')))
+      .toThrow(/outside the permitted directory/i);
+  });
+
+  test('throws on absolute escape (C:/Windows/win.ini style)', () => {
+    const outside = process.platform === 'win32' ? 'C:\\Windows\\win.ini' : '/etc/passwd';
+    expect(() => confineToBase(base, outside))
+      .toThrow(/outside the permitted directory/i);
+  });
+
+  test('throws on a sibling-prefix bypass (data-evil)', () => {
+    // path.resolve(base) === .../data ; a sibling '.../data-evil' must NOT pass a naive startsWith
+    const sibling = path.resolve(base) + '-evil';
+    expect(() => confineToBase(base, sibling))
+      .toThrow(/outside the permitted directory/i);
+  });
+
+  test('throws on empty/missing requestedPath', () => {
+    expect(() => confineToBase(base, '')).toThrow(/missing path/i);
+    expect(() => confineToBase(base, null)).toThrow(/missing path/i);
   });
 });

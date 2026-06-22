@@ -9,6 +9,7 @@
  * Phase 2: API Surface Separation
  */
 
+const path = require('path');
 const { createReportGraphWithCheckpointer } = require('./workflow/graph');
 const { ROLLBACK_CLEARS, ROLLBACK_COUNTER_RESETS, PHASES } = require('./workflow/state');
 
@@ -80,4 +81,34 @@ function sendErrorResponse(res, sessionId, error, context) {
   res.status(500).json(response);
 }
 
-module.exports = { buildRollbackState, createGraphAndConfig, sendErrorResponse };
+/**
+ * Resolve `requestedPath` and verify it stays within `baseDir`.
+ * Throws if the path escapes the permitted directory (../, absolute
+ * elsewhere, or a sibling-prefix bypass like `data-evil`).
+ *
+ * NOTE (SEC-A-2): does NOT resolve symlinks (no fs.realpathSync), so a symlink
+ * placed inside baseDir that points outside would pass. Safe here because this
+ * is a single-tenant console where data/ holds only server-created session dirs
+ * and is never attacker-writable. If data/ could ever accept untrusted writes,
+ * add an fs.realpathSync.native re-check on `resolved` before returning (guard
+ * ENOENT for not-yet-created write targets).
+ *
+ * @param {string} baseDir - Absolute directory the result must live under
+ * @param {string} requestedPath - Caller-supplied (untrusted) path
+ * @returns {string} The resolved absolute path, guaranteed within baseDir
+ */
+function confineToBase(baseDir, requestedPath) {
+  if (!requestedPath) {
+    throw new Error('Missing path');
+  }
+  const root = path.resolve(baseDir);
+  const resolved = path.resolve(root, requestedPath);
+  // Append the platform separator so `/data` does not match `/data-evil`.
+  const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
+  if (resolved !== root && !resolved.startsWith(rootWithSep)) {
+    throw new Error(`Path is outside the permitted directory: ${requestedPath}`);
+  }
+  return resolved;
+}
+
+module.exports = { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase };
