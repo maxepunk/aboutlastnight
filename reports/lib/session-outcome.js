@@ -6,8 +6,10 @@
  * attached (early-400, reconnect gap, tab closed) that outcome is lost. We also
  * record it here so GET /state can surface it after the fact.
  *
- * In-memory + last-write-wins. One process holds all session state already
- * (same lifetime as the checkpointer cache); this rides that lifetime.
+ * Process-local, in-memory, last-write-wins. NOT restart-durable — unlike the
+ * SqliteSaver checkpointer, this store is lost on process restart. The durable
+ * interrupt/checkpoint state is the authoritative recovery surface; this is only
+ * a best-effort surface for a dropped SSE within a single process lifetime.
  *
  * @module session-outcome
  */

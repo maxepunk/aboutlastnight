@@ -17,7 +17,6 @@ const { createReportGraphWithCheckpointer, RECURSION_LIMIT } = require('./lib/wo
 const {
   PHASES,
   ROLLBACK_CLEARS,
-  ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS,
   REVISION_CAPS
 } = require('./lib/workflow/state');
