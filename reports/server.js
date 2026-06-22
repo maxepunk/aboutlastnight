@@ -29,7 +29,7 @@ const {
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
-const { buildRollbackState, createGraphAndConfig, sendErrorResponse } = require('./lib/api-helpers');
+const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('./lib/api-helpers');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
 const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
 const { SchemaValidator } = require('./lib/schema-validator');
@@ -40,6 +40,9 @@ const outlineValidator = new SchemaValidator();
 const CHECKPOINT_DB_PATH = path.join(__dirname, 'data', 'checkpoints.sqlite');
 fs.mkdirSync(path.dirname(CHECKPOINT_DB_PATH), { recursive: true });
 const sharedCheckpointer = SqliteSaver.fromConnString(CHECKPOINT_DB_PATH);
+
+// Base directory all browse/file requests are confined to (SEC-1/SEC-2)
+const DATA_DIR = path.join(__dirname, 'data');
 
 // Shared promptBuilder - created at startup, injected into workflow config (Commit 8.18)
 // Persists cache across all graph invocations for efficient prompt loading
@@ -1121,9 +1124,13 @@ app.get('/api/config', requireAuth, (req, res) => {
 
 // Browse local filesystem for directory/file selection (local dev tool)
 app.get('/api/browse', requireAuth, async (req, res) => {
-    const projectRoot = path.resolve(__dirname);
-    const rawDir = req.query.dir || projectRoot;
-    const targetDir = path.resolve(sanitizePath(rawDir));
+    const rawDir = req.query.dir || DATA_DIR;
+    let targetDir;
+    try {
+        targetDir = confineToBase(DATA_DIR, sanitizePath(rawDir) || DATA_DIR);
+    } catch (err) {
+        return res.status(400).json({ error: 'Invalid path' });
+    }
 
     try {
         const stat = await fs.promises.stat(targetDir);
@@ -1144,10 +1151,11 @@ app.get('/api/browse', requireAuth, async (req, res) => {
                 return a.name.localeCompare(b.name);
             });
 
-        const parsed = path.parse(targetDir);
+        const parentDir = path.dirname(targetDir);
+        const atRoot = path.resolve(targetDir) === path.resolve(DATA_DIR);
         res.json({
             path: targetDir,
-            parent: parsed.dir || null,
+            parent: atRoot ? null : parentDir,
             entries
         });
     } catch (err) {
@@ -1160,9 +1168,15 @@ app.get('/api/browse', requireAuth, async (req, res) => {
 
 // Serve individual files by absolute path (for photo thumbnails in console)
 app.get('/api/file', requireAuth, (req, res) => {
-    const filePath = sanitizePath(req.query.path || '');
-    if (!filePath) return res.status(400).json({ error: 'Missing path parameter' });
-    res.sendFile(path.resolve(filePath), (err) => {
+    const raw = sanitizePath(req.query.path || '');
+    if (!raw) return res.status(400).json({ error: 'Missing path parameter' });
+    let filePath;
+    try {
+        filePath = confineToBase(DATA_DIR, raw);
+    } catch (err) {
+        return res.status(400).json({ error: 'Invalid path' });
+    }
+    res.sendFile(filePath, (err) => {
         if (err && !res.headersSent) {
             res.status(err.status || 404).json({ error: 'File not found' });
         }
