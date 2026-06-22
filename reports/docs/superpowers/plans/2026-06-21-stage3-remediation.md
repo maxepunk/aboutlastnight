@@ -4040,7 +4040,7 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
 
 - [ ] **Step 2: Write the failing test FIRST.** Create `lib/observability/__tests__/progress-bridge-llm-delta.test.js`:
   ```js
-  const { createProgressFromTrace } = require('../progress-bridge');
+  const { createProgressFromTrace, _resetDeltaBuffers } = require('../progress-bridge');
   const { progressEmitter } = require('../progress-emitter');
   const { SSE_EVENT_TYPES } = require('../constants');
 
@@ -4062,6 +4062,13 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
     beforeEach(() => {
       jest.useFakeTimers();
       emitted = [];
+      // The coalescer's deltaBuffers Map is module-scoped and (post P5.1 correction)
+      // RESET-IN-PLACE on non-terminal flushes — deleted only on a terminal
+      // llm_complete/llm_error. These delta-only tests never send a terminal event, so
+      // each leaves a live buffer keyed by (SESSION, context); without this reset the
+      // leftover flushedAtTokens baseline bleeds into the next same-key test. Mirrors the
+      // _resetOutcomeStore / _resetLocks test-isolation convention elsewhere in the repo.
+      _resetDeltaBuffers();
       unsubscribe = progressEmitter.subscribe(SESSION, (d) => emitted.push(d));
     });
     afterEach(() => {
@@ -4095,6 +4102,23 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
       expect(deltas().length).toBe(1);            // 50-token threshold tripped a synchronous flush
       expect(deltas()[0].tokenCount).toBe(50);
       expect(deltas()[0].deltaText.length).toBe(50);
+    });
+
+    test('keeps coalescing PAST 50 tokens — threshold is since-last-flush, not cumulative', () => {
+      // Regression for the P5.1 review BLOCKER: upstream tokenCount is CUMULATIVE across the
+      // whole call. A cumulative threshold would flush on EVERY delta past 50 (~70 frames for
+      // 120 tokens). The since-last-flush baseline must flush only at 50 and 100, then hold the
+      // trailing 20 until the timer. This test FAILS on the buggy cumulative implementation.
+      const logger = createProgressFromTrace('genArticle', SESSION);
+      for (let i = 1; i <= 120; i++) {
+        logger({ type: 'llm_delta', phase: 'writing', deltaText: 'x', tokenCount: i, ttftMs: 90, elapsed: i / 100 });
+      }
+      expect(deltas().length).toBe(2);            // synchronous flushes at cumulative 50 and 100 ONLY
+      expect(deltas()[0].tokenCount).toBe(50);
+      expect(deltas()[1].tokenCount).toBe(100);
+      jest.advanceTimersByTime(250);
+      expect(deltas().length).toBe(3);            // trailing 101..120 drained by the timer, not per-token
+      expect(deltas()[2].tokenCount).toBe(120);
     });
 
     test('a phase change flushes the prior phase buffer immediately', () => {
@@ -4131,25 +4155,43 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
   // ── llm_delta coalescing (P5) ─────────────────────────────────────────────
   // The SDK fires a stream_event per token; forwarding each as its own SSE frame
   // is a firehose. We buffer per (sessionId, context) and flush on whichever
-  // comes first: a 250ms timer, 50 accumulated tokens, a phase change, or the
-  // terminating llm_complete/llm_error. Flush emits ONE coalesced llm_delta whose
-  // deltaText is everything accumulated since the previous flush (replace-not-append
-  // on the client) and whose tokenCount/ttftMs are the latest cumulative values.
+  // comes first: a 250ms timer, 50 tokens SINCE THE LAST FLUSH, a phase change, or
+  // the terminating llm_complete/llm_error. Flush emits ONE coalesced llm_delta whose
+  // deltaText is everything accumulated since the previous flush (the client APPENDS
+  // each frame's deltaText) and whose tokenCount/ttftMs are the latest cumulative values.
+  //
+  // ⚠️ CORRECTED 2026-06-22 (P5.1 opus code-review BLOCKER): the upstream tokenCount
+  // (client.js: Math.ceil(deltaCharCount/4)) is CUMULATIVE across the whole call, not
+  // per-delta. The original draft thresholded on `buf.tokenCount >= 50` and DELETED the
+  // buffer on every flush — so once cumulative tokens passed 50, every subsequent delta
+  // re-tripped the threshold and flushed, collapsing the coalescer into a per-token
+  // firehose (~1951 frames for a 2000-token call instead of ~40). Fix: threshold on
+  // tokens SINCE THE LAST FLUSH via a `flushedAtTokens` baseline, and RESET the buffer
+  // in place on a non-terminal flush (delete only on the terminal { final: true } flush)
+  // so the baseline survives. The emitted `tokenCount` stays cumulative (the client and
+  // the tests expect cumulative).
   const DELTA_FLUSH_MS = 250;
   const DELTA_FLUSH_TOKENS = 50;
-  const deltaBuffers = new Map(); // key: `${sessionId}::${context}` -> { phase, text, tokenCount, ttftMs, elapsed, timer }
+  const deltaBuffers = new Map(); // key: `${sessionId}::${context}` -> { phase, text, tokenCount, flushedAtTokens, ttftMs, elapsed, timer }
 
   function deltaKey(sessionId, context) {
     return `${sessionId}::${context}`;
   }
 
-  function flushDeltaBuffer(sessionId, context) {
+  // A non-terminal flush (timer / 50-token-since-last-flush / phase change) RESETS the
+  // buffer in place and advances flushedAtTokens, so the next 50-token window is measured
+  // from here. A terminal flush (llm_complete/llm_error) passes { final: true } to delete
+  // the buffer outright. Pass options ONLY from the terminal branches.
+  function flushDeltaBuffer(sessionId, context, { final = false } = {}) {
     const key = deltaKey(sessionId, context);
     const buf = deltaBuffers.get(key);
     if (!buf) return;
     if (buf.timer) { clearTimeout(buf.timer); buf.timer = null; }
-    if (buf.text.length === 0 && buf.tokenCount === 0) {
-      deltaBuffers.delete(key);
+    if (buf.text.length === 0) {
+      // Nothing new since the last flush (empty 'preparing' message_start, or a terminal
+      // flush right after a threshold flush). Drop on a terminal flush; otherwise leave the
+      // already-reset buffer in place for continued accumulation under the same baseline.
+      if (final) deltaBuffers.delete(key);
       return;
     }
     progressEmitter.emitProgress(sessionId, {
@@ -4162,27 +4204,37 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
       ttftMs: buf.ttftMs ?? null,
       elapsed: buf.elapsed ?? null
     });
-    deltaBuffers.delete(key);
+    if (final) {
+      deltaBuffers.delete(key);
+    } else {
+      buf.text = '';
+      buf.flushedAtTokens = buf.tokenCount; // baseline for the next since-last-flush window
+    }
   }
 
   function pushDelta(sessionId, context, msg) {
     if (!sessionId) return; // console-only logger: no SSE coalescing
     const key = deltaKey(sessionId, context);
     let buf = deltaBuffers.get(key);
-    // A phase change flushes the prior buffer so phases never interleave in one frame.
+    // A phase change flushes the prior phase so phases never interleave in one frame.
+    // The non-terminal flush RESETS the buffer (does not delete it), so re-fetch and
+    // re-key it to the new phase rather than recreating (which would reset the baseline).
     if (buf && buf.phase !== msg.phase) {
       flushDeltaBuffer(sessionId, context);
-      buf = undefined;
+      buf = deltaBuffers.get(key);
+      if (buf) buf.phase = msg.phase;
     }
     if (!buf) {
-      buf = { phase: msg.phase, text: '', tokenCount: 0, ttftMs: msg.ttftMs ?? null, elapsed: null, timer: null };
+      buf = { phase: msg.phase, text: '', tokenCount: 0, flushedAtTokens: 0, ttftMs: msg.ttftMs ?? null, elapsed: null, timer: null };
       deltaBuffers.set(key, buf);
     }
     buf.text += msg.deltaText || '';
     buf.tokenCount = msg.tokenCount ?? buf.tokenCount;
     if (buf.ttftMs == null && msg.ttftMs != null) buf.ttftMs = msg.ttftMs;
     buf.elapsed = msg.elapsed ?? buf.elapsed;
-    if (buf.tokenCount >= DELTA_FLUSH_TOKENS) {
+    // Threshold on tokens SINCE THE LAST FLUSH (cumulative upstream count minus the
+    // baseline) — NOT the raw cumulative, which would flush on every delta past 50.
+    if (buf.tokenCount - buf.flushedAtTokens >= DELTA_FLUSH_TOKENS) {
       flushDeltaBuffer(sessionId, context);
       return;
     }
@@ -4190,6 +4242,27 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
       buf.timer = setTimeout(() => flushDeltaBuffer(sessionId, context), DELTA_FLUSH_MS);
     }
   }
+
+  // Test-only: clear all coalescing buffers + pending flush timers. Buffers are
+  // reset-in-place on non-terminal flushes (deleted only on terminal llm_complete/
+  // llm_error), so a delta-only unit test that never sends a terminal event leaves
+  // module-scoped residue that would bleed across tests. Mirrors the repo's
+  // _resetOutcomeStore (session-outcome.js) / _resetLocks (session-locks.js) convention.
+  function _resetDeltaBuffers() {
+    for (const buf of deltaBuffers.values()) {
+      if (buf.timer) clearTimeout(buf.timer);
+    }
+    deltaBuffers.clear();
+  }
+  ```
+  And APPEND `_resetDeltaBuffers` to the existing `module.exports` at the bottom of `progress-bridge.js` (it is currently `{ createProgressFromTrace, formatProgressEvent, PROGRESS_ICONS }` — do NOT replace, append):
+  ```js
+  module.exports = {
+    createProgressFromTrace,
+    formatProgressEvent,
+    PROGRESS_ICONS,
+    _resetDeltaBuffers
+  };
   ```
   Then add the `llm_delta` branch inside the returned callback in `createProgressFromTrace`. Insert it immediately BEFORE the `if (msg.type === 'llm_complete')` block (currently line 181) so deltas are handled before the completion path:
   ```js
@@ -4202,13 +4275,13 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
   Then make `llm_complete` and `llm_error` flush any pending buffer first. In the `llm_complete` branch (line 181) add as its FIRST statement:
   ```js
     if (msg.type === 'llm_complete') {
-      if (sessionId) flushDeltaBuffer(sessionId, context);   // drain trailing partials before completion
+      if (sessionId) flushDeltaBuffer(sessionId, context, { final: true });   // drain trailing partials, then delete the buffer
       const responseStr = msg.result === undefined || msg.result === null
   ```
   And in the `llm_error` branch (line 222) add as its FIRST statement:
   ```js
     if (msg.type === 'llm_error') {
-      if (sessionId) flushDeltaBuffer(sessionId, context);   // drain trailing partials before the error
+      if (sessionId) flushDeltaBuffer(sessionId, context, { final: true });   // drain trailing partials, then delete the buffer
       // Same diagnostic envelope as llm_complete, plus the error context.
   ```
 
@@ -4216,7 +4289,7 @@ Dependencies: **P2** must land first — it adds `options.includePartialMessages
   ```bash
   npx jest lib/observability/__tests__/progress-bridge-llm-delta.test.js
   ```
-  Expected: 4 passing. Then run the existing bridge test to confirm no regression:
+  Expected: 5 passing (incl. the past-50 since-last-flush regression). Then run the existing bridge test to confirm no regression:
   ```bash
   npx jest lib/observability/__tests__/progress-bridge-undefined-result.test.js
   ```
