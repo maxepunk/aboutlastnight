@@ -1311,6 +1311,21 @@ app.get('/', (req, res) => {
     res.redirect('/console');
 });
 
+/**
+ * Notion reachability + auth startup probe.
+ * One lightweight authenticated GET; returns {ok, error} instead of throwing so the
+ * startup IIFE can render a single loud failure card (mirrors isClaudeAvailable).
+ * @param {{request: Function}} client - a NotionClient (injected for testing)
+ */
+async function probeNotionReachable(client) {
+    try {
+        await client.request('users/me');
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, error: error.message };
+    }
+}
+
 // Start server with Claude Agent SDK health check
 // Only start in normal runtime (not during tests)
 if (require.main === module) {
@@ -1335,6 +1350,29 @@ if (require.main === module) {
     }
 
     console.log('Claude Agent SDK available ✓');
+
+    // Notion-reachability probe — fail loud at startup, not per-session.
+    console.log('Checking Notion reachability...');
+    const { NotionClient } = require('./lib/notion-client');
+    if (!process.env.NOTION_TOKEN) {
+        console.error('ERROR: NOTION_TOKEN is not set. Notion fetches will fail. Aborting startup.');
+        process.exit(1);
+    }
+    const notionProbe = await probeNotionReachable(new NotionClient(process.env.NOTION_TOKEN));
+    if (!notionProbe.ok) {
+        console.error(`
+╔═══════════════════════════════════════════════════════════╗
+║  ERROR: Notion not reachable                              ║
+║                                                           ║
+║  ${String(notionProbe.error).slice(0, 53).padEnd(53)}║
+║                                                           ║
+║  Check NOTION_TOKEN validity and network access.          ║
+║  Server startup aborted.                                  ║
+╚═══════════════════════════════════════════════════════════╝
+        `);
+        process.exit(1);
+    }
+    console.log('Notion reachable ✓');
 
     // Validate theme files at startup (Commit 8.18)
     console.log('Validating theme files...');
@@ -1402,4 +1440,4 @@ process.on('SIGINT', async () => {
 });
 
 // Export helpers for testing
-module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks };
+module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable };
