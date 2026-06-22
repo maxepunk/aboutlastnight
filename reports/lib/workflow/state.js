@@ -870,6 +870,55 @@ const REVISION_CAPS = {
  *
  * The fields listed are set to null, triggering node skip-logic to regenerate.
  */
+/**
+ * Fields intentionally NOT subject to the downstream-clear denylist (ROOT-1).
+ *
+ * Every Annotation channel (Object.keys(ReportStateAnnotation.spec)) must either
+ * appear in at least one ROLLBACK_CLEARS list OR be listed here with a reason. The
+ * completeness test (rollback-clears-completeness.test.js) enforces this so the
+ * hand-maintained denylist cannot silently drift behind new node-written state.
+ *
+ * Categories:
+ *  - Session identity / config: stable for the whole run; rollback never re-derives.
+ *  - Fetched / parsed, re-derivable: nodes re-derive on replay even without an
+ *    explicit clear (canonicalCharacters from fetchMemoryTokens; shellAccounts from
+ *    parseRawInput's re-parse).
+ *  - Incremental raw input: rawSessionInput is owned by the await-* checkpoints' own
+ *    skip semantics, not the clear lists. (The full-context raw inputs accusation/
+ *    sessionReport/directorNotesRaw ARE first-class channels cleared by
+ *    await-full-context — P6.3 — so they are NOT exempt.)
+ *  - Transient per-revision scratch: '_'-prefixed caches that nodes null out
+ *    themselves at end of use (incl. _previousFullContext, the await-full-context
+ *    pre-fill stash); no rollback owns them.
+ *  - Default-only / never written by a node: dead-but-defaulted channels.
+ *  - Control + counters: currentPhase + *RevisionCount handled by
+ *    buildRollbackState directly / ROLLBACK_COUNTER_RESETS, not the field list.
+ */
+const ROLLBACK_CLEARS_EXEMPT = new Set([
+  // Session identity / config (stable across the run)
+  'sessionId', 'theme',
+  // Incremental raw input — owned by await-* checkpoint skip logic
+  'rawSessionInput',
+  // Fetched / parsed, re-derived on replay (fetchMemoryTokens + parseRawInput re-runs)
+  'canonicalCharacters', 'shellAccounts',
+  // Photo branch inputs cleared transitively / re-discovered on replay
+  'genericPhotoAnalyses', 'whiteboardPhotoPath', 'preprocessStats',
+  // Default-only channels never written by any node return
+  'preCurationSummary', 'supervisorNarrativeCompass',
+  // Raw character-ID text — paired with characterIdMappings (which IS cleared)
+  'characterIdsRaw',
+  // Transient per-revision scratch — nodes null these themselves after use
+  '_rescuedItems', '_excludedItemsCache', '_rescueWarnings',
+  '_previousArcs', '_previousOutline', '_previousContentBundle', '_arcValidation', '_previousFullContext',
+  // Control flow + counters — handled by buildRollbackState / ROLLBACK_COUNTER_RESETS
+  'currentPhase', 'voiceRevisionCount',
+  'arcRevisionCount', 'humanArcRevisionCount', 'outlineRevisionCount', 'articleRevisionCount',
+  // Accumulator — error log intentionally preserved across rollback (no clear list
+  // includes it). Not a stale-input risk; unlike evaluationHistory (which IS cleared
+  // as [] by the lists that include it), errors is left to accumulate.
+  'errors'
+]);
+
 const ROLLBACK_CLEARS = {
   // Phase 0.2: Input review - clears everything (essentially fresh start)
   'input-review': [
@@ -887,7 +936,7 @@ const ROLLBACK_CLEARS = {
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // Generation
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     // Evaluation history
     'evaluationHistory'
   ],
@@ -895,11 +944,15 @@ const ROLLBACK_CLEARS = {
   // Phase 1.35: Paper evidence selection (8.9.4)
   'paper-evidence-selection': [
     'selectedPaperEvidence',
+    // Per-point re-pause: await-roster + await-full-context are DOWNSTREAM of this point;
+    // clear their captured inputs so they re-pause when rolling back here (else they skip on
+    // stale roster/full-context). Mirrors the already-cleared downstream characterIdMappings.
+    'roster', 'rosterPronouns', 'accusation', 'sessionReport', 'directorNotesRaw',
     'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -908,23 +961,27 @@ const ROLLBACK_CLEARS = {
   // state.roster?.length > 0) re-pauses instead of silently reusing stale input.
   'await-roster': [
     'roster', 'rosterPronouns',
+    // Per-point re-pause: await-full-context is downstream — clear full-context so it re-pauses.
+    'accusation', 'sessionReport', 'directorNotesRaw',
     'whiteboardAnalysis',
     'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
   // Phase 1.65+: Character ID mappings (8.9.5)
   'character-ids': [
     'characterIdMappings',
+    // Per-point re-pause: await-full-context is downstream — clear full-context so it re-pauses.
+    'accusation', 'sessionReport', 'directorNotesRaw',
     // Note: photoAnalyses preserved - only mappings need re-entry
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -945,7 +1002,7 @@ const ROLLBACK_CLEARS = {
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -956,7 +1013,7 @@ const ROLLBACK_CLEARS = {
     'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -969,7 +1026,7 @@ const ROLLBACK_CLEARS = {
     'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults',
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -983,20 +1040,20 @@ const ROLLBACK_CLEARS = {
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback',
-    'assembledHtml', 'validationResults',
+    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
   // Phase 3.2: Outline
   'outline': [
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults'
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
     // Note: evaluationHistory preserved - may contain useful arc evals
   ],
 
   // Phase 4.2: Article
   'article': [
-    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults'
+    'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ]
 };
 
@@ -1029,6 +1086,7 @@ module.exports = {
   REVISION_CAPS,
   // Rollback configuration (Commit 8.9.3)
   ROLLBACK_CLEARS,
+  ROLLBACK_CLEARS_EXEMPT,
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS,
   // Export reducers for testing
