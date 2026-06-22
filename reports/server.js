@@ -57,7 +57,7 @@ let httpServer = null; // hoisted so SIGINT (module scope) can drain + close it
  * so it is unit-testable (the SIGINT handler itself calls process.exit).
  * @param {{inFlight:Set<Promise>, checkpointer:{db:{close:Function}}, server?:{close:Function}}} deps
  */
-async function drainAndClose({ inFlight, checkpointer, server }) {
+async function drainAndClose({ inFlight, checkpointer, server, closeTimeoutMs = 5000 }) {
   if (inFlight && inFlight.size > 0) {
     // allSettled: a rejected resume must not abort the drain of the others
     await Promise.allSettled(Array.from(inFlight));
@@ -66,7 +66,14 @@ async function drainAndClose({ inFlight, checkpointer, server }) {
     checkpointer.db.close();
   }
   if (server && typeof server.close === 'function') {
-    await new Promise(resolve => server.close(resolve));
+    // server.close() stops accepting NEW connections but does not terminate existing
+    // keep-alive / SSE connections (the /progress stream is long-lived), so its callback
+    // may never fire. Backstop with a timeout so SIGINT still exits cleanly — by this point
+    // the checkpoint write + db handle close are already done, so nothing is lost.
+    await Promise.race([
+      new Promise(resolve => server.close(resolve)),
+      new Promise(resolve => setTimeout(resolve, closeTimeoutMs))
+    ]);
   }
 }
 

@@ -41,6 +41,15 @@ describe('drainAndClose (DUR-2)', () => {
     expect(order).toContain('server.close');
   });
 
+  it('resolves even if server.close never calls back (open SSE/keep-alive backstop)', async () => {
+    const order = [];
+    const checkpointer = { db: { close: () => order.push('db.close') } };
+    // A real http.Server with an open SSE connection: close() fires but never invokes cb.
+    const server = { close: () => { order.push('server.close-called'); /* no cb */ } };
+    await drainAndClose({ inFlight: new Set(), checkpointer, server, closeTimeoutMs: 10 });
+    expect(order).toEqual(['db.close', 'server.close-called']); // returned despite no callback
+  });
+
   it('exposes a module-scope in-flight Set for the /approve handler to register into', () => {
     expect(_inFlight instanceof Set).toBe(true);
   });
