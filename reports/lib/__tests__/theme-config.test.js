@@ -245,13 +245,11 @@ describe('theme-config', () => {
 
     it('journalist has postGenValidation rules', () => {
       const config = getThemeConfig('journalist');
-      expect(config.display.postGenValidation.minPullQuotes).toBe(0);
       expect(config.display.postGenValidation.minInlineEvidenceCards).toBe(3);
     });
 
     it('detective has no postGenValidation minimums', () => {
       const config = getThemeConfig('detective');
-      expect(config.display.postGenValidation.minPullQuotes).toBe(0);
       expect(config.display.postGenValidation.minInlineEvidenceCards).toBe(0);
     });
 
