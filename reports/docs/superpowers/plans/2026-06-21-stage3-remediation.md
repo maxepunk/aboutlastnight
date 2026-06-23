@@ -7207,6 +7207,162 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
+### Task 7.8: Block unauthenticated static exposure of the repo root (SEC-1 class — capstone finding)
+
+> **Added 2026-06-22 (P7 adversarial capstone).** The capstone found that `app.use(express.static(__dirname))` (server.js, the global static mount, registered BEFORE any auth) serves the ENTIRE repo root unauthenticated over the public tunnel — including `data/checkpoints.sqlite` (the durable SqliteSaver DB: all session evidence, generated articles, director notes), `server.js`, `package.json`, and every internal source/doc file. `.env` escapes only via express.static's default `dotfiles:'ignore'`. This is the same filesystem-over-tunnel class as SEC-1/SEC-2 but was outside the original 6-task plan; the path-confinement of Tasks 7.1/7.2 only covered `/api/file`+`/api/browse`. The loopback bind (SEC-A-3) does NOT mitigate it — the file is served over the tunnel like any request. **Denylist approach (user decision 2026-06-22):** preserve-by-default so adding a new public report/asset never needs a guard change; only sensitive paths are enumerated.
+
+**Files:**
+- Create: `lib/static-guard.js`
+- Test: `lib/__tests__/static-guard.test.js` (NEW)
+- Modify: `server.js` (one `require` + one `app.use(staticGuard)` immediately before `app.use(express.static(__dirname))`)
+
+- [ ] **Step 1: Write the failing unit test FIRST.** Create `lib/__tests__/static-guard.test.js`:
+  ```javascript
+  const { isDeniedStaticPath } = require('../static-guard');
+
+  describe('isDeniedStaticPath (P7.8 static exposure guard)', () => {
+    // BLOCKED — sensitive trees / files that must never be served unauthenticated
+    test.each([
+      '/data/checkpoints.sqlite',
+      '/data/1221/analysis/arc-analysis.json',
+      '/node_modules/express/package.json',
+      '/lib/notion-client.js',
+      '/scripts/e2e-walkthrough.js',
+      '/__tests__/unit/x.test.js',
+      '/templates/journalist/layouts/article.hbs',
+      '/emailer/send_followup_emails_smart.py',
+      '/docs/PIPELINE_DEEP_DIVE.md',
+      '/audit/x.md',
+      '/coverage/lcov.info',
+      '/config/x.json',
+      '/archive/old.html',
+      '/server.js',
+      '/jest.config.js',
+      '/package.json',
+      '/package-lock.json',
+      '/langgraph.json',
+      '/cloudflared-config-template.yml',
+      '/CLAUDE.md',
+      '/ENV_SETUP.md',
+      '/BEHAVIORAL_ANALYSIS_COMPREHENSIVE.json',
+      '/test-request.json',
+      '/start-everything.bat',
+      '/outputs/report-040426-refsheet.md',
+    ])('blocks %s', (p) => {
+      expect(isDeniedStaticPath(p)).toBe(true);
+    });
+
+    // ALLOWED — legitimately public files the live site serves
+    test.each([
+      '/report1116.html',
+      '/report20251221ALL15.html',
+      '/detlogv3.html',
+      '/frame-picker.html',
+      '/outputs/report-032026.html',
+      '/console/app.js',
+      '/console/components/checkpoints/Outline.js',
+      '/console/console.css',
+      '/sessionphotos/1221/whiteboard.jpg',
+      '/assets/images/041026/photo.jpg',
+      '/',
+      '/index.html',
+    ])('allows %s', (p) => {
+      expect(isDeniedStaticPath(p)).toBe(false);
+    });
+
+    test('handles non-string / empty input safely', () => {
+      expect(isDeniedStaticPath('')).toBe(false);
+      expect(isDeniedStaticPath(null)).toBe(false);
+      expect(isDeniedStaticPath(undefined)).toBe(false);
+    });
+  });
+  ```
+
+- [ ] **Step 2: Run it — expect failure (module missing).** `npx jest lib/__tests__/static-guard.test.js` → `Cannot find module '../static-guard'`.
+
+- [ ] **Step 3: Implement.** Create `lib/static-guard.js`:
+  ```javascript
+  /**
+   * Static-serve guard (P7.8 / SEC-1 class).
+   *
+   * The root `express.static(__dirname)` mount would otherwise serve the ENTIRE
+   * repository — including data/ (the durable session DB + all pipeline state),
+   * source, config, and internal docs — to any UNauthenticated client over the
+   * public Cloudflare tunnel. This denylist blocks the sensitive trees and file
+   * types while leaving the legitimately-public files (published report*.html,
+   * the console SPA under /console, session photos, marketing assets) servable.
+   *
+   * Denylist (not allowlist) by deliberate choice: preserve-by-default, so adding
+   * a new public report/asset never needs a guard change; only sensitive paths
+   * are enumerated. Returns 404 (not 403) so the guard does not confirm a file
+   * exists.
+   */
+
+  // Whole directory trees that are entirely internal (never public).
+  const DENIED_DIR_PREFIXES = /^\/(data|node_modules|lib|scripts|__tests__|templates|emailer|docs|audit|coverage|config|archive)(\/|$)/i;
+
+  // Sensitive file extensions, anywhere in the tree (defense-in-depth: catches a
+  // stray DB / secret / internal working-doc even if it sits outside the dirs above).
+  const DENIED_EXTENSIONS = /\.(sqlite|sqlite-shm|sqlite-wal|db|env|bat|md)$/i;
+
+  // Root-level source/config files (server.js, jest.config.js, package*.json,
+  // langgraph.json, *.yml, analysis/test JSON dumps). The single-segment anchor
+  // `[^/]+` matches ONLY files directly in the repo root — NOT /console/app.js or
+  // other nested public assets.
+  const DENIED_ROOT_SOURCE = /^\/[^/]+\.(js|json|ya?ml)$/i;
+
+  function isDeniedStaticPath(reqPath) {
+    if (typeof reqPath !== 'string' || reqPath.length === 0) return false;
+    return (
+      DENIED_DIR_PREFIXES.test(reqPath) ||
+      DENIED_EXTENSIONS.test(reqPath) ||
+      DENIED_ROOT_SOURCE.test(reqPath)
+    );
+  }
+
+  /** Express middleware: 404 sensitive static paths before the root static mount. */
+  function staticGuard(req, res, next) {
+    if (isDeniedStaticPath(req.path)) {
+      return res.status(404).end();
+    }
+    return next();
+  }
+
+  module.exports = { isDeniedStaticPath, staticGuard };
+  ```
+
+- [ ] **Step 4: Re-run — expect all green.** `npx jest lib/__tests__/static-guard.test.js`.
+
+- [ ] **Step 5: Wire into `server.js`.**
+  (a) Add the require near the other `./lib/...` requires:
+  ```javascript
+  const { staticGuard } = require('./lib/static-guard');
+  ```
+  (b) Insert the guard IMMEDIATELY BEFORE the root static mount. Find the EXACT line `app.use(express.static(__dirname));` and change it to:
+  ```javascript
+  // SEC (P7.8): block sensitive paths (data/, source, config, internal docs)
+  // before the root static mount, which is unauthenticated and would otherwise
+  // serve the entire repo (incl. data/checkpoints.sqlite) over the tunnel.
+  app.use(staticGuard);
+  app.use(express.static(__dirname));
+  ```
+  > The guard is global but its patterns never match API routes (`/api/*` has no sensitive prefix/extension and isn't a single root segment) or `/console/*` or `/sessionphotos/*` (those don't match either), so it only ever blocks would-be static reads of sensitive files. It must sit before the root mount; placement relative to the `/console` and `/sessionphotos` mounts is irrelevant since those paths are never denied.
+
+- [ ] **Step 6: Verify suite + load.**
+  ```bash
+  npx jest lib/__tests__/static-guard.test.js __tests__/unit/server-build-resume-payload.test.js
+  ```
+  Expected: green. Then `cd C:/Users/spide/Documents/claudecode/aboutlastnight/reports && SESSION_SECRET=x node -e "require('./server.js'); console.log('OK')"` → OK. (Live curl of `/data/checkpoints.sqlite` → 404 and `/report1116.html` → 200 is a DEFERRED operator step; do NOT start the server.)
+
+- [ ] **Step 7: Commit.**
+  ```bash
+  git add server.js lib/static-guard.js lib/__tests__/static-guard.test.js && git commit -m "fix(security): block unauthenticated static exposure of repo root (SEC-1 class, capstone)
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+  ```
+
+---
+
 ## Phase P8: Complete F1 (pronouns) — all three links + tests
 
 Goal: Director-set pronouns survive capture → resume → prompt → review so the article (and the HITL review surface) use the right pronouns instead of silently defaulting every character to they/them.
