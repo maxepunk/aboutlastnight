@@ -33,6 +33,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const { resolveCompletePayload } = require('./lib/sse-complete');
 
 // Configuration
 const API_BASE = process.env.API_BASE || 'http://localhost:3001';
@@ -163,7 +164,17 @@ function connectSSE(sessionId, { onEvent, onComplete, onConnected, onError } = {
 
               case 'complete':
                 console.log(color('\n  [SSE] Received completion event', 'green'));
-                if (onComplete) onComplete(data.result);
+                if (onComplete) onComplete(resolveCompletePayload(data));
+                break;
+
+              case 'failed':
+                // SSE-1 (P4.4): a workflow FAILURE arrives as a distinct 'failed' event.
+                // Resolve the completion promise with the flat error payload so the run
+                // ends promptly and visibly instead of timing out at 408. Two failure
+                // shapes: a THROWN error carries flat error/details; a node-RETURNED
+                // error carries the message only in errors[0].message — read both.
+                console.error(color(`\n  [SSE] Workflow FAILED: ${data.error || (data.errors && data.errors[0] && data.errors[0].message) || 'unknown'}${data.details ? ' — ' + data.details : ''}`, 'red'));
+                if (onComplete) onComplete(resolveCompletePayload(data));
                 break;
 
               case 'llm_start':
@@ -613,7 +624,12 @@ async function loadSessionInput(sessionId) {
       rosterPronouns: sessionConfig.rosterPronouns || {},
       accusation: sessionConfig.accusation,
       sessionReport: directorNotes.sessionReport || sessionConfig.sessionReport,
-      directorNotes: directorNotes.rawProse || JSON.stringify(directorNotes, null, 2)
+      // Send the full structured directorNotes object (whiteboard, quotes, transactions),
+      // NOT just rawProse — the enriched sessions carry structure the parser consumes.
+      // Fall back to a prose-only shape only when the file has no structured fields.
+      directorNotes: (directorNotes && Object.keys(directorNotes).length > 0)
+        ? directorNotes
+        : { rawProse: directorNotes?.rawProse || '' }
     };
   } else {
     // Files not required - checkpoints will gather data interactively
@@ -3429,11 +3445,11 @@ async function runWalkthrough() {
   while (iteration < maxIterations) {
     iteration++;
 
-    // Guard: the workflow can end without a checkpoint state (e.g. error routing to END).
-    // Avoid crashing on currentData.checkpoint; let post-loop output handling run.
+    // CR-3: with resolveCompletePayload wired, a 'complete' SSE always yields a flat
+    // payload (currentPhase/outputPath/...). An undefined currentData here means the
+    // resolver or the POST path regressed — fail loud instead of masking it.
     if (!currentData) {
-      console.error(color('\n[harness] currentData undefined (workflow ended without a checkpoint state); breaking loop.', 'yellow'));
-      break;
+      throw new Error('[harness] currentData is undefined after a server response — completion payload was not resolved (regression of CR-3)');
     }
 
     // Display current phase
