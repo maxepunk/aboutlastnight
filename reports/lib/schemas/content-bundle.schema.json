@@ -128,7 +128,7 @@
                     "text": { "type": "string", "minLength": 1 },
                     "attribution": {
                       "type": "string",
-                      "description": "Speaker name for a verbatim quote. OMIT for a crystallization quote (journalist insight, no '— Nova'). See lib/prompt-builder.js CRYSTALLIZATION & VERBATIM MOMENTS."
+                      "description": "Speaker name for a verbatim quote. OMIT for a crystallization quote (the narrator's own crystallized insight, with no speaker attribution). See lib/prompt-builder.js CRYSTALLIZATION & VERBATIM MOMENTS."
                     }
                   },
                   "additionalProperties": false
