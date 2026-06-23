@@ -429,6 +429,12 @@ describe('ReportStateAnnotation', () => {
       state1.sessionId = 'test';
       expect(state2.sessionId).toBeNull();
     });
+
+    it('getDefaultState field count matches the documented count (S12)', () => {
+      // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
+      // self-test) together if the field set changes.
+      expect(Object.keys(getDefaultState()).length).toBe(63);
+    });
   });
 
   describe('PHASES constant', () => {

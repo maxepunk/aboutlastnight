@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (55 total - includes revision context + human feedback):
+ * State Fields (63 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus
@@ -651,7 +651,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (55 fields after human feedback + revision budget additions)
+ * Get default state with all fields initialized (63 fields after human feedback + revision budget additions)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -1072,7 +1072,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 53
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 63
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null
