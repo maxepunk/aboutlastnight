@@ -357,6 +357,25 @@ function mergeDirectorOverrides(sessionConfig, directorNotes) {
   return { ...sessionConfig };
 }
 
+/**
+ * Resolve rosterPronouns with KEY-COUNT precedence (CR-4).
+ *
+ * An empty-but-present map ({}) is truthy and would shadow a populated source under
+ * `||`. Select the first map that actually has keys: incremental state wins over
+ * rawInput; {} only results when BOTH are genuinely empty.
+ *
+ * @param {Object} state - Workflow state (may carry rosterPronouns from await-roster).
+ * @param {Object} rawInput - state.rawSessionInput (may carry rosterPronouns from /start).
+ * @returns {Object} The chosen pronoun map (possibly {}).
+ */
+function resolveRosterPronouns(state, rawInput) {
+  const fromState = (state && state.rosterPronouns) || {};
+  if (Object.keys(fromState).length > 0) return fromState;
+  const fromRaw = (rawInput && rawInput.rosterPronouns) || {};
+  if (Object.keys(fromRaw).length > 0) return fromRaw;
+  return {};
+}
+
 async function parseRawInput(state, config) {
   // ROLL-4: gate the skip on the parsed OUTPUT (sessionConfig), not the raw input, so a
   // rollback to await-full-context (which clears sessionConfig) re-parses; a normal resume
@@ -429,7 +448,7 @@ Return structured JSON matching the schema.`;
     result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
     result.reportingMode = rawInput.reportingMode || 'on-site';
     result.guestReporter = rawInput.guestReporter || null;
-    // F1 (X-1 + CR-6): consume the raw rosterPronouns channel EXACTLY ONCE here.
+    // F1 (X-1 + CR-6 + CR-4): consume the raw rosterPronouns channel EXACTLY ONCE here.
     // The await-roster approval writes typed-keyed pronouns to state.rosterPronouns
     // (the channel); this is the single bridge that normalizes them to canonical
     // first-name keys and stamps them onto sessionConfig.rosterPronouns. From this
@@ -437,8 +456,10 @@ Return structured JSON matching the schema.`;
     // downstream reader (prompt-builder via getPromptBuilder, InputReview) reads
     // the sessionConfig copy, NOT the raw channel (whose key domain is typed, not
     // canonical). Do not re-read state.rosterPronouns downstream.
+    // CR-4: resolveRosterPronouns picks the populated map by KEY COUNT so an
+    // empty-but-present {} cannot shadow a populated rawInput under `||`.
     result.rosterPronouns = normalizeRosterPronounsToCanonical(
-      state.rosterPronouns || rawInput.rosterPronouns || {},
+      resolveRosterPronouns(state, rawInput),
       state.canonicalCharacters || {}
     );
     result.createdAt = new Date().toISOString();
@@ -799,6 +820,7 @@ module.exports = {
     ensureDir,
     sanitizePath,
     mergeDirectorOverrides,
+    resolveRosterPronouns,
     projectBuriedTokensToScoringTimeline
   }
 };

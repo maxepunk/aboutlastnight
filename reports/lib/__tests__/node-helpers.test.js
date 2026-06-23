@@ -129,11 +129,13 @@ describe('F1 pronoun key chain (X-1 + X-7): normalize then render', () => {
 
 describe('F1 single-source stamp precedence (CR-6)', () => {
   const { normalizeRosterPronounsToCanonical } = require('../workflow/nodes/node-helpers');
-  // Mirror the exact stamp expression from input-nodes.js so this test
-  // pins the precedence contract that parseRawInput depends on.
+  const { _testing } = require('../workflow/nodes/input-nodes');
+  const { resolveRosterPronouns } = _testing;
+  // Mirror the EXACT merged stamp expression from input-nodes.js (CR-4 precedence +
+  // CR-6 canonical normalize) so this test pins the real contract parseRawInput uses.
   function stamp(stateChannel, rawInput, canonicalCharacters) {
     return normalizeRosterPronounsToCanonical(
-      stateChannel || rawInput || {},
+      resolveRosterPronouns({ rosterPronouns: stateChannel }, { rosterPronouns: rawInput }),
       canonicalCharacters || {}
     );
   }
