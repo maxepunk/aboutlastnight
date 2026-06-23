@@ -198,7 +198,7 @@
     },
     "pullQuotes": {
       "type": "array",
-      "description": "Featured quotes - verbatim (from evidence, with attribution) or crystallization (journalist insight, no attribution)",
+      "description": "Featured quotes - verbatim (from evidence, with attribution) or crystallization (the narrator's insight, no attribution)",
       "items": {
         "type": "object",
         "required": ["type", "text"],
@@ -206,7 +206,7 @@
           "type": {
             "type": "string",
             "enum": ["verbatim", "crystallization"],
-            "description": "verbatim = exact quote from evidence (has attribution), crystallization = journalist insight echoing article prose (NO attribution)"
+            "description": "verbatim = exact quote from evidence (has attribution), crystallization = the narrator's insight echoing article prose (NO attribution)"
           },
           "text": { "type": "string", "description": "The quote text" },
           "attribution": {
