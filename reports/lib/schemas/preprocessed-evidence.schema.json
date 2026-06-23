@@ -71,7 +71,7 @@
           },
           "groupCluster": {
             "type": "string",
-            "description": "Suggested grouping with related evidence (e.g., 'Marcus-Victoria dealings')"
+            "description": "Suggested grouping with related evidence (e.g., 'Marcus-Vic dealings')"
           },
           "sfFields": {
             "type": "object",

@@ -361,7 +361,7 @@ Roster coverage ONLY applies to the actual player roster, not NPCs.
 NON-ROSTER PCs (Valid for MENTIONS - evidence-based only)
 ═══════════════════════════════════════════════════════════════════════════
 Non-roster PCs are valid game characters who were NOT present at this session's investigation.
-Examples: If Sofia, Howie, or others are NOT in the roster, they are non-roster PCs.
+Examples: If Nat, Ezra, or others are NOT in the roster, they are non-roster PCs.
 
 Non-roster PCs CAN appear in arc characterPlacements when:
 - They are mentioned in exposed evidence (someone's memory about them)
@@ -369,8 +369,8 @@ Non-roster PCs CAN appear in arc characterPlacements when:
 
 They should NOT be flagged as "missing from roster coverage" or as invalid.
 However, their roles must be EVIDENCE-BASED, not OBSERVED:
-- CORRECT: "Sofia: Mentioned in Alex's memory as co-investor"
-- WRONG: "Sofia: Was seen coordinating with Victoria" (${theme === 'detective' ? 'the investigation did not observe this' : "Nova didn't see this"})
+- CORRECT: "Nat: Mentioned in Alex's memory as co-investor"
+- WRONG: "Nat: Was seen coordinating with Vic" (${theme === 'detective' ? 'the investigation did not observe this' : "Nova didn't see this"})
 
 When a non-roster PC appears, add appropriate caveats to indicate evidence-based inference.
 
@@ -634,7 +634,7 @@ ${JSON.stringify(roster, null, 2)}
 CRITICAL ROSTER vs EVIDENCE DISTINCTION:
 - The ROSTER above lists the ONLY characters who need arc coverage (they were played this session)
 - Evidence IDs may reference characters NOT on the roster (from the broader game universe)
-- Do NOT infer roster members from evidence ID prefixes (e.g., "hos011" does NOT mean "Howie" is on roster)
+- Do NOT infer roster members from evidence ID prefixes (e.g., "ezr011" does NOT mean "Ezra" is on roster)
 - ONLY check coverage for the ${roster.length} names listed in SESSION ROSTER above
 
 PLAYER FOCUS (arcs should reflect what players investigated):

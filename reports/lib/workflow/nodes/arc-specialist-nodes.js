@@ -434,7 +434,7 @@ For each arc, provide:
    - contradiction: This arc recontextualizes another
 
 3. **callbackSeeds** - What details in this arc could pay off later?
-   Example: "Victoria's confident smile" planted early, pays off when we learn she knew all along.
+   Example: "Vic's confident smile" planted early, pays off when we learn she knew all along.
 
 4. **convergenceRole** - How does this arc contribute to the central event (murder/accusation)?
 

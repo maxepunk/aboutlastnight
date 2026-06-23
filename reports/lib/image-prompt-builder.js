@@ -50,8 +50,8 @@ CHARACTER ROSTER (use for name disambiguation):
 ${rosterList}
 
 Analyze the whiteboard and extract all visible information. When transcribing handwritten names,
-use the roster above to correct OCR errors (e.g., "Viktoria" should be corrected to "Victoria"
-if Victoria is in the roster).
+use the roster above to correct OCR errors (e.g., "Vik" should be corrected to "Vic"
+if Vic is in the roster).
 
 Return structured JSON with:
 - names: All character names found (roster-corrected)
@@ -259,7 +259,7 @@ Output valid JSON only. No explanation needed.`;
     const examplePhoto = {
       ...CHARACTER_IDS_PHOTO_TEMPLATE,
       filename: exampleFilename,
-      characterMappings: [{ descriptionIndex: 0, characterName: 'Victoria' }],
+      characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }],
       additionalCharacters: [{ description: 'person in background', characterName: 'Morgan', role: 'observing' }],
       corrections: { location: 'near the evidence table' }  // Omit null values per JSON best practice
     };

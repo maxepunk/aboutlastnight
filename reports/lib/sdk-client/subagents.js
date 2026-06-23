@@ -78,7 +78,7 @@ CRITICAL PRINCIPLES:
      - temporal: Events overlapping in time
      - contradiction: This arc recontextualizes another
    - callbackSeeds: Details that can be recontextualized later
-     Example: "Victoria's confident smile" planted early, pays off when we learn she knew all along
+     Example: "Vic's confident smile" planted early, pays off when we learn she knew all along
    - convergenceRole: How does this arc connect to the murder/accusation?
 
    Also provide interweavingPlan:
@@ -351,7 +351,7 @@ INTERWEAVING PRINCIPLES:
 
 2. CALLBACK SEEDS
    - Plant details early that pay off later
-   - Example: "Victoria's confident smile" planted early, pays off when we learn she knew all along
+   - Example: "Vic's confident smile" planted early, pays off when we learn she knew all along
    - These create "aha moments" for readers
 
 3. BRIDGE TYPES

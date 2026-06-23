@@ -434,7 +434,7 @@ ${availablePhotos.length > 0 ? availablePhotos.map((p, i) => `${i + 1}. ${p.file
    Visual: ${(p.visualContent || '').substring(0, 100)}...`).join('\n\n') : 'No session photos available'}
 
 IMPORTANT: When specifying photoPlacement, use the EXACT filename from above (e.g., "IMG_1234.jpg").
-Do NOT use paths like "character-photos/victoria.png" - these files do not exist.
+Do NOT use paths like "character-photos/vic.png" - these files do not exist.
 
 **Evidence Cards:**
 - Every card must CLOSE or OPEN a loop (not just illustrate)
@@ -873,7 +873,7 @@ EVIDENCE-CARD INLINE EXAMPLE:
   "id": "the-story",
   "type": "narrative",
   "content": [
-    {"type": "paragraph", "text": "I watched them circle each other, Victoria's composure finally cracking..."},
+    {"type": "paragraph", "text": "I watched them circle each other, Vic's composure finally cracking..."},
     {"type": "evidence-card", "tokenId": "jav042", "headline": "The Moment of Truth", "content": "JAV042 - 12:17AM - [Full verbatim text from arcEvidencePackages.evidenceItems[].fullContent - do NOT truncate or summarize]", "owner": "Jamie Woods", "significance": "critical"},
     {"type": "paragraph", "text": "After that, nothing was the same between them..."}
   ]

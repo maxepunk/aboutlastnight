@@ -19,7 +19,7 @@ Memory tokens submitted to the Detective become PUBLIC RECORD.
 
 > In Alex's memory, we see him presenting his algorithm to Marcus. "This is my life's work," Alex says in the recording.
 
-> A cease and desist letter came across my desk. Patchwork Law Firm, representing Alex Chen, demanding NeurAI stop using the stolen algorithm.
+> A cease and desist letter came across my desk. Patchwork Law Firm, representing Alex Reeves, demanding NeurAI stop using the stolen algorithm.
 
 > Jamie's memory shows Vic offering Alex the position Marcus held. "He's gone. The job is yours." That's Vic's voice. Jamie witnessed it.
 

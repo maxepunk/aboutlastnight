@@ -78,8 +78,8 @@ EXAMPLE - CORRECT (buried token):
   WHY CORRECT: Only observable transaction data, no owner/content
 
 EXAMPLE - CORRECT (exposed token):
-  Token: VIK001, disposition: exposed, owner: Victoria
-  Summary: "Victoria's memory: discusses 'permanent solutions' with Morgan"
+  Token: VIC001, disposition: exposed, owner: Vic
+  Summary: "Vic's memory: discusses 'permanent solutions' with Morgan"
   WHY CORRECT: Owner and content are public record for exposed tokens
 
 ═══════════════════════════════════════════════════════════════════

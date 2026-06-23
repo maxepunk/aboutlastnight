@@ -224,7 +224,7 @@ WHY WRONG: This is a summary ABOUT the texts, not a quote FROM them.
 **Example - CORRECT:**
 ```
 "Pull your funding and I'll pull your secrets into the light."
-— Skyler Chen
+— Skyler Iyer
 ```
 WHY CORRECT: This is the actual text from the evidence.
 
