@@ -9928,8 +9928,28 @@ addEdge chain. Updated comments to match; no behavioral change.
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```
 
-### Task 12.9: Final whole-suite green check for the phase
-> (Renumbered from 12.8 — CR-7 is inserted as Task 12.8; see Integration §"CR-7". Run this LAST, after CR-7.)
+### Task 12.9: Relocate the model-freshness manual script out of the Jest glob (skip cleanup)
+
+> **Added 2026-06-22 (user request — resolve the standing 1-skipped test before Stage 3 completes).** `lib/__tests__/model-freshness.test.js` is NOT a unit test — it's a manual operational script that checks `MODEL_IDS` (`lib/llm/client.js`) against the LIVE Agent SDK, which needs a full Node subprocess Jest can't host. Under Jest it self-`test.skip`s; that is the suite's ONLY skipped test. Move it to `scripts/` so it leaves the Jest glob entirely (skip disappears) while the manual run survives. The model pins it checks were current as of 2026-06-22 (opus 4.8 / sonnet 4.6 / haiku 4.5).
+
+**Files:**
+- Move: `lib/__tests__/model-freshness.test.js` → `scripts/check-model-freshness.js`
+
+- [ ] **Step 1: Move the file out of the test glob.** From `reports/`: `git mv lib/__tests__/model-freshness.test.js scripts/check-model-freshness.js`.
+- [ ] **Step 2: Delete the now-dead Jest branch.** In the moved file, remove the `else { describe('model freshness', () => { test.skip(...) }); }` block (the file no longer runs under Jest, so the skip placeholder is dead). Keep the `if (require.main === module) { ... }` check body.
+- [ ] **Step 3: Fix the run-command references.** Update the JSDoc (`Run manually: node lib/__tests__/model-freshness.test.js` → `node scripts/check-model-freshness.js`) and grep for stragglers: `grep -rn "model-freshness" . --include=*.js --include=*.md | grep -v node_modules` — update any other path reference.
+- [ ] **Step 4: Confirm the skip is gone.** `npx jest 2>&1 | tail -5` → no "skipped" in the Tests line (was `1 skipped`). `node -e "require('./scripts/check-model-freshness.js')"` must NOT auto-run the SDK check (the `require.main` guard holds when required).
+- [ ] **Step 5: Commit.**
+  ```bash
+  git add -A && git commit -m "chore(cleanup): relocate model-freshness manual script out of the Jest glob (removes the standing skipped test)
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+  ```
+
+---
+
+### Task 12.10: Final whole-suite green check for the phase
+> (Renumbered from 12.8 → 12.9 → 12.10 — CR-7 is Task 12.8, model-freshness relocation is Task 12.9; see Integration §"CR-7". Run this LAST, after both.)
 
 **Files:**
 - Test: entire Jest suite (no source changes)

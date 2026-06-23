@@ -14,7 +14,10 @@ credentials-file: C:\Users\spide\.cloudflared\f1105ac0-fc4f-4262-827c-e17b4a829f
 
 ingress:
   - hostname: console.aboutlastnightgame.com
-    service: http://localhost:3000
+    # Use the IPv4 loopback literal (NOT "localhost"): server.js binds 127.0.0.1
+    # ONLY (SEC-A-3), and on Windows "localhost" can resolve to ::1 first, which
+    # the server does not listen on → tunnel connection refused.
+    service: http://127.0.0.1:3001
   - service: http_status:404
 
 # =====================================
@@ -23,7 +26,8 @@ ingress:
 # tunnel: The unique ID from cloudflared tunnel create
 # credentials-file: Path to the JSON credentials file
 # hostname: Your public URL (console.aboutlastnightgame.com)
-# service: Where to route traffic (http://localhost:3000 = your server)
+# service: Where to route traffic (http://127.0.0.1:3001 = your server; use
+#          127.0.0.1 not localhost — see the SEC-A-3 note in the ingress above)
 # Last line: Catch-all rule (returns 404 for any other hostname)
 
 # =====================================
