@@ -42,10 +42,14 @@ const MODEL_TIMEOUTS = {
 };
 
 /**
- * Per-call spend ceiling (USD), passed to the SDK as maxBudgetUsd. A backstop so a
- * runaway call (or an auto-retried long Opus call) cannot bonfire tokens unattended.
- * Generous by design — tune only from billing data. Opus arc-analysis is the most
- * expensive call, hence the highest ceiling.
+ * Per-call RUNAWAY backstop (USD), passed to the SDK as maxBudgetUsd. We run on a
+ * Claude subscription (rate-limited, NOT metered per-token), so this dollar figure
+ * is NOT a cost target — the SDK derives it from token usage × list pricing, so it
+ * functions as a token-VOLUME circuit breaker. Set deliberately HIGH so it never
+ * fires on legitimate work (even a big Opus arc-analysis with extended thinking) —
+ * it only aborts a pathological runaway (stuck retry loop / infinite tool loop)
+ * before it burns the rate-limit quota unattended. Lower these only if you switch
+ * to metered API billing and want a real cost ceiling.
  *
  * NOTE: this is a PER-CALL ceiling, not aggregate. LangGraph's node retryPolicy
  * (Task P3.1) re-runs a failed node up to `maxAttempts` times, each a FRESH SDK call
@@ -53,9 +57,9 @@ const MODEL_TIMEOUTS = {
  * de-layering (one retry layer, ≤3 attempts) keeps that bound predictable.
  */
 const MODEL_BUDGETS = {
-  opus: 5.0,
-  sonnet: 2.0,
-  haiku: 0.5
+  opus: 100.0,
+  sonnet: 50.0,
+  haiku: 10.0
 };
 
 /**
