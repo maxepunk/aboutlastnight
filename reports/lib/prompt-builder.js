@@ -178,16 +178,15 @@ class PromptBuilder {
   }
 
   /**
-   * Build outline generation prompt
-   * Phase 3: Generate article outline from selected arcs
+   * Returns the roster section string for the current theme/characters/pronouns.
+   * Single source of truth for the 4 identical generateRosterSection call sites (CR-7).
    *
-   * @param {Object} arcAnalysis - Arc analysis results
-   * @param {string[]} selectedArcs - User-selected arc names
-   * @param {string} heroImage - Confirmed hero image filename
-   * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
-   * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
-   * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
+   * @returns {string}
    */
+  _rosterSection() {
+    return generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns);
+  }
+
   /**
    * Generate FINANCIAL_SUMMARY XML section from shell account data
    * Returns empty string if no accounts with positive totals
@@ -222,6 +221,17 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
 </FINANCIAL_SUMMARY>`;
   }
 
+  /**
+   * Build outline generation prompt
+   * Phase 3: Generate article outline from selected arcs
+   *
+   * @param {Object} arcAnalysis - Arc analysis results
+   * @param {string[]} selectedArcs - User-selected arc names
+   * @param {string} heroImage - Confirmed hero image filename
+   * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
+   * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
+   * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
+   */
   async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null) {
     const rawPrompts = await this.theme.loadPhasePrompts('outlineGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
@@ -602,7 +612,7 @@ Return JSON with the following structure:
     const constraints = THEME_CONSTRAINTS[this.themeName];
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}
+${this._rosterSection()}
 
 ${constraints.hardConstraints}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
@@ -652,7 +662,7 @@ ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}
+${this._rosterSection()}
 </RULES>
 
 <SECTION_GUIDANCE>
@@ -792,7 +802,7 @@ ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}
+${this._rosterSection()}
 
 <TEMPORAL_DISCIPLINE>
 CRITICAL: FOUR STAGES. Get them right or the article makes no sense.
@@ -1078,7 +1088,7 @@ REVISION RULES:
 
 ${revisionConstraints.revisionVoice}
 
-${generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns)}`;
+${this._rosterSection()}`;
 
     const revisionChecklist = this.themeName === 'detective'
       ? `Fix the issues you identified in your self-check. Also check for:

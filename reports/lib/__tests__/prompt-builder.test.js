@@ -1100,6 +1100,17 @@ describe('PromptBuilder', () => {
       const result = generateRosterSection('journalist', canonical, null, { Vic: 'she/her' });
       expect(result).toContain('Vic Kingsley (she/her)');
     });
+
+    it('_rosterSection() returns the same string as the direct generateRosterSection call (CR-7)', () => {
+      const { PromptBuilder, generateRosterSection } = require('../prompt-builder');
+      const pb = new PromptBuilder(null, 'journalist');
+      pb.canonicalCharacters = { Vic: 'Vic Kingsley' };
+      pb.characterData = null;
+      pb.sessionConfig = { rosterPronouns: { Vic: 'she/her' } };
+      expect(pb._rosterSection()).toBe(
+        generateRosterSection('journalist', pb.canonicalCharacters, pb.characterData, pb.sessionConfig.rosterPronouns)
+      );
+    });
   });
 
   describe('buildArticlePrompt — enriched director notes', () => {
