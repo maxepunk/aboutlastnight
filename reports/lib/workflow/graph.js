@@ -17,9 +17,8 @@
  *   → fetchSessionPhotos → preprocessPhotos → analyzePhotos
  *   → detectWhiteboard
  *
- * NOTE: Parallel execution deferred - LangGraph's addEdge doesn't create
- * proper fan-in behavior (each edge triggers target independently).
- * TODO: Implement proper parallelization using Send() pattern when needed.
+ * NOTE: Data acquisition runs as a single sequential addEdge chain — no parallel
+ * branches, no Send() fan-in.
  *
  * PHASE 1.35-1.8: Sequential Checkpoints & Processing
  * → checkpointPaperEvidence [interrupt: paper-evidence-selection]
@@ -369,42 +368,39 @@ function createGraphBuilder() {
   builder.addNode('finalizeInput', nodes.finalizeInput);
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 1: Data Acquisition (Parallel Branches)
+  // ADD NODES - Phase 1: Data Acquisition (Sequential)
   // ═══════════════════════════════════════════════════════
 
   builder.addNode('initializeSession', nodes.initializeSession);
   builder.addNode('loadDirectorNotes', nodes.loadDirectorNotes);
 
-  // Branch A: Evidence fetching
+  // Evidence fetching
   builder.addNode('fetchMemoryTokens', nodes.fetchMemoryTokens);
   builder.addNode('fetchPaperEvidence', nodes.fetchPaperEvidence);
 
-  // Branch B: Photo processing
+  // Photo processing
   builder.addNode('fetchSessionPhotos', nodes.fetchSessionPhotos);
   builder.addNode('preprocessPhotos', nodes.preprocessPhotos);
 
-  // Branch C: Whiteboard detection
+  // Whiteboard detection
   builder.addNode('detectWhiteboard', nodes.detectWhiteboard);
-
-  // NOTE: joinParallelBranches removed - sequential execution doesn't need it
-  // TODO: Re-add when implementing Send() pattern for true parallelization
 
   // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 1.35-1.8: Sequential Checkpoints & Processing
   // Dedicated checkpoint nodes follow SRP (data separate from checkpoints)
   // ═══════════════════════════════════════════════════════
 
-  // Checkpoint: Paper evidence selection (after parallel join)
+  // Checkpoint: Paper evidence selection
   builder.addNode('checkpointPaperEvidence', nodes.checkpointPaperEvidence);
 
   // Checkpoint: Await roster (incremental input - Phase 4f)
   // Pauses for user to provide roster via /approve endpoint
   builder.addNode('checkpointAwaitRoster', nodes.checkpointAwaitRoster);
 
-  // Photo analysis (pure - no checkpoint, runs in parallel branch)
+  // Photo analysis (pure - no checkpoint; sequential in the data-fetch chain)
   builder.addNode('analyzePhotos', nodes.analyzePhotos, LLM_RETRY);
 
-  // Checkpoint: Character IDs (after parallel join)
+  // Checkpoint: Character IDs
   builder.addNode('checkpointCharacterIds', nodes.checkpointCharacterIds);
   builder.addNode('parseCharacterIds', nodes.parseCharacterIds, LLM_RETRY);
   builder.addNode('finalizePhotoAnalyses', nodes.finalizePhotoAnalyses, LLM_RETRY);
@@ -515,24 +511,22 @@ function createGraphBuilder() {
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 1: Data Acquisition (SEQUENTIAL)
-  // NOTE: Parallel branches deferred - LangGraph's addEdge doesn't create
-  // proper fan-in behavior. Each edge triggers independently.
-  // TODO: Implement proper parallelization using Send() pattern
+  // Data acquisition runs as a single sequential chain (no parallel branches).
   // ═══════════════════════════════════════════════════════
 
   builder.addEdge('initializeSession', 'loadDirectorNotes');
 
-  // Sequential data fetching (previously parallel branches A, B, C)
-  // Branch A: Evidence fetching
+  // Sequential data acquisition: evidence → photos → whiteboard detection.
+  // Evidence fetching
   builder.addEdge('loadDirectorNotes', 'fetchMemoryTokens');
   builder.addEdge('fetchMemoryTokens', 'fetchPaperEvidence');
 
-  // Branch B: Photo processing
+  // Photo processing
   builder.addEdge('fetchPaperEvidence', 'fetchSessionPhotos');
   builder.addEdge('fetchSessionPhotos', 'preprocessPhotos');
   builder.addEdge('preprocessPhotos', 'analyzePhotos');
 
-  // Branch C: Whiteboard detection
+  // Whiteboard detection
   builder.addEdge('analyzePhotos', 'detectWhiteboard');
 
   // ═══════════════════════════════════════════════════════
