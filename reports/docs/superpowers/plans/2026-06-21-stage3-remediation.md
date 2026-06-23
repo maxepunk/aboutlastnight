@@ -9113,6 +9113,22 @@ bannedPatterns config was already removed in CR-5.
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
 
+### Phase P10 (corrected scope, added 2026-06-22 post-preflight)
+
+The 2026-06-22 P10 preflight validated every anchor against live source (P8/P9 edited 3 of the 4 P10 files) and swept for tests asserting the OLD shapes. The four tasks' primary edits are correct; anchor drift + one missed test:
+
+**Anchor drift (re-anchor on symbols, not the plan's line numbers):**
+- **10.1** `EVIDENCE-CARD INLINE EXAMPLE` is now at `prompt-builder.js:872-873` (plan says 876-877). **P8.8 already changed line 872 "Victoria's composure" → "Vic's composure"**, so the plan's "before" is stale. The evidence-card line 873 still has `jav042`/`JAV042`/`Jamie Woods` (untouched). 10.1 SUPERSEDES P8.8 on line 872 (placeholder `[Character A]` beats the real name `Vic` in a shape-teaching example) — intentional, not a conflict. Corrected "before"/"after":
+  - Before: `{"type": "paragraph", "text": "I watched them circle each other, Vic's composure finally cracking..."},` then the `jav042`/`Jamie Woods` evidence-card line.
+  - After: `[Character A]`'s composure + the `tok001`/`[Token ID]`/`[timestamp]`/`[Character A]` evidence-card (exactly as the plan's "after" shows). The 10.1 test's slice anchors (`EVIDENCE-CARD INLINE EXAMPLE:` / `CRYSTALLIZATION & VERBATIM MOMENTS:`) both exist.
+- **10.2** content byte-exact; `getArticleRules` now at `:197`, export at `:236` (drifted -2 from P9 item 3 removing minPullQuotes). The Step 2/3 instructions are content-anchored (replace the `describe('getArticleRules')` block; delete named assertions) so they hold. **Premise re-verified: `getArticleRules`/`bannedPatterns`/`articleRules`/`requiredVoiceMarkers`/`minRosterMentions` have ZERO runtime consumers** (only `theme-config.js` + `theme-config.test.js`).
+- **10.3** byte-exact at `evaluator-nodes.js:538-543` (P8.8's name edits didn't shift it). No conflicting test.
+- **10.4** content byte-exact; checklist now `:1143-1160`, the `token_language` enum at `:1189`. The 10.4 test slices on `async buildValidationPrompt`/`getPhaseRequirements` (symbol-anchored, drift-proof). The Files header lists `:1193 token_language` but no step edits it — correct: `token_language` is an issue-CATEGORY label (used when a real bare-token violation is found), not a ban instruction. LEAVE the enum.
+
+**GAP — fold into 10.4:** an existing test asserts the OLD shape. `lib/__tests__/prompt-builder.test.js:305-312` (journalist `buildValidationPrompt` "should specify validation checklist items") asserts `expect(userPrompt).toContain('token/tokens');` at `:306`. 10.4 rewords that to `"token"/"tokens"` with scoping language → the literal `token/tokens` disappears → the test fails on a full `npx jest`. Add a step in 10.4 to change `:306` to a scoped assertion (`expect(userPrompt).toContain('memory token');` — confirms the F9 allowance reached the journalist checklist). The sibling assertions (`Em-dashes`, `Game mechanics language`, `Vague attribution`, `Passive/neutral voice`, `Missing roster members`, `Blake condemned`) are unchanged by 10.4 and stay.
+
+**Verification after all four:** `npx jest` whole-suite green; then the adversarial Opus capstone.
+
 ---
 
 ## Phase P11: Remaining correctness (harness + precedence + detective leak)
