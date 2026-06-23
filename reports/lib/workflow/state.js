@@ -22,7 +22,6 @@
  *   - Analysis: narrativeArcs, selectedArcs, heroImage, _arcAnalysisCache
  *   - Evaluation (8.6): evaluationHistory
  *   - Generation: outline, contentBundle
- *   - Supervisor (8.6): supervisorNarrativeCompass
  *   - Output: assembledHtml, validationResults
  *   - Control: currentPhase, errors
  *   - Revision Counters (8.6): arcRevisionCount, humanArcRevisionCount, outlineRevisionCount, articleRevisionCount
@@ -457,20 +456,6 @@ const ReportStateAnnotation = Annotation.Root({
   // Programmatic validation was too brittle - trust Opus evaluators instead
 
   // ═══════════════════════════════════════════════════════
-  // SUPERVISOR STATE (Commit 8.6)
-  // ═══════════════════════════════════════════════════════
-
-  /**
-   * Supervisor's narrative compass - maintains cohesion across phases
-   * Structure: { coreThemes, emotionalHook, keyMoments, playerFocusAnchors, coherenceNotes }
-   * Updated by supervisor after each phase to track/enforce vision
-   */
-  supervisorNarrativeCompass: Annotation({
-    reducer: replaceReducer,
-    default: () => null
-  }),
-
-  // ═══════════════════════════════════════════════════════
   // FINAL OUTPUTS
   // ═══════════════════════════════════════════════════════
 
@@ -728,8 +713,6 @@ function getDefaultState() {
     // Generation outputs
     outline: null,
     contentBundle: null,
-    // Supervisor (Commit 8.6)
-    supervisorNarrativeCompass: null,
     // Final outputs
     assembledHtml: null,
     validationResults: null,
@@ -890,7 +873,7 @@ const ROLLBACK_CLEARS_EXEMPT = new Set([
   // Photo branch inputs cleared transitively / re-discovered on replay
   'genericPhotoAnalyses', 'whiteboardPhotoPath', 'preprocessStats',
   // Default-only channels never written by any node return
-  'preCurationSummary', 'supervisorNarrativeCompass',
+  'preCurationSummary',
   // Raw character-ID text — paired with characterIdMappings (which IS cleared)
   'characterIdsRaw',
   // Transient per-revision scratch — nodes null these themselves after use

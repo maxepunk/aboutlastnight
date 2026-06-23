@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 64 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 63 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -253,8 +253,6 @@ describe('ReportStateAnnotation', () => {
         // Generation outputs
         'outline',
         'contentBundle',
-        // Supervisor (Commit 8.6)
-        'supervisorNarrativeCompass',
         // Final outputs
         'assembledHtml',
         'outputPath',
@@ -350,12 +348,6 @@ describe('ReportStateAnnotation', () => {
     describe('evaluation defaults (Commit 8.6)', () => {
       it('evaluationHistory defaults to empty array', () => {
         expect(defaultState.evaluationHistory).toEqual([]);
-      });
-    });
-
-    describe('supervisor defaults (Commit 8.6)', () => {
-      it('supervisorNarrativeCompass defaults to null', () => {
-        expect(defaultState.supervisorNarrativeCompass).toBeNull();
       });
     });
 
