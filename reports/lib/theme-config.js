@@ -142,7 +142,7 @@ const THEME_CONFIGS = {
     // via extractCanonicalCharacters() in node-helpers.js at fetch time.
 
     // Display constants for template rendering and post-generation validation
-    // Detective case reports use different ID prefix and no minimum pull quote/evidence card requirements
+    // Detective case reports use a different ID prefix and no evidence-card minimum (minInlineEvidenceCards: 0)
     display: {
       articleIdPrefix: 'DCR',           // Detective Case Report
       crystallizationLabel: "Detective's Note",
