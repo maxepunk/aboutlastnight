@@ -2737,17 +2737,6 @@ async function handleOutline(checkpoint, currentPhase) {
     console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
   }
 
-  // Pull Quotes
-  if (outline.pullQuotes?.length > 0) {
-    console.log(color('\n┌─ PULL QUOTES ──────────────────────────────────────────────────┐', 'yellow'));
-    outline.pullQuotes.forEach((pq, i) => {
-      const attr = pq.attribution ? ` — ${pq.attribution}` : ' (Nova insight)';
-      console.log(`│ ${i + 1}. "${pq.text}"${attr}`);
-      console.log(color(`│    Placement: ${pq.placement || 'unspecified'}`, 'dim'));
-    });
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
   console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
 
   // DRY: Use centralized helpers
@@ -3229,14 +3218,6 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
       }
       if (outline.closing) {
         console.log(color(`┌─ CLOSING: ${outline.closing.theme || 'N/A'}`, 'yellow'));
-      }
-      if (outline.pullQuotes?.length > 0) {
-        console.log(color(`\nPull Quotes: ${outline.pullQuotes.length}`, 'dim'));
-        outline.pullQuotes.forEach((pq, i) => {
-          const text = typeof pq === 'string' ? pq : (pq.text || JSON.stringify(pq));
-          const attr = pq.attribution ? ` — ${pq.attribution}` : '';
-          console.log(`  ${i + 1}. "${text.substring(0, 50)}..."${attr}`);
-        });
       }
       console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
       break;
