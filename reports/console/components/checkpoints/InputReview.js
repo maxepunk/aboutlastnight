@@ -9,6 +9,7 @@ window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, safeStringify } = window.Console.utils;
+const { resolveRosterPronoun } = window.Console.inputReviewLogic;
 
 function CharacterMentionsSection({ mentions, roster }) {
   const [selected, setSelected] = React.useState(null);
@@ -109,7 +110,7 @@ function InputReview({ data, onApprove, theme }) {
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Roster'),
       React.createElement('div', { className: 'tag-list' },
         roster.map(function (name) {
-          const pronouns = rosterPronouns[name] || 'they/them';
+          const pronouns = resolveRosterPronoun(name, rosterPronouns);
           return React.createElement(Badge, { key: name, label: name + ' (' + pronouns + ')', color: 'var(--accent-cyan)' });
         })
       )
