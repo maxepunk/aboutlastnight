@@ -6,24 +6,10 @@
  *
  * Live exports: CORE_ARC_SYSTEM_PROMPT, CORE_ARC_SCHEMA,
  *               INTERWEAVING_SYSTEM_PROMPT, INTERWEAVING_SCHEMA,
- *               PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT, PLAYER_FOCUS_GUIDED_SCHEMA,
- *               normalizePath
+ *               PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT, PLAYER_FOCUS_GUIDED_SCHEMA
  *
  * See ARCHITECTURE_DECISIONS.md 8.8-8.28 for full history.
  */
-
-const path = require('path');
-
-/**
- * Normalize path to forward slashes for cross-platform consistency
- * Claude SDK's Read tool works with forward slashes on all platforms
- */
-const normalizePath = (p) => p.replace(/\\/g, '/');
-
-// Compute absolute paths at module load time
-// __dirname = lib/sdk-client, so go up 2 levels to reach reports/
-const REPORTS_ROOT = path.resolve(__dirname, '../..');
-const REFS_PATH = normalizePath(path.join(REPORTS_ROOT, '.claude/skills/journalist-report/references/prompts'));
 
 /**
  * System prompt for player-focus-guided arc analysis
@@ -460,7 +446,6 @@ module.exports = {
 
   // Testing exports
   _testing: {
-    normalizePath,  // Exported for testing path normalization
     // Commit 8.28: Split-call schemas
     CORE_ARC_SYSTEM_PROMPT,
     CORE_ARC_SCHEMA,
