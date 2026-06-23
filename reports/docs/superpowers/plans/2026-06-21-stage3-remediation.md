@@ -8417,6 +8417,13 @@ The 2026-06-22 preflight (read of every P9 anchor against live source + a repo-w
 
 **Verification after all three:** `npx jest` whole-suite green (these edits keep the 3 affected suites — `outline-edit-logic`, `schema-validator`, `theme-config` — green); then the adversarial Opus capstone.
 
+### Post-capstone cleanup folded into P9 (items 1–3, added 2026-06-22, user-approved)
+
+The P9 capstone surfaced three pull-quote-adjacent residues that no later phase covers (verified: P11/X-6 is the *pronoun-annotation* detective leak, not this; P12's cleanup list does not include any of these). Folded into P9 as three small follow-up commits rather than deferred:
+- **Item 1 — `7ff3936`:** `content-bundle.schema.json` top-level `pullQuotes` descriptions said "journalist insight", which (like the 4be4a07 "— Nova" fix) leaked journalist voice into the DETECTIVE revision/article prompt via the `<SCHEMA>` embed. Reworded to "the narrator's insight" (theme-neutral). Both revision prompts now contain zero "journalist insight". No test asserted the old string.
+- **Item 2 — `e392d6b`:** removed two dead `outline.pullQuotes` display blocks in `scripts/e2e-walkthrough.js` (reading a top-level `outline.pullQuotes` that never existed in the outline schema; one hardcoded "(Nova insight)"). The `contentBundle.pullQuotes` display blocks are untouched. (Disjoint from P11.1's `:166/:616/:3444` edits.)
+- **Item 3 — `f6b4515`:** removed the now-dead `postGenValidation.minPullQuotes:0` from both theme configs + its two `theme-config.test.js` assertions. 9.3 removed its only runtime reader; the plan body deferred it as "interface contract", but no later phase picks it up. The ai-nodes source-shape guard test (asserts `minPullQuotes` is absent from `ai-nodes.js`) is unaffected.
+
 ---
 
 ## Phase P10: Complete F4 + F9 — live prompt example + live validators
