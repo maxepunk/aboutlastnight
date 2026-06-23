@@ -869,8 +869,8 @@ EVIDENCE-CARD INLINE EXAMPLE:
   "id": "the-story",
   "type": "narrative",
   "content": [
-    {"type": "paragraph", "text": "I watched them circle each other, Vic's composure finally cracking..."},
-    {"type": "evidence-card", "tokenId": "jav042", "headline": "The Moment of Truth", "content": "JAV042 - 12:17AM - [Full verbatim text from arcEvidencePackages.evidenceItems[].fullContent - do NOT truncate or summarize]", "owner": "Jamie Woods", "significance": "critical"},
+    {"type": "paragraph", "text": "I watched them circle each other, [Character A]'s composure finally cracking..."},
+    {"type": "evidence-card", "tokenId": "tok001", "headline": "The Moment of Truth", "content": "[Token ID] - [timestamp] - [Full verbatim text from arcEvidencePackages.evidenceItems[].fullContent - do NOT truncate or summarize]", "owner": "[Character A]", "significance": "critical"},
     {"type": "paragraph", "text": "After that, nothing was the same between them..."}
   ]
 }
@@ -950,7 +950,7 @@ STRUCTURE:
    EVIDENCE CARD DUAL FIELDS:
    - "content" = VERBATIM memory text for BODY inline cards
      * COPY EXACTLY from arcEvidencePackages evidenceItems[].fullContent
-     * Include tokenId prefix and timestamp (e.g., "JAV042 - 12:17AM - ...")
+     * Include tokenId prefix and timestamp (e.g., "[Token ID] - [timestamp] - ...")
      * Do NOT paraphrase or summarize
 
    - "summary" = Brief 100-char summary for SIDEBAR mini-cards
