@@ -234,7 +234,7 @@
           "headline": { "type": "string", "description": "Compelling headline for the evidence card" },
           "content": { "type": "string", "description": "Full quotable text from the evidence (fullDescription)" },
           "summary": { "type": "string", "description": "Brief summary for sidebar display" },
-          "owner": { "type": "string", "description": "Character who owns this evidence (e.g., 'Rachel Torres')" },
+          "owner": { "type": "string", "description": "Character who owns this evidence (e.g., 'Riley Torres')" },
           "significance": {
             "type": "string",
             "enum": ["critical", "supporting", "contextual"],
