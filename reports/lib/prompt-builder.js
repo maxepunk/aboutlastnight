@@ -1076,7 +1076,7 @@ ${generateRosterSection(this.themeName, this.canonicalCharacters, this.character
 
     const revisionChecklist = this.themeName === 'detective'
       ? `Fix the issues you identified in your self-check. Also check for:
-- Any game mechanics terminology ("tokens", "character sheets", "Act 1/2/3")
+- Any game mechanics terminology (the bare system label "token"/"tokens" [the in-world phrase "memory token" is allowed], "character sheets", "Act 1/2/3")
 - Repeated facts across sections (each section must answer a DIFFERENT question)
 - Names missing <strong> tags or evidence missing <em> tags
 - Any first-person voice that slipped in ("I saw", "I discovered")
@@ -1086,7 +1086,7 @@ ${generateRosterSection(this.themeName, this.canonicalCharacters, this.character
 - Any remaining passive/observer voice patterns
 - Any em-dashes that slipped through
 - Generic praise or vague attributions
-- Game mechanics language ("tokens", "buried memories", "buried bonus")`;
+- Game mechanics language (the bare system label "token"/"tokens" [the in-world phrase "memory token" is allowed], "buried memories", "buried bonus")`;
 
     const userPrompt = `<YOUR_SELF_CHECK>
 ${voiceSelfCheck}

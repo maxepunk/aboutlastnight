@@ -71,3 +71,33 @@ describe('F9: buildValidationPrompt token ban is scoped', () => {
     expect(occurrences).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('F9: buildRevisionPrompt token ban is scoped', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'prompt-builder.js'),
+    'utf8'
+  );
+  const start = src.indexOf('async buildRevisionPrompt');
+  const end = src.indexOf('async buildValidationPrompt');
+  const fn = src.slice(start, end);
+
+  it('locates buildRevisionPrompt', () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+  });
+
+  it('detective revision checklist no longer bans unqualified "tokens"', () => {
+    expect(fn).not.toContain('terminology ("tokens"');
+  });
+
+  it('journalist revision checklist no longer bans unqualified "tokens"', () => {
+    expect(fn).not.toContain('language ("tokens"');
+  });
+
+  it('both revision checklists allow the in-world phrase "memory token"', () => {
+    const occurrences = (fn.match(/memory token/g) || []).length;
+    expect(occurrences).toBeGreaterThanOrEqual(2);
+  });
+});
