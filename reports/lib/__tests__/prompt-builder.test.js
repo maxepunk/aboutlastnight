@@ -303,7 +303,7 @@ describe('PromptBuilder', () => {
       const { userPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
 
       expect(userPrompt).toContain('Em-dashes');
-      expect(userPrompt).toContain('token/tokens');
+      expect(userPrompt).toContain('memory token');
       expect(userPrompt).toContain('Game mechanics language');
       expect(userPrompt).toContain('Vague attribution');
       expect(userPrompt).toContain('Passive/neutral voice');

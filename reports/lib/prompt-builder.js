@@ -1142,7 +1142,7 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
     const validationChecklist = this.themeName === 'detective'
       ? `Check for:
-1. Game mechanics language ("token", "Act 3", "final call", "character sheet")
+1. Game mechanics language: the bare system label "token" (the in-world phrase "memory token" is ALLOWED), "Act 3", "final call", "character sheet"
 2. First-person voice (should be third-person investigative)
 3. Repeated facts appearing in multiple sections (section differentiation)
 4. Missing roster members
@@ -1151,7 +1151,7 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 7. Report exceeds ~800 words (target ~750)`
       : `Check for:
 1. Em-dashes (— or --)
-2. "token/tokens" instead of "extracted memory"
+2. The bare system label "token"/"tokens" instead of "memory token" or "extracted memory" (the in-world phrase "memory token" is ALLOWED and correct)
 3. Game mechanics language ("Act 3", "final call", "first burial")
 4. Vague attribution ("from my notes", "sources say")
 5. Passive/neutral voice (should be participatory)

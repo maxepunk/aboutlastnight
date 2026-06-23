@@ -41,3 +41,33 @@ describe('F4: no retired identifiers in the article prompt source', () => {
     expect(/jav042/i.test(src)).toBe(false);
   });
 });
+
+describe('F9: buildValidationPrompt token ban is scoped', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'prompt-builder.js'),
+    'utf8'
+  );
+  const start = src.indexOf('async buildValidationPrompt');
+  const end = src.indexOf('getPhaseRequirements');
+  const fn = src.slice(start, end);
+
+  it('locates buildValidationPrompt', () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+  });
+
+  it('detective checklist no longer flags unqualified "token"', () => {
+    expect(fn).not.toContain('("token", "Act 3"');
+  });
+
+  it('journalist checklist no longer flags unqualified "token/tokens"', () => {
+    expect(fn).not.toContain('"token/tokens"');
+  });
+
+  it('both checklists allow the in-world phrase "memory token"', () => {
+    const occurrences = (fn.match(/memory token/g) || []).length;
+    expect(occurrences).toBeGreaterThanOrEqual(2);
+  });
+});
