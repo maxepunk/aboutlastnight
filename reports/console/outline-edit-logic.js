@@ -167,7 +167,6 @@
       arcConnections: deepClone(Array.isArray(s.arcConnections) ? s.arcConnections : []),
       exposed: Array.isArray(s.exposed) ? s.exposed.slice() : [],
       buried: Array.isArray(s.buried) ? s.buried.slice() : [],
-      pullQuotes: deepClone(Array.isArray(s.pullQuotes) ? s.pullQuotes : []),
       characterHighlights: mapToRows(s.characterHighlights)
     };
   }
@@ -239,14 +238,7 @@
     });
     setOrDeleteArray(out, 'exposed', Array.isArray(formState.exposed) ? formState.exposed.filter(nonEmpty) : splitCsv(formState.exposed));
     setOrDeleteArray(out, 'buried', Array.isArray(formState.buried) ? formState.buried.filter(nonEmpty) : splitCsv(formState.buried));
-    var quotes = (Array.isArray(formState.pullQuotes) ? formState.pullQuotes : []).map(function (row) {
-      var q = { type: row.type || 'verbatim', text: row.text || '' };
-      if (row.attribution === null) { q.attribution = null; }
-      else if (nonEmpty(row.attribution)) { q.attribution = row.attribution; }
-      if (nonEmpty(row.advancesArc)) q.advancesArc = row.advancesArc;
-      return q;
-    });
-    setOrDeleteArray(out, 'pullQuotes', quotes);
+    delete out.pullQuotes;  // F3/X-5: pullQuotes removed from the outline contract (article phase ignores planned quotes; crystallization flows through inline quote content-blocks)
     var map = rowsToMap(formState.characterHighlights);
     if (Object.keys(map).length > 0) { out.characterHighlights = map; } else { delete out.characterHighlights; }
     return out;

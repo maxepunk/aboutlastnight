@@ -253,20 +253,6 @@ function ThePlayersEditor({ section, onSave, onCancel }) {
     }),
     React.createElement(StringListEditor, { label: 'Exposed (optional)', value: state.exposed, placeholder: 'character name', onChange: function (v) { setList('exposed', v); } }),
     React.createElement(StringListEditor, { label: 'Buried (optional)', value: state.buried, placeholder: 'topic', onChange: function (v) { setList('buried', v); } }),
-    React.createElement(ObjectListEditor, {
-      label: 'Pull Quotes (optional)',
-      value: state.pullQuotes,
-      makeRow: function () { return { type: 'verbatim', text: '', attribution: '' }; },
-      renderRow: function (row, idx, setField) {
-        return React.createElement('div', { className: 'flex flex-col gap-sm' },
-          React.createElement(EnumSelect, { label: 'Type', value: row.type || 'verbatim', options: ['verbatim', 'insight', 'crystallization'], onChange: function (v) { setField(idx, 'type', v); } }),
-          React.createElement(TextField, { label: 'Text', value: row.text, multiline: true, onChange: function (v) { setField(idx, 'text', v); } }),
-          React.createElement(TextField, { label: 'Attribution (optional)', value: row.attribution == null ? '' : row.attribution, onChange: function (v) { setField(idx, 'attribution', v); } }),
-          React.createElement(TextField, { label: 'Advances Arc (optional)', value: row.advancesArc || '', onChange: function (v) { setField(idx, 'advancesArc', v); } })
-        );
-      },
-      onChange: function (v) { setList('pullQuotes', v); }
-    }),
     React.createElement(KeyValueEditor, { label: 'Character Highlights (optional, name → note)', value: state.characterHighlights, onChange: function (v) { setList('characterHighlights', v); } }),
     actionsRow(handleSave, onCancel)
   );
@@ -685,7 +671,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       editing
         ? React.createElement(ThePlayersEditor, { section: section, onSave: function (u) { saveSectionEdit('thePlayers', u); }, onCancel: cancelEdit })
         : React.createElement('div', { className: 'outline-section__content' },
-            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' arc connection(s), ' + ((section.pullQuotes || []).length) + ' pull quote(s)'))
+            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' arc connection(s)'))
     );
   }
 

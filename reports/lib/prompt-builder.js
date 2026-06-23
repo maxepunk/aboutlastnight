@@ -543,11 +543,7 @@ Return JSON with the following structure:
       {"arcName": "Arc A", "characterAngle": "How this arc advances through character revelation"}
     ],
     "exposed": ["names"],
-    "buried": ["names"],
-    "pullQuotes": [
-      {"type": "verbatim", "text": "Exact quote from evidence", "attribution": "Character Name", "advancesArc": "Arc name"},
-      {"type": "insight", "text": "Nova's crystallized observation", "attribution": null, "advancesArc": "Arc name"}
-    ]
+    "buried": ["names"]
   },
   "whatsMissing": {
     "arcConnections": [

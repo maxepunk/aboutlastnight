@@ -51,9 +51,6 @@ function validJournalistOutline() {
       ],
       exposed: ['Sarah Blackwood'],
       buried: ['the silent partner'],
-      pullQuotes: [
-        { type: 'verbatim', text: 'I never touched that account.', attribution: 'Sarah Blackwood', advancesArc: 'The embezzlement' }
-      ],
       characterHighlights: { 'Sarah Blackwood': 'Cool under questioning.' }
     },
     whatsMissing: {
@@ -248,11 +245,10 @@ describe('journalist initializers (no loss on load)', () => {
     expect(s.shellAccounts[0].total).toBe('$1.2M');
   });
 
-  it('initThePlayers maps characterHighlights to rows and clones pullQuotes', () => {
+  it('initThePlayers maps characterHighlights to rows (no pullQuotes seed, X-5)', () => {
     const s = L.initThePlayers(validJournalistOutline().thePlayers);
     expect(s.characterHighlights).toEqual([{ key: 'Sarah Blackwood', value: 'Cool under questioning.' }]);
-    expect(s.pullQuotes[0].type).toBe('verbatim');
-    expect(s.pullQuotes[0].text).toContain('account');
+    expect(s.pullQuotes).toBeUndefined();
   });
 
   it('initWhatsMissing / initClosing keep object-arrays', () => {
@@ -326,32 +322,18 @@ describe('journalist builders', () => {
     expect(validate('outline', full).valid).toBe(true);
   });
 
-  it('buildThePlayersPayload (B1+B4) keeps map, valid pullQuotes (type/text, no placement), no strays', () => {
+  it('buildThePlayersPayload (B1+B4) keeps map, drops pullQuotes, no strays (X-5)', () => {
     const orig = validJournalistOutline().thePlayers;
     const state = L.initThePlayers(orig);
     state.characterHighlights = L.setRowField(state.characterHighlights, 0, 'value', 'Edited highlight.');
-    state.pullQuotes = L.addRow(state.pullQuotes, { type: 'insight', text: 'A new insight quote.', attribution: null });
     const out = L.buildThePlayersPayload(state, orig);
     expect(Array.isArray(out.arcConnections)).toBe(true);
     expect(typeof out.characterHighlights).toBe('object');
     expect(Array.isArray(out.characterHighlights)).toBe(false);
     expect(out.characterHighlights['Sarah Blackwood']).toBe('Edited highlight.');
-    expect(out.pullQuotes[1].type).toBe('insight');
-    expect(out.pullQuotes[1].text).toBe('A new insight quote.');
-    expect(out.pullQuotes[1].placement).toBeUndefined();
-    expect(out.pullQuotes[1].attribution).toBeNull();
+    expect(out.pullQuotes).toBeUndefined();
     expect(out.shellAccounts).toBeUndefined();
     expect(out.focus).toBeUndefined();
-    const full = L.mergeSection(validJournalistOutline(), 'thePlayers', out);
-    expect(validate('outline', full).valid).toBe(true);
-  });
-
-  it('buildThePlayersPayload defaults a missing pullQuote type to verbatim and still validates', () => {
-    const orig = validJournalistOutline().thePlayers;
-    const state = L.initThePlayers(orig);
-    state.pullQuotes = L.addRow(state.pullQuotes, { text: 'No type set.' });
-    const out = L.buildThePlayersPayload(state, orig);
-    expect(out.pullQuotes[1].type).toBe('verbatim');
     const full = L.mergeSection(validJournalistOutline(), 'thePlayers', out);
     expect(validate('outline', full).valid).toBe(true);
   });
@@ -395,15 +377,15 @@ describe('preservation invariant', () => {
     expect(out.photoPlacement).toEqual(orig.photoPlacement);
   });
 
-  it('thePlayers: editing one pullQuote leaves arcConnections/exposed/buried/characterHighlights untouched', () => {
+  it('thePlayers: editing characterHighlights leaves arcConnections/exposed/buried untouched', () => {
     const orig = validJournalistOutline().thePlayers;
     const state = L.initThePlayers(orig);
-    state.pullQuotes = L.setRowField(state.pullQuotes, 0, 'text', 'Only this changed.');
+    state.characterHighlights = L.setRowField(state.characterHighlights, 0, 'value', 'Only this changed.');
     const out = L.buildThePlayersPayload(state, orig);
     expect(out.arcConnections).toEqual(orig.arcConnections);
     expect(out.exposed).toEqual(orig.exposed);
     expect(out.buried).toEqual(orig.buried);
-    expect(out.characterHighlights).toEqual(orig.characterHighlights);
+    expect(out.characterHighlights).toEqual({ 'Sarah Blackwood': 'Only this changed.' });
   });
 
   it('arc: editing name leaves evidenceCards + photoPlacement untouched', () => {

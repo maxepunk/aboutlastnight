@@ -196,31 +196,6 @@
           "description": "Character names whose evidence was buried",
           "items": { "type": "string" }
         },
-        "pullQuotes": {
-          "type": "array",
-          "description": "Pull quotes planned for this section",
-          "items": {
-            "type": "object",
-            "required": ["type", "text"],
-            "additionalProperties": false,
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["verbatim", "insight", "crystallization"],
-                "description": "verbatim = exact quote with attribution, insight/crystallization = journalist's observation without attribution"
-              },
-              "text": { "type": "string", "description": "Quote text" },
-              "attribution": {
-                "type": ["string", "null"],
-                "description": "Character name for verbatim quotes, null for crystallization"
-              },
-              "advancesArc": {
-                "type": "string",
-                "description": "Which arc this quote advances"
-              }
-            }
-          }
-        },
         "characterHighlights": {
           "type": "object",
           "description": "Key character moments to highlight",
