@@ -315,11 +315,18 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     }
 
     // Await roster checkpoint (Parallel branch architecture)
-    // User provides roster to enable character ID mapping
+    // User provides roster to enable character ID mapping.
+    // F1 (CR-1): pronouns captured alongside the roster MUST ride along on both
+    // the Command resume AND the direct state update, or every character defaults
+    // to they/them downstream (generateRosterSection.resolvePronouns).
     if (approvals.roster && Array.isArray(approvals.roster)) {
         validApprovalDetected = true;
         stateUpdates.roster = approvals.roster;
         resume.roster = approvals.roster;
+        if (approvals.rosterPronouns && typeof approvals.rosterPronouns === 'object') {
+            stateUpdates.rosterPronouns = approvals.rosterPronouns;
+            resume.rosterPronouns = approvals.rosterPronouns;
+        }
     }
 
     // Await full context checkpoint (Parallel branch architecture)

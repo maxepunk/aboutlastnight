@@ -158,3 +158,32 @@ describe('buildResumePayload — outlineEdits routing (regression, validation ac
     expect(result.stateUpdates.outline).toBeUndefined();
   });
 });
+
+describe('buildResumePayload — rosterPronouns forwarding (F1 / CR-1 regression)', () => {
+  it('forwards approvals.rosterPronouns into BOTH resume and stateUpdates when roster is present', () => {
+    const result = buildResumePayload({
+      roster: ['Vic', 'Sam'],
+      rosterPronouns: { Vic: 'she/her', Sam: 'he/him' }
+    });
+    expect(result.error).toBeNull();
+    expect(result.resume.roster).toEqual(['Vic', 'Sam']);
+    // The link CR-1 severed: pronouns must ride along on resume + stateUpdates.
+    expect(result.resume.rosterPronouns).toEqual({ Vic: 'she/her', Sam: 'he/him' });
+    expect(result.stateUpdates.rosterPronouns).toEqual({ Vic: 'she/her', Sam: 'he/him' });
+  });
+
+  it('forwards roster without rosterPronouns when none supplied (no undefined keys injected)', () => {
+    const result = buildResumePayload({ roster: ['Vic'] });
+    expect(result.error).toBeNull();
+    expect(result.resume.roster).toEqual(['Vic']);
+    expect('rosterPronouns' in result.resume).toBe(false);
+    expect('rosterPronouns' in result.stateUpdates).toBe(false);
+  });
+
+  it('ignores rosterPronouns when roster is absent/invalid (no orphan pronouns)', () => {
+    const result = buildResumePayload({ rosterPronouns: { Vic: 'she/her' } });
+    // roster branch never fires → pronouns must NOT leak through on their own.
+    expect('rosterPronouns' in result.resume).toBe(false);
+    expect('rosterPronouns' in result.stateUpdates).toBe(false);
+  });
+});
