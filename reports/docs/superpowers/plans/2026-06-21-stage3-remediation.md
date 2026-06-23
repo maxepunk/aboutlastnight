@@ -10233,3 +10233,94 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
+## Phase P12 (corrected scope, added 2026-06-23 post-preflight)
+
+> Authored after validating every P12 target against live source at HEAD `d0904fd` and running each task's prove-dead grep. The per-task sections above are correct on intent; this block is the authoritative execution guide where the literal text drifted or under-scoped. Two user decisions (2026-06-23): **12.7 = full file-wide comment sweep**; **12.9 = relocate + de-dup against client.js**.
+
+**Dead-symbol verification (all 5 confirmed dead at HEAD):** `loadTemplate` (only the def), `normalizePath`/`REFS_PATH`/`path` (no external consumer; `path.` only at the deletion sites), `PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT` (never passed to a `systemPrompt`; the `_SCHEMA` stays live at `arc-specialist:922`), `mergeReducer` (bound to no annotation), `supervisorNarrativeCompass` (zero writers). **Field count = 64 now → 63 after 12.5** (plan's `63` is correct). **M6**: `ROLLBACK_CLEARS_EXEMPT` line `'preCurationSummary', 'supervisorNarrativeCompass',` is at `state.js:907` — 12.5 Step 4b strips it.
+
+**Anchor drift (symbol-anchor everything):** 12.3 prompt `subagents.js:33` (was :28), arc reexport `:1731` (was :1769); 12.5 annotation `state.js:482` (was :462), default `:746` (was :723); 12.4 `mergeReducer` def `:63`, `_testing` `:1096`, self-test `:1119/:1126-1127`; 12.8 call sites `:605/:655/:795/:1081` (were :603/…). Test-side anchors all exist (state.test.js `:46`/`:138`/`:239`/`:297`/`:397`; theme-loader.test.js `:211`/`:326`/`:350`; ai-nodes.test.js `:181`).
+
+### CORRECTION 1 (Task 12.3, NEW step) — reword the stale `subagents.js:227` comment 🔴 MANDATORY
+After deleting `PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT`, the `CORE_ARC_SYSTEM_PROMPT` header at `subagents.js:227` still references it:
+```javascript
+ * Commit 8.28: Split from PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT
+```
+Reword (this is the verification-follow-up at plan line 184, folded in):
+```javascript
+ * Commit 8.28: Split from the former player-focus-guided single-call prompt
+```
+`lib/sdk-client/subagents.js` is already in 12.3's git-add; no new file.
+
+### CORRECTION 2 (Task 12.2) — header drops ONLY `normalizePath` 🟢 MINOR
+12.2 Step 4's "after" block drops both `normalizePath` AND `PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT` from the file header, but the prompt still exists until 12.3. In 12.2, leave the prompt in the header (drop only `normalizePath`):
+```javascript
+ *               PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT, PLAYER_FOCUS_GUIDED_SCHEMA
+```
+12.3 then removes `PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT` from this line (its Step 3 already does this). Keeps each commit's header consistent with the symbols that exist at that point.
+
+### CORRECTION 3 (Task 12.7) — FULL file-wide sweep, not just 3 sites 🟡 EXPANDED (user: full sweep)
+S14's intent is "remove the misleading parallel-branch comments." The plan lists only `:404`, `:518-520`, `:525-535`, but the `addNode` section + file header carry the same vestigial claims. This is comment-only — the `addNode`/`addEdge` wiring stays byte-identical. Apply the plan's 3 edits AND these:
+
+1. **File-header NOTE/TODO (`graph.js:20-22`):**
+   ```javascript
+   // BEFORE:
+    * NOTE: Parallel execution deferred - LangGraph's addEdge doesn't create
+    * proper fan-in behavior (each edge triggers target independently).
+    * TODO: Implement proper parallelization using Send() pattern when needed.
+   // AFTER:
+    * NOTE: Data acquisition runs as a single sequential addEdge chain — no parallel
+    * branches, no Send() fan-in.
+   ```
+2. **addNode Branch labels (`:378/:382/:386`):** `// Branch A: Evidence fetching` → `// Evidence fetching`; `// Branch B: Photo processing` → `// Photo processing`; `// Branch C: Whiteboard detection` → `// Whiteboard detection`.
+3. **joinParallelBranches NOTE+TODO (`:389-390`):** delete both lines:
+   ```javascript
+   // DELETE:
+     // NOTE: joinParallelBranches removed - sequential execution doesn't need it
+     // TODO: Re-add when implementing Send() pattern for true parallelization
+   ```
+4. **"after parallel join" comments:** `:397` `// Checkpoint: Paper evidence selection (after parallel join)` → `// Checkpoint: Paper evidence selection`; `:407` `// Checkpoint: Character IDs (after parallel join)` → `// Checkpoint: Character IDs`.
+5. **Plan's existing targets** (apply as written): `:404` → `// Photo analysis (pure - no checkpoint; sequential in the data-fetch chain)`; `:518-520` NOTE block → `// Data acquisition runs as a single sequential chain (no parallel branches).`; `:525-535` "previously parallel branches A,B,C" + Branch A/B/C labels → the sequential wording in the plan.
+
+After: `grep -n "parallel\|Send(\|Branch [ABC]\|fan-in" lib/workflow/graph.js` should return NOTHING (no vestigial parallel language anywhere in the file).
+
+### CORRECTION 4 (Task 12.7 Step 2) — smoke uses the real export 🟢 MINOR
+`buildGraph` does not exist. Use a plain load-smoke: `node -e "require('./lib/workflow/graph.js'); console.log('graph loads OK');"` (real exports are `createReportGraph` / `createReportGraphWithCheckpointer` / `createReportGraphNoCheckpoint` / `RECURSION_LIMIT` / `_testing`).
+
+### CORRECTION 5 (Task P12.8 / CR-7) — construct PromptBuilder correctly in the test 🟡 RECOMMENDED
+The constructor is `constructor(themeLoader, themeName = 'journalist', sessionConfig = {}, canonicalCharacters = null, characterData = null)`. The CR-7 Step 1 test's `new PromptBuilder('journalist')` puts `'journalist'` in the **themeLoader** slot (it passes only because `themeName` defaults to `'journalist'`). Use the real contract (matches the existing tests' `new PromptBuilder(mockThemeLoader, 'journalist')`):
+```javascript
+it('_rosterSection() returns the same string as the direct generateRosterSection call (CR-7)', () => {
+  const pb = new PromptBuilder(null, 'journalist');
+  pb.canonicalCharacters = { Vic: 'Vic Kingsley' };
+  pb.characterData = null;
+  pb.sessionConfig = { rosterPronouns: { Vic: 'she/her' } };
+  const { generateRosterSection } = require('../prompt-builder');
+  expect(pb._rosterSection()).toBe(
+    generateRosterSection('journalist', pb.canonicalCharacters, pb.characterData, pb.sessionConfig.rosterPronouns)
+  );
+});
+```
+The 4 call sites to collapse are at `:605/:655/:795/:1081` (invocation string unchanged by 11.3) → `${this._rosterSection()}`. CR-7 lands LAST (after all other P12 tasks, per Integration §CR-7).
+
+### CORRECTION 6 (Task 12.9) — relocate + DE-DUP against client.js 🟡 EXPANDED (user: de-dup)
+The relocated script keeps its OWN hardcoded `MODEL_IDS`, so it validates its own copy, not the live pins. `lib/llm/client.js` does NOT currently export `MODEL_IDS`. Fold a de-dup:
+1. In `lib/llm/client.js`, add `MODEL_IDS` to `module.exports` (it's already a module-scope `const` at `:67`). Append `MODEL_IDS` to the existing export object — do NOT drop the current exports (incl. `MODEL_BUDGETS`).
+2. In the moved `scripts/check-model-freshness.js`, replace the hardcoded block:
+   ```javascript
+   // BEFORE (hardcoded copy):
+     const MODEL_IDS = {
+       opus: 'claude-opus-4-8',
+       sonnet: 'claude-sonnet-4-6',
+       haiku: 'claude-haiku-4-5'
+     };
+   // AFTER (single source of truth):
+     const { MODEL_IDS } = require('../lib/llm/client');
+   ```
+   (Require path from `scripts/` is `../lib/llm/client`. Keep the rest: the `requested1m = shorthand !== 'haiku'` betas logic and the live-SDK loop are unchanged.) The script still runs only under `require.main === module`. Step 4's `node -e "require('./scripts/check-model-freshness.js')"` must still NOT auto-run (the guard holds) — and now also loads client.js cleanly. 12.9's `git add -A` already covers `lib/llm/client.js`; commit message can note "+ read MODEL_IDS from client.js (single source)".
+
+### Execution
+Subagent-driven, order **12.1 → 12.2 → 12.3 → 12.4 → 12.5 → 12.6 → 12.7 → 12.8 (CR-7) → 12.9**, fresh Sonnet implementer per task → Opus spec review → Opus quality review → fix-loop → one clean commit each → **12.10 final whole-suite green check** (target: all green, **0 skipped** after 12.9) → adversarial Opus capstone over the whole phase. 12.2→12.3 share `subagents.js` (sequential); 12.4→12.5→12.6 share `state.js`/`state.test.js` (sequential); the rest are disjoint.
+
+---
+
