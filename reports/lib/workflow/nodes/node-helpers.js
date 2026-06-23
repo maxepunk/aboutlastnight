@@ -967,10 +967,14 @@ function extractCanonicalCharacters(tokens, theme = 'journalist', paperEvidence 
   const characters = {};
 
   for (const token of tokens) {
-    for (const owner of (token.owners || [])) {
+    for (const ownerRaw of (token.owners || [])) {
+      if (!ownerRaw) continue;
+      // Trim once so BOTH the key derivation and the stored canonical value
+      // are whitespace-clean (Notion full names can carry trailing spaces, e.g. "Riley Torres ").
+      const owner = String(ownerRaw).trim();
       if (!owner) continue;
       // Derive first name from Notion's canonical full name
-      const firstName = owner.includes(' ') ? owner.split(' ')[0].trim() : owner;
+      const firstName = owner.includes(' ') ? owner.split(' ')[0] : owner;
       const firstNameKey = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
       // First occurrence wins (preserves Notion's canonical form)
       if (!characters[firstNameKey]) {

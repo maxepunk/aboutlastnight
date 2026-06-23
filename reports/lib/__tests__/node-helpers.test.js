@@ -56,6 +56,26 @@ describe('extractCanonicalCharacters', () => {
   });
 });
 
+describe('extractCanonicalCharacters whitespace trim (8.9 / Riley Torres)', () => {
+  const { extractCanonicalCharacters } = require('../workflow/nodes/node-helpers');
+  it('trims trailing whitespace in the canonical full name', () => {
+    const out = extractCanonicalCharacters([{ owners: ['Riley Torres '] }]);
+    expect(out.Riley).toBe('Riley Torres');
+  });
+  it('still keys by the trimmed first name', () => {
+    const out = extractCanonicalCharacters([{ owners: ['Riley Torres '] }]);
+    expect(Object.keys(out)).toEqual(['Riley']);
+  });
+  it('leaves an already-clean name unchanged', () => {
+    const out = extractCanonicalCharacters([{ owners: ['Vic Kingsley'] }]);
+    expect(out.Vic).toBe('Vic Kingsley');
+  });
+  it('trims a leading space too (old code produced a broken empty key)', () => {
+    const out = extractCanonicalCharacters([{ owners: [' Riley Torres'] }]);
+    expect(out).toEqual({ Riley: 'Riley Torres' });
+  });
+});
+
 describe('normalizeRosterPronounsToCanonical', () => {
   const { normalizeRosterPronounsToCanonical } = require('../workflow/nodes/node-helpers');
   const canonical = { Victoria: 'Victoria Kingsley', Sam: 'Sam Rivera' };
