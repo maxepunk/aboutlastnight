@@ -9480,6 +9480,71 @@ Root cause (verified by read): `generateRosterSection` at `prompt-builder.js:34`
 
 ---
 
+## Phase P11 (corrected scope, added 2026-06-23 post-preflight)
+
+> Authored after validating every P11 anchor against live source at HEAD `84f962b` (drift from P8/P9/P10 + this session's `e392d6b` dead-block removal). The three per-task sections above remain correct on intent; this block is the **authoritative execution guide** where the per-task text drifted or omitted an integration-section requirement. The integration section (M5) wins over per-task text per plan line 5.
+
+**Topology note (reconciled):** P8's F1 pronoun work (CR-1/X-1/X-4/CR-6 at `7a6ad42`/`67e108d`/`1a09e41`/`6fcb463` + 8.6–8.9) IS an ancestor of HEAD. So `input-nodes.js`'s pronoun line is already in **P8's merged form** — M5 applies. WIP commit `4d5a79a` (Task 11.1's starting point) is also an ancestor.
+
+**Anchor drift (symbol-anchor everything; line numbers shifted):**
+- 11.1 `e2e-walkthrough.js`: complete case `:164-167` (was `:166`) · incrementalInputData `:611-617` ✓ · band-aid guard `:3432-3437` (was `:3444`, −10 from `e392d6b`) · output `:3453` (was `:3463`) · `case 'failed'` confirmed ABSENT.
+- 11.2 `input-nodes.js`: pronoun assignment `:440-443` (was `:428`) · `parseRawInput` def `:360` ✓ · `_testing` block `:793-803` (was `:781-791`).
+- 11.3 `prompt-builder.js`: `generateRosterSection` `:22-35` ✓ · 4 call sites `:599/:649/:789/:1075` (−4) · test describe `:1039` ✓.
+
+### CORRECTION 1 (Task 11.2 Step 4) — apply the M5 merge, NOT the literal "before" 🔴 MANDATORY
+The line is already P8's merged form (live `input-nodes.js:440-443`):
+```js
+result.rosterPronouns = normalizeRosterPronounsToCanonical(
+  state.rosterPronouns || rawInput.rosterPronouns || {},
+  state.canonicalCharacters || {}
+);
+```
+Step 4's literal target (`result.rosterPronouns = state.rosterPronouns || rawInput.rosterPronouns || {};`) **does not exist** — the `||` chain is P8's first argument. Apply the M5 final form (plan lines 122-133): replace only the **first argument**:
+```js
+      // F1 (X-1 + CR-6 + CR-4): pick the populated pronoun map by key-count (CR-4 —
+      // an empty {} must not shadow rawInput), then re-key to canonical first names
+      // (X-1) so generateRosterSection.resolvePronouns matches. sessionConfig.rosterPronouns
+      // is the single downstream source (CR-6).
+      result.rosterPronouns = normalizeRosterPronounsToCanonical(
+        resolveRosterPronouns(state, rawInput),
+        state.canonicalCharacters || {}
+      );
+```
+Steps 1-3 (new test file + the `resolveRosterPronouns` helper above `parseRawInput`) and Step 5 (export) are unchanged. The helper body in Step 3 is correct as written.
+
+### CORRECTION 2 (Task 11.2, NEW Step 4b) — update the P8.4 stamp() test mirror 🔴 MANDATORY (M5)
+M5 line 133 requires it and 11.2's Files list omits it. The mirror is `lib/__tests__/node-helpers.test.js:130-155` (`describe('F1 single-source stamp precedence (CR-6)')`). Its local `stamp()` helper (`:134-139`) currently re-implements `stateChannel || rawInput || {}` with a comment claiming it *"Mirror[s] the exact stamp expression from input-nodes.js"* — which becomes FALSE after Correction 1, and keeps pinning the **buggy** `||` precedence. Update `stamp()` to route through the real helper so the characterization stays faithful:
+```js
+  const { _testing } = require('../workflow/nodes/input-nodes');
+  const { resolveRosterPronouns } = _testing;
+  // Mirror the EXACT merged stamp expression from input-nodes.js (CR-4 precedence +
+  // CR-6 canonical normalize) so this test pins the real contract parseRawInput uses.
+  function stamp(stateChannel, rawInput, canonicalCharacters) {
+    return normalizeRosterPronounsToCanonical(
+      resolveRosterPronouns({ rosterPronouns: stateChannel }, { rosterPronouns: rawInput }),
+      canonicalCharacters || {}
+    );
+  }
+```
+The 3 existing assertions (`:142-154`) are behavior-identical under the new helper (verified: channel-wins, rawInput-fallback, and both-empty→`{}` all unchanged), so this is faithfulness-only. Add the `git add lib/__tests__/node-helpers.test.js` to Step 8's commit and run `npx jest lib/__tests__/node-helpers.test.js` as part of Step 7.
+
+### CORRECTION 3 (Task 11.1 Step 5b) — mirror M4's `errors[0].message` fallback 🟡 FOLDED
+Two `type:'failed'` shapes exist (verified via `outcomeEventType` + `server.js`): a THROWN exception carries flat `error`/`details`; a node that RETURNS `{currentPhase:'error', errors:[{message}]}` carries the real message ONLY in `errors[0].message`. The console's twin path already reconciled this (M4, plan lines 104-114). Mirror it in the harness so the SSE-layer line is correct for both shapes. Use this `console.error` in the Step 5b `case 'failed':`:
+```js
+                console.error(color(`\n  [SSE] Workflow FAILED: ${data.error || (data.errors && data.errors[0] && data.errors[0].message) || 'unknown'}${data.details ? ' — ' + data.details : ''}`, 'red'));
+```
+(Everything else in Step 5b — the `resolveCompletePayload(data)` → `onComplete` flow — is unchanged. The flat `currentPhase:'error'` payload lands in the post-loop error branch at `:3478-3485`, which already prints `currentData.errors`.)
+
+### Verified safe / no action
+- **11.3 / X-6:** every existing `generateRosterSection` test asserting a pronoun suffix passes `'journalist'` (`node-helpers.test.js:116`, `prompt-builder.test.js:1072/1081`, `character-data-prompt.test.js`). No test asserts a *detective* roster keeps the suffix → X-6 breaks nothing. 11.3 edits only the body; CR-7/P12.8 collapses the 4 call sites last (no conflict).
+- **11.1 Step 8** (live `--auto` run) is **operator-deferred** — needs the running server + Notion; the implementer verifies the pure resolver via Jest (Steps 1-4) and the wiring via read + the Step 7 assertion.
+- `__tests__/unit/scripts/` exists; `scripts/lib/` is created on first add. `input-nodes-schema.test.js` exists and consumes `_testing` (Step 7 valid; adding one export key won't break it).
+
+### Execution
+Subagent-driven, order **11.1 → 11.2 → 11.3**, fresh Sonnet implementer per task → Opus spec review → Opus quality review → fix-loop → one clean commit each → adversarial Opus capstone + full `npx jest`.
+
+---
+
 ## Phase P12: Cleanup / hygiene
 
 Goal: Remove dead exports, constants, methods, and stale comments surfaced by the audit (X-8, DEAD-1, DEAD-2, S11/S12/S14), keeping the Jest suite green after each removal.
