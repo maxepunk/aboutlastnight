@@ -231,8 +231,8 @@ function getArticleCriteria(theme = 'journalist') {
     },
     antiPatterns: {
       description: isDetective
-        ? 'Are anti-patterns avoided? (token terminology, game mechanics, character sheet references)'
-        : 'Are anti-patterns avoided? (em-dash, token terminology, game mechanics)',
+        ? 'Are anti-patterns avoided? (token terminology, game mechanics, character sheet references; the in-world phrase "memory token" is allowed)'
+        : 'Are anti-patterns avoided? (em-dash, token terminology, game mechanics; the in-world phrase "memory token" is allowed)',
       weight: 0.15,
       type: 'structural'
     },
@@ -428,11 +428,11 @@ Remember: STRUCTURAL issues block. ADVISORY issues are warnings for human consid
     const isDetectiveOutline = theme === 'detective';
     const outlineType = isDetectiveOutline ? 'case report' : 'article';
     const criticalChecks = isDetectiveOutline
-      ? `CRITICAL CHECKS:
+      ? `CRITICAL OUTLINE CHECKS:
 - arcCoverage: Every selected thread should be addressed in the outline
 - requiredSections: executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment MUST exist
 - sectionDifferentiation: Each section must answer a DIFFERENT question (no repeated facts)`
-      : `CRITICAL CHECKS:
+      : `CRITICAL OUTLINE CHECKS:
 - arcCoverage: Every selected arc should be referenced in theStory section
 - requiredSections: lede, theStory, thePlayers, closing MUST exist`;
 
@@ -538,9 +538,9 @@ EVALUATION RULES:
 CRITICAL CHECKS:
 ${theme === 'detective'
   ? `- voiceConsistency: Report MUST use third-person investigative voice ("The investigation revealed", "Evidence indicates")
-- antiPatterns: Report MUST NOT contain "token", "Act 1/2/3", game terminology, "character sheet"`
+- antiPatterns: Report MUST NOT contain the bare system label "token" (the in-world phrase "memory token" is ALLOWED and correct), "Act 1/2/3", game terminology, "character sheet"`
   : `- voiceConsistency: Article MUST use first-person participatory voice ("I", "my", "we")
-- antiPatterns: Article MUST NOT contain em-dashes (—), "token", "Act 1/2/3", game terminology`}
+- antiPatterns: Article MUST NOT contain em-dashes (—), the bare system label "token" (the in-world phrase "memory token" is ALLOWED and correct), "Act 1/2/3", game terminology`}
 
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC lines with voice issues
