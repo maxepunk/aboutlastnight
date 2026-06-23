@@ -31,6 +31,7 @@ const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('./lib/api-helpers');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
+const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
 const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
 const { SchemaValidator } = require('./lib/schema-validator');
@@ -392,6 +393,10 @@ const SSE_HEARTBEAT_MS = 15000;
 // (413) before any handler.
 app.use('/api/auth/login', express.json({ limit: '1kb' }));
 app.use(express.json({ limit: '50mb' }));
+// SEC (P7.8): block sensitive paths (data/, source, config, internal docs)
+// before the root static mount, which is unauthenticated and would otherwise
+// serve the entire repo (incl. data/checkpoints.sqlite) over the tunnel.
+app.use(staticGuard);
 app.use(express.static(__dirname));
 
 // Serve console SPA
