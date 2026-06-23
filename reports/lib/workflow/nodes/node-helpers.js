@@ -1070,6 +1070,31 @@ function normalizeRosterPronounsToCanonical(rosterPronouns, canonicalCharacters)
   return out;
 }
 
+/**
+ * F1 invariant guard: roster names with NO match in canonicalCharacters.
+ * A roster PC absent from canonicalCharacters loses their pronoun + canonical
+ * surname in generateRosterSection (silent they/them). Matching mirrors
+ * normalizeRosterPronounsToCanonical: canonical first-name key (case-insensitive)
+ * OR canonical full-name value (case-insensitive, trimmed).
+ * @param {Array|null} roster - roster entries (strings or {name})
+ * @param {Object|null} canonicalCharacters - firstName -> fullName map
+ * @returns {string[]} uncovered roster names (empty = invariant holds)
+ */
+function findUncoveredRosterNames(roster, canonicalCharacters) {
+  const canonical = canonicalCharacters || {};
+  const keys = Object.keys(canonical);
+  const keyLower = new Set(keys.map(k => k.toLowerCase().trim()));
+  const fullLower = new Set(keys.map(k => String(canonical[k]).toLowerCase().trim()));
+  const uncovered = [];
+  for (const entry of (roster || [])) {
+    const name = (entry && entry.name) || entry;
+    if (!name) continue;
+    const lower = String(name).toLowerCase().trim();
+    if (!keyLower.has(lower) && !fullLower.has(lower)) uncovered.push(name);
+  }
+  return uncovered;
+}
+
 module.exports = {
   safeParseJson,
   getSdkClient,
@@ -1103,6 +1128,9 @@ module.exports = {
 
   // Canonical character extraction (RC2)
   extractCanonicalCharacters,
+
+  // F1 invariant guard: roster names with no canonicalCharacters match
+  findUncoveredRosterNames,
 
   // Financial validation (Pipeline Quality D2)
   validateFinancialData,

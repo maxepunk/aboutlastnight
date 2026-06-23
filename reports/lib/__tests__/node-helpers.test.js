@@ -133,3 +133,28 @@ describe('F1 single-source stamp precedence (CR-6)', () => {
     expect(stamp(null, null, canonical)).toEqual({});
   });
 });
+
+describe('findUncoveredRosterNames (F1 invariant guard)', () => {
+  const { findUncoveredRosterNames } = require('../workflow/nodes/node-helpers');
+  const canonical = { Vic: 'Vic Kingsley', Sarah: 'Sarah Blackwood' };
+  it('returns [] when every roster name matches a canonical key (case-insensitive)', () => {
+    expect(findUncoveredRosterNames(['vic', 'Sarah'], canonical)).toEqual([]);
+  });
+  it('matches a full canonical name too', () => {
+    expect(findUncoveredRosterNames(['Vic Kingsley'], canonical)).toEqual([]);
+  });
+  it('flags a name with no canonical match', () => {
+    expect(findUncoveredRosterNames(['Alice', 'Vic'], canonical)).toEqual(['Alice']);
+  });
+  it('handles object roster entries and empty inputs', () => {
+    expect(findUncoveredRosterNames([{ name: 'Sarah' }], canonical)).toEqual([]);
+    expect(findUncoveredRosterNames(null, canonical)).toEqual([]);
+    expect(findUncoveredRosterNames(['X'], null)).toEqual(['X']);
+  });
+  it('trims surrounding whitespace before matching', () => {
+    expect(findUncoveredRosterNames([' Vic '], canonical)).toEqual([]);
+  });
+  it('flags prototype-key names (Set-based membership, no inherited-key false match)', () => {
+    expect(findUncoveredRosterNames(['constructor', 'toString'], canonical)).toEqual(['constructor', 'toString']);
+  });
+});

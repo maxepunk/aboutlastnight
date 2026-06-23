@@ -39,6 +39,7 @@ const {
   createBatches,
   processWithConcurrency,
   resolveArc,
+  findUncoveredRosterNames,  // F1 invariant guard: roster names with no canonical match
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper
 } = require('./node-helpers');
 const { traceNode } = require('../../observability');
@@ -869,6 +870,14 @@ async function generateOutline(state, config) {
   // Build session facts for outline (same as article phase - RC3 guardrail)
   const roster = state.sessionConfig?.roster || [];
   const canonicalChars = state.canonicalCharacters || {};
+  // F1 invariant: every roster PC must resolve to a canonicalCharacters entry, or
+  // generateRosterSection silently drops their pronoun + canonical surname (they/them).
+  // This holds ONLY because fetchMemoryTokens fetches ALL tokens (scannedTokens is never
+  // set). If that ever changes — or a director enters a non-character name — warn loudly.
+  const uncoveredRoster = findUncoveredRosterNames(roster, canonicalChars);
+  if (uncoveredRoster.length > 0) {
+    console.warn(`[F1] roster names with no canonical match (pronoun/surname will default to they/them): ${uncoveredRoster.join(', ')}`);
+  }
   const sessionFacts = roster.length > 0 ? {
     roster: roster.map(p => {
       const name = p.name || p;
@@ -1136,6 +1145,14 @@ async function generateContentBundle(state, config) {
   // Build session facts for non-roster character guardrail (RC3)
   const roster = state.sessionConfig?.roster || [];
   const canonicalChars = state.canonicalCharacters || {};
+  // F1 invariant: every roster PC must resolve to a canonicalCharacters entry, or
+  // generateRosterSection silently drops their pronoun + canonical surname (they/them).
+  // This holds ONLY because fetchMemoryTokens fetches ALL tokens (scannedTokens is never
+  // set). If that ever changes — or a director enters a non-character name — warn loudly.
+  const uncoveredRoster = findUncoveredRosterNames(roster, canonicalChars);
+  if (uncoveredRoster.length > 0) {
+    console.warn(`[F1] roster names with no canonical match (pronoun/surname will default to they/them): ${uncoveredRoster.join(', ')}`);
+  }
   const sessionFacts = roster.length > 0 ? {
     roster: roster.map(p => {
       const name = p.name || p;
