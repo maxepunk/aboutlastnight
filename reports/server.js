@@ -391,14 +391,34 @@ app.use('/sessionphotos/:sessionId', (req, res, next) => {
     express.static(photosDir)(req, res, next);
 });
 
-// Session middleware for authentication
+// Session middleware for authentication.
+// SECURITY (SEC-4): refuse to start without a real secret — the in-repo
+// fallback let anyone forge {authenticated:true} cookies over the tunnel.
+if (!process.env.SESSION_SECRET) {
+    console.error(
+        '\nFATAL: SESSION_SECRET is not set.\n' +
+        'Generate one with:  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"\n' +
+        'and add it to .env before starting the server.\n'
+    );
+    process.exit(1);
+}
+
+// Behind the Cloudflare tunnel the public origin is HTTPS, but Express sees
+// the proxied (http) hop — trust the proxy so secure cookies are honored.
+app.set('trust proxy', 1);
+
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'fallback-secret-change-this',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
-        secure: false, // Set to true if using HTTPS only
+        // 'auto' = mark the cookie Secure whenever the request is HTTPS. With
+        // `trust proxy` set (above) Express derives this from x-forwarded-proto,
+        // so the cookie is Secure behind the tunnel and plain on http://localhost
+        // dev — WITHOUT depending on NODE_ENV, which the launch scripts never set.
+        secure: 'auto',
+        sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     }
 }));

@@ -1,3 +1,4 @@
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used-for-signing-in-tests';
 /**
  * buildResumePayload Unit Tests
  *

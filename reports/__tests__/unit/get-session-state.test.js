@@ -1,3 +1,4 @@
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used-for-signing-in-tests';
 /**
  * getSessionState / shapeSessionState (READ-1 + DEL-1 read side)
  * A state read must report interrupt status and the last persisted outcome.

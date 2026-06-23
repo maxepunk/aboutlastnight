@@ -1,3 +1,4 @@
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used-for-signing-in-tests';
 /**
  * SIGINT drain (DUR-2): an in-flight /approve resume must finish (or be
  * awaited) and the durable checkpointer's db handle must close before exit.
