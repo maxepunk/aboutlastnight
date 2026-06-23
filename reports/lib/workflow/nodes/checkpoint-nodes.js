@@ -156,6 +156,7 @@ async function checkpointAwaitRoster(state, config) {
     {
       genericPhotoAnalyses: state.photoAnalyses,
       whiteboardPhotoPath: state.whiteboardPhotoPath,
+      canonicalCharacters: state.canonicalCharacters || {},
       message: 'Provide roster to enable whiteboard OCR and character identification'
     },
     skipCondition

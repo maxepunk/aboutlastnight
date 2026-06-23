@@ -10,6 +10,7 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, safeStringify } = window.Console.utils;
 const { resolveRosterPronoun } = window.Console.inputReviewLogic;
+const { validateRosterEntry } = window.Console.awaitRosterLogic;
 
 function CharacterMentionsSection({ mentions, roster }) {
   const [selected, setSelected] = React.useState(null);
@@ -62,6 +63,8 @@ function InputReview({ data, onApprove, theme }) {
   const whiteboard = directorNotes.whiteboard || {};
   const roster = sessionConfig.roster || [];
   const rosterPronouns = sessionConfig.rosterPronouns || {};
+  const canonicalCharacters = (data && data.canonicalCharacters) || {};
+  const hasCanon = Object.keys(canonicalCharacters).length > 0;
 
   // Confidence badge color mapping
   const confidenceColor = {
@@ -111,7 +114,15 @@ function InputReview({ data, onApprove, theme }) {
       React.createElement('div', { className: 'tag-list' },
         roster.map(function (name) {
           const pronouns = resolveRosterPronoun(name, rosterPronouns);
-          return React.createElement(Badge, { key: name, label: name + ' (' + pronouns + ')', color: 'var(--accent-cyan)' });
+          const isUnknown = hasCanon && !validateRosterEntry(name, canonicalCharacters).matched;
+          return React.createElement('span', {
+            key: name,
+            className: 'flex gap-sm items-center',
+            title: isUnknown ? 'No character match — pronouns may default to they/them in the article.' : undefined
+          },
+            React.createElement(Badge, { label: name + ' (' + pronouns + ')', color: 'var(--accent-cyan)' }),
+            isUnknown && React.createElement(Badge, { label: '⚠ no character match', color: 'var(--accent-amber)' })
+          );
         })
       )
     ),

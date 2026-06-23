@@ -693,7 +693,7 @@ Return structured JSON matching the schema.`;
   // are read-only). Do not introduce a non-idempotent side effect before this point.
   checkpointInterrupt(
     CHECKPOINT_TYPES.INPUT_REVIEW,
-    parsedData,
+    { ...parsedData, canonicalCharacters: state.canonicalCharacters || {} },
     sessionConfig.roster?.length > 0 ? true : null
   );
 
