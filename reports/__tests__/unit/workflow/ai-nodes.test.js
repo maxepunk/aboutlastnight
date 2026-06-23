@@ -178,14 +178,6 @@ describe('ai-nodes', () => {
       expect(typeof builder.buildRevisionPrompt).toBe('function');
     });
 
-    it('has theme property with loadTemplate', async () => {
-      const builder = createMockPromptBuilder();
-
-      expect(builder.theme).toBeDefined();
-      const template = await builder.theme.loadTemplate();
-      expect(typeof template).toBe('string');
-    });
-
     it('returns systemPrompt and userPrompt from build methods', async () => {
       const builder = createMockPromptBuilder();
 

@@ -14,7 +14,6 @@ jest.mock('../theme-loader', () => {
         'formatting': '',
         'evidence-boundaries': ''
       }),
-      loadTemplate: jest.fn(),
       validate: jest.fn()
     }))
   };

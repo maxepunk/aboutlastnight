@@ -14,7 +14,6 @@ jest.mock('../theme-loader', () => {
     ...actual,
     createThemeLoader: jest.fn(() => ({
       loadPhasePrompts: jest.fn(),
-      loadTemplate: jest.fn(),
       validate: jest.fn()
     }))
   };

@@ -151,22 +151,6 @@ class ThemeLoader {
   }
 
   /**
-   * Load the HTML article template (cached)
-   * @returns {Promise<string>} - Template HTML
-   */
-  async loadTemplate() {
-    const cacheKey = 'template:article';
-
-    if (!this.cache.has(cacheKey)) {
-      const filePath = path.join(this.assetsPath, 'article.html');
-      const content = await fs.readFile(filePath, 'utf8');
-      this.cache.set(cacheKey, content);
-    }
-
-    return this.cache.get(cacheKey);
-  }
-
-  /**
    * Load CSS files for the template
    * Discovers .css files from the assets/css directory (theme-agnostic).
    * Files are loaded in alphabetical order for deterministic output.

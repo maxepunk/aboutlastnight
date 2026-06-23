@@ -208,27 +208,9 @@ describe('ThemeLoader', () => {
     });
   });
 
-  describe('loadTemplate', () => {
-    it('should load and cache template', async () => {
-      const mockTemplate = '<html>...</html>';
-      fs.readFile.mockResolvedValue(mockTemplate);
-
-      const result = await loader.loadTemplate();
-
-      expect(result).toBe(mockTemplate);
-      expect(fs.readFile).toHaveBeenCalledWith(
-        path.join(testSkillPath, 'assets', 'article.html'),
-        'utf8'
-      );
-    });
-
-    it('should return cached template on second call', async () => {
-      fs.readFile.mockResolvedValue('<template>');
-
-      await loader.loadTemplate();
-      await loader.loadTemplate();
-
-      expect(fs.readFile).toHaveBeenCalledTimes(1);
+  describe('dead-method removal (X-8)', () => {
+    it('does not expose loadTemplate (article.html is no longer prompt context)', () => {
+      expect(loader.loadTemplate).toBeUndefined();
     });
   });
 
@@ -323,7 +305,6 @@ describe('ThemeLoader', () => {
 
       // Populate cache
       await loader.loadPrompt('test');
-      await loader.loadTemplate();
       expect(loader.cache.size).toBeGreaterThan(0);
 
       loader.clearCache();
@@ -347,13 +328,11 @@ describe('ThemeLoader', () => {
       fs.readFile.mockResolvedValue('content');
 
       await loader.loadPrompt('test-prompt');
-      await loader.loadTemplate();
 
       const stats = loader.getCacheStats();
 
-      expect(stats.entries).toBe(2);
+      expect(stats.entries).toBe(1);
       expect(stats.keys).toContain('prompt:test-prompt');
-      expect(stats.keys).toContain('template:article');
       expect(stats.validated).toBe(false);
     });
 

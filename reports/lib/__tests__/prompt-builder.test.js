@@ -11,9 +11,7 @@ jest.mock('../theme-loader', () => {
   return {
     ...actual,
     createThemeLoader: jest.fn(() => ({
-      loadPhasePrompts: jest.fn(),
-      loadTemplate: jest.fn(),
-      validate: jest.fn()
+      loadPhasePrompts: jest.fn(),      validate: jest.fn()
     }))
   };
 });
@@ -27,9 +25,7 @@ describe('PromptBuilder', () => {
 
     // Create mock theme loader
     mockThemeLoader = {
-      loadPhasePrompts: jest.fn(),
-      loadTemplate: jest.fn(),
-      validate: jest.fn()
+      loadPhasePrompts: jest.fn(),      validate: jest.fn()
     };
 
     builder = new PromptBuilder(mockThemeLoader);
@@ -565,9 +561,7 @@ describe('PromptBuilder', () => {
         'formatting': 'formatting stub',
         'anti-patterns': 'anti-patterns stub',
         'editorial-design': 'design stub',
-      }),
-      loadTemplate: jest.fn(),
-      validate: jest.fn()
+      }),      validate: jest.fn()
     };
   }
 
@@ -1119,9 +1113,7 @@ describe('PromptBuilder', () => {
           'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
           'anti-patterns': '', 'section-rules': '', 'editorial-design': '', 'formatting': '',
           'writing-principles': ''
-        }),
-        loadTemplate: jest.fn(),
-        validate: jest.fn()
+        }),        validate: jest.fn()
       };
       const sessionConfig = { reportingMode: 'on-site', journalistFirstName: 'Cassandra' };
       builder = new PromptBuilder(mockThemeLoader, 'journalist', sessionConfig);

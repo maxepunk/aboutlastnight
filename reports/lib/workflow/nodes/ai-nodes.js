@@ -1543,7 +1543,6 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
  */
 function createMockPromptBuilder() {
   const mockTheme = {
-    loadTemplate: async () => '<html>{{content}}</html>',
     loadPhasePrompts: async (phase) => ({
       'character-voice': 'Test character voice prompt',
       'evidence-boundaries': 'Test evidence boundaries prompt',
