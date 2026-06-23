@@ -30,6 +30,7 @@ const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('./lib/api-helpers');
+const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
 const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
 const { SchemaValidator } = require('./lib/schema-validator');
@@ -43,6 +44,13 @@ const sharedCheckpointer = SqliteSaver.fromConnString(CHECKPOINT_DB_PATH);
 
 // Base directory all browse/file requests are confined to (SEC-1/SEC-2)
 const DATA_DIR = path.join(__dirname, 'data');
+
+// Login brute-force protection (SEC-5): 5 failures / 15 min per IP, 15 min lockout
+const loginRateLimiter = createLoginRateLimiter({
+    maxAttempts: 5,
+    windowMs: 15 * 60 * 1000,
+    lockoutMs: 15 * 60 * 1000
+});
 
 // Shared promptBuilder - created at startup, injected into workflow config (Commit 8.18)
 // Persists cache across all graph invocations for efficient prompt loading
@@ -437,6 +445,7 @@ function requireAuth(req, res, next) {
 app.post('/api/auth/login', (req, res) => {
     const { password } = req.body;
     const correctPassword = process.env.ACCESS_PASSWORD;
+    const ip = req.ip;
 
     if (!correctPassword) {
         console.warn('WARNING: ACCESS_PASSWORD not set in .env file');
@@ -446,15 +455,30 @@ app.post('/api/auth/login', (req, res) => {
         });
     }
 
+    // SEC-5: refuse before checking the password if this IP is locked out.
+    const gate = loginRateLimiter.check(ip);
+    if (!gate.allowed) {
+        const retryAfterSec = Math.ceil(gate.retryAfterMs / 1000);
+        console.warn(`[${new Date().toISOString()}] Login blocked (rate limit) from ${ip}, retry in ${retryAfterSec}s`);
+        res.set('Retry-After', String(retryAfterSec));
+        return res.status(429).json({
+            success: false,
+            message: `Too many attempts. Try again in ${Math.ceil(retryAfterSec / 60)} minute(s).`,
+            retryAfterMs: gate.retryAfterMs
+        });
+    }
+
     if (password === correctPassword) {
+        loginRateLimiter.recordSuccess(ip);
         req.session.authenticated = true;
-        console.log(`[${new Date().toISOString()}] Successful login from ${req.ip}`);
+        console.log(`[${new Date().toISOString()}] Successful login from ${ip}`);
         res.json({
             success: true,
             message: 'Authentication successful'
         });
     } else {
-        console.warn(`[${new Date().toISOString()}] Failed login attempt from ${req.ip}`);
+        loginRateLimiter.recordFailure(ip);
+        console.warn(`[${new Date().toISOString()}] Failed login attempt from ${ip}`);
         res.status(401).json({
             success: false,
             message: 'Incorrect password'
@@ -1281,7 +1305,12 @@ if (require.main === module) {
         console.log(`Theme files validated (${sharedPromptBuilder.theme.cache.size} cached) ✓`);
     }
 
-    httpServer = app.listen(PORT, () => {
+    // SEC-A-3: bind loopback only — the Cloudflare tunnel (→ localhost) is the
+    // sole remote ingress. Prevents a direct-LAN client from spoofing
+    // X-Forwarded-For (trusted via `trust proxy`, Task 7.3) to rotate req.ip and
+    // evade the SEC-5 login rate-limiter. Console is reachable via the public
+    // tunnel URL or http://localhost:3001 — NOT via the host's LAN IP.
+    httpServer = app.listen(PORT, '127.0.0.1', () => {
         console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
