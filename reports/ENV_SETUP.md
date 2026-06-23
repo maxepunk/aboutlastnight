@@ -7,8 +7,8 @@ Your Notion integration token is now stored in a local `.env` file instead of be
 ### Files Modified
 
 1. **`package.json`** - Added `dotenv` dependency
-2. **`server.js`** - Added `/api/config` endpoint to serve token
-3. **`detlogv3.html`** - Frontend fetches token from backend on page load
+2. **`server.js`** - Added `/api/config` endpoint reporting whether Notion is configured (token stays server-side, never sent to the client)
+3. **`detlogv3.html`** - Legacy standalone debug page; reads `/api/config` but uses its own browser-side token (manual entry / `localStorage`) for direct Notion calls — see "Token Exposure" below
 
 ### Files Created
 
@@ -28,9 +28,9 @@ Your Notion integration token is now stored in a local `.env` file instead of be
 
 ### After (Automatic)
 1. Server reads token from `.env` file on startup
-2. Frontend fetches token from `/api/config` endpoint
-3. Token automatically populated in form
-4. Falls back to localStorage if server unavailable
+2. Server uses the token for all Notion calls; the token never leaves the server
+3. Frontend checks `/api/config` only for whether Notion is configured (`{ notionConfigured: boolean }`)
+4. No token entry needed in the browser
 
 ---
 
@@ -132,32 +132,23 @@ git status
 
 ### Token Exposure
 
-**Current risk level: Low (for personal use)**
+**Current risk level: Low**
 
-- Token served via `/api/config` endpoint
-- Anyone who can access your server can get the token
-- For personal/small team use, this is acceptable
+- In the **console SPA**, the token NEVER leaves the server — all pipeline Notion access is server-side (`lib/notion-client.js`)
+- `/api/config` (auth-protected) returns only `{ notionConfigured: boolean }`, not the token (SEC-3)
+- A console client therefore cannot read `NOTION_TOKEN`, even when authenticated
+- **Legacy exception:** the standalone debug pages `detlogv2.html` / `detlogv3.html` (served statically from the repo root) use a separate browser-side token model — the operator pastes a token held in `localStorage` and sent directly from the browser to Notion. They are NOT the production console and no longer receive a token from `/api/config`; retire them if the browser-side-token path is unwanted.
 
-**If you want higher security:**
-
-Add authentication to the `/api/config` endpoint:
+**The current handler returns only a non-secret boolean:**
 
 ```javascript
-// In server.js, modify /api/config endpoint
-app.get('/api/config', (req, res) => {
-    // Check for API key (optional)
-    const apiKey = req.headers['x-api-key'];
-    if (apiKey !== process.env.API_KEY) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
+// In server.js — /api/config returns no secrets
+app.get('/api/config', requireAuth, (req, res) => {
     res.json({
-        notionToken: process.env.NOTION_TOKEN || ''
+        notionConfigured: Boolean(process.env.NOTION_TOKEN)
     });
 });
 ```
-
-Then add `API_KEY=your-secret` to `.env` and update frontend to send it.
 
 ---
 
@@ -165,11 +156,11 @@ Then add `API_KEY=your-secret` to `.env` and update frontend to send it.
 
 ### "Token field is empty on load"
 
-**Problem:** Frontend not fetching token from backend
+**Problem:** Frontend not reaching the backend config endpoint
 
 **Check:**
 1. Server is running: `http://localhost:3001/api/config`
-   - Should return: `{"notionToken":"ntn_..."}`
+   - Should return: `{"notionConfigured":true}`
 2. Browser console for errors (F12 → Console tab)
 3. Try hard refresh: Ctrl+Shift+R
 
@@ -271,7 +262,7 @@ npm install
 # Start server (loads .env automatically)
 npm start
 
-# Check token endpoint works
+# Check config endpoint works (returns {"notionConfigured":true})
 curl http://localhost:3001/api/config
 
 # View .env contents

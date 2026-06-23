@@ -1159,10 +1159,12 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Config endpoint - serves environment variables to frontend (protected)
+// Config endpoint - serves NON-SECRET client configuration (protected).
+// SEC-3: NOTION_TOKEN is NEVER sent to the client — all Notion access is
+// server-side (lib/notion-client.js). The console SPA does not read it.
 app.get('/api/config', requireAuth, (req, res) => {
     res.json({
-        notionToken: process.env.NOTION_TOKEN || ''
+        notionConfigured: Boolean(process.env.NOTION_TOKEN)
     });
 });
 
