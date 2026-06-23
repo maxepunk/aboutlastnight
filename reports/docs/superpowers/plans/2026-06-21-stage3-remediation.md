@@ -9129,6 +9129,14 @@ The 2026-06-22 P10 preflight validated every anchor against live source (P8/P9 e
 
 **Verification after all four:** `npx jest` whole-suite green; then the adversarial Opus capstone.
 
+### Post-review F9 completions folded into P10 (added 2026-06-23, user-confirmed)
+
+The per-task reviews surfaced two F9 sites the plan's 4 tasks didn't cover; both folded in:
+- **10.3 fold (`8279b6f`):** the live article evaluator had a SECOND token-ban surface besides `CRITICAL CHECKS` — the structural (blocking, weight 0.15) `antiPatterns` CRITERION description (`evaluator-nodes.js:232-238`). Scoped both themes to allow "memory token". (Also renamed the OUTLINE evaluator's `CRITICAL CHECKS:` header → `CRITICAL OUTLINE CHECKS:` so the guard test's `indexOf` anchors unambiguously to the article block — spec-adjudicated KEEP, safe, documented.)
+- **Revision-prompt site (`79f2569`):** `buildRevisionPrompt`'s two checklists (`prompt-builder.js` ~:1079 detective, ~:1089 journalist) still listed `"tokens"` as banned game-mechanics terminology, unqualified — the last live token-ban path. Scoped both to the bare label + allow "memory token".
+
+**Theme decision (user, 2026-06-23):** "the phrase 'memory token' is fine across the board." So the carve-out is UNIFORM across both themes (no detective-strict variant). Rationale confirmed by the skill prompts: both themes' `photo-analysis.md` legitimately write "memory tokens visible" in captions, so the validators must NOT hard-block "memory token"; the VOICE prompts (journalist `character-voice.md:55` "NEVER refer to 'memory tokens' as objects" → "extracted memory"; detective `:147` "NEVER use 'Memory Token'" → "memory extraction") still advisorily steer EVIDENCE PROSE — a separate concern from the structural validator ban. F9 is now complete on every live path: generation example, evaluator (CRITICAL CHECKS + structural criterion), validation prompt, and revision prompt.
+
 ---
 
 ## Phase P11: Remaining correctness (harness + precedence + detective leak)
