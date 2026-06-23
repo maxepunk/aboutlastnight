@@ -1084,6 +1084,28 @@ describe('PromptBuilder', () => {
       const result = generateRosterSection('journalist', canonical);
       expect(result).toContain('Vic Kingsley (they/them)');
     });
+
+    it('detective theme omits the pronoun annotation entirely (X-6)', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const canonical = { Vic: 'Vic Kingsley', Sam: 'Sam Rivera' };
+      const pronouns = { Vic: 'she/her' };
+      const result = generateRosterSection('detective', canonical, null, pronouns);
+      expect(result).toContain('Vic → Vic Kingsley');
+      expect(result).toContain('Sam → Sam Rivera');
+      // No pronoun suffix on detective roster lines:
+      expect(result).not.toContain('they/them');
+      expect(result).not.toContain('she/her');
+      expect(result).not.toMatch(/Vic Kingsley \(/);
+      // Bare line — nothing trailing the full name (not even a stray space):
+      expect(result).toMatch(/- Vic → Vic Kingsley$/m);
+    });
+
+    it('journalist theme still appends the pronoun annotation (X-6 does not regress F1)', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const canonical = { Vic: 'Vic Kingsley' };
+      const result = generateRosterSection('journalist', canonical, null, { Vic: 'she/her' });
+      expect(result).toContain('Vic Kingsley (she/her)');
+    });
   });
 
   describe('buildArticlePrompt — enriched director notes', () => {

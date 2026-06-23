@@ -30,8 +30,14 @@ function generateRosterSection(theme = 'journalist', canonicalCharacters = null,
     return key ? pronounMap[key] : 'they/them';
   };
 
+  // Pronoun annotation is journalist-only (first-person, captured pronouns).
+  // Detective is third-person — the annotation is meaningless there, so omit the
+  // suffix even when rosterPronouns is populated (it's captured theme-agnostically) (X-6).
+  const showPronouns = theme === 'journalist';
   const lines = Object.entries(characters)
-    .map(([first, full]) => `- ${first} → ${full} (${resolvePronouns(first)})`)
+    .map(([first, full]) => showPronouns
+      ? `- ${first} → ${full} (${resolvePronouns(first)})`
+      : `- ${first} → ${full}`)
     .join('\n');
 
   let result = `CANONICAL CHARACTER ROSTER:
