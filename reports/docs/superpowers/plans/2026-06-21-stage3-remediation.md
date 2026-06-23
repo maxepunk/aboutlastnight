@@ -7873,6 +7873,140 @@ describe('F1 single-source stamp precedence (CR-6)', () => {
 
 ---
 
+## Phase P8 (corrected scope, added 2026-06-22 post-investigation): Tasks 8.6–8.9
+
+Tasks 8.1–8.4 + an adversarial capstone landed, and a **live-Notion probe through the real acquisition path** (`fetchMemoryTokens([])` → `extractCanonicalCharacters`) confirmed `canonicalCharacters` = all 20 PCs + Marcus **every session** — because `directorNotes.scannedTokens` is never populated (no code writer; absent from all input JSON), so all 81 tokens are always fetched. Therefore F1 (8.1–8.4) delivers correct director pronouns + canonical surnames for the whole roster; it works. The probe also confirmed the live character set is name-clean (owners resolve from the Characters DB current names; the Timeline DB — which still holds old names — is never fetched).
+
+Four grounded follow-ups, folded in below. (The earlier "validate roster against canonicalCharacters because it omits roster PCs" idea is **withdrawn** — its premise was a stale `data/{id}/fetched/tokens.json` artifact, not the live fetch.)
+
+**Naming ground truth (`audit/narrative-universe.md`, read live from Notion 2026-06-19):** character names changed once, globally (~Dec 2025→Feb 2026). Current canon: Victoria→**Vic** Kingsley, Jessicah→**Jess** Kane, Diana→**Mel** Nilsson, Oliver→**Quinn** Sterling, James→**Remi** Whitman, Derek→**Sam** Thorne, Sofia→**Nat** Francisco, Leila→**Zia** Bishara, Tori→**Cass** Zhang, Howie→**Ezra** Sullivan, Rachel→**Riley** Torres. Token codes: VIK→VIC, HOS→EZR, etc. "Chen" is a hallucinated surname the anti-patterns file already forbids.
+
+### Task 8.6: Fail-loud guard for the `roster ⊆ canonicalCharacters` invariant
+
+Pronoun + canonical-surname delivery (`generateRosterSection` iterates `canonicalCharacters`; `sessionFacts.roster` at `ai-nodes.js:873-876/1140-1143` falls back to the bare first name) silently assumes every roster PC is in `canonicalCharacters`. That holds ONLY because all tokens are fetched. This task makes a breach (a future `scannedTokens` wiring, OR a director entering a non-character name) **fail loud** instead of silently emitting they/them.
+
+**Files:**
+- Modify: `lib/workflow/nodes/node-helpers.js` (new `findUncoveredRosterNames` + export before `module.exports`)
+- Modify: `lib/workflow/nodes/ai-nodes.js` (warn in both sessionFacts blocks, ~872 outline + ~1139 article)
+- Test: `lib/__tests__/node-helpers.test.js`
+
+- [ ] **Step 1: Failing test.** Append to `lib/__tests__/node-helpers.test.js`:
+```javascript
+describe('findUncoveredRosterNames (F1 invariant guard)', () => {
+  const { findUncoveredRosterNames } = require('../workflow/nodes/node-helpers');
+  const canonical = { Vic: 'Vic Kingsley', Sarah: 'Sarah Blackwood' };
+  it('returns [] when every roster name matches a canonical key (case-insensitive)', () => {
+    expect(findUncoveredRosterNames(['vic', 'Sarah'], canonical)).toEqual([]);
+  });
+  it('matches a full canonical name too', () => {
+    expect(findUncoveredRosterNames(['Vic Kingsley'], canonical)).toEqual([]);
+  });
+  it('flags a name with no canonical match', () => {
+    expect(findUncoveredRosterNames(['Alice', 'Vic'], canonical)).toEqual(['Alice']);
+  });
+  it('handles object roster entries and empty inputs', () => {
+    expect(findUncoveredRosterNames([{ name: 'Sarah' }], canonical)).toEqual([]);
+    expect(findUncoveredRosterNames(null, canonical)).toEqual([]);
+    expect(findUncoveredRosterNames(['X'], null)).toEqual(['X']);
+  });
+});
+```
+- [ ] **Step 2:** `npx jest lib/__tests__/node-helpers.test.js -t 'findUncoveredRosterNames'` → fails (not exported).
+- [ ] **Step 3: Implement** (in `node-helpers.js`, above `module.exports`, + add to exports):
+```javascript
+/**
+ * F1 invariant guard: roster names with NO match in canonicalCharacters.
+ * A roster PC absent from canonicalCharacters loses their pronoun + canonical
+ * surname in generateRosterSection (silent they/them). Matching mirrors
+ * normalizeRosterPronounsToCanonical: canonical first-name key (case-insensitive)
+ * OR canonical full-name value (case-insensitive, trimmed).
+ * @returns {string[]} uncovered roster names (empty = invariant holds)
+ */
+function findUncoveredRosterNames(roster, canonicalCharacters) {
+  const canonical = canonicalCharacters || {};
+  const keys = Object.keys(canonical);
+  const keyLower = new Set(keys.map(k => k.toLowerCase().trim()));
+  const fullLower = new Set(keys.map(k => String(canonical[k]).toLowerCase().trim()));
+  const uncovered = [];
+  for (const entry of (roster || [])) {
+    const name = (entry && entry.name) || entry;
+    if (!name) continue;
+    const lower = String(name).toLowerCase().trim();
+    if (!keyLower.has(lower) && !fullLower.has(lower)) uncovered.push(name);
+  }
+  return uncovered;
+}
+```
+- [ ] **Step 4:** re-run → 4 passing.
+- [ ] **Step 5: Wire the warn** into BOTH sessionFacts blocks in `ai-nodes.js` (outline ~870 and article ~1137). Add `findUncoveredRosterNames` to the existing `require('./node-helpers')` destructure. After `const canonicalChars = state.canonicalCharacters || {};` in each block, insert:
+```javascript
+  // F1 invariant: every roster PC must resolve to a canonicalCharacters entry, or
+  // generateRosterSection silently drops their pronoun + canonical surname (they/them).
+  // This holds ONLY because fetchMemoryTokens fetches ALL tokens (scannedTokens is never
+  // set). If that ever changes — or a director enters a non-character name — warn loudly.
+  const uncoveredRoster = findUncoveredRosterNames(roster, canonicalChars);
+  if (uncoveredRoster.length > 0) {
+    console.warn(`[F1] roster names with no canonical match (pronoun/surname will default to they/them): ${uncoveredRoster.join(', ')}`);
+  }
+```
+- [ ] **Step 6:** `npx jest lib/__tests__/node-helpers.test.js __tests__/unit/workflow/ai-nodes.test.js` → green.
+- [ ] **Step 7: Commit.** `git add lib/workflow/nodes/node-helpers.js lib/workflow/nodes/ai-nodes.js lib/__tests__/node-helpers.test.js && git commit -m 'feat(F1): fail-loud guard when a roster PC has no canonicalCharacters match (protects pronoun/surname delivery)'`
+
+### Task 8.7: AwaitRoster capture correctness — character names + canonicalCharacters validation (robust)
+
+The director must enter **character** names (matching `canonicalCharacters` keys — all 20 PCs, available live at the await-roster checkpoint) or pronouns silently fail. `AwaitRoster.js` says "Enter Player Names / e.g. Alice, Bob, Charlie" and "maps real player names to character identities" — actively misleading. Robust fix: correct the copy AND surface the known character set for validation/suggestion.
+
+**Files:**
+- Modify: `lib/workflow/nodes/checkpoint-nodes.js` (add `canonicalCharacters` to the await-roster interrupt payload, ~154-161)
+- Create: `console/await-roster-logic.js` (dual-export pure validation, per console testing rule)
+- Modify: `console/components/checkpoints/AwaitRoster.js` (copy + consume `data.canonicalCharacters` + inline warning)
+- Modify: `console/components/checkpoints/InputReview.js` (warn on roster entries with no canonical match)
+- Modify: `console/index.html` (script tag before AwaitRoster.js)
+- Test: `console/__tests__/await-roster-logic.test.js`
+
+- [ ] **Step 1 (checkpoint payload):** In `checkpointAwaitRoster` (`checkpoint-nodes.js`), add `canonicalCharacters: state.canonicalCharacters || {}` to the `checkpointInterrupt(CHECKPOINT_TYPES.AWAIT_ROSTER, { … })` data object. (`state.canonicalCharacters` is populated here — `fetchMemoryTokens` runs upstream per graph edges.) Confirm the server checkpoint route forwards the full `data` object to the console (the existing `genericPhotoAnalyses`/`whiteboardPhotoPath` fields prove it does).
+- [ ] **Step 2 (failing node-env test):** Create `console/__tests__/await-roster-logic.test.js` testing `validateRosterEntry(name, canonicalCharacters)` → `{ matched: boolean, canonical: string|null }` (exact key, case-insensitive, full-name, and unmatched cases) and `knownCharacterList(canonicalCharacters)` → sorted `[{ first, full }]`. Run → fails (module missing).
+- [ ] **Step 3 (dual-export module):** Create `console/await-roster-logic.js` (IIFE + `window.Console.awaitRosterLogic` + node `module.exports`), pure, matching `input-review-logic.js`'s pattern. `validateRosterEntry` reuses the X-1 matching semantics (key case-insensitive OR full-name). Run test → green.
+- [ ] **Step 4 (AwaitRoster UI + copy):** In `AwaitRoster.js`: change the section title/help/placeholder to elicit **character** names (e.g. heading "Enter Character Names", help "the characters who were played — names as they appear in the game", placeholder "e.g., Sarah, Vic, Remi"); rewrite the "Why Roster Is Needed" paragraph to say character identities/pronouns. Read `data.canonicalCharacters`; render known characters as one-click add-chips; on a free-typed name with no `validateRosterEntry` match, show an inline ⚠ warning (do NOT block — fail-loud, not fail-closed; a roster PC with zero tokens is a legit edge). Alias `window.Console.awaitRosterLogic` at module scope.
+- [ ] **Step 5 (index.html):** add `<script type="text/babel" src="await-roster-logic.js"></script>` immediately before the `AwaitRoster.js` tag. Pre-commit `tidy` hook validates HTML (no-ops without tidy in this env, but keep markup valid; never `--no-verify`).
+- [ ] **Step 6 (InputReview warning):** In `InputReview.js`, when rendering the roster, flag any entry with no canonical match (surface a small ⚠ next to the badge). Reuses 8.7 logic; if `canonicalCharacters` isn't available at InputReview, fall back to flagging only against the `rosterPronouns` key domain.
+- [ ] **Step 7:** `npx jest console/__tests__/await-roster-logic.test.js` → green; full `npx jest` → no regressions. Manual browser verify deferred to operator (console rule).
+- [ ] **Step 8: Commit.** `git add lib/workflow/nodes/checkpoint-nodes.js console/await-roster-logic.js console/components/checkpoints/AwaitRoster.js console/components/checkpoints/InputReview.js console/index.html console/__tests__/await-roster-logic.test.js && git commit -m 'feat(F1): AwaitRoster elicits character names + canonicalCharacters-backed validation (capture-layer fix)'`
+
+### Task 8.8: Refresh stale/wrong-name prompt examples to current canon
+
+All sites below were verified **model-facing** (inside prompt strings sent to the SDK), NOT test fixtures or comments. Update each to the current canonical name. Do NOT touch `*.test.js` fixtures, the `node-helpers.test.js` Victoria fixtures, or code comments (`node-helpers.js:98/1033`, `photo-nodes.js:588/715`).
+
+**Files & edits:**
+- `lib/evidence-preprocessor.js:81-82` — `VIK001`/`Victoria` → `VIC001`/`Vic` ("Vic's memory: discusses 'permanent solutions' with Morgan").
+- `lib/image-prompt-builder.js:53-54` — `"Viktoria" should be corrected to "Victoria"` → `"Vik" should be corrected to "Vic"` (and "if Vic is in the roster").
+- `lib/prompt-builder.js:437` — `character-photos/victoria.png` → `character-photos/vic.png`.
+- `lib/prompt-builder.js:876` — `Victoria's composure` → `Vic's composure`.
+- `lib/sdk-client/subagents.js:81` & `lib/workflow/nodes/arc-specialist-nodes.js:437` — `"Victoria's confident smile"` → `"Vic's confident smile"`.
+- `lib/workflow/nodes/evaluator-nodes.js:364` — `Sofia, Howie` → `Nat, Ezra`; `:372` `Sofia: Mentioned…` → `Nat: Mentioned…`; `:373` `Sofia: Was seen coordinating with Victoria` → `Nat: Was seen coordinating with Vic`.
+- `lib/workflow/nodes/evaluator-nodes.js:637` — `"hos011" does NOT mean "Howie"` → `"ezr011" does NOT mean "Ezra"`.
+- `.claude/skills/journalist-report/references/prompts/evidence-boundaries.md:22` — `Alex Chen` → `Alex Reeves`.
+- `.claude/skills/journalist-report/references/prompts/narrative-structure.md:227` — `— Skyler Chen` → `— Skyler Iyer`.
+
+- [ ] **Step 1:** Before each edit, re-confirm the line is inside a prompt string / prompt `.md` (not a fixture/comment). Apply the replacements above.
+- [ ] **Step 2:** Sanity sweep for residue: `grep -rn "Victoria\|Jessicah\|Diana Nilsson\|Oliver Sterling\|Sofia\|Howie\| Chen" lib/ .claude/skills/journalist-report/references/prompts/ | grep -v __tests__` — confirm only intended/non-model-facing residue remains.
+- [ ] **Step 3:** `npx jest` → no regressions (existing tests that assert on example text may need their assertions updated to the new names — update assertions, not the canon).
+- [ ] **Step 4: Commit.** `git add -A && git commit -m 'fix(F1): refresh stale/wrong-name prompt examples to current canon (Vic/Nat/Ezra/Reeves/Iyer)'`
+
+### Task 8.9: Trim canonical full-name whitespace in `extractCanonicalCharacters`
+
+Live Notion has `"Riley Torres "` (trailing space) in the Characters DB; `extractCanonicalCharacters` stores the owner string verbatim, so `generateRosterSection` renders the trailing space. Cosmetic (X-1 already trims for matching), but it's in the rendered prompt.
+
+**Files:** Modify `lib/workflow/nodes/node-helpers.js` (`extractCanonicalCharacters`, ~966-983); Test: `lib/__tests__/node-helpers.test.js`.
+
+- [ ] **Step 1: Failing test.** Append to `node-helpers.test.js`: a token with `owners: ['Riley Torres ']` (trailing space) → `extractCanonicalCharacters([token]).Riley` should equal `'Riley Torres'` (trimmed), key `'Riley'`.
+- [ ] **Step 2:** run → fails (value has trailing space).
+- [ ] **Step 3:** In `extractCanonicalCharacters`, trim the owner when storing (`const ownerTrimmed = owner.trim();` derive `firstName` from it, store `characters[firstNameKey] = ownerTrimmed;`). Keep first-occurrence-wins.
+- [ ] **Step 4:** run → green; full `npx jest lib/__tests__/node-helpers.test.js` → green.
+- [ ] **Step 5: Commit.** `git add lib/workflow/nodes/node-helpers.js lib/__tests__/node-helpers.test.js && git commit -m 'fix(F1): trim whitespace in extractCanonicalCharacters canonical names (Riley Torres trailing space)'`
+
+---
+
 ## Phase P9: Complete F3 (crystallization/pull-quotes) — schema + outline contract
 
 Goal: Attribution-less crystallization quote blocks validate against the content-bundle schema and render as inline `quote` blocks; the outline phase stops planning per-section `pullQuotes` that the post-F3 article phase ignores, and the dead `pullQuoteCount`/`minPullQuotes>0` post-gen guards (plus their false "revision loop" comment) are removed.
