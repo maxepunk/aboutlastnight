@@ -338,8 +338,8 @@ describe('SchemaValidator', () => {
       expect(result.valid).toBe(false);
     });
 
-    it('should reject quote missing attribution', () => {
-      const missingAttribution = {
+    it('accepts a quote with attribution omitted (F3 crystallization, CR-2)', () => {
+      const omittedAttribution = {
         metadata: {
           sessionId: 'test',
           theme: 'journalist',
@@ -351,13 +351,37 @@ describe('SchemaValidator', () => {
             id: 's1',
             type: 'narrative',
             content: [
-              { type: 'quote', text: 'A quote without attribution' }
+              { type: 'quote', text: 'The room rewrote the night it had just lived.' }
             ]
           }
         ]
       };
 
-      const result = validator.validate('content-bundle', missingAttribution);
+      const result = validator.validate('content-bundle', omittedAttribution);
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject quote missing text', () => {
+      const missingText = {
+        metadata: {
+          sessionId: 'test',
+          theme: 'journalist',
+          generatedAt: '2024-12-23T10:00:00.000Z'
+        },
+        headline: { main: 'Valid Headline With Enough Length' },
+        sections: [
+          {
+            id: 's1',
+            type: 'narrative',
+            content: [
+              { type: 'quote', attribution: 'Skyler' }
+            ]
+          }
+        ]
+      };
+
+      const result = validator.validate('content-bundle', missingText);
 
       expect(result.valid).toBe(false);
     });

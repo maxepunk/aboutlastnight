@@ -122,11 +122,14 @@
                 },
                 {
                   "type": "object",
-                  "required": ["type", "text", "attribution"],
+                  "required": ["type", "text"],
                   "properties": {
                     "type": { "const": "quote" },
-                    "text": { "type": "string" },
-                    "attribution": { "type": "string" }
+                    "text": { "type": "string", "minLength": 1 },
+                    "attribution": {
+                      "type": "string",
+                      "description": "Speaker name for a verbatim quote. OMIT for a crystallization quote (journalist insight, no '— Nova'). See lib/prompt-builder.js CRYSTALLIZATION & VERBATIM MOMENTS."
+                    }
                   },
                   "additionalProperties": false
                 },
