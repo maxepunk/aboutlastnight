@@ -33,7 +33,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { PHASES } = require('../state');
 const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
-const { getSdkClient, synthesizePlayerFocus } = require('./node-helpers');
+const { getSdkClient, synthesizePlayerFocus, normalizeRosterPronounsToCanonical } = require('./node-helpers');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { traceNode } = require('../../observability');
 const { enrichDirectorNotes } = require('../../director-enricher');
@@ -429,7 +429,14 @@ Return structured JSON matching the schema.`;
     result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
     result.reportingMode = rawInput.reportingMode || 'on-site';
     result.guestReporter = rawInput.guestReporter || null;
-    result.rosterPronouns = state.rosterPronouns || rawInput.rosterPronouns || {};
+    // F1 (X-1): re-key director-typed pronouns to canonical first names so
+    // generateRosterSection.resolvePronouns (which iterates canonicalCharacters
+    // keys) finds them. Without this, "Victoria Kingsley"/"victoria" silently
+    // resolve to they/them.
+    result.rosterPronouns = normalizeRosterPronounsToCanonical(
+      state.rosterPronouns || rawInput.rosterPronouns || {},
+      state.canonicalCharacters || {}
+    );
     result.createdAt = new Date().toISOString();
     return result;
   })();

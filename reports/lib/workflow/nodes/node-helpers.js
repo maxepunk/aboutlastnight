@@ -1024,6 +1024,52 @@ function validateFinancialData(financialTracker, shellAccounts) {
   return issues;
 }
 
+/**
+ * Normalize a director-typed rosterPronouns map to canonical first-name keys (F1 / X-1).
+ *
+ * generateRosterSection iterates state.canonicalCharacters (Notion-derived,
+ * title-cased first-name keys) and resolves pronouns by that key. The director,
+ * however, types pronouns keyed by whatever roster string they entered
+ * ("victoria", "Victoria Kingsley", "Vic"). Without re-keying, any case- or
+ * form-divergence silently falls through to they/them. This re-keys each typed
+ * entry to its canonical first name when a match exists, preserving the value;
+ * unmatched entries are kept under their original key so nothing is dropped.
+ *
+ * Match order per typed entry:
+ *   1. exact canonical key (case-insensitive)
+ *   2. typed string equals a canonical FULL name (case-insensitive) -> that key
+ *   3. no match -> keep original key
+ *
+ * @param {Object|null} rosterPronouns - director-typed map: typedName -> pronouns
+ * @param {Object|null} canonicalCharacters - Notion map: canonicalFirstName -> fullName
+ * @returns {Object} pronouns re-keyed by canonical first name where resolvable
+ */
+function normalizeRosterPronounsToCanonical(rosterPronouns, canonicalCharacters) {
+  const pronouns = rosterPronouns || {};
+  const canonical = canonicalCharacters || {};
+  const canonicalKeys = Object.keys(canonical);
+  const out = {};
+
+  for (const [typedName, value] of Object.entries(pronouns)) {
+    const typedLower = String(typedName).toLowerCase().trim();
+
+    // 1. Case-insensitive canonical key match.
+    let resolvedKey = canonicalKeys.find(k => k.toLowerCase() === typedLower);
+
+    // 2. Typed string equals a canonical full name -> map to its first-name key.
+    if (!resolvedKey) {
+      resolvedKey = canonicalKeys.find(
+        k => String(canonical[k]).toLowerCase().trim() === typedLower
+      );
+    }
+
+    // 3. Fall back to the original typed key (preserve, don't drop).
+    out[resolvedKey || typedName] = value;
+  }
+
+  return out;
+}
+
 module.exports = {
   safeParseJson,
   getSdkClient,
@@ -1066,5 +1112,8 @@ module.exports = {
 
   // Re-export batching utilities from preprocessor for convenience
   createBatches,
-  processWithConcurrency
+  processWithConcurrency,
+
+  // F1 (X-1): canonical-key normalization for director-typed pronouns
+  normalizeRosterPronounsToCanonical
 };
