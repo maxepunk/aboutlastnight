@@ -1190,25 +1190,19 @@ async function generateContentBundle(state, config) {
   const { getThemeConfig } = require('../../theme-config');
   const articleTheme = config?.configurable?.theme || state.theme || 'journalist';
   const themeDisplay = getThemeConfig(articleTheme)?.display?.postGenValidation || {};
-  const minPullQuotes = themeDisplay.minPullQuotes ?? 2;
   const minInlineCards = themeDisplay.minInlineEvidenceCards ?? 3;
 
   const inlineEvidenceCards = (generatedContent.sections || []).flatMap(s =>
     (s.content || []).filter(c => c.type === 'evidence-card')
   );
-  const pullQuoteCount = (generatedContent.pullQuotes || []).length;
   const sidebarCardCount = (generatedContent.evidenceCards || []).length;
 
   console.log(`[generateContentBundle] Post-generation: Visual components generated:`);
   console.log(`  Inline evidence-cards: ${inlineEvidenceCards.length}${minInlineCards > 0 ? ` (minimum ${minInlineCards} required)` : ''}`);
   console.log(`  Sidebar evidence cards: ${sidebarCardCount}`);
-  console.log(`  Pull quotes: ${pullQuoteCount}${minPullQuotes > 0 ? ` (minimum ${minPullQuotes} required)` : ''}`);
 
   if (minInlineCards > 0 && inlineEvidenceCards.length < minInlineCards) {
-    console.warn(`  ⚠ INSUFFICIENT inline evidence-cards — validation will trigger revision loop`);
-  }
-  if (minPullQuotes > 0 && pullQuoteCount < minPullQuotes) {
-    console.warn(`  ⚠ INSUFFICIENT pull quotes — validation will trigger revision loop`);
+    console.warn(`  ⚠ INSUFFICIENT inline evidence-cards — does not meet the inline-card minimum`);
   }
 
   // Extract ContentBundle from response (may include voice_self_check)
