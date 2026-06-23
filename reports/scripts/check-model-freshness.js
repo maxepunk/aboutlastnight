@@ -2,24 +2,20 @@
  * Model Freshness Check
  *
  * Validates that our MODEL_IDS map in client.js points to the latest
- * Claude models. This test cannot run inside Jest because the Agent SDK
+ * Claude models. This script cannot run inside Jest because the Agent SDK
  * requires a full Node runtime with subprocess transport.
  *
- * Run manually: node lib/__tests__/model-freshness.test.js
+ * Run manually: node scripts/check-model-freshness.js
  *
  * When this script warns about stale models, update MODEL_IDS in
  * lib/llm/client.js.
  */
 
-// When run directly (not via Jest), execute the check
+// Guard: only execute the live-SDK check when run directly (not when required).
+// Keeps `require('./scripts/check-model-freshness')` from triggering SDK calls.
 if (require.main === module) {
   const { query } = require('@anthropic-ai/claude-agent-sdk');
-
-  const MODEL_IDS = {
-    opus: 'claude-opus-4-8',
-    sonnet: 'claude-sonnet-4-6',
-    haiku: 'claude-haiku-4-5'
-  };
+  const { MODEL_IDS } = require('../lib/llm/client');
 
   (async () => {
     console.log('Verifying MODEL_IDS against live Agent SDK...\n');
@@ -68,10 +64,5 @@ if (require.main === module) {
   })().catch(e => {
     console.error('Fatal error:', e.message);
     process.exit(1);
-  });
-} else {
-  // When loaded via Jest, just skip
-  describe('model freshness', () => {
-    test.skip('run manually: node lib/__tests__/model-freshness.test.js', () => {});
   });
 }

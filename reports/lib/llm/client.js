@@ -591,5 +591,6 @@ module.exports = {
   isSdkTimeoutError,
   createSemaphore,
   MODEL_TIMEOUTS,
-  MODEL_BUDGETS
+  MODEL_BUDGETS,
+  MODEL_IDS
 };
