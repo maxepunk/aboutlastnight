@@ -13,6 +13,8 @@ const {
   getCanonicalName,
   getThemeCharacters
 } = require('../theme-config');
+// getArticleRules is intentionally still destructured above to PROVE it is
+// undefined after deletion (see "F9: dead bannedPatterns config removed").
 
 describe('theme-config', () => {
   describe('THEME_CONFIGS', () => {
@@ -31,10 +33,7 @@ describe('theme-config', () => {
       expect(typeof THEME_CONFIGS.journalist.outlineRules).toBe('object');
     });
 
-    it('journalist should have articleRules object', () => {
-      expect(THEME_CONFIGS.journalist.articleRules).toBeDefined();
-      expect(typeof THEME_CONFIGS.journalist.articleRules).toBe('object');
-    });
+
   });
 
   describe('getThemeNPCs', () => {
@@ -58,7 +57,6 @@ describe('theme-config', () => {
       expect(config).toBeDefined();
       expect(config.npcs).toBeDefined();
       expect(config.outlineRules).toBeDefined();
-      expect(config.articleRules).toBeDefined();
     });
 
     it('should return null for unknown theme', () => {
@@ -115,57 +113,23 @@ describe('theme-config', () => {
     });
   });
 
-  describe('getArticleRules', () => {
-    it('should return article rules for journalist theme', () => {
-      const rules = getArticleRules('journalist');
-      expect(rules).toBeDefined();
-      expect(rules.requiredVoiceMarkers).toBeDefined();
-      expect(rules.bannedPatterns).toBeDefined();
+  describe('F9: dead bannedPatterns config removed', () => {
+    it('getArticleRules is no longer exported', () => {
+      expect(getArticleRules).toBeUndefined();
     });
 
-    it('should include required voice markers', () => {
-      const rules = getArticleRules('journalist');
-      expect(rules.requiredVoiceMarkers).toContain('I ');
-      expect(rules.requiredVoiceMarkers).toContain('my ');
-      expect(rules.requiredVoiceMarkers).toContain('we ');
+    it('journalist config carries no articleRules', () => {
+      expect(THEME_CONFIGS.journalist.articleRules).toBeUndefined();
     });
 
-    it('should include banned patterns with metadata', () => {
-      const rules = getArticleRules('journalist');
-      expect(Array.isArray(rules.bannedPatterns)).toBe(true);
-
-      const emDash = rules.bannedPatterns.find(p => p.name === 'em-dash');
-      expect(emDash).toBeDefined();
-      expect(emDash.pattern).toBe('—');
-      expect(emDash.description).toBeDefined();
-
-      const tokenTerm = rules.bannedPatterns.find(p => p.name === 'token-term');
-      expect(tokenTerm).toBeDefined();
-      expect(tokenTerm.caseSensitive).toBe(false);
-
-      const gameMechanics = rules.bannedPatterns.find(p => p.name === 'game-mechanics');
-      expect(gameMechanics).toBeDefined();
-      expect(gameMechanics.isRegex).toBe(true);
+    it('detective config carries no articleRules', () => {
+      expect(THEME_CONFIGS.detective.articleRules).toBeUndefined();
     });
 
-    it('token-term ban flags bare "token" but NOT "memory token"', () => {
-      const rules = getArticleRules('journalist');
-      const tokenTerm = rules.bannedPatterns.find(p => p.name === 'token-term');
-      expect(tokenTerm).toBeDefined();
-      expect(tokenTerm.isRegex).toBe(true);
-      const re = new RegExp(tokenTerm.pattern, tokenTerm.caseSensitive ? '' : 'i');
-      expect(re.test('they handed me a token')).toBe(true);
-      expect(re.test('her memory token surfaced')).toBe(false);
-    });
-
-    it('should include min roster mentions', () => {
-      const rules = getArticleRules('journalist');
-      expect(rules.minRosterMentions).toBe(1);
-    });
-
-    it('should return empty object for unknown theme', () => {
-      const rules = getArticleRules('unknown');
-      expect(rules).toEqual({});
+    it('no theme retains a bannedPatterns array', () => {
+      for (const cfg of Object.values(THEME_CONFIGS)) {
+        expect(cfg.articleRules).toBeUndefined();
+      }
     });
   });
 
@@ -188,31 +152,12 @@ describe('theme-config', () => {
       expect(config).not.toBeNull();
       expect(config.npcs).toBeDefined();
       expect(config.outlineRules).toBeDefined();
-      expect(config.articleRules).toBeDefined();
     });
 
     it('detective outlineRules has correct required sections', () => {
       const rules = getOutlineRules('detective');
       expect(rules.requiredSections).toEqual(
         expect.arrayContaining(['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'])
-      );
-    });
-
-    it('detective articleRules bans game mechanics but not em-dashes', () => {
-      const rules = getArticleRules('detective');
-      // Detective voice allows em-dashes (used in noir style)
-      const patternNames = rules.bannedPatterns.map(p => p.name);
-      expect(patternNames).not.toContain('em-dash');
-      // Still bans game mechanics
-      expect(patternNames).toContain('token-term');
-    });
-
-    it('detective requiredVoiceMarkers are third-person investigative', () => {
-      const rules = getArticleRules('detective');
-      // Detective uses third-person investigative, not first-person participatory
-      expect(rules.requiredVoiceMarkers).not.toContain('I ');
-      expect(rules.requiredVoiceMarkers).toEqual(
-        expect.arrayContaining(['the investigation', 'evidence'])
       );
     });
 
@@ -322,7 +267,6 @@ describe('theme-config', () => {
       expect(typeof getThemeConfig).toBe('function');
       expect(typeof isValidTheme).toBe('function');
       expect(typeof getOutlineRules).toBe('function');
-      expect(typeof getArticleRules).toBe('function');
     });
 
     it('should export THEME_CONFIGS', () => {
