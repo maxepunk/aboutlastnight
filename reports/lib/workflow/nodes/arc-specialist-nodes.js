@@ -53,8 +53,7 @@ const {
   CORE_ARC_SCHEMA,
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
-  // Commit 8.15: Player-focus-guided (used by reviseArcs)
-  PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
+  // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SCHEMA
   // Commit 8.xx: Removed legacy parallel architecture imports
   // (SPECIALIST_AGENT_NAMES, getSpecialistAgents, ORCHESTRATOR_*, SYNTHESIS_*, SPECIALIST_*)
@@ -1728,7 +1727,6 @@ module.exports = {
     INTERWEAVING_SCHEMA,
 
     // Commit 8.15: Player-focus-guided schema (used by revision flow)
-    PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
     PLAYER_FOCUS_GUIDED_SCHEMA,
 
     // Revision path prompt builder (for director-notes enrichment testing)

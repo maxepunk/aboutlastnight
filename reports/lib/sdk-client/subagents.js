@@ -6,81 +6,10 @@
  *
  * Live exports: CORE_ARC_SYSTEM_PROMPT, CORE_ARC_SCHEMA,
  *               INTERWEAVING_SYSTEM_PROMPT, INTERWEAVING_SCHEMA,
- *               PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT, PLAYER_FOCUS_GUIDED_SCHEMA
+ *               PLAYER_FOCUS_GUIDED_SCHEMA
  *
  * See ARCHITECTURE_DECISIONS.md 8.8-8.28 for full history.
  */
-
-/**
- * System prompt for player-focus-guided arc analysis
- *
- * Commit 8.15: Single comprehensive call driven by player conclusions
- */
-const PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT = `You are the Arc Analyst for an investigative article about "About Last Night" - a crime thriller game where players investigate the death of Marcus Blackwood.
-
-GAME CONTEXT:
-"About Last Night" is a 90-120 minute immersive crime thriller. A memory-altering drug called "the memory drug" allows characters to bury memories - their own or others'. The game involves financial manipulation, power struggles, and hidden alliances.
-
-YOUR ROLE:
-You analyze evidence through three lenses (financial, behavioral, victimization) and generate narrative arcs that address what PLAYERS concluded and investigated. The accusation is PRIMARY - you must always include an arc addressing it.
-
-CRITICAL PRINCIPLES:
-
-1. PLAYER FOCUS FIRST
-   - The accusation MUST have an arc, even if evidence is "speculative"
-   - Whiteboard connections get priority over discovered patterns
-   - Director observations are ground truth for behavioral claims
-   - Arcs serve the players' investigation story, not just evidence patterns
-
-2. HONEST UNCERTAINTY
-   - Use evidenceStrength to indicate confidence level
-   - Include caveats for complications and contradictions
-   - List unanswered questions explicitly
-   - "Speculative" arcs are allowed with proper caveats
-
-3. THREE-LENS ANALYSIS
-   - Every arc should be analyzed through financial, behavioral, and victimization lenses
-   - Document which lenses support vs. contradict each arc
-   - Cross-reference patterns across domains
-
-4. EVIDENCE BOUNDARIES
-   - Layer 1 (Exposed): Can quote and describe freely
-   - Layer 2 (Buried): Can report amounts/accounts/timing, NOT content or ownership
-   - Layer 3 (Director Notes): Shapes emphasis and provides ground truth
-
-5. ANTI-PATTERNS
-   - Never use "token" (say "memory")
-   - Never use em-dashes
-   - Never claim to know buried content
-
-6. INTERWEAVING FOR COMPULSIVE READABILITY
-   Arcs are not sequential chapters. They interweave through CALLBACKS.
-
-   For each arc, identify:
-   - sharedCharacters: Who appears in this arc AND other arcs? These are bridges.
-   - bridgeOpportunities: How can we connect FROM this arc TO others?
-     - shared_character: Same person, different context
-     - causal_chain: This arc explains WHY another happened
-     - temporal: Events overlapping in time
-     - contradiction: This arc recontextualizes another
-   - callbackSeeds: Details that can be recontextualized later
-     Example: "Vic's confident smile" planted early, pays off when we learn she knew all along
-   - convergenceRole: How does this arc connect to the murder/accusation?
-
-   Also provide interweavingPlan:
-   - suggestedOrder: Arrange arcs so each answer opens a NEW question
-   - convergencePoint: Where do all threads meet?
-   - keyCallbacks: Specific [plant → payoff] opportunities across arcs
-     Example: { plantIn: "arc-funding", payoffIn: "arc-murder", detail: "Derek's panic has a price tag" }
-
-OUTPUT:
-Generate 3-5 narrative arcs with the required fields. Ensure:
-- One arc with arcSource="accusation" (required)
-- Every roster member has at least one placement
-- All keyEvidence IDs are from the valid ID list
-- Each arc has caveats and unansweredQuestions (even if minimal)
-- Each arc has interweaving metadata for callback opportunities
-- Include interweavingPlan with suggestedOrder and keyCallbacks`;
 
 /**
  * JSON schema for player-focus-guided arc analysis output
@@ -210,7 +139,7 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
 /**
  * System prompt for core arc generation (Call 1)
  *
- * Commit 8.28: Split from PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT
+ * Commit 8.28: Split from the former player-focus-guided single-call prompt
  * Focus on fundamental arc generation without interweaving complexity
  */
 const CORE_ARC_SYSTEM_PROMPT = `You are the Arc Analyst for an investigative article about "About Last Night" - a crime thriller game where players investigate the death of Marcus Blackwood.
@@ -440,8 +369,7 @@ module.exports = {
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
 
-  // Commit 8.15: Player-focus-guided architecture (used by reviseArcs)
-  PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
+  // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SCHEMA,
 
   // Testing exports
@@ -451,8 +379,7 @@ module.exports = {
     CORE_ARC_SCHEMA,
     INTERWEAVING_SYSTEM_PROMPT,
     INTERWEAVING_SCHEMA,
-    // Commit 8.15: Revision flow
-    PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT,
+    // Commit 8.15: Revision flow schema
     PLAYER_FOCUS_GUIDED_SCHEMA
   }
 };

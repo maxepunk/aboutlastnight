@@ -11,3 +11,13 @@ describe('subagents dead-export removal (X-8)', () => {
     expect(subagents.CORE_ARC_SYSTEM_PROMPT).toBeDefined();
   });
 });
+
+describe('PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT removal (X-8)', () => {
+  it('no longer exports the unused system prompt', () => {
+    expect(subagents.PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT).toBeUndefined();
+    expect(subagents._testing.PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT).toBeUndefined();
+  });
+  it('still exports the live revision schema', () => {
+    expect(subagents.PLAYER_FOCUS_GUIDED_SCHEMA).toBeDefined();
+  });
+});
