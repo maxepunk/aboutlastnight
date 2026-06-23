@@ -384,6 +384,13 @@ const SERVER_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes for long-running workflo
 const SSE_HEARTBEAT_MS = 15000;
 
 // Middleware
+// SEC-6: the unauthenticated /api/auth/login surface gets a 1kb parser
+// mounted BEFORE the 50mb global parser, so a pre-auth client cannot
+// buffer 50mb and exhaust memory on this single-process server. Express's
+// json parser is a no-op once req._body is set, so the global parser skips
+// the already-parsed login body; a >1kb login body throws entity.too.large
+// (413) before any handler.
+app.use('/api/auth/login', express.json({ limit: '1kb' }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
 
@@ -1248,6 +1255,18 @@ async function probeNotionReachable(client) {
         return { ok: false, error: error.message };
     }
 }
+
+// Body-size / malformed-JSON guard (SEC-6): return a clean 413/400 instead
+// of leaking a stack trace for oversized or malformed request bodies.
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'Request body too large' });
+    }
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'Malformed JSON body' });
+    }
+    return next(err);
+});
 
 // Start server with Claude Agent SDK health check
 // Only start in normal runtime (not during tests)
