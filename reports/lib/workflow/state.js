@@ -54,19 +54,6 @@ const appendReducer = (oldValue, newValue) => {
 };
 
 /**
- * Merge reducer: shallow-merges objects (Commit 8.6)
- * Used for specialistAnalyses where parallel specialists contribute results
- * @param {Object} oldValue - Previous object
- * @param {Object} newValue - New properties to merge
- * @returns {Object} Merged object
- */
-const mergeReducer = (oldValue, newValue) => {
-  const prev = oldValue || {};
-  const next = newValue || {};
-  return { ...prev, ...next };
-};
-
-/**
  * Append single reducer: appends a single item to existing array (Commit 8.6)
  * Used for evaluationHistory where each evaluation adds one entry
  * @param {Array} oldValue - Previous array
@@ -385,9 +372,8 @@ const ReportStateAnnotation = Annotation.Root({
    * Arc specialist outputs from orchestrated subagent analysis
    * Structure: { financial: {...}, behavioral: {...}, victimization: {...} }
    *
-   * Commit 8.8 change: Uses replaceReducer instead of mergeReducer
-   * because the orchestrator returns the complete object in one call
-   * (subagents run in parallel via SDK, not sequential graph nodes)
+   * Commit 8.8 change: Uses replaceReducer (the orchestrator returns the
+   * complete specialistAnalyses object in one SDK call, so no merge needed)
    */
   specialistAnalyses: Annotation({
     reducer: replaceReducer,
@@ -1093,7 +1079,6 @@ module.exports = {
   _testing: {
     replaceReducer,
     appendReducer,
-    mergeReducer,
     appendSingleReducer
   }
 };
@@ -1116,15 +1101,13 @@ if (require.main === module) {
   console.log('Default arcRevisionCount:', defaultState.arcRevisionCount); // Should be 0
 
   // Test reducers
-  const { replaceReducer, appendReducer, mergeReducer, appendSingleReducer } = module.exports._testing;
+  const { replaceReducer, appendReducer, appendSingleReducer } = module.exports._testing;
 
   console.log('\nReducer tests:');
   console.log('replaceReducer(1, 2):', replaceReducer(1, 2)); // Should be 2
   console.log('replaceReducer(1, null):', replaceReducer(1, null)); // Should be null (allows clearing)
   console.log('appendReducer([1], [2, 3]):', appendReducer([1], [2, 3])); // Should be [1, 2, 3]
   console.log('appendReducer(null, [1]):', appendReducer(null, [1])); // Should be [1]
-  console.log('mergeReducer({a:1}, {b:2}):', mergeReducer({a:1}, {b:2})); // Should be {a:1, b:2}
-  console.log('mergeReducer(null, {a:1}):', mergeReducer(null, {a:1})); // Should be {a:1}
   console.log('appendSingleReducer([1], 2):', appendSingleReducer([1], 2)); // Should be [1, 2]
   console.log('appendSingleReducer([1], null):', appendSingleReducer([1], null)); // Should be [1]
 

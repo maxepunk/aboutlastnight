@@ -43,7 +43,7 @@ describe('ReportStateAnnotation', () => {
       expect(_testing).toBeDefined();
       expect(typeof _testing.replaceReducer).toBe('function');
       expect(typeof _testing.appendReducer).toBe('function');
-      expect(typeof _testing.mergeReducer).toBe('function');
+      expect(_testing.mergeReducer).toBeUndefined();
       expect(typeof _testing.appendSingleReducer).toBe('function');
     });
   });
@@ -132,46 +132,6 @@ describe('ReportStateAnnotation', () => {
         { id: 1, msg: 'first' },
         { id: 2, msg: 'second' }
       ]);
-    });
-  });
-
-  describe('mergeReducer (Commit 8.6)', () => {
-    const { mergeReducer } = _testing;
-
-    it('merges new properties into existing object', () => {
-      expect(mergeReducer({ a: 1 }, { b: 2 })).toEqual({ a: 1, b: 2 });
-    });
-
-    it('overwrites existing properties with new values', () => {
-      expect(mergeReducer({ a: 1 }, { a: 2 })).toEqual({ a: 2 });
-    });
-
-    it('handles null old value', () => {
-      expect(mergeReducer(null, { a: 1 })).toEqual({ a: 1 });
-    });
-
-    it('handles undefined old value', () => {
-      expect(mergeReducer(undefined, { a: 1 })).toEqual({ a: 1 });
-    });
-
-    it('handles null new value', () => {
-      expect(mergeReducer({ a: 1 }, null)).toEqual({ a: 1 });
-    });
-
-    it('handles undefined new value', () => {
-      expect(mergeReducer({ a: 1 }, undefined)).toEqual({ a: 1 });
-    });
-
-    it('handles both null', () => {
-      expect(mergeReducer(null, null)).toEqual({});
-    });
-
-    it('returns new object instance (immutable)', () => {
-      const oldObj = { a: 1 };
-      const newObj = { b: 2 };
-      const result = mergeReducer(oldObj, newObj);
-      expect(result).not.toBe(oldObj);
-      expect(result).not.toBe(newObj);
     });
   });
 
