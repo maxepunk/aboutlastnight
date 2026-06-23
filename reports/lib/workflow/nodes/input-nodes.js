@@ -429,10 +429,14 @@ Return structured JSON matching the schema.`;
     result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
     result.reportingMode = rawInput.reportingMode || 'on-site';
     result.guestReporter = rawInput.guestReporter || null;
-    // F1 (X-1): re-key director-typed pronouns to canonical first names so
-    // generateRosterSection.resolvePronouns (which iterates canonicalCharacters
-    // keys) finds them. Without this, "Victoria Kingsley"/"victoria" silently
-    // resolve to they/them.
+    // F1 (X-1 + CR-6): consume the raw rosterPronouns channel EXACTLY ONCE here.
+    // The await-roster approval writes typed-keyed pronouns to state.rosterPronouns
+    // (the channel); this is the single bridge that normalizes them to canonical
+    // first-name keys and stamps them onto sessionConfig.rosterPronouns. From this
+    // point on, sessionConfig.rosterPronouns is the ONE source of truth — every
+    // downstream reader (prompt-builder via getPromptBuilder, InputReview) reads
+    // the sessionConfig copy, NOT the raw channel (whose key domain is typed, not
+    // canonical). Do not re-read state.rosterPronouns downstream.
     result.rosterPronouns = normalizeRosterPronounsToCanonical(
       state.rosterPronouns || rawInput.rosterPronouns || {},
       state.canonicalCharacters || {}

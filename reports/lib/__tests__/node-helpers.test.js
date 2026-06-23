@@ -106,3 +106,30 @@ describe('F1 pronoun key chain (X-1 + X-7): normalize then render', () => {
     expect(section).not.toContain('Victoria Kingsley (they/them)');
   });
 });
+
+describe('F1 single-source stamp precedence (CR-6)', () => {
+  const { normalizeRosterPronounsToCanonical } = require('../workflow/nodes/node-helpers');
+  // Mirror the exact stamp expression from input-nodes.js so this test
+  // pins the precedence contract that parseRawInput depends on.
+  function stamp(stateChannel, rawInput, canonicalCharacters) {
+    return normalizeRosterPronounsToCanonical(
+      stateChannel || rawInput || {},
+      canonicalCharacters || {}
+    );
+  }
+  const canonical = { Victoria: 'Victoria Kingsley' };
+
+  it('the await-roster channel value takes precedence over rawInput', () => {
+    const out = stamp({ Victoria: 'she/her' }, { Victoria: 'he/him' }, canonical);
+    expect(out.Victoria).toBe('she/her');
+  });
+
+  it('falls back to rawInput.rosterPronouns when the channel is empty', () => {
+    const out = stamp(null, { 'Victoria Kingsley': 'they/them' }, canonical);
+    expect(out.Victoria).toBe('they/them');
+  });
+
+  it('yields {} when neither source supplies pronouns', () => {
+    expect(stamp(null, null, canonical)).toEqual({});
+  });
+});
