@@ -34,13 +34,18 @@ const initialState = {
   // Errors
   error: null,
   // Completed
-  completedResult: null
+  completedResult: null,
+  // Hand-off: set by SessionStart's reconnect-resume so App drives the streaming resume
+  // (SessionStart unmounts once sessionId is set, so it can't own the EventSource).
+  pendingResume: null
 };
 
 const ACTIONS = {
   LOGIN_SUCCESS: 'LOGIN_SUCCESS',
   LOGOUT: 'LOGOUT',
   SET_SESSION: 'SET_SESSION',
+  RESUME_REQUESTED: 'RESUME_REQUESTED',
+  RESUME_CLEAR_PENDING: 'RESUME_CLEAR_PENDING',
   CHECKPOINT_RECEIVED: 'CHECKPOINT_RECEIVED',
   PROCESSING_START: 'PROCESSING_START',
   SSE_CONNECTED: 'SSE_CONNECTED',
@@ -73,6 +78,23 @@ function reducer(state, action) {
 
     case ACTIONS.SET_SESSION:
       return { ...state, sessionId: action.sessionId };
+
+    case ACTIONS.RESUME_REQUESTED:
+      // Reconnect-resume hand-off: set the session, enter processing, and flag App to
+      // drive the streaming resume. Mirrors PROCESSING_START's stream-reset fields.
+      return {
+        ...state,
+        sessionId: action.sessionId,
+        pendingResume: { sessionId: action.sessionId },
+        processing: true,
+        progressMessages: [],
+        eventLog: [],
+        llmActivity: null,
+        error: null
+      };
+
+    case ACTIONS.RESUME_CLEAR_PENDING:
+      return { ...state, pendingResume: null };
 
     case ACTIONS.SET_THEME:
       return { ...state, theme: action.theme };
