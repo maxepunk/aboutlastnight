@@ -3388,7 +3388,9 @@ async function runWalkthrough() {
     if (stateOverrides) {
       rollbackBody.stateOverrides = stateOverrides;
     }
-    const { status, data, error } = await apiCall(`/api/session/${sessionId}/rollback`, rollbackBody);
+    // 4th arg routes through the SSE 'processing'→'complete' path now that /rollback is
+    // non-blocking (returns {status:'processing'} and emits the result via SSE).
+    const { status, data, error } = await apiCall(`/api/session/${sessionId}/rollback`, rollbackBody, 'POST', sessionId);
     if (status !== 200) {
       console.error(color(`Rollback failed: ${data?.error || error}`, 'red'));
       return;
