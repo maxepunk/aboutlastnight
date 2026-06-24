@@ -1016,6 +1016,10 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
     const { rollbackTo, stateOverrides } = req.body;
 
+    if (shuttingDown) {
+        return res.status(503).json({ sessionId, error: 'Server is shutting down; retry shortly' });
+    }
+
     // Validate rollbackTo
     if (!rollbackTo) {
         return res.status(400).json({ error: 'rollbackTo is required' });
@@ -1029,7 +1033,6 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/rollback: rollbackTo=${rollbackTo}`);
 
     try {
-        // Check current state first
         const session = await getSessionState(sessionId);
         if (!session) {
             return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
@@ -1039,17 +1042,12 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             checkpointer: sharedCheckpointer
         });
 
-        // Build rollback state
-        let initialState = buildRollbackState(rollbackTo);
+        // Build rollback state (synchronous setup).
+        const initialState = buildRollbackState(rollbackTo);
 
-        // ROLL-4: stash prior full-context so AwaitFullContext pre-fills the re-collection
-        // form whenever the rollback CLEARS those channels — await-full-context, OR any
-        // upstream point whose clear list includes them (paper-evidence-selection / await-roster /
-        // character-ids, added by P6.4's per-point re-pause fix). Gating on the clear list itself
-        // (not a literal rollbackTo === 'await-full-context') makes the pre-fill automatically
-        // track which points clear full-context, so re-collection stays one-click (no re-typing
-        // a long sessionReport) regardless of how far back the director rolled.
-        // buildRollbackState nulls the channels; capture their current values first.
+        // ROLL-4: stash prior full-context so AwaitFullContext pre-fills re-collection
+        // whenever the rollback CLEARS those channels. buildRollbackState nulls the
+        // channels; capture their current values first.
         if (ROLLBACK_CLEARS[rollbackTo]?.includes('accusation')) {
             initialState._previousFullContext = {
                 accusation: session.state.accusation || null,
@@ -1058,38 +1056,38 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             };
         }
 
-        // Apply overrides
         if (stateOverrides) {
             Object.assign(initialState, stateOverrides);
         }
 
-        const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
+        // DEL-1: a rolled-back session's prior TERMINAL outcome is stale the moment we
+        // commit the rollback — clear it synchronously so a dropped SSE mid-rollback can't
+        // surface the pre-rollback outcome via GET /state. The rollback's own completion
+        // records a fresh outcome.
+        clearSessionOutcome(sessionId);
 
-        clearSessionOutcome(sessionId); // DEL-1: a rolled-back session's prior terminal outcome is now stale
-
-        // Check if graph is interrupted at a checkpoint
-        const graphState = await graph.getState(config);
-        const interrupted = isGraphInterrupted(graphState);
-
-        // Build response with new interrupt format
-        if (interrupted) {
-            const interruptData = getInterruptData(graphState);
-            const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
-            return res.json({
-                ...buildInterruptResponse(sessionId, checkpointData, result.currentPhase),
-                rolledBackTo: rollbackTo,
-                fieldsCleared: ROLLBACK_CLEARS[rollbackTo]
-            });
-        }
-
-        // Non-interrupted response
-        res.json({
+        // Non-blocking: rollback re-invokes from the rollback point. Usually re-pauses fast,
+        // but a rollback upstream of a long node can exceed the proxy timeouts on a held POST.
+        runGraphInBackground({
             sessionId,
-            rolledBackTo: rollbackTo,
-            currentPhase: result.currentPhase,
-            fieldsCleared: ROLLBACK_CLEARS[rollbackTo]
+            invoke: () => graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }),
+            getState: () => graph.getState(config),
+            buildResponse: (result, graphState) => {
+                const base = isGraphInterrupted(graphState)
+                    ? buildInterruptResponse(
+                        sessionId,
+                        buildCompleteCheckpointData(getInterruptData(graphState), graphState.values),
+                        result.currentPhase
+                      )
+                    : { sessionId, currentPhase: result.currentPhase };
+                if (!isGraphInterrupted(graphState) && result.errors?.length > 0) {
+                    base.errors = result.errors;
+                }
+                return { ...base, rolledBackTo: rollbackTo, fieldsCleared: ROLLBACK_CLEARS[rollbackTo] };
+            },
+            res,
+            inFlightTasks
         });
-
     } catch (error) {
         sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/rollback`);
     }
