@@ -1,5 +1,7 @@
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('../structured-output-extractor');
 const { STRUCTURED_OUTPUT_CHANNELS } = require('../../observability/constants');
+const { sanitizeSchemaForSdk } = require('../client');
+const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 
 const SIMPLE_SCHEMA = {
   type: 'object',
@@ -167,5 +169,35 @@ describe('extractStructuredOutput', () => {
     });
     expect(result.value).toEqual({ name: 'has } brace', count: 1, nested: { a: 1 } });
     expect(result.channel).toBe(STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK);
+  });
+});
+
+describe('$id-collision safety for sanitized schemas (#277 guardrail)', () => {
+  const validBundle = {
+    metadata: { sessionId: 's', theme: 'journalist', generatedAt: '2026-06-23T00:00:00.000Z' },
+    headline: { main: 'A Sufficiently Long Headline Here' },
+    sections: [{ id: 's1', type: 'narrative', content: [] }]
+  };
+  const callWith = (schema) => extractStructuredOutput({
+    structuredOutput: validBundle,
+    resultText: JSON.stringify(validBundle),
+    schema, label: 'collision-probe', model: 'sonnet'
+  });
+
+  it('sanitized ($id-stripped) schema compiles twice without ajv "already exists"', () => {
+    const sdkSchema = sanitizeSchemaForSdk(contentBundleSchema); // $id stripped + memoized
+    expect(() => { callWith(sdkSchema); callWith(sdkSchema); }).not.toThrow();
+    expect(callWith(sdkSchema).value).toMatchObject({ headline: { main: expect.any(String) } });
+  });
+
+  it('proves the $id-strip is load-bearing: two DISTINCT clones sharing a $id collide', () => {
+    // Force the exact collision the $id-strip prevents: two different objects with the SAME $id.
+    // Different objects => the extractor validatorCache (WeakMap) misses both => ajv.compile runs
+    // twice on the same $id => throw. Use a THROWAWAY $id so the real 'content-bundle'
+    // registration (relied on by other tests) is untouched.
+    const cloneA = JSON.parse(JSON.stringify(contentBundleSchema)); cloneA.$id = 'collision-probe-id';
+    const cloneB = JSON.parse(JSON.stringify(contentBundleSchema)); cloneB.$id = 'collision-probe-id';
+    callWith(cloneA);
+    expect(() => callWith(cloneB)).toThrow(/already exists/);
   });
 });
