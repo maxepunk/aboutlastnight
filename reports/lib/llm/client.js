@@ -91,6 +91,52 @@ const EFFORT_LEVELS = {
   // haiku omitted — Haiku 4.5 doesn't support the effort parameter
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SDK schema sanitizer (anthropics/claude-agent-sdk-typescript#277)
+//
+// The JSON-Schema keyword `format` silently disables the SDK's constrained-decoding
+// (structured_output) channel. With the channel off the model hand-writes strict JSON
+// and drifts from the schema -> ajv rejects -> StructuredOutputExtractionError. `format`
+// is the SOLE confirmed trigger; oneOf / minLength / maxLength / minItems /
+// additionalProperties are PROVEN SAFE and KEPT for their validation value. Strip ONLY
+// `format`, recursively.
+//
+// The sanitized clone is the SINGLE schema handed to BOTH the SDK outputFormat AND the
+// post-hoc extractor (see the outputFormat assembly), so the channel constraint and
+// validation can never disagree.
+//
+// Memoized per original object so the extractor's object-identity validator cache
+// (structured-output-extractor.js) compiles each schema exactly once. A naive clone-per-
+// call carrying the same `$id` ('content-bundle') would make the extractor's module-level
+// ajv throw "schema with key or id 'content-bundle' already exists" on the 2nd schema-
+// bearing call in a process (generation->revision). Belt-and-suspenders: also drop
+// `$id`/`$schema` — lossless because NO schema in lib/schemas uses `$ref`.
+//
+// NOTE: inline-literal callers (a fresh object each call) miss the memo and get a fresh
+// clone+compile per call — no worse than today (raw literal was also compiled per call)
+// and collision-free (no $id).
+const _sanitizedSchemaCache = new WeakMap();
+
+function sanitizeSchemaForSdk(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  const cached = _sanitizedSchemaCache.get(schema);
+  if (cached) return cached;
+
+  const sanitized = JSON.parse(JSON.stringify(schema)); // deep clone — never mutate caller's constant
+  delete sanitized.$id;
+  delete sanitized.$schema;
+  (function stripFormat(node) {
+    if (Array.isArray(node)) { for (const item of node) stripFormat(item); return; }
+    if (node && typeof node === 'object') {
+      if (typeof node.format === 'string') delete node.format; // the ONLY keyword we remove (string value = the keyword form; an object-valued `format` is a data property)
+      for (const key of Object.keys(node)) stripFormat(node[key]);
+    }
+  })(sanitized);
+
+  _sanitizedSchemaCache.set(schema, sanitized);
+  return sanitized;
+}
+
 /**
  * SDK wrapper for LangGraph nodes with timeout and progress streaming
  *
@@ -594,6 +640,7 @@ module.exports = {
   isClaudeAvailable,
   isSdkTimeoutError,
   createSemaphore,
+  sanitizeSchemaForSdk,
   MODEL_TIMEOUTS,
   MODEL_BUDGETS,
   MODEL_IDS

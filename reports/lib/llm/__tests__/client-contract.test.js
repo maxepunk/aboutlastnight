@@ -288,3 +288,44 @@ describe('sdkQueryImpl contract', () => {
     expect(isTransientError(thrown)).toBe(false);
   });
 });
+
+describe('sanitizeSchemaForSdk (#277 channel-skip guardrail)', () => {
+  const { sanitizeSchemaForSdk } = require('../client');
+
+  it('strips ONLY format, recursively, and keeps safe keywords', () => {
+    const original = {
+      $id: 'x', $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object', additionalProperties: false,
+      properties: {
+        ts: { type: 'string', format: 'date-time', minLength: 1 },
+        nested: { type: 'array', minItems: 1, items: { type: 'string', format: 'email', maxLength: 99 } },
+        choice: { oneOf: [{ type: 'string' }, { type: 'number' }] }
+      }
+    };
+    const out = sanitizeSchemaForSdk(original);
+    expect(out.properties.ts.format).toBeUndefined();
+    expect(out.properties.nested.items.format).toBeUndefined();
+    expect(out.properties.ts.minLength).toBe(1);
+    expect(out.properties.nested.minItems).toBe(1);
+    expect(out.properties.nested.items.maxLength).toBe(99);
+    expect(out.properties.choice.oneOf).toHaveLength(2);
+    expect(out.additionalProperties).toBe(false);
+    expect(out.$id).toBeUndefined();
+    expect(out.$schema).toBeUndefined();
+    expect(original.properties.ts.format).toBe('date-time'); // original not mutated
+    expect(original.$id).toBe('x');
+  });
+
+  it('memoizes: same original -> same sanitized object (stable identity)', () => {
+    const original = { $id: 'memo', type: 'object', properties: { ts: { type: 'string', format: 'date-time' } } };
+    expect(sanitizeSchemaForSdk(original)).toBe(sanitizeSchemaForSdk(original));
+  });
+
+  it('preserves a DATA property named "format" while stripping the format keyword', () => {
+    const original = { type: 'object', properties: { format: { type: 'string', format: 'date-time' } } };
+    const out = sanitizeSchemaForSdk(original);
+    expect(out.properties.format).toBeDefined();          // data property survives
+    expect(out.properties.format.type).toBe('string');
+    expect(out.properties.format.format).toBeUndefined();  // inner format KEYWORD stripped
+  });
+});
