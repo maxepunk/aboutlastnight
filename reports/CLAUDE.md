@@ -431,9 +431,9 @@ The Outline checkpoint's per-section editors (journalist LEDE / THE STORY / FOLL
 
 **Step-by-step Pipeline Control:**
 - `/api/session/:id/start` (POST) - Start new session with raw input
-- `/api/session/:id/resume` (POST) - Resume existing workflow (re-invoke at current state)
+- `/api/session/:id/resume` (POST) - Resume existing workflow (re-invoke at current state). NON-BLOCKING: returns `{status:'processing'}` immediately, runs the graph in the background, and delivers the result via the `/progress` SSE `complete` event (same contract as `/approve`). Clients MUST use SSE-before-POST. (A long re-invoke would otherwise exceed undici's 5-min `headersTimeout` / Cloudflare's ~100s edge timeout on a held-open POST.)
 - `/api/session/:id/approve` (POST) - Submit checkpoint approval
-- `/api/session/:id/rollback` (POST) - Roll back to checkpoint
+- `/api/session/:id/rollback` (POST) - Roll back to checkpoint. NON-BLOCKING (same contract as resume/approve); the SSE completion payload carries `rolledBackTo` + `fieldsCleared`.
 - `/api/session/:id/state` (GET) - Get current state
 - `/api/session/:id/state/:field` (GET) - Get single state field
 - `/api/session/:id/checkpoint` (GET) - Get checkpoint info
@@ -446,6 +446,8 @@ The Outline checkpoint's per-section editors (journalist LEDE / THE STORY / FOLL
 - `/api/file` (GET) - Read session data file
 
 See `server.js` for detailed usage and request/response shapes.
+
+**Non-blocking endpoints** (`/start` excepted — it interrupts in seconds): `/approve`, `/resume`, `/rollback` all run their `graph.invoke` in the background via `lib/api-background-runner.js#runGraphInBackground` (one source of truth for the CONC-1 lock + DUR-2 drain + DEL-1 outcome + SSE `emitComplete`). The sessionId-keyed lock gives mutual exclusion across all three; a concurrent second call gets a 409.
 
 ## Environment Setup
 
