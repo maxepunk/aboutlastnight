@@ -525,7 +525,7 @@ async function fetchSessionPhotos(state, config) {
  *
  * evidence: [{
  *   notionId, name, basicType, description,
- *   narrativeThreads[], owners[], containers[], files[]?
+ *   narrativeThreads[], owners[], files[]?
  * }]
  *
  * @param {Object} mockData - Mock data to return

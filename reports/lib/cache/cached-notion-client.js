@@ -19,7 +19,7 @@ const { NotionCacheStore } = require('./notion-cache-store');
 const { FreshnessChecker } = require('./freshness-checker');
 const { parseTokenPage, parseEvidencePage } = require('../notion/parse');
 const { applyRelationNames } = require('../notion/relations');
-const { RELATION_REGISTRY, ENTITY_RELATIONS, CHARACTERS_DB_ID } = require('../notion/databases');
+const { RELATION_REGISTRY, ENTITY_RELATIONS, CHARACTERS_DB_ID, TOKEN_FILTER, EVIDENCE_FILTER } = require('../notion/databases');
 
 // Default cache location
 const DEFAULT_CACHE_PATH = path.join(__dirname, '..', '..', 'data', '.cache', 'notion-cache.db');
@@ -63,7 +63,7 @@ class CachedNotionClient {
     try {
       return await this._fetchWithCache(
         'memory_token',
-        this._getTokenFilter(),
+        TOKEN_FILTER,
         (items, ids) => this._applyTokenFilter(items, ids),
         tokenIds
       );
@@ -88,7 +88,7 @@ class CachedNotionClient {
     try {
       const result = await this._fetchWithCache(
         'paper_evidence',
-        this._getEvidenceFilter(),
+        EVIDENCE_FILTER,
         null, // No post-filter needed
         null
       );
@@ -290,41 +290,8 @@ class CachedNotionClient {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Filters (mirrors NotionClient logic)
+  // Post-filter (query filters are imported from lib/notion/databases.js)
   // ─────────────────────────────────────────────────────────────
-
-  _getTokenFilter() {
-    return {
-      or: [
-        { property: 'Basic Type', select: { equals: 'Memory Token' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Video' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Audio + Image' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Audio' } }
-      ]
-    };
-  }
-
-  _getEvidenceFilter() {
-    return {
-      and: [
-        {
-          or: [
-            { property: 'Basic Type', select: { equals: 'Prop' } },
-            { property: 'Basic Type', select: { equals: 'Document' } },
-            { property: 'Basic Type', select: { equals: 'Set Dressing' } }
-          ]
-        },
-        {
-          or: [
-            { property: 'Narrative Threads', multi_select: { contains: 'Funding & Espionage' } },
-            { property: 'Narrative Threads', multi_select: { contains: 'Marriage Troubles' } },
-            { property: 'Narrative Threads', multi_select: { contains: 'Memory Drug' } },
-            { property: 'Narrative Threads', multi_select: { contains: 'Underground Parties' } }
-          ]
-        }
-      ]
-    };
-  }
 
   _applyTokenFilter(tokens, tokenIds) {
     if (!tokenIds || !Array.isArray(tokenIds) || tokenIds.length === 0) {
