@@ -1005,14 +1005,15 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             invoke: () => graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }),
             getState: () => graph.getState(config),
             buildResponse: (result, graphState) => {
-                const base = isGraphInterrupted(graphState)
+                const interrupted = isGraphInterrupted(graphState);
+                const base = interrupted
                     ? buildInterruptResponse(
                         sessionId,
                         buildCompleteCheckpointData(getInterruptData(graphState), graphState.values),
                         result.currentPhase
                       )
                     : { sessionId, currentPhase: result.currentPhase };
-                if (!isGraphInterrupted(graphState) && result.errors?.length > 0) {
+                if (!interrupted && result.errors?.length > 0) {
                     base.errors = result.errors;
                 }
                 return { ...base, rolledBackTo: rollbackTo, fieldsCleared: ROLLBACK_CLEARS[rollbackTo] };

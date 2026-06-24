@@ -70,6 +70,10 @@ function makeSseHandler(dispatch, sseRef) {
         });
         break;
       case 'llm_error':
+        // Emitted by client.js when the SDK returned success but structured-output
+        // extraction failed (typically SDK#277 with a schema-invalid text response).
+        // Treat like llm_complete from a UI-spinner perspective (the LLM call is over)
+        // and surface the diagnostic envelope as a progress message so the dev sees it.
         dispatch({
           type: APP_ACTIONS.SSE_LLM_COMPLETE,
           response: null,
@@ -109,11 +113,18 @@ function makeSseHandler(dispatch, sseRef) {
         }
         break;
       case 'failed':
+        // P4 SSE-1 emits type:'failed' for an error outcome. Reconciled failure
+        // UX (M4): close the stream, clear `processing` (SSE_COMPLETE), and drive
+        // the INLINE failure card (Retry=/resume, Roll back) via SSE_LLM_FAILURE —
+        // NOT a SET_ERROR banner. ProgressStream stays mounted while
+        // llmActivity.phase==='failed', so the card renders with processing=false.
         eventSourceClose(sseRef);
         dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
         dispatch({
           type: APP_ACTIONS.SSE_LLM_FAILURE,
           error: (event.data.error
+            // errors[0].message covers nodes that RETURN {currentPhase:'error', errors:[...]}
+            // (server.js graph-error path) with no flat error/details field.
             || (event.data.errors && event.data.errors[0] && event.data.errors[0].message)
             || 'Workflow failed') +
             (event.data.details ? ' — ' + event.data.details : '')
