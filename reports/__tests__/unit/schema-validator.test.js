@@ -155,25 +155,17 @@ describe('SchemaValidator', () => {
       );
     });
 
-    it('should reject ContentBundle with invalid date-time format', () => {
-      const invalidDate = {
-        metadata: {
-          sessionId: 'test',
-          theme: 'journalist',
-          generatedAt: 'not-a-date'
-        },
+    it('should ACCEPT ContentBundle with a non-ISO generatedAt (format intentionally not enforced)', () => {
+      // generatedAt is server-stamped (ai-nodes.js generateContentBundle:1218), so the schema
+      // deliberately carries no `format:"date-time"` — that keyword silently disables the
+      // SDK constrained-decoding channel (#277). This test locks in the relaxation.
+      const nonIsoDate = {
+        metadata: { sessionId: 'test', theme: 'journalist', generatedAt: 'not-a-date' },
         headline: { main: 'Valid Headline With Enough Length' },
-        sections: [
-          { id: 's1', type: 'narrative', content: [] }
-        ]
+        sections: [{ id: 's1', type: 'narrative', content: [] }]
       };
-
-      const result = validator.validate('content-bundle', invalidDate);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
-        expect.objectContaining({ keyword: 'format' })
-      );
+      const result = validator.validate('content-bundle', nonIsoDate);
+      expect(result.valid).toBe(true);
     });
 
     it('should reject ContentBundle with invalid section type', () => {
