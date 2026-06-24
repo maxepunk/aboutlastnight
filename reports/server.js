@@ -34,6 +34,7 @@ const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
 const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
+const { runGraphInBackground } = require('./lib/api-background-runner');
 const { SchemaValidator } = require('./lib/schema-validator');
 const outlineValidator = new SchemaValidator();
 
@@ -1103,6 +1104,10 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
     const { stateOverrides } = req.body;
 
+    if (shuttingDown) {
+        return res.status(503).json({ sessionId, error: 'Server is shutting down; retry shortly' });
+    }
+
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/resume`);
 
     try {
@@ -1116,33 +1121,39 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
             checkpointer: sharedCheckpointer
         });
 
-        let initialState = {};
+        const initialState = {};
         if (stateOverrides) {
             Object.assign(initialState, stateOverrides);
         }
 
-        const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
-        const graphState = await graph.getState(config);
-        const interrupted = isGraphInterrupted(graphState);
-
-        if (interrupted) {
-            const interruptData = getInterruptData(graphState);
-            const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
-            return res.json(buildInterruptResponse(sessionId, checkpointData, result.currentPhase));
-        }
-
-        const response = { sessionId, currentPhase: result.currentPhase };
-        if (result.currentPhase === PHASES.COMPLETE) {
-            response.assembledHtml = result.assembledHtml;
-            response.validationResults = result.validationResults;
-            response.outputPath = result.outputPath;
-            response.photosCopied = result.photosCopied;
-        }
-        if (result.errors?.length > 0) {
-            response.errors = result.errors;
-        }
-
-        res.json(response);
+        // Non-blocking: run graph.invoke in the background; deliver the result via SSE.
+        // (A long re-invoke — e.g. generateContentBundle ~400s — used to exceed undici's
+        //  5-min headersTimeout / Cloudflare's ~100s edge timeout on the held-open POST.)
+        runGraphInBackground({
+            sessionId,
+            invoke: () => graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }),
+            getState: () => graph.getState(config),
+            buildResponse: (result, graphState) => {
+                if (isGraphInterrupted(graphState)) {
+                    const interruptData = getInterruptData(graphState);
+                    const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
+                    return buildInterruptResponse(sessionId, checkpointData, result.currentPhase);
+                }
+                const response = { sessionId, currentPhase: result.currentPhase };
+                if (result.currentPhase === PHASES.COMPLETE) {
+                    response.assembledHtml = result.assembledHtml;
+                    response.validationResults = result.validationResults;
+                    response.outputPath = result.outputPath;
+                    response.photosCopied = result.photosCopied;
+                }
+                if (result.errors?.length > 0) {
+                    response.errors = result.errors;
+                }
+                return response;
+            },
+            res,
+            inFlightTasks
+        });
     } catch (error) {
         sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/resume`);
     }
