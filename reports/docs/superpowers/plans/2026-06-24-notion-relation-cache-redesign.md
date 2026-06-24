@@ -830,21 +830,26 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ## Task 7: Update `fetch-nodes.test.js` (drop Container; confirm shape)
 
 **Files:**
-- Modify (test): `__tests__/unit/workflow/fetch-nodes.test.js` (paper-evidence structure test ~344-357)
+- Modify (test): `__tests__/unit/workflow/fetch-nodes.test.js` (paper-evidence structure test — `containers` assertion at line 356)
+- Modify (fixture): `__tests__/fixtures/mock-responses/paper-evidence.json` (remove the `"containers"` array from all 4 evidence objects — lines 10, 19, 35, 44)
 
 **Interfaces:**
 - Consumes: the new token/evidence shapes (owners resolved; no containers).
 
-- [ ] **Step 1: Run it to see the failure.** Run: `npx jest __tests__/unit/workflow/fetch-nodes.test.js` — the paper-evidence structure test asserting a `containers` property will FAIL (field removed).
+**Note (verified pre-flight):** the `containers` field the test sees comes from the FIXTURE, not the test file — `createMockNotionClient` (fetch-nodes.js:536) returns `mockData.evidence` verbatim, and the test wires it from `__tests__/fixtures/mock-responses/paper-evidence.json`. The fixture's docstring purpose is to stay "aligned with actual NotionClient return formats," so the stale `containers` arrays MUST be removed there too (the real shape no longer has them). Removing only line 356 leaves the suite green but leaves the fixture lying about the shape — remove both.
 
-- [ ] **Step 2: Remove the `containers` assertion.** In the paper-evidence structure test (~344-357), delete the line asserting `containers` exists (e.g. `expect(evidence[0]).toHaveProperty('containers')` or a `containers` key in a `toMatchObject`). Leave the `owners`, `notionId`, `name`, `basicType`, `description`, `narrativeThreads`, `files` assertions intact. If the test's mock client returns evidence objects with a `containers` field, drop it from the mock too so the mock matches the real shape.
+- [ ] **Step 1: Run it to see the failure.** Run: `npx jest __tests__/unit/workflow/fetch-nodes.test.js` — the paper-evidence structure test asserting a `containers` property (line 356) will FAIL once the producers stop emitting it... *unless* the fixture still carries it (it does, today). So this step mostly confirms the current state; the real change is Steps 2-3.
 
-- [ ] **Step 3: Run it, expect pass.** Run: `npx jest __tests__/unit/workflow/fetch-nodes.test.js` — PASS.
+- [ ] **Step 2: Remove the `containers` assertion + fixture field.**
+  - In `fetch-nodes.test.js`, delete line 356: `expect(evidence).toHaveProperty('containers');`. Leave the `notionId`, `name`, `basicType`, `description`, `narrativeThreads`, `owners` assertions (lines 350-355) intact.
+  - In `__tests__/fixtures/mock-responses/paper-evidence.json`, delete the `"containers": [...]` line from each of the 4 evidence objects (lines 10, 19, 35, 44). Mind trailing-comma JSON validity: where `containers` is the LAST key in an object (lines 10, 35, 44 per the pre-flight grep), removing it requires also dropping the now-trailing comma on the preceding line; where it's mid-object (line 19) just remove the line. Re-read the file before editing to confirm exact comma placement.
+
+- [ ] **Step 3: Run it, expect pass.** Run: `npx jest __tests__/unit/workflow/fetch-nodes.test.js` — PASS. (A malformed-JSON fixture throws a parse error on require — if so, fix the comma.)
 
 - [ ] **Step 4: Commit.**
 ```bash
-git add reports/__tests__/unit/workflow/fetch-nodes.test.js
-git commit -m "test(workflow): drop Container assertions from fetch-nodes evidence shape
+git add reports/__tests__/unit/workflow/fetch-nodes.test.js reports/__tests__/fixtures/mock-responses/paper-evidence.json
+git commit -m "test(workflow): drop Container assertions from fetch-nodes evidence shape + fixture
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
@@ -895,7 +900,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Consumes: `lib/notion-client.js` (`NotionClient` → `fetchPaperEvidence`, `downloadAttachments`).
 - Produces: identical CLI/IO — flags `--pretty`, `--with-files`, `--download` (implies files), `--output-dir=` (default `./assets/images/notion`), `--output=`; two-tier `NOTION_TOKEN` env/.env fallback; output JSON `{ evidence, fetchedAt, totalCount }` plus, when `--download`, `downloads: {new, replaced, cached, total}` + `outputDirectory` + `downloadErrors`; stdout=JSON / stderr=logs; `exit(1)` on missing token / API error; **no `containers` in output**.
 
-**Implementation note:** Behavior-preserving rewrite. **Read the current script first.** Preserve flags/env/output/stderr/exit exactly; replace inline fetch/parse/resolve/download with `NotionClient`. The `--download` side effect maps to `client.downloadAttachments(evidence, outputDir)` whose returned `{ newFiles, replacedFiles, cachedFiles, errors }` must be reshaped into the existing output `downloads: { new, replaced, cached, total }` + `downloadErrors` exactly as today.
+**Implementation note:** Behavior-preserving rewrite of the JSON/exit contract. **Read the current script first.** Preserve flags/env/`--output` routing/exit codes and the stdout=JSON / stderr=summary split exactly; replace inline fetch/parse/resolve/download with `NotionClient`. The `--download` side effect maps to `client.downloadAttachments(evidence, outputDir)` whose returned `{ newFiles, replacedFiles, cachedFiles, errors }` reshapes into the existing output `downloads: { new, replaced, cached, total }` + `downloadErrors`.
+
+**Two accepted, pre-flight-verified consolidations (NOT regressions — do not chase byte-identical):**
+1. **Same-size re-download categorization shifts.** The old in-script `downloadAllFiles` counted a re-downloaded *same-size* file as `replaced`; the shared `downloadAttachments` counts it as `cached` (existingSize === buffer.length → `cachedFiles`). `total`, the on-disk bytes, `file.localPath`, and `errors`/`downloadErrors` are all identical — only the new/replaced/cached split moves for unchanged files. The library's labeling (same size = cached) is the new canonical behavior.
+2. **Per-file stderr progress lines are dropped.** The old script logged each file ("Downloaded:", "Updated:", "Refreshed:", "Using cached:", "Failed:"); `downloadAttachments` does not log per-file. Preserve the post-download **summary** block (New/Replaced/Cached/Errors counts) in the wrapper; the per-file lines are gone. JSON contract is unaffected.
+
+Also update the script's JSDoc header output example (it documents a now-removed `containers` field and a stale `downloadedFiles` key — match it to the real `{ evidence, fetchedAt, totalCount, downloads?, outputDirectory?, downloadErrors? }` shape).
 
 - [ ] **Step 1: Rewrite the body as a thin wrapper.** `main()` becomes:
 ```javascript
@@ -917,7 +928,7 @@ if (download) {
 }
 // ...existing output routing (unchanged: --output file write w/ mkdir, else stdout; --pretty; stderr summary; exit codes)...
 ```
-Confirm `downloadAttachments`'s stat keys (`newFiles/replacedFiles/cachedFiles/errors`, per `lib/notion-client.js:356-361`) map to the script's historical `downloads.{new,replaced,cached,total}` shape — adjust the reshape if the current script used different stat names so the output stays byte-identical.
+Confirm `downloadAttachments`'s stat keys (`newFiles/replacedFiles/cachedFiles/errors`, per `lib/notion-client.js:356-361`) map to the script's historical `downloads.{new,replaced,cached,total}` shape. The reshape uses those exact keys; the only behavioral delta is the same-size→`cached` categorization noted above (accepted).
 
 - [ ] **Step 2: Syntax + load check.** Run from `reports/`: `node --check .claude/skills/journalist-report/scripts/fetch-paper-evidence.js`.
 
