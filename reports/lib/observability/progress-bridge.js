@@ -289,6 +289,12 @@ function formatProgressEvent(msg) {
           const tail = msg.subtype === 'hook_response' && h.outcome ? ` → ${h.outcome}` : '';
           return { icon: PROGRESS_ICONS.system, shortText: `hook ${name}${tail}`, detailText: '' };
         }
+        case 'mirror_error':
+          return { icon: PROGRESS_ICONS.error, shortText: `mirror_error: ${msg.mirrorError || 'unknown'}`, detailText: '' };
+        case 'notification': {
+          const n = msg.notification || {};
+          return { icon: PROGRESS_ICONS.notification, shortText: `[${n.priority || 'info'}] ${n.text || ''}`.trim(), detailText: '' };
+        }
         default:
           return { icon: PROGRESS_ICONS.system, shortText: msg.subtype || 'Initializing...', detailText: '' };
       }
@@ -301,15 +307,22 @@ function formatProgressEvent(msg) {
         detailText: ''
       };
 
-    case 'result':
+    case 'result': {
+      const sub = msg.subtype || 'success';
+      const ok = sub === 'success';
       return {
-        icon: PROGRESS_ICONS.result,
-        shortText: 'Complete',
-        detailText: msg.subtype || ''
+        icon: ok ? PROGRESS_ICONS.result : PROGRESS_ICONS.error,
+        shortText: ok ? 'Complete' : `failed: ${sub}`,
+        detailText: ''
       };
+    }
 
     default:
-      return { icon: '', shortText: msg.type, detailText: '' };
+      return {
+        icon: /error|fail/i.test(msg.type || '') ? PROGRESS_ICONS.error : PROGRESS_ICONS.system,
+        shortText: msg.type || 'event',
+        detailText: ''
+      };
   }
 }
 

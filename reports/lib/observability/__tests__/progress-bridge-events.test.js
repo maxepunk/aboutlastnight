@@ -100,3 +100,35 @@ describe('formatProgressEvent — rate_limit_event', () => {
     expect(out.shortText).toBe('quota warning · seven_day_opus 87%');
   });
 });
+
+describe('formatProgressEvent — failures stop hiding', () => {
+  it('a success result is a green Complete', () => {
+    const out = formatProgressEvent({ type: 'result', subtype: 'success' });
+    expect(out.icon).toBe(PROGRESS_ICONS.result);
+    expect(out.shortText).toBe('Complete');
+  });
+  it('an error-subtype result is NOT styled as success', () => {
+    const out = formatProgressEvent({ type: 'result', subtype: 'error_max_budget_usd' });
+    expect(out.icon).toBe(PROGRESS_ICONS.error);
+    expect(out.shortText).toBe('failed: error_max_budget_usd');
+  });
+  it('mirror_error renders with the error icon and its message', () => {
+    const out = formatProgressEvent({ type: 'system', subtype: 'mirror_error', mirrorError: 'disk write failed' });
+    expect(out.icon).toBe(PROGRESS_ICONS.error);
+    expect(out.shortText).toBe('mirror_error: disk write failed');
+  });
+  it('notification renders priority + text', () => {
+    const out = formatProgressEvent({ type: 'system', subtype: 'notification', notification: { text: 'context window 80% full', priority: 'high' } });
+    expect(out.shortText).toBe('[high] context window 80% full');
+  });
+  it('an unknown error-ish top-level type gets the error icon', () => {
+    const out = formatProgressEvent({ type: 'some_error_event' });
+    expect(out.icon).toBe(PROGRESS_ICONS.error);
+    expect(out.shortText).toBe('some_error_event');
+  });
+  it('an unknown benign top-level type gets the neutral gear', () => {
+    const out = formatProgressEvent({ type: 'keep_alive' });
+    expect(out.icon).toBe(PROGRESS_ICONS.system);
+    expect(out.shortText).toBe('keep_alive');
+  });
+});

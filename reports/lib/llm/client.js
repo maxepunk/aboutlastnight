@@ -424,6 +424,10 @@ async function sdkQueryImpl({
           ...((msg.subtype === 'hook_started' || msg.subtype === 'hook_progress' || msg.subtype === 'hook_response') && {
             hook: { name: msg.hook_name, event: msg.hook_event, outcome: msg.outcome, exitCode: msg.exit_code }
           }),
+          // mirror_error is a real error message (project mirror write failure); don't lose it.
+          ...(msg.subtype === 'mirror_error' && { mirrorError: msg.error }),
+          // Loop-side notifications carry user-facing text + priority.
+          ...(msg.subtype === 'notification' && { notification: { text: msg.text, priority: msg.priority } }),
           ...(contentPreview && { contentPreview })
         });
       }

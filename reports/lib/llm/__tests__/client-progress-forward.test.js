@@ -56,3 +56,15 @@ describe('client onProgress forward — hooks', () => {
     expect(events.find(e => e.subtype === 'hook_response').hook).toEqual({ name: 'PreToolUse', event: 'PreToolUse', outcome: 'error', exitCode: 1 });
   });
 });
+
+describe('client onProgress forward — mirror_error & notification', () => {
+  afterEach(() => clearMockQuery());
+  it('forwards mirror_error text and notification text/priority', async () => {
+    const events = await captureForward([
+      { type: 'system', subtype: 'mirror_error', error: 'disk write failed', key: { projectKey: 'p', sessionId: 's' } },
+      { type: 'system', subtype: 'notification', key: 'k', text: 'context window 80% full', priority: 'high' }
+    ]);
+    expect(events.find(e => e.subtype === 'mirror_error').mirrorError).toBe('disk write failed');
+    expect(events.find(e => e.subtype === 'notification').notification).toEqual({ text: 'context window 80% full', priority: 'high' });
+  });
+});
