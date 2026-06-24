@@ -37,6 +37,25 @@ describe('formatProgressEvent — system subtypes: api_retry', () => {
   });
 });
 
+describe('formatProgressEvent — system subtypes: init & status', () => {
+  it('renders init with model, betas, tool count, and permission mode', () => {
+    const out = formatProgressEvent({
+      type: 'system', subtype: 'init',
+      init: { model: 'claude-opus-4-8', betas: ['context-1m-2025-08-07'], toolCount: 14, permissionMode: 'bypassPermissions' }
+    });
+    expect(out.shortText).toBe('init · model=claude-opus-4-8 · betas=[context-1m-2025-08-07] · 14 tools · bypassPermissions');
+  });
+  it('renders init minimally when fields are absent', () => {
+    expect(formatProgressEvent({ type: 'system', subtype: 'init', init: {} }).shortText).toBe('init');
+  });
+  it('renders a non-null status', () => {
+    expect(formatProgressEvent({ type: 'system', subtype: 'status', sdkStatus: 'compacting' }).shortText).toBe('status: compacting');
+  });
+  it('renders a bare "status" when the enum is null', () => {
+    expect(formatProgressEvent({ type: 'system', subtype: 'status', sdkStatus: null }).shortText).toBe('status');
+  });
+});
+
 describe('formatProgressEvent — rate_limit_event', () => {
   it('renders benign "allowed" telemetry quietly with which-limit + utilization', () => {
     const out = formatProgressEvent({

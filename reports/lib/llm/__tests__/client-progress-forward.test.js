@@ -27,3 +27,22 @@ describe('client onProgress forward — api_retry', () => {
     expect(retry.retry).toEqual({ attempt: 2, maxRetries: 10, delayMs: 30000, errorStatus: 429, reason: 'rate_limit' });
   });
 });
+
+describe('client onProgress forward — init & status', () => {
+  afterEach(() => clearMockQuery());
+
+  it('forwards init model/betas/toolCount/permissionMode', async () => {
+    const events = await captureForward([
+      { type: 'system', subtype: 'init', model: 'claude-opus-4-8', betas: ['context-1m-2025-08-07'], tools: ['Read', 'Write', 'Bash'], permissionMode: 'bypassPermissions' }
+    ]);
+    const init = events.find(e => e.subtype === 'init');
+    expect(init.init).toEqual({ model: 'claude-opus-4-8', betas: ['context-1m-2025-08-07'], toolCount: 3, permissionMode: 'bypassPermissions' });
+  });
+
+  it('forwards the status enum as sdkStatus', async () => {
+    const events = await captureForward([
+      { type: 'system', subtype: 'status', status: 'requesting' }
+    ]);
+    expect(events.find(e => e.subtype === 'status').sdkStatus).toBe('requesting');
+  });
+});

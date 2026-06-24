@@ -407,6 +407,18 @@ async function sdkQueryImpl({
               reason: msg.error
             }
           }),
+          // init confirms which model/betas/tools/permission actually engaged — invaluable
+          // for "is the 1M-context beta really on?" debugging. (SDKSystemMessage subtype:'init'.)
+          ...(msg.subtype === 'init' && {
+            init: {
+              model: msg.model,
+              betas: msg.betas,
+              toolCount: Array.isArray(msg.tools) ? msg.tools.length : undefined,
+              permissionMode: msg.permissionMode
+            }
+          }),
+          // status enum: 'compacting' | 'requesting' | null. (SDKStatusMessage subtype:'status'.)
+          ...(msg.subtype === 'status' && { sdkStatus: msg.status }),
           ...(contentPreview && { contentPreview })
         });
       }

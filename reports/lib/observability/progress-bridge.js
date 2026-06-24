@@ -261,6 +261,21 @@ function formatProgressEvent(msg) {
           if (r.delayMs != null) segs.push(`backoff ${Math.round(r.delayMs / 1000)}s`);
           return { icon: PROGRESS_ICONS.retry, shortText: segs.join(' · ') || 'api retry', detailText: '' };
         }
+        case 'init': {
+          const i = msg.init || {};
+          const segs = ['init'];
+          if (i.model) segs.push(`model=${i.model}`);
+          if (Array.isArray(i.betas) && i.betas.length) segs.push(`betas=[${i.betas.join(',')}]`);
+          if (i.toolCount != null) segs.push(`${i.toolCount} tools`);
+          if (i.permissionMode) segs.push(i.permissionMode);
+          return { icon: PROGRESS_ICONS.system, shortText: segs.join(' · '), detailText: '' };
+        }
+        case 'status':
+          return {
+            icon: PROGRESS_ICONS.system,
+            shortText: msg.sdkStatus ? `status: ${msg.sdkStatus}` : 'status',
+            detailText: ''
+          };
         default:
           return { icon: PROGRESS_ICONS.system, shortText: msg.subtype || 'Initializing...', detailText: '' };
       }
