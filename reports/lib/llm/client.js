@@ -395,6 +395,18 @@ async function sdkQueryImpl({
           // Pass rate_limit_info (status, utilization, type) through so the formatter
           // can render meaningful diagnostics rather than the bare event name.
           ...(msg.type === 'rate_limit_event' && { rateLimitInfo: msg.rate_limit_info }),
+          // api_retry carries the real story: which attempt, why (rate_limit/server_error/
+          // overloaded...), the HTTP status, and the backoff. The bare 'api_retry' label
+          // hides all of it. (SDKAPIRetryMessage: type:'system' subtype:'api_retry'.)
+          ...(msg.subtype === 'api_retry' && {
+            retry: {
+              attempt: msg.attempt,
+              maxRetries: msg.max_retries,
+              delayMs: msg.retry_delay_ms,
+              errorStatus: msg.error_status,
+              reason: msg.error
+            }
+          }),
           ...(contentPreview && { contentPreview })
         });
       }

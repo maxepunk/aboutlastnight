@@ -251,12 +251,20 @@ function formatProgressEvent(msg) {
         detailText: `${msg.elapsedSeconds?.toFixed(1) || '?'}s`
       };
 
-    case 'system':
-      return {
-        icon: PROGRESS_ICONS.system,
-        shortText: msg.subtype || 'Initializing...',
-        detailText: ''
-      };
+    case 'system': {
+      switch (msg.subtype) {
+        case 'api_retry': {
+          const r = msg.retry || {};
+          const segs = [];
+          if (r.attempt != null) segs.push(`retry ${r.attempt}${r.maxRetries != null ? '/' + r.maxRetries : ''}`);
+          if (r.reason) segs.push(r.errorStatus != null ? `${r.reason} (HTTP ${r.errorStatus})` : r.reason);
+          if (r.delayMs != null) segs.push(`backoff ${Math.round(r.delayMs / 1000)}s`);
+          return { icon: PROGRESS_ICONS.retry, shortText: segs.join(' · ') || 'api retry', detailText: '' };
+        }
+        default:
+          return { icon: PROGRESS_ICONS.system, shortText: msg.subtype || 'Initializing...', detailText: '' };
+      }
+    }
 
     case 'error':
       return {

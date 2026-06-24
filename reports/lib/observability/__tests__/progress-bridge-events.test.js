@@ -18,6 +18,25 @@ describe('formatResetsIn', () => {
   });
 });
 
+describe('formatProgressEvent — system subtypes: api_retry', () => {
+  it('renders attempt, reason, HTTP status, and backoff', () => {
+    const out = formatProgressEvent({
+      type: 'system', subtype: 'api_retry',
+      retry: { attempt: 2, maxRetries: 10, delayMs: 30000, errorStatus: 429, reason: 'rate_limit' }
+    });
+    expect(out.icon).toBe(PROGRESS_ICONS.retry);
+    expect(out.shortText).toBe('retry 2/10 · rate_limit (HTTP 429) · backoff 30s');
+  });
+  it('degrades gracefully when retry fields are partial', () => {
+    const out = formatProgressEvent({ type: 'system', subtype: 'api_retry', retry: { reason: 'overloaded' } });
+    expect(out.shortText).toBe('overloaded');
+  });
+  it('falls back to a plain label when retry payload is absent', () => {
+    const out = formatProgressEvent({ type: 'system', subtype: 'api_retry' });
+    expect(out.shortText).toBe('api retry');
+  });
+});
+
 describe('formatProgressEvent — rate_limit_event', () => {
   it('renders benign "allowed" telemetry quietly with which-limit + utilization', () => {
     const out = formatProgressEvent({
