@@ -103,12 +103,16 @@ lib/observability/
 ├── llm-tracer.js                   # createTracedSdkQuery() with full visibility
 ├── progress-emitter.js             # SSE progress streaming via EventEmitter
 └── progress-bridge.js              # Console + SSE formatting; sole source of progress event icons/strings
+lib/notion/                         # Unified Notion data-layer core (single source of truth)
+├── databases.js                    # DB IDs, query filters, RELATION_REGISTRY + ENTITY_RELATIONS
+├── parse.js                        # Pure page→element parsers (emit relation IDs, not names; no Container)
+└── relations.js                    # Pure registry-driven applyRelationNames join (non-mutating)
 lib/cache/
 ├── index.js                        # Public API for Notion caching
-├── cached-notion-client.js         # Cache-aware Notion client wrapper
+├── cached-notion-client.js         # Cache decorator: stores relation IDs + freshness-checked name table; read-time owner join
 ├── freshness-checker.js            # Cache staleness detection
-└── notion-cache-store.js           # Persistent cache storage
-lib/notion-client.js                # Raw Notion API client
+└── notion-cache-store.js           # Persistent cache storage (SCHEMA_VERSION bump clears stale-shape blobs)
+lib/notion-client.js                # Raw (uncached) Notion API client — consumes lib/notion/ core
 lib/schema-validator.js             # JSON schema validation helpers
 lib/sdk-client/
 └── subagents.js                    # Programmatic SDK subagent defs (arc orchestrator, commits 8.8-8.11)
@@ -143,6 +147,8 @@ lib/schemas/
 ├── preprocessed-evidence.schema.json # Batch-summarized evidence items
 └── outline.schema.json             # Article outline validation (8.25)
 ```
+
+**Notion data layer (unified):** `lib/notion/` is the single source of truth — `databases.js` (DB IDs, query filters, the `RELATION_REGISTRY` + `ENTITY_RELATIONS`), `parse.js` (pure page→element parsers, emit relation IDs not names), `relations.js` (pure registry-driven `applyRelationNames` join). `NotionClient` (uncached) and `CachedNotionClient` (server-only decorator) both consume it; the standalone `journalist-report` skill scripts are thin wrappers over the uncached `NotionClient`. Resolved relation names are produced by a **read-time join**: the cache stores element relation IDs + a separately freshness-checked name table per target DB (`character` ← Characters DB), so renaming a related page (e.g. a character) is reflected on the next fetch without a manual cache clear. Add a resolved relation by adding one `RELATION_REGISTRY` entry + listing it in `ENTITY_RELATIONS`. (`Container` is intentionally not resolved — it exists in-game but is irrelevant to reports.)
 
 ### Template System
 
