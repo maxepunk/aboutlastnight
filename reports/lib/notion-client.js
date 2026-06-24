@@ -12,10 +12,10 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-
-// Database IDs (from existing scripts)
-const ELEMENTS_DB_ID = '18c2f33d-583f-8020-91bc-d84c7dd94306';
-const NOTION_VERSION = '2022-06-28';
+const notionParse = require('./notion/parse');
+const { parseTokenPage, parseEvidencePage } = notionParse;
+const { collectRelationIds, applyRelationNames } = require('./notion/relations');
+const { ELEMENTS_DB_ID, NOTION_VERSION, TOKEN_FILTER, EVIDENCE_FILTER } = require('./notion/databases');
 
 class NotionClient {
   /**
@@ -67,10 +67,7 @@ class NotionClient {
    * @param {Array} richTextArray - Notion rich text array
    * @returns {string} - Plain text
    */
-  extractRichText(richTextArray) {
-    if (!richTextArray || !Array.isArray(richTextArray)) return '';
-    return richTextArray.map(t => t.plain_text || '').join('');
-  }
+  extractRichText(richTextArray) { return notionParse.extractRichText(richTextArray); }
 
   /**
    * Parse SF_ fields from memory token description
@@ -86,44 +83,7 @@ class NotionClient {
    * @param {string} descText - Full description text
    * @returns {Object} - Parsed fields
    */
-  parseSFFields(descText) {
-    const result = {
-      fullDescription: '',
-      tokenId: '',
-      summary: '',
-      valueRating: '',
-      memoryType: '',
-      group: ''
-    };
-
-    if (!descText) return result;
-
-    // Find where SF_ fields begin
-    const sfIndex = descText.indexOf('SF_');
-    if (sfIndex > 0) {
-      result.fullDescription = descText.substring(0, sfIndex).trim();
-    } else if (sfIndex === -1) {
-      result.fullDescription = descText.trim();
-    }
-
-    // Extract SF_ fields using regex
-    const rfidMatch = descText.match(/SF_RFID:\s*\[([^\]]*)\]/i);
-    if (rfidMatch) result.tokenId = rfidMatch[1].trim().toLowerCase();
-
-    const summaryMatch = descText.match(/SF_Summary:\s*\[([^\]]*)\]/i);
-    if (summaryMatch) result.summary = summaryMatch[1].trim();
-
-    const ratingMatch = descText.match(/SF_ValueRating:\s*\[([^\]]*)\]/i);
-    if (ratingMatch) result.valueRating = ratingMatch[1].trim();
-
-    const typeMatch = descText.match(/SF_MemoryType:\s*\[([^\]]*)\]/i);
-    if (typeMatch) result.memoryType = typeMatch[1].trim();
-
-    const groupMatch = descText.match(/SF_Group:\s*\[([^\]]*)\]/i);
-    if (groupMatch) result.group = groupMatch[1].trim();
-
-    return result;
-  }
+  parseSFFields(descText) { return notionParse.parseSFFields(descText); }
 
   /**
    * Fetch memory tokens from Notion Elements database
@@ -135,69 +95,23 @@ class NotionClient {
     let allResults = [];
     let hasMore = true;
     let startCursor = undefined;
-
-    // Filter for memory token types (includes base 'Memory Token' and subtypes)
-    const filter = {
-      or: [
-        { property: 'Basic Type', select: { equals: 'Memory Token' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Video' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Audio + Image' } },
-        { property: 'Basic Type', select: { equals: 'Memory Token Audio' } }
-      ]
-    };
-
-    // Paginate through all results
     while (hasMore) {
-      const body = { page_size: 100, filter };
+      const body = { page_size: 100, filter: TOKEN_FILTER };
       if (startCursor) body.start_cursor = startCursor;
-
       const data = await this.request(`databases/${ELEMENTS_DB_ID}/query`, 'POST', body);
-
       for (const page of data.results) {
-        const props = page.properties;
-        const name = this.extractRichText(props['Name']?.title);
-        const descText = this.extractRichText(props['Description/Text']?.rich_text);
-        const basicType = props['Basic Type']?.select?.name || '';
-
-        const sfFields = this.parseSFFields(descText);
-
-        const item = {
-          notionId: page.id,
-          tokenId: sfFields.tokenId,
-          name: name,
-          fullDescription: sfFields.fullDescription,
-          summary: sfFields.summary,
-          valueRating: sfFields.valueRating,
-          memoryType: sfFields.memoryType,
-          group: sfFields.group,
-          basicType: basicType,
-          ownerIds: props['Owner']?.relation?.map(r => r.id) || []
-        };
-
-        // Only include items with valid token IDs
-        if (item.tokenId) {
-          allResults.push(item);
-        }
+        const item = parseTokenPage(page);
+        if (item) allResults.push(item);
       }
-
       hasMore = data.has_more;
       startCursor = data.next_cursor;
     }
-
-    // Resolve owner names
-    allResults = await this.resolveRelationNames(allResults, 'ownerIds', 'owners');
-
-    // Filter by token IDs if specified
+    allResults = applyRelationNames(allResults, 'memory_token', await this._buildNameMaps(allResults, 'memory_token'));
     if (tokenIds && Array.isArray(tokenIds) && tokenIds.length > 0) {
       const filterSet = new Set(tokenIds.map(id => id.toLowerCase()));
       allResults = allResults.filter(t => filterSet.has(t.tokenId));
     }
-
-    return {
-      tokens: allResults,
-      fetchedAt: new Date().toISOString(),
-      totalCount: allResults.length
-    };
+    return { tokens: allResults, fetchedAt: new Date().toISOString(), totalCount: allResults.length };
   }
 
   /**
@@ -213,110 +127,53 @@ class NotionClient {
     let allResults = [];
     let hasMore = true;
     let startCursor = undefined;
-
-    // Filter for relevant Basic Types AND Narrative Threads
-    const filter = {
-      and: [
-        {
-          or: [
-            { property: 'Basic Type', select: { equals: 'Prop' } },
-            { property: 'Basic Type', select: { equals: 'Document' } },
-            { property: 'Basic Type', select: { equals: 'Set Dressing' } }
-          ]
-        },
-        {
-          or: [
-            { property: 'Narrative Threads', multi_select: { contains: 'Funding & Espionage' } },
-            { property: 'Narrative Threads', multi_select: { contains: 'Marriage Troubles' } },
-            { property: 'Narrative Threads', multi_select: { contains: 'Memory Drug' } },
-            { property: 'Narrative Threads', multi_select: { contains: 'Underground Parties' } }
-          ]
-        }
-      ]
-    };
-
     while (hasMore) {
-      const body = { page_size: 100, filter };
+      const body = { page_size: 100, filter: EVIDENCE_FILTER };
       if (startCursor) body.start_cursor = startCursor;
-
       const data = await this.request(`databases/${ELEMENTS_DB_ID}/query`, 'POST', body);
-
-      for (const page of data.results) {
-        const props = page.properties;
-        const name = this.extractRichText(props['Name']?.title);
-        const descText = this.extractRichText(props['Description/Text']?.rich_text);
-        const basicType = props['Basic Type']?.select?.name || '';
-        const narrativeThreads = props['Narrative Threads']?.multi_select?.map(s => s.name) || [];
-
-        const item = {
-          notionId: page.id,
-          name: name,
-          basicType: basicType,
-          description: descText,
-          narrativeThreads: narrativeThreads,
-          ownerIds: props['Owner']?.relation?.map(r => r.id) || [],
-          containerIds: props['Container']?.relation?.map(r => r.id) || []
-        };
-
-        // Extract file attachments if requested
-        if (includeFiles && props['Files & media']?.files) {
-          item.files = props['Files & media'].files.map(file => ({
-            name: file.name,
-            type: file.type,
-            url: file.type === 'external' ? file.external?.url : file.file?.url
-          }));
-        }
-
-        allResults.push(item);
-      }
-
+      for (const page of data.results) allResults.push(parseEvidencePage(page, { includeFiles }));
       hasMore = data.has_more;
       startCursor = data.next_cursor;
     }
+    allResults = applyRelationNames(allResults, 'paper_evidence', await this._buildNameMaps(allResults, 'paper_evidence'));
+    return { evidence: allResults, fetchedAt: new Date().toISOString(), totalCount: allResults.length };
+  }
 
-    // Resolve relation names
-    allResults = await this.resolveRelationNames(allResults, 'ownerIds', 'owners');
-    allResults = await this.resolveRelationNames(allResults, 'containerIds', 'containers');
+  /** Fetch a related page's Name title (-> 'Unknown' on failure). @private */
+  async _fetchPageName(id) {
+    try {
+      const data = await this.request(`pages/${id}`);
+      return notionParse.extractRichText(data.properties?.Name?.title) || 'Unknown';
+    } catch {
+      return 'Unknown';
+    }
+  }
 
-    return {
-      evidence: allResults,
-      fetchedAt: new Date().toISOString(),
-      totalCount: allResults.length
-    };
+  /** Build { [targetDb]: { [id]: Name } } for the registered relations of entityType. @private */
+  async _buildNameMaps(elements, entityType) {
+    const idsByDb = collectRelationIds(elements, entityType);
+    const maps = {};
+    for (const [db, ids] of Object.entries(idsByDb)) {
+      const map = {};
+      for (const id of ids) map[id] = await this._fetchPageName(id);
+      maps[db] = map;
+    }
+    return maps;
   }
 
   /**
-   * Resolve relation IDs to names
-   *
-   * @param {Array} items - Array of items with relation IDs
-   * @param {string} idField - Field name containing relation IDs
-   * @param {string} nameField - Field name to store resolved names
-   * @returns {Promise<Array>} - Items with resolved names
+   * Legacy relation resolver (retained for backward-compat + tests): mutates
+   * `items`, setting items[nameField] from items[idField] and deleting idField.
    */
   async resolveRelationNames(items, idField, nameField) {
-    // Collect unique IDs
-    const allIds = new Set();
-    items.forEach(item => {
-      (item[idField] || []).forEach(id => allIds.add(id));
-    });
-
-    // Fetch names for all IDs
+    const ids = new Set();
+    items.forEach(it => (it[idField] || []).forEach(id => ids.add(id)));
     const nameMap = new Map();
-    for (const id of allIds) {
-      try {
-        const data = await this.request(`pages/${id}`);
-        nameMap.set(id, this.extractRichText(data.properties?.Name?.title) || 'Unknown');
-      } catch (err) {
-        nameMap.set(id, 'Unknown');
-      }
-    }
-
-    // Add resolved names and remove raw IDs
-    items.forEach(item => {
-      item[nameField] = (item[idField] || []).map(id => nameMap.get(id) || 'Unknown');
-      delete item[idField];
+    for (const id of ids) nameMap.set(id, await this._fetchPageName(id));
+    items.forEach(it => {
+      it[nameField] = (it[idField] || []).map(id => nameMap.get(id) || 'Unknown');
+      delete it[idField];
     });
-
     return items;
   }
 
