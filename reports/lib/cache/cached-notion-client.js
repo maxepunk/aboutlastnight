@@ -17,6 +17,9 @@ const path = require('path');
 const { NotionClient, createNotionClient, ELEMENTS_DB_ID } = require('../notion-client');
 const { NotionCacheStore } = require('./notion-cache-store');
 const { FreshnessChecker } = require('./freshness-checker');
+const { parseTokenPage, parseEvidencePage } = require('../notion/parse');
+const { collectRelationIds, applyRelationNames } = require('../notion/relations');
+const { RELATION_REGISTRY, ENTITY_RELATIONS, CHARACTERS_DB_ID } = require('../notion/databases');
 
 // Default cache location
 const DEFAULT_CACHE_PATH = path.join(__dirname, '..', '..', 'data', '.cache', 'notion-cache.db');
@@ -158,6 +161,9 @@ class CachedNotionClient {
     // 6. Merge results
     let allEntities = [...cachedEntities, ...refreshedEntities];
 
+    // Resolve relation names via the freshness-checked name table (read-time join).
+    allEntities = applyRelationNames(allEntities, entityType, await this._ensureNameTable(entityType));
+
     // 7. Apply post-filter if provided (e.g., tokenIds filter)
     if (postFilter && filterArg) {
       allEntities = postFilter(allEntities, filterArg);
@@ -222,114 +228,65 @@ class CachedNotionClient {
   async _fetchFullEntities(entityType, filter, targetIds) {
     const targetSet = new Set(targetIds);
     const entities = [];
-    let hasMore = true;
-    let startCursor = undefined;
-
+    let hasMore = true, startCursor = undefined;
     while (hasMore) {
       const body = { page_size: 100, filter };
       if (startCursor) body.start_cursor = startCursor;
-
       const data = await this._request(`databases/${ELEMENTS_DB_ID}/query`, 'POST', body);
-
       for (const page of data.results) {
         if (!targetSet.has(page.id)) continue;
-
         const parsed = entityType === 'memory_token'
-          ? this._parseTokenPage(page)
-          : this._parseEvidencePage(page);
-
-        if (parsed) {
-          entities.push(parsed);
-        }
+          ? parseTokenPage(page)
+          : parseEvidencePage(page, { includeFiles: true });
+        if (parsed) entities.push(parsed);
       }
-
       hasMore = data.has_more;
       startCursor = data.next_cursor;
     }
+    return entities; // blobs carry ownerIds; names resolved at read time
+  }
 
-    // Resolve owner/container relations
-    if (entityType === 'memory_token') {
-      return await this.notionClient.resolveRelationNames(entities, 'ownerIds', 'owners');
-    } else {
-      let result = await this.notionClient.resolveRelationNames(entities, 'ownerIds', 'owners');
-      result = await this.notionClient.resolveRelationNames(result, 'containerIds', 'containers');
-      return result;
+  /**
+   * Ensure the cached name tables for entityType's registered relations are fresh,
+   * and return { [targetDb]: { [pageId]: Name } } for the read-time join.
+   * The Characters table is freshness-checked against the Characters DB, so a
+   * character rename invalidates only its name row — element cache untouched.
+   * @private
+   */
+  async _ensureNameTable(entityType) {
+    const relNames = ENTITY_RELATIONS[entityType] || [];
+    const targets = [...new Set(relNames.map(n => ({ db: RELATION_REGISTRY[n].targetDb, type: RELATION_REGISTRY[n].cacheType })).map(t => JSON.stringify(t)))].map(s => JSON.parse(s));
+    const maps = {};
+    for (const { db, type } of targets) {
+      // Light fetch: ids + timestamps from the target DB.
+      const notionTs = [];
+      let hasMore = true, cursor = undefined;
+      while (hasMore) {
+        const body = { page_size: 100 };
+        if (cursor) body.start_cursor = cursor;
+        const data = await this._request(`databases/${db}/query`, 'POST', body);
+        for (const p of data.results) notionTs.push({ id: p.id, last_edited_time: p.last_edited_time });
+        hasMore = data.has_more; cursor = data.next_cursor;
+      }
+      const fresh = this.freshnessChecker.checkFreshness(type, notionTs);
+      const idsToFetch = [...fresh.stale, ...fresh.new];
+      if (idsToFetch.length > 0) {
+        const tsMap = new Map(notionTs.map(t => [t.id, t.last_edited_time]));
+        const toUpsert = [];
+        for (const id of idsToFetch) {
+          const page = await this._request(`pages/${id}`);
+          const name = (page.properties?.Name?.title || []).map(t => t.plain_text || '').join('') || 'Unknown';
+          toUpsert.push({ notion_id: id, entity_type: type, last_edited_time: tsMap.get(id) || new Date().toISOString(), data: { name } });
+        }
+        this.cacheStore.upsertEntities(toUpsert);
+      }
+      if (fresh.deleted.length > 0) this.cacheStore.deleteStaleEntities(type, notionTs.map(t => t.id));
+      // Build the id->Name map from the (now fresh) cache.
+      const map = {};
+      for (const row of this.cacheStore.getEntitiesByType(type)) map[row.notion_id] = row.data.name;
+      maps[db] = map;
     }
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // Page Parsing (mirrors NotionClient logic)
-  // ─────────────────────────────────────────────────────────────
-
-  /**
-   * Parse memory token page
-   * @private
-   */
-  _parseTokenPage(page) {
-    const props = page.properties;
-    const name = this._extractRichText(props['Name']?.title);
-    const descText = this._extractRichText(props['Description/Text']?.rich_text);
-    const basicType = props['Basic Type']?.select?.name || '';
-
-    const sfFields = this.notionClient.parseSFFields(descText);
-
-    // Only include items with valid token IDs
-    if (!sfFields.tokenId) return null;
-
-    return {
-      notionId: page.id,
-      tokenId: sfFields.tokenId,
-      name: name,
-      fullDescription: sfFields.fullDescription,
-      summary: sfFields.summary,
-      valueRating: sfFields.valueRating,
-      memoryType: sfFields.memoryType,
-      group: sfFields.group,
-      basicType: basicType,
-      ownerIds: props['Owner']?.relation?.map(r => r.id) || []
-    };
-  }
-
-  /**
-   * Parse paper evidence page
-   * @private
-   */
-  _parseEvidencePage(page) {
-    const props = page.properties;
-    const name = this._extractRichText(props['Name']?.title);
-    const descText = this._extractRichText(props['Description/Text']?.rich_text);
-    const basicType = props['Basic Type']?.select?.name || '';
-    const narrativeThreads = props['Narrative Threads']?.multi_select?.map(s => s.name) || [];
-
-    const item = {
-      notionId: page.id,
-      name: name,
-      basicType: basicType,
-      description: descText,
-      narrativeThreads: narrativeThreads,
-      ownerIds: props['Owner']?.relation?.map(r => r.id) || [],
-      containerIds: props['Container']?.relation?.map(r => r.id) || []
-    };
-
-    // Extract file attachments
-    if (props['Files & media']?.files) {
-      item.files = props['Files & media'].files.map(file => ({
-        name: file.name,
-        type: file.type,
-        url: file.type === 'external' ? file.external?.url : file.file?.url
-      }));
-    }
-
-    return item;
-  }
-
-  /**
-   * Extract plain text from Notion rich text array
-   * @private
-   */
-  _extractRichText(richTextArray) {
-    if (!richTextArray || !Array.isArray(richTextArray)) return '';
-    return richTextArray.map(t => t.plain_text || '').join('');
+    return maps;
   }
 
   // ─────────────────────────────────────────────────────────────
