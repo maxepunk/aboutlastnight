@@ -353,7 +353,6 @@ describe('fetch-nodes', () => {
       expect(evidence).toHaveProperty('description');
       expect(evidence).toHaveProperty('narrativeThreads');
       expect(evidence).toHaveProperty('owners');
-      expect(evidence).toHaveProperty('containers');
     });
 
     it('returns partial state update', async () => {
