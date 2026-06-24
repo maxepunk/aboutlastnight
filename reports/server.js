@@ -33,7 +33,6 @@ const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBa
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
-const { acquireSessionLock, releaseSessionLock } = require('./lib/session-locks');
 const { runGraphInBackground } = require('./lib/api-background-runner');
 const { SchemaValidator } = require('./lib/schema-validator');
 const outlineValidator = new SchemaValidator();
@@ -851,8 +850,6 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
 
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve:`, JSON.stringify(approvals));
 
-    let lockAcquired = false;
-
     try {
         // Create graph and config (theme resolved from state below)
         const { graph, config } = createGraphAndConfig(sessionId, 'journalist', {
@@ -862,8 +859,6 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         // Check if graph is interrupted using native LangGraph pattern
         const graphState = await graph.getState(config);
         if (!graphState || !isGraphInterrupted(graphState)) {
-            // Recovery path: if graph ended with error after article approval,
-            // guide user to rollback to article checkpoint
             const stateValues = graphState?.values || {};
             if (stateValues.currentPhase === 'error' && stateValues.articleApproved === true) {
                 console.log(`[${new Date().toISOString()}] Recovering from article error state for session ${sessionId}`);
@@ -874,7 +869,6 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                     rollbackTo: 'article'
                 });
             }
-
             return res.status(400).json({
                 sessionId,
                 error: 'Session is not at a checkpoint',
@@ -892,109 +886,48 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
             return res.status(400).json({ sessionId, error: validationError });
         }
 
-        // CONC-1: reject a second concurrent approve on this session. After all 400
-        // paths (so they never leak the lock); before res.json(processing) (so the
-        // loser gets a 409, not a 200 'processing').
-        if (!acquireSessionLock(sessionId)) {
-            return res.status(409).json({
-                sessionId,
-                error: 'An approval is already in progress for this session. Please wait for it to finish.'
-            });
-        }
-        lockAcquired = true;
-
-        // NOTE: Background pipelines now start earlier with staggered timing (Phase 3 optimization):
-        // - Evidence pipeline: starts at session start (context-free, no playerFocus needed)
-        // - Photo pipeline: starts after parseRawInput completes (needs sessionConfig.photosPath)
-        // See POST /api/session/:id/start handler for pipeline triggers
-
-        // Return immediately - workflow runs in background
         const previousPhase = graphState.values?.currentPhase;
-        res.json({
+
+        // Non-blocking via the shared runner: it acquires the sessionId lock (409 on a
+        // second concurrent approve), returns {status:'processing'}, runs the graph in the
+        // background, records the outcome, and emits the result via SSE.
+        runGraphInBackground({
             sessionId,
-            status: 'processing',
-            previousPhase
-        });
-
-        // Run workflow in background using Command({ resume }) pattern.
-        // Wrap in a tracked promise so SIGINT can drain it (DUR-2).
-        const task = new Promise((resolve) => {
-        setImmediate(async () => {
-            try {
-                // Resume graph with Command - resume value becomes the return of interrupt()
-                // Also pass stateUpdates for any direct state modifications
-                const command = new Command({ resume, update: stateUpdates });
-                const result = await graph.invoke(command, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
-
-                // Check if graph paused at another checkpoint
-                const newGraphState = await graph.getState(config);
-                const interrupted = isGraphInterrupted(newGraphState);
-
-                console.log(`[${new Date().toISOString()}] Workflow complete for session ${sessionId}, phase: ${result.currentPhase}, interrupted: ${interrupted}`);
-
-                // Build SSE response
-                let response;
-                if (interrupted) {
+            invoke: () => graph.invoke(
+                new Command({ resume, update: stateUpdates }),
+                { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }
+            ),
+            getState: () => graph.getState(config),
+            buildResponse: (result, newGraphState) => {
+                if (isGraphInterrupted(newGraphState)) {
                     const interruptData = getInterruptData(newGraphState);
                     const checkpointData = buildCompleteCheckpointData(interruptData, newGraphState.values);
-                    response = {
+                    return {
                         ...buildInterruptResponse(sessionId, checkpointData, result.currentPhase),
                         previousPhase
                     };
-                } else {
-                    response = {
-                        sessionId,
-                        previousPhase,
-                        currentPhase: result.currentPhase
-                    };
-
-                    // Include completion data
-                    if (result.currentPhase === PHASES.COMPLETE) {
-                        response.assembledHtml = result.assembledHtml;
-                        response.validationResults = result.validationResults;
-                        response.outputPath = result.outputPath;
-                        response.photosCopied = result.photosCopied;
-                    }
-
-                    // Include errors
-                    if (result.errors?.length > 0) {
-                        response.errors = result.errors;
-                    }
                 }
-
-                // Persist the outcome FIRST so a dropped SSE is recoverable via GET /state (DEL-1)
-                recordSessionOutcome(sessionId, buildOutcomeRecord(response));
-                // Emit completion via SSE
-                progressEmitter.emitComplete(sessionId, response);
-
-            } catch (error) {
-                console.error(`[${new Date().toISOString()}] Background workflow error for session ${sessionId}:`, error);
-                const failedResponse = {
-                    sessionId,
-                    currentPhase: PHASES.ERROR,
-                    error: 'Internal server error',
-                    details: 'Approval operation failed. Check server logs.'
-                };
-                recordSessionOutcome(sessionId, buildOutcomeRecord(failedResponse));
-                progressEmitter.emitComplete(sessionId, failedResponse);
-            } finally {
-                releaseSessionLock(sessionId);   // CONC-1 (P4.3)
-                resolve();                       // DUR-2 drain (P1.4)
-            }
+                const response = { sessionId, previousPhase, currentPhase: result.currentPhase };
+                if (result.currentPhase === PHASES.COMPLETE) {
+                    response.assembledHtml = result.assembledHtml;
+                    response.validationResults = result.validationResults;
+                    response.outputPath = result.outputPath;
+                    response.photosCopied = result.photosCopied;
+                }
+                if (result.errors?.length > 0) {
+                    response.errors = result.errors;
+                }
+                return response;
+            },
+            res,
+            inFlightTasks,
+            processingExtra: { previousPhase }
         });
-        }).finally(() => inFlightTasks.delete(task));
-        inFlightTasks.add(task);
-
     } catch (error) {
-        // If we acquired the lock but the background task never started (e.g. res.json
-        // threw before setImmediate was scheduled), release it so the session isn't
-        // permanently locked. Guarded by lockAcquired so a pre-acquire throw never
-        // releases a DIFFERENT in-flight request's lock for this session.
-        if (lockAcquired) releaseSessionLock(sessionId);
-        // This only catches errors BEFORE the background task starts (validation, etc.)
+        // Only fires for an UNEXPECTED error BEFORE the runner scheduled the background task
+        // (validation throw, getState throw). The runner owns the lock, so there is no lock to
+        // release here. Emit an SSE completion so the console's open SSE doesn't hang.
         console.error(`[${new Date().toISOString()}] POST /api/session/${sessionId}/approve error:`, error);
-
-        // Emit SSE completion for sync errors so client doesn't hang waiting
         const earlyFailure = {
             sessionId,
             currentPhase: PHASES.ERROR,
@@ -1003,7 +936,6 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         };
         recordSessionOutcome(sessionId, buildOutcomeRecord(earlyFailure));
         progressEmitter.emitComplete(sessionId, earlyFailure);
-
         sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/approve`);
     }
 });
