@@ -124,8 +124,30 @@ const PROGRESS_ICONS = {
   error: '\u274C',                 // cross mark
   llm_start: '\uD83D\uDE80',       // rocket
   llm_complete: '\u2705',          // checkmark
-  rate_limit_event: '\u23F1\uFE0F' // stopwatch
+  rate_limit_event: '\u23F1\uFE0F', // stopwatch (legacy; unused after this change)
+  quota_ok: '\uD83D\uDCCA',   // bar chart U+1F4CA \u2014 benign quota telemetry
+  warn: '\u26A0\uFE0F',       // warning sign U+26A0
+  blocked: '\u26D4',          // no entry U+26D4 \u2014 hard throttle / rejected
+  retry: '\uD83D\uDD04',      // counterclockwise arrows U+1F504 \u2014 api retry
+  notification: '\uD83D\uDD14' // bell U+1F514
 };
+
+/**
+ * Format a rate-limit `resetsAt` epoch into a human "resets in Xm" string.
+ * Accepts seconds- or millis-epoch (heuristic: > 1e12 ⇒ already millis).
+ * @param {number|undefined} resetsAt - epoch from SDKRateLimitInfo.resetsAt
+ * @param {number} [now] - millis-epoch reference (injectable for tests)
+ * @returns {string} e.g. 'resets in 42m', or '' when resetsAt is absent
+ */
+function formatResetsIn(resetsAt, now = Date.now()) {
+  if (resetsAt == null) return '';
+  // Heuristic: if resetsAt is already in the same order of magnitude as now (millis),
+  // use as-is; otherwise treat as seconds and convert to millis.
+  // Threshold: resetsAt > now/2 means it's already millis-epoch.
+  const ms = resetsAt > now / 2 ? resetsAt : resetsAt * 1000;
+  const mins = Math.max(0, Math.round((ms - now) / 60000));
+  return `resets in ${mins}m`;
+}
 
 /**
  * Format a progress event into display components
@@ -162,13 +184,27 @@ function formatProgressEvent(msg) {
 
     case 'rate_limit_event': {
       const info = msg.rateLimitInfo || {};
-      const segs = [info.status || 'unknown'];
-      if (info.utilization != null) segs.push(`util=${(info.utilization * 100).toFixed(0)}%`);
-      if (info.rateLimitType) segs.push(info.rateLimitType);
+      const status = info.status || 'unknown';
+      const which = info.rateLimitType || '';
+      const util = info.utilization != null ? `${Math.round(info.utilization * 100)}%` : '';
+      const scope = [which, util].filter(Boolean).join(' ');
+      // 'allowed' is benign telemetry the SDK emits on ~every call — keep it quiet.
+      if (status === 'allowed') {
+        return {
+          icon: PROGRESS_ICONS.quota_ok,
+          shortText: `quota ok${scope ? ' · ' + scope : ''}`,
+          detailText: status
+        };
+      }
+      // 'allowed_warning' | 'rejected' — actionable; put everything in shortText
+      // (only shortText reaches the console).
+      const isRejected = status === 'rejected';
+      const resets = formatResetsIn(info.resetsAt);
+      const segs = [isRejected ? 'RATE LIMITED' : 'quota warning', scope, resets].filter(Boolean);
       return {
-        icon: PROGRESS_ICONS.rate_limit_event,
-        shortText: 'rate limit',
-        detailText: segs.join(' ')
+        icon: isRejected ? PROGRESS_ICONS.blocked : PROGRESS_ICONS.warn,
+        shortText: segs.join(' · '),
+        detailText: `status=${status}`
       };
     }
 
@@ -403,6 +439,7 @@ function createProgressFromTrace(context, sessionId = null) {
 module.exports = {
   createProgressFromTrace,
   formatProgressEvent,
+  formatResetsIn,
   PROGRESS_ICONS,
   _resetDeltaBuffers
 };
