@@ -270,3 +270,22 @@ describe('NotionCacheStore', () => {
     });
   });
 });
+
+describe('schema version migration', () => {
+  const os = require('os'); const path = require('path'); const fs = require('fs');
+  const { NotionCacheStore, SCHEMA_VERSION } = require('../../cache/notion-cache-store');
+  it('clears entities when the stored schema version is older', () => {
+    const p = path.join(os.tmpdir(), `notion-cache-migrate-${Date.now()}.db`);
+    // Seed a store, then force an old version + an entity.
+    let store = new NotionCacheStore(p);
+    store.upsertEntities([{ notion_id: 'x', entity_type: 'memory_token', last_edited_time: '2025-01-01T00:00:00.000Z', data: { tokenId: 't', owners: ['Old Name'] } }]);
+    store.setMetadata('schema_version', '0'); // simulate a pre-bump db
+    store.close();
+    // Reopen: mismatch (0 !== current) must clear entities and set current version.
+    store = new NotionCacheStore(p);
+    expect(store.getEntityCount('memory_token')).toBe(0);
+    expect(store.getMetadata('schema_version')).toBe(SCHEMA_VERSION);
+    store.close();
+    fs.unlinkSync(p); try { fs.unlinkSync(p + '-wal'); } catch {} try { fs.unlinkSync(p + '-shm'); } catch {}
+  });
+});

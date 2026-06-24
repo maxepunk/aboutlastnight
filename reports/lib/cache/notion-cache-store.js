@@ -20,7 +20,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 
-const SCHEMA_VERSION = '1';
+const SCHEMA_VERSION = '2';
 
 class NotionCacheStore {
   /**
@@ -69,9 +69,11 @@ class NotionCacheStore {
       );
     `);
 
-    // Set schema version if not exists
+    // Schema version: on a mismatch (or first run after a bump), drop cached
+    // entities so a stale-shape blob can never survive into a new read path.
     const version = this.getMetadata('schema_version');
-    if (!version) {
+    if (version !== SCHEMA_VERSION) {
+      this.db.exec('DELETE FROM notion_entities;');
       this.setMetadata('schema_version', SCHEMA_VERSION);
     }
   }
