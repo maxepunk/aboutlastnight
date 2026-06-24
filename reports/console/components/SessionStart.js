@@ -147,26 +147,12 @@ function SessionStart({ dispatch, theme }) {
           phase: checkpoint.currentPhase
         });
       } else {
-        // Not at a checkpoint — resume the workflow
-        setStatus('Resuming workflow...');
-        const result = await sessionApi.resume(sessionId);
-
-        if (result.interrupted && result.checkpoint) {
-          dispatch({
-            type: SESSION_ACTIONS.CHECKPOINT_RECEIVED,
-            checkpointType: result.checkpoint.type,
-            data: result.checkpoint,
-            phase: result.currentPhase
-          });
-        } else if (result.currentPhase === 'complete') {
-          dispatch({
-            type: SESSION_ACTIONS.WORKFLOW_COMPLETE,
-            result
-          });
-        } else {
-          setStatus('Session at phase: ' + (result.currentPhase || 'unknown'));
-          setLoading(false);
-        }
+        // Not at a checkpoint — hand off a STREAMING resume to App. /resume is non-blocking
+        // now (returns {status:'processing'} and streams the result via SSE), and this
+        // component unmounts once sessionId is set, so it can't own the EventSource itself.
+        // RESUME_REQUESTED sets the session + processing + the pendingResume flag that App's
+        // effect picks up to drive the streaming resume.
+        dispatch({ type: SESSION_ACTIONS.RESUME_REQUESTED, sessionId });
       }
     } catch (err) {
       setStatus('Connection failed. Is the server running?');
