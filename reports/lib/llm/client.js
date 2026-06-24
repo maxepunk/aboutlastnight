@@ -419,6 +419,11 @@ async function sdkQueryImpl({
           }),
           // status enum: 'compacting' | 'requesting' | null. (SDKStatusMessage subtype:'status'.)
           ...(msg.subtype === 'status' && { sdkStatus: msg.status }),
+          // Hook lifecycle: surface which hook + (for responses) success/error/cancelled
+          // and exit code, so a FAILING hook stops looking like benign 'hook_response'.
+          ...((msg.subtype === 'hook_started' || msg.subtype === 'hook_progress' || msg.subtype === 'hook_response') && {
+            hook: { name: msg.hook_name, event: msg.hook_event, outcome: msg.outcome, exitCode: msg.exit_code }
+          }),
           ...(contentPreview && { contentPreview })
         });
       }

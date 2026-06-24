@@ -46,3 +46,13 @@ describe('client onProgress forward — init & status', () => {
     expect(events.find(e => e.subtype === 'status').sdkStatus).toBe('requesting');
   });
 });
+
+describe('client onProgress forward — hooks', () => {
+  afterEach(() => clearMockQuery());
+  it('forwards hook name/event/outcome/exitCode', async () => {
+    const events = await captureForward([
+      { type: 'system', subtype: 'hook_response', hook_name: 'PreToolUse', hook_event: 'PreToolUse', outcome: 'error', exit_code: 1 }
+    ]);
+    expect(events.find(e => e.subtype === 'hook_response').hook).toEqual({ name: 'PreToolUse', event: 'PreToolUse', outcome: 'error', exitCode: 1 });
+  });
+});

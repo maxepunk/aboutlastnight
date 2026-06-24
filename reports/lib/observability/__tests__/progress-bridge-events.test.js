@@ -56,6 +56,23 @@ describe('formatProgressEvent — system subtypes: init & status', () => {
   });
 });
 
+describe('formatProgressEvent — system subtypes: hooks', () => {
+  it('renders a started hook with its name', () => {
+    const out = formatProgressEvent({ type: 'system', subtype: 'hook_started', hook: { name: 'PreToolUse', event: 'PreToolUse' } });
+    expect(out.icon).toBe(PROGRESS_ICONS.system);
+    expect(out.shortText).toBe('hook PreToolUse');
+  });
+  it('renders a successful response with its outcome', () => {
+    const out = formatProgressEvent({ type: 'system', subtype: 'hook_response', hook: { name: 'PreToolUse', outcome: 'success' } });
+    expect(out.shortText).toBe('hook PreToolUse → success');
+  });
+  it('renders a FAILED hook response with the error icon + exit code', () => {
+    const out = formatProgressEvent({ type: 'system', subtype: 'hook_response', hook: { name: 'PreToolUse', outcome: 'error', exitCode: 1 } });
+    expect(out.icon).toBe(PROGRESS_ICONS.error);
+    expect(out.shortText).toBe('hook PreToolUse → error (exit 1)');
+  });
+});
+
 describe('formatProgressEvent — rate_limit_event', () => {
   it('renders benign "allowed" telemetry quietly with which-limit + utilization', () => {
     const out = formatProgressEvent({

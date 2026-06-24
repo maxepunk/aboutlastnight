@@ -276,6 +276,19 @@ function formatProgressEvent(msg) {
             shortText: msg.sdkStatus ? `status: ${msg.sdkStatus}` : 'status',
             detailText: ''
           };
+        case 'hook_started':
+        case 'hook_progress':
+        case 'hook_response': {
+          const h = msg.hook || {};
+          const name = h.name || h.event || '?';
+          const failed = msg.subtype === 'hook_response' && h.outcome && h.outcome !== 'success';
+          if (failed) {
+            const exit = h.exitCode != null ? ` (exit ${h.exitCode})` : '';
+            return { icon: PROGRESS_ICONS.error, shortText: `hook ${name} → ${h.outcome}${exit}`, detailText: '' };
+          }
+          const tail = msg.subtype === 'hook_response' && h.outcome ? ` → ${h.outcome}` : '';
+          return { icon: PROGRESS_ICONS.system, shortText: `hook ${name}${tail}`, detailText: '' };
+        }
         default:
           return { icon: PROGRESS_ICONS.system, shortText: msg.subtype || 'Initializing...', detailText: '' };
       }
