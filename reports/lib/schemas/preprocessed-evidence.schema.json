@@ -83,8 +83,7 @@
     },
     "preprocessedAt": {
       "type": "string",
-      "format": "date-time",
-      "description": "ISO timestamp when preprocessing completed"
+      "description": "ISO timestamp when preprocessing completed (server-stamped; no format:date-time — disables SDK channel, #277)"
     },
     "sessionId": {
       "type": "string",
