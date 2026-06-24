@@ -27,6 +27,117 @@ const CHECKPOINT_COMPONENTS = {
   'article': window.Console.checkpoints && window.Console.checkpoints.Article
 };
 
+/**
+ * Build the SSE onProgress handler shared by approve/resume/rollback (all three drive
+ * the same non-blocking, SSE-delivered contract). Closes over dispatch + the EventSource
+ * ref so the completion branches can close the stream.
+ */
+function makeSseHandler(dispatch, sseRef) {
+  return (event) => {
+    switch (event.type) {
+      case 'connected':
+        dispatch({ type: APP_ACTIONS.SSE_CONNECTED });
+        break;
+      case 'progress':
+        dispatch({
+          type: APP_ACTIONS.SSE_PROGRESS,
+          message: event.data.message || event.data.context || JSON.stringify(event.data)
+        });
+        break;
+      case 'llm_start':
+        dispatch({
+          type: APP_ACTIONS.SSE_LLM_START,
+          label: event.data.label || event.data.context || 'Processing',
+          model: event.data.model || 'unknown',
+          prompt: event.data.prompt || null,
+          systemPrompt: event.data.systemPrompt || null
+        });
+        break;
+      case 'llm_delta':
+        dispatch({
+          type: APP_ACTIONS.SSE_LLM_DELTA,
+          phase: event.data.phase || 'writing',
+          deltaText: event.data.deltaText || '',
+          tokenCount: event.data.tokenCount,
+          ttftMs: event.data.ttftMs
+        });
+        break;
+      case 'llm_complete':
+        dispatch({
+          type: APP_ACTIONS.SSE_LLM_COMPLETE,
+          response: event.data.response || null,
+          elapsed: event.data.elapsed || null
+        });
+        break;
+      case 'llm_error':
+        dispatch({
+          type: APP_ACTIONS.SSE_LLM_COMPLETE,
+          response: null,
+          elapsed: event.data.elapsed || null
+        });
+        dispatch({
+          type: APP_ACTIONS.SSE_PROGRESS,
+          message: `Extraction failed: ${event.data.error || 'unknown'} (channel=text_fallback, stop=${event.data.diagnostics?.stopReason || '?'}, structuredOutputPresent=${event.data.diagnostics?.structuredOutputPresent})`
+        });
+        break;
+      case 'complete':
+        eventSourceClose(sseRef);
+        dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
+        {
+          const result = event.data;
+          if (result.interrupted && result.checkpoint) {
+            dispatch({
+              type: APP_ACTIONS.CHECKPOINT_RECEIVED,
+              checkpointType: result.checkpoint.type,
+              data: result.checkpoint,
+              phase: result.currentPhase
+            });
+          } else if (result.currentPhase === 'complete') {
+            dispatch({ type: APP_ACTIONS.WORKFLOW_COMPLETE, result });
+          } else if (result.currentPhase === 'error') {
+            // Unreachable on the runner path: the server stamps a non-interrupted error as
+            // SSE type:'failed' (progress-emitter outcomeEventType), so it hits the 'failed'
+            // branch (inline failure card) below, not here. Kept for parity with the legacy
+            // inline approve handler / any future non-runner emit.
+            dispatch({
+              type: APP_ACTIONS.SET_ERROR,
+              message: (result.error || 'Workflow error') +
+                (result.details ? ' ' + result.details : '') +
+                ' You can edit and retry, or use rollback.'
+            });
+          }
+        }
+        break;
+      case 'failed':
+        eventSourceClose(sseRef);
+        dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
+        dispatch({
+          type: APP_ACTIONS.SSE_LLM_FAILURE,
+          error: (event.data.error
+            || (event.data.errors && event.data.errors[0] && event.data.errors[0].message)
+            || 'Workflow failed') +
+            (event.data.details ? ' — ' + event.data.details : '')
+        });
+        break;
+      case 'error':
+        eventSourceClose(sseRef);
+        dispatch({
+          type: APP_ACTIONS.SSE_ERROR,
+          message: event.data.message || 'Connection lost'
+        });
+        break;
+    }
+  };
+}
+
+/** Close + clear the tracked EventSource (idempotent). */
+function eventSourceClose(sseRef) {
+  if (sseRef.current) {
+    sseRef.current.close();
+    sseRef.current = null;
+  }
+}
+
 function App() {
   const [state, dispatch] = useAppState();
   const [rollbackTarget, setRollbackTarget] = React.useState(null);
@@ -53,6 +164,18 @@ function App() {
     });
   }, []);
 
+  // Reconnect-resume hand-off: SessionStart dispatched RESUME_REQUESTED (it can't own the
+  // EventSource because it unmounts once sessionId is set). Drive the streaming resume here,
+  // then clear the flag so it fires exactly once.
+  React.useEffect(() => {
+    if (state.pendingResume && state.pendingResume.sessionId) {
+      const sid = state.pendingResume.sessionId;
+      dispatch({ type: APP_ACTIONS.RESUME_CLEAR_PENDING });
+      streamingResume(sid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingResume]);
+
   /**
    * Handle logout
    */
@@ -71,142 +194,57 @@ function App() {
    */
   const handleApprove = async (payload) => {
     if (!state.sessionId) return;
-
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
-
     try {
       const { response, eventSource } = await appApi.approve(
-        state.sessionId,
-        payload,
-        (event) => {
-          // Dispatch SSE events to state machine
-          switch (event.type) {
-            case 'connected':
-              dispatch({ type: APP_ACTIONS.SSE_CONNECTED });
-              break;
-            case 'progress':
-              dispatch({
-                type: APP_ACTIONS.SSE_PROGRESS,
-                message: event.data.message || event.data.context || JSON.stringify(event.data)
-              });
-              break;
-            case 'llm_start':
-              dispatch({
-                type: APP_ACTIONS.SSE_LLM_START,
-                label: event.data.label || event.data.context || 'Processing',
-                model: event.data.model || 'unknown',
-                prompt: event.data.prompt || null,
-                systemPrompt: event.data.systemPrompt || null
-              });
-              break;
-            case 'llm_delta':
-              dispatch({
-                type: APP_ACTIONS.SSE_LLM_DELTA,
-                phase: event.data.phase || 'writing',
-                deltaText: event.data.deltaText || '',
-                tokenCount: event.data.tokenCount,
-                ttftMs: event.data.ttftMs
-              });
-              break;
-            case 'llm_complete':
-              dispatch({
-                type: APP_ACTIONS.SSE_LLM_COMPLETE,
-                response: event.data.response || null,
-                elapsed: event.data.elapsed || null
-              });
-              break;
-            case 'llm_error':
-              // Emitted by client.js when the SDK returned success but structured-output
-              // extraction failed (typically SDK#277 with a schema-invalid text response).
-              // Treat like llm_complete from a UI-spinner perspective (the LLM call is over)
-              // and surface the diagnostic envelope as a progress message so the dev sees it.
-              dispatch({
-                type: APP_ACTIONS.SSE_LLM_COMPLETE,
-                response: null,
-                elapsed: event.data.elapsed || null
-              });
-              dispatch({
-                type: APP_ACTIONS.SSE_PROGRESS,
-                message: `Extraction failed: ${event.data.error || 'unknown'} (channel=text_fallback, stop=${event.data.diagnostics?.stopReason || '?'}, structuredOutputPresent=${event.data.diagnostics?.structuredOutputPresent})`
-              });
-              break;
-            case 'complete':
-              // Close SSE connection
-              eventSource.close();
-              sseRef.current = null;
-              dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
-
-              // Parse the completion result
-              const result = event.data;
-              if (result.interrupted && result.checkpoint) {
-                dispatch({
-                  type: APP_ACTIONS.CHECKPOINT_RECEIVED,
-                  checkpointType: result.checkpoint.type,
-                  data: result.checkpoint,
-                  phase: result.currentPhase
-                });
-              } else if (result.currentPhase === 'complete') {
-                dispatch({
-                  type: APP_ACTIONS.WORKFLOW_COMPLETE,
-                  result
-                });
-              } else if (result.currentPhase === 'error') {
-                dispatch({
-                  type: APP_ACTIONS.SET_ERROR,
-                  message: (result.error || 'Workflow error') +
-                    (result.details ? ' ' + result.details : '') +
-                    ' You can edit and retry, or use rollback.'
-                });
-                // Don't clear checkpointType — let the user retry from the same checkpoint
-              }
-              break;
-            case 'failed':
-              // P4 SSE-1 emits type:'failed' for an error outcome. Reconciled failure
-              // UX (M4): close the stream, clear `processing` (SSE_COMPLETE), and drive
-              // the INLINE failure card (Retry=/resume, Roll back) via SSE_LLM_FAILURE —
-              // NOT a SET_ERROR banner. ProgressStream stays mounted while
-              // llmActivity.phase==='failed', so the card renders with processing=false.
-              eventSource.close();
-              sseRef.current = null;
-              dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
-              dispatch({
-                type: APP_ACTIONS.SSE_LLM_FAILURE,
-                // errors[0].message covers nodes that RETURN {currentPhase:'error', errors:[...]}
-                // (server.js graph-error path) with no flat error/details field.
-                error: (event.data.error
-                  || (event.data.errors && event.data.errors[0] && event.data.errors[0].message)
-                  || 'Workflow failed') +
-                  (event.data.details ? ' — ' + event.data.details : '')
-              });
-              break;
-            case 'error':
-              eventSource.close();
-              sseRef.current = null;
-              dispatch({
-                type: APP_ACTIONS.SSE_ERROR,
-                message: event.data.message || 'Connection lost'
-              });
-              break;
-          }
-        }
+        state.sessionId, payload, makeSseHandler(dispatch, sseRef)
       );
-
-      // Track EventSource for cleanup on unmount.
-      // EventSource.close() is idempotent, so double-close on unmount is safe.
       sseRef.current = eventSource;
-
-      // Check for immediate POST errors
       if (response.error) {
-        dispatch({
-          type: APP_ACTIONS.SET_ERROR,
-          message: response.error
-        });
+        dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
       }
     } catch (err) {
       dispatch({
         type: APP_ACTIONS.SSE_ERROR,
         message: 'Failed to connect: ' + (err.message || 'Unknown error')
       });
+    }
+  };
+
+  /**
+   * Streaming resume (non-blocking /resume). Used by the [Retry] button and the
+   * reconnect-resume hand-off. Same SSE contract as approve.
+   */
+  const streamingResume = async (sessionId) => {
+    if (!sessionId) return;
+    dispatch({ type: APP_ACTIONS.PROCESSING_START });
+    try {
+      const { response, eventSource } = await appApi.resume(sessionId, makeSseHandler(dispatch, sseRef));
+      sseRef.current = eventSource;
+      if (response.error) {
+        dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
+      }
+    } catch (err) {
+      dispatch({ type: APP_ACTIONS.SSE_ERROR, message: 'Resume failed: ' + (err.message || 'Unknown error') });
+    }
+  };
+
+  /**
+   * Streaming rollback (non-blocking /rollback). Same SSE contract as approve.
+   */
+  const streamingRollback = async (target, overrides) => {
+    if (!state.sessionId) return;
+    dispatch({ type: APP_ACTIONS.PROCESSING_START });
+    try {
+      const { response, eventSource } = await appApi.rollback(
+        state.sessionId, target, overrides, makeSseHandler(dispatch, sseRef)
+      );
+      sseRef.current = eventSource;
+      if (response.error) {
+        dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
+      }
+    } catch (err) {
+      dispatch({ type: APP_ACTIONS.SET_ERROR, message: 'Rollback failed: ' + (err.message || 'Unknown error') });
     }
   };
 
@@ -221,30 +259,11 @@ function App() {
 
   /**
    * Handle rollback confirmation from RollbackPanel modal
-   * Calls API, dispatches result, closes modal
+   * Delegates to streamingRollback for live SSE progress.
    */
   const handleRollbackConfirm = async (target, overrides) => {
     setRollbackTarget(null);
-    if (!state.sessionId) return;
-    dispatch({ type: APP_ACTIONS.PROCESSING_START });
-    try {
-      const result = await appApi.rollback(state.sessionId, target, overrides);
-      if (result.error) {
-        dispatch({ type: APP_ACTIONS.SET_ERROR, message: result.error });
-      } else if (result.interrupted && result.checkpoint) {
-        dispatch({
-          type: APP_ACTIONS.CHECKPOINT_RECEIVED,
-          checkpointType: result.checkpoint.type,
-          data: result.checkpoint,
-          phase: result.currentPhase
-        });
-      }
-    } catch (err) {
-      dispatch({
-        type: APP_ACTIONS.SET_ERROR,
-        message: 'Rollback failed: ' + (err.message || 'Unknown error')
-      });
-    }
+    await streamingRollback(target, overrides);
   };
 
   // ── Render ──
@@ -273,42 +292,8 @@ function App() {
         llmActivity: state.llmActivity,
         lastLlmActivity: state.lastLlmActivity,
         eventLog: state.eventLog,
-        // [Retry] = re-run the failed node (P2 resume semantics).
-        onRetry: async () => {
-          if (!state.sessionId) return;
-          dispatch({ type: APP_ACTIONS.PROCESSING_START });
-          try {
-            // NOTE: retry is intentionally STREAMLESS — /resume is a blocking JSON call
-            // (no SSE-before-POST), so the live token stream/liveness is absent during the
-            // re-run. The ribbon sits at 'preparing' until /resume returns. Deliberate
-            // (P2 re-run semantics via /resume); a streaming retry would change the contract.
-            const result = await appApi.resume(state.sessionId);
-            if (result.error) {
-              dispatch({ type: APP_ACTIONS.SET_ERROR, message: result.error });
-            } else if (result.interrupted && result.checkpoint) {
-              dispatch({
-                type: APP_ACTIONS.CHECKPOINT_RECEIVED,
-                checkpointType: result.checkpoint.type,
-                data: result.checkpoint,
-                phase: result.currentPhase
-              });
-            } else if (result.currentPhase === 'complete') {
-              dispatch({ type: APP_ACTIONS.WORKFLOW_COMPLETE, result });
-            } else if (result.currentPhase === 'error') {
-              // A retry that RE-FAILS via the graph-error path returns
-              // { currentPhase:'error', errors:[...] } with no flat result.error; without
-              // this branch nothing dispatches and the spinner hangs. Re-drive the inline
-              // failure card (mirrors handleApprove's case 'failed').
-              dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
-              dispatch({
-                type: APP_ACTIONS.SSE_LLM_FAILURE,
-                error: (result.errors && result.errors[0] && result.errors[0].message) || 'Workflow failed'
-              });
-            }
-          } catch (err) {
-            dispatch({ type: APP_ACTIONS.SSE_ERROR, message: 'Retry failed: ' + (err.message || 'Unknown error') });
-          }
-        },
+        // [Retry] = re-run the failed node via streaming resume.
+        onRetry: () => streamingResume(state.sessionId),
         // [Roll back] = open the existing rollback modal at the current checkpoint.
         onRollback: () => setRollbackTarget(state.checkpointType)
       })
