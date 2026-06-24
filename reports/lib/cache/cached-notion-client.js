@@ -18,7 +18,7 @@ const { NotionClient, createNotionClient, ELEMENTS_DB_ID } = require('../notion-
 const { NotionCacheStore } = require('./notion-cache-store');
 const { FreshnessChecker } = require('./freshness-checker');
 const { parseTokenPage, parseEvidencePage } = require('../notion/parse');
-const { collectRelationIds, applyRelationNames } = require('../notion/relations');
+const { applyRelationNames } = require('../notion/relations');
 const { RELATION_REGISTRY, ENTITY_RELATIONS, CHARACTERS_DB_ID } = require('../notion/databases');
 
 // Default cache location
