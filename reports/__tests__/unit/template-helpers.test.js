@@ -163,6 +163,11 @@ describe('template-helpers', () => {
     it('returns default for invalid date', () => {
       expect(articleId({ generatedAt: 'invalid' })).toBe('NNA-0000-00');
     });
+
+    it('falls back to 00 year suffix when generatedAt is unparseable', () => {
+      const id = articleId({ sessionId: '0306', theme: 'journalist', generatedAt: 'not-a-date' });
+      expect(id).toBe('NNA-0306-00');
+    });
   });
 
   describe('eq', () => {

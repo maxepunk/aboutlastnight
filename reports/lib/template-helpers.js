@@ -217,9 +217,11 @@ function articleId(metadata) {
     return `${prefix}-0000-00`;
   }
 
-  const yearSuffix = metadata.generatedAt
-    ? String(new Date(metadata.generatedAt).getFullYear()).slice(-2)
-    : '00';
+  let yearSuffix = '00';
+  if (metadata.generatedAt) {
+    const year = new Date(metadata.generatedAt).getFullYear();
+    yearSuffix = Number.isNaN(year) ? '00' : String(year).slice(-2);
+  }
 
   return `${prefix}-${metadata.sessionId}-${yearSuffix}`;
 }
