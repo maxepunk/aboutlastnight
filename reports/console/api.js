@@ -99,34 +99,56 @@ const api = {
   },
 
   /**
-   * Rollback to a specific checkpoint
-   * @param {string} sessionId
-   * @param {string} rollbackTo - Checkpoint name
-   * @param {object} [overrides] - State overrides
-   * @returns {Promise<object>}
+   * Rollback to a checkpoint (SSE-before-POST — /rollback is non-blocking and streams
+   * its result + live progress via SSE, same contract as approve()).
+   * @returns {Promise<{response: object, eventSource: EventSource}>}
    */
-  async rollback(sessionId, rollbackTo, overrides) {
+  async rollback(sessionId, rollbackTo, overrides, onProgress) {
+    const { eventSource, connected } = api.connectSSE(sessionId, onProgress);
+    let timerId;
+    const timeout = new Promise((_, reject) => {
+      timerId = setTimeout(() => reject(new Error('SSE connection timeout after 10s')), 10000);
+    });
+    await Promise.race([connected, timeout]).then(() => clearTimeout(timerId)).catch((err) => {
+      clearTimeout(timerId);
+      eventSource.close();
+      throw err;
+    });
+
     const res = await fetch(`/api/session/${sessionId}/rollback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ rollbackTo, stateOverrides: overrides })
     });
-    return res.json();
+    const response = await res.json();
+    return { response, eventSource };
   },
 
   /**
-   * Resume existing workflow
-   * @param {string} sessionId
-   * @returns {Promise<object>}
+   * Resume an existing workflow (SSE-before-POST — /resume is non-blocking and streams
+   * its result + live progress via SSE, same contract as approve()).
+   * @returns {Promise<{response: object, eventSource: EventSource}>}
    */
-  async resume(sessionId) {
+  async resume(sessionId, onProgress) {
+    const { eventSource, connected } = api.connectSSE(sessionId, onProgress);
+    let timerId;
+    const timeout = new Promise((_, reject) => {
+      timerId = setTimeout(() => reject(new Error('SSE connection timeout after 10s')), 10000);
+    });
+    await Promise.race([connected, timeout]).then(() => clearTimeout(timerId)).catch((err) => {
+      clearTimeout(timerId);
+      eventSource.close();
+      throw err;
+    });
+
     const res = await fetch(`/api/session/${sessionId}/resume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include'
     });
-    return res.json();
+    const response = await res.json();
+    return { response, eventSource };
   },
 
   /**
