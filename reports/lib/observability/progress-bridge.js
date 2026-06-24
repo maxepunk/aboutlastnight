@@ -134,7 +134,7 @@ const PROGRESS_ICONS = {
 
 /**
  * Format a rate-limit `resetsAt` epoch into a human "resets in Xm" string.
- * Accepts seconds- or millis-epoch (heuristic: > 1e12 ⇒ already millis).
+ * Accepts seconds- or millis-epoch (heuristic: > now/2 ⇒ already millis).
  * @param {number|undefined} resetsAt - epoch from SDKRateLimitInfo.resetsAt
  * @param {number} [now] - millis-epoch reference (injectable for tests)
  * @returns {string} e.g. 'resets in 42m', or '' when resetsAt is absent
