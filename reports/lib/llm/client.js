@@ -271,12 +271,11 @@ async function sdkQueryImpl({
     options.tools = [];
   }
 
-  // Add structured output format if schema provided
-  if (jsonSchema) {
-    options.outputFormat = {
-      type: 'json_schema',
-      schema: jsonSchema
-    };
+  // Structured output: sanitizeSchemaForSdk strips `format` (#277 channel-skip trigger)
+  // and is the SINGLE sanitized object reused for BOTH the SDK channel and the extractor.
+  const sdkSchema = jsonSchema ? sanitizeSchemaForSdk(jsonSchema) : null;
+  if (sdkSchema) {
+    options.outputFormat = { type: 'json_schema', schema: sdkSchema };
   }
 
   try {
@@ -438,7 +437,7 @@ async function sdkQueryImpl({
             const extracted = extractStructuredOutput({
               structuredOutput: msg.structured_output,
               resultText: msg.result,
-              schema: jsonSchema,
+              schema: sdkSchema,
               label: progressLabel,
               model: resolvedModel
             });

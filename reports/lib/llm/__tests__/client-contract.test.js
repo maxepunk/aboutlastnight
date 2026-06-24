@@ -287,6 +287,32 @@ describe('sdkQueryImpl contract', () => {
     expect(thrown.message).not.toMatch(/SDK timeout after/);
     expect(isTransientError(thrown)).toBe(false);
   });
+
+  it('passes a format-free, $id-free schema to the SDK outputFormat', async () => {
+    let capturedOptions = null;
+    setMockQuery(({ options }) => {
+      capturedOptions = options;
+      return makeAsyncIterable([
+        { type: 'result', subtype: 'success', result: '{"ok":true}', structured_output: { ok: true } }
+      ]);
+    });
+
+    const schema = {
+      $id: 'cap',
+      type: 'object',
+      properties: { ts: { type: 'string', format: 'date-time' } }
+    };
+
+    await sdkQueryImpl({
+      prompt: 'test',
+      model: 'haiku',
+      jsonSchema: schema
+    });
+
+    expect(capturedOptions.outputFormat).toBeDefined();
+    expect(JSON.stringify(capturedOptions.outputFormat.schema)).not.toContain('"format"');
+    expect(capturedOptions.outputFormat.schema.$id).toBeUndefined();
+  });
 });
 
 describe('sanitizeSchemaForSdk (#277 channel-skip guardrail)', () => {
