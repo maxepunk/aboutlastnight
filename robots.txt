@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Internal/operational content not meant for search results
+Disallow: /reports/
+Disallow: /docs/
+Disallow: /specs/
+
+Sitemap: https://www.aboutlastnightgame.com/sitemap.xml
