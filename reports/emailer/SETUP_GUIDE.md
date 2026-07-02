@@ -29,10 +29,18 @@
 Open `send_followup_emails_smart.py` in a text editor and update these lines:
 
 ```python
-# Line ~20-24: Update these three values
+# Update these two values
 SENDER_EMAIL = "max@storypunk.com"        # Your actual email
-SENDER_PASSWORD = "abcd efgh ijkl mnop"   # Your 16-char app password
 REPLY_TO_EMAIL = "info@storypunk.com"     # Where replies should go
+```
+
+**The app password is never stored in the script or this guide — the repo is
+public.** The script reads it from the `ALN_GMAIL_APP_PASSWORD` environment
+variable, or prompts you once at startup if the variable isn't set. To skip
+the prompt permanently on your machine (Windows):
+
+```
+setx ALN_GMAIL_APP_PASSWORD "your 16-char app password"
 ```
 
 **Options for REPLY_TO_EMAIL:**
