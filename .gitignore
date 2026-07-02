@@ -72,5 +72,8 @@ reports/script*.md
 # Emailer - recipient lists contain PII
 reports/emailer/recipients_*.csv
 
+# Account recovery codes / credentials - never track anywhere in the repo
+*Backup-codes*
+
 # Git worktrees (superpowers skill)
 .worktrees/

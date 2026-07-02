@@ -16,6 +16,8 @@ from email.utils import formataddr
 from pathlib import Path
 from typing import List, Dict, Tuple
 import time
+import os
+import getpass
 
 try:
     from PIL import Image
@@ -31,7 +33,9 @@ SMTP_PORT = 587
 
 # Sender Information
 SENDER_EMAIL = "about.last.night.game@gmail.com"      # UPDATE: Your email address
-SENDER_PASSWORD = "***REMOVED-CREDENTIAL***"    # UPDATE: Your app password
+# App password comes from the ALN_GMAIL_APP_PASSWORD env var, or a prompt at startup.
+# NEVER hardcode it here — this file is in a public repo (generate at myaccount.google.com/apppasswords)
+SENDER_PASSWORD = os.environ.get("ALN_GMAIL_APP_PASSWORD") or getpass.getpass("Gmail app password: ")
 SENDER_NAME = "Max & Shuai"             # Display name
 REPLY_TO_EMAIL = "about.last.night@gmail.com"   # UPDATE: Where replies should go (can be same as SENDER_EMAIL)
 

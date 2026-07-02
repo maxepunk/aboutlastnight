@@ -23,7 +23,6 @@
 4. Click "Create a new app password"
 5. Copy the password
 6. Save this - you'll paste it into the script
-***REMOVED-CREDENTIAL***
 
 ### Step 2: Configure the Script
 
