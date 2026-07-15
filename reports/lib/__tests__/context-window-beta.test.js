@@ -39,13 +39,13 @@ describe('1M context window beta', () => {
     expect(capturedOptions.betas).toEqual(['context-1m-2025-08-07']);
   });
 
-  test('sonnet resolves to claude-sonnet-4-6 with 1M beta', async () => {
+  test('sonnet resolves to claude-sonnet-5 with 1M beta', async () => {
     await sdkQuery({
       prompt: 'test',
       model: 'sonnet',
       disableTools: true
     });
-    expect(capturedOptions.model).toBe('claude-sonnet-4-6');
+    expect(capturedOptions.model).toBe('claude-sonnet-5');
     expect(capturedOptions.betas).toEqual(['context-1m-2025-08-07']);
   });
 
@@ -59,12 +59,12 @@ describe('1M context window beta', () => {
     expect(capturedOptions.betas).toBeUndefined();
   });
 
-  test('default model (sonnet) resolves to claude-sonnet-4-6 with 1M beta', async () => {
+  test('default model (sonnet) resolves to claude-sonnet-5 with 1M beta', async () => {
     await sdkQuery({
       prompt: 'test',
       disableTools: true
     });
-    expect(capturedOptions.model).toBe('claude-sonnet-4-6');
+    expect(capturedOptions.model).toBe('claude-sonnet-5');
     expect(capturedOptions.betas).toEqual(['context-1m-2025-08-07']);
   });
 

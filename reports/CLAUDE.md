@@ -210,7 +210,7 @@ We never load user-level (`~/.claude/`) or local sources. A probe found those co
 
 **Model Pins** (see `MODEL_IDS` in `lib/llm/client.js`):
 - `opus` → `claude-opus-4-8` (arc analysis, article validation)
-- `sonnet` → `claude-sonnet-4-6` (default for most content generation nodes)
+- `sonnet` → `claude-sonnet-5` (default for most content generation nodes)
 - `haiku` → `claude-haiku-4-5` (image analysis, evidence preprocessing)
 
 ### Arc Analysis Architecture (Commit 8.15+)
@@ -485,7 +485,7 @@ See `PIPELINE_DEEP_DIVE.md#common-debugging-scenarios` for detailed debugging gu
 
 ## Emailer
 
-**Send follow-up emails:** `python emailer/send_followup_emails_smart.py --date MMDD --send`
+**Send follow-up emails:** from `emailer/`, run `python send_followup_emails_smart.py` (interactive prompts; session date is entered as MMDDYY)
 **Setup:** See `emailer/SETUP_GUIDE.md`
 
 ## Journalist Skill (Direct Claude Code Usage)

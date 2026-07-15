@@ -65,12 +65,12 @@ const MODEL_BUDGETS = {
 /**
  * Resolve shorthand model names to explicit model IDs.
  * The Agent SDK's shorthand resolution lags behind latest releases
- * (e.g., 'sonnet' resolves to 4.5 instead of 4.6). Using explicit IDs
+ * (e.g., 'sonnet' resolves to an older Sonnet, not 5). Using explicit IDs
  * guarantees we run on the intended model version.
  */
 const MODEL_IDS = {
   opus: 'claude-opus-4-8',
-  sonnet: 'claude-sonnet-4-6',
+  sonnet: 'claude-sonnet-5',
   haiku: 'claude-haiku-4-5'
 };
 
@@ -82,12 +82,12 @@ const MODEL_IDS = {
  *
  * Per Anthropic's effort docs (https://platform.claude.com/docs/en/build-with-claude/effort):
  *   - Haiku 4.5: effort not supported (omit)
- *   - Sonnet 4.6: 'high' for intelligence-sensitive workloads
+ *   - Sonnet 5: 'xhigh' — the best setting for the hard coding/agentic content-generation work this pipeline runs (Sonnet 5 added 'xhigh'; 'high' is the SDK default)
  *   - Opus 4.8: 'xhigh' is the recommended starting point for coding/agentic work
  */
 const EFFORT_LEVELS = {
   opus: 'xhigh',
-  sonnet: 'high'
+  sonnet: 'xhigh'
   // haiku omitted — Haiku 4.5 doesn't support the effort parameter
 };
 

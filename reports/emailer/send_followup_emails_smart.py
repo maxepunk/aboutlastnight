@@ -25,6 +25,25 @@ try:
 except ImportError:
     HAS_PIL = False
 
+
+# ----- Load a local .env (if present) so the app password can live in a gitignored
+# file scoped to this script, instead of a machine-wide (setx) variable. Real
+# environment variables still take precedence. NEVER commit .env — this repo is public.
+def _load_local_dotenv():
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_local_dotenv()
+
+
 # ===== CONFIGURATION =====
 
 # Email Provider Settings
@@ -650,7 +669,7 @@ def main():
         print("\nFor Gmail:")
         print("1. Enable 2-Factor Authentication")
         print("2. Generate App Password at: https://myaccount.google.com/apppasswords")
-        print("3. Update SENDER_PASSWORD in the script")
+        print("3. Set it as the ALN_GMAIL_APP_PASSWORD env var (see SETUP_GUIDE.md) — never hardcode it")
     except Exception as e:
         print(f"\n❌ Error: {str(e)}")
         print(f"Successfully sent {success_count}/{len(recipients)} before error")

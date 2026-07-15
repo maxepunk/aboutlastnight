@@ -1,246 +1,193 @@
 # Smart Email Sender - Setup Guide
 
-## Quick Start (5 minutes)
+Sends personalized "thank you for playing" follow-up emails to a session's players:
+the unique NovaNews case-file link, the feedback form, a return-visit promo code, and
+(optionally) a personal note and resized session photos.
 
-### Step 1: Get Your App Password
+**Script:** `send_followup_emails_smart.py` · **Sends from:** `about.last.night.game@gmail.com`
 
-**For Gmail:**
-1. Go to your Google Account: https://myaccount.google.com/
-2. Click "Security" in the left sidebar
-3. Enable "2-Step Verification" (if not already enabled)
-4. Scroll to "App passwords" (appears after 2FA is enabled)
-5. Click "App passwords"
-6. Select app: "Mail"
-7. Select device: "Other" → Name it "About Last Night Sender"
-8. Click "Generate"
-9. Copy the 16-character password (example: `abcd efgh ijkl mnop`)
-10. Save this - you'll paste it into the script
+---
 
-**For Outlook/Microsoft:**
-1. Go to: https://account.microsoft.com/security
-2. Click "Advanced security options"
-3. Scroll to "App passwords"
-4. Click "Create a new app password"
-5. Copy the password
-6. Save this - you'll paste it into the script
+## One-Time Setup
 
-### Step 2: Configure the Script
+### Step 1: Get a Gmail App Password
 
-Open `send_followup_emails_smart.py` in a text editor and update these lines:
+The account `about.last.night.game@gmail.com` needs an **app password** (a 16-character
+password just for this script — not the account's normal login password). App passwords
+require **2-Step Verification** to be enabled on the account.
+
+1. Sign in to **about.last.night.game@gmail.com**.
+2. Go to **https://myaccount.google.com/apppasswords** (if it says the page isn't
+   available, 2-Step Verification isn't on yet — enable it under Security first).
+3. If an old app password is listed (e.g. "About Last Night Sender"), **delete it** with
+   the trash icon — that instantly revokes it. (Do this any time a password may have
+   leaked.)
+4. Under **App name**, type something like `ALN Emailer`, then click **Create**.
+   *(Google's current UI only asks for a name. Older guides mention "select Mail / select
+   device" dropdowns — those are gone.)*
+5. Google shows a 16-character password once, in four groups of four
+   (e.g. `abcd efgh ijkl mnop`). **Copy it now** — you can't see it again.
+
+### Step 2: Give the Password to the Script (never hardcode it)
+
+**The app password is never stored in the script — this repo is public.** At startup the
+script looks for it in this order: a local **`.env`** file, then the `ALN_GMAIL_APP_PASSWORD`
+environment variable, and if neither is set it just prompts you (`Gmail app password:`) each
+run.
+
+**Recommended — a local `.env` file.** This keeps the secret in one gitignored file that only
+this script reads, instead of setting it machine-wide. From the emailer folder:
+
+```
+cd C:\Users\spide\Documents\claudecode\aboutlastnight\reports\emailer
+copy .env.example .env
+```
+
+Open `.env` in a text editor and set the value to your 16-character app password (spaces
+removed):
+
+```
+ALN_GMAIL_APP_PASSWORD=your16charpassword
+```
+
+That's it — the script loads `.env` automatically. It's gitignored (`.gitignore` line 20) and
+must **never** be committed. (`.env.example` is the safe, committed template.)
+
+**Alternatives:**
+- **Machine-wide (Windows `setx`)** — persists in the registry and is exposed to *every*
+  process you run, so a scoped `.env` is usually better. If you want it anyway:
+  `setx ALN_GMAIL_APP_PASSWORD "your16charpassword"`, then open a **new** terminal. A variable
+  set this way overrides `.env`.
+- **One session only** (PowerShell, in the window you'll run the script from):
+  `$env:ALN_GMAIL_APP_PASSWORD = "your16charpassword"`
+- **Just type it** at the `Gmail app password:` prompt each run — nothing is stored anywhere.
+
+### Step 3 (optional): Install Pillow for Photo Attachments
+
+Only needed if you want to attach session photos. Without it, the script still runs and just
+skips the photo step.
+
+```
+pip install Pillow
+```
+
+### Sender settings (already configured — change only if needed)
+
+These are set near the top of `send_followup_emails_smart.py` and normally need no edits:
 
 ```python
-# Update these two values
-SENDER_EMAIL = "max@storypunk.com"        # Your actual email
-REPLY_TO_EMAIL = "info@storypunk.com"     # Where replies should go
+SENDER_EMAIL   = "about.last.night.game@gmail.com"   # the account the app password belongs to
+REPLY_TO_EMAIL = "about.last.night@gmail.com"        # where replies land
+SENDER_NAME    = "Max & Shuai"                        # display name on the From line
 ```
 
-**The app password is never stored in the script or this guide — the repo is
-public.** The script reads it from the `ALN_GMAIL_APP_PASSWORD` environment
-variable, or prompts you once at startup if the variable isn't set. To skip
-the prompt permanently on your machine (Windows):
+---
+
+## Running It
 
 ```
-setx ALN_GMAIL_APP_PASSWORD "your 16-char app password"
+cd C:\Users\spide\Documents\claudecode\aboutlastnight\reports\emailer
+python send_followup_emails_smart.py
 ```
 
-**Options for REPLY_TO_EMAIL:**
-- Same as SENDER_EMAIL: Replies come back to you
-- Different email: Replies go to a shared inbox or different address
-- Multiple addresses: `"max@storypunk.com, shuai@patchworkadventures.com"`
+**Run it from the `emailer` folder** — it loads `about_last_night_followup_template.html` by
+relative path and writes the record CSV into the current directory. (Running it as
+`python emailer/send_followup_emails_smart.py` from elsewhere will fail to find the template.)
 
-### Step 3: Run the Script
+The script is fully interactive — it has **no command-line flags**. It walks you through:
 
-```bash
-# Make sure you're in the directory with the files
-cd /path/to/email-files
+1. **Session date** — `MMDDYY` format (6 digits), e.g. `122725` for Dec 27, 2025.
+   *(Not MMDD. Year must be 25–30.)*
+2. **Session number** — `1`, `2`, or `3` for that day. This sets the report ID used in the
+   case-file link:
+   - 1st session → report ID = the date (e.g. `122725` → `report-122725.html`)
+   - 2nd/3rd → date + the number (e.g. `1227252`, `1227253`)
+3. **Paste booking data** — the name/email list, then press **Enter twice**.
+4. **Session note (optional)** — a personal note appended after the signoff. Paste it and
+   press Enter twice, or press Enter once immediately to skip.
+5. **Session photos (optional)** — paste a folder path (Explorer "Copy as path" works, quotes
+   are stripped) to attach photos, or press Enter to skip. Images are auto-resized (max
+   1600px, JPEG) and it warns if the total exceeds 20 MB (Gmail's hard limit is 25 MB).
+6. **Preview** — shows the full email body (using the first recipient), the recipient list,
+   and any photo attachments.
+7. **"Does this look correct?"** — type `yes` to continue.
+8. A **dry run** prints who it *would* send to (no emails sent yet).
+9. **"Send for real?"** — type `yes` to actually send. It authenticates and sends, pausing
+   ~1 second between emails.
 
-# Run the script
-python3 send_followup_emails_smart.py
-```
+A record is saved to `recipients_<date>_<reportid>.csv` in the emailer folder.
 
-### Step 4: Follow the Prompts
+### Booking data format
 
-The script will walk you through:
+Alternating lines of name then email:
 
-1. **Enter session date** (MMDD format)
-   ```
-   Enter session date (MMDD format, e.g., 1204 for Dec 4): 1204
-   ```
-
-2. **Select session number** (if multiple that day)
-   ```
-   Is this the first session of the day?
-     1 = First session (report ID: 1204)
-     2 = Second session (report ID: 12042)
-     3 = Third session (report ID: 12043)
-   Enter session number [1]: 1
-   ```
-
-3. **Paste your booking data**
-   ```
-   Paste data below, then press Enter twice:
-   [Paste your list here]
-   [Press Enter twice when done]
-   ```
-
-4. **Review and confirm**
-   - Script shows you a preview
-   - Does a dry run (no actual sends)
-   - Asks for final confirmation
-   - Sends the emails!
-
-## Your Booking Data Format
-
-The script handles this format automatically:
 ```
 Aisha Krieger
 aishakrieger@gmail.com
 Maya Kaczorowski
 maya.kacz@gmail.com
-Brandon Weeks
-me@brandonweeks.com
 ```
 
-**It automatically:**
-- Parses alternating name/email lines
-- Capitalizes names properly ("brian benson" → "Brian Benson")
-- Normalizes emails to lowercase
-- Validates email format
-- Handles any spacing inconsistencies
+The script capitalizes names, lowercases emails, warns on malformed addresses, and requires
+an even number of lines (each name paired with an email).
 
-## Advanced Configuration
+### What gets sent
 
-### Change Email Provider
+- **Subject:** "Thank you for playing About Last Night"
+- **From:** Max & Shuai `<about.last.night.game@gmail.com>` · **Reply-To:** `about.last.night@gmail.com`
+- **Case file link:** `https://aboutlastnightgame.com/reports/outputs/report-<reportid>.html`
+- **Feedback link:** `https://aboutlastnightgame.com/feedback.html?date=<MMDD>`
+- **Return promo code:** `ALNReturnVisit` (33% off)
 
-**Gmail (default):**
-```python
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-```
-
-**Outlook/Microsoft 365:**
-```python
-SMTP_SERVER = "smtp.office365.com"
-SMTP_PORT = 587
-```
-
-**SendGrid (for high volume):**
-```python
-SMTP_SERVER = "smtp.sendgrid.net"
-SMTP_PORT = 587
-SENDER_EMAIL = "apikey"  # Literally "apikey"
-SENDER_PASSWORD = "your-sendgrid-api-key"
-```
-
-### Adjust Sending Speed
-
-```python
-DELAY_BETWEEN_EMAILS = 1  # seconds
-
-# Slower (safer for large batches):
-DELAY_BETWEEN_EMAILS = 2
-
-# Faster (if your provider allows):
-DELAY_BETWEEN_EMAILS = 0.5
-```
-
-### Save Records
-
-```python
-SAVE_CSV = True  # Saves to recipients_MMDD_reportid.csv
-
-# Output example:
-# recipients_1204_1204.csv
-# recipients_1204_12042.csv (second session)
-```
+---
 
 ## Troubleshooting
 
-### "Authentication Failed"
-**Problem:** Wrong email or password
-**Solution:**
-1. Double-check SENDER_EMAIL matches your account
-2. Verify you're using the App Password, not your regular password
-3. Make sure 2FA is enabled (required for App Passwords)
+### It's asking me for the app password every time
+No `.env` file was found and `ALN_GMAIL_APP_PASSWORD` isn't set. Create `emailer/.env` from
+`.env.example` (recommended), or set the env var — see Step 2. If you used `setx`, open a
+**fresh** terminal; it doesn't affect already-open ones.
+
+### "Authentication failed" (SMTPAuthenticationError)
+1. Confirm `ALN_GMAIL_APP_PASSWORD` holds the **app password**, not the account's normal
+   password (`$env:ALN_GMAIL_APP_PASSWORD` to check).
+2. Confirm 2-Step Verification is still on for the account (app passwords stop working if it's
+   turned off).
+3. If the password may have leaked, **revoke and regenerate** it (Step 1) and re-set the env
+   var.
+
+### "Template file not found"
+You're not in the `emailer` folder. `cd` into it first (see Running It).
 
 ### "Connection Refused"
-**Problem:** SMTP settings incorrect or firewall blocking
-**Solution:**
-1. Verify SMTP_SERVER and SMTP_PORT for your provider
-2. Check if your network/VPN blocks SMTP
-3. Try port 465 instead of 587 (some networks)
+Some networks/VPNs block SMTP. Check `SMTP_SERVER`/`SMTP_PORT` (`smtp.gmail.com:587`), or try
+from a different network.
 
-### Emails Go to Spam
-**Problem:** Email authentication or reputation issues
-**Solutions:**
-1. Send test to yourself first - check spam folder
-2. For high volume, use SendGrid/Mailgun instead of Gmail
-3. Set up SPF/DKIM records for your domain (advanced)
+### Emails go to spam
+Send a test to yourself first, and test a small batch (2–3) before a full send.
 
-### "Invalid Email" Warnings
-**Problem:** Booking system has malformed email
-**Solution:**
-1. Script will warn you but continue
-2. Review the preview - manually fix in the list
-3. Or edit the CSV file that's saved
+### Rate limits
+Gmail personal accounts allow ~500 emails/day, which is far above a normal session (~8–20
+recipients). For unusually large sends, raise `DELAY_BETWEEN_EMAILS` in the script.
 
-### Rate Limiting
-**Problem:** Sending too many too fast
-**Gmail limits:**
-- Personal: 500/day
-- Workspace: 2000/day
+---
 
-**Solutions:**
-1. Increase DELAY_BETWEEN_EMAILS
-2. Batch across multiple days
-3. Use SendGrid for higher limits
+## Security Notes
 
-## Testing Checklist
+- **Never** put the app password into the script, this guide, `.env.example`, or any
+  committed file — the repo is public. It belongs only in a gitignored `.env` or an
+  environment variable.
+- The app password is scoped to `about.last.night.game@gmail.com` and does nothing without
+  2-Step Verification enabled. Revoke it any time it may have been exposed.
+- The account's **2FA backup codes** are equally sensitive. Keep the
+  `Backup-codes-*.txt` file **out of the repo** (it's gitignored, but don't rely on that),
+  and regenerate the codes if they were ever exposed.
 
-Before sending to real customers:
+## Pre-send Checklist
 
-- [ ] Send test email to yourself
-- [ ] Verify links work (case file, feedback form)
-- [ ] Check mobile display (forward to your phone)
-- [ ] Verify reply goes to correct address
-- [ ] Check spam folder
-- [ ] Test with a small batch (2-3 emails) first
-
-## Daily Workflow
-
-Your typical send process:
-
-1. Get booking confirmation email/dashboard export
-2. Copy the name/email list
-3. Run script: `python3 send_followup_emails_smart.py`
-4. Enter session date (e.g., `1204`)
-5. Paste booking data
-6. Review preview
-7. Confirm and send
-8. Check saved CSV for records
-
-**Time:** ~2 minutes per session
-
-## Files Generated
-
-The script creates:
-- `recipients_MMDD_reportid.csv` - Record of who was sent what
-- Console output - Success/failure log (you can copy/paste for records)
-
-## Email Sending Limits
-
-**Gmail Personal:** 500 emails/day
-**Gmail Workspace:** 2,000 emails/day
-**Outlook Personal:** 300 emails/day
-**Microsoft 365:** 10,000 emails/day
-**SendGrid Free:** 100 emails/day
-**SendGrid Paid:** 40,000+ emails/month
-
-**Your needs:** Assuming 8-10 people/session × 2 sessions/day = ~20 emails/day
-→ Gmail is perfectly fine!
-
-## Need Help?
-
-Common issues and solutions are in the Troubleshooting section above.
-
-The script includes detailed error messages that will guide you to the solution.
+- [ ] `emailer/.env` created (or `ALN_GMAIL_APP_PASSWORD` set, or ready to paste at the prompt)
+- [ ] Report is published and live at the case-file URL for this session
+- [ ] Running from the `emailer` folder
+- [ ] Correct `MMDDYY` date and session number
+- [ ] Preview body + recipient list look right
+- [ ] Dry run looks right before typing `yes` to send
