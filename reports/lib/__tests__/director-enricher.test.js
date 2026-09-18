@@ -1,9 +1,12 @@
 const { DIRECTOR_NOTES_ENRICHED_SCHEMA, buildEnrichmentPrompt, enrichDirectorNotes, createFallback } = require('../director-enricher');
 
 describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
-  it('requires rawProse as the source of truth', () => {
-    expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.required).toContain('rawProse');
-    expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.rawProse.type).toBe('string');
+  it('carries the four indexes and nothing else at the top level', () => {
+    // B3: rawProse is supplied by the caller, not round-tripped through the model.
+    expect(Object.keys(DIRECTOR_NOTES_ENRICHED_SCHEMA.properties).sort()).toEqual([
+      'characterMentions', 'entityNotes', 'postInvestigationDevelopments',
+      'quotes', 'transactionReferences'
+    ]);
   });
 
   it('defines characterMentions as an object of arrays keyed by canonical name', () => {
@@ -46,7 +49,8 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
     expect(item.properties.text.type).toBe('string');
     expect(item.properties.addressee.type).toBe('string');
     expect(item.properties.context.type).toBe('string');
-    expect(item.properties.confidence.enum).toEqual(['high', 'low']);
+    // B3: aligned with transactionReferences; 'medium' used to fail validation.
+    expect(item.properties.confidence.enum).toEqual(['high', 'medium', 'low']);
     expect(item.required).toEqual(expect.arrayContaining(['speaker', 'text']));
   });
 
@@ -82,11 +86,11 @@ describe('buildEnrichmentPrompt', () => {
     expect(out.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it('system prompt forbids summarization and requires rawProse verbatim', () => {
+  it('system prompt forbids summarization and requires verbatim excerpts', () => {
     const { systemPrompt } = buildEnrichmentPrompt(sampleContext);
     expect(systemPrompt).toMatch(/not.*summariz/i);
-    expect(systemPrompt).toMatch(/verbatim/i);
-    expect(systemPrompt).toMatch(/rawProse.*MUST equal the input/i);
+    // B3: the echo-the-prose rule is gone; what remains is the grounding rule.
+    expect(systemPrompt).toMatch(/verbatim substring of the prose/i);
   });
 
   it('user prompt contains all context sections as XML tags', () => {
@@ -323,5 +327,163 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA — tightened constraints', () => {
     const prop = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.postInvestigationDevelopments.items.properties.proseOffset;
     expect(prop.type).toBe('integer');
     expect(prop.minimum).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// B3: the enricher discarded the whole Opus payload whenever the echoed rawProse
+// differed by one byte. data/062726/ and data/071826/inputs/director-notes.json
+// both carry the fallback signature (all four indexes empty) over 3.8K-5.0K
+// characters of prose with 9-12 quoted utterances, so article generation ran with
+// no quote bank and no transaction links and invented speakers and attribution.
+// The server holds the prose; the model has no reason to echo it.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('DIRECTOR_NOTES_ENRICHED_SCHEMA — prose is not round-tripped (B3)', () => {
+  it('does not ask the model for rawProse at all', () => {
+    expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.rawProse).toBeUndefined();
+    expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.required || []).not.toContain('rawProse');
+  });
+
+  it('accepts confidence "medium" on a quote (enums aligned across the schema)', () => {
+    const Ajv = require('ajv');
+    const validate = new Ajv({ allErrors: true, strict: true, allowUnionTypes: true })
+      .compile(DIRECTOR_NOTES_ENRICHED_SCHEMA);
+
+    const ok = validate({
+      characterMentions: {},
+      entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
+      quotes: [{ speaker: 'Remi', text: 'do you want to trade', confidence: 'medium' }],
+      transactionReferences: [],
+      postInvestigationDevelopments: []
+    });
+
+    expect(validate.errors).toBeNull();
+    expect(ok).toBe(true);
+  });
+
+  it('uses the same confidence enum on quotes and transactionReferences', () => {
+    expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.confidence.enum)
+      .toEqual(['high', 'medium', 'low']);
+    expect(DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.transactionReferences.items.properties.confidence.enum)
+      .toEqual(['high', 'medium', 'low']);
+  });
+});
+
+describe('ENRICHMENT prompts — no verbatim-echo rule (B3)', () => {
+  it('drops the rule that told the model to echo rawProse', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
+    expect(systemPrompt).not.toMatch(/rawProse/);
+    expect(userPrompt).not.toMatch(/rawProse/);
+  });
+
+  it('keeps a positive verbatim requirement on excerpts and quotes', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
+    expect(systemPrompt).toMatch(/verbatim substring of the prose/i);
+    expect(userPrompt).toMatch(/verbatim substring of the prose/i);
+  });
+});
+
+describe('enrichDirectorNotes — keeps the payload the model produced (B3)', () => {
+  const prose = 'Vic was working the room. "do you want to trade a little" Remi said to Mel.';
+  const context = { rawProse: prose, roster: ['Vic', 'Remi', 'Mel'] };
+
+  const modelPayload = () => ({
+    characterMentions: { Vic: [{ excerpt: 'Vic was working the room.' }] },
+    entityNotes: { npcsReferenced: ['Blake'], shellAccountsReferenced: [] },
+    quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }],
+    transactionReferences: [{ excerpt: 'Vic was working the room.', linkedTransactions: [], confidence: 'low' }],
+    postInvestigationDevelopments: []
+  });
+
+  it('keeps the indexes and supplies the prose from the input, not the model', async () => {
+    const sdk = jest.fn().mockResolvedValue(modelPayload());
+
+    const result = await enrichDirectorNotes(context, sdk);
+
+    expect(result.rawProse).toBe(prose);
+    expect(result.characterMentions).toEqual({ Vic: [{ excerpt: 'Vic was working the room.' }] });
+    expect(result.quotes).toHaveLength(1);
+    expect(result.transactionReferences).toHaveLength(1);
+    expect(result._enrichmentFallback).toBeUndefined();
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  it('keeps the indexes even when the model echoes a prose that differs by one character', async () => {
+    // The exact condition that silently emptied 062726 and 071826.
+    const sdk = jest.fn().mockResolvedValue({ ...modelPayload(), rawProse: prose + ' ' });
+
+    const result = await enrichDirectorNotes(context, sdk);
+
+    expect(result.rawProse).toBe(prose);
+    expect(result.quotes).toHaveLength(1);
+    expect(result.characterMentions.Vic).toBeDefined();
+    expect(result._enrichmentFallback).toBeUndefined();
+  });
+});
+
+describe('enrichDirectorNotes — quote grounding (B3)', () => {
+  const prose = 'Vic was working the room. "do you want to trade a little" Remi said to Mel.';
+
+  it('drops a quote that is not in the prose and counts it, keeping the grounded one', async () => {
+    const sdk = jest.fn().mockResolvedValue({
+      quotes: [
+        { speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' },
+        { speaker: 'Mel', text: 'I never touched the account', confidence: 'low' }  // invented
+      ]
+    });
+
+    const result = await enrichDirectorNotes({ rawProse: prose, roster: ['Vic'] }, sdk);
+
+    expect(result.quotes).toEqual([
+      { speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }
+    ]);
+    expect(result._enrichmentWarnings).toEqual({ droppedQuotes: 1 });
+  });
+
+  it('keeps a quote whose curly quotes and whitespace differ from the prose', async () => {
+    const curlyProse = 'Remi said “do you  want to trade” to Mel.';
+    const sdk = jest.fn().mockResolvedValue({
+      quotes: [{ speaker: 'Remi', text: "do you want to trade", confidence: 'high' }]
+    });
+
+    const result = await enrichDirectorNotes({ rawProse: curlyProse, roster: ['Remi'] }, sdk);
+
+    expect(result.quotes).toHaveLength(1);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  it('drops a quote with empty text', async () => {
+    const sdk = jest.fn().mockResolvedValue({
+      quotes: [{ speaker: 'Remi', text: '   ' }]
+    });
+
+    const result = await enrichDirectorNotes({ rawProse: prose, roster: ['Remi'] }, sdk);
+
+    expect(result.quotes).toEqual([]);
+    expect(result._enrichmentWarnings).toEqual({ droppedQuotes: 1 });
+  });
+});
+
+describe('enrichDirectorNotes — the fallback is visible (B3)', () => {
+  const prose = 'Vic was working the room.';
+
+  it('marks a thrown SDK failure with _enrichmentFallback.reason', async () => {
+    const sdk = jest.fn().mockRejectedValue(new Error('SDK timeout after 900000ms idle'));
+
+    const result = await enrichDirectorNotes({ rawProse: prose }, sdk);
+
+    expect(result).toEqual({
+      ...createFallback(prose),
+      _enrichmentFallback: { reason: 'SDK timeout after 900000ms idle' }
+    });
+  });
+
+  it('marks a non-object SDK result with _enrichmentFallback.reason', async () => {
+    const sdk = jest.fn().mockResolvedValue(null);
+
+    const result = await enrichDirectorNotes({ rawProse: prose }, sdk);
+
+    expect(result.rawProse).toBe(prose);
+    expect(result._enrichmentFallback.reason).toMatch(/no object/i);
   });
 });

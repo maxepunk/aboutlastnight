@@ -193,3 +193,35 @@ describe('SESSION_CONFIG_SCHEMA sessionId description (B1)', () => {
     expect(desc).not.toMatch(/MMDD/);
   });
 });
+
+describe('parseRawInput surfaces the enrichment fallback (B3)', () => {
+  // B3: an empty enrichment used to be indistinguishable from prose with nothing
+  // in it. The marker has to survive into BOTH the directorNotes channel (which
+  // the input-review checkpoint renders) and inputs/director-notes.json (which
+  // loadDirectorNotes rehydrates on resume).
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+
+  test('persists _enrichmentFallback on the channel and in director-notes.json', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-enrich-fallback-'));
+    const directorProse = 'Director notes prose...';
+    sdkQuery
+      .mockResolvedValueOnce({ sessionId: '091826', roster: ['Alex'], reportingMode: 'on-site' })
+      .mockResolvedValueOnce({ exposedTokens: [], buriedTokens: [], shellAccounts: [],
+        exposedCount: 0, buriedCount: 0, totalBuried: 0 })
+      .mockRejectedValueOnce(new Error('opus overloaded_error'));   // step3 enrichment fails
+
+    const result = await parseRawInput(
+      makeState({ sessionId: '091826', directorNotesRaw: directorProse }),
+      { configurable: { sdkClient: sdkQuery, dataDir, sessionId: '091826' } }
+    );
+
+    expect(result.directorNotes._enrichmentFallback).toEqual({ reason: 'opus overloaded_error' });
+
+    const onDisk = JSON.parse(
+      fs.readFileSync(path.join(dataDir, '091826', 'inputs', 'director-notes.json'), 'utf-8')
+    );
+    expect(onDisk._enrichmentFallback).toEqual({ reason: 'opus overloaded_error' });
+  });
+});

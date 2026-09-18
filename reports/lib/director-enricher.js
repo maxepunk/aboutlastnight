@@ -9,15 +9,13 @@
  * Spec: docs/superpowers/specs/2026-04-20-director-notes-enrichment-design.md
  */
 
+// B3: the model is NOT asked to echo the prose back. The caller already holds it,
+// and requiring a byte-exact round trip made a single stray character discard the
+// entire enrichment (see enrichDirectorNotes).
 const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
   type: 'object',
-  required: ['rawProse'],
   additionalProperties: false,
   properties: {
-    rawProse: {
-      type: 'string',
-      description: 'Original director prose, verbatim. MUST equal input exactly.'
-    },
     characterMentions: {
       type: 'object',
       description: 'Keys = canonical roster names. Arrays = excerpts mentioning each.',
@@ -27,8 +25,8 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
           type: 'object',
           required: ['excerpt'],
           properties: {
-            excerpt: { type: 'string', description: 'Verbatim passage from rawProse' },
-            proseOffset: { type: 'integer', minimum: 0, description: 'Byte index into rawProse' },
+            excerpt: { type: 'string', description: 'Verbatim passage from the director prose' },
+            proseOffset: { type: 'integer', minimum: 0, description: 'Byte index into the director prose' },
             timeAnchor: { type: 'string', description: 'Temporal cue if present (e.g., "throughout morning")' },
             linkedCharacters: {
               type: 'array',
@@ -98,7 +96,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
           addressee: { type: 'string', description: 'Who the speaker was addressing, if known' },
           context: { type: 'string', description: 'Surrounding context from prose' },
           proseOffset: { type: 'integer', minimum: 0 },
-          confidence: { type: 'string', enum: ['high', 'low'], description: 'high = speaker named adjacent' }
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: 'high = speaker named adjacent' }
         }
       }
     },
@@ -122,14 +120,14 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
 const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*.
 
 Hard rules:
-1. \`rawProse\` in your output MUST equal the input prose exactly (verbatim, including punctuation, line breaks, and typos).
+1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
 2. Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes (npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).
 3. transactionReferences: link an observation to a scoring-timeline row ONLY when timestamp, actor, and amount converge. If no row matches cleanly, emit linkedTransactions: [] with confidence: "low" and a linkReasoning explaining the ambiguity. Do NOT fabricate.
 4. quotes: only extract phrases that appear in quotation marks in the prose, or unambiguous direct speech. Preserve wording exactly. confidence: "high" iff speaker is named adjacent to the quote; otherwise "low".
 5. postInvestigationDevelopments: only passages with explicit post-investigation temporal markers ("just been announced", "currently whereabouts unknown", "is on his way to", "following the investigation", "at the time of this article's writing").
 6. Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.
 
-You are an INDEXER, not a SUMMARIZER. If you find yourself rewriting the director's words, stop — quote them verbatim in excerpts instead.`;
+You are an INDEXER, not a SUMMARIZER.`;
 
 function buildEnrichmentPrompt({
   rawProse,
@@ -198,7 +196,7 @@ ${rawProse}
 </DIRECTOR_NOTES_RAW>
 
 <ENRICHMENT_RULES>
-1. Preserve rawProse verbatim — your output's rawProse field MUST equal the director notes above, exactly.
+1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
 2. Use ONLY roster names from the roster section as keys in characterMentions.
 3. Link transactionReferences only when timestamp, actor, and amount converge with the scoring timeline. Otherwise confidence: "low" and empty linkedTransactions.
 4. Extract quotes verbatim; confidence "high" iff speaker named adjacent, else "low".
@@ -221,6 +219,37 @@ function createFallback(rawProse) {
   };
 }
 
+/**
+ * Normalize for substring comparison: curly quotes to straight, runs of
+ * whitespace to one space. A quote the model retyped with a different dash or
+ * line wrap is still the director's quote.
+ */
+function normalizeForGrounding(value) {
+  return String(value || '')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Enrich director prose with four indexes over it.
+ *
+ * B3: the prose is supplied BY THE CALLER and returned unchanged -- it is never
+ * round-tripped through the model. The previous contract required the model to
+ * echo rawProse byte-for-byte and discarded the entire payload on any mismatch,
+ * which silently emptied the quote and transaction indexes on two of the last
+ * three sessions. Only two things now produce a fallback (a thrown SDK call, or
+ * a non-object result) and both mark it with `_enrichmentFallback.reason` so the
+ * emptiness is visible instead of looking like prose with nothing in it.
+ *
+ * Quotes are still grounded: one that is not a substring of the prose is dropped
+ * and counted in `_enrichmentWarnings.droppedQuotes`.
+ *
+ * @param {Object} context - { rawProse, roster, accusation, npcs, shellAccounts, detectiveEvidenceLog, scoringTimeline }
+ * @param {Function} sdk - sdkQuery-compatible client
+ * @returns {Promise<Object>} enriched director notes (never throws)
+ */
 async function enrichDirectorNotes(context, sdk) {
   const rawProse = context?.rawProse || '';
   if (!rawProse) {
@@ -239,28 +268,33 @@ async function enrichDirectorNotes(context, sdk) {
       label: 'Director notes enrichment'
     });
 
-    if (!result || typeof result.rawProse !== 'string') {
-      console.warn('[enrichDirectorNotes] SDK returned invalid result; falling back');
-      return createFallback(rawProse);
+    if (!result || typeof result !== 'object') {
+      console.warn('[enrichDirectorNotes] SDK returned no object; falling back');
+      return { ...createFallback(rawProse), _enrichmentFallback: { reason: 'SDK returned no object' } };
     }
 
-    if (result.rawProse !== rawProse) {
-      console.warn('[enrichDirectorNotes] SDK returned non-verbatim rawProse; falling back to preserve source prose');
-      return createFallback(rawProse);
+    const proseNorm = normalizeForGrounding(rawProse);
+    const quotes = (result.quotes || []).filter(
+      q => q && normalizeForGrounding(q.text) && proseNorm.includes(normalizeForGrounding(q.text))
+    );
+    const droppedQuotes = (result.quotes || []).length - quotes.length;
+    if (droppedQuotes > 0) {
+      console.warn(`[enrichDirectorNotes] dropped ${droppedQuotes} quote(s) not found verbatim in prose`);
     }
 
     // Normalize optional fields so downstream consumers always see the expected shape
     return {
-      rawProse: result.rawProse,
+      rawProse,
       characterMentions: result.characterMentions || {},
       entityNotes: result.entityNotes || { npcsReferenced: [], shellAccountsReferenced: [] },
-      quotes: result.quotes || [],
+      quotes,
       transactionReferences: result.transactionReferences || [],
-      postInvestigationDevelopments: result.postInvestigationDevelopments || []
+      postInvestigationDevelopments: result.postInvestigationDevelopments || [],
+      ...(droppedQuotes > 0 && { _enrichmentWarnings: { droppedQuotes } })
     };
   } catch (error) {
     console.warn(`[enrichDirectorNotes] SDK call failed: ${error.message}; falling back`);
-    return createFallback(rawProse);
+    return { ...createFallback(rawProse), _enrichmentFallback: { reason: error.message } };
   }
 }
 
