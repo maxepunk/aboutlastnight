@@ -299,6 +299,18 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         validApprovalDetected = true;
         resume.approved = true;
         if (approvals.articleEdits && typeof approvals.articleEdits === 'object') {
+            // B6: mirror the outline gate. An unvalidated hand-edit reached
+            // validateContentBundle, which routes a bad bundle straight to END --
+            // after ten checkpoints and five-plus Opus calls, with Retry failing
+            // identically and rollback discarding the approved draft.
+            const { valid, errors } = outlineValidator.validate('content-bundle', approvals.articleEdits);
+            if (!valid) {
+                const detail = (errors || [])
+                    .map(function (e) { return (e.path || '/') + ' ' + e.message; })
+                    .join('; ');
+                error = 'Edited article failed schema validation (content-bundle): ' + detail;
+                return { resume, stateUpdates, error };
+            }
             stateUpdates.contentBundle = approvals.articleEdits;
         }
     } else if (approvals.article === false && typeof approvals.articleFeedback === 'string' && approvals.articleFeedback.trim()) {

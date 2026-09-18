@@ -187,3 +187,55 @@ describe('buildResumePayload — rosterPronouns forwarding (F1 / CR-1 regression
     expect('rosterPronouns' in result.stateUpdates).toBe(false);
   });
 });
+
+describe('buildResumePayload — articleEdits validation (B6)', () => {
+  // The article checkpoint's JSON editor previously fed straight into
+  // stateUpdates.contentBundle with no shape check, so one dropped key routed
+  // validateContentBundle -> END after 10 checkpoints and 5+ Opus calls.
+  const validBundle = () => JSON.parse(JSON.stringify(
+    require('../fixtures/content-bundles/valid-journalist.json')
+  ));
+
+  it('applies a schema-valid content bundle', () => {
+    const edits = validBundle();
+    const result = buildResumePayload({ article: true, articleEdits: edits });
+    expect(result.error).toBeNull();
+    expect(result.resume.approved).toBe(true);
+    expect(result.stateUpdates.contentBundle).toEqual(edits);
+  });
+
+  it('rejects an edit missing required top-level keys and does NOT apply it', () => {
+    const result = buildResumePayload({ article: true, articleEdits: { headline: { main: 'x' } } });
+    expect(result.error).toEqual(expect.stringContaining('content-bundle'));
+    expect(result.error).toEqual(expect.stringContaining('sections'));
+    expect(result.stateUpdates.contentBundle).toBeUndefined();
+  });
+
+  it('rejects an edit whose sections went from array to string', () => {
+    const edits = validBundle();
+    edits.sections = 'THE STORY: everything happened at once.';
+    const result = buildResumePayload({ article: true, articleEdits: edits });
+    expect(result.error).toEqual(expect.stringContaining('failed schema validation (content-bundle)'));
+    expect(result.error).toEqual(expect.stringContaining('/sections'));
+    expect(result.stateUpdates.contentBundle).toBeUndefined();
+  });
+
+  it('does not apply articleEdits on rejection (article:false)', () => {
+    const result = buildResumePayload({
+      article: false,
+      articleFeedback: 'tighten the lede',
+      articleEdits: { headline: { main: 'should not be applied' } }
+    });
+    expect(result.error).toBeNull();
+    expect(result.resume.approved).toBe(false);
+    expect(result.stateUpdates.contentBundle).toBeUndefined();
+    expect(result.stateUpdates._articleFeedback).toBe('tighten the lede');
+  });
+
+  it('approves without edits when articleEdits is omitted', () => {
+    const result = buildResumePayload({ article: true });
+    expect(result.error).toBeNull();
+    expect(result.resume.approved).toBe(true);
+    expect(result.stateUpdates.contentBundle).toBeUndefined();
+  });
+});
