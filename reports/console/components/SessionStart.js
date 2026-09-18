@@ -198,9 +198,14 @@ function SessionStart({ dispatch, theme }) {
           return;
 
         case 'complete':
-          // B9: do NOT resume. Offer the report and the two safe routes instead.
+          // B9: do NOT resume. Offer the report and the routes that actually exist.
+          // The copy names only those: rollback from a complete thread has no entry
+          // point today (/checkpoint returns checkpoint:null, and both rollback
+          // openers require state.checkpointType), so pointing at it sent the
+          // director looking for a control that is not there. It is a real need and
+          // is being added separately — do not promise it here until it exists.
           setStatus(
-            'This session is complete. Use Start Fresh for a new run, or Resume with a rollback point.'
+            'This session is complete. Open the report below, or use Start Fresh for a new run.'
           );
           setReportLinks(buildReportLinks(sessionId, checkpoint.lastOutcome));
           setLoading(false);
@@ -461,7 +466,9 @@ function SessionStart({ dispatch, theme }) {
             href: href,
             target: '_blank',
             rel: 'noopener',
-            'aria-label': 'Open the published report for this session in a new tab'
+            // Per-link label: two anchors can appear (the conventional path and the
+            // file the run actually wrote), and one shared label would name neither.
+            'aria-label': 'Open ' + href + ' in a new tab'
           }, href)
         );
       }),
