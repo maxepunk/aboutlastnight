@@ -69,6 +69,38 @@
   }
 
   /**
+   * What the attach watchdog should do after re-reading GET /checkpoint.
+   *
+   * Attaching sets processing:true and rides a stream that may never speak again:
+   * progressEmitter fires `complete` ONCE, to whoever is connected at that instant,
+   * so a run that ended between the /checkpoint read (or the lock 409) and the
+   * handshake leaves the console spinning with no Retry — that button only appears
+   * while llmActivity.phase === 'failed'. And `inProgress` is only
+   * isSessionLocked(id); lib/api-background-runner.js:58 documents a stuck lock as a
+   * real failure mode, so without this the wait can be permanent.
+   *
+   *   'load-checkpoint' - the run paused; render it (SET_THEME first) and close
+   *   'complete'        - it finished unheard; show the completion
+   *   'keep-waiting'    - the lock is still held; hold the stream, log once
+   *   'stranded'        - nothing running, nothing paused, nothing finished
+   *
+   * Note the deliberate difference from classifyCheckpointResponse: 'resumable'
+   * means "safe to resume" when the director asked for a session, but for a stream
+   * we are ALREADY attached to it means the run vanished without a checkpoint.
+   *
+   * @param {object|null} resp - GET /api/session/:id/checkpoint response
+   * @returns {'load-checkpoint'|'complete'|'keep-waiting'|'stranded'}
+   */
+  function decideAttachFallback(resp) {
+    switch (classifyCheckpointResponse(resp)) {
+      case 'at-checkpoint': return 'load-checkpoint';
+      case 'in-progress': return 'keep-waiting';
+      case 'complete': return 'complete';
+      default: return 'stranded';
+    }
+  }
+
+  /**
    * The report links a COMPLETE session should be offered instead of a Resume.
    *
    * Always offers the conventional path. A recorded outcome that names a DIFFERENT
@@ -123,6 +155,7 @@
   const api = {
     isValidSessionId,
     classifyCheckpointResponse,
+    decideAttachFallback,
     buildReportLinks,
     SESSION_ID_PATTERN,
     CHECKPOINT_ORDER

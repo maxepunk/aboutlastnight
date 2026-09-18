@@ -170,3 +170,54 @@ describe('buildReportLinks', () => {
     expect(buildReportLinks(null, null)).toEqual([]);
   });
 });
+
+describe('decideAttachFallback', () => {
+  // Review fix 2: attach sets processing:true and rides a stream that may never
+  // speak again. progressEmitter fires `complete` ONCE, to whoever is connected at
+  // that moment, so a run that ended between the /checkpoint read (or the lock 409)
+  // and the handshake leaves the console spinning with no Retry — that only appears
+  // while llmActivity.phase === 'failed' — and no timeout. Worse, `inProgress` is
+  // only isSessionLocked(id), and api-background-runner.js:58 documents a stuck lock
+  // as a real failure mode, so the wait can be permanent. This is the decision the
+  // 20-second watchdog makes after re-reading GET /checkpoint.
+  const { decideAttachFallback } = require('../session-start-logic');
+
+  it('loads the checkpoint when the run has paused', () => {
+    expect(decideAttachFallback({ interrupted: true, checkpoint: { type: 'outline' } }))
+      .toBe('load-checkpoint');
+  });
+
+  it('shows the completion when the run finished unheard', () => {
+    expect(decideAttachFallback({ interrupted: false, currentPhase: 'complete' }))
+      .toBe('complete');
+  });
+
+  it('keeps waiting while the session is still locked', () => {
+    expect(decideAttachFallback({ interrupted: false, inProgress: true, currentPhase: '2.1' }))
+      .toBe('keep-waiting');
+  });
+
+  it('keeps waiting even at phase complete while the lock is still held', () => {
+    // A forced re-run of a complete thread: still working, do not steal the screen.
+    expect(decideAttachFallback({ interrupted: false, inProgress: true, currentPhase: 'complete' }))
+      .toBe('keep-waiting');
+  });
+
+  it('reports stranded when the run stopped mid-pipeline and left no checkpoint', () => {
+    // Nothing holds the lock, nothing is interrupted, nothing completed: the graph
+    // died or the lock leaked. This is the permanent hang the watchdog exists for.
+    expect(decideAttachFallback({ interrupted: false, currentPhase: '2.1' }))
+      .toBe('stranded');
+  });
+
+  it('reports stranded for a vanished session or an error body', () => {
+    expect(decideAttachFallback({ error: 'Session not found' })).toBe('stranded');
+    expect(decideAttachFallback({ interrupted: false })).toBe('stranded');
+    expect(decideAttachFallback(null)).toBe('stranded');
+  });
+
+  it('reports stranded for an interrupt with no payload to render', () => {
+    expect(decideAttachFallback({ interrupted: true, checkpoint: null, currentPhase: '1.8' }))
+      .toBe('stranded');
+  });
+});

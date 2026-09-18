@@ -14,6 +14,16 @@ const { RollbackPanel, CompletionView } = window.Console;
 const { CHECKPOINT_LABELS } = window.Console.utils;
 // H10 message derivation (pure, node-tested in __tests__/unit/llm-stream-logic.test.js).
 const { formatLlmErrorMessage, formatFailureMessage } = window.Console.llmStreamLogic;
+// Attach watchdog decision + report links (pure, node-tested in
+// console/__tests__/session-start-logic.test.js).
+const { decideAttachFallback, buildReportLinks } = window.Console.sessionStartLogic;
+
+// How long an attached stream may say nothing before the watchdog re-reads
+// /checkpoint, and how often it looks. The server's heartbeat is an SSE COMMENT
+// (`: heartbeat`), which EventSource never delivers to onmessage, so a silent run
+// really is silent here — the idle window is not defeated by keepalives.
+const ATTACH_IDLE_MS = 20000;
+const ATTACH_POLL_MS = 5000;
 
 // Checkpoint type -> specific component mapping (Batch 3B.3 + 3B.4 + 3B.5 + 3B.6)
 const CHECKPOINT_COMPONENTS = {
@@ -34,7 +44,7 @@ const CHECKPOINT_COMPONENTS = {
  * the same non-blocking, SSE-delivered contract). Closes over dispatch + the EventSource
  * ref so the completion branches can close the stream.
  */
-function makeSseHandler(dispatch, sseRef) {
+function makeSseHandler(dispatch, sseRef, activityRef) {
   // H9: a mid-run drop is non-terminal now (api.js leaves the stream open so
   // EventSource reconnects), so the log has to say both halves out loud or the
   // director cannot tell a stall from a reconnect. One handler per run, so this
@@ -42,6 +52,10 @@ function makeSseHandler(dispatch, sseRef) {
   let dropped = false;
 
   return (event) => {
+    // Review fix 2: the attach watchdog's liveness signal. Stamped for every real
+    // event so a run that is genuinely streaming is never second-guessed.
+    if (activityRef && event.type !== 'heartbeat') activityRef.current = Date.now();
+
     switch (event.type) {
       case 'connected':
         dispatch({ type: APP_ACTIONS.SSE_CONNECTED });
@@ -209,6 +223,12 @@ function App() {
   const [state, dispatch] = useAppState();
   const [rollbackTarget, setRollbackTarget] = React.useState(null);
   const sseRef = React.useRef(null);
+  // Review fix 2 (attach watchdog): the session whose stream we are merely riding,
+  // when the last real SSE event arrived, and whether the "still running" line has
+  // already been logged for the current silence.
+  const [attachedSession, setAttachedSession] = React.useState(null);
+  const sseActivityRef = React.useRef(0);
+  const attachWaitLoggedRef = React.useRef(false);
 
   // Cleanup EventSource on unmount
   React.useEffect(() => {
@@ -269,9 +289,11 @@ function App() {
     if (!state.sessionId) return;
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
     eventSourceClose(sseRef);
+    // This call owns the stream now; release the attach watchdog.
+    setAttachedSession(null);
     try {
       const { response, eventSource } = await appApi.approve(
-        state.sessionId, payload, makeSseHandler(dispatch, sseRef)
+        state.sessionId, payload, makeSseHandler(dispatch, sseRef, sseActivityRef)
       );
       assignSse(sseRef, eventSource);
       if (response.error) {
@@ -293,8 +315,10 @@ function App() {
     if (!sessionId) return;
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
     eventSourceClose(sseRef);
+    // This call owns the stream now; release the attach watchdog.
+    setAttachedSession(null);
     try {
-      const { response, eventSource } = await appApi.resume(sessionId, makeSseHandler(dispatch, sseRef));
+      const { response, eventSource } = await appApi.resume(sessionId, makeSseHandler(dispatch, sseRef, sseActivityRef));
       assignSse(sseRef, eventSource);
       if (response.error) {
         handlePostFailure(dispatch, sseRef, sessionId, response);
@@ -314,12 +338,15 @@ function App() {
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
     eventSourceClose(sseRef);
     try {
-      const { eventSource } = await appApi.attach(sessionId, makeSseHandler(dispatch, sseRef));
+      const { eventSource } = await appApi.attach(sessionId, makeSseHandler(dispatch, sseRef, sseActivityRef));
       assignSse(sseRef, eventSource);
       dispatch({
         type: APP_ACTIONS.SSE_PROGRESS,
         message: 'Attached to the run already in progress for this session. Waiting for its next checkpoint…'
       });
+      // Arm the watchdog: this stream may never speak (see decideAttachFallback).
+      attachWaitLoggedRef.current = false;
+      setAttachedSession(sessionId);
     } catch (err) {
       dispatch({
         type: APP_ACTIONS.SSE_ERROR,
@@ -329,15 +356,110 @@ function App() {
   };
 
   /**
+   * Review fix 2: the attached stream has said nothing for ATTACH_IDLE_MS. Ask
+   * /checkpoint what actually happened and act on it, so a run that ended while
+   * nobody was listening cannot leave the console spinning forever with no exit but
+   * a page reload. The decision itself is pure (decideAttachFallback).
+   */
+  const attachWatchdog = async (sessionId) => {
+    if (Date.now() - sseActivityRef.current < ATTACH_IDLE_MS) {
+      // Still streaming: re-arm the one-line notice for the next silence.
+      attachWaitLoggedRef.current = false;
+      return;
+    }
+
+    let resp;
+    try {
+      resp = await appApi.getCheckpoint(sessionId);
+    } catch (err) {
+      // The console is unreachable, not the run. Try again on the next tick rather
+      // than tearing down a stream that may still deliver.
+      return;
+    }
+
+    switch (decideAttachFallback(resp)) {
+      case 'load-checkpoint':
+        eventSourceClose(sseRef);
+        setAttachedSession(null);
+        dispatch({ type: APP_ACTIONS.SET_THEME, theme: resp.theme || 'journalist' });
+        dispatch({
+          type: APP_ACTIONS.CHECKPOINT_RECEIVED,
+          checkpointType: resp.checkpointType || resp.checkpoint.type,
+          data: resp.checkpoint,
+          phase: resp.currentPhase
+        });
+        return;
+
+      case 'complete': {
+        eventSourceClose(sseRef);
+        setAttachedSession(null);
+        dispatch({ type: APP_ACTIONS.SET_THEME, theme: resp.theme || 'journalist' });
+        // No SSE completion payload to forward, so rebuild what CompletionView needs
+        // from the persisted outcome. Last link = the file the run actually wrote
+        // when that differs from the conventional path (see buildReportLinks).
+        const links = buildReportLinks(sessionId, resp.lastOutcome);
+        dispatch({
+          type: APP_ACTIONS.WORKFLOW_COMPLETE,
+          result: {
+            ...(resp.lastOutcome || {}),
+            sessionId,
+            currentPhase: 'complete',
+            htmlUrl: links[links.length - 1] || null
+          }
+        });
+        return;
+      }
+
+      case 'keep-waiting':
+        if (!attachWaitLoggedRef.current) {
+          attachWaitLoggedRef.current = true;
+          dispatch({
+            type: APP_ACTIONS.SSE_PROGRESS,
+            message: 'No progress events for 20s, but the session is still running. Holding the stream open.'
+          });
+        }
+        return;
+
+      case 'stranded':
+      default:
+        eventSourceClose(sseRef);
+        setAttachedSession(null);
+        dispatch({
+          type: APP_ACTIONS.SSE_ERROR,
+          message: 'The run is no longer in progress and left no checkpoint; use Resume or Roll back.'
+        });
+        return;
+    }
+  };
+
+  // Runs only while we are riding someone else's stream AND still processing. Every
+  // terminal SSE branch clears `processing` (SSE_COMPLETE / WORKFLOW_COMPLETE /
+  // SSE_ERROR), so the interval tears itself down the moment the run reports in —
+  // it can never fire after a checkpoint has been delivered.
+  React.useEffect(() => {
+    // The sessionId match is structural, not defensive: attachedSession is App-local
+    // state that outlives RESET_SESSION/LOGOUT, so without it a stale attach could
+    // poll the previous session and dispatch ITS checkpoint into the current one.
+    if (!attachedSession || attachedSession !== state.sessionId || !state.processing) {
+      return undefined;
+    }
+    const timerId = setInterval(() => { attachWatchdog(attachedSession); }, ATTACH_POLL_MS);
+    return () => clearInterval(timerId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachedSession, state.sessionId, state.processing]);
+
+  /**
    * Streaming rollback (non-blocking /rollback). Same SSE contract as approve.
    */
   const streamingRollback = async (target, overrides) => {
     if (!state.sessionId) return;
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
     eventSourceClose(sseRef);
+    // This call owns the stream now; release the attach watchdog.
+    setAttachedSession(null);
     try {
       const { response, eventSource } = await appApi.rollback(
-        state.sessionId, target, overrides, makeSseHandler(dispatch, sseRef)
+        state.sessionId, target, overrides, makeSseHandler(dispatch, sseRef, sseActivityRef)
       );
       assignSse(sseRef, eventSource);
       if (response.error) {
