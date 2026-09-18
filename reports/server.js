@@ -362,6 +362,23 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
 const VALID_THEMES = ['journalist', 'detective'];
 
 /**
+ * Session-ID contract (B1 companion).
+ *
+ * The session ID is the session DATE as MMDDYY, optionally with one extra digit
+ * for a second session the same day. It is not a free-form label: the follow-up
+ * emailer builds each player's report link from it, `data/<id>/` and
+ * `outputs/report-<id>.html` are named after it, and a non-date id (071126 ->
+ * "0711", "march-15") silently splits a session's artifacts across directories.
+ *
+ * ALLOW_NONSTANDARD_SESSION_ID=true opts out for throwaway harness runs.
+ */
+const SESSION_ID_PATTERN = /^\d{6}\d?$/;   // emailer contract: MMDDYY + optional session number
+
+function isAllowedSessionId(id) {
+    return SESSION_ID_PATTERN.test(id) || process.env.ALLOW_NONSTANDARD_SESSION_ID === 'true';
+}
+
+/**
  * Build complete checkpoint data by merging state-based data with interrupt payload
  *
  * The interrupt() call only includes data explicitly passed to checkpointInterrupt().
@@ -774,6 +791,13 @@ for (const endpoint of RESOURCE_ENDPOINTS) {
  */
 app.post('/api/session/:id/start', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
+
+    if (!isAllowedSessionId(sessionId)) {
+        return res.status(400).json({
+            error: `Session ID must be the session date as MMDDYY (e.g. 091826), with a single extra digit for a second session the same day (e.g. 0918262). The follow-up emailer builds the report link from it. Got: ${sessionId}`
+        });
+    }
+
     clearSessionOutcome(sessionId); // DEL-1: a fresh start wipes any prior run's outcome for this id
     const { theme = 'journalist', rawSessionInput } = req.body;
 
@@ -1354,4 +1378,4 @@ process.on('SIGINT', async () => {
 
 // Export helpers for testing. `app` is exported so integration tests can boot the
 // real route table over http (listen() stays behind the require.main guard above).
-module.exports = { app, buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
+module.exports = { app, isAllowedSessionId, buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };

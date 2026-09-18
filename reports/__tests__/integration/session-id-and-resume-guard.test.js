@@ -138,3 +138,50 @@ describe('POST /resume on a complete session (B9)', () => {
     await flushBackground();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1.2 — B1 companion: the session ID is the emailer's report-link contract
+// ─────────────────────────────────────────────────────────────────────────────
+describe('POST /start session-ID contract (B1 companion)', () => {
+  const START_BODY = { theme: 'journalist', rawSessionInput: { photosPath: 'data/x/photos' } };
+
+  afterEach(() => {
+    delete process.env.ALLOW_NONSTANDARD_SESSION_ID;
+  });
+
+  it('rejects a non-date session ID with a 400 naming the MMDDYY format', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+
+    const res = await send('POST', '/api/session/march-15/start', START_BODY);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/MMDDYY/);
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it('accepts MMDDYY plus one session digit (second session the same day)', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+
+    const res = await send('POST', '/api/session/0918262/start', START_BODY);
+
+    expect(res.status).toBe(200);
+    expect(res.body.interrupted).toBe(true);
+  });
+
+  it('accepts a plain MMDDYY session ID', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+
+    const res = await send('POST', '/api/session/091826/start', START_BODY);
+
+    expect(res.status).toBe(200);
+  });
+
+  it('accepts any ID when ALLOW_NONSTANDARD_SESSION_ID is set (e2e harness escape hatch)', async () => {
+    process.env.ALLOW_NONSTANDARD_SESSION_ID = 'true';
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+
+    const res = await send('POST', '/api/session/march-15/start', START_BODY);
+
+    expect(res.status).toBe(200);
+  });
+});

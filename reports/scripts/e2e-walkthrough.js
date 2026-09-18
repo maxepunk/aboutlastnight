@@ -72,6 +72,10 @@ function getArgValue(flag) {
   return index !== -1 && index + 1 < args.length ? args[index + 1] : null;
 }
 
+// B1 companion: the SERVER validates --session against the MMDDYY emailer
+// contract. Throwaway harness IDs (1225, 1221) are not dates, so a fresh run with
+// one needs ALLOW_NONSTANDARD_SESSION_ID=true in the SERVER's environment (.env) --
+// setting it here would not reach the server process.
 const SESSION_ID = getArgValue('--session');
 const INPUT_FILE = getArgValue('--input');
 const OVERRIDE_FILE = getArgValue('--override');
@@ -560,6 +564,8 @@ ${color('CHECKPOINTS:', 'cyan')}
 
 ${color('NOTES:', 'cyan')}
   - Server must be running at ${API_BASE}
+  - --session must be the session date as MMDDYY (e.g. 091826). For a throwaway
+    id like 1225, set ALLOW_NONSTANDARD_SESSION_ID=true in the SERVER's .env
   - Uses REST endpoints: /api/session/:id/start, /api/session/:id/approve
   - Final HTML is saved to reports/outputs/
 `);
