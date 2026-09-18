@@ -22,7 +22,7 @@ jest.mock('../../lib/workflow/graph', () => ({
   RECURSION_LIMIT: 100
 }));
 
-const { app } = require('../../server.js');
+const { app, isAllowedSessionId } = require('../../server.js');
 const { _resetLocks, acquireSessionLock } = require('../../lib/session-locks');
 const { _resetOutcomeStore } = require('../../lib/session-outcome');
 
@@ -259,5 +259,37 @@ describe('GET /checkpoint payload completeness (H1, H2, H8)', () => {
     expect(res.body.interrupted).toBe(false);
     expect(res.body.checkpoint).toBeNull();
     expect(res.body.checkpointType).toBeNull();
+  });
+});
+
+// The predicate itself, at the boundaries the HTTP cases above do not reach.
+describe('isAllowedSessionId', () => {
+  afterEach(() => { delete process.env.ALLOW_NONSTANDARD_SESSION_ID; });
+
+  it('accepts six digits (MMDDYY) and seven (plus a session number)', () => {
+    expect(isAllowedSessionId('091826')).toBe(true);
+    expect(isAllowedSessionId('0918262')).toBe(true);
+  });
+
+  it('rejects the legacy MMDD form that split session 071126', () => {
+    expect(isAllowedSessionId('0711')).toBe(false);
+  });
+
+  it('rejects too-short, too-long, empty and non-numeric ids', () => {
+    expect(isAllowedSessionId('09182')).toBe(false);
+    expect(isAllowedSessionId('09182622')).toBe(false);
+    expect(isAllowedSessionId('')).toBe(false);
+    expect(isAllowedSessionId('march-15')).toBe(false);
+    expect(isAllowedSessionId('20251221')).toBe(false);
+  });
+
+  it('accepts anything once ALLOW_NONSTANDARD_SESSION_ID is set', () => {
+    process.env.ALLOW_NONSTANDARD_SESSION_ID = 'true';
+    expect(isAllowedSessionId('1225')).toBe(true);
+  });
+
+  it('is not enabled by any other value of the env var', () => {
+    process.env.ALLOW_NONSTANDARD_SESSION_ID = '1';
+    expect(isAllowedSessionId('1225')).toBe(false);
   });
 });
