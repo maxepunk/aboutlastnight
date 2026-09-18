@@ -553,6 +553,15 @@ textarea.input {
   border: 1px solid rgba(231, 76, 60, 0.3);
 }
 
+/* badge--warning was used by app.js's Detective badge and had no rule at all, so
+   it rendered as bare uppercase text on the page background. Character IDs uses it
+   for "Critical" photos, where an unstyled badge would defeat the point. */
+.badge--warning {
+  background: rgba(212, 168, 83, 0.15);
+  color: var(--accent-amber);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+}
+
 /* ── Collapsible Section ── */
 .collapsible-section {
   border: 1px solid rgba(212, 168, 83, 0.1);
@@ -884,6 +893,14 @@ textarea.input {
   overflow-wrap: break-word;
   word-break: break-word;
   min-width: 0;
+}
+
+/* H26: the row is a flex container whose text child breaks words, so this button
+   was allowed to shrink and wrap its own label into a vertical letter stack at
+   1024 and 1440 px. It is a control, not prose. */
+.evidence-item__desc > button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .evidence-item__meta {
@@ -1452,9 +1469,16 @@ textarea.input {
   white-space: normal;
 }
 
+/* H26: .character-tag is an inline-flex box with word-break:break-word, which the
+   name span inherited as a licence to shrink to its narrowest word. Measured on the
+   arc cards: the span for "Vic" was 9 px wide and 54 px tall — the primary editorial
+   decision screen rendered every character name as a vertical letter stack, which is
+   what pushed the director toward the all-selected default. */
 .character-tag__name {
   color: var(--accent-cyan);
   font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .character-tag__role {
