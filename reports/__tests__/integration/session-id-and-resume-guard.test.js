@@ -185,3 +185,79 @@ describe('POST /start session-ID contract (B1 companion)', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1.3 — H1/H2/H8: /checkpoint must ship the same payload the SSE path delivers
+// ─────────────────────────────────────────────────────────────────────────────
+describe('GET /checkpoint payload completeness (H1, H2, H8)', () => {
+  const CHARACTER_IDS_INTERRUPT = {
+    type: 'character-ids',
+    photoAnalyses: [{ filename: 'a.jpg', characterDescriptions: ['tall, grey suit'] }],
+    roster: ['Vic']
+  };
+  const STATE = {
+    currentPhase: 1.66,
+    theme: 'detective',
+    sessionPhotos: ['a.jpg'],
+    sessionConfig: { roster: ['Vic'] }
+  };
+
+  it('merges the state-based checkpoint data into the interrupt payload', async () => {
+    mockGraph = graphInterruptedAt(STATE, CHARACTER_IDS_INTERRUPT);
+
+    const res = await send('GET', '/api/session/091826/checkpoint');
+
+    expect(res.status).toBe(200);
+    expect(res.body.checkpointType).toBe('character-ids');
+    expect(res.body.checkpoint.type).toBe('character-ids');
+    // sessionPhotos comes from STATE, not from the interrupt payload: without the
+    // merge the CharacterIds view renders photo cards with no photos.
+    expect(res.body.checkpoint.sessionPhotos).toEqual(['a.jpg']);
+    expect(res.body.checkpoint.roster).toEqual(['Vic']);
+  });
+
+  it('reports the session theme so a resumed run is not rendered with the wrong one', async () => {
+    mockGraph = graphInterruptedAt(STATE, CHARACTER_IDS_INTERRUPT);
+
+    const res = await send('GET', '/api/session/091826/checkpoint');
+
+    expect(res.body.theme).toBe('detective');
+  });
+
+  it('defaults theme to journalist when the thread has none', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.66 }, CHARACTER_IDS_INTERRUPT);
+
+    const res = await send('GET', '/api/session/091826/checkpoint');
+
+    expect(res.body.theme).toBe('journalist');
+  });
+
+  it('reports inProgress:false and a lastOutcome key when the session is idle', async () => {
+    mockGraph = graphInterruptedAt(STATE, CHARACTER_IDS_INTERRUPT);
+
+    const res = await send('GET', '/api/session/091826/checkpoint');
+
+    expect(res.body.inProgress).toBe(false);
+    expect(res.body).toHaveProperty('lastOutcome');
+    expect(res.body.lastOutcome).toBeNull();
+  });
+
+  it('reports inProgress:true while a background run holds the session lock', async () => {
+    mockGraph = graphInterruptedAt(STATE, CHARACTER_IDS_INTERRUPT);
+    acquireSessionLock('091826');
+
+    const res = await send('GET', '/api/session/091826/checkpoint');
+
+    expect(res.body.inProgress).toBe(true);
+  });
+
+  it('returns checkpoint:null when the thread is not interrupted', async () => {
+    mockGraph = graphAtPhase({ currentPhase: 'complete', theme: 'journalist' });
+
+    const res = await send('GET', '/api/session/091826/checkpoint');
+
+    expect(res.body.interrupted).toBe(false);
+    expect(res.body.checkpoint).toBeNull();
+    expect(res.body.checkpointType).toBeNull();
+  });
+});

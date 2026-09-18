@@ -33,6 +33,7 @@ const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBa
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
+const { isSessionLocked } = require('./lib/session-locks');
 const { runGraphInBackground } = require('./lib/api-background-runner');
 const { SchemaValidator } = require('./lib/schema-validator');
 const outlineValidator = new SchemaValidator();
@@ -645,13 +646,21 @@ app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
         const interrupted = isGraphInterrupted(graphState);
         const interruptData = interrupted ? getInterruptData(graphState) : null;
 
+        // H1: ship the SAME payload the SSE/approve path delivers. A bare interrupt
+        // payload is missing the state-based extras (e.g. CHARACTER_IDS needs
+        // sessionPhotos + sessionConfig), so a session reattached through this
+        // endpoint renders degraded. H2: theme, or a journalist thread is rendered
+        // with whatever the console's toggle happens to say. H8: inProgress +
+        // lastOutcome let a client reattach to a run instead of 409-ing blind.
         res.json({
             sessionId,
             currentPhase: graphState.values.currentPhase,
             interrupted,
             checkpointType: interruptData?.type || null,
-            // Include checkpoint data for UI if interrupted
-            checkpoint: interruptData
+            checkpoint: interrupted ? buildCompleteCheckpointData(interruptData, graphState.values) : null,
+            theme: graphState.values.theme || 'journalist',
+            inProgress: isSessionLocked(sessionId),
+            lastOutcome: getSessionOutcome(sessionId) || null
         });
 
     } catch (error) {
