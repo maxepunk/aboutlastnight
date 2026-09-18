@@ -1033,7 +1033,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
  */
 app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
     const { id: sessionId } = req.params;
-    const { stateOverrides } = req.body;
+    const { stateOverrides, force = false } = req.body || {};
 
     if (shuttingDown) {
         return res.status(503).json({ sessionId, error: 'Server is shutting down; retry shortly' });
@@ -1045,6 +1045,18 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
         const session = await getSessionState(sessionId);
         if (!session) {
             return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
+        }
+
+        // B9: re-invoking a COMPLETE thread replays it from START. Every checkpoint's
+        // skip condition is already satisfied, so it never pauses: the whole paid
+        // pipeline re-runs unattended and overwrites data/<id>/inputs/* and the
+        // published report. Refuse unless the caller asked for it explicitly.
+        if (session.state.currentPhase === PHASES.COMPLETE && force !== true) {
+            return res.status(409).json({
+                sessionId,
+                currentPhase: PHASES.COMPLETE,
+                error: 'Session is complete. Resuming would re-run the entire pipeline from the start (paid model calls, files overwritten). Use rollback to revisit a checkpoint, or POST { "force": true } to re-run deliberately.'
+            });
         }
 
         const theme = session.state.theme || 'journalist';
@@ -1340,5 +1352,6 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-// Export helpers for testing
-module.exports = { buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
+// Export helpers for testing. `app` is exported so integration tests can boot the
+// real route table over http (listen() stays behind the require.main guard above).
+module.exports = { app, buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
