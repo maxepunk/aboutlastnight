@@ -70,8 +70,12 @@ function getPreprocessor(config) {
  * @returns {Object} Partial state update with preprocessedEvidence, currentPhase
  */
 async function preprocessEvidence(state, config) {
-  // Skip if already preprocessed (resume case)
-  if (state.preprocessedEvidence) {
+  // Skip if already preprocessed (resume case).
+  // H12: gate on real ITEMS, not on the object's presence. A truthy-but-empty
+  // result (what the old catch block wrote) made this guard swallow every retry
+  // and trap the session: curateEvidenceBundle then threw "No preprocessed
+  // evidence" forever, because the node it needed never ran again.
+  if (state.preprocessedEvidence?.items?.length > 0) {
     console.log('[preprocessEvidence] Skipping - preprocessedEvidence already exists');
     return {
       currentPhase: PHASES.PREPROCESS_EVIDENCE
@@ -113,18 +117,13 @@ async function preprocessEvidence(state, config) {
     };
 
   } catch (error) {
-    console.error('[preprocessEvidence] Error:', error.message);
-
-    return {
-      preprocessedEvidence: createEmptyResult(state.sessionId, Date.now()),
-      errors: [{
-        phase: PHASES.PREPROCESS_EVIDENCE,
-        type: 'preprocessing-failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
-      }],
-      currentPhase: PHASES.ERROR
-    };
+    // H12 fail-loud: throw like every sibling node. Writing an empty result here
+    // both hid the failure behind a zero-item pre-curation checkpoint and made
+    // this node's LLM_RETRY policy dead code (a node that never throws is never
+    // retried). Throwing leaves the clean pre-node snapshot for the retry policy
+    // and, failing that, for an operator-driven /resume.
+    console.error('[preprocessEvidence] failed:', error.message);
+    throw error;
   }
 }
 

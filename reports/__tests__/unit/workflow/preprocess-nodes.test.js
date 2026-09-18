@@ -214,7 +214,11 @@ describe('preprocess-nodes', () => {
     });
 
     describe('error handling', () => {
-      it('returns error state when preprocessing fails', async () => {
+      // H12: the node used to CATCH a preprocessor failure and return an empty
+      // result plus currentPhase: ERROR, which trapped the session (see
+      // preprocess-nodes-failloud.test.js). It now throws, so the graph's
+      // LLM_RETRY policy can retry it and a persistent failure surfaces.
+      it('rejects with the preprocessor error instead of returning an error state', async () => {
         const failingPreprocessor = {
           process: jest.fn().mockRejectedValue(new Error('Processing failed'))
         };
@@ -225,31 +229,10 @@ describe('preprocess-nodes', () => {
         };
         const config = { configurable: { preprocessor: failingPreprocessor } };
 
-        const result = await preprocessEvidence(state, config);
-
-        expect(result.currentPhase).toBe(PHASES.ERROR);
-        expect(result.errors).toBeDefined();
-        expect(result.errors.length).toBe(1);
-        expect(result.errors[0].type).toBe('preprocessing-failed');
-        expect(result.errors[0].message).toBe('Processing failed');
+        await expect(preprocessEvidence(state, config)).rejects.toThrow('Processing failed');
       });
 
-      it('error includes phase information', async () => {
-        const failingPreprocessor = {
-          process: jest.fn().mockRejectedValue(new Error('API timeout'))
-        };
-
-        const state = { memoryTokens: [{ id: 't1' }], paperEvidence: [] };
-        const config = { configurable: { preprocessor: failingPreprocessor } };
-
-        const result = await preprocessEvidence(state, config);
-
-        expect(result.errors[0].phase).toBe(PHASES.PREPROCESS_EVIDENCE);
-        expect(result.errors[0].timestamp).toBeDefined();
-      });
-
-      it('sets preprocessedEvidence to empty result on error (not null)', async () => {
-        // This ensures retry logic can distinguish "not attempted" (null) from "failed" (empty)
+      it('writes no preprocessedEvidence on failure (nothing for the skip guard to latch onto)', async () => {
         const failingPreprocessor = {
           process: jest.fn().mockRejectedValue(new Error('API timeout'))
         };
@@ -262,14 +245,13 @@ describe('preprocess-nodes', () => {
         };
         const config = { configurable: { preprocessor: failingPreprocessor } };
 
-        const result = await preprocessEvidence(state, config);
+        const outcome = await preprocessEvidence(state, config).then(
+          (result) => ({ resolved: result }),
+          (error) => ({ rejected: error })
+        );
 
-        // Should have empty result, NOT null/undefined
-        expect(result.preprocessedEvidence).toBeDefined();
-        expect(result.preprocessedEvidence.items).toEqual([]);
-        expect(result.preprocessedEvidence.sessionId).toBe('error-test');
-        expect(result.preprocessedEvidence.stats.totalItems).toBe(0);
-        // NOTE: playerFocus assertion removed - playerFocus removed in SRP fix (Phase 3)
+        expect(outcome.resolved).toBeUndefined();
+        expect(outcome.rejected.message).toBe('API timeout');
       });
     });
 
