@@ -1187,7 +1187,11 @@ app.get('/api/health', (req, res) => {
 // server-side (lib/notion-client.js). The console SPA does not read it.
 app.get('/api/config', requireAuth, (req, res) => {
     res.json({
-        notionConfigured: Boolean(process.env.NOTION_TOKEN)
+        notionConfigured: Boolean(process.env.NOTION_TOKEN),
+        // The console enforces the same session-ID contract /start does, so it has
+        // to know when the opt-out is on — otherwise it would reject a harness id
+        // the route would have accepted.
+        allowNonstandardSessionId: process.env.ALLOW_NONSTANDARD_SESSION_ID === 'true'
     });
 });
 

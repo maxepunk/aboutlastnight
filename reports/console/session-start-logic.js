@@ -68,6 +68,36 @@
     return 'not-found';
   }
 
+  /**
+   * The report links a COMPLETE session should be offered instead of a Resume.
+   *
+   * Always offers the conventional path. A recorded outcome that names a DIFFERENT
+   * file is offered alongside it rather than instead of it: B1 (parseRawInput
+   * overwriting the sessionId channel) published session 071126's report as
+   * report-0711.html, and the director needs to see that mismatch rather than a 404.
+   *
+   * buildOutcomeRecord stores `outputPath` (an absolute filesystem path) and not
+   * `htmlUrl`, so derive the servable URL from its basename when htmlUrl is absent.
+   *
+   * @param {string} sessionId
+   * @param {object|null} lastOutcome - GET /checkpoint lastOutcome
+   * @returns {string[]} servable URLs, conventional path first
+   */
+  function buildReportLinks(sessionId, lastOutcome) {
+    if (typeof sessionId !== 'string' || sessionId.length === 0) return [];
+    const links = ['/outputs/report-' + sessionId + '.html'];
+    const outcome = lastOutcome || {};
+    if (outcome.outcome !== 'complete') return links;
+
+    let recorded = outcome.htmlUrl || null;
+    if (!recorded && typeof outcome.outputPath === 'string' && outcome.outputPath) {
+      const basename = outcome.outputPath.split(/[\\/]/).pop();
+      if (basename) recorded = '/outputs/' + basename;
+    }
+    if (recorded && links.indexOf(recorded) === -1) links.push(recorded);
+    return links;
+  }
+
   // H3: the order the graph actually interrupts in — the plain addEdge chain from
   // detectWhiteboard onward (lib/workflow/graph.js:539-568). `input-review` fires
   // INSIDE parseRawInput, which the graph reaches from checkpointAwaitContext, so it
@@ -93,6 +123,7 @@
   const api = {
     isValidSessionId,
     classifyCheckpointResponse,
+    buildReportLinks,
     SESSION_ID_PATTERN,
     CHECKPOINT_ORDER
   };

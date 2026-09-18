@@ -293,3 +293,29 @@ describe('isAllowedSessionId', () => {
     expect(isAllowedSessionId('1225')).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/config — the console enforces the session-ID contract client-side, so
+// the opt-out has to reach it or the two sides disagree about what /start accepts.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('GET /api/config allowNonstandardSessionId', () => {
+  afterEach(() => { delete process.env.ALLOW_NONSTANDARD_SESSION_ID; });
+
+  it('is false by default, so the console holds the MMDDYY contract', async () => {
+    const res = await send('GET', '/api/config');
+    expect(res.status).toBe(200);
+    expect(res.body.allowNonstandardSessionId).toBe(false);
+  });
+
+  it('is true exactly when the env var says true (read per request, not at boot)', async () => {
+    process.env.ALLOW_NONSTANDARD_SESSION_ID = 'true';
+    expect((await send('GET', '/api/config')).body.allowNonstandardSessionId).toBe(true);
+    process.env.ALLOW_NONSTANDARD_SESSION_ID = '1';
+    expect((await send('GET', '/api/config')).body.allowNonstandardSessionId).toBe(false);
+  });
+
+  it('still does not leak the Notion token', async () => {
+    const res = await send('GET', '/api/config');
+    expect(Object.keys(res.body).sort()).toEqual(['allowNonstandardSessionId', 'notionConfigured']);
+  });
+});

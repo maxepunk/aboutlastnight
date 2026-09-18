@@ -1,8 +1,9 @@
 /**
  * SessionStart Component
- * Session ID input (alphanumeric + hyphens), photos path, optional whiteboard path.
+ * Session ID input (the session date, MMDDYY + optional session digit — see
+ * session-start-logic.js), photos path, optional whiteboard path.
  * Browse buttons open FileBrowser modal for server-side path selection.
- * Start Fresh and Resume buttons.
+ * Start Fresh, and a Resume that classifies the session before it spends anything.
  * Exports to window.Console.SessionStart
  */
 
@@ -12,13 +13,24 @@ const { api: sessionApi } = window.Console;
 const { ACTIONS: SESSION_ACTIONS } = window.Console;
 const { CollapsibleSection } = window.Console.utils;
 const { FileBrowser } = window.Console;
+// Pure, node-tested (console/__tests__/session-start-logic.test.js). This component
+// is a thin consumer: it does not decide what a valid ID is or what a session state
+// means, it only renders the answer.
+const { isValidSessionId, classifyCheckpointResponse, buildReportLinks } =
+  window.Console.sessionStartLogic;
 
 function SessionStart({ dispatch, theme }) {
   const [sessionId, setSessionId] = React.useState('');
   const [photosPath, setPhotosPath] = React.useState('');
   const [whiteboardPath, setWhiteboardPath] = React.useState('');
   const [status, setStatus] = React.useState('');
+  // Report links rendered under the status line (the complete branch). Kept apart
+  // from `status` because they have to be real anchors, not text.
+  const [reportLinks, setReportLinks] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  // Mirrors the server's ALLOW_NONSTANDARD_SESSION_ID so this screen accepts exactly
+  // what POST /start accepts. Defaults to the strict contract until /api/config answers.
+  const [allowNonstandardId, setAllowNonstandardId] = React.useState(false);
   const [reporterName, setReporterName] = React.useState('');
   const [reportingMode, setReportingMode] = React.useState('on-site');
   const [guestReporterName, setGuestReporterName] = React.useState('');
@@ -30,8 +42,26 @@ function SessionStart({ dispatch, theme }) {
   const [browseInitialPath, setBrowseInitialPath] = React.useState('');
   const [browseTarget, setBrowseTarget] = React.useState(null); // 'photos' | 'whiteboard'
 
-  const isValid = /^[a-zA-Z0-9-]{1,30}$/.test(sessionId);
+  React.useEffect(() => {
+    sessionApi.getConfig()
+      .then((cfg) => setAllowNonstandardId(cfg && cfg.allowNonstandardSessionId === true))
+      .catch(() => { /* Unreachable config: hold the strict contract. */ });
+  }, []);
+
+  // B9 companion: the session ID is the session DATE (MMDDYY, plus one digit for a
+  // second session that day), not a label. The follow-up emailer builds every
+  // player's report link from it and data/<id>/ + outputs/report-<id>.html are named
+  // after it, so a typed "1221" or "march-15" splits one session's artifacts across
+  // directories — which already happened to 071126. POST /start rejects those now;
+  // this keeps the button from promising otherwise.
+  const isValid = isValidSessionId(sessionId, allowNonstandardId);
   const defaultPhotosPath = sessionId ? 'data/' + sessionId + '/photos' : '';
+
+  /** Clear whatever the last attempt left on screen. */
+  function resetStatus() {
+    setStatus('');
+    setReportLinks([]);
+  }
 
   /**
    * Build rawSessionInput from form fields
@@ -87,6 +117,7 @@ function SessionStart({ dispatch, theme }) {
   const handleStart = async () => {
     if (!isValid) return;
     setLoading(true);
+    resetStatus();
     setStatus('Starting fresh session...');
 
     try {
@@ -117,42 +148,73 @@ function SessionStart({ dispatch, theme }) {
   };
 
   /**
-   * Handle Resume — calls api.getCheckpoint, then dispatches accordingly
-   * If interrupted: SET_SESSION + CHECKPOINT_RECEIVED
-   * If not interrupted: calls api.resume
+   * Handle Resume — read GET /checkpoint, classify it, take exactly one action.
+   *
+   * The old guard only rejected a thread with NO currentPhase, so a COMPLETE
+   * session passed straight through to /resume and re-invoked the graph from START
+   * (B9): every checkpoint's skip condition already satisfied, so it never paused —
+   * Notion re-fetch, Haiku vision on every photo, Opus arcs, outline, article, and
+   * an overwritten published report, unattended, from one click on a button that
+   * does not sound destructive. The five branches below are the five things a
+   * session can be; only two of them may start work.
    */
   const handleResume = async () => {
     if (!isValid) return;
     setLoading(true);
+    resetStatus();
     setStatus('Checking session state...');
 
     try {
       const checkpoint = await sessionApi.getCheckpoint(sessionId);
 
-      // Session not found
-      if (checkpoint.error || (!checkpoint.interrupted && !checkpoint.currentPhase)) {
-        setStatus('No existing session found. Use "Start Fresh" instead.');
-        setLoading(false);
-        return;
-      }
+      switch (classifyCheckpointResponse(checkpoint)) {
+        case 'not-found':
+          setStatus('No existing session found. Use "Start Fresh" instead.');
+          setLoading(false);
+          return;
 
-      dispatch({ type: SESSION_ACTIONS.SET_SESSION, sessionId });
+        case 'at-checkpoint':
+          // H2: SET_THEME FIRST. The theme decides which template, which checkpoint
+          // editors, and which section shapes render; dispatched after
+          // CHECKPOINT_RECEIVED (or not at all) a resumed detective thread rendered
+          // an empty journalist Outline card with live Approve buttons.
+          dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
+          dispatch({ type: SESSION_ACTIONS.SET_SESSION, sessionId });
+          dispatch({
+            type: SESSION_ACTIONS.CHECKPOINT_RECEIVED,
+            checkpointType: checkpoint.checkpointType || checkpoint.checkpoint.type,
+            data: checkpoint.checkpoint,
+            phase: checkpoint.currentPhase
+          });
+          return;
 
-      if (checkpoint.interrupted && checkpoint.checkpoint) {
-        // Session is at a checkpoint — load it
-        dispatch({
-          type: SESSION_ACTIONS.CHECKPOINT_RECEIVED,
-          checkpointType: checkpoint.checkpointType || checkpoint.checkpoint.type,
-          data: checkpoint.checkpoint,
-          phase: checkpoint.currentPhase
-        });
-      } else {
-        // Not at a checkpoint — hand off a STREAMING resume to App. /resume is non-blocking
-        // now (returns {status:'processing'} and streams the result via SSE), and this
-        // component unmounts once sessionId is set, so it can't own the EventSource itself.
-        // RESUME_REQUESTED sets the session + processing + the pendingResume flag that App's
-        // effect picks up to drive the streaming resume.
-        dispatch({ type: SESSION_ACTIONS.RESUME_REQUESTED, sessionId });
+        case 'in-progress':
+          // H8: a run is holding the session lock — the director refreshed, slept the
+          // laptop, or lost the tunnel mid-call. POSTing anything here 409s; attach to
+          // the running stream instead. App owns the EventSource (this component
+          // unmounts as soon as sessionId is set).
+          dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
+          dispatch({ type: SESSION_ACTIONS.ATTACH_REQUESTED, sessionId });
+          return;
+
+        case 'complete':
+          // B9: do NOT resume. Offer the report and the two safe routes instead.
+          setStatus(
+            'This session is complete. Use Start Fresh for a new run, or Resume with a rollback point.'
+          );
+          setReportLinks(buildReportLinks(sessionId, checkpoint.lastOutcome));
+          setLoading(false);
+          return;
+
+        case 'resumable':
+        default:
+          // Stopped mid-pipeline and nothing is running: resuming re-enters at the
+          // saved state. /resume is non-blocking (returns {status:'processing'} and
+          // streams the result via SSE) and this component unmounts once sessionId is
+          // set, so App drives it off the pendingResume flag.
+          dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
+          dispatch({ type: SESSION_ACTIONS.RESUME_REQUESTED, sessionId });
+          return;
       }
     } catch (err) {
       setStatus('Connection failed. Is the server running?');
@@ -169,7 +231,8 @@ function SessionStart({ dispatch, theme }) {
   return React.createElement('div', { className: 'session-start fade-in' },
     React.createElement('h2', { className: 'session-start__title' }, 'Session'),
     React.createElement('p', { className: 'session-start__subtitle' },
-      'Enter a session ID (e.g. 1221, march-15-matinee) to start or resume a workflow.'
+      'Session ID is the session date as MMDDYY (e.g. 091826). Second session the same day: ' +
+      'add a digit (0918262). The follow-up email links to /outputs/report-<id>.html.'
     ),
 
     // Theme selector
@@ -206,12 +269,12 @@ function SessionStart({ dispatch, theme }) {
         id: 'session-id',
         type: 'text',
         className: 'input input-mono',
-        placeholder: '1221',
+        placeholder: '091826',
         value: sessionId,
         onChange: (e) => {
           const val = e.target.value.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 30);
           setSessionId(val);
-          setStatus('');
+          resetStatus();
         },
         onKeyDown: handleKeyDown,
         maxLength: 30,
@@ -386,6 +449,24 @@ function SessionStart({ dispatch, theme }) {
     ),
 
     status && React.createElement('p', { className: 'session-start__status' }, status),
+
+    // B9: a complete session is offered its report instead of a Resume that would
+    // re-run the pipeline. Real anchors, opened in a new tab so the console survives.
+    reportLinks.length > 0 && React.createElement('p', { className: 'session-start__status' },
+      'Report: ',
+      reportLinks.map(function (href, i) {
+        return React.createElement(React.Fragment, { key: href },
+          i > 0 ? ' · ' : null,
+          React.createElement('a', {
+            href: href,
+            target: '_blank',
+            rel: 'noopener',
+            'aria-label': 'Open the published report for this session in a new tab'
+          }, href)
+        );
+      }),
+      ' (opens in a new tab)'
+    ),
 
     // FileBrowser modal
     React.createElement(FileBrowser, {

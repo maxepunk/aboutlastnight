@@ -117,3 +117,56 @@ describe('classifyCheckpointResponse', () => {
       .toBe('resumable');
   });
 });
+
+describe('buildReportLinks', () => {
+  // The B9 payoff screen: a complete session is offered its report instead of a
+  // Resume that would re-run the pipeline. The conventional path is always offered;
+  // a recorded outcome naming a DIFFERENT file is offered alongside it, because
+  // B1 (parseRawInput overwriting the sessionId channel) published session 071126's
+  // report as report-0711.html and that mismatch is exactly what the director needs
+  // to see rather than a 404.
+  const { buildReportLinks } = require('../session-start-logic');
+
+  it('offers the conventional report path when there is no recorded outcome', () => {
+    expect(buildReportLinks('091826', null)).toEqual(['/outputs/report-091826.html']);
+    expect(buildReportLinks('091826', undefined)).toEqual(['/outputs/report-091826.html']);
+  });
+
+  it('adds nothing when the recorded outcome names the same file', () => {
+    expect(buildReportLinks('091826', {
+      outcome: 'complete',
+      htmlUrl: '/outputs/report-091826.html'
+    })).toEqual(['/outputs/report-091826.html']);
+  });
+
+  it('adds the recorded htmlUrl when it names a different file', () => {
+    expect(buildReportLinks('071126', {
+      outcome: 'complete',
+      htmlUrl: '/outputs/report-0711.html'
+    })).toEqual(['/outputs/report-071126.html', '/outputs/report-0711.html']);
+  });
+
+  it('derives the link from outputPath when the record carries no htmlUrl', () => {
+    // buildOutcomeRecord stores outputPath (absolute, Windows) and not htmlUrl.
+    expect(buildReportLinks('071126', {
+      outcome: 'complete',
+      outputPath: 'C:\\Users\\dir\\reports\\outputs\\report-0711.html'
+    })).toEqual(['/outputs/report-071126.html', '/outputs/report-0711.html']);
+    expect(buildReportLinks('071126', {
+      outcome: 'complete',
+      outputPath: '/home/x/reports/outputs/report-0711.html'
+    })).toEqual(['/outputs/report-071126.html', '/outputs/report-0711.html']);
+  });
+
+  it('ignores an outcome that is not a completion', () => {
+    expect(buildReportLinks('091826', { outcome: 'failed', outputPath: '/x/report-other.html' }))
+      .toEqual(['/outputs/report-091826.html']);
+    expect(buildReportLinks('091826', { outcome: 'interrupted' }))
+      .toEqual(['/outputs/report-091826.html']);
+  });
+
+  it('returns nothing without a session id', () => {
+    expect(buildReportLinks('', null)).toEqual([]);
+    expect(buildReportLinks(null, null)).toEqual([]);
+  });
+});
