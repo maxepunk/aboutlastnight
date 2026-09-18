@@ -35,10 +35,27 @@ const CHECKPOINT_COMPONENTS = {
  * ref so the completion branches can close the stream.
  */
 function makeSseHandler(dispatch, sseRef) {
+  // H9: a mid-run drop is non-terminal now (api.js leaves the stream open so
+  // EventSource reconnects), so the log has to say both halves out loud or the
+  // director cannot tell a stall from a reconnect. One handler per run, so this
+  // latch is per-run.
+  let dropped = false;
+
   return (event) => {
     switch (event.type) {
       case 'connected':
         dispatch({ type: APP_ACTIONS.SSE_CONNECTED });
+        if (dropped) {
+          dropped = false;
+          dispatch({ type: APP_ACTIONS.SSE_PROGRESS, message: 'Reconnected' });
+        }
+        break;
+      case 'reconnecting':
+        dropped = true;
+        dispatch({
+          type: APP_ACTIONS.SSE_PROGRESS,
+          message: event.data.message || 'Connection interrupted, reconnecting…'
+        });
         break;
       case 'progress':
         dispatch({
@@ -150,6 +167,40 @@ function eventSourceClose(sseRef) {
   }
 }
 
+/**
+ * The ONLY writer of sseRef.current besides eventSourceClose: closes whatever the
+ * ref held before taking the new stream.
+ *
+ * Every approve/resume/rollback used to assign the ref directly, and only the
+ * terminal SSE branches ever closed it — so a 400/404/409, or a 'complete' that
+ * arrived during the await, left the previous EventSource open and untracked.
+ * Each leak duplicates every later dispatch, and about six of them exhaust an
+ * HTTP/1.1 tab's connections and stall the console.
+ */
+function assignSse(sseRef, eventSource) {
+  if (sseRef.current && sseRef.current !== eventSource) sseRef.current.close();
+  sseRef.current = eventSource;
+}
+
+/**
+ * Handle a non-blocking POST that came back with an error body.
+ *
+ * A 409 from the session lock means a run we are not attached to is already going
+ * (H8) — the director refreshed, or two tabs are open. Attaching to its stream is
+ * the useful answer; a banner on the session form, with progress hidden, was not.
+ * The OTHER 409 is Task 1's B9 refusal: it names currentPhase 'complete' and is a
+ * real error — that thread must not be resumed.
+ */
+function handlePostFailure(dispatch, sseRef, sessionId, response) {
+  if (response.status === 409 && response.currentPhase !== 'complete') {
+    // streamingAttach closes the current stream before opening its own.
+    dispatch({ type: APP_ACTIONS.ATTACH_REQUESTED, sessionId });
+    return;
+  }
+  eventSourceClose(sseRef);
+  dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
+}
+
 function App() {
   const [state, dispatch] = useAppState();
   const [rollbackTarget, setRollbackTarget] = React.useState(null);
@@ -157,12 +208,7 @@ function App() {
 
   // Cleanup EventSource on unmount
   React.useEffect(() => {
-    return () => {
-      if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
-      }
-    };
+    return () => eventSourceClose(sseRef);
   }, []);
 
   // Check auth on mount
@@ -188,6 +234,17 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.pendingResume]);
 
+  // H8 attach hand-off: SessionStart found a run already in flight, or a POST came
+  // back 409 against the session lock. Same one-shot pattern as pendingResume.
+  React.useEffect(() => {
+    if (state.pendingAttach && state.pendingAttach.sessionId) {
+      const sid = state.pendingAttach.sessionId;
+      dispatch({ type: APP_ACTIONS.ATTACH_CLEAR_PENDING });
+      streamingAttach(sid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingAttach]);
+
   /**
    * Handle logout
    */
@@ -207,13 +264,14 @@ function App() {
   const handleApprove = async (payload) => {
     if (!state.sessionId) return;
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
+    eventSourceClose(sseRef);
     try {
       const { response, eventSource } = await appApi.approve(
         state.sessionId, payload, makeSseHandler(dispatch, sseRef)
       );
-      sseRef.current = eventSource;
+      assignSse(sseRef, eventSource);
       if (response.error) {
-        dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
+        handlePostFailure(dispatch, sseRef, state.sessionId, response);
       }
     } catch (err) {
       dispatch({
@@ -230,14 +288,39 @@ function App() {
   const streamingResume = async (sessionId) => {
     if (!sessionId) return;
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
+    eventSourceClose(sseRef);
     try {
       const { response, eventSource } = await appApi.resume(sessionId, makeSseHandler(dispatch, sseRef));
-      sseRef.current = eventSource;
+      assignSse(sseRef, eventSource);
       if (response.error) {
-        dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
+        handlePostFailure(dispatch, sseRef, sessionId, response);
       }
     } catch (err) {
       dispatch({ type: APP_ACTIONS.SSE_ERROR, message: 'Resume failed: ' + (err.message || 'Unknown error') });
+    }
+  };
+
+  /**
+   * Attach to a run already in flight (H8): open its progress stream, post nothing.
+   * The only path that reaches a run the console did not itself start — after a
+   * refresh, a laptop sleep, or a tunnel drop during a long model call.
+   */
+  const streamingAttach = async (sessionId) => {
+    if (!sessionId) return;
+    dispatch({ type: APP_ACTIONS.PROCESSING_START });
+    eventSourceClose(sseRef);
+    try {
+      const { eventSource } = await appApi.attach(sessionId, makeSseHandler(dispatch, sseRef));
+      assignSse(sseRef, eventSource);
+      dispatch({
+        type: APP_ACTIONS.SSE_PROGRESS,
+        message: 'Attached to the run already in progress for this session. Waiting for its next checkpoint…'
+      });
+    } catch (err) {
+      dispatch({
+        type: APP_ACTIONS.SSE_ERROR,
+        message: 'Could not attach to the run in progress: ' + (err.message || 'Unknown error')
+      });
     }
   };
 
@@ -247,13 +330,14 @@ function App() {
   const streamingRollback = async (target, overrides) => {
     if (!state.sessionId) return;
     dispatch({ type: APP_ACTIONS.PROCESSING_START });
+    eventSourceClose(sseRef);
     try {
       const { response, eventSource } = await appApi.rollback(
         state.sessionId, target, overrides, makeSseHandler(dispatch, sseRef)
       );
-      sseRef.current = eventSource;
+      assignSse(sseRef, eventSource);
       if (response.error) {
-        dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
+        handlePostFailure(dispatch, sseRef, state.sessionId, response);
       }
     } catch (err) {
       dispatch({ type: APP_ACTIONS.SET_ERROR, message: 'Rollback failed: ' + (err.message || 'Unknown error') });

@@ -37,7 +37,10 @@ const initialState = {
   completedResult: null,
   // Hand-off: set by SessionStart's reconnect-resume so App drives the streaming resume
   // (SessionStart unmounts once sessionId is set, so it can't own the EventSource).
-  pendingResume: null
+  pendingResume: null,
+  // H8 hand-off: same shape, but for ATTACHING to a run already in flight —
+  // open the stream, post nothing.
+  pendingAttach: null
 };
 
 const ACTIONS = {
@@ -46,6 +49,8 @@ const ACTIONS = {
   SET_SESSION: 'SET_SESSION',
   RESUME_REQUESTED: 'RESUME_REQUESTED',
   RESUME_CLEAR_PENDING: 'RESUME_CLEAR_PENDING',
+  ATTACH_REQUESTED: 'ATTACH_REQUESTED',
+  ATTACH_CLEAR_PENDING: 'ATTACH_CLEAR_PENDING',
   CHECKPOINT_RECEIVED: 'CHECKPOINT_RECEIVED',
   PROCESSING_START: 'PROCESSING_START',
   SSE_CONNECTED: 'SSE_CONNECTED',
@@ -95,6 +100,27 @@ function reducer(state, action) {
 
     case ACTIONS.RESUME_CLEAR_PENDING:
       return { ...state, pendingResume: null };
+
+    case ACTIONS.ATTACH_REQUESTED:
+      // H8: a run is already in flight for this session (the director refreshed,
+      // slept the laptop, or lost the tunnel mid-Opus; or a POST just came back 409
+      // against the session lock). Enter processing and flag App to ride that run's
+      // progress stream. Mirrors RESUME_REQUESTED exactly EXCEPT that the effect it
+      // triggers posts nothing — posting is what produced the 409, and on a complete
+      // thread it would re-run the whole paid pipeline.
+      return {
+        ...state,
+        sessionId: action.sessionId,
+        pendingAttach: { sessionId: action.sessionId },
+        processing: true,
+        progressMessages: [],
+        eventLog: [],
+        llmActivity: null,
+        error: null
+      };
+
+    case ACTIONS.ATTACH_CLEAR_PENDING:
+      return { ...state, pendingAttach: null };
 
     case ACTIONS.SET_THEME:
       return { ...state, theme: action.theme };
