@@ -799,13 +799,14 @@ async function generateOutline(state, config) {
   const sdk = getSdkClient(config, 'generateOutline');
   const promptBuilder = getPromptBuilder(config, state);
 
-  // Get arc analysis from cache or reconstruct from narrativeArcs
-  const arcAnalysis = state._arcAnalysisCache || {
-    narrativeArcs: state.narrativeArcs || [],
-    characterPlacementOpportunities: {},
-    rosterCoverage: { featured: [], mentioned: [], needsPlacement: [] },
-    heroImageSuggestion: null
-  };
+  // Arc metadata for the outline prompt. The cache carries the ANALYSIS
+  // (synthesisNotes, interweavingPlan); the arcs live in their own channel and
+  // were never in the cache, so the old `state._arcAnalysisCache || {...}`
+  // fallback never fired and <arc-metadata> rendered [] in every real session.
+  // `timing` and `architecture` are our own bookkeeping and are not the model's
+  // business (<arc-analysis> dumped them verbatim).
+  const { timing, architecture, ...cache } = state._arcAnalysisCache || {};
+  const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
 
   // Helper to extract filename from photo (handles string path or object)
   const getPhotoFilename = (photo) =>
