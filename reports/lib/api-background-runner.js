@@ -73,11 +73,22 @@ function runGraphInBackground({
           _emitComplete(sessionId, response);
         } catch (error) {
           console.error(`[${new Date().toISOString()}] Background workflow error for session ${sessionId}:`, error);
+          // H10: the director works over the tunnel and cannot read server logs, so
+          // the real cause has to travel on the payload. `error` stays generic (the
+          // console's headline); `details` carries the thrown message, which for SDK
+          // failures already names the subtype, the HTTP status, the call label and
+          // the remedy (e.g. "re-authenticate with `claude /login`"). sdkSubtype and
+          // apiErrorStatus ride along when present so the client can label the failure
+          // without parsing prose. `details` also lands on the persisted outcome
+          // (buildOutcomeRecord), so it survives a dropped SSE.
           const failedResponse = {
             sessionId,
             currentPhase: PHASES.ERROR,
             error: 'Internal server error',
-            details: 'Background operation failed. Check server logs.'
+            details: error?.message || 'Background operation failed. Check server logs.',
+            errorName: error?.name,
+            ...(error?.sdkSubtype && { sdkSubtype: error.sdkSubtype }),
+            ...(typeof error?.apiErrorStatus === 'number' && { apiErrorStatus: error.apiErrorStatus })
           };
           _record(sessionId, _buildOutcome(failedResponse));
           _emitComplete(sessionId, failedResponse);
