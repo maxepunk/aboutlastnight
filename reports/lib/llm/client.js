@@ -282,6 +282,7 @@ async function sdkQueryImpl({
     let messageCount = 0;
     let deltaCharCount = 0;   // running streamed-char total for the token-count cue
     let ttftMs = null;        // time-to-first-token (first non-empty delta)
+    let lastAssistantError = null;  // e.g. 'authentication_failed' — names the reason on an is_error result
 
     // Emit llm_start event with FULL prompt (no truncation)
     if (onProgress) {
@@ -334,6 +335,12 @@ async function sdkQueryImpl({
           });
         }
         continue;  // partials are not assistant/result messages; skip the rest of the loop body
+      }
+
+      // Track the most recent assistant-level error (e.g. 'authentication_failed') so a
+      // subsequent is_error result can name the real reason, not just an HTTP status.
+      if (msg.type === 'assistant' && msg.error) {
+        lastAssistantError = typeof msg.error === 'string' ? msg.error : (msg.error?.type || String(msg.error));
       }
 
       // Log context window on session init (verify 1M beta is active)
@@ -392,6 +399,12 @@ async function sdkQueryImpl({
           // Surface assistant-message errors (max_output_tokens, rate_limit, etc.) so
           // the progress channel can distinguish them from the truncated text response.
           ...(msg.type === 'assistant' && msg.error && { assistantError: msg.error }),
+          // A result can be subtype:'success' with is_error:true (terminal API failure,
+          // e.g. expired OAuth → 401). Forward flag + status so the bridge renders ❌, not ✅.
+          ...(msg.type === 'result' && msg.is_error && {
+            resultIsError: true,
+            ...(typeof msg.api_error_status === 'number' && { apiErrorStatus: msg.api_error_status })
+          }),
           // Pass rate_limit_info (status, utilization, type) through so the formatter
           // can render meaningful diagnostics rather than the bare event name.
           ...(msg.type === 'rate_limit_event' && { rateLimitInfo: msg.rate_limit_info }),
@@ -457,6 +470,39 @@ async function sdkQueryImpl({
           structuredOutputPresent: msg.structured_output !== undefined && msg.structured_output !== null,
           resultTextLength: typeof msg.result === 'string' ? msg.result.length : 0
         };
+
+        // A "success" result flagged is_error is a terminal API failure the CLI wrapped
+        // after exhausting its internal api_retry attempts (live-verified 2026-07-22:
+        // expired OAuth → assistant error 'authentication_failed', then subtype:'success'
+        // + is_error:true + api_error_status:401 with the 401 text in msg.result). That
+        // text is NOT model output: extracting it yields a misleading schema-mismatch
+        // error, and a text-mode call would silently return the error string as content.
+        // Throw the real failure, enriched so isTransientError classifies by status
+        // (401/403 permanent → surface to operator; 429/5xx transient → node auto-retry).
+        if (msg.is_error) {
+          const status = typeof msg.api_error_status === 'number' ? msg.api_error_status : null;
+          const reason = lastAssistantError || 'api_error_result';
+          const preview = typeof msg.result === 'string' ? msg.result.slice(0, 300) : '';
+          const authHint = (status === 401 || lastAssistantError === 'authentication_failed')
+            ? ' — Claude Code credentials expired/invalid; re-authenticate with `claude /login`'
+            : '';
+          const resultErr = new Error(
+            `SDK result error (${reason}${status !== null ? `, HTTP ${status}` : ''}) - ${progressLabel}: ${preview}${authHint}`
+          );
+          resultErr.sdkSubtype = reason;            // preserved through the abort-race catch (see below)
+          if (status !== null) resultErr.apiErrorStatus = status;
+          if (onProgress) {
+            onProgress({
+              type: 'llm_error',
+              elapsed: (Date.now() - startTime) / 1000,
+              error: resultErr.message,
+              errorName: resultErr.name,
+              jsonSchema,
+              ...sdkDiagnostics
+            });
+          }
+          throw resultErr;
+        }
 
         let finalResult;
         let outputChannel = null;

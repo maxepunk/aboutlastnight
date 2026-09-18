@@ -68,3 +68,22 @@ describe('client onProgress forward — mirror_error & notification', () => {
     expect(events.find(e => e.subtype === 'notification').notification).toEqual({ text: 'context window 80% full', priority: 'high' });
   });
 });
+
+describe('client onProgress forward — is_error result', () => {
+  afterEach(() => clearMockQuery());
+  it('forwards resultIsError + apiErrorStatus on the result event (call throws)', async () => {
+    // Self-contained (captureForward appends its own success result and expects resolution;
+    // an is_error result makes sdkQueryImpl throw).
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'result', subtype: 'success', is_error: true, api_error_status: 401, result: 'Failed to authenticate. API Error: 401' }
+    ]));
+    try {
+      await sdkQueryImpl({ prompt: 'x', model: 'haiku', onProgress: (e) => events.push(e) });
+    } catch { /* expected */ }
+    const resultEvent = events.find(e => e.type === 'result');
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent.resultIsError).toBe(true);
+    expect(resultEvent.apiErrorStatus).toBe(401);
+  });
+});

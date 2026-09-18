@@ -315,6 +315,77 @@ describe('sdkQueryImpl contract', () => {
   });
 });
 
+describe('sdkQueryImpl is_error result handling (terminal API failure wrapped as success)', () => {
+  const { isTransientError } = require('../retry');
+  afterEach(() => clearMockQuery());
+
+  // Live-verified shape (2026-07-22, expired-OAuth probe): the CLI exhausts its internal
+  // api_retry attempts, emits an assistant msg with error:'authentication_failed', then a
+  // result with subtype:'success' BUT is_error:true + api_error_status:401 whose .result
+  // text is the 401 error string — NOT model output.
+  const AUTH_FAIL_TEXT = 'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth access token has expired. Re-authenticate to continue."},"request_id":null}';
+  const authFailureStream = () => makeAsyncIterable([
+    { type: 'assistant', error: 'authentication_failed', message: { content: [{ type: 'text', text: AUTH_FAIL_TEXT }] } },
+    { type: 'result', subtype: 'success', is_error: true, api_error_status: 401, result: AUTH_FAIL_TEXT, stop_reason: 'stop_sequence', duration_api_ms: 0, usage: { output_tokens: 0 } }
+  ]);
+
+  test('schema call: throws enriched auth error with re-login hint, NOT a schema-extraction error', async () => {
+    setMockQuery(authFailureStream);
+
+    let thrown;
+    try {
+      await sdkQueryImpl({ prompt: 'test', jsonSchema: SIMPLE_SCHEMA, model: 'haiku', label: 'auth-test' });
+    } catch (e) { thrown = e; }
+
+    expect(thrown).toBeDefined();
+    expect(thrown).not.toBeInstanceOf(StructuredOutputExtractionError);
+    expect(thrown.message).toMatch(/authentication_failed/);
+    expect(thrown.message).toMatch(/HTTP 401/);
+    expect(thrown.message).toMatch(/claude \/login/);
+    expect(thrown.apiErrorStatus).toBe(401);
+    expect(isTransientError(thrown)).toBe(false);
+  });
+
+  test('text call (no schema): throws instead of returning the error text as content', async () => {
+    setMockQuery(authFailureStream);
+    await expect(
+      sdkQueryImpl({ prompt: 'test', model: 'haiku', label: 'auth-text-test' })
+    ).rejects.toThrow(/authentication_failed/);
+  });
+
+  test('emits llm_error (not llm_complete) with the diagnostics envelope', async () => {
+    setMockQuery(authFailureStream);
+    const events = [];
+
+    try {
+      await sdkQueryImpl({ prompt: 'test', jsonSchema: SIMPLE_SCHEMA, model: 'haiku', label: 'auth-envelope-test', onProgress: (m) => events.push(m) });
+    } catch { /* expected */ }
+
+    expect(events.filter(e => e.type === 'llm_complete')).toHaveLength(0);
+    const errEvents = events.filter(e => e.type === 'llm_error');
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].error).toMatch(/authentication_failed/);
+    expect(errEvents[0].apiErrorStatus).toBe(401);          // sdkDiagnostics envelope present
+    expect(errEvents[0].structuredOutputPresent).toBe(false);
+  });
+
+  test('a transient-status is_error result (HTTP 529) stays auto-retryable', async () => {
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'result', subtype: 'success', is_error: true, api_error_status: 529, result: 'API Error: 529 overloaded' }
+    ]));
+
+    let thrown;
+    try {
+      await sdkQueryImpl({ prompt: 'test', model: 'haiku', label: 'overload-test' });
+    } catch (e) { thrown = e; }
+
+    expect(thrown).toBeDefined();
+    expect(thrown.apiErrorStatus).toBe(529);
+    expect(thrown.message).not.toMatch(/claude \/login/);   // hint is auth-specific
+    expect(isTransientError(thrown)).toBe(true);
+  });
+});
+
 describe('sanitizeSchemaForSdk (#277 channel-skip guardrail)', () => {
   const { sanitizeSchemaForSdk } = require('../client');
 

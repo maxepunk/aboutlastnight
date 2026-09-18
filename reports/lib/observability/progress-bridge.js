@@ -309,10 +309,15 @@ function formatProgressEvent(msg) {
 
     case 'result': {
       const sub = msg.subtype || 'success';
-      const ok = sub === 'success';
+      // subtype:'success' + resultIsError is a terminal API failure the CLI wrapped
+      // (e.g. expired OAuth → 401); client.js forwards the flag + apiErrorStatus.
+      const ok = sub === 'success' && !msg.resultIsError;
       return {
         icon: ok ? PROGRESS_ICONS.result : PROGRESS_ICONS.error,
-        shortText: ok ? 'Complete' : `failed: ${sub}`,
+        shortText: ok ? 'Complete'
+          : msg.resultIsError
+            ? `failed: api error${typeof msg.apiErrorStatus === 'number' ? ` (HTTP ${msg.apiErrorStatus})` : ''}`
+            : `failed: ${sub}`,
         detailText: ''
       };
     }

@@ -112,6 +112,14 @@ describe('formatProgressEvent — failures stop hiding', () => {
     expect(out.icon).toBe(PROGRESS_ICONS.error);
     expect(out.shortText).toBe('failed: error_max_budget_usd');
   });
+  it('a success-subtype result flagged is_error renders as failure, not Complete', () => {
+    // Terminal API failure (e.g. expired OAuth → 401) arrives as subtype:'success' +
+    // is_error:true; client forwards it as resultIsError + apiErrorStatus.
+    const out = formatProgressEvent({ type: 'result', subtype: 'success', resultIsError: true, apiErrorStatus: 401 });
+    expect(out.icon).toBe(PROGRESS_ICONS.error);
+    expect(out.shortText).not.toBe('Complete');
+    expect(out.shortText).toMatch(/401/);
+  });
   it('mirror_error renders with the error icon and its message', () => {
     const out = formatProgressEvent({ type: 'system', subtype: 'mirror_error', mirrorError: 'disk write failed' });
     expect(out.icon).toBe(PROGRESS_ICONS.error);
