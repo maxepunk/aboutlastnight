@@ -380,6 +380,34 @@ function isAllowedSessionId(id) {
 }
 
 /**
+ * Shape the terminal (non-interrupted) response the /approve, /resume and
+ * /rollback completions deliver over SSE. ONE shaper for all three.
+ *
+ * H5: `outputPath` is an absolute filesystem path under outputs/.
+ * The console's "View Report" button opened it directly, so the browser resolved
+ * it relatively, hit the /console/* catch-all, and opened a second copy of the
+ * console. `htmlUrl` is the same file as a path the browser can actually GET --
+ * outputs/ is served by the root static mount and is not denied by static-guard.
+ *
+ * @param {object} result - graph.invoke() result
+ * @param {string} sessionId
+ * @param {object} [extra] - endpoint-specific fields (e.g. previousPhase)
+ * @returns {object}
+ */
+function buildCompletionResponse(result, sessionId, extra = {}) {
+    const response = { sessionId, ...extra, currentPhase: result.currentPhase };
+    if (result.currentPhase === PHASES.COMPLETE) {
+        response.assembledHtml = result.assembledHtml;
+        response.validationResults = result.validationResults;
+        response.outputPath = result.outputPath;
+        response.photosCopied = result.photosCopied;
+        if (result.outputPath) response.htmlUrl = '/outputs/' + path.basename(result.outputPath);
+    }
+    if (result.errors?.length > 0) response.errors = result.errors;
+    return response;
+}
+
+/**
  * Build complete checkpoint data by merging state-based data with interrupt payload
  *
  * The interrupt() call only includes data explicitly passed to checkpointInterrupt().
@@ -940,17 +968,7 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                         previousPhase
                     };
                 }
-                const response = { sessionId, previousPhase, currentPhase: result.currentPhase };
-                if (result.currentPhase === PHASES.COMPLETE) {
-                    response.assembledHtml = result.assembledHtml;
-                    response.validationResults = result.validationResults;
-                    response.outputPath = result.outputPath;
-                    response.photosCopied = result.photosCopied;
-                }
-                if (result.errors?.length > 0) {
-                    response.errors = result.errors;
-                }
-                return response;
+                return buildCompletionResponse(result, sessionId, { previousPhase });
             },
             res,
             inFlightTasks,
@@ -1045,10 +1063,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
                         buildCompleteCheckpointData(getInterruptData(graphState), graphState.values),
                         result.currentPhase
                       )
-                    : { sessionId, currentPhase: result.currentPhase };
-                if (!interrupted && result.errors?.length > 0) {
-                    base.errors = result.errors;
-                }
+                    : buildCompletionResponse(result, sessionId);
                 return { ...base, rolledBackTo: rollbackTo, fieldsCleared: ROLLBACK_CLEARS[rollbackTo] };
             },
             res,
@@ -1115,17 +1130,7 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
                     const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
                     return buildInterruptResponse(sessionId, checkpointData, result.currentPhase);
                 }
-                const response = { sessionId, currentPhase: result.currentPhase };
-                if (result.currentPhase === PHASES.COMPLETE) {
-                    response.assembledHtml = result.assembledHtml;
-                    response.validationResults = result.validationResults;
-                    response.outputPath = result.outputPath;
-                    response.photosCopied = result.photosCopied;
-                }
-                if (result.errors?.length > 0) {
-                    response.errors = result.errors;
-                }
-                return response;
+                return buildCompletionResponse(result, sessionId);
             },
             res,
             inFlightTasks
@@ -1387,4 +1392,4 @@ process.on('SIGINT', async () => {
 
 // Export helpers for testing. `app` is exported so integration tests can boot the
 // real route table over http (listen() stays behind the require.main guard above).
-module.exports = { app, isAllowedSessionId, buildResumePayload, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
+module.exports = { app, isAllowedSessionId, buildResumePayload, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
