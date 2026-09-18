@@ -93,11 +93,64 @@
     return pi <= ci;
   }
 
+  /**
+   * H10: build the event-log line for an SSE `llm_error`.
+   *
+   * app.js hardcoded "Extraction failed … (channel=text_fallback, …)" for every
+   * one of these, so the two failures that actually strand a run — an expired
+   * Claude Code token (subtype:success + is_error + HTTP 401) and any other
+   * terminal SDK result error — reached the director described as a schema
+   * problem. lib/llm/client.js emits llm_error on BOTH paths and names which via
+   * `errorName`, so read it. The channel is only reported when the payload has
+   * one (the llm_error diagnostics envelope in progress-bridge.js does not carry
+   * `channel`; llm_complete does).
+   *
+   * @param {object|null} data - SSE llm_error payload
+   * @returns {string}
+   */
+  function formatLlmErrorMessage(data) {
+    const d = data || {};
+    const label = d.errorName === 'StructuredOutputExtractionError'
+      ? 'Extraction failed'
+      : 'Model call failed';
+    const channel = d.diagnostics && d.diagnostics.channel;
+    return `${label}: ${d.error || 'unknown'}` + (channel ? ` (channel=${channel})` : '');
+  }
+
+  /**
+   * H10: build the failure-card message for an SSE `failed` payload.
+   *
+   * The runner sends a deliberately generic `error` ('Internal server error') and
+   * puts the thrown message — which already names the SDK subtype, the HTTP
+   * status, the call label and the remedy — on `details`. app.js led with `error`,
+   * so the director over the tunnel, who cannot read server logs, got only
+   * "Internal server error" with the cause appended after an em dash if at all.
+   * Lead with `details`.
+   *
+   * `errors` is an append-only channel: the LAST entry is the failure that ended
+   * the run. app.js read [0], which on a revision loop is an earlier, survived
+   * error.
+   *
+   * @param {object|null} data - SSE failed payload
+   * @returns {string}
+   */
+  function formatFailureMessage(data) {
+    const d = data || {};
+    const list = Array.isArray(d.errors) ? d.errors : [];
+    const last = list.length > 0 ? list[list.length - 1] : null;
+    const lastMessage = last && typeof last === 'object' ? last.message : last;
+    const headline = d.details || d.error || lastMessage || 'Workflow failed';
+    const status = typeof d.apiErrorStatus === 'number' ? `HTTP ${d.apiErrorStatus}` : null;
+    return status && !headline.includes(status) ? `${headline} (${status})` : headline;
+  }
+
   const api = {
     applyLlmStart,
     applyLlmDelta,
     applyLlmComplete,
     applyLlmFailure,
+    formatLlmErrorMessage,
+    formatFailureMessage,
     appendEvent,
     describePhase,
     phaseOrder,

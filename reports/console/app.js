@@ -12,6 +12,8 @@ const { useAppState, ACTIONS: APP_ACTIONS, LoginOverlay, SessionStart } = window
 const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
 const { RollbackPanel, CompletionView } = window.Console;
 const { CHECKPOINT_LABELS } = window.Console.utils;
+// H10 message derivation (pure, node-tested in __tests__/unit/llm-stream-logic.test.js).
+const { formatLlmErrorMessage, formatFailureMessage } = window.Console.llmStreamLogic;
 
 // Checkpoint type -> specific component mapping (Batch 3B.3 + 3B.4 + 3B.5 + 3B.6)
 const CHECKPOINT_COMPONENTS = {
@@ -70,10 +72,11 @@ function makeSseHandler(dispatch, sseRef) {
         });
         break;
       case 'llm_error':
-        // Emitted by client.js when the SDK returned success but structured-output
-        // extraction failed (typically SDK#277 with a schema-invalid text response).
-        // Treat like llm_complete from a UI-spinner perspective (the LLM call is over)
-        // and surface the diagnostic envelope as a progress message so the dev sees it.
+        // client.js emits this on TWO paths: structured-output extraction failed
+        // (SDK#277), and a terminal SDK result error (expired token, 429, 5xx).
+        // Either way the LLM call is over, so clear the spinner like llm_complete
+        // and log the message. H10: the label used to be hardcoded "Extraction
+        // failed"; it is derived from errorName now.
         dispatch({
           type: APP_ACTIONS.SSE_LLM_COMPLETE,
           response: null,
@@ -81,7 +84,7 @@ function makeSseHandler(dispatch, sseRef) {
         });
         dispatch({
           type: APP_ACTIONS.SSE_PROGRESS,
-          message: `Extraction failed: ${event.data.error || 'unknown'} (channel=text_fallback, stop=${event.data.diagnostics?.stopReason || '?'}, structuredOutputPresent=${event.data.diagnostics?.structuredOutputPresent})`
+          message: formatLlmErrorMessage(event.data)
         });
         break;
       case 'complete':
@@ -122,12 +125,10 @@ function makeSseHandler(dispatch, sseRef) {
         dispatch({ type: APP_ACTIONS.SSE_COMPLETE });
         dispatch({
           type: APP_ACTIONS.SSE_LLM_FAILURE,
-          error: (event.data.error
-            // errors[0].message covers nodes that RETURN {currentPhase:'error', errors:[...]}
-            // (server.js graph-error path) with no flat error/details field.
-            || (event.data.errors && event.data.errors[0] && event.data.errors[0].message)
-            || 'Workflow failed') +
-            (event.data.details ? ' — ' + event.data.details : '')
+          // H10: lead with `details` (the thrown cause the runner puts there), not
+          // the runner's generic 'Internal server error' headline, and read the LAST
+          // entry of the append-only `errors` channel.
+          error: formatFailureMessage(event.data)
         });
         break;
       case 'error':

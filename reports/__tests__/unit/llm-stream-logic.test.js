@@ -100,3 +100,92 @@ describe('describePhase', () => {
     expect(L.isPhaseReached('writing', 'done')).toBe(false);
   });
 });
+
+/**
+ * H10: terminal failures reached the director as "Internal server error, check
+ * server logs" (unreadable over the tunnel), and every llm_error was labelled
+ * "Extraction failed … channel=text_fallback" regardless of what actually
+ * happened — an expired OAuth token read as a schema problem. Both messages are
+ * derived here so the derivation is pinned rather than inlined in app.js.
+ */
+describe('formatLlmErrorMessage', () => {
+  test('labels a genuine extraction failure by errorName', () => {
+    expect(L.formatLlmErrorMessage({
+      errorName: 'StructuredOutputExtractionError',
+      error: 'result did not match schema'
+    })).toBe('Extraction failed: result did not match schema');
+  });
+
+  test('does NOT call a terminal API failure an extraction failure', () => {
+    const msg = L.formatLlmErrorMessage({
+      errorName: 'Error',
+      error: 'SDK result error (authentication_failed, HTTP 401) - Arc analysis: ... re-authenticate with `claude /login`'
+    });
+    expect(msg).toContain('Model call failed:');
+    expect(msg).not.toContain('Extraction failed');
+    expect(msg).toContain('claude /login');
+  });
+
+  test('appends the output channel when the payload carries one', () => {
+    expect(L.formatLlmErrorMessage({
+      errorName: 'StructuredOutputExtractionError',
+      error: 'invalid',
+      diagnostics: { channel: 'text_fallback' }
+    })).toBe('Extraction failed: invalid (channel=text_fallback)');
+  });
+
+  test('never invents a channel — llm_error diagnostics carry none', () => {
+    expect(L.formatLlmErrorMessage({
+      errorName: 'StructuredOutputExtractionError',
+      error: 'invalid',
+      diagnostics: { stopReason: 'end_turn', channel: null }
+    })).toBe('Extraction failed: invalid');
+  });
+
+  test('survives an empty payload', () => {
+    expect(L.formatLlmErrorMessage({})).toBe('Model call failed: unknown');
+    expect(L.formatLlmErrorMessage(null)).toBe('Model call failed: unknown');
+  });
+});
+
+describe('formatFailureMessage', () => {
+  test('prefers `details` (the real cause) over the generic `error` headline', () => {
+    expect(L.formatFailureMessage({
+      error: 'Internal server error',
+      details: 'SDK result error (authentication_failed, HTTP 401) - Arc analysis'
+    })).toBe('SDK result error (authentication_failed, HTTP 401) - Arc analysis');
+  });
+
+  test('reads the LAST element of the append-only errors array, not the first', () => {
+    expect(L.formatFailureMessage({
+      errors: [
+        { message: 'evidence preprocessing degraded' },
+        { message: 'Cannot revise: no previous outline available' }
+      ]
+    })).toBe('Cannot revise: no previous outline available');
+  });
+
+  test('falls back through details -> error -> last error -> a constant', () => {
+    expect(L.formatFailureMessage({ error: 'Workflow error' })).toBe('Workflow error');
+    expect(L.formatFailureMessage({})).toBe('Workflow failed');
+    expect(L.formatFailureMessage(null)).toBe('Workflow failed');
+  });
+
+  test('tolerates an errors array of bare strings', () => {
+    expect(L.formatFailureMessage({ errors: ['first', 'second'] })).toBe('second');
+  });
+
+  test('shows apiErrorStatus when present', () => {
+    expect(L.formatFailureMessage({
+      details: 'SDK result error (authentication_failed) - Arc analysis',
+      apiErrorStatus: 401
+    })).toBe('SDK result error (authentication_failed) - Arc analysis (HTTP 401)');
+  });
+
+  test('does not repeat a status the message already names', () => {
+    expect(L.formatFailureMessage({
+      details: 'SDK result error (authentication_failed, HTTP 401) - Arc analysis',
+      apiErrorStatus: 401
+    })).toBe('SDK result error (authentication_failed, HTTP 401) - Arc analysis');
+  });
+});
