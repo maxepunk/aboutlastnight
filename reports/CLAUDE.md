@@ -379,16 +379,21 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 
 ```
 console/
-├── index.html                      # SPA shell, CDN scripts, 22 script tags in load order
-├── api.js                          # REST client + SSE-before-POST pattern
-├── state.js                        # useReducer: 18 actions, initialState, RESET_SESSION
-├── utils.js                        # Badge, CollapsibleSection, JsonViewer, safeStringify, etc.
+├── index.html                      # SPA shell, CDN scripts, 29 script tags in load order
+├── api.js                          # REST client + SSE-before-POST pattern, plus attach() (SSE-only, no POST)
+├── state.js                        # useReducer: 24 actions, initialState, RESET_SESSION
+├── utils.js                        # Badge, CollapsibleSection, JsonViewer, safeStringify, etc. (republishes CHECKPOINT_ORDER)
+├── session-start-logic.js         # Dual-export PURE module: isValidSessionId (MMDDYY contract, mirrors server.js), classifyCheckpointResponse (not-found | at-checkpoint | in-progress | complete | resumable), buildReportLinks, CHECKPOINT_ORDER. Must load before utils.js AND components/SessionStart.js.
+├── session-status-logic.js        # Dual-export PURE module: SET_ERROR / CLEAR_ERROR reducer fragments. Must load before state.js.
+├── llm-stream-logic.js            # Dual-export PURE module: llmActivity lifecycle, eventLog append, failure/llm_error message derivation. Must load before state.js and app.js.
+├── input-review-logic.js          # Dual-export PURE module for the InputReview checkpoint.
+├── await-roster-logic.js          # Dual-export PURE module: roster entry validation against canonicalCharacters.
 ├── outline-edit-logic.js          # Dual-export PURE module: all Outline-editor init/build/merge/validate/reset logic (browser: window.Console.outlineEditLogic; node: module.exports). Unit-tested in node-env. Must load before Outline.js/Article.js.
-├── app.js                          # Root: auth gate, checkpoint routing, rollback flow
+├── app.js                          # Root: auth gate, checkpoint routing, rollback flow, attach-to-in-flight-run
 ├── console.css                     # All styles (~1800 lines, BEM naming, noir theme)
 └── components/
     ├── LoginOverlay.js             # Auth overlay
-    ├── SessionStart.js             # Session ID + start/resume
+    ├── SessionStart.js             # Session ID + Start Fresh; Resume classifies the session first (never resumes a complete thread; attaches to an in-flight one)
     ├── ProgressStream.js           # SSE progress + LLM activity display
     ├── PipelineProgress.js         # 10-step checkpoint stepper
     ├── CheckpointShell.js          # Shared checkpoint wrapper
@@ -450,7 +455,7 @@ The Outline checkpoint's per-section editors (journalist LEDE / THE STORY / FOLL
 
 **Utility:**
 - `/api/health` (GET) - Health check
-- `/api/config` (GET) - Client configuration
+- `/api/config` (GET) - Client configuration: `{notionConfigured, allowNonstandardSessionId}`. The console validates the session ID against the same MMDDYY contract `/start` enforces, so it needs the `ALLOW_NONSTANDARD_SESSION_ID` opt-out.
 - `/api/browse` (GET) - List session data files
 - `/api/file` (GET) - Read session data file
 
