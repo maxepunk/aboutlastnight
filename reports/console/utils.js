@@ -116,18 +116,18 @@ function editBtn(onClick) {
   }, '✎');
 }
 
-const CHECKPOINT_ORDER = [
-  'input-review', 'paper-evidence-selection', 'await-roster', 'character-ids',
-  'await-full-context', 'pre-curation', 'evidence-and-photos', 'arc-selection',
-  'outline', 'article'
-];
+// H3: the stepper's pipeline order. Single copy lives in session-start-logic.js
+// (dual-export, so __tests__/unit/console-checkpoint-order.test.js can check it
+// against lib/workflow/graph.js); this file only republishes it. session-start-logic.js
+// must load BEFORE utils.js in index.html — the read happens at load time.
+const CHECKPOINT_ORDER = window.Console.sessionStartLogic.CHECKPOINT_ORDER;
 
 const CHECKPOINT_LABELS = {
-  'input-review': 'Input Review',
   'paper-evidence-selection': 'Paper Evidence',
   'await-roster': 'Roster',
   'character-ids': 'Character IDs',
   'await-full-context': 'Full Context',
+  'input-review': 'Input Review',
   'pre-curation': 'Pre-Curation',
   'evidence-and-photos': 'Evidence Bundle',
   'arc-selection': 'Arc Selection',

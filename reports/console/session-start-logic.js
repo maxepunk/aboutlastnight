@@ -68,10 +68,33 @@
     return 'not-found';
   }
 
+  // H3: the order the graph actually interrupts in — the plain addEdge chain from
+  // detectWhiteboard onward (lib/workflow/graph.js:539-568). `input-review` fires
+  // INSIDE parseRawInput, which the graph reaches from checkpointAwaitContext, so it
+  // is FIFTH, not first. It sat first in console/utils.js, which put the stepper out
+  // of step with the run for its whole length: it reported the wrong position and
+  // PipelineProgress offered the wrong rollback targets. The list lives here rather
+  // than in utils.js only because utils.js touches `window` at load and so cannot be
+  // required in node-env; utils.js republishes it. Pinned by
+  // __tests__/unit/console-checkpoint-order.test.js against graph.js itself.
+  const CHECKPOINT_ORDER = [
+    'paper-evidence-selection',
+    'await-roster',
+    'character-ids',
+    'await-full-context',
+    'input-review',
+    'pre-curation',
+    'evidence-and-photos',
+    'arc-selection',
+    'outline',
+    'article'
+  ];
+
   const api = {
     isValidSessionId,
     classifyCheckpointResponse,
-    SESSION_ID_PATTERN
+    SESSION_ID_PATTERN,
+    CHECKPOINT_ORDER
   };
 
   if (typeof window !== 'undefined') {
