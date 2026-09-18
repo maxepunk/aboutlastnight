@@ -139,9 +139,40 @@
     const list = Array.isArray(d.errors) ? d.errors : [];
     const last = list.length > 0 ? list[list.length - 1] : null;
     const lastMessage = last && typeof last === 'object' ? last.message : last;
-    const headline = d.details || d.error || lastMessage || 'Workflow failed';
+    // String(): nothing guarantees `details` is a string, and a non-string headline
+    // made .includes() below throw inside the failure handler — losing the failure.
+    const headline = String(d.details || d.error || lastMessage || 'Workflow failed');
     const status = typeof d.apiErrorStatus === 'number' ? `HTTP ${d.apiErrorStatus}` : null;
     return status && !headline.includes(status) ? `${headline} (${status})` : headline;
+  }
+
+  /**
+   * Run `fn`; if it rejects or throws, close `stream` before rethrowing.
+   *
+   * api.js opens the progress stream BEFORE it posts (the SSE-before-POST contract),
+   * so between those two steps there is an open EventSource that only the caller
+   * knows about. When the POST threw — a dropped request, or a tunnel 502/504 whose
+   * non-JSON body makes res.json() reject — the throw propagated out of
+   * approve/resume/rollback before app.js could track the stream: sseRef.current
+   * stayed null, so nothing ever closed it, while it went on dispatching into the
+   * SSE handler it was built with. A later 'complete' then drove CHECKPOINT_RECEIVED
+   * into a console that had already shown the error.
+   *
+   * Closing is best-effort: a close() that throws must never replace the real cause.
+   *
+   * @param {{close: function}|null} stream - the EventSource (or any closeable)
+   * @param {function(): (Promise|*)} fn
+   * @returns {Promise<*>} fn's value
+   */
+  async function closeOnThrow(stream, fn) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (stream && typeof stream.close === 'function') {
+        try { stream.close(); } catch (closeErr) { /* the original error is what matters */ }
+      }
+      throw err;
+    }
   }
 
   const api = {
@@ -151,6 +182,7 @@
     applyLlmFailure,
     formatLlmErrorMessage,
     formatFailureMessage,
+    closeOnThrow,
     appendEvent,
     describePhase,
     phaseOrder,

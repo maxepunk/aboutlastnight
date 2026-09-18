@@ -84,6 +84,26 @@ describe('CHECKPOINT_ORDER', () => {
     expect(sessionStartAt).toBeGreaterThan(logicAt);
   });
 
+  it('loads every pure logic module before the file that destructures it', () => {
+    // These are load-time destructures, not lazy lookups: a wrong order yields
+    // `undefined` at load and a blank page, which no other test would catch (the
+    // console has no DOM harness).
+    const html = fs.readFileSync(path.join(CONSOLE_DIR, 'index.html'), 'utf8');
+    const at = (src) => html.indexOf(`src="${src}"`);
+    // llm-stream-logic: state.js delegates its reducer transitions, api.js uses
+    // closeOnThrow, app.js uses the two message formatters.
+    expect(at('state.js')).toBeGreaterThan(at('llm-stream-logic.js'));
+    expect(at('api.js')).toBeGreaterThan(at('llm-stream-logic.js'));
+    expect(at('app.js')).toBeGreaterThan(at('llm-stream-logic.js'));
+    // session-status-logic: state.js SET_ERROR / CLEAR_ERROR.
+    expect(at('state.js')).toBeGreaterThan(at('session-status-logic.js'));
+    // session-start-logic: app.js reads decideAttachFallback + buildReportLinks.
+    expect(at('app.js')).toBeGreaterThan(at('session-start-logic.js'));
+    // api.js still precedes every component that destructures window.Console.api.
+    expect(at('components/SessionStart.js')).toBeGreaterThan(at('api.js'));
+    expect(at('app.js')).toBeGreaterThan(at('api.js'));
+  });
+
   it('labels every step it orders', () => {
     const utilsSrc = fs.readFileSync(path.join(CONSOLE_DIR, 'utils.js'), 'utf8');
     CHECKPOINT_ORDER.forEach((type) => {

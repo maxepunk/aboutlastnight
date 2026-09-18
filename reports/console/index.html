@@ -14,9 +14,11 @@
 <body>
   <div id="root"></div>
   <!-- Load order defines dependency graph -->
-  <script type="text/babel" src="api.js"></script>
+  <!-- Pure dual-export logic modules first: api.js and state.js both destructure
+       from them at load time. -->
   <script type="text/babel" src="session-status-logic.js"></script>
   <script type="text/babel" src="llm-stream-logic.js"></script>
+  <script type="text/babel" src="api.js"></script>
   <script type="text/babel" src="state.js"></script>
   <script type="text/babel" src="session-start-logic.js"></script>
   <script type="text/babel" src="utils.js"></script>

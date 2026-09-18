@@ -6,6 +6,11 @@
 
 window.Console = window.Console || {};
 
+// Review fix 1: closes the stream when the POST that follows it throws. Pure and
+// node-tested in __tests__/unit/llm-stream-logic.test.js. llm-stream-logic.js loads
+// BEFORE api.js in index.html for this destructure.
+const { closeOnThrow } = window.Console.llmStreamLogic;
+
 /**
  * Open the progress stream and resolve once the server's `connected` frame lands.
  *
@@ -121,14 +126,18 @@ const api = {
     // Step 1: Connect SSE first, wait for connected event (with timeout)
     const eventSource = await openProgressStream(sessionId, onProgress);
 
-    // Step 2: POST approval
-    const res = await fetch(`/api/session/${sessionId}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload)
+    // Step 2: POST approval. closeOnThrow owns the window between the open stream
+    // and a tracked one: if this throws, the caller never gets `eventSource` back,
+    // so only this wrapper can still close it.
+    const response = await closeOnThrow(eventSource, async () => {
+      const res = await fetch(`/api/session/${sessionId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      return readJsonWithStatus(res);
     });
-    const response = await readJsonWithStatus(res);
 
     // Step 3: Return both
     return { response, eventSource };
@@ -156,13 +165,15 @@ const api = {
   async rollback(sessionId, rollbackTo, overrides, onProgress) {
     const eventSource = await openProgressStream(sessionId, onProgress);
 
-    const res = await fetch(`/api/session/${sessionId}/rollback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ rollbackTo, stateOverrides: overrides })
+    const response = await closeOnThrow(eventSource, async () => {
+      const res = await fetch(`/api/session/${sessionId}/rollback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ rollbackTo, stateOverrides: overrides })
+      });
+      return readJsonWithStatus(res);
     });
-    const response = await readJsonWithStatus(res);
     return { response, eventSource };
   },
 
@@ -174,12 +185,14 @@ const api = {
   async resume(sessionId, onProgress) {
     const eventSource = await openProgressStream(sessionId, onProgress);
 
-    const res = await fetch(`/api/session/${sessionId}/resume`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
+    const response = await closeOnThrow(eventSource, async () => {
+      const res = await fetch(`/api/session/${sessionId}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      return readJsonWithStatus(res);
     });
-    const response = await readJsonWithStatus(res);
     return { response, eventSource };
   },
 

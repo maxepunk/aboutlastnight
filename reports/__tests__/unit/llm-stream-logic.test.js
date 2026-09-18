@@ -189,3 +189,64 @@ describe('formatFailureMessage', () => {
     })).toBe('SDK result error (authentication_failed, HTTP 401) - Arc analysis');
   });
 });
+
+/**
+ * Review fix 1: openProgressStream hands back an OPEN EventSource, and the POST that
+ * follows it can throw — a dropped request, or a non-JSON 502/504 from the tunnel
+ * making res.json() reject. The exception used to propagate straight out of
+ * approve/resume/rollback, so app.js's assignSse never ran: sseRef.current stayed
+ * null while the stream stayed open, untracked, and still closed over the SSE
+ * handler — so it kept dispatching, including a later 'complete' that drove
+ * CHECKPOINT_RECEIVED into a console already showing the error.
+ */
+describe('closeOnThrow', () => {
+  function fakeStream() {
+    return { closed: 0, close() { this.closed += 1; } };
+  }
+
+  test('passes the resolved value through and leaves the stream open', async () => {
+    const stream = fakeStream();
+    await expect(L.closeOnThrow(stream, async () => 'body')).resolves.toBe('body');
+    expect(stream.closed).toBe(0);
+  });
+
+  test('closes the stream and rethrows the SAME error', async () => {
+    const stream = fakeStream();
+    const boom = new Error('Failed to fetch');
+    await expect(L.closeOnThrow(stream, async () => { throw boom; })).rejects.toBe(boom);
+    expect(stream.closed).toBe(1);
+  });
+
+  test('closes exactly once', async () => {
+    const stream = fakeStream();
+    await L.closeOnThrow(stream, async () => { throw new Error('x'); }).catch(() => {});
+    expect(stream.closed).toBe(1);
+  });
+
+  test('rethrows a synchronous throw too, and still closes', async () => {
+    const stream = fakeStream();
+    await expect(L.closeOnThrow(stream, () => { throw new Error('sync'); }))
+      .rejects.toThrow('sync');
+    expect(stream.closed).toBe(1);
+  });
+
+  test('a failing close never masks the original error', async () => {
+    const stream = { close() { throw new Error('close blew up'); } };
+    await expect(L.closeOnThrow(stream, async () => { throw new Error('the real cause'); }))
+      .rejects.toThrow('the real cause');
+  });
+
+  test('tolerates a missing or closeless stream', async () => {
+    await expect(L.closeOnThrow(null, async () => { throw new Error('real'); }))
+      .rejects.toThrow('real');
+    await expect(L.closeOnThrow({}, async () => { throw new Error('real'); }))
+      .rejects.toThrow('real');
+  });
+});
+
+describe('formatFailureMessage with a non-string headline', () => {
+  test('does not throw when details is an object (Minor, folded in)', () => {
+    expect(() => L.formatFailureMessage({ details: { code: 500 }, apiErrorStatus: 500 }))
+      .not.toThrow();
+  });
+});
