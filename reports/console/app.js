@@ -51,11 +51,15 @@ function makeSseHandler(dispatch, sseRef) {
         }
         break;
       case 'reconnecting':
-        dropped = true;
-        dispatch({
-          type: APP_ACTIONS.SSE_PROGRESS,
-          message: event.data.message || 'Connection interrupted, reconnecting…'
-        });
+        // Once per outage, not once per retry: the browser re-attempts every ~3 s,
+        // so an unlatched line would bury the run's real progress in a long drop.
+        if (!dropped) {
+          dropped = true;
+          dispatch({
+            type: APP_ACTIONS.SSE_PROGRESS,
+            message: event.data.message || 'Connection interrupted, reconnecting…'
+          });
+        }
         break;
       case 'progress':
         dispatch({

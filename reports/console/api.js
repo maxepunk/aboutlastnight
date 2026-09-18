@@ -252,7 +252,6 @@ const api = {
           case 'complete':
           case 'failed':
           case 'error':
-          case 'reconnecting':
           case 'heartbeat':
             if (onProgress) onProgress({ type, data });
             break;
