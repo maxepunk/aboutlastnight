@@ -181,9 +181,10 @@ const result = await sdkQuery({
   // timeoutMs: omitted — inherits the 15-min IDLE/stall default (re-armed on every streamed
   // message, NOT a total-duration cap). Pass a smaller idle window only with data (see Model Call Limits below).
   onProgress: (msg) => console.log(msg.type, msg.elapsed),  // Optional streaming
-  allowedTools: ['Read'],  // Optional, for images
+  tools: ['Read'],  // Optional: RESTRICTS the tool set (omit + no disableTools = full set incl. Bash/Write)
+  allowedTools: ['Read'],  // Optional: permission auto-allow only; NOT a restriction
   label: 'Evidence analysis',  // For timeout error messages
-  loadProjectSettings: false  // Optional: false skips .claude/skills/ autoload (use on utility/normalization calls)
+  loadProjectSettings: true  // Optional: default false; true loads project .claude/skills/ + project CLAUDE.md
 });
 ```
 
@@ -201,10 +202,12 @@ const result = await sdkQuery({
 - The `channel` field on `llm_complete`/`llm_error` tells you which path fired (`structured_output` = SDK tool channel, the normal path now; `text_fallback` = channel skipped, we extracted from text — should no longer occur for content-bundle).
 
 **`loadProjectSettings` flag:** Controls filesystem-settings scope:
-- `true` (default) → `settingSources: ['project']` — loads project `.claude/skills/` and project `CLAUDE.md` only
-- `false` → `settingSources: []` — pure SDK isolation; pass on utility/normalization calls
+- `false` (**default**, flipped 2026-09-18 for H22) → `settingSources: []` — pure SDK isolation
+- `true` → `settingSources: ['project']` — loads project `.claude/skills/` and project `CLAUDE.md` only
 
-We never load user-level (`~/.claude/`) or local sources. A probe found those contribute ~86K tokens of irrelevant context (superpowers meta-skill, MEMORY.md, MCP server instructions, two `CLAUDE.md` files) that none of our SDK calls use. This is pure context hygiene — it does NOT prevent the channel skip described above; that's a separate SDK bug.
+We never load user-level (`~/.claude/`) or local sources. A probe found those contribute ~86K tokens of irrelevant context (superpowers meta-skill, MEMORY.md, MCP server instructions, two `CLAUDE.md` files) that none of our SDK calls use. **Project scope is not free either (H22):** this `CLAUDE.md` (~9.4K tokens), `.claude/settings.json` `enabledPlugins`, skill frontmatter and the nine agent descriptions come to ~15.5K tokens per call and ~75K per session, and nothing in the pipeline reads any of it (`ThemeLoader` loads its prompt files with `fs`). Hence the default is OFF; a call that genuinely wants the project skill asks for it. This is pure context hygiene — it does NOT prevent the channel skip described above; that's a separate SDK bug.
+
+**Tool gating (H21):** `allowedTools` is a permission AUTO-ALLOW list in this SDK, not a restriction (installed `sdk.d.ts`: "to restrict which tools are available, use the `tools` option"), and it is a no-op under `permissionMode: 'bypassPermissions'`. A call with neither `tools` nor `disableTools` runs with the full set, **Bash/Write/Edit included**. Every pipeline call now declares one: `disableTools: true` for pure text/structured output, `tools: ['Read']` for the two image calls.
 
 **Model Call Limits (idle timeout + cost ceiling):** SDK calls use a **15-min IDLE/stall timeout**, not a total-duration cap — the timer is re-armed on every streamed message (including the token-level `includePartialMessages` deltas emitted as `llm_delta`), so a legitimately long call (big prompt + extended thinking) survives as long as it keeps producing; only a genuine stall (no streamed activity for 15 min) aborts. A stall throws `SDK timeout after … idle … with no streamed activity`, which `isSdkTimeoutError` recognizes and `isTransientError` (`lib/llm/retry.js`) classifies **transient** (the node-level `retryPolicy` consumes this to auto-retry transient SDK failures). Cost is bounded separately by a **per-call `maxBudgetUsd` ceiling** (`MODEL_BUDGETS` in `lib/llm/client.js`: opus $5, sonnet $2, haiku $0.5) — a generous backstop, not a tight cap; an overrun throws a labeled **non-transient** `error_max_budget_usd` that is never auto-retried (the budget is per-CALL, so N node-retries can cost up to N× the ceiling). Steady-state latency is still captured per-call via `duration_api_ms` on the `llm_complete` event (`lib/observability/progress-bridge.js`).
 
@@ -436,13 +439,13 @@ The Outline checkpoint's per-section editors (journalist LEDE / THE STORY / FOLL
 ### Session REST API
 
 **Step-by-step Pipeline Control:**
-- `/api/session/:id/start` (POST) - Start new session with raw input
-- `/api/session/:id/resume` (POST) - Resume existing workflow (re-invoke at current state). NON-BLOCKING: returns `{status:'processing'}` immediately, runs the graph in the background, and delivers the result via the `/progress` SSE `complete` event (same contract as `/approve`). Clients MUST use SSE-before-POST. (A long re-invoke would otherwise exceed undici's 5-min `headersTimeout` / Cloudflare's ~100s edge timeout on a held-open POST.)
+- `/api/session/:id/start` (POST) - Start new session with raw input. **The session ID must be the session date as MMDDYY** (`091826`), optionally with one extra digit for a second session the same day (`0918262`); anything else is a 400 (B1: the emailer builds each player's report link from this id, and `data/<id>/` + `outputs/report-<id>.html` are named after it). `ALLOW_NONSTANDARD_SESSION_ID=true` in the server's env opts out for throwaway harness runs.
+- `/api/session/:id/resume` (POST) - Resume existing workflow (re-invoke at current state). NON-BLOCKING: returns `{status:'processing'}` immediately, runs the graph in the background, and delivers the result via the `/progress` SSE `complete` event (same contract as `/approve`). Clients MUST use SSE-before-POST. (A long re-invoke would otherwise exceed undici's 5-min `headersTimeout` / Cloudflare's ~100s edge timeout on a held-open POST.) **A COMPLETE thread returns 409** `{currentPhase:'complete'}` unless the body carries `{force:true}` — re-invoking a finished thread replays it from START, and every skip condition is already satisfied, so the whole paid pipeline re-runs unattended and overwrites the session's inputs and published report (B9).
 - `/api/session/:id/approve` (POST) - Submit checkpoint approval
 - `/api/session/:id/rollback` (POST) - Roll back to checkpoint. NON-BLOCKING (same contract as resume/approve); the SSE completion payload carries `rolledBackTo` + `fieldsCleared`.
 - `/api/session/:id/state` (GET) - Get current state
 - `/api/session/:id/state/:field` (GET) - Get single state field
-- `/api/session/:id/checkpoint` (GET) - Get checkpoint info
+- `/api/session/:id/checkpoint` (GET) - Get checkpoint info: `{sessionId, currentPhase, interrupted, checkpointType, checkpoint, theme, inProgress, lastOutcome}`. `checkpoint` is the SAME merged payload the SSE/approve path delivers (`buildCompleteCheckpointData`, so state extras like `sessionPhotos` are included), or null when not interrupted. `inProgress` is `isSessionLocked(id)` and `lastOutcome` the persisted outcome, so a client can reattach to a run instead of blind-POSTing into a 409 (H1, H2, H8).
 - `/api/session/:id/progress` (GET, SSE) - Stream pipeline progress events
 
 **Utility:**
