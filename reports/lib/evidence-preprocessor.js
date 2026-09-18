@@ -342,6 +342,7 @@ async function processBatch(batch, sdkClient, batchIndex) {
       systemPrompt: SYSTEM_PROMPT,
       model: 'haiku',
       jsonSchema: BATCH_RESPONSE_SCHEMA,
+      disableTools: true,          // H21: summarizes the batch it was handed
       loadProjectSettings: false
     });
 

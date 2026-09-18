@@ -248,7 +248,8 @@ async function analyzeSinglePhoto({
       prompt: userPrompt,
       model: 'haiku',
       jsonSchema: PHOTO_ANALYSIS_SCHEMA,
-      allowedTools: ['Read'],
+      tools: ['Read'],          // H21: the ONLY tool this call may use
+      allowedTools: ['Read'],   // permission auto-allow (no-op under bypassPermissions)
       label: originalFilename,
       loadProjectSettings: false
     });
@@ -641,6 +642,7 @@ async function parseCharacterIds(state, config) {
       prompt: userPrompt,
       model: 'sonnet',  // Complex table parsing requires sonnet (same as input-nodes.js:445)
       jsonSchema: PARSED_CHARACTER_IDS_SCHEMA,
+      disableTools: true,       // H21: text parse of the director's mapping input
       loadProjectSettings: false
     });
 
@@ -866,6 +868,7 @@ async function finalizePhotoAnalyses(state, config) {
           prompt: userPrompt,
           model: 'haiku',  // Fast model for simple text transformation
           jsonSchema: ENRICHED_PHOTO_SCHEMA,
+          disableTools: true,  // H21: text transformation; the image was read upstream
           loadProjectSettings: false
         });
 

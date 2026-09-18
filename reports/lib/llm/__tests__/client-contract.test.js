@@ -109,7 +109,14 @@ describe('sdkQueryImpl contract', () => {
     expect(capturedOptions.settingSources).toEqual(['project']);
   });
 
-  test("settingSources is ['project'] when loadProjectSettings is omitted (default)", async () => {
+  // H22: the default used to be ['project'], which loaded reports/CLAUDE.md
+  // (~9.4K tokens), .claude/settings.json enabledPlugins (including
+  // superpowers' "invoke a skill before ANY response"), skill frontmatter and
+  // nine agent descriptions into the five largest generation calls -- roughly
+  // 15.5K tokens per call, ~75K per session, none of it read by the pipeline
+  // (ThemeLoader reads prompt files with fs). The nine utility calls were the
+  // ones opting out. The polarity is now the other way round.
+  test('settingSources is [] when loadProjectSettings is omitted (default)', async () => {
     let capturedOptions = null;
     setMockQuery(({ options }) => {
       capturedOptions = options;
@@ -119,7 +126,56 @@ describe('sdkQueryImpl contract', () => {
     });
 
     await sdkQueryImpl({ prompt: 'test', model: 'haiku' });
-    expect(capturedOptions.settingSources).toEqual(['project']);
+    expect(capturedOptions.settingSources).toEqual([]);
+  });
+
+  // H21: `allowedTools` is an auto-ALLOW list in this SDK, not a restriction
+  // (installed sdk.d.ts: "to restrict which tools are available, use the `tools`
+  // option"). Under permissionMode: 'bypassPermissions', a call that passes only
+  // allowedTools runs with the full tool set -- Bash, Write, Edit -- and can
+  // write into reports/ and data/<other-session>/ with no prompt.
+  describe('tool gating (H21)', () => {
+    function captureOptions() {
+      const captured = {};
+      setMockQuery(({ options }) => {
+        captured.options = options;
+        return makeAsyncIterable([
+          { type: 'result', subtype: 'success', result: 'ok' }
+        ]);
+      });
+      return captured;
+    }
+
+    test('tools: [...] restricts the tool set', async () => {
+      const captured = captureOptions();
+      await sdkQueryImpl({ prompt: 'test', model: 'haiku', tools: ['Read'] });
+      expect(captured.options.tools).toEqual(['Read']);
+    });
+
+    test('disableTools: true sets an empty tool set', async () => {
+      const captured = captureOptions();
+      await sdkQueryImpl({ prompt: 'test', model: 'haiku', disableTools: true });
+      expect(captured.options.tools).toEqual([]);
+    });
+
+    test('disableTools wins over tools when both are passed', async () => {
+      const captured = captureOptions();
+      await sdkQueryImpl({ prompt: 'test', model: 'haiku', disableTools: true, tools: ['Read'] });
+      expect(captured.options.tools).toEqual([]);
+    });
+
+    test('tools is left unset when neither option is passed', async () => {
+      const captured = captureOptions();
+      await sdkQueryImpl({ prompt: 'test', model: 'haiku' });
+      expect(captured.options.tools).toBeUndefined();
+    });
+
+    test('allowedTools is still forwarded (permission auto-allow, not a restriction)', async () => {
+      const captured = captureOptions();
+      await sdkQueryImpl({ prompt: 'test', model: 'haiku', tools: ['Read'], allowedTools: ['Read'] });
+      expect(captured.options.allowedTools).toEqual(['Read']);
+      expect(captured.options.tools).toEqual(['Read']);
+    });
   });
 
   test('idle timer resets on each streamed message (long-but-active call does not abort)', async () => {

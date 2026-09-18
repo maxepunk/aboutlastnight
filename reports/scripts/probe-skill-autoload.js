@@ -2,9 +2,10 @@
  * Skill Autoload Probe
  *
  * Asks the model to enumerate every skill/instruction visible in its system
- * context. Mirrors generateContentBundle's SDK settings (model: opus,
- * disableTools: true, loadProjectSettings: true) so the probe reflects what
- * an article-generation call actually sees.
+ * context. Passes loadProjectSettings: true EXPLICITLY -- H22 flipped the default
+ * to false, so a probe relying on the old default would report an empty context
+ * and prove nothing. This measures what project scope costs, which is the
+ * question H22 left open (does the parent-directory CLAUDE.md load too?).
  *
  * Usage: node scripts/probe-skill-autoload.js
  */
@@ -44,13 +45,14 @@ const PROBE_SCHEMA = {
 
 (async function main() {
   console.log('Probing skill autoload visible to article-generation-style SDK call...');
-  console.log('Settings: model=opus, disableTools=true, loadProjectSettings=true (default)\n');
+  console.log('Settings: model=opus, disableTools=true, loadProjectSettings=true (explicit)\n');
 
   const result = await sdkQuery({
     prompt: PROBE_PROMPT,
     model: 'opus',
     jsonSchema: PROBE_SCHEMA,
     disableTools: true,
+    loadProjectSettings: true,   // explicit: the default is now false (H22)
     label: 'skill autoload probe',
     onProgress: (msg) => {
       if (msg.type === 'llm_complete') {

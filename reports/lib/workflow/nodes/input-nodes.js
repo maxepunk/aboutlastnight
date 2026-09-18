@@ -441,6 +441,7 @@ Return structured JSON matching the schema.`;
       systemPrompt: 'You parse game session information into structured JSON. Be precise and accurate.',
       model: 'haiku',
       jsonSchema: SESSION_CONFIG_SCHEMA,
+      disableTools: true,          // H21: pure parse; no tool needs it
       loadProjectSettings: false
     });
     result.rosterCount = result.roster?.length || 0;
@@ -522,6 +523,7 @@ Return structured JSON matching the schema.`;
       systemPrompt: 'You parse game session reports with token and transaction data. Be precise with numbers and IDs.',
       model: 'sonnet', // Use sonnet for complex table parsing
       jsonSchema: SESSION_REPORT_SCHEMA,
+      disableTools: true,          // H21: pure parse; no tool needs it
       loadProjectSettings: false
     });
   })();
@@ -625,7 +627,8 @@ Return structured JSON matching the schema.`;
         systemPrompt: whiteboardSystemPrompt,
         model: 'sonnet', // Use sonnet for complex image analysis
         jsonSchema: WHITEBOARD_SCHEMA,
-        allowedTools: ['Read'], // Required for image viewing
+        tools: ['Read'],        // H21: the ONLY tool this call may use
+        allowedTools: ['Read'], // Required for image viewing (permission auto-allow)
         loadProjectSettings: false
       });
     } catch (error) {

@@ -145,14 +145,21 @@ function sanitizeSchemaForSdk(schema) {
  * @param {string} [options.systemPrompt] - System prompt
  * @param {string} [options.model='sonnet'] - Model: 'haiku', 'sonnet', 'opus'
  * @param {Object} [options.jsonSchema] - JSON schema for structured output
- * @param {string[]} [options.allowedTools=[]] - Tools the SDK can use (e.g., ['Read', 'Task'])
- * @param {boolean} [options.disableTools=false] - If true, disables ALL built-in tools for pure structured output.
- * @param {boolean} [options.loadProjectSettings=true] - Controls filesystem-settings scope:
+ * @param {string[]} [options.allowedTools=[]] - Permission AUTO-ALLOW list, NOT a restriction.
+ *   In this SDK it only pre-approves permission prompts (installed sdk.d.ts: "to restrict which
+ *   tools are available, use the `tools` option"), and under permissionMode: 'bypassPermissions'
+ *   it is a no-op. Use `tools` or `disableTools` to actually gate the tool set (H21).
+ * @param {string[]} [options.tools] - RESTRICTS the available tool set to exactly these
+ *   (e.g. ['Read'] for an image call). Omitted → the SDK's full set, including Bash/Write/Edit.
+ * @param {boolean} [options.disableTools=false] - If true, tools: [] — no tools at all. Wins over `tools`.
+ * @param {boolean} [options.loadProjectSettings=false] - Controls filesystem-settings scope:
+ *   - false → settingSources: []           (no filesystem settings; pure SDK isolation) — DEFAULT
  *   - true  → settingSources: ['project']  (loads project .claude/skills/ and project CLAUDE.md)
- *   - false → settingSources: []           (no filesystem settings; pure SDK isolation)
- *   We never load user/local sources — Phase 1A audit found those contribute ~86K tokens of
- *   irrelevant context (superpowers meta-skill, MEMORY.md, MCP instructions) and correlate
- *   with channel-skip failures on large structured-output calls.
+ *   Nothing in the pipeline reads either (ThemeLoader loads its prompt files with fs), while
+ *   project scope costs ~15.5K tokens per call: reports/CLAUDE.md, enabledPlugins, skill
+ *   frontmatter and the agent descriptions (H22). We never load user/local sources either —
+ *   those add ~86K tokens of MEMORY.md/MCP/meta-skill priming and correlate with channel-skip
+ *   failures on large structured-output calls.
  * @param {Object} [options.agents] - Custom agent definitions for Task tool invocation
  * @param {string} [options.cwd] - Current working directory for file operations
  * @param {('low'|'medium'|'high'|'xhigh'|'max')} [options.effort] - Override the per-model effort default
@@ -169,6 +176,7 @@ async function sdkQueryImpl({
   model = 'sonnet',
   jsonSchema,
   allowedTools = [],
+  tools,
   agents,
   cwd,
   effort,
@@ -177,7 +185,7 @@ async function sdkQueryImpl({
   onProgress,
   label,
   disableTools = false,
-  loadProjectSettings = true
+  loadProjectSettings = false
 }) {
   const resolvedModel = MODEL_IDS[model] || model;
   const idleTimeoutMs = timeoutMs || MODEL_TIMEOUTS[model] || MODEL_TIMEOUTS.sonnet;
@@ -226,9 +234,16 @@ async function sdkQueryImpl({
   // scope is pure context hygiene — removes irrelevant priming without losing
   // anything the pipeline actually depends on.
   //
+  // H22: project scope is not free either — reports/CLAUDE.md (~9.4K tokens),
+  // .claude/settings.json enabledPlugins (superpowers' "invoke a skill before ANY
+  // response" among them), skill frontmatter and nine agent descriptions: ~15.5K
+  // tokens per call, ~75K per session. NOTHING in the pipeline reads any of it
+  // (ThemeLoader loads its prompt files with fs), so the default is now OFF and a
+  // call that genuinely wants the project skill has to ask for it.
+  //
   // Mapping:
-  //   loadProjectSettings: false → settingSources: []          (no filesystem context)
-  //   loadProjectSettings: true  → settingSources: ['project'] (project skill + project CLAUDE.md only)
+  //   loadProjectSettings: false (default) → settingSources: []          (no filesystem context)
+  //   loadProjectSettings: true            → settingSources: ['project'] (project skill + project CLAUDE.md only)
   //
   // Note on channel skip: this does NOT prevent the structured-output channel skip
   // we see on generateContentBundle. That's caused by a known SDK bug (#277) in
@@ -266,9 +281,13 @@ async function sdkQueryImpl({
     options.agents = agents;
   }
 
-  // Disable ALL built-in tools for pure structured output
+  // H21: `tools` is the real gate in this SDK; `allowedTools` only auto-allows
+  // permission prompts and is a no-op under bypassPermissions. With neither set,
+  // the call runs with the full tool set, Bash/Write/Edit included.
   if (disableTools) {
-    options.tools = [];
+    options.tools = [];            // pure structured output: no tools at all
+  } else if (Array.isArray(tools)) {
+    options.tools = tools;         // e.g. ['Read'] for an image-reading call
   }
 
   // Structured output: sanitizeSchemaForSdk strips `format` (#277 channel-skip trigger)

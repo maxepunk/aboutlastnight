@@ -552,6 +552,7 @@ async function enrichWithInterweaving(coreArcs, roster, config) {
       prompt,
       systemPrompt: INTERWEAVING_SYSTEM_PROMPT,
       model: 'opus',
+      disableTools: true,          // H21: pure analysis over the arcs in the prompt
       jsonSchema: INTERWEAVING_SCHEMA,
       label: 'Interweaving enrichment (Call 2)'
     });
