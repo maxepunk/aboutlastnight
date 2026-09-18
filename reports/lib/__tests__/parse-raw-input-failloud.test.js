@@ -15,7 +15,10 @@ const { parseRawInput } = require('../workflow/nodes/input-nodes');
 const { sdkQuery } = require('../llm');
 const { PHASES } = require('../workflow/state');
 
-const cfg = { configurable: { sdkClient: sdkQuery, dataDir: require('os').tmpdir() } };
+// B1: parseRawInput now REFUSES to write inputs without an authoritative sessionId
+// (initializeSession guarantees one from thread_id before this node runs), so the
+// shared config carries one. The B1 describe below covers the missing-id case.
+const cfg = { configurable: { sdkClient: sdkQuery, dataDir: require('os').tmpdir(), sessionId: 'TEST' } };
 
 // ROLL-4: accusation/sessionReport/directorNotes are now FIRST-CLASS state channels
 // (accusation / sessionReport / directorNotesRaw), not rawSessionInput sub-fields.
@@ -105,5 +108,88 @@ describe('parseRawInput gate invariant (ROLL-4 fail-loud)', () => {
       .mockResolvedValueOnce({ exposedTokens: [], buriedTokens: [], shellAccounts: [],
         exposedCount: 0, buriedCount: 0, totalBuried: 0 });
     await expect(parseRawInput(makeState({ directorNotesRaw: undefined }), cfg)).rejects.toThrow(/directorNotesRaw is required/);
+  });
+});
+
+describe('parseRawInput sessionId authority (B1)', () => {
+  // B1: the node returned Haiku's parsed sessionId into the `sessionId` channel
+  // (a replace reducer) and used it for the inputs directory. Session 071126's
+  // Step-1 call answered "0711", so the inputs landed in data/0711/ while
+  // data/071126/ got none, and the report was published as report-0711.html
+  // with photosCopied=0. initializeSession already set the channel from
+  // thread_id before this node ran.
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+
+  let dataDir;
+
+  function mockStepsWithParsedSessionId(parsedSessionId) {
+    const directorProse = 'Director notes prose...';
+    sdkQuery
+      .mockResolvedValueOnce({ sessionId: parsedSessionId, roster: ['Alex'], reportingMode: 'on-site' })
+      .mockResolvedValueOnce({ exposedTokens: [], buriedTokens: [], shellAccounts: [],
+        exposedCount: 0, buriedCount: 0, totalBuried: 0 })
+      .mockResolvedValueOnce({ characterMentions: {}, quotes: [],
+        transactionReferences: [], postInvestigationDevelopments: [] });
+    return directorProse;
+  }
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-parse-sessionid-'));
+  });
+
+  test('ignores the model-parsed sessionId and writes under the thread sessionId', async () => {
+    const directorProse = mockStepsWithParsedSessionId('0711');
+    const state = makeState({ sessionId: '071126', directorNotesRaw: directorProse });
+    const config = { configurable: { sdkClient: sdkQuery, dataDir, sessionId: '071126' } };
+
+    const result = await parseRawInput(state, config);
+
+    // The channel is owned by initializeSession; this node must not write it.
+    expect(result).not.toHaveProperty('sessionId');
+    expect(result.sessionConfig.sessionId).toBe('071126');
+    expect(fs.existsSync(path.join(dataDir, '071126', 'inputs', 'session-config.json'))).toBe(true);
+    expect(fs.existsSync(path.join(dataDir, '0711'))).toBe(false);
+  });
+
+  test('keeps the parsed sessionId when it already agrees with the thread', async () => {
+    const directorProse = mockStepsWithParsedSessionId('071126');
+    const state = makeState({ sessionId: '071126', directorNotesRaw: directorProse });
+    const config = { configurable: { sdkClient: sdkQuery, dataDir, sessionId: '071126' } };
+
+    const result = await parseRawInput(state, config);
+
+    expect(result.sessionConfig.sessionId).toBe('071126');
+  });
+
+  test('falls back to config.configurable.sessionId when state has none', async () => {
+    const directorProse = mockStepsWithParsedSessionId('0711');
+    const state = makeState({ directorNotesRaw: directorProse });
+    const config = { configurable: { sdkClient: sdkQuery, dataDir, sessionId: '071126' } };
+
+    const result = await parseRawInput(state, config);
+
+    expect(result.sessionConfig.sessionId).toBe('071126');
+    expect(fs.existsSync(path.join(dataDir, '071126', 'inputs'))).toBe(true);
+  });
+
+  test('THROWS rather than writing inputs under a model-invented directory', async () => {
+    const directorProse = mockStepsWithParsedSessionId('0711');
+    const state = makeState({ directorNotesRaw: directorProse });
+    const config = { configurable: { sdkClient: sdkQuery, dataDir } }; // no sessionId anywhere
+
+    await expect(parseRawInput(state, config)).rejects.toThrow(/No sessionId/i);
+    expect(fs.existsSync(path.join(dataDir, '0711'))).toBe(false);
+  });
+});
+
+describe('SESSION_CONFIG_SCHEMA sessionId description (B1)', () => {
+  const { _testing } = require('../workflow/nodes/input-nodes');
+
+  test('tells the model to copy the provided sessionId rather than derive MMDD', () => {
+    const desc = _testing.SESSION_CONFIG_SCHEMA.properties.sessionId.description;
+    expect(desc).toMatch(/verbatim/i);
+    expect(desc).not.toMatch(/MMDD/);
   });
 });

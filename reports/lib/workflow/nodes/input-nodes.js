@@ -69,7 +69,7 @@ const SESSION_CONFIG_SCHEMA = {
   properties: {
     sessionId: {
       type: 'string',
-      description: 'Session identifier in MMDD format (e.g., "1221" for Dec 21)'
+      description: 'Copy the provided sessionId verbatim.'
     },
     sessionDate: {
       type: 'string',
@@ -651,7 +651,19 @@ Return structured JSON matching the schema.`;
   // Step 6: Save files to data directory
   // ─────────────────────────────────────────────────────
 
-  const sessionId = sessionConfig.sessionId;
+  // B1: the sessionId channel is owned by initializeSession (thread_id). Haiku's
+  // Step-1 answer is advisory at best -- for session 071126 it returned "0711", so
+  // the inputs were written to data/0711/ while data/071126/ got none and the
+  // report was published as report-0711.html with photosCopied=0. Take the
+  // authoritative id, and refuse to write anything if we do not have one.
+  const sessionId = state.sessionId || config?.configurable?.sessionId;
+  if (!sessionId) {
+    throw new Error('[parseRawInput] No sessionId in state or config; refusing to write inputs');
+  }
+  if (sessionConfig.sessionId !== sessionId) {
+    console.warn(`[parseRawInput] Model returned sessionId "${sessionConfig.sessionId}"; overriding with "${sessionId}"`);
+    sessionConfig.sessionId = sessionId;
+  }
   const inputsDir = path.join(dataDir, sessionId, 'inputs');
 
   console.log(`[parseRawInput] Saving files to ${inputsDir}`);
@@ -692,7 +704,8 @@ Return structured JSON matching the schema.`;
 
   // Build parsed data for review checkpoint
   const parsedData = {
-    sessionId,
+    // NOTE (B1): no `sessionId` key -- returning one would overwrite the channel
+    // initializeSession set from thread_id. The id lives inside sessionConfig.
     sessionConfig,
     directorNotes,
     playerFocus,
