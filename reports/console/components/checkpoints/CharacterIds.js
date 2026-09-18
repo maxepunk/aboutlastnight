@@ -14,7 +14,14 @@ const { Badge, truncate } = window.Console.utils;
 function CharacterIds({ data, onApprove }) {
   const sessionPhotos = (data && data.sessionPhotos) || [];
   const photoAnalyses = (data && data.photoAnalyses && data.photoAnalyses.analyses) || [];
-  const roster = (data && data.sessionConfig && data.sessionConfig.roster) || [];
+  // H4: the interrupt payload carries `roster` (checkpoint-nodes.js passes state.roster
+  // from await-roster). sessionConfig.roster is EMPTY here — parseRawInput, which writes
+  // sessionConfig, runs two checkpoints later — so reading only that key meant the roster
+  // bar never rendered and, on a reused session ID, the previous run's stale roster showed
+  // instead. sessionConfig stays as the fallback for a thread that already parsed.
+  const roster = (data && data.roster)
+    || (data && data.sessionConfig && data.sessionConfig.roster)
+    || [];
 
   // Per-photo user descriptions keyed by index
   const [descriptions, setDescriptions] = React.useState({});
@@ -25,10 +32,20 @@ function CharacterIds({ data, onApprove }) {
     return (filepath || '').split('/').pop().split('\\').pop();
   }
 
-  function getScoreClass(score) {
-    if (score > 7) return 'photo-card__score--high';
-    if (score >= 4) return 'photo-card__score--medium';
-    return 'photo-card__score--low';
+  /**
+   * H24: the card read `photo.relevanceScore`, which no analysis object carries, and
+   * stamped every photo with a red "0/10" — ten of them, while the pipeline had rated
+   * four of those photos "critical". The real field is storyRelevance
+   * ('critical' | 'supporting' | 'contextual'); render it as the word it is.
+   * 'contextual' gets no badge: it is the default and the absence reads as such.
+   *
+   * @param {string} relevance
+   * @returns {{className: string, label: string}|null}
+   */
+  function getRelevanceBadge(relevance) {
+    if (relevance === 'critical') return { className: 'badge badge--warning', label: 'Critical' };
+    if (relevance === 'supporting') return { className: 'badge', label: 'Supporting' };
+    return null;
   }
 
   function getRoleColor(role) {
@@ -106,7 +123,7 @@ function CharacterIds({ data, onApprove }) {
       photoAnalyses.map(function (photo, i) {
         var filepath = sessionPhotos[i] || '';
         var displayName = getDisplayName(filepath) || 'Photo ' + (i + 1);
-        var score = photo.relevanceScore || 0;
+        var relevanceBadge = getRelevanceBadge(photo.storyRelevance);
         var visual = photo.visualContent || '';
         var charDescs = photo.characterDescriptions || [];
         var caption = photo.suggestedCaption || '';
@@ -144,9 +161,9 @@ function CharacterIds({ data, onApprove }) {
                 style: { cursor: 'pointer' }
               },
                 React.createElement('span', { className: 'text-sm' }, displayName),
-                React.createElement('span', {
-                  className: 'photo-card__score ' + getScoreClass(score)
-                }, score + '/10'),
+                relevanceBadge && React.createElement('span', {
+                  className: relevanceBadge.className
+                }, relevanceBadge.label),
                 React.createElement('span', {
                   className: 'text-xs text-muted',
                   style: { marginLeft: 'auto' }
@@ -207,9 +224,15 @@ function CharacterIds({ data, onApprove }) {
                   rows: 2,
                   value: descriptions[i] || '',
                   onChange: function (e) { updateDescription(i, e.target.value); },
-                  placeholder: 'e.g., ' + (roster.length > 0
-                    ? roster[0] + ' is the person in red, ' + (roster[1] || '...') + ' is behind them...'
-                    : 'Sarah is in the red dress, Marcus is behind her...')
+                  // Built from the session's own roster so the example names are people
+                  // the director just typed, not names from another session.
+                  placeholder: 'e.g., ' + (
+                    roster.length > 1
+                      ? roster[0] + ' is the person in red, ' + roster[1] + ' is behind them...'
+                      : roster.length === 1
+                        ? roster[0] + ' is the person in red, to the left of the bar...'
+                        : 'Sarah is in the red dress, Marcus is behind her...'
+                  )
                 })
               )
             )
