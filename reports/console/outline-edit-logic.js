@@ -579,6 +579,86 @@
     return { valid: errors.length === 0, errors: errors };
   }
 
+  // ── (I2) ARTICLE CLIENT GATE (B6) ─────────────────────────────────────────
+  //
+  // The mirror of validateOutlineShape for the ContentBundle. Task 3 added the
+  // server-side content-bundle schema check (a 400 the console already renders);
+  // this catches the obvious breakage before the POST and in the same inline
+  // error slot, because an unvalidated hand-edit used to reach
+  // validateContentBundle, which routes a bad bundle straight to END — after ten
+  // checkpoints and five-plus Opus calls, with Retry failing identically.
+  //
+  // NOT STRICTER THAN THE SERVER, on purpose: content-bundle.schema.json makes
+  // `heading` optional on a section, so requiring it here would block Approve on
+  // a bundle the server would have accepted. This gate checks only what is
+  // unambiguously required, and leaves the fine grain to the schema.
+
+  /** The content-block `type` values content-bundle.schema.json allows. */
+  var CONTENT_BLOCK_TYPES = [
+    'paragraph', 'quote', 'evidence-reference', 'list', 'photo', 'evidence-card'
+  ];
+
+  /**
+   * Dependency-free structural check on an edited ContentBundle.
+   *
+   * @param {*} bundle
+   * @returns {{valid: boolean, errors: Array<{path: string, message: string}>}}
+   */
+  function validateBundleShape(bundle) {
+    if (!isPlainObject(bundle)) {
+      return { valid: false, errors: [{ path: '/', message: 'article bundle must be an object' }] };
+    }
+    var errors = [];
+
+    ['metadata', 'headline'].forEach(function (key) {
+      if (!isPlainObject(bundle[key])) {
+        errors.push({ path: '/' + key, message: "must be a required object '" + key + "'" });
+      }
+    });
+
+    if (!Array.isArray(bundle.sections) || bundle.sections.length === 0) {
+      errors.push({ path: '/sections', message: 'must be a non-empty array of sections' });
+      return { valid: false, errors: errors };
+    }
+
+    bundle.sections.forEach(function (section, i) {
+      var base = '/sections/' + i;
+      if (!isPlainObject(section)) {
+        errors.push({ path: base, message: 'must be an object' });
+        return;
+      }
+      if (!isNonEmptyString(section.id)) {
+        errors.push({ path: base + '/id', message: "must have required string 'id'" });
+      }
+      if (section.heading !== undefined && typeof section.heading !== 'string') {
+        errors.push({ path: base + '/heading', message: 'must be a string when present' });
+      }
+      if (!Array.isArray(section.content)) {
+        errors.push({ path: base + '/content', message: 'must be an array of content blocks' });
+        return;
+      }
+      section.content.forEach(function (block, j) {
+        var blockPath = base + '/content/' + j;
+        if (!isPlainObject(block)) {
+          errors.push({ path: blockPath, message: 'must be an object' });
+          return;
+        }
+        if (typeof block.type !== 'string' || block.type.length === 0) {
+          errors.push({ path: blockPath + '/type', message: "must have a string 'type'" });
+          return;
+        }
+        if (CONTENT_BLOCK_TYPES.indexOf(block.type) === -1) {
+          errors.push({
+            path: blockPath + '/type',
+            message: "'" + block.type + "' is not a content block type (" + CONTENT_BLOCK_TYPES.join(', ') + ')'
+          });
+        }
+      });
+    });
+
+    return { valid: errors.length === 0, errors: errors };
+  }
+
   // ── (J) PUBLIC SURFACE ────────────────────────────────────────────────────
   var api = {
     deepClone: deepClone,
@@ -631,7 +711,9 @@
     mergeArcInterweaving: mergeArcInterweaving,
 
     validateOutline: validateOutline,
-    validateOutlineShape: validateOutlineShape
+    validateOutlineShape: validateOutlineShape,
+    validateBundleShape: validateBundleShape,
+    CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES
   };
 
   if (typeof window !== 'undefined') {

@@ -10,9 +10,32 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify, editBtn } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ArticleEditLogic = window.Console.outlineEditLogic;
+const ViewLogic = window.Console.checkpointViewLogic;
+
+/**
+ * Photos in the HTML preview, and scripts in it (R5 F9).
+ *
+ * The assembled article references photos relatively (`sessionphotos/<id>/x.jpg`).
+ * The server injects `<base href="/">` into `htmlPreview` so they resolve; this
+ * strips <script> tags instead of granting `allow-scripts`, which removes the
+ * three "Blocked script execution in 'about:srcdoc'" console errors without
+ * giving the previewed document script access to its own (same-origin) frame.
+ */
+function stripScripts(html) {
+  return String(html == null ? '' : html)
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<script[^>]*\/>/gi, '');
+}
+
+/** Last path segment, tolerating both separators (the photo paths are Windows). */
+function baseName(filepath) {
+  const value = String(filepath == null ? '' : filepath);
+  const cut = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
+  return cut >= 0 ? value.slice(cut + 1) : value;
+}
 
 // ── Editor components (module-level to isolate hooks from Article) ──
 
@@ -590,8 +613,19 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // Theme detection: prop > metadata > fallback
   const isDetective = theme === 'detective' ||
     (!theme && contentBundle.metadata && contentBundle.metadata.theme === 'detective');
-  const assembledHtml = (data && data.assembledHtml) || (data && data.articleHtml) || '';
-  const evaluationHistory = (data && data.evaluationHistory) || {};
+  // H13: the preview used to be gated on `assembledHtml`, which is null until
+  // assembleHtml runs TWO NODES LATER — so the button did not exist on the first
+  // pass, i.e. at the only gate where it matters. Task 3 renders `htmlPreview`
+  // from the pending bundle with the same TemplateAssembler the pipeline
+  // publishes with.
+  const previewHtml = (data && data.htmlPreview) || (data && data.assembledHtml) ||
+    (data && data.articleHtml) || '';
+  // H6: `data.evaluationHistory` is an append-only ARRAY mixing all three phases;
+  // the old renderEvalBar read `.overallScore` (and `advisoryNotes`, not a field)
+  // off it and rendered null in every session.
+  const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
+  // Absolute paths of this session's photos, for photoUrl (H13/F9).
+  const sessionPhotos = (data && data.sessionPhotos) || [];
   const previousArticle = (revisionCache && revisionCache.article) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -614,6 +648,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [mode, setMode] = React.useState('view'); // 'view' | 'json' | 'reject'
   const [jsonText, setJsonText] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
+  // B6: inline error for an edited bundle that fails the client shape gate.
+  const [editError, setEditError] = React.useState('');
   const [feedbackText, setFeedbackText] = React.useState('');
   const [showHtmlPreview, setShowHtmlPreview] = React.useState(false);
   const [expandedPhoto, setExpandedPhoto] = React.useState(null);
@@ -627,6 +663,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     setMode('view');
     setJsonText('');
     setJsonError('');
+    setEditError('');
     setFeedbackText('');
     setShowHtmlPreview(false);
     setExpandedPhoto(null);
@@ -754,29 +791,56 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   // -- Actions --
 
+  /**
+   * B6 (client half): check an edited bundle's shape before the POST.
+   *
+   * Task 3 added the server-side content-bundle schema gate, which returns a 400
+   * the console renders as a banner. This runs the same class of check inline, in
+   * the existing validation-error slot, and BLOCKS Approve — because before
+   * either gate existed a hand-edit reached validateContentBundle, which routes a
+   * bad bundle straight to END: ten checkpoints and five-plus Opus calls spent,
+   * Retry failing identically, and rollback discarding the approved draft.
+   *
+   * @returns {boolean} whether the edits may be sent
+   */
+  function gateEdits(bundle, setError) {
+    var result = ArticleEditLogic.validateBundleShape(bundle);
+    if (result.valid) {
+      setError('');
+      return true;
+    }
+    setError('Cannot approve, edited article is invalid: ' +
+      result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
+    return false;
+  }
+
   function handleApprove() {
     if (hasEdits && editedBundle) {
+      if (!gateEdits(editedBundle, setEditError)) return;
       // Persist edits in reducer state so they survive unmount during processing
       if (dispatch) {
         dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
       }
       onApprove({ article: true, articleEdits: editedBundle });
     } else {
+      setEditError('');
       onApprove({ article: true });
     }
   }
 
   function handleJsonApprove() {
+    var parsed;
     try {
-      var parsed = JSON.parse(jsonText);
-      setJsonError('');
-      if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: parsed });
-      }
-      onApprove({ article: true, articleEdits: parsed });
+      parsed = JSON.parse(jsonText);
     } catch (err) {
       setJsonError('Invalid JSON: ' + err.message);
+      return;
     }
+    if (!gateEdits(parsed, setJsonError)) return;
+    if (dispatch) {
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: parsed });
+    }
+    onApprove({ article: true, articleEdits: parsed });
   }
 
   function handleModeChange(newMode) {
@@ -804,8 +868,27 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   // -- Photo URL --
 
+  /**
+   * A servable URL for one photo filename (R4 H13, R5 F9).
+   *
+   * `/sessionphotos/<id>/<file>` only exists AFTER assembleHtml copies the
+   * photos, which happens after this gate — so every photo on the article
+   * checkpoint was a broken image. `data.sessionPhotos` holds the absolute
+   * source paths, which `/api/file?path=` serves directly (the same route
+   * CharacterIds.js uses for its thumbnails). The old path stays as a fallback
+   * for a payload that carries no sessionPhotos (a raw /checkpoint read).
+   */
   function photoUrl(filename) {
-    if (!sessionId || !filename) return '';
+    if (!filename) return '';
+    var target = baseName(filename);
+    for (var i = 0; i < sessionPhotos.length; i += 1) {
+      var candidate = String(sessionPhotos[i] || '');
+      var base = baseName(candidate);
+      if (base && target && base.toLowerCase() === target.toLowerCase()) {
+        return '/api/file?path=' + encodeURIComponent(candidate);
+      }
+    }
+    if (!sessionId) return '';
     return '/sessionphotos/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(filename);
   }
 
@@ -892,7 +975,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
           className: 'article-block article-block--photo-rich article-block--editable'
         },
           editBtn(function () { startBlockEdit(sectionIdx, blockIdx); }),
-          sessionId && currentBlock.filename
+          photoUrl(currentBlock.filename)
             ? React.createElement('img', {
                 src: photoUrl(currentBlock.filename),
                 alt: currentBlock.caption || currentBlock.filename,
@@ -1090,14 +1173,18 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       });
     }
 
+    var heroSrc = photoUrl(currentHero.filename);
     return React.createElement('figure', { className: 'article-hero mb-md article-block--editable' },
       editBtn(function () { startSidebarEdit('heroImage', 0); }),
-      React.createElement('img', {
-        src: photoUrl(currentHero.filename),
-        alt: currentHero.caption || 'Hero image',
-        className: 'article-hero__image',
-        loading: 'lazy'
-      }),
+      heroSrc
+        ? React.createElement('img', {
+            src: heroSrc,
+            alt: currentHero.caption || 'Hero image',
+            className: 'article-hero__image',
+            loading: 'lazy'
+          })
+        : React.createElement('div', { className: 'article-block__photo-placeholder' },
+            currentHero.filename + ' (not among the photos this session carries)'),
       currentHero.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, currentHero.caption),
       currentHero.characters && currentHero.characters.length > 0 && React.createElement('div', { className: 'tag-list mt-sm' },
         currentHero.characters.map(function (c, j) {
@@ -1128,7 +1215,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
           }
           return React.createElement('figure', { key: 'gallery-' + i, className: 'article-photos-gallery__item article-block--editable' },
             editBtn(function () { startSidebarEdit('photos', i); }),
-            sessionId && photo.filename
+            photoUrl(photo.filename)
               ? React.createElement('img', {
                   src: photoUrl(photo.filename),
                   alt: photo.caption || photo.filename,
@@ -1149,24 +1236,6 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     );
   }
 
-  // -- Evaluation bar --
-
-  function renderEvalBar() {
-    var score = evaluationHistory.overallScore;
-    var issues = evaluationHistory.structuralIssues;
-    var advisory = evaluationHistory.advisoryNotes;
-    if (score == null && issues == null && advisory == null) return null;
-
-    return React.createElement('div', { className: 'eval-bar mb-md' },
-      score != null && React.createElement('span', { className: 'eval-bar__score' }, 'Score: ' + score + '/10'),
-      issues != null && React.createElement('span', { className: 'eval-bar__issues' },
-        issues + ' structural issue' + (issues !== 1 ? 's' : '')
-      ),
-      advisory != null && React.createElement('span', { className: 'text-xs text-muted' },
-        Array.isArray(advisory) ? advisory.length + ' advisory note' + (advisory.length !== 1 ? 's' : '') : advisory
-      )
-    );
-  }
 
   // -- Expanded photo overlay --
 
@@ -1206,7 +1275,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     }),
 
     // Evaluation bar
-    renderEvalBar(),
+    React.createElement(EvalBar, { view: evaluation }),
 
     // Word count + edit indicator
     React.createElement('div', { className: 'flex gap-md items-center' },
@@ -1218,7 +1287,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     ),
 
     // Hero image
-    sessionId && renderHeroImage(),
+    renderHeroImage(),
 
     // Headline (editable)
     isEditing('headline')
@@ -1290,10 +1359,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     !isDetective && renderFinancialTracker(getCurrentBundle().financialTracker || financialTracker),
 
     // Photos gallery
-    sessionId && renderPhotosGallery(),
+    renderPhotosGallery(),
 
     // HTML Preview toggle
-    assembledHtml && React.createElement('div', { className: 'mt-md' },
+    previewHtml && React.createElement('div', { className: 'mt-md' },
       React.createElement('button', {
         className: 'btn btn-secondary btn-sm',
         onClick: function () { setShowHtmlPreview(!showHtmlPreview); },
@@ -1303,12 +1372,18 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       showHtmlPreview && React.createElement('div', { className: 'html-preview mt-md fade-in' },
         React.createElement('iframe', {
           className: 'html-preview__frame',
-          srcDoc: assembledHtml,
+          // The string is used as-is apart from the <script> strip: the server
+          // already injected `<base href="/">` so the relative sessionphotos/
+          // URLs resolve instead of hitting the /console/* SPA catch-all.
+          srcDoc: stripScripts(previewHtml),
           sandbox: 'allow-same-origin',
           title: 'Article HTML Preview'
         })
       )
     ),
+
+    // Inline validation error (B6: shown when Approve is blocked)
+    editError && React.createElement('p', { className: 'validation-error', role: 'alert' }, editError),
 
     // Action buttons
     React.createElement('div', { className: 'action-modes mt-md' },

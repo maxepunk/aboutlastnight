@@ -1734,10 +1734,12 @@ textarea.input {
   overflow: hidden;
 }
 
+/* R5 F9: an iframe has no intrinsic height, so `max-height: 500px` never
+   applied and the final approval gate showed the article through its 300 px
+   `min-height` porthole. An explicit height is the only thing that sizes it. */
 .html-preview__frame {
   width: 100%;
-  max-height: 500px;
-  min-height: 300px;
+  height: 70vh;
   border: none;
   background: #fff;
   overflow: auto;
@@ -2407,7 +2409,7 @@ textarea.input {
   }
 
   .html-preview__frame {
-    max-height: 300px;
+    height: 60vh;
   }
 
   .edit-area {

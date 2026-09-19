@@ -625,3 +625,135 @@ describe('capstone conformance', () => {
     expect(validate('detective-outline', o).valid).toBe(true);
   });
 });
+
+// ── (K) validateBundleShape (article client gate, B6) ───────────────────────────
+//
+// The mirror of validateOutlineShape for the ARTICLE gate. Task 3 added the
+// server-side content-bundle schema check, which returns a 400; this catches the
+// obvious breakage before the POST, in the same `validation-error` slot, so a
+// hand-edit cannot reach validateContentBundle (which routes a bad bundle
+// straight to END — after ten checkpoints and five-plus Opus calls).
+//
+// DELIBERATELY NOT STRICTER THAN THE SERVER: content-bundle.schema.json makes
+// `heading` optional on a section, so this gate must not require it or it would
+// block Approve on a bundle the server would accept.
+describe('validateBundleShape (article client gate)', () => {
+  function validBundle() {
+    return {
+      metadata: { sessionId: '091826', theme: 'journalist', generatedAt: '2026-09-18T12:00:00Z' },
+      headline: { main: 'The room got it wrong' },
+      sections: [
+        {
+          id: 'lede',
+          type: 'narrative',
+          heading: 'LEDE',
+          content: [
+            { type: 'paragraph', text: 'One guest dead, a room full of liars.' },
+            { type: 'quote', text: 'I never touched the ledger.', attribution: 'Vic' }
+          ]
+        }
+      ]
+    };
+  }
+
+  it('accepts a valid bundle', () => {
+    expect(L.validateBundleShape(validBundle())).toEqual({ valid: true, errors: [] });
+  });
+
+  it('accepts a section with no heading (the server schema does)', () => {
+    const b = validBundle();
+    delete b.sections[0].heading;
+    expect(L.validateBundleShape(b).valid).toBe(true);
+  });
+
+  it('rejects a non-object', () => {
+    expect(L.validateBundleShape(null).valid).toBe(false);
+    expect(L.validateBundleShape([]).valid).toBe(false);
+    expect(L.validateBundleShape('{}').errors[0].path).toBe('/');
+  });
+
+  it('requires metadata, headline and sections', () => {
+    ['metadata', 'headline', 'sections'].forEach((key) => {
+      const b = validBundle();
+      delete b[key];
+      const r = L.validateBundleShape(b);
+      expect(r.valid).toBe(false);
+      expect(r.errors.some(e => e.path === '/' + key)).toBe(true);
+    });
+  });
+
+  it('rejects an empty sections array', () => {
+    const b = validBundle();
+    b.sections = [];
+    const r = L.validateBundleShape(b);
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.path === '/sections')).toBe(true);
+  });
+
+  it('requires a string id and an array content on every section', () => {
+    const b = validBundle();
+    delete b.sections[0].id;
+    b.sections[0].content = 'prose';
+    const r = L.validateBundleShape(b);
+    expect(r.errors.some(e => e.path === '/sections/0/id')).toBe(true);
+    expect(r.errors.some(e => e.path === '/sections/0/content')).toBe(true);
+  });
+
+  it('rejects a non-string heading when one is present', () => {
+    const b = validBundle();
+    b.sections[0].heading = 7;
+    expect(L.validateBundleShape(b).errors.some(e => e.path === '/sections/0/heading')).toBe(true);
+  });
+
+  it('rejects a content block with no type, a non-string type, or an unknown type', () => {
+    const b = validBundle();
+    b.sections[0].content = [{ text: 'no type' }, { type: 3 }, { type: 'sidebar' }];
+    const r = L.validateBundleShape(b);
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.path === '/sections/0/content/0/type')).toBe(true);
+    expect(r.errors.some(e => e.path === '/sections/0/content/1/type')).toBe(true);
+    const unknown = r.errors.find(e => e.path === '/sections/0/content/2/type');
+    expect(unknown.message).toMatch(/sidebar/);
+  });
+
+  it('accepts every block type the schema defines', () => {
+    const b = validBundle();
+    b.sections[0].content = [
+      { type: 'paragraph', text: 'x' },
+      { type: 'quote', text: 'y' },
+      { type: 'evidence-reference', tokenId: 't1' },
+      { type: 'list', items: ['a'] },
+      { type: 'photo', filename: 'p.jpg' },
+      { type: 'evidence-card', tokenId: 't2', headline: 'h', content: 'c' }
+    ];
+    expect(L.validateBundleShape(b).valid).toBe(true);
+  });
+
+  it('rejects a non-object content block', () => {
+    const b = validBundle();
+    b.sections[0].content = ['just a string'];
+    expect(L.validateBundleShape(b).errors.some(e => e.path === '/sections/0/content/0')).toBe(true);
+  });
+
+  it('rejects a non-object section', () => {
+    const b = validBundle();
+    b.sections = ['lede'];
+    expect(L.validateBundleShape(b).errors.some(e => e.path === '/sections/0')).toBe(true);
+  });
+
+  // The gap runs one way only: the client may pass what the server rejects (the
+  // server's 400 names the field and the console already renders it), never the
+  // reverse, which would block Approve on a bundle the server would accept.
+  it('is deliberately lenient where the server is finer-grained (metadata.generatedAt)', () => {
+    const b = validBundle();
+    delete b.metadata.generatedAt;
+    expect(L.validateBundleShape(b).valid).toBe(true);
+    expect(validate('content-bundle', b).valid).toBe(false);
+  });
+
+  it('agrees with the server schema on the fixture it accepts', () => {
+    expect(validate('content-bundle', validBundle()).valid).toBe(
+      L.validateBundleShape(validBundle()).valid
+    );
+  });
+});
