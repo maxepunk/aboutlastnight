@@ -487,3 +487,71 @@ describe('enrichDirectorNotes — the fallback is visible (B3)', () => {
     expect(result._enrichmentFallback.reason).toMatch(/no object/i);
   });
 });
+
+describe('enrichDirectorNotes — an all-empty reply is a fallback, not a result (Task 1 Minor)', () => {
+  const { enrichDirectorNotes } = require('../director-enricher');
+  const LONG_PROSE = 'They circled each other all morning. '.repeat(15); // > 400 chars
+  const EMPTY_REPLY = { characterMentions: {}, quotes: [], transactionReferences: [] };
+
+  it('marks an all-empty reply over substantial prose', async () => {
+    expect(LONG_PROSE.length).toBeGreaterThan(400);
+    const sdk = jest.fn().mockResolvedValue(EMPTY_REPLY);
+
+    const result = await enrichDirectorNotes({ rawProse: LONG_PROSE }, sdk);
+
+    // Schema-valid, so it used to look identical to notes with nothing in them.
+    // The input-review banner (Task 4.5) needs to be able to tell the difference.
+    expect(result._enrichmentFallback).toEqual({ reason: 'model returned no indexes' });
+    expect(result.rawProse).toBe(LONG_PROSE);
+  });
+
+  it('does NOT mark short prose, where empty indexes are plausible', async () => {
+    const sdk = jest.fn().mockResolvedValue(EMPTY_REPLY);
+    const result = await enrichDirectorNotes({ rawProse: 'Quiet session.' }, sdk);
+    expect(result._enrichmentFallback).toBeUndefined();
+  });
+
+  it('does NOT mark a reply that indexed anything at all', async () => {
+    const cases = [
+      { ...EMPTY_REPLY, characterMentions: { Vic: [{ excerpt: 'They circled each other all morning.' }] } },
+      { ...EMPTY_REPLY, quotes: [{ speaker: 'Vic', text: 'They circled each other all morning.' }] },
+      { ...EMPTY_REPLY, transactionReferences: [{ excerpt: 'x', linkedTransactions: [], confidence: 'low' }] }
+    ];
+    for (const reply of cases) {
+      const result = await enrichDirectorNotes({ rawProse: LONG_PROSE }, jest.fn().mockResolvedValue(reply));
+      expect(result._enrichmentFallback).toBeUndefined();
+    }
+  });
+});
+
+describe('normalizeForGrounding folds dashes (the JSDoc already claimed it)', () => {
+  const { enrichDirectorNotes } = require('../director-enricher');
+
+  it('keeps a quote the model retyped with an em-dash where the prose has a hyphen', async () => {
+    const prose = 'Vic said the deal was already done - signed, filed, forgotten.';
+    const sdk = jest.fn().mockResolvedValue({
+      characterMentions: {}, transactionReferences: [],
+      quotes: [{ speaker: 'Vic', text: 'the deal was already done — signed, filed, forgotten.' }]
+    });
+
+    const result = await enrichDirectorNotes({ rawProse: prose }, sdk);
+
+    expect(result.quotes).toHaveLength(1);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+});
+
+describe('ENRICHMENT prompts define the medium confidence band (Task 1 Minor)', () => {
+  const { buildEnrichmentPrompt } = require('../director-enricher');
+
+  it('the system rule and the user rules both say what medium means', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'x' });
+    [systemPrompt, userPrompt].forEach((text) => {
+      // "high iff speaker named adjacent; otherwise low" left medium undefined,
+      // so the enum's middle value was unreachable by instruction.
+      expect(text).toMatch(/"medium"/);
+      expect(text).toMatch(/same sentence/i);
+      expect(text).toMatch(/surrounding paragraph/i);
+    });
+  });
+});

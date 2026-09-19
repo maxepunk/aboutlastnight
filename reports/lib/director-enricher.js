@@ -117,13 +117,19 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
   }
 };
 
+/**
+ * Above this many characters of prose, an enrichment that indexed NOTHING is
+ * treated as a failure rather than an accurate report of empty notes.
+ */
+const EMPTY_ENRICHMENT_PROSE_THRESHOLD = 400;
+
 const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*.
 
 Hard rules:
 1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
 2. Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes (npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).
 3. transactionReferences: link an observation to a scoring-timeline row ONLY when timestamp, actor, and amount converge. If no row matches cleanly, emit linkedTransactions: [] with confidence: "low" and a linkReasoning explaining the ambiguity. Do NOT fabricate.
-4. quotes: only extract phrases that appear in quotation marks in the prose, or unambiguous direct speech. Preserve wording exactly. confidence: "high" iff speaker is named adjacent to the quote; otherwise "low".
+4. quotes: only extract phrases that appear in quotation marks in the prose, or unambiguous direct speech. Preserve wording exactly. Confidence bands: "high" = the speaker is named in the SAME SENTENCE as the quote; "medium" = the speaker is not named beside the quote but is unambiguous from the SURROUNDING PARAGRAPH; "low" = anything else. Never guess a speaker to reach a higher band.
 5. postInvestigationDevelopments: only passages with explicit post-investigation temporal markers ("just been announced", "currently whereabouts unknown", "is on his way to", "following the investigation", "at the time of this article's writing").
 6. Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.
 
@@ -211,7 +217,7 @@ ${rawProse}
 1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
 2. Use ONLY roster names from the roster section as keys in characterMentions.
 3. Link transactionReferences only when timestamp, actor, and amount converge with the scoring timeline. Otherwise confidence: "low" and empty linkedTransactions.
-4. Extract quotes verbatim; confidence "high" iff speaker named adjacent, else "low".
+4. Extract quotes verbatim. Confidence: "high" = speaker named in the same sentence; "medium" = speaker inferable from the surrounding paragraph; "low" = otherwise.
 5. postInvestigationDevelopments only for passages with explicit post-investigation markers.
 6. Empty arrays are valid. Never fabricate.
 </ENRICHMENT_RULES>
@@ -240,6 +246,9 @@ function normalizeForGrounding(value) {
   return String(value || '')
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
+    // The JSDoc above already promised this: a quote the model retyped with an
+    // em-dash where the prose has a hyphen was being DROPPED as ungrounded.
+    .replace(/[\u2013\u2014-]/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -285,6 +294,18 @@ async function enrichDirectorNotes(context, sdk) {
       return { ...createFallback(rawProse), _enrichmentFallback: { reason: 'SDK returned no object' } };
     }
 
+    // An all-empty but SCHEMA-VALID reply used to be indistinguishable from
+    // director notes that genuinely had nothing in them. Over substantial prose
+    // it is a failure, and the input-review banner needs to be able to say so.
+    const indexedNothing =
+      Object.keys(result.characterMentions || {}).length === 0 &&
+      (result.quotes || []).length === 0 &&
+      (result.transactionReferences || []).length === 0;
+    const substantialProse = rawProse.length > EMPTY_ENRICHMENT_PROSE_THRESHOLD;
+    if (indexedNothing && substantialProse) {
+      console.warn(`[enrichDirectorNotes] model returned no indexes over ${rawProse.length} chars of prose`);
+    }
+
     const proseNorm = normalizeForGrounding(rawProse);
     const quotes = (result.quotes || []).filter(
       q => q && normalizeForGrounding(q.text) && proseNorm.includes(normalizeForGrounding(q.text))
@@ -302,7 +323,10 @@ async function enrichDirectorNotes(context, sdk) {
       quotes,
       transactionReferences: result.transactionReferences || [],
       postInvestigationDevelopments: result.postInvestigationDevelopments || [],
-      ...(droppedQuotes > 0 && { _enrichmentWarnings: { droppedQuotes } })
+      ...(droppedQuotes > 0 && { _enrichmentWarnings: { droppedQuotes } }),
+      ...(indexedNothing && substantialProse && {
+        _enrichmentFallback: { reason: 'model returned no indexes' }
+      })
     };
   } catch (error) {
     console.warn(`[enrichDirectorNotes] SDK call failed: ${error.message}; falling back`);

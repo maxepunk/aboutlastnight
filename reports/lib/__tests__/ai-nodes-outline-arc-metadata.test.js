@@ -105,3 +105,49 @@ describe('generateOutline arcAnalysis wiring', () => {
     expect(captured.arcAnalysis.narrativeArcs).toEqual([]);
   });
 });
+
+describe('<arc-analysis> does not repeat the arcs (Task 1 Minor)', () => {
+  const { PromptBuilder } = require('../prompt-builder');
+
+  const ARC_ANALYSIS = {
+    synthesisNotes: 'The money and the vote are the same story.',
+    interweavingPlan: { convergencePoint: 'the ledger' },
+    narrativeArcs: [
+      { id: 'arc-1', title: 'The Money Trail', arcSource: 'accusation', evidenceStrength: 'strong' },
+      { id: 'arc-2', title: 'The Succession', arcSource: 'whiteboard', evidenceStrength: 'moderate' }
+    ]
+  };
+
+  function builder(theme) {
+    const themeLoader = {
+      loadPhasePrompts: jest.fn().mockResolvedValue({
+        'section-rules': 'SR', 'editorial-design': 'ED',
+        'narrative-structure': 'NS', 'evidence-boundaries': 'EB'
+      }),
+      validate: jest.fn()
+    };
+    return new PromptBuilder(themeLoader, theme, {}, { Vic: 'Vic Kingsley' });
+  }
+
+  ['journalist', 'detective'].forEach((theme) => {
+    it(`${theme}: each arc title is serialized exactly once`, async () => {
+      const { userPrompt } = await builder(theme).buildOutlinePrompt(
+        ARC_ANALYSIS, ['arc-1', 'arc-2'], 'hero.png', [], [], [], null
+      );
+      // <arc-metadata> already renders every arc, trimmed to the fields the
+      // outline needs. <arc-analysis> dumped the SAME arcs again, untrimmed.
+      ARC_ANALYSIS.narrativeArcs.forEach((arc) => {
+        const count = userPrompt.split(arc.title).length - 1;
+        expect(count).toBe(1);
+      });
+    });
+
+    it(`${theme}: <arc-analysis> still carries the analysis itself`, async () => {
+      const { userPrompt } = await builder(theme).buildOutlinePrompt(
+        ARC_ANALYSIS, ['arc-1'], 'hero.png', [], [], [], null
+      );
+      expect(userPrompt).toContain('The money and the vote are the same story.');
+      expect(userPrompt).toContain('convergencePoint');
+    });
+  });
+});

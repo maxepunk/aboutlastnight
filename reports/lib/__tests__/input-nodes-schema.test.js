@@ -45,3 +45,22 @@ describe('mergeDirectorOverrides — passthrough behavior', () => {
     expect(merged).toEqual(sessionConfig);
   });
 });
+
+describe('Step-1 parse prompt does not invite a derived sessionId (Task 1 Minor)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'workflow', 'nodes', 'input-nodes.js'), 'utf8'
+  );
+
+  it('tells the model to copy the provided sessionId verbatim', () => {
+    expect(src).toContain('Use the provided sessionId verbatim');
+  });
+
+  it('no longer offers the MMDD derivation that produced data/0711 for session 071126', () => {
+    // B1: Haiku answered "0711" for session 071126, the inputs were written to
+    // data/0711/ and the report published as report-0711.html with 0 photos.
+    // parseRawInput overrides the value now, but the instruction stayed.
+    expect(src).not.toContain('derive in MMDD format');
+  });
+});

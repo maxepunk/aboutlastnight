@@ -329,6 +329,13 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
 ${labelPromptSection('section-rules', prompts['section-rules'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
 
+    // <arc-metadata> below renders every arc, trimmed to the fields the outline
+    // needs. <arc-analysis> then dumped the SAME arcs again, untrimmed, so every
+    // arc title, summary and evidence list was serialized twice in one prompt.
+    // Strip them: the analysis (synthesisNotes, interweavingPlan) is what
+    // <arc-analysis> is for.
+    const { narrativeArcs: _arcsRenderedInMetadata, ...arcAnalysisOnly } = arcAnalysis || {};
+
     // Commit 8.15: Extract arc-specific fields for outline guidance
     const arcsWithMetadata = (arcAnalysis.narrativeArcs || []).map(arc => ({
       id: arc.id,
@@ -384,7 +391,7 @@ ${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type}
 </evidence-context>
 
 <arc-analysis>
-${JSON.stringify(arcAnalysis, null, 2)}
+${JSON.stringify(arcAnalysisOnly, null, 2)}
 
 ${labelPromptSection('section-rules', prompts['section-rules'])}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
@@ -565,7 +572,7 @@ ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'U
 </arc-evidence>
 
 <arc-analysis>
-${JSON.stringify(arcAnalysis, null, 2)}
+${JSON.stringify(arcAnalysisOnly, null, 2)}
 
 ${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
 ${labelPromptSection('formatting', prompts['formatting'])}

@@ -453,7 +453,7 @@ ${sessionIdHint}
 Rules for parsing:
 1. Extract character first names from the roster (comma-separated list)
 2. For accusation, identify WHO was accused and WHAT they were accused of
-3. For sessionId: If a specific sessionId is provided above, use it exactly. Otherwise derive in MMDD format.
+3. For sessionId: Use the provided sessionId verbatim. (B1: a derived id sent session 071126's inputs to data/0711/ and published report-0711.html with no photos. parseRawInput overrides a wrong answer, but do not produce one.)
 4. sessionDate should be YYYY-MM-DD format
 
 Return structured JSON matching the schema.${correctionsBlock}`;
