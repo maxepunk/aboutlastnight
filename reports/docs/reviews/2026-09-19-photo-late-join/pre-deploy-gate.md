@@ -17,8 +17,8 @@ No thread was paused at `character-ids`; nothing to clear. No thread was in prog
 
 - paper-evidence → await-roster → **await-full-context** (the old position `character-ids` was skipped: old-thread migration correct) → parse → input-review → pre-curation → evidence-and-photos → arc-selection, with **no photo work** on the way.
 - After arc selection the `photos` gate fired, pre-filled from the start-time `rawSessionInput.photosPath` (R9), `defaultDir` absolute, `found: 10`.
-- **Negative 1:** `POST /start` with a non-existent `photosPath` on a never-used id → `400 Photos directory not found: <path>. Leave the field blank…`; no thread created.
-- **Negative 2:** answering the gate with a non-existent path → `400 Photos directory not found: <path>`; the run stayed at the gate.
+- **Negative 1:** `POST /start` with a non-existent `photosPath` on a never-used id → `400 Photos directory not found or not a directory: <path>. Leave the field blank…` (the wording gained "or not a directory" in the final fix wave, I1); no thread created.
+- **Negative 2:** answering the gate with a non-existent path → `400 Photos directory not found or not a directory: <path>` (post-I1 wording; the run observed the pre-I1 text); the run stayed at the gate.
 - Real folder → the branch skipped fetch/preprocess/analysis on the surviving photo state and paused at `character-ids`; mappings entered; arc evidence packages built with 8/5/5 photos; hero image selected; outline (Opus), article (Opus) + one automatic revision, fact-check + evaluation, assembly.
 - Result: `outputs/report-0919269.html`, `photosCopied: 10`, 6 `<img>` tags / 5 `sessionphotos/` references. Weekly quota 33% → 37% for the run.
 - Not exercised live (verified by unit tests and the Task 1 reviewer's static trace): the empty-folder "no photographs" answer.
