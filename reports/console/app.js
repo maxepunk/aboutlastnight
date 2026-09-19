@@ -550,6 +550,13 @@ function App() {
               theme: state.theme,
               onApprove: handleApprove,
               onReject: handleReject,
+              // R5 F16: a checkpoint that offers its own recovery needs the
+              // rollback opener. ArcSelection's zero-arc dead end dispatched a
+              // SHOW_ROLLBACK action no reducer handles, so its only offered
+              // escape logged "[state] Unknown action" and did nothing. Same
+              // callback the stepper uses, so Confirm goes through the existing
+              // streaming rollback.
+              onRollback: (target) => setRollbackTarget(target),
               dispatch: dispatch,
               revisionCache: state.revisionCache,
               // pendingEdits is keyed by checkpointType (matches CHECKPOINT_COMPONENTS map keys above).

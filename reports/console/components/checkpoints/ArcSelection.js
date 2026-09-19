@@ -1,54 +1,55 @@
 /**
  * ArcSelection Checkpoint Component
  * Displays narrative arcs as selectable cards in a responsive grid.
- * Each card shows title, evidence strength, source, tone, hook,
- * key moments, evidence breakdown, character placements, financial
- * connections, thematic links, and evaluation score.
- * Supports approve with selection and reject-with-feedback for revision.
+ * Each card shows title, summary, hook, key evidence, caveats, unanswered
+ * questions, source and strength badges, and character placements.
+ * Supports approve with selection (plus optional outline guidance) and
+ * reject-with-feedback for revision.
  * Exports to window.Console.checkpoints.ArcSelection
  */
 
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, truncate } = window.Console.utils;
+const { Badge, truncate, EvalBar } = window.Console.utils;
 const { RevisionDiff } = window.Console;
+const ViewLogic = window.Console.checkpointViewLogic;
 
-function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
+function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisionCache }) {
   const arcs = (data && data.narrativeArcs) || [];
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
   const maxRevisions = (data && data.maxRevisions) || 2;
   const previousArcs = (revisionCache && revisionCache.arcs) || null;
+  // H6: `data.evaluationHistory` is an append-only ARRAY mixing all three
+  // phases, and this screen looked for a per-arc `arc.evaluationHistory` that
+  // nothing populates, so the Opus arc verdict rendered nowhere.
+  const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'arcs'));
 
-  // Selected arc IDs
+  // Selected arc IDs. H15: every arc used to arrive checked, which pushed the
+  // director to approve all five; 5+ arcs routinely costs an outline revision.
   const [selectedArcs, setSelectedArcs] = React.useState(function () {
-    var initial = new Set();
-    arcs.forEach(function (arc) {
-      initial.add(arc.id || arc.title);
-    });
-    return initial;
+    return new Set(ViewLogic.defaultArcSelection(arcs));
   });
 
-  // Track which cards are expanded (for key moments overflow)
+  // Track which cards are expanded (for long evidence and caveat lists)
   const [expandedCards, setExpandedCards] = React.useState(new Set());
 
   // Action mode: 'view' (default) or 'reject'
   const [mode, setMode] = React.useState('view');
   const [feedbackText, setFeedbackText] = React.useState('');
+  // Q2: optional emphasis, carried into the outline AND article prompts.
+  const [guidanceText, setGuidanceText] = React.useState('');
 
   // Reset selection when arcs change (e.g., after rollback or revision)
   // Use serialized IDs (not just length) to detect same-count data swaps
   const arcIdKey = arcs.map(function (arc) { return arc.id || arc.title; }).join(',');
   React.useEffect(function () {
-    var all = new Set();
-    arcs.forEach(function (arc) {
-      all.add(arc.id || arc.title);
-    });
-    setSelectedArcs(all);
+    setSelectedArcs(new Set(ViewLogic.defaultArcSelection(arcs)));
     setExpandedCards(new Set());
     setMode('view');
     setFeedbackText('');
+    setGuidanceText('');
   }, [arcIdKey]);
 
   function toggleArc(arcId) {
@@ -76,7 +77,11 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
   }
 
   function handleSubmit() {
-    onApprove({ selectedArcs: Array.from(selectedArcs) });
+    const payload = { selectedArcs: Array.from(selectedArcs) };
+    // Only on an APPROVAL: a rejection regenerates the arcs and arcFeedback is
+    // the channel for that (server.js buildResumePayload).
+    if (guidanceText.trim()) payload.outlineGuidance = guidanceText.trim();
+    onApprove(payload);
   }
 
   function handleModeChange(newMode) {
@@ -99,18 +104,15 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
     onReject({ selectedArcs: false, arcFeedback: feedbackText.trim() });
   }
 
+  // The arc schema's evidenceStrength enum is strong | moderate | weak |
+  // speculative (arc-specialist-nodes.js). The old map tested HIGH/MEDIUM, so
+  // every badge came out red whatever the strength was.
   function getStrengthColor(strength) {
-    var upper = (strength || '').toUpperCase();
-    if (upper === 'HIGH') return 'var(--accent-green)';
-    if (upper === 'MEDIUM') return 'var(--accent-amber)';
-    return 'var(--accent-red)';
-  }
-
-  function getStrengthBarClass(strength) {
-    var upper = (strength || '').toUpperCase();
-    if (upper === 'HIGH') return 'arc-card__score-fill--high';
-    if (upper === 'MEDIUM') return 'arc-card__score-fill--medium';
-    return 'arc-card__score-fill--low';
+    var value = (strength || '').toLowerCase();
+    if (value === 'strong') return 'var(--accent-green)';
+    if (value === 'moderate') return 'var(--accent-amber)';
+    if (value === 'weak' || value === 'speculative') return 'var(--accent-red)';
+    return 'var(--accent-amber)';
   }
 
   const isValid = selectedArcs.size >= 1;
@@ -130,10 +132,13 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
         React.createElement('span', { className: 'revision-diff__feedback-label' }, 'Your Last Feedback'),
         React.createElement('p', { className: 'revision-diff__feedback-text' }, previousFeedback)
       ),
+      // R5 F16: this dispatched a SHOW_ROLLBACK action no reducer handles, so
+      // the only offered recovery from a zero-arc dead end logged
+      // "[state] Unknown action" and did nothing. App passes onRollback now.
       React.createElement('button', {
         className: 'btn btn-danger',
-        onClick: function() { dispatch({ type: 'SHOW_ROLLBACK' }); },
-        'aria-label': 'Roll back to regenerate arcs'
+        onClick: function () { if (onRollback) onRollback('evidence-and-photos'); },
+        'aria-label': 'Roll back to the evidence bundle and regenerate arcs'
       }, 'Roll Back to Regenerate')
     );
   }
@@ -156,45 +161,36 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
       'Revision timed out. These are the arcs from before your feedback was applied. You can approve them as-is, reject with the same feedback to retry, or roll back.'
     ),
 
+    // Evaluation bar (what Opus said about THESE arcs)
+    React.createElement(EvalBar, { view: evaluation }),
+
     // Hint text
     React.createElement('p', { className: 'text-sm text-muted' },
       'Select 3\u20135 arcs to develop. ' + selectedArcs.size + ' of ' + arcs.length + ' selected.'
     ),
 
+    // H15: say when the selection has left the band the outline prompt expects.
+    ViewLogic.arcSelectionNote(selectedArcs.size) && React.createElement('p', {
+      className: 'arc-selection__note'
+    }, ViewLogic.arcSelectionNote(selectedArcs.size)),
+
     // Arc cards grid
     React.createElement('div', { className: 'arc-grid' },
-      arcs.map(function (arc) {
+      arcs.map(function (arc, index) {
         var arcId = arc.id || arc.title;
         var isSelected = selectedArcs.has(arcId);
         var isExpanded = expandedCards.has(arcId);
-        var keyMoments = arc.keyMoments || [];
-        var evidence = arc.evidence || [];
-        var placements = arc.characterPlacements || {};
-        var financials = arc.financialConnections || [];
-        var thematic = arc.thematicLinks || [];
+        // H7: every list the cards used to render (keyMoments,
+        // financialConnections, thematicLinks, emotionalTone) is a field the arc
+        // schema does not emit, so the cards showed a title, a red strength
+        // badge and nothing else. arcCardModel reads the real names.
+        var model = ViewLogic.arcCardModel(arc);
+        var evidencePreview = isExpanded ? model.keyEvidence : model.keyEvidence.slice(0, 4);
+        var hasMoreEvidence = model.keyEvidence.length > 4;
         var evalHistory = arc.evaluationHistory || {};
 
-        // Evidence breakdown
-        var exposedEvidence = evidence.filter(function (e) { return e.layer === 'exposed'; }).length;
-        var buriedEvidence = evidence.filter(function (e) { return e.layer === 'buried'; }).length;
-
-        // Key moments: normalize to strings
-        var momentStrings = keyMoments.map(function (m) {
-          return typeof m === 'string' ? m : (m.description || '');
-        });
-        var previewMoments = momentStrings.slice(0, 3);
-        var hasMoreMoments = momentStrings.length > 3;
-
-        // Financial connections: normalize to strings
-        var financialStrings = financials.map(function (f) {
-          return typeof f === 'string' ? f : (f.description || '');
-        });
-
-        // Character placement entries
-        var placementEntries = Object.entries(placements);
-
         return React.createElement('div', {
-          key: arcId + '-' + arcs.indexOf(arc),
+          key: arcId + '-' + index,
           className: 'arc-card' + (isSelected ? ' arc-card--selected' : '')
         },
           // Selection checkbox + title row
@@ -205,129 +201,104 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
                 className: 'checkbox-item__checkbox',
                 checked: isSelected,
                 onChange: function () { toggleArc(arcId); },
-                'aria-label': 'Select arc: ' + (arc.title || arcId)
+                'aria-label': 'Select arc: ' + (model.title || arcId)
               })
             ),
-            React.createElement('span', { className: 'arc-card__title' }, arc.title || arcId),
+            React.createElement('span', { className: 'arc-card__title' }, model.title || arcId),
             React.createElement(Badge, {
-              label: arc.evidenceStrength || 'UNKNOWN',
-              color: getStrengthColor(arc.evidenceStrength)
+              label: model.strength || 'strength unknown',
+              color: getStrengthColor(model.strength)
             })
           ),
 
-          // Source + tone
-          React.createElement('div', { className: 'arc-card__meta' },
-            arc.arcSource && React.createElement('span', { className: 'text-xs text-muted' },
-              'Source: ' + arc.arcSource
-            ),
-            arc.emotionalTone && React.createElement('span', { className: 'text-xs text-muted' },
-              'Tone: ' + arc.emotionalTone
-            )
+          // Source badge
+          model.source && React.createElement('div', { className: 'arc-card__meta' },
+            React.createElement(Badge, { label: 'source: ' + model.source, color: 'var(--accent-cyan)' })
+          ),
+
+          // Summary: the 2-3 sentences that say what this arc IS
+          model.summary && React.createElement('p', { className: 'text-sm text-secondary' },
+            model.summary
           ),
 
           // Hook
-          arc.hook && React.createElement('p', { className: 'arc-card__hook text-sm text-secondary' },
-            arc.hook
+          model.hook && React.createElement('p', { className: 'arc-card__hook text-sm text-secondary' },
+            model.hook
           ),
 
-          // Key Moments
-          previewMoments.length > 0 && React.createElement('div', { className: 'arc-card__section' },
-            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Key Moments'),
-            React.createElement('ul', { className: 'arc-card__moments' },
-              (isExpanded ? momentStrings : previewMoments).map(function (moment, j) {
-                return React.createElement('li', { key: 'moment-' + j, className: 'text-xs text-secondary' },
-                  truncate(moment, 60)
-                );
-              })
+          // Key evidence (ids, with owners where the package carries them)
+          evidencePreview.length > 0 && React.createElement('div', { className: 'arc-card__section' },
+            React.createElement('p', { className: 'text-xs text-muted mb-sm' },
+              'Key Evidence (' + model.keyEvidence.length + ')'
             ),
-            hasMoreMoments && React.createElement('button', {
-              className: 'btn btn-ghost btn-sm',
-              onClick: function () { toggleExpanded(arcId); }
-            }, isExpanded ? 'Show fewer' : '+' + (momentStrings.length - 3) + ' more')
-          ),
-
-          // Evidence breakdown
-          evidence.length > 0 && React.createElement('div', { className: 'arc-card__section' },
-            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Evidence'),
             React.createElement('div', { className: 'tag-list' },
-              React.createElement(Badge, {
-                label: evidence.length + ' total',
-                color: 'var(--accent-amber)'
-              }),
-              exposedEvidence > 0 && React.createElement(Badge, {
-                label: exposedEvidence + ' exposed',
-                color: 'var(--layer-exposed)'
-              }),
-              buriedEvidence > 0 && React.createElement(Badge, {
-                label: buriedEvidence + ' buried',
-                color: 'var(--layer-buried)'
-              })
-            )
-          ),
-
-          // Character Placements
-          placementEntries.length > 0 && React.createElement('div', { className: 'arc-card__section' },
-            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Characters'),
-            React.createElement('div', { className: 'tag-list' },
-              placementEntries.map(function (entry) {
-                return React.createElement('span', {
-                  key: entry[0],
-                  className: 'character-tag'
-                },
-                  React.createElement('span', { className: 'character-tag__name' }, entry[0]),
-                  React.createElement('span', { className: 'character-tag__role' }, entry[1])
-                );
-              })
-            )
-          ),
-
-          // Financial Connections
-          financialStrings.length > 0 && React.createElement('div', { className: 'arc-card__section' },
-            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Financial Connections'),
-            React.createElement('ul', { className: 'arc-card__moments' },
-              financialStrings.slice(0, 2).map(function (fc, j) {
-                return React.createElement('li', { key: 'fc-' + j, className: 'text-xs text-secondary' },
-                  truncate(fc, 50)
-                );
-              })
-            ),
-            financialStrings.length > 2 && React.createElement('span', { className: 'text-xs text-muted' },
-              '+' + (financialStrings.length - 2) + ' more'
-            )
-          ),
-
-          // Thematic Links
-          thematic.length > 0 && React.createElement('div', { className: 'arc-card__section' },
-            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Themes'),
-            React.createElement('div', { className: 'tag-list' },
-              thematic.map(function (theme) {
+              evidencePreview.map(function (id, j) {
                 return React.createElement(Badge, {
-                  key: theme,
-                  label: theme,
-                  color: 'var(--accent-cyan)'
+                  key: 'ev-' + j,
+                  label: id,
+                  color: 'var(--layer-exposed)'
                 });
               })
+            ),
+            hasMoreEvidence && React.createElement('button', {
+              className: 'btn btn-ghost btn-sm',
+              onClick: function () { toggleExpanded(arcId); },
+              'aria-label': isExpanded ? 'Show fewer evidence ids' : 'Show all evidence ids'
+            }, isExpanded ? 'Show fewer' : '+' + (model.keyEvidence.length - 4) + ' more')
+          ),
+
+          // Caveats: what complicates this arc
+          model.caveats.length > 0 && React.createElement('div', { className: 'arc-card__section' },
+            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Caveats'),
+            React.createElement('ul', { className: 'arc-card__moments' },
+              model.caveats.map(function (caveat, j) {
+                return React.createElement('li', { key: 'cav-' + j, className: 'text-xs arc-card__caveat' },
+                  caveat
+                );
+              })
             )
           ),
 
-          // Evaluation score
+          // Unanswered questions: what the arc cannot close
+          model.unansweredQuestions.length > 0 && React.createElement('div', { className: 'arc-card__section' },
+            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Unanswered Questions'),
+            React.createElement('ul', { className: 'arc-card__moments' },
+              model.unansweredQuestions.map(function (question, j) {
+                return React.createElement('li', { key: 'uq-' + j, className: 'text-xs text-secondary' },
+                  question
+                );
+              })
+            )
+          ),
+
+          // Character placements (an object map of roster name -> role)
+          model.characters.length > 0 && React.createElement('div', { className: 'arc-card__section' },
+            React.createElement('p', { className: 'text-xs text-muted mb-sm' }, 'Characters'),
+            React.createElement('div', { className: 'tag-list' },
+              model.characters.map(function (character, j) {
+                return React.createElement('span', {
+                  key: 'ch-' + j,
+                  className: 'character-tag'
+                },
+                  React.createElement('span', { className: 'character-tag__name' }, character.name),
+                  React.createElement('span', { className: 'character-tag__role' }, character.role)
+                );
+              })
+            )
+          ),
+
+          // Per-arc evaluation. Nothing populates arc.evaluationHistory today
+          // (R5 F4) - the gate-level EvalBar above is the real verdict - but the
+          // `.length` read is correct now rather than printing "[object Object]
+          // issues" if a future payload does carry it.
           evalHistory.overallScore != null && React.createElement('div', { className: 'arc-card__section' },
             React.createElement('div', { className: 'arc-card__eval' },
               React.createElement('span', { className: 'text-xs text-muted' }, 'Score'),
-              React.createElement('div', { className: 'arc-card__score-bar' },
-                React.createElement('div', {
-                  className: 'arc-card__score-fill ' + getStrengthBarClass(
-                    evalHistory.overallScore >= 7 ? 'HIGH' :
-                    evalHistory.overallScore >= 4 ? 'MEDIUM' : 'LOW'
-                  ),
-                  style: { width: Math.min(evalHistory.overallScore * 10, 100) + '%' }
-                })
-              ),
               React.createElement('span', { className: 'text-xs text-secondary' },
-                evalHistory.overallScore + '/10'
+                String(evalHistory.overallScore)
               ),
-              evalHistory.structuralIssues != null && React.createElement('span', { className: 'text-xs text-muted' },
-                evalHistory.structuralIssues + ' issue' + (evalHistory.structuralIssues !== 1 ? 's' : '')
+              Array.isArray(evalHistory.structuralIssues) && React.createElement('span', { className: 'text-xs text-muted' },
+                evalHistory.structuralIssues.length + ' issue' + (evalHistory.structuralIssues.length !== 1 ? 's' : '')
               )
             )
           )
@@ -338,6 +309,26 @@ function ArcSelection({ data, onApprove, onReject, dispatch, revisionCache }) {
     // Validation hint
     !isValid && mode !== 'reject' && React.createElement('p', { className: 'validation-error' },
       'Select at least 1 arc to continue.'
+    ),
+
+    // Q2: the director's emphasis for the outline. This is the cheapest
+    // intervention on the whole screen - a sentence here steers the outline and
+    // article prompts, instead of a rejection that regenerates the arcs.
+    React.createElement('div', { className: 'form-group mt-md' },
+      React.createElement('label', { className: 'form-group__label', htmlFor: 'outline-guidance' },
+        'Note to the outline (optional): what to lead with, what to play down, ' +
+        'what question the piece should answer'
+      ),
+      React.createElement('textarea', {
+        id: 'outline-guidance',
+        className: 'input',
+        value: guidanceText,
+        onChange: function (e) { setGuidanceText(e.target.value); },
+        rows: 3,
+        placeholder: 'e.g. Lead with the vote, not the money. Play down the Sarah ' +
+          'succession thread. Answer: who decided Vic was guilty before the vote?',
+        'aria-label': 'Note to the outline'
+      })
     ),
 
     // Action mode buttons

@@ -190,6 +190,53 @@
     };
   }
 
+  // ── Arc selection defaults ────────────────────────────────────────────────
+
+  /** How many arcs the outline prompt is written for. */
+  var MIN_ARCS = 3;
+  var MAX_ARCS = 5;
+
+  /**
+   * Which arcs to pre-select.
+   *
+   * Every arc arrived checked, which — with the cards unreadable (R5 F8) —
+   * pushed the director to approve all five, and five-plus arcs routinely costs
+   * an outline revision. Follow the evidence instead: the strong arcs, capped at
+   * MAX_ARCS; with none strong, the first MIN_ARCS, so the screen still opens
+   * with a workable selection rather than an empty one.
+   *
+   * The id convention matches the component's (`arc.id || arc.title`), which is
+   * also what the approve payload sends as `selectedArcs`.
+   *
+   * @param {Array|null} arcs
+   * @returns {string[]}
+   */
+  function defaultArcSelection(arcs) {
+    var list = asArray(arcs);
+    var idOf = function (arc) { return (arc && (arc.id || arc.title)) || ''; };
+    var strong = list
+      .filter(function (arc) { return arc && arc.evidenceStrength === 'strong'; })
+      .slice(0, MAX_ARCS);
+    var chosen = strong.length > 0 ? strong : list.slice(0, MIN_ARCS);
+    return chosen.map(idOf).filter(function (id) { return id.length > 0; });
+  }
+
+  /**
+   * The inline note for a selection outside the 3-5 band, or null inside it.
+   *
+   * @param {number} count
+   * @returns {string|null}
+   */
+  function arcSelectionNote(count) {
+    if (count > MAX_ARCS) {
+      return 'More than 5 arcs usually forces an outline revision. Consider dropping the weakest.';
+    }
+    if (count < MIN_ARCS) {
+      return 'Fewer than 3 arcs gives the outline too little to braid; the article tends to read thin.';
+    }
+    return null;
+  }
+
   // ── Input review ──────────────────────────────────────────────────────────
 
   /**
@@ -336,6 +383,8 @@
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
     arcCardModel: arcCardModel,
+    defaultArcSelection: defaultArcSelection,
+    arcSelectionNote: arcSelectionNote,
     accusationView: accusationView,
     whiteboardView: whiteboardView,
     factCheckSummary: factCheckSummary

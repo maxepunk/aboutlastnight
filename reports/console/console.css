@@ -1419,6 +1419,21 @@ textarea.input {
   word-break: break-word;
 }
 
+/* A caveat is the reason an arc might not survive the article; it reads amber,
+   not as ordinary secondary text. */
+.arc-card__caveat {
+  color: var(--accent-amber);
+}
+
+/* H15: the selection has left the 3-5 band the outline prompt is written for. */
+.arc-selection__note {
+  padding: var(--space-xs) var(--space-md);
+  border-left: 2px solid var(--accent-amber);
+  background: rgba(212, 168, 83, 0.08);
+  color: var(--accent-amber);
+  font-size: 0.8rem;
+}
+
 /* ── Arc Evaluation Score Bar ── */
 .arc-card__eval {
   display: flex;

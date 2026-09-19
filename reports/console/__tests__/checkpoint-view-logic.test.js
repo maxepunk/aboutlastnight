@@ -328,3 +328,45 @@ describe('factCheckSummary', () => {
     expect(factCheckSummary(null)).toEqual({ structural: 0, advisory: 0, total: 0, groups: [] });
   });
 });
+
+// ── Arc selection defaults (4.4) ────────────────────────────────────────────
+//
+// R5 F8 companion: every arc arrived pre-selected, which (with unreadable cards)
+// pushed the director to accept all 5 — and 5+ arcs routinely forces an outline
+// revision. The default now follows the evidence, and the count is called out
+// when it leaves the 3-5 band the outline prompt is written for.
+describe('defaultArcSelection', () => {
+  const { defaultArcSelection, arcSelectionNote } = require('../checkpoint-view-logic');
+
+  const arc = (id, strength) => ({ id, title: 'T ' + id, evidenceStrength: strength });
+
+  it('pre-selects the strong arcs, capped at 5', () => {
+    const arcs = [
+      arc('a', 'strong'), arc('b', 'moderate'), arc('c', 'strong'),
+      arc('d', 'strong'), arc('e', 'strong'), arc('f', 'strong'), arc('g', 'strong')
+    ];
+    expect(defaultArcSelection(arcs)).toEqual(['a', 'c', 'd', 'e', 'f']);
+  });
+
+  it('falls back to the first three when no arc is strong', () => {
+    const arcs = [arc('a', 'moderate'), arc('b', 'weak'), arc('c', 'speculative'), arc('d', 'weak')];
+    expect(defaultArcSelection(arcs)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('identifies an arc by title when it has no id (the component keys the same way)', () => {
+    expect(defaultArcSelection([{ title: 'Only', evidenceStrength: 'strong' }])).toEqual(['Only']);
+  });
+
+  it('returns nothing for no arcs', () => {
+    expect(defaultArcSelection([])).toEqual([]);
+    expect(defaultArcSelection(null)).toEqual([]);
+  });
+
+  it('notes a count outside the 3-5 band and stays silent inside it', () => {
+    expect(arcSelectionNote(3)).toBeNull();
+    expect(arcSelectionNote(5)).toBeNull();
+    expect(arcSelectionNote(6)).toMatch(/More than 5 arcs usually forces an outline revision/);
+    expect(arcSelectionNote(2)).toMatch(/Fewer than 3/);
+    expect(arcSelectionNote(0)).toMatch(/Fewer than 3/);
+  });
+});
