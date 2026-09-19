@@ -97,7 +97,7 @@ If #3 is "no," rewrite the prose.
 1. Death declaration (1 sentence)
 2. Memory theft framing — what happened to the victims (1-2 sentences)
 3. Accusation preview — who's accused and why, plus any alternative theories (1-2 sentences)
-4. Nova's presence — she was there (1 sentence)
+4. Nova's own stake in the story, in whatever way your reporting mode allows (1 sentence)
 
 Generate original prose for each session. Do NOT reuse phrasing from previous articles.
 

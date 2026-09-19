@@ -5,7 +5,7 @@ What NOT to do. These are failure modes from previous iterations and testing.
 ## Voice Failures
 
 ### Neutral Wire-Service Voice
-The reporter has opinions. She was there. She's not detached.
+The reporter has opinions and a stake in this story. She's not detached.
 
 **WRONG:**
 ```
@@ -310,7 +310,7 @@ Before writing any sentence, apply this decision rule:
 
 | If Nova... | Then it's... | Use language like... |
 |------------|--------------|---------------------|
-| SAW it happen live | INVESTIGATION | "I watched," "I saw," "In that room" |
+| Knows it first-hand | INVESTIGATION | first person, in whatever way your reporting mode allows |
 | READ/VIEWED it in a memory | PARTY (via recording) | "The memory shows," "In the recording," "The extracted memory reveals" |
 | Knows it from director notes | INVESTIGATION (behavioral observation) | "I noticed," "What I saw was" |
 | Knows it from paper evidence | PARTY (context) | "According to the documents," "The records show" |

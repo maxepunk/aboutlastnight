@@ -113,10 +113,10 @@ Different sessions produce different evidence, different buried memories, differ
 **If Blake is identified as the murderer:**
 ```
 The group landed on Blake. Marcus's Valet. The person who spent
-two hours offering money for silence. I worked alongside Blake
-all night. Watched them operate. Professional. Methodical. If
-Blake did this, they did it the same way they do everything:
-efficiently, without wasted motion.
+the evening offering money for silence. I tracked Blake through
+this record all night. Professional. Methodical. If Blake did
+this, they did it the same way they do everything: efficiently,
+without wasted motion.
 
 I don't know if the group got it right. But I know Blake had
 means, motive, and a timeline that doesn't quite add up.
@@ -125,8 +125,8 @@ means, motive, and a timeline that doesn't quite add up.
 **If someone else is identified:**
 ```
 The group landed on [NAME]. I'm not sure I agree, but I wasn't
-the one with holes in my memory. They were there. I was just
-watching.
+the one with holes in my memory. It was their night. I only
+have the record of it.
 ```
 
 **If it's unresolved:**

@@ -131,11 +131,16 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * Reporting-mode blocks (BASELINE.md §4 class 6).
  *
  * BOTH remote sessions of the last five were written as on-site. The rule
- * existed (character-voice.md lines 89-94) but arrived as an OVERRIDE, appended
- * after the on-site persona stated at line 10 and the "in-the-muck-with-everyone"
- * voice at line 19 — and it lost. So the mode does not override the persona any
- * more: it IS the persona, stated once, in the system prompt, immediately after
- * the identity line.
+ * existed (a "REPORTING MODE OVERRIDE" section in character-voice.md) but arrived
+ * as an OVERRIDE, appended after that file's on-site persona ("Was surveilling the
+ * party") and its "in-the-muck-with-everyone" voice line — and it lost. So the
+ * mode does not override the persona any more: it IS the persona, stated once, in
+ * the system prompt, immediately after the identity line.
+ *
+ * I3 finished the job: the craft prompts no longer assert presence at all, in
+ * either direction, and character-voice.md's one POV section names
+ * {{REPORTING_MODE}} and defers here. This block is the only place the reporter's
+ * whereabouts are stated. Pinned by prompt-reporting-mode-neutral.test.js.
  *
  * "You did not vote" is in both blocks. The reporter covers the room; they are
  * never a member of it. hardConstraints used to say the opposite in so many words
@@ -178,16 +183,21 @@ const THEME_CONSTRAINTS = {
 - NO passive observer voice ("The group decided") - name who acted, in whatever way your REPORTING MODE allows
 - NO inventing last names - use ONLY canonical names from the roster above`,
     voiceCheckpoint: `Before generating, internalize Nova's voice:`,
-    voiceQuestion: 'Ask yourself: "Am I writing AS Nova who experienced this, or ABOUT events Nova observed?"\nThe answer must be AS Nova. Every sentence should feel like it\'s coming from someone who was in that room.',
+    // I3: mode-neutral. These two strings are rendered for BOTH reporting modes —
+    // voiceQuestion in the article prompt, revisionVoice in the revision SYSTEM
+    // prompt, which carries no mode block at all — so a presence claim here
+    // contradicts the remote mode block and does it in the place a remote article
+    // gets "corrected" back into an on-site one.
+    voiceQuestion: 'Ask yourself: "Am I writing AS Nova, who has a stake in this, or ABOUT events Nova observed?"\nThe answer must be AS Nova. Every sentence should feel like it\'s coming from someone this story happened to, not from a wire service.',
     revisionVoice: `VOICE INFLUENCES TO EMBODY:
-- Hunter S. Thompson: Participatory, in-the-muck, part of the chaos
+- Hunter S. Thompson: Participatory and implicated, part of the story
 - Kara Swisher: Directness, calling out BS, no corporate spin
 - Casey Newton: Tech fluency, accessible explanations
 - Heather Cox Richardson: Connects to bigger patterns
 - Marisa Kabas: Moral clarity without preaching
 
 VOICE MECHANICS:
-- First-person participatory: "I watched", "I saw", "I was there"
+- First-person participatory, reported the way your REPORTING MODE allows
 - NOT observer mode: "The group decided", "They concluded", "It was noted"
 - Transform: "The group came to a conclusion" -> "I watched them reach their conclusion"
 - Transform: "From my notes that night" -> remove attribution or use "- Nova"
@@ -1125,14 +1135,14 @@ STRUCTURE:
    Use the bullet criteria below as guidance for what to populate in each sub-object's string values.
 
    VOICE INFLUENCES CHECK:
-   - Hunter S. Thompson: Am I participatory, in-the-muck, part of the chaos? NOT observing from outside?
+   - Hunter S. Thompson: Am I participatory and implicated, part of this story? NOT a neutral distance from it?
    - Kara Swisher: Am I direct, calling out BS, no corporate spin tolerance?
    - Casey Newton: Am I explaining tech clearly, accessible but not dumbed down?
    - Heather Cox Richardson: Am I connecting to bigger patterns, systemic meaning?
    - Marisa Kabas: Am I maintaining moral clarity without preaching?
 
    VOICE MECHANICS CHECK:
-   - First-person witness: "I watched", "I saw" NOT "The group decided"
+   - First person, reported the way my REPORTING MODE allows, NOT "The group decided"
    - Sentence rhythm: Short punchy, then longer building, then short again
    - No em-dashes (commas or periods instead)
    - "Extracted memories" NOT "tokens"
