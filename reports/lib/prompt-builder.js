@@ -82,6 +82,24 @@ ${content.trim()}
 </${filename}>`;
 }
 
+/**
+ * Build the <DIRECTOR_GUIDANCE> section (Q2 decision).
+ *
+ * Standalone so the revision nodes can append it without going through a
+ * PromptBuilder instance (their tests use a mock builder).
+ *
+ * @param {string|null} directorGuidance - free text from the arc-selection gate
+ * @returns {string} XML section, or '' when there is no guidance
+ */
+function buildDirectorGuidanceSection(directorGuidance) {
+  if (typeof directorGuidance !== 'string' || !directorGuidance.trim()) return '';
+  return labelPromptSection(
+    'DIRECTOR_GUIDANCE',
+    'The director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\n' +
+    directorGuidance.trim()
+  );
+}
+
 // Default reporter first name when the director provides none. The pipeline's
 // authoritative stamp is input-nodes.js (parseRawInput); this fallback only
 // covers PromptBuilder instances constructed without that stamp (e.g. tests, skill).
@@ -103,7 +121,7 @@ CRITICAL: THE PARTY = LAST NIGHT. THE INVESTIGATION = THIS MORNING. See <TEMPORA
 
 TONE: Professional, analytical, with a distinct noir flair. Economical with words. Every sentence earns its place.
 FORMAT: HTML (body content only, NO <html>, <head>, or <body> tags).`,
-    revision: 'You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only.',
+    revision: 'You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only. Keep the third-person investigative case-report voice.',
     validation: 'You are validating a detective case report against anti-patterns and section differentiation requirements.'
   }
 };
@@ -198,12 +216,8 @@ class PromptBuilder {
    * @returns {string} XML section, or '' when there is no guidance
    */
   _buildDirectorGuidance(directorGuidance) {
-    if (typeof directorGuidance !== 'string' || !directorGuidance.trim()) return '';
-    return '\n' + labelPromptSection(
-      'DIRECTOR_GUIDANCE',
-      'The director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\n' +
-      directorGuidance.trim()
-    );
+    const section = buildDirectorGuidanceSection(directorGuidance);
+    return section ? '\n' + section : '';
   }
 
   /**
@@ -1260,6 +1274,28 @@ ${validationReturnFormat}`;
   }
 
   /**
+   * Load the revision-phase craft rules and return them as ONE <RULES> section.
+   *
+   * PROMPT-REVIEW: the revision prompts carried no craft rules at all. Appended
+   * LAST to the revision user prompts (recency bias), after the human feedback,
+   * so the reviser edits under the same voice/boundary/anti-pattern contract the
+   * generator wrote under.
+   *
+   * Fails loud: a revision that silently loses its rules is the unguarded
+   * regeneration this is meant to prevent.
+   *
+   * @returns {Promise<string>} labelled <RULES> section
+   */
+  async buildRevisionRulesSection() {
+    const rawPrompts = await this.theme.loadPhasePrompts('revision');
+    const body = Object.entries(rawPrompts)
+      .map(([name, content]) => labelPromptSection(name, this.resolvePromptVariables(content)))
+      .filter(Boolean)
+      .join('\n');
+    return labelPromptSection('RULES', body);
+  }
+
+  /**
    * Get required prompts for a phase (for debugging/logging)
    * @param {string} phase - Phase name
    * @returns {string[]} - List of required prompt names
@@ -1309,7 +1345,11 @@ function createPromptBuilder(options = null) {
 module.exports = {
   PromptBuilder,
   createPromptBuilder,
-  generateRosterSection
+  generateRosterSection,
+  buildDirectorGuidanceSection,
+  // Theme framing, consumed by the revision system prompts in ai-nodes.js
+  THEME_SYSTEM_PROMPTS,
+  THEME_CONSTRAINTS
 };
 
 // Self-test when run directly

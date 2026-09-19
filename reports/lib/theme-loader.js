@@ -37,6 +37,17 @@ const PHASE_REQUIREMENTS = {
     'anti-patterns',
     'character-voice',
     'evidence-boundaries'
+  ],
+  // PROMPT-REVIEW: the three revision prompts used to carry NO craft rules. The
+  // reviser got the previous output plus the evaluator's feedback and was asked
+  // for targeted fixes, with none of the voice / evidence-boundary / anti-pattern
+  // rules the GENERATOR had — so a revision could undo the generator's compliance
+  // while "fixing" one criterion. This is the generator's rule set minus the
+  // structural/format files (the reviser is editing, not laying out).
+  revision: [
+    'character-voice',
+    'evidence-boundaries',
+    'anti-patterns'
   ]
 };
 

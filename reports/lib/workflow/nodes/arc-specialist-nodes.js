@@ -148,6 +148,62 @@ function createDefaultInterweavingPlan() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Build the three-category character block (ROSTER PCs / NPCs / NON-ROSTER PCs).
+ *
+ * Shared by the arc GENERATION and arc REVISION prompts. The revision prompt used
+ * to omit it entirely while asking the model to fix roster-coverage failures — the
+ * single most common structural failure — so the reviser could not tell a missing
+ * roster PC from a legitimately-absent NPC or non-roster PC, and "fixes" invented
+ * placements for characters who were never in the session.
+ *
+ * @param {string[]} roster - session roster (first names)
+ * @param {string} theme - 'journalist' | 'detective'
+ * @param {string[]} allCharacters - every known game character (Notion-derived)
+ * @returns {string}
+ */
+function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCharacters = []) {
+  const themeNPCs = getThemeNPCs(theme);
+  const nonRosterPCs = getNonRosterPCs(roster, allCharacters, themeNPCs);
+
+  return `### Character Categories for characterPlacements
+
+**ROSTER PCs** (MUST have placements - ${theme === 'journalist' ? 'Nova observed them' : 'present at the investigation'}):
+${JSON.stringify(roster)}
+
+**NPCs** (valid in placements, don't count for coverage):
+${themeNPCs.join(', ')}
+
+**NON-ROSTER PCs** (can mention from evidence only):
+${nonRosterPCs.length > 0 ? nonRosterPCs.join(', ') : '(none this session)'}
+${nonRosterPCs.length > 0 ? `- These are valid game characters not playing this session
+- CAN be mentioned if they appear in evidence
+- Roles must be evidence-based: "Mentioned in X's memory"
+- Add caveats when using: "Based on memory evidence only"` : ''}
+`;
+}
+
+/**
+ * Describe each exposed evidence item as `id - owner - one-line summary`.
+ *
+ * The revision prompt used to show a bare JSON array of IDs while telling the
+ * model to fix its keyEvidence references. An ID with no content attached is not
+ * something a model can reason about: it can only shuffle the strings. The
+ * generation prompt always had the summaries; the reviser now does too.
+ *
+ * @param {Object} evidenceSummary - result of extractEvidenceSummary()
+ * @returns {string}
+ */
+function describeValidEvidence(evidenceSummary) {
+  const lines = [
+    ...(evidenceSummary.exposedTokens || []).map(t =>
+      `- ${t.id} - ${t.owner || 'owner unknown'} - ${t.summary || '(no summary)'}`),
+    ...(evidenceSummary.exposedPaper || []).map(pp =>
+      `- ${pp.id} - ${pp.name || 'paper evidence'} - ${pp.summary || '(no summary)'}`)
+  ];
+  return lines.length > 0 ? lines.join('\n') : '(no exposed evidence available)';
+}
+
+/**
  * Build prompt for core arc generation (Call 1)
  *
  * Commit 8.28: OUTPUT FORMAT at TOP for recency bias
@@ -160,12 +216,11 @@ function buildCoreArcPrompt(state) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
 
-  // Compute non-roster PCs for three-category character guidance
-  // Character list derived from Notion (state.canonicalCharacters) instead of hardcoded config
+  // Character list derived from Notion (state.canonicalCharacters) instead of hardcoded
+  // config. The three-category block itself is built by buildCharacterCategoriesBlock,
+  // shared with the REVISION prompt.
   const theme = state.theme || 'journalist';
-  const themeNPCs = getThemeNPCs(theme);
   const allCharacters = Object.keys(state.canonicalCharacters || {});
-  const nonRosterPCs = getNonRosterPCs(context.roster, allCharacters, themeNPCs);
 
   // Output format at TOP for recency bias
   const outputFormat = buildOutputFormatSection(`{
@@ -230,20 +285,7 @@ ${context.primaryInvestigation}
 ### Session Roster (ALL characters who need placement)
 ${JSON.stringify(context.roster)}
 
-### Character Categories for characterPlacements
-
-**ROSTER PCs** (MUST have placements - ${theme === 'journalist' ? 'Nova observed them' : 'present at the investigation'}):
-${JSON.stringify(context.roster)}
-
-**NPCs** (valid in placements, don't count for coverage):
-${themeNPCs.join(', ')}
-
-**NON-ROSTER PCs** (can mention from evidence only):
-${nonRosterPCs.length > 0 ? nonRosterPCs.join(', ') : '(none this session)'}
-${nonRosterPCs.length > 0 ? `- These are valid game characters not playing this session
-- CAN be mentioned if they appear in evidence
-- Roles must be evidence-based: "Mentioned in X's memory"
-- Add caveats when using: "Based on memory evidence only"` : ''}
+${buildCharacterCategoriesBlock(context.roster, theme, allCharacters)}
 
 ${state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
 ### Character Context (extracted from paper evidence — use for accuracy)
@@ -1071,6 +1113,8 @@ function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
 
   const accusation = playerFocus.accusation || {};
   const roster = sessionConfig.roster || [];
+  const theme = state.theme || 'journalist';
+  const allCharacters = Object.keys(state.canonicalCharacters || {});
   // Enriched director-notes shape (2026-04)
   const directorProse = directorNotes.rawProse || '';
   const directorQuotes = directorNotes.quotes || [];
@@ -1101,8 +1145,9 @@ ${renderDirectorEnrichmentBlock({
   postInvestigationDevelopments: directorPostInv
 })}
 
-### Valid Evidence IDs (for keyEvidence validation)
-${JSON.stringify(evidenceSummary.allEvidenceIds)}
+${buildCharacterCategoriesBlock(roster, theme, allCharacters)}
+### Valid Evidence (the ONLY ids keyEvidence may cite)
+${describeValidEvidence(evidenceSummary)}
 
 ---
 
@@ -1735,7 +1780,9 @@ module.exports = {
     PLAYER_FOCUS_GUIDED_SCHEMA,
 
     // Revision path prompt builder (for director-notes enrichment testing)
-    buildArcRevisionPrompt
+    buildArcRevisionPrompt,
+    buildCharacterCategoriesBlock,
+    describeValidEvidence
   }
 };
 

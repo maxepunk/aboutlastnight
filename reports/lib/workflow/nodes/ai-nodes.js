@@ -24,7 +24,12 @@
 
 const { PHASES } = require('../state');
 const { SchemaValidator } = require('../../schema-validator');
-const { createPromptBuilder } = require('../../prompt-builder');
+const {
+  createPromptBuilder,
+  buildDirectorGuidanceSection,
+  THEME_SYSTEM_PROMPTS,
+  THEME_CONSTRAINTS
+} = require('../../prompt-builder');
 const outlineSchema = require('../../schemas/outline.schema.json');
 const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
@@ -984,7 +989,7 @@ async function reviseOutline(state, config) {
   const promptBuilder = getPromptBuilder(config, state);
 
   // Build revision prompt
-  const revisionPrompt = buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
+  const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
 
   const theme = config?.configurable?.theme || 'journalist';
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
@@ -992,7 +997,7 @@ async function reviseOutline(state, config) {
   try {
     const result = await sdk({
       prompt: revisionPrompt,
-      systemPrompt: getOutlineRevisionSystemPrompt(),
+      systemPrompt: getOutlineRevisionSystemPrompt(theme),
       model: 'opus',  // Same as generateOutline
       jsonSchema: activeOutlineSchema,
       disableTools: true,
@@ -1035,8 +1040,11 @@ async function reviseOutline(state, config) {
  * Get system prompt for outline revision
  * Focuses on TARGETED FIXES, not regeneration
  */
-function getOutlineRevisionSystemPrompt() {
-  return `You are revising an article outline for an investigative article about "About Last Night".
+function getOutlineRevisionSystemPrompt(theme = 'journalist') {
+  const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
+  return `${framing.outlineGeneration}
+
+You are REVISING that outline, not writing it from scratch.
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING an existing outline, not generating from scratch
@@ -1071,7 +1079,10 @@ DO:
  * @param {Object} promptBuilder - PromptBuilder instance (unused but kept for consistency)
  * @returns {string} Complete revision prompt
  */
-function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+  // PROMPT-REVIEW: the craft rules the GENERATOR wrote under, appended LAST.
+  const rulesSection = await promptBuilder.buildRevisionRulesSection();
+  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance);
   const selectedArcs = state.selectedArcs || [];
   const evidenceBundle = state.evidenceBundle || {};
   const arcEvidencePackages = state.arcEvidencePackages || [];
@@ -1104,7 +1115,12 @@ ${previousOutputSection}
 4. PRESERVE everything that's working well (high-scoring criteria)
 5. Return the complete updated outline in the same JSON format
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.
+
+---
+
+${rulesSection}
+${guidanceSection}`;
 }
 
 /**
@@ -1405,12 +1421,12 @@ async function reviseContentBundle(state, config) {
   const promptBuilder = getPromptBuilder(config, state);
 
   // Build revision prompt with full context
-  const revisionPrompt = buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
+  const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
 
   try {
     const revised = await sdk({
       prompt: revisionPrompt,
-      systemPrompt: getArticleRevisionSystemPrompt(),
+      systemPrompt: getArticleRevisionSystemPrompt(config?.configurable?.theme || state?.theme || 'journalist'),
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
       jsonSchema: contentBundleSchema,  // Use full schema (Fix 3)
@@ -1462,8 +1478,12 @@ async function reviseContentBundle(state, config) {
  * Get system prompt for article revision
  * Focuses on TARGETED FIXES, not regeneration
  */
-function getArticleRevisionSystemPrompt() {
-  return `You are revising an investigative article for "About Last Night".
+function getArticleRevisionSystemPrompt(theme = 'journalist') {
+  const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
+  const constraints = THEME_CONSTRAINTS[theme] || THEME_CONSTRAINTS.journalist;
+  return `${framing.revision || framing.articleGeneration}
+
+${constraints.revisionVoice}
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING an existing article, not generating from scratch
@@ -1494,7 +1514,10 @@ Return the complete revised article in the same JSON format.`;
  * @param {Object} promptBuilder - PromptBuilder instance
  * @returns {string} Complete revision prompt
  */
-function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+  // PROMPT-REVIEW: the craft rules the GENERATOR wrote under, appended LAST.
+  const rulesSection = await promptBuilder.buildRevisionRulesSection();
+  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance);
   return `## REVISION CONTEXT
 
 ${contextSection}
@@ -1525,7 +1548,12 @@ The SDK's outputFormat enforcement is known to fail silently for nested schemas 
 
 \`\`\`json
 ${JSON.stringify(contentBundleSchema, null, 2)}
-\`\`\``;
+\`\`\`
+
+---
+
+${rulesSection}
+${guidanceSection}`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1561,6 +1589,14 @@ function createMockPromptBuilder() {
 
   return {
     theme: mockTheme,
+
+    async buildRevisionRulesSection() {
+      const prompts = await mockTheme.loadPhasePrompts('revision');
+      const body = ['character-voice', 'evidence-boundaries', 'anti-patterns']
+        .map(name => `<${name}>\n${prompts[name]}\n</${name}>`)
+        .join('\n');
+      return `<RULES>\n${body}\n</RULES>`;
+    },
 
     async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts, sessionFacts) {
       return {
@@ -1623,6 +1659,10 @@ module.exports = {
     safeParseJson,
     getSdkClient,
     getPromptBuilder,
+    getOutlineRevisionSystemPrompt,
+    getArticleRevisionSystemPrompt,
+    buildOutlineRevisionPrompt,
+    buildArticleRevisionPrompt,
     scorePaperEvidence,  // Batched Sonnet scoring (Commit 8.11)
     getSchemaValidator
   }

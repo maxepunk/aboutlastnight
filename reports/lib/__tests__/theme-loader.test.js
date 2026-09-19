@@ -435,6 +435,17 @@ describe('ThemeLoader', () => {
       expect(PHASE_REQUIREMENTS.validation).toBeDefined();
     });
 
+    it('defines a revision phase carrying the craft rules (PROMPT-REVIEW)', () => {
+      // The revision prompts used to carry NO craft rules at all: the reviser was
+      // handed the previous output plus feedback and asked to fix it with none of
+      // the voice, evidence-boundary or anti-pattern rules the GENERATOR had.
+      expect(PHASE_REQUIREMENTS.revision).toEqual([
+        'character-voice',
+        'evidence-boundaries',
+        'anti-patterns'
+      ]);
+    });
+
     it('should export ALL_PROMPTS', () => {
       expect(ALL_PROMPTS).toBeDefined();
       expect(Array.isArray(ALL_PROMPTS)).toBe(true);
