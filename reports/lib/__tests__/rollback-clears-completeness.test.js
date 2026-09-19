@@ -222,4 +222,27 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     ])];
     expect(names.filter((f) => !all.includes(f))).toEqual([]);
   });
+
+  describe('steering channels (spec 2026-09-19 §4.5, §5.4)', () => {
+    const points = Object.keys(ROLLBACK_CLEARS);
+
+    test.each(points)('%s clears the hand-edit diff and report exactly where it clears the feedback slot', (point) => {
+      const list = ROLLBACK_CLEARS[point];
+      expect(list.includes('_outlineHandEdits')).toBe(list.includes('_outlineFeedback'));
+      expect(list.includes('_outlineHandEditReport')).toBe(list.includes('_outlineFeedback'));
+      expect(list.includes('_articleHandEdits')).toBe(list.includes('_articleFeedback'));
+      expect(list.includes('_articleHandEditReport')).toBe(list.includes('_articleFeedback'));
+    });
+
+    test('directorGateNotes clears at arc-selection and every point upstream of it', () => {
+      ['input-review', 'paper-evidence-selection', 'await-roster', 'await-full-context',
+       'pre-curation', 'evidence-and-photos', 'arc-selection']
+        .forEach((p) => expect(ROLLBACK_CLEARS[p]).toContain('directorGateNotes'));
+    });
+
+    test('directorGateNotes is NOT list-cleared by the four downstream points (they prune instead)', () => {
+      ['photos', 'character-ids', 'outline', 'article']
+        .forEach((p) => expect(ROLLBACK_CLEARS[p]).not.toContain('directorGateNotes'));
+    });
+  });
 });

@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 69 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 74 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -294,7 +294,13 @@ describe('ReportStateAnnotation', () => {
         // Human rejection feedback (consumed by revision nodes, cleared after use)
         '_outlineFeedback',
         '_articleFeedback',
-        '_arcFeedback'
+        '_arcFeedback',
+        // Director steering (spec 2026-09-19): hand edits, the rework report, gate notes
+        '_outlineHandEdits',
+        '_articleHandEdits',
+        '_outlineHandEditReport',
+        '_articleHandEditReport',
+        'directorGateNotes'
       ];
 
       expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort());
@@ -442,7 +448,31 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(69);
+      expect(Object.keys(getDefaultState()).length).toBe(74);
+    });
+
+    it('declares the steering channels (spec 2026-09-19 §4.5, §5.1)', () => {
+      const channels = Object.keys(ReportStateAnnotation.spec);
+      ['_outlineHandEdits', '_articleHandEdits', '_outlineHandEditReport', '_articleHandEditReport', 'directorGateNotes']
+        .forEach((c) => expect(channels).toContain(c));
+      const d = getDefaultState();
+      expect(d._outlineHandEdits).toBeNull();
+      expect(d._articleHandEdits).toBeNull();
+      expect(d._outlineHandEditReport).toBeNull();
+      expect(d._articleHandEditReport).toBeNull();
+      expect(d.directorGateNotes).toEqual([]);
+    });
+
+    it('directorGateNotes is a REPLACE channel (a prune must be able to write survivors)', () => {
+      // In LangGraph 1.0.7 an Annotation({reducer}) channel is a BinaryOperatorAggregate
+      // whose `.operator` IS the reducer function (verified: Object.keys(spec.photosPath)).
+      const operator = ReportStateAnnotation.spec.directorGateNotes.operator;
+      const prev = [{ gate: 'arc-selection', text: 'a' }, { gate: 'outline', text: 'b' }];
+      const next = [{ gate: 'arc-selection', text: 'a' }];
+      expect(operator(prev, next)).toEqual(next);            // replace, not append
+      expect(operator(prev, [])).toEqual([]);
+      // Contrast with the append channel the old design would have used:
+      expect(ReportStateAnnotation.spec.evaluationHistory.operator([{ a: 1 }], [{ b: 2 }])).toEqual([{ a: 1 }, { b: 2 }]);
     });
 
     it('declares photosPath and its rollback stash as nullable replace channels', () => {
