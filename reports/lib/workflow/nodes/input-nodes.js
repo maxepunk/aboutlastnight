@@ -17,7 +17,7 @@
  * - whiteboardPhotoPath: Path to whiteboard image (Layer 3 data)
  *
  * Output files (saved to data/{sessionId}/inputs/):
- * - session-config.json: roster, accusation, photosPath, metadata
+ * - session-config.json: roster, accusation, metadata (NOT photosPath - C1: state.photosPath owns it)
  * - director-notes.json: observations, whiteboard data (from vision)
  * - orchestrator-parsed.json: exposedTokens, buriedTokens, shellAccounts
  *
@@ -485,7 +485,9 @@ Return structured JSON matching the schema.${correctionsBlock}`;
       loadProjectSettings: false
     });
     result.rosterCount = result.roster?.length || 0;
-    result.photosPath = sanitizePath(rawInput.photosPath);
+    // photosPath is NOT copied here any more (C1): state.photosPath is the one
+    // owner and fetchSessionPhotos reads only that. Two copies is how the gate
+    // and the fetch came to disagree about which folder was in play.
     result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
     result.reportingMode = rawInput.reportingMode || 'on-site';
     result.guestReporter = rawInput.guestReporter || null;

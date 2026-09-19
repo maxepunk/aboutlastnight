@@ -184,12 +184,13 @@ const CHECKPOINT_ORDER = window.Console.sessionStartLogic.CHECKPOINT_ORDER;
 const CHECKPOINT_LABELS = {
   'paper-evidence-selection': 'Paper Evidence',
   'await-roster': 'Roster',
-  'character-ids': 'Character IDs',
   'await-full-context': 'Full Context',
   'input-review': 'Input Review',
   'pre-curation': 'Pre-Curation',
   'evidence-and-photos': 'Evidence Bundle',
   'arc-selection': 'Arc Selection',
+  'photos': 'Photos',
+  'character-ids': 'Character IDs',
   'outline': 'Outline',
   'article': 'Article'
 };

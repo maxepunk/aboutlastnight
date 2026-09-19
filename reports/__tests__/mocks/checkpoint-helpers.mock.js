@@ -19,6 +19,7 @@ const CHECKPOINT_TYPES = {
   ARC_SELECTION: 'arc-selection',
   OUTLINE: 'outline',
   ARTICLE: 'article',
+  PHOTOS: 'photos',
   // Incremental input checkpoints (for parallel branch architecture)
   AWAIT_ROSTER: 'await-roster',
   AWAIT_FULL_CONTEXT: 'await-full-context'

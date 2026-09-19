@@ -81,6 +81,17 @@ describe('buildRollbackState evaluation stubs', () => {
     expect(stubs.every(s => s.source === 'rollback')).toBe(true);
   });
 
+  test('rollback into the photo branch invalidates the outline AND the article (R2)', () => {
+    for (const point of ['photos', 'character-ids']) {
+      const stubs = buildRollbackState(point).evaluationHistory;
+      expect(stubs.map(s => s.phase)).toEqual(['outline', 'article']);
+      expect(stubs.every(s => s.ready === false)).toBe(true);
+      expect(stubs.every(s => s.source === 'rollback')).toBe(true);
+      // The arc verdict is UPSTREAM of the branch and must survive.
+      expect(ROLLBACK_CLEARS[point]).not.toContain('evaluationHistory');
+    }
+  });
+
   test('rollback to arc-selection empties the history instead of stubbing it', () => {
     // arc-selection HAS evaluationHistory in its clear list, so nothing can skip
     // and a stub would be noise. Verified here so the two mechanisms cannot drift.

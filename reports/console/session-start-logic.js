@@ -231,9 +231,9 @@
   }
 
   // H3: the order the graph actually interrupts in — the plain addEdge chain from
-  // detectWhiteboard onward (lib/workflow/graph.js:539-568). `input-review` fires
-  // INSIDE parseRawInput, which the graph reaches from checkpointAwaitContext, so it
-  // is FIFTH, not first. It sat first in console/utils.js, which put the stepper out
+  // fetchPaperEvidence onward. `input-review` fires from checkpointInputReview,
+  // which the graph reaches via checkpointAwaitContext -> parseRawInput, so it is
+  // FOURTH, not first. It sat first in console/utils.js, which put the stepper out
   // of step with the run for its whole length: it reported the wrong position and
   // PipelineProgress offered the wrong rollback targets. The list lives here rather
   // than in utils.js only because utils.js touches `window` at load and so cannot be
@@ -242,12 +242,16 @@
   const CHECKPOINT_ORDER = [
     'paper-evidence-selection',
     'await-roster',
-    'character-ids',
     'await-full-context',
     'input-review',
     'pre-curation',
     'evidence-and-photos',
     'arc-selection',
+    // Photo late-join: the photo chain now hangs off arc selection's forward leg,
+    // so these two gates come after it instead of before await-full-context.
+    // `photos` is CONDITIONAL — it is skipped when a path was given at start.
+    'photos',
+    'character-ids',
     'outline',
     'article'
   ];

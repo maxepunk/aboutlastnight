@@ -67,19 +67,15 @@ describe('ROLLBACK_CLEARS completeness (ROOT-1)', () => {
 });
 
 describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extension)', () => {
-  // GRAPH EXECUTION / REPLAY order (derived from graph.js edges) — deliberately NOT the
-  // frontend DISPLAY order in console/utils.js (which lists 'input-review' first). On
-  // rollback the graph replays from START in THIS order, so a field captured at checkpoint C
-  // is "downstream" of every point at-or-before C here. 'input-review' executes LATE
-  // (after await-full-context) despite its 0.2 label: the graph reaches it via
-  // checkpointAwaitContext -> parseRawInput -> checkpointInputReview, a DEDICATED
-  // interrupt node (B2 — hosting the interrupt inside parseRawInput made every approve
-  // re-pay the parse). Its conditional edge routes a reject-with-corrections back to
-  // parseRawInput and an approve forward to finalizeInput.
-  const CHECKPOINT_SEQUENCE = [
+  // GRAPH EXECUTION / REPLAY order (derived from graph.js edges) - deliberately NOT
+  // the frontend DISPLAY order. On rollback the graph replays from START in this
+  // order, so a field captured at checkpoint C is "downstream" of every point
+  // at-or-before C. 'input-review' executes LATE (after await-full-context) despite
+  // its 0.2 label: the graph reaches it via checkpointAwaitContext -> parseRawInput
+  // -> checkpointInputReview (B2).
+  const MAIN_LINE = [
     'paper-evidence-selection',
     'await-roster',
-    'character-ids',
     'await-full-context',
     'input-review',
     'pre-curation',
@@ -89,35 +85,53 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     'article'
   ];
 
-  // The human-captured skip-field(s) whose presence makes each checkpoint SKIP (silently reuse
-  // stale input) on the replay — verified against checkpoint-nodes.js + input-nodes.js skip
-  // conditions. 'input-review' is now a DEDICATED checkpoint node (checkpointInputReview, B2/B8)
-  // whose skip-field is its own `inputReviewApproved` channel — an approval flag, NOT a
-  // re-derivable parse output, so every point at-or-before it must clear it or the gate
-  // silently stays approved. (Its parse OUTPUTS sessionConfig/directorNotes/playerFocus are
-  // deliberately NOT cleared by this point: loadDirectorNotes rehydrates them from
-  // inputs/*.json on every replay, so the checkpoint shows the restored parse and a reject
-  // with corrections is what triggers a re-parse.) (rosterPronouns travels with roster:
-  // both are captured at await-roster and cleared as a unit.)
+  // The PHOTO BRANCH (photo late-join). These two gates are not stages of the main
+  // line: the branch hangs off checkpointArcSelection's forward leg and joins at
+  // buildArcEvidencePackages. In replay order: ... arc-selection -> photos ->
+  // character-ids -> outline ...
+  const PHOTO_BRANCH = ['photos', 'character-ids'];
+
+  // The branch's fields split in two, and the split is what the two rules below
+  // enforce.
+  //
+  // INPUTS: nothing on the main line makes these stale, and they must move as a
+  // unit (C3), so ONLY `photos` clears them.
+  const PHOTO_INPUT_FIELDS = [
+    'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses'
+  ];
+
+  // ROSTER-DERIVED: the roster feeds every Haiku photo prompt AND the character-ID
+  // parse, and finalizePhotoAnalyses skips whenever any analysis is already
+  // enriched - so a roster change leaves the captions keyed to the OLD names and
+  // no replay re-enriches them. Points at-or-before await-roster MAY clear these;
+  // points after it must not (C4: the common rollback must not re-pay Haiku).
+  const ROSTER_DERIVED_FIELDS = ['photoAnalyses', 'characterIdMappings'];
+
+  // The human-captured skip-field(s) whose presence makes each checkpoint SKIP
+  // (silently reuse stale input) on the replay - verified against
+  // checkpoint-nodes.js skip conditions. 'photos' skips on state.photosPath alone
+  // (C1/C2: NOT on a directory scan - preprocessPhotos copies every photo into
+  // data/<id>/photos, so a scan-based skip could never fire twice).
   const SKIP_FIELDS = {
     'paper-evidence-selection': ['selectedPaperEvidence'],
     'await-roster': ['roster', 'rosterPronouns'],
-    'character-ids': ['characterIdMappings'],
     'await-full-context': ['accusation', 'sessionReport', 'directorNotesRaw'],
     'input-review': ['inputReviewApproved'],
     'pre-curation': ['preCurationApproved'],
     'evidence-and-photos': ['_evidenceApproved'],
     'arc-selection': ['selectedArcs'],
+    'photos': ['photosPath'],
+    'character-ids': ['characterIdMappings'],
     'outline': ['outlineApproved'],
     'article': ['articleApproved']
   };
 
-  test('every rollback point clears its own + every downstream checkpoint skip-field', () => {
+  test('every main-line point clears its own + every downstream main-line skip-field', () => {
     const gaps = [];
-    CHECKPOINT_SEQUENCE.forEach((checkpoint, idx) => {
+    MAIN_LINE.forEach((checkpoint, idx) => {
       for (const field of SKIP_FIELDS[checkpoint]) {
         for (let p = 0; p <= idx; p++) {
-          const point = CHECKPOINT_SEQUENCE[p];
+          const point = MAIN_LINE[p];
           if (!(ROLLBACK_CLEARS[point] || []).includes(field)) {
             gaps.push(`${point} does not clear '${field}' (captured at ${checkpoint})`);
           }
@@ -127,15 +141,85 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     expect(gaps).toEqual([]);
   });
 
-  test('every checkpoint in the sequence is a real rollback point', () => {
-    for (const cp of CHECKPOINT_SEQUENCE) {
+  test('each photo-branch point clears its own + the branch skip-fields after it', () => {
+    // photos precedes character-ids inside the branch, so it clears both.
+    expect(ROLLBACK_CLEARS['photos']).toContain('photosPath');
+    expect(ROLLBACK_CLEARS['photos']).toContain('characterIdMappings');
+    expect(ROLLBACK_CLEARS['character-ids']).toContain('characterIdMappings');
+    expect(ROLLBACK_CLEARS['character-ids']).not.toContain('photosPath');
+  });
+
+  test('each photo-branch point clears the main-line gates downstream of the join', () => {
+    for (const point of PHOTO_BRANCH) {
+      expect(ROLLBACK_CLEARS[point]).toContain('outlineApproved');
+      expect(ROLLBACK_CLEARS[point]).toContain('articleApproved');
+      // The join rebuilds the packages from the new analyses/mappings.
+      expect(ROLLBACK_CLEARS[point]).toContain('arcEvidencePackages');
+    }
+  });
+
+  test('no photo-branch point clears an UPSTREAM main-line gate', () => {
+    const upstreamSkipFields = MAIN_LINE.slice(0, MAIN_LINE.indexOf('outline'))
+      .flatMap((cp) => SKIP_FIELDS[cp]);
+    for (const point of PHOTO_BRANCH) {
+      const wrong = (ROLLBACK_CLEARS[point] || []).filter((f) => upstreamSkipFields.includes(f));
+      expect(wrong).toEqual([]);
+    }
+  });
+
+  test('no main-line point ever clears a photo INPUT - only `photos` owns those (C4/C3)', () => {
+    const wrong = [];
+    MAIN_LINE.forEach((point) => {
+      (ROLLBACK_CLEARS[point] || []).forEach((field) => {
+        if (PHOTO_INPUT_FIELDS.includes(field)) wrong.push(`${point} clears input '${field}'`);
+      });
+    });
+    expect(wrong).toEqual([]);
+    expect(ROLLBACK_CLEARS['character-ids'].filter((f) => PHOTO_INPUT_FIELDS.includes(f))).toEqual([]);
+  });
+
+  test('only points at-or-before await-roster clear the roster-derived outputs (v2 I2)', () => {
+    const rosterIdx = MAIN_LINE.indexOf('await-roster');
+    const wrong = [];
+    MAIN_LINE.forEach((point, idx) => {
+      const cleared = (ROLLBACK_CLEARS[point] || []).filter((f) => ROSTER_DERIVED_FIELDS.includes(f));
+      if (idx > rosterIdx && cleared.length > 0) {
+        wrong.push(`${point} (after await-roster) clears ${cleared.join(', ')}`);
+      }
+    });
+    expect(wrong).toEqual([]);
+    // And the two that MAY, do: the roster is an input to both outputs, so a roster
+    // rollback that left them in place would ship captions keyed to the old names.
+    expect(ROLLBACK_CLEARS['paper-evidence-selection']).toContain('photoAnalyses');
+    expect(ROLLBACK_CLEARS['paper-evidence-selection']).toContain('characterIdMappings');
+    expect(ROLLBACK_CLEARS['await-roster']).toContain('photoAnalyses');
+    expect(ROLLBACK_CLEARS['await-roster']).toContain('characterIdMappings');
+  });
+
+  test('sessionPhotos is never cleared without preprocessStats and whiteboardPhotoPath (C3)', () => {
+    // preprocessPhotos OVERWRITES sessionPhotos with the PROCESSED paths and skips
+    // on preprocessStats, so clearing the list alone re-fetches the full-resolution
+    // originals and then skips the resize - the article then points at 46 MB of
+    // unprocessed images and Character IDs is a minute of blank cards (H27).
+    Object.entries(ROLLBACK_CLEARS).forEach(([point, fields]) => {
+      if (!fields.includes('sessionPhotos')) return;
+      expect(fields).toContain('preprocessStats');
+      expect(fields).toContain('whiteboardPhotoPath');
+      expect(fields).toContain('genericPhotoAnalyses');
+    });
+  });
+
+  test('every checkpoint in both lists is a real rollback point', () => {
+    for (const cp of [...MAIN_LINE, ...PHOTO_BRANCH]) {
       expect(ROLLBACK_CLEARS).toHaveProperty(cp);
     }
   });
 
-  test('every skip-field is a real state channel (no stale fixture)', () => {
+  test('every skip-field and photo field is a real state channel (no stale fixture)', () => {
     const all = Object.keys(ReportStateAnnotation.spec);
-    const ghosts = [...new Set(Object.values(SKIP_FIELDS).flat())].filter(f => !all.includes(f));
-    expect(ghosts).toEqual([]);
+    const names = [...new Set([
+      ...Object.values(SKIP_FIELDS).flat(), ...PHOTO_INPUT_FIELDS, ...ROSTER_DERIVED_FIELDS
+    ])];
+    expect(names.filter((f) => !all.includes(f))).toEqual([]);
   });
 });

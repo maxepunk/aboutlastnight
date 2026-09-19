@@ -22,12 +22,13 @@ describe('CHECKPOINT_ORDER', () => {
     expect(CHECKPOINT_ORDER).toEqual([
       'paper-evidence-selection',
       'await-roster',
-      'character-ids',
       'await-full-context',
       'input-review',
       'pre-curation',
       'evidence-and-photos',
       'arc-selection',
+      'photos',
+      'character-ids',
       'outline',
       'article'
     ]);
@@ -50,11 +51,15 @@ describe('CHECKPOINT_ORDER', () => {
     const chain = [
       'checkpointPaperEvidence',      // paper-evidence-selection
       'checkpointAwaitRoster',        // await-roster
-      'checkpointCharacterIds',       // character-ids
       'checkpointAwaitContext',       // await-full-context
       'parseRawInput',                // -> checkpointInputReview (input-review interrupt)
       'checkpointPreCuration',        // pre-curation
-      'checkpointEvidenceAndPhotos'   // evidence-and-photos
+      'checkpointEvidenceAndPhotos',  // evidence-and-photos
+      // arc-selection is reached by a CONDITIONAL edge (builder.branches), asserted
+      // in __tests__/unit/workflow/graph-routing.test.js. The photo branch hangs off
+      // its forward leg, so its two gates come last in graph.js source order.
+      'checkpointPhotos',             // photos
+      'checkpointCharacterIds'        // character-ids
     ];
     const positions = chain.map((node) => graphSrc.indexOf(`builder.addEdge('${node}'`));
     chain.forEach((node, i) => {

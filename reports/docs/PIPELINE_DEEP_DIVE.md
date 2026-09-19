@@ -32,7 +32,7 @@ This document provides a comprehensive understanding of the post-game report gen
 - **Journalist theme** (`state.theme = 'journalist'`): Nova, an NPC journalist at the party, writes an investigative article (~3000 words, first-person participatory voice, NovaNews branding).
 - **Detective theme** (`state.theme = 'detective'`): Detective Anondono files an official case report (~750 words, third-person investigative voice, single-column case file format).
 
-Both themes share the same 40-node LangGraph pipeline and 10 checkpoints. Theme-specific behavior is handled by `theme-config.js` (NPCs, rules), `prompt-builder.js` (voice/constraints), `theme-loader.js` (prompt files from `.claude/skills/{theme}-report/`), and `templates/{theme}/` (Handlebars layouts).
+Both themes share the same 45-node LangGraph pipeline and 11 checkpoints. Theme-specific behavior is handled by `theme-config.js` (NPCs, rules), `prompt-builder.js` (voice/constraints), `theme-loader.js` (prompt files from `.claude/skills/{theme}-report/`), and `templates/{theme}/` (Handlebars layouts).
 
 ---
 
@@ -196,7 +196,7 @@ Nova's article is NOT just a factual record. It reflects:
 │              PHASE 0-1: DATA ACQUISITION & PARSING                          │
 │  fetchMemoryTokens() → tag disposition (exposed/buried/unknown)             │
 │  fetchPaperEvidence() → narrativeThreads, owners, descriptions              │
-│  analyzePhotos() → Haiku vision analysis                                    │
+│  (photos are NOT fetched here - see PHASE 2.36)                             │
 │  parseDirectorNotes() → playerFocus, whiteboard, accusation                 │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
@@ -263,7 +263,7 @@ Nova's article is NOT just a factual record. It reflects:
 
 ### Phase 1: Data Acquisition
 
-**Nodes**: `fetchMemoryTokens`, `fetchPaperEvidence`, `analyzePhotos`, `preprocessEvidence`
+**Nodes**: `fetchMemoryTokens`, `fetchPaperEvidence`, `preprocessEvidence` (photo nodes moved to Phase 2.36)
 
 **Key Files**:
 - `lib/workflow/nodes/fetch-nodes.js`
@@ -299,8 +299,7 @@ Nova's article is NOT just a factual record. It reflects:
 
 **Checkpoints** (incremental input flow):
 - `paper-evidence-selection` (1.35): Select which paper evidence was unlocked
-- `await-roster` (1.51): Wait for roster (enables character ID mapping)
-- `character-ids` (1.66): Map photos to characters based on Haiku descriptions
+- `await-roster` (1.51): Wait for roster (names and pronouns)
 - `await-full-context` (1.52): Wait for accusation/sessionReport/directorNotes
 
 ### Phase 1.8: Evidence Curation
@@ -397,6 +396,12 @@ SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
 ```
 
 **Checkpoint**: `arc-selection` (2.35) - Select 3-5 arcs for article
+
+### Phase 2.36: Photo Branch
+
+**Nodes**: `checkpointPhotos`, `fetchSessionPhotos`, `preprocessPhotos`, `analyzePhotos`, `detectWhiteboard`, `checkpointCharacterIds`, `parseCharacterIds`, `finalizePhotoAnalyses`
+
+**Checkpoints**: `photos` (2.36, conditional - skipped when photosPath came from /start); `character-ids` (1.66, historical number)
 
 ### Phase 2.4: Arc Evidence Packaging
 
@@ -865,11 +870,12 @@ State persists via `MemorySaver` (in-memory) or `SqliteSaver` (persistent).
 ### "Photos not appearing in article"
 
 **Check**:
-1. Are photos analyzed in `photoAnalyses`?
-2. Are `characterDescriptions` mapped to roster?
-3. Is `arcEvidencePackages` including relevant photos?
+1. Was a photos folder supplied - at /start or at the `photos` checkpoint? (state.photosPath)
+2. Are photos analyzed in `photoAnalyses`?
+3. Are `characterDescriptions` mapped to roster?
+4. Is `arcEvidencePackages` including relevant photos?
 
-**Fix**: Check `character-ids` checkpoint approval and photo-to-arc mapping.
+**Fix**: `fetchSessionPhotos` THROWS on a missing folder now, so a bad path shows as a run error naming the path, not as a silent zero-photo article. Check the `photos` gate's answer, then the `character-ids` approval and the photo-to-arc mapping.
 
 ### "fullDescription not appearing in articles" (Commit 6ffeef8)
 

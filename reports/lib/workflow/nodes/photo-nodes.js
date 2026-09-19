@@ -5,7 +5,12 @@
  * - analyzePhotos: Batch-analyze session photos using Haiku vision
  *
  * Added in Commit 8.6 to provide rich visual context to arc analysis.
- * Photos are analyzed BEFORE preprocessing to inform evidence curation.
+ * Photo late-join: the whole chain now runs at Phase 2.36, AFTER arc selection,
+ * off checkpointArcSelection's forward leg and joining at
+ * buildArcEvidencePackages. It no longer informs evidence curation (nothing
+ * before the join consumed a photo analysis anyway), and the director can run a
+ * session to its arcs before the photos are curated. The 1.65/1.66/1.67 phase
+ * numbers below are historical display strings, not an order.
  *
  * Key features:
  * - Uses Haiku vision for fast, cost-effective analysis
@@ -344,29 +349,31 @@ async function preprocessPhotos(state, config) {
  * @returns {Object} Partial state update with whiteboardPhotoPath, currentPhase
  */
 async function detectWhiteboard(state, config) {
-  const photos = state.sessionPhotos || [];
-
-  if (photos.length === 0) {
-    console.log('[detectWhiteboard] No photos to check');
-    return {
-      whiteboardPhotoPath: null,
-      currentPhase: PHASES.DETECT_WHITEBOARD
-    };
-  }
-
   // Skip if already detected
   if (state.whiteboardPhotoPath !== null && state.whiteboardPhotoPath !== undefined) {
     console.log(`[detectWhiteboard] Skipping - already detected: ${state.whiteboardPhotoPath}`);
     return { currentPhase: PHASES.DETECT_WHITEBOARD };
   }
 
-  // Check if user provided whiteboard path via rawSessionInput
-  // (detectWhiteboard runs before parseRawInput, so check rawSessionInput directly)
+  // I1: the user-provided path is checked BEFORE the empty-photos return. It used
+  // to come after, so naming the whiteboard explicitly did nothing when the photos
+  // folder was empty. This channel's only real consumer is generateOutline's
+  // article EXCLUSION - the PARSE reads rawSessionInput.whiteboardPhotoPath
+  // directly.
   const userProvidedPath = state.rawSessionInput?.whiteboardPhotoPath;
   if (userProvidedPath) {
     console.log(`[detectWhiteboard] Using user-provided path: ${userProvidedPath}`);
     return {
       whiteboardPhotoPath: userProvidedPath,
+      currentPhase: PHASES.DETECT_WHITEBOARD
+    };
+  }
+
+  const photos = state.sessionPhotos || [];
+  if (photos.length === 0) {
+    console.log('[detectWhiteboard] No photos to check and no whiteboard photo supplied at start');
+    return {
+      whiteboardPhotoPath: null,
       currentPhase: PHASES.DETECT_WHITEBOARD
     };
   }

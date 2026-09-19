@@ -96,3 +96,49 @@ describe('routeArticleEvaluation — programmatic fact-check path (BASELINE clas
     })).toBe('revise');
   });
 });
+
+describe('graph wiring — photo late-join', () => {
+  const { createGraphBuilder } = _testing;
+  const builder = createGraphBuilder();
+  const edges = [...builder.edges];
+  const has = (from, to) => edges.some(([f, t]) => f === from && t === to);
+
+  test('the photo chain no longer sits in Phase 1', () => {
+    expect(has('fetchPaperEvidence', 'fetchSessionPhotos')).toBe(false);
+    expect(has('detectWhiteboard', 'checkpointPaperEvidence')).toBe(false);
+    expect(has('checkpointAwaitRoster', 'checkpointCharacterIds')).toBe(false);
+    expect(has('finalizePhotoAnalyses', 'checkpointAwaitContext')).toBe(false);
+  });
+
+  test('Phase 1 runs straight from evidence to the roster gate to the context gate', () => {
+    expect(has('fetchPaperEvidence', 'checkpointPaperEvidence')).toBe(true);
+    expect(has('checkpointPaperEvidence', 'checkpointAwaitRoster')).toBe(true);
+    expect(has('checkpointAwaitRoster', 'checkpointAwaitContext')).toBe(true);
+  });
+
+  test("checkpointArcSelection's forward leg enters the photo branch", () => {
+    // A conditional edge is in builder.BRANCHES, not builder.edges (M1).
+    const ends = builder.branches.checkpointArcSelection.condition.ends;
+    expect(ends.forward).toBe('checkpointPhotos');
+    expect(ends.revise).toBe('incrementArcRevision');
+  });
+
+  test('the photo branch is a chain from the gate to the evidence-package join', () => {
+    expect(has('checkpointPhotos', 'fetchSessionPhotos')).toBe(true);
+    expect(has('fetchSessionPhotos', 'preprocessPhotos')).toBe(true);
+    expect(has('preprocessPhotos', 'analyzePhotos')).toBe(true);
+    // I1: detectWhiteboard travels WITH the chain. Ahead of the fetch it would
+    // always write null and the whiteboard would leak into the article photos.
+    expect(has('analyzePhotos', 'detectWhiteboard')).toBe(true);
+    expect(has('detectWhiteboard', 'checkpointCharacterIds')).toBe(true);
+    expect(has('checkpointCharacterIds', 'parseCharacterIds')).toBe(true);
+    expect(has('parseCharacterIds', 'finalizePhotoAnalyses')).toBe(true);
+    expect(has('finalizePhotoAnalyses', 'buildArcEvidencePackages')).toBe(true);
+    expect(has('buildArcEvidencePackages', 'generateOutline')).toBe(true);
+  });
+
+  test('registers checkpointPhotos as a node', () => {
+    expect(Object.keys(builder.nodes)).toContain('checkpointPhotos');
+    expect(Object.keys(builder.nodes)).toHaveLength(45);
+  });
+});

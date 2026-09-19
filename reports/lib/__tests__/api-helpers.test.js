@@ -157,7 +157,7 @@ describe('buildRollbackState re-pause correctness', () => {
   test('every rollback point at/upstream of input-review clears inputReviewApproved', () => {
     // The gate skips on an approval FLAG, not on a re-derivable parse output, so a
     // rollback to any earlier point must re-open it.
-    ['paper-evidence-selection', 'await-roster', 'character-ids', 'await-full-context', 'input-review']
+    ['paper-evidence-selection', 'await-roster', 'await-full-context', 'input-review']
       .forEach((point) => {
         expect(buildRollbackState(point)).toHaveProperty('inputReviewApproved', null);
       });
@@ -180,12 +180,39 @@ describe('buildRollbackState re-pause correctness', () => {
   test('every rollback point at/upstream of arc-selection clears arcEvidencePackages', () => {
     const upstreamOfPackages = [
       'input-review', 'paper-evidence-selection', 'await-roster',
-      'character-ids', 'pre-curation', 'evidence-and-photos', 'arc-selection'
+      'pre-curation', 'evidence-and-photos', 'arc-selection'
     ];
     for (const point of upstreamOfPackages) {
       const state = buildRollbackState(point);
       expect(state).toHaveProperty('arcEvidencePackages', null);
     }
+  });
+
+  test('the photo-branch points clear arcEvidencePackages so the join rebuilds them', () => {
+    // photos/character-ids are DOWNSTREAM of arc-selection now, but the packages
+    // fold photo analyses into arc data, so new mappings mean new packages.
+    for (const point of ['photos', 'character-ids']) {
+      expect(buildRollbackState(point)).toHaveProperty('arcEvidencePackages', null);
+    }
+  });
+
+  test('a photos rollback clears the five photo inputs as a unit (C3)', () => {
+    const state = buildRollbackState('photos');
+    expect(state).toHaveProperty('photosPath', null);
+    expect(state).toHaveProperty('sessionPhotos', null);
+    expect(state).toHaveProperty('preprocessStats', null);
+    expect(state).toHaveProperty('whiteboardPhotoPath', null);
+    expect(state).toHaveProperty('genericPhotoAnalyses', null);
+  });
+
+  test('a character-ids rollback preserves photoAnalyses and every upstream input', () => {
+    const state = buildRollbackState('character-ids');
+    expect(state).toHaveProperty('characterIdMappings', null);
+    expect(state).not.toHaveProperty('photoAnalyses');
+    expect(state).not.toHaveProperty('sessionPhotos');
+    expect(state).not.toHaveProperty('selectedArcs');
+    expect(state).not.toHaveProperty('inputReviewApproved');
+    expect(state).not.toHaveProperty('accusation');
   });
 
   test('await-full-context is a valid rollback point that clears the 3 raw inputs (ROLL-4)', () => {

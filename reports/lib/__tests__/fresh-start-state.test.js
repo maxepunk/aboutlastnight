@@ -81,6 +81,7 @@ describe('buildFreshStartState', () => {
 
   test('nulls the photo channels, so the new photosPath is actually scanned', () => {
     const state = buildFreshStartState();
+    expect(state.photosPath).toBeNull();
     expect(state.sessionPhotos).toBeNull();
     expect(state.preprocessStats).toBeNull();
     expect(state.photoAnalyses).toBeNull();

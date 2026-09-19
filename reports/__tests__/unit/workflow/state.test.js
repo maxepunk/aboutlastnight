@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 67 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 69 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -215,6 +215,7 @@ describe('ReportStateAnnotation', () => {
         'canonicalCharacters',
         'paperEvidence',
         'selectedPaperEvidence',  // Commit 8.9
+        'photosPath',             // Photo late-join: the one owner of the photo folder
         'sessionPhotos',
         // Incremental input (Parallel branch architecture)
         'roster',
@@ -283,6 +284,7 @@ describe('ReportStateAnnotation', () => {
         '_previousOutline',
         '_previousContentBundle',
         '_previousFullContext',  // ROLL-4: stash for AwaitFullContext pre-fill on rollback
+        '_previousPhotosPath',   // Photo late-join: stash for the photos gate pre-fill on rollback
         // Arc validation routing (Commit 8.xx)
         '_arcValidation',
         // Director guidance captured at arc selection (Q2)
@@ -440,7 +442,15 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(67);
+      expect(Object.keys(getDefaultState()).length).toBe(69);
+    });
+
+    it('declares photosPath and its rollback stash as nullable replace channels', () => {
+      const channels = Object.keys(ReportStateAnnotation.spec);
+      expect(channels).toContain('photosPath');
+      expect(channels).toContain('_previousPhotosPath');
+      expect(getDefaultState()).toHaveProperty('photosPath', null);
+      expect(getDefaultState()).toHaveProperty('_previousPhotosPath', null);
     });
   });
 
@@ -489,8 +499,14 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 41 phases (Commit 8.26: added 3 SRP checkpoint phases)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(41);
+    it('defines exactly 42 phases (photo late-join: added PHOTOS)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(42);
+    });
+
+    it('defines the photos gate phase between arc selection and evidence packaging', () => {
+      expect(PHASES.PHOTOS).toBe('2.36');
+      expect(PHASES.ARC_SELECTION).toBe('2.35');
+      expect(PHASES.BUILD_ARC_PACKAGES).toBe('2.4');
     });
 
     it('defines input parsing phases (Commit 8.9)', () => {
@@ -548,8 +564,12 @@ describe('ReportStateAnnotation', () => {
       expect(CHECKPOINT_TYPES.PRE_CURATION).toBe('pre-curation');
     });
 
-    it('defines exactly 10 checkpoint types (Parallel branch: added AWAIT_ROSTER, AWAIT_FULL_CONTEXT)', () => {
-      expect(Object.keys(CHECKPOINT_TYPES)).toHaveLength(10);
+    it('defines exactly 11 checkpoint types (photo late-join: added PHOTOS)', () => {
+      expect(Object.keys(CHECKPOINT_TYPES)).toHaveLength(11);
+    });
+
+    it('defines PHOTOS type', () => {
+      expect(CHECKPOINT_TYPES.PHOTOS).toBe('photos');
     });
 
     it('defines INPUT_REVIEW type', () => {
@@ -604,8 +624,8 @@ describe('ReportStateAnnotation', () => {
   });
 
   describe('ROLLBACK_CLEARS constant (Phase 4f)', () => {
-    it('defines 10 rollback points (ROLL-4: added await-full-context)', () => {
-      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(10);
+    it('defines 11 rollback points (photo late-join: added photos)', () => {
+      expect(Object.keys(ROLLBACK_CLEARS)).toHaveLength(11);
     });
 
     it('includes all expected rollback points', () => {
@@ -618,6 +638,7 @@ describe('ReportStateAnnotation', () => {
         'pre-curation',
         'evidence-and-photos',
         'arc-selection',
+        'photos',  // Photo late-join: head of the photo branch
         'outline',
         'article'
       ];

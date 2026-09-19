@@ -94,14 +94,17 @@ describe('_outlineGuidance state channel', () => {
   });
 
   it('is cleared by every rollback point at or upstream of arc-selection', () => {
-    ['input-review', 'paper-evidence-selection', 'await-roster', 'character-ids',
+    ['input-review', 'paper-evidence-selection', 'await-roster',
      'await-full-context', 'pre-curation', 'evidence-and-photos', 'arc-selection']
       .forEach((point) => {
         expect(ROLLBACK_CLEARS[point]).toContain('_outlineGuidance');
       });
   });
 
-  it('SURVIVES a rollback to outline or article (the arcs and the guidance stand)', () => {
+  it('SURVIVES a rollback into the photo branch or to outline/article', () => {
+    // The guidance is captured AT arc-selection, which is upstream of all four.
+    expect(ROLLBACK_CLEARS['photos']).not.toContain('_outlineGuidance');
+    expect(ROLLBACK_CLEARS['character-ids']).not.toContain('_outlineGuidance');
     expect(ROLLBACK_CLEARS['outline']).not.toContain('_outlineGuidance');
     expect(ROLLBACK_CLEARS['article']).not.toContain('_outlineGuidance');
   });

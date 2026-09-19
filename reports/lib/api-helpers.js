@@ -87,6 +87,11 @@ function buildRollbackState(rollbackPoint = 'input-review') {
  */
 function buildEvaluationInvalidationStubs(rollbackPoint) {
   const PHASES_INVALIDATED_BY = {
+    // The photo branch (photo late-join) preserves evaluationHistory the way the
+    // outline point does — the arc verdict is upstream and still valid — and
+    // regenerates the outline AND the article, so both are invalidated (R2/M1).
+    photos: ['outline', 'article'],
+    'character-ids': ['outline', 'article'],
     outline: ['outline', 'article'],
     article: ['article']
   };

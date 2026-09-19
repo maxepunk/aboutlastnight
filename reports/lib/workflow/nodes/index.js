@@ -64,6 +64,7 @@ module.exports = {
   // Checkpoint nodes (from checkpoint-nodes.js) - Parallel branch architecture
   checkpointInputReview: checkpointNodes.checkpointInputReview,  // B2/B8: input-review is its own node
   checkpointPaperEvidence: checkpointNodes.checkpointPaperEvidence,
+  checkpointPhotos: checkpointNodes.checkpointPhotos,       // Photo late-join: collects the folder after arc selection
   checkpointCharacterIds: checkpointNodes.checkpointCharacterIds,
   checkpointPreCuration: checkpointNodes.checkpointPreCuration,
   checkpointAwaitRoster: checkpointNodes.checkpointAwaitRoster,

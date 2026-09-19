@@ -198,6 +198,38 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => null
   }),
 
+  /**
+   * The ONE owner of the session photo folder (C1).
+   *
+   * Seeded by POST /start when the director already has photos, otherwise
+   * captured at the `photos` checkpoint, which runs after arc selection.
+   * `fetchSessionPhotos` reads THIS and nothing else: the gate's skip signal and
+   * the fetch's directory must never be able to disagree. rawSessionInput and
+   * sessionConfig are no longer consulted by the fetch — a gate that skipped on a
+   * directory scan of `data/<id>/photos` while the fetch fell back to
+   * `data/<id>/inputs/photos` produced a photo-less article with no error.
+   */
+  photosPath: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * Transient pre-fill stash for the `photos` gate (v2 M1).
+   *
+   * `ROLLBACK_CLEARS['photos']` nulls `photosPath` so the gate always re-asks, and
+   * `rawSessionInput` is rollback-EXEMPT — so without this, every rollback after a
+   * gate-time correction would re-offer the ORIGINAL start-time path, which is the
+   * bad one the director just corrected. `/rollback` stashes the cleared value here
+   * (exactly as ROLL-4 stashes `_previousFullContext`), the gate pre-fills from it,
+   * and the capture return nulls it. Display only: it can neither make the gate skip
+   * nor redirect `fetchSessionPhotos`.
+   */
+  _previousPhotosPath: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
   /** Session photos from filesystem/Notion */
   sessionPhotos: Annotation({
     reducer: replaceReducer,
@@ -712,7 +744,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (67 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check)
+ * Get default state with all fields initialized (69 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -735,6 +767,7 @@ function getDefaultState() {
     canonicalCharacters: null,  // RC2: firstName -> fullName map from Notion tokens
     paperEvidence: [],
     selectedPaperEvidence: null,  // Commit 8.9: user-selected subset
+    photosPath: null,             // Photo late-join: the one owner of the photo folder
     sessionPhotos: [],
     // Incremental input (parallel branch architecture)
     roster: null,
@@ -801,6 +834,7 @@ function getDefaultState() {
     _previousOutline: null,
     _previousContentBundle: null,
     _previousFullContext: null,
+    _previousPhotosPath: null,
     // Arc validation routing (Commit 8.xx)
     _arcValidation: null,
     // Director guidance captured at arc selection (Q2)
@@ -857,6 +891,7 @@ const PHASES = {
   ARC_SYNTHESIS: '2.2',             // Synthesizer combines specialist outputs
   ARC_EVALUATION: '2.3',            // Evaluator checks arcs
   ARC_SELECTION: '2.35',            // Checkpoint: user selects arcs (Commit 8.26 - SRP separation)
+  PHOTOS: '2.36',                   // Photo late-join: gate that collects the photo folder after arc selection
   BUILD_ARC_PACKAGES: '2.4',        // Phase 1 Fix: Build per-arc evidence packages after selection
   ANALYZE_ARCS: '2',                // @deprecated - use sub-phases
 
@@ -926,7 +961,8 @@ const REVISION_CAPS = {
  *    await-full-context — P6.3 — so they are NOT exempt.)
  *  - Transient per-revision scratch: '_'-prefixed caches that nodes null out
  *    themselves at end of use (incl. _previousFullContext, the await-full-context
- *    pre-fill stash); no rollback owns them.
+ *    pre-fill stash, and _previousPhotosPath, the `photos` one); no rollback owns
+ *    them.
  *  - Default-only / never written by a node: dead-but-defaulted channels.
  *  - Control + counters: currentPhase + *RevisionCount handled by
  *    buildRollbackState directly / ROLLBACK_COUNTER_RESETS, not the field list.
@@ -938,23 +974,18 @@ const ROLLBACK_CLEARS_EXEMPT = new Set([
   'rawSessionInput',
   // Fetched / parsed, re-derived on replay (fetchMemoryTokens + parseRawInput re-runs)
   'canonicalCharacters', 'shellAccounts',
-  // Photo branch inputs cleared transitively / re-discovered on replay
-  'genericPhotoAnalyses', 'whiteboardPhotoPath', 'preprocessStats',
-  // Photo PATHS — every checkpoint is downstream of fetchSessionPhotos, so no rollback
-  // point can meaningfully re-pause it, and the directory scan is deterministic. It is
-  // also NOT safely clearable: preprocessPhotos overwrites sessionPhotos with the
-  // PROCESSED paths and gates on preprocessStats (exempt above), so clearing
-  // sessionPhotos alone re-fetches the originals and then skips the resize, leaving the
-  // article pointing at un-processed images. Reusing the scanned+processed list is the
-  // correct replay behaviour, not stale input. (B2: 'input-review' used to clear it.)
-  'sessionPhotos',
+  // NOTE: the photo INPUT channels are NOT exempt (C3/C4). They are cleared as a
+  // unit by the `photos` rollback point, and by nothing else: preprocessPhotos
+  // gates on preprocessStats and overwrites sessionPhotos with the PROCESSED
+  // paths, so any partial clear either skips the resize or re-pays Haiku. See
+  // ROLLBACK_CLEARS.
   // Default-only channels never written by any node return
   'preCurationSummary',
   // Raw character-ID text — paired with characterIdMappings (which IS cleared)
   'characterIdsRaw',
   // Transient per-revision scratch — nodes null these themselves after use
   '_rescuedItems', '_excludedItemsCache', '_rescueWarnings',
-  '_previousArcs', '_previousOutline', '_previousContentBundle', '_arcValidation', '_previousFullContext',
+  '_previousArcs', '_previousOutline', '_previousContentBundle', '_arcValidation', '_previousFullContext', '_previousPhotosPath',
   // Control flow + counters — handled by buildRollbackState / ROLLBACK_COUNTER_RESETS
   'currentPhase', 'voiceRevisionCount',
   'arcRevisionCount', 'humanArcRevisionCount', 'outlineRevisionCount', 'articleRevisionCount',
@@ -973,8 +1004,8 @@ const ROLLBACK_CLEARS = {
   // photoAnalyses, characterIdMappings) plus the parse outputs themselves. Both
   // halves were wrong:
   //  - The upstream clears re-paused checkpoints that run BEFORE this one in the
-  //    graph's replay order (paper-evidence-selection, await-roster,
-  //    character-ids all precede parseRawInput), so "roll back to input-review"
+  //    graph's replay order (paper-evidence-selection and await-roster both
+  //    precede parseRawInput), so "roll back to input-review"
   //    actually threw the operator back to the first checkpoint of the run. And
   //    clearing sessionPhotos while preprocessStats survived made preprocessPhotos
   //    skip, leaving the article pointing at un-processed photo paths.
@@ -1008,6 +1039,15 @@ const ROLLBACK_CLEARS = {
     // clear their captured inputs so they re-pause when rolling back here (else they skip on
     // stale roster/full-context). Mirrors the already-cleared downstream characterIdMappings.
     'roster', 'rosterPronouns', 'accusation', 'sessionReport', 'directorNotesRaw',
+    // v2 I2: these two STAY. They are roster-DERIVED: the roster goes into every
+    // Haiku photo prompt and into the character-ID parse, and finalizePhotoAnalyses
+    // skips whenever any analysis is already enriched — so a roster change after the
+    // branch has run leaves the captions keyed to the OLD names and no replay
+    // re-enriches them. This point clears the roster, so it must clear what the
+    // roster produced. The photo INPUTS (photosPath/sessionPhotos/preprocessStats/
+    // whiteboardPhotoPath/genericPhotoAnalyses) are NOT cleared here —
+    // preprocessPhotos still skips on preprocessStats, so the resize is not re-paid,
+    // only the analysis.
     'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
@@ -1026,22 +1066,9 @@ const ROLLBACK_CLEARS = {
     // full-context so it re-pauses, and the input-review approval flag so its gate re-opens.
     'accusation', 'sessionReport', 'directorNotesRaw', 'inputReviewApproved',
     'whiteboardAnalysis',
-    'characterIdMappings',
-    'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
-    '_outlineGuidance',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
-    'evaluationHistory'
-  ],
-
-  // Phase 1.65+: Character ID mappings (8.9.5)
-  'character-ids': [
-    'characterIdMappings',
-    // Per-point re-pause: await-full-context + input-review are downstream — clear
-    // full-context so it re-pauses, and the input-review approval flag so its gate re-opens.
-    'accusation', 'sessionReport', 'directorNotesRaw', 'inputReviewApproved',
-    // Note: photoAnalyses preserved - only mappings need re-entry
+    // v2 I2: photoAnalyses travels with characterIdMappings. This gate captures the
+    // roster, and both outputs are keyed to it.
+    'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
@@ -1060,7 +1087,10 @@ const ROLLBACK_CLEARS = {
   // parseRawInput (which skips when sessionConfig is populated). (rawSessionInput is EXEMPT
   // and no longer pruned — its at-start config survives so the re-parse can read
   // photosPath/journalistFirstName/etc.) Upstream collected inputs (roster,
-  // characterIdMappings, photoAnalyses, selectedPaperEvidence) are PRESERVED.
+  // selectedPaperEvidence) are PRESERVED. The photo branch's characterIdMappings
+  // and photoAnalyses are DOWNSTREAM of this point now (photo late-join) and are
+  // preserved for the opposite reason: this gate does not invalidate them, and
+  // re-paying Haiku for a re-collected accusation would be pure waste (C4).
   'await-full-context': [
     'accusation', 'sessionReport', 'directorNotesRaw',
     'sessionConfig', 'directorNotes', 'playerFocus',
@@ -1119,6 +1149,49 @@ const ROLLBACK_CLEARS = {
     'evaluationHistory'
   ],
 
+  // Phase 2.36: Photos — the head of the photo branch (photo late-join).
+  //
+  // The ONLY rollback point that clears photo state. All five input channels move
+  // as a unit (C3): preprocessPhotos skips on preprocessStats and overwrote
+  // sessionPhotos with the PROCESSED paths, so clearing the list alone re-fetched
+  // the full-resolution originals and then skipped the resize. photosPath is the
+  // gate's skip field, so clearing it is what makes this point re-ask at all (C2).
+  //
+  // ARC STATE IS UPSTREAM of this point and is PRESERVED — that is the whole
+  // point of the move. evaluationHistory is preserved too (the arc verdict is
+  // still valid and the console renders it); buildRollbackState appends ready:false
+  // stubs for outline + article instead (lib/api-helpers.js PHASES_INVALIDATED_BY).
+  'photos': [
+    'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses',
+    'photoAnalyses', 'characterIdMappings',
+    'heroImage', 'arcEvidencePackages',
+    'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback',
+    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+  ],
+
+  // Phase 1.66: Character ID mappings (8.9.5) — second gate of the photo branch.
+  //
+  // Rewritten for the photo late-join. This gate now runs AFTER await-full-context,
+  // input-review, pre-curation, evidence-and-photos and arc-selection, so the
+  // accusation/sessionReport/directorNotesRaw/inputReviewApproved clears and the
+  // curation + arc clears are GONE: they would throw the director back to the start
+  // of the run.
+  //
+  // photoAnalyses is preserved here, as today. KNOWN LIMITATION, not a promise
+  // (v2 M8): finalizePhotoAnalyses skips whenever any analysis already carries
+  // identifiedCharacters, so the re-entered mappings do NOT reach the captions. The
+  // fix is either clearing photoAnalyses here too (a Haiku re-run) or making that
+  // skip compare the mappings; it is out of scope and recorded in the plan's
+  // Follow-ups. Roll back to `photos` to actually redo them.
+  'character-ids': [
+    'characterIdMappings',
+    'heroImage', 'arcEvidencePackages',
+    'outline', 'outlineApproved', '_outlineFeedback',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback',
+    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+  ],
+
   // Phase 3.2: Outline
   'outline': [
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
@@ -1146,9 +1219,8 @@ const FRESH_START_KEEPS = new Set(['theme', 'sessionId', 'rawSessionInput']);
  * `/start` seeded `initialState` with `buildRollbackState('input-review')`. A
  * rollback list is the wrong tool: 'input-review' deliberately preserves
  * everything UPSTREAM of the parse (the graph reaches paper-evidence-selection,
- * await-roster, character-ids and await-full-context before it), and Task 3.1
- * additionally moved `sessionPhotos` into ROLLBACK_CLEARS_EXEMPT because no
- * rollback point can meaningfully re-pause the photo scan. Correct for a
+ * await-roster and await-full-context before it), and it preserves the photo
+ * branch entirely, which only the `photos` point clears. Correct for a
  * rollback; wrong for a start. On a second `/start` for a session id whose thread
  * exists, roster, rosterPronouns, selectedPaperEvidence, characterIdMappings,
  * photoAnalyses, sessionPhotos, preprocessStats, accusation, sessionReport,
@@ -1176,11 +1248,14 @@ const ROLLBACK_COUNTER_RESETS = {
   'input-review': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'paper-evidence-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'await-roster': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'character-ids': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'await-full-context': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'pre-curation': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'evidence-and-photos': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
   'arc-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  // The photo branch joins AFTER the arc verdict, so rolling back into it does not
+  // refund an arc revision budget spent upstream (M1).
+  'photos': { outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'character-ids': { outlineRevisionCount: 0, articleRevisionCount: 0 },
   'outline': { outlineRevisionCount: 0, articleRevisionCount: 0 },
   'article': { articleRevisionCount: 0 }
 };
@@ -1217,7 +1292,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 67
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 69
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null
@@ -1253,7 +1328,7 @@ if (require.main === module) {
   console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, HUMAN_ARCS: 4, OUTLINE: 3, ARTICLE: 3 }
 
   // Test rollback points
-  console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 10
+  console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 11
 
   console.log('\nSelf-test complete.');
 }

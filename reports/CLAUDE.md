@@ -52,7 +52,7 @@ npx @langchain/langgraph-cli dev --tunnel  # With tunnel (for Safari/remote)
 
 ## Architecture
 
-### LangGraph Workflow (6 Phases, 44 Nodes)
+### LangGraph Workflow (6 Phases, 45 Nodes)
 
 ```
 Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
@@ -62,22 +62,25 @@ Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6
 
 *See lib/workflow/graph.js for complete node list*
 
-**Human Checkpoints (10 total - workflow pauses for approval via native `interrupt()`):**
+**Human Checkpoints (11 total - workflow pauses for approval via native `interrupt()`; `photos` is conditional):**
 
 For data flow at each checkpoint, see `PIPELINE_DEEP_DIVE.md#phase-by-phase-breakdown`.
 
 | Checkpoint | Phase | Purpose |
 |------------|-------|---------|
 | `paper-evidence-selection` | 1.35 | Select which paper evidence was unlocked during gameplay |
-| `await-roster` | 1.51 | Wait for roster input (incremental input - enables character ID mapping) |
-| `character-ids` | 1.66 | Map characters to photos based on Haiku's visual descriptions |
+| `await-roster` | 1.51 | Wait for roster input (names + pronouns). Photos are not needed yet. |
 | `await-full-context` | 1.52 | Wait for accusation/sessionReport/directorNotes (incremental input) |
 | `input-review` | 0.2 | Review AI-parsed session input. Dedicated node `checkpointInputReview`, reached as `parseRawInput → checkpointInputReview` (so an approve does not re-pay the parse), gating on the `inputReviewApproved` channel |
 | `pre-curation` | 1.75 | Review preprocessed evidence before curation |
 | `evidence-and-photos` | 1.8 | Approve curated three-layer evidence bundle |
 | `arc-selection` | 2.35 | Select which narrative arcs to develop (3-5 recommended) |
+| `photos` | 2.36 | Collect the session photo folder. CONDITIONAL: skipped when `photosPath` was given at /start. The photo chain runs here, after arc analysis, so a session can be parsed, curated and arc-analysed while the photos are still being curated. |
+| `character-ids` | 1.66 | Map characters to photos based on Haiku's visual descriptions. Runs INSIDE the photo branch, after arc selection (its 1.66 phase number is historical). |
 | `outline` | 3.25 | Approve article structure and photo placements |
 | `article` | 4.25 | Final article approval before HTML assembly |
+
+The photo branch keeps its original phase NUMBERS, so the badge CheckpointShell renders runs backwards there: Arc Selection 2.35, Photos 2.36, Character IDs 1.66. The numbers are historical labels, not an order (see the plan's ruling R3).
 
 **Checkpoint payload keys** (added by `getCheckpointData` in `server.js`; the console consumes these names):
 
@@ -137,7 +140,7 @@ lib/template-helpers.js             # Handlebars helper registration
 lib/theme-config.js                 # Theme settings, NPC definitions, validation rules
 lib/prompt-builder.js               # Prompt assembly for each phase
 lib/workflow/
-├── graph.js                        # LangGraph StateGraph (44 nodes, edges)
+├── graph.js                        # LangGraph StateGraph (45 nodes, edges)
 ├── state.js                        # State annotations, phases, reducers
 ├── checkpoint-helpers.js           # Native interrupt() helpers (DRY)
 ├── reference-loader.js             # Load reference files for prompts
@@ -381,7 +384,7 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 **Requirements:** LangSmith account + `LANGSMITH_API_KEY` in `.env`
 **Config:** `langgraph.json` defines graph as `./lib/studio/entry.js:graph`
 
-**Features:** Graph visualization (44 nodes), state inspection, time-travel debugging, prompt iteration
+**Features:** Graph visualization (45 nodes), state inspection, time-travel debugging, prompt iteration
 
 ## Console Frontend
 

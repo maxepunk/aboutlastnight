@@ -15,9 +15,28 @@
  * - Use PHASES constants for currentPhase values
  */
 
+const fs = require('fs');
+const path = require('path');
 const { PHASES } = require('../state');
 const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
 const { traceNode } = require('../../observability');
+
+// Same convention as fetch-nodes.js / photo-nodes.js / input-nodes.js.
+const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', '..', 'data');
+
+// Same extension list fetchSessionPhotos scans with.
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+/** Images directly in `dir`, or 0 when the directory is missing or unreadable. */
+function countImages(dir) {
+  try {
+    return fs.readdirSync(dir)
+      .filter((f) => IMAGE_EXTENSIONS.includes(path.extname(f).toLowerCase()))
+      .length;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * Input Review Checkpoint (CODE-REVIEW B2, B8)
@@ -131,6 +150,66 @@ async function checkpointPaperEvidence(state, config) {
 }
 
 /**
+ * Photos Checkpoint (photo late-join)
+ *
+ * The head of the photo branch, reached from checkpointArcSelection's `forward`
+ * leg. It exists so a session can be started, parsed, curated and arc-analysed
+ * with no photos at all while the director curates and cleans them.
+ *
+ * SKIP SIGNAL: `state.photosPath`, and nothing else (C1/C2). It does NOT read the
+ * filesystem to decide. preprocessPhotos copies every photo into
+ * `data/<id>/photos`, so a `found > 0` skip could never fire again after a first
+ * run — and because ROLLBACK_CLEARS['photos'] nulls photosPath, this gate ALWAYS
+ * re-asks on a rollback to it. `found` is reported for information only.
+ *
+ * PRE-FILL: `state.photosPath || state._previousPhotosPath ||
+ * state.rawSessionInput?.photosPath` (R4 + v2 M1). All three are DISPLAY ONLY —
+ * none can make this gate skip or redirect fetchSessionPhotos, which reads
+ * state.photosPath alone. The purpose is that a thread which supplied a path at
+ * start (including every thread started on the previous graph) stops here once,
+ * pre-filled and answered with one click; and that a rollback after a gate-time
+ * CORRECTION offers the corrected path, not the original typo, because /rollback
+ * stashes the cleared value in _previousPhotosPath.
+ *
+ * @param {Object} state - Current state with sessionId, photosPath
+ * @param {Object} config - Graph config with optional configurable.dataDir
+ * @returns {Object} Partial state update with photosPath, currentPhase
+ */
+async function checkpointPhotos(state, config) {
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const defaultDir = path.join(dataDir, state.sessionId, 'photos');
+
+  const skipCondition = state.photosPath ? state.photosPath : null;
+
+  const resumeValue = checkpointInterrupt(
+    CHECKPOINT_TYPES.PHOTOS,
+    {
+      photosPath: state.photosPath || state._previousPhotosPath || state.rawSessionInput?.photosPath || null,
+      defaultDir,
+      found: countImages(defaultDir),
+      sessionId: state.sessionId
+    },
+    skipCondition
+  );
+
+  if (!skipCondition) {
+    const supplied = typeof resumeValue?.photosPath === 'string'
+      ? resumeValue.photosPath.trim().replace(/^["']|["']$/g, '')
+      : '';
+    if (supplied) {
+      console.log(`[checkpointPhotos] Captured photos path from resume: ${supplied}`);
+      return {
+        photosPath: supplied,
+        _previousPhotosPath: null,   // consumed — clear the pre-fill stash (v2 M1)
+        currentPhase: PHASES.PHOTOS
+      };
+    }
+  }
+
+  return { currentPhase: PHASES.PHOTOS };
+}
+
+/**
  * Character IDs Checkpoint
  *
  * Pauses for user to map photo character descriptions to roster names.
@@ -213,7 +292,9 @@ async function checkpointPreCuration(state, config) {
  *
  * Pauses for user to provide roster via /approve endpoint.
  * This is a NEW checkpoint for incremental input flow.
- * Enables: Whiteboard OCR with roster disambiguation, character ID mapping
+ * Enables: Whiteboard OCR with roster disambiguation, and (later, in the Phase
+ * 2.36 photo branch) the character ID mapping and the Haiku photo prompts — which
+ * is why a rollback to this point clears photoAnalyses + characterIdMappings.
  *
  * @param {Object} state - Current state with genericPhotoAnalyses
  * @param {Object} config - Graph config
@@ -530,6 +611,9 @@ module.exports = {
   checkpointPaperEvidence: traceNode(checkpointPaperEvidence, 'checkpointPaperEvidence', {
     stateFields: ['paperEvidence', 'selectedPaperEvidence']
   }),
+  checkpointPhotos: traceNode(checkpointPhotos, 'checkpointPhotos', {
+    stateFields: ['photosPath', 'sessionPhotos']
+  }),
   checkpointCharacterIds: traceNode(checkpointCharacterIds, 'checkpointCharacterIds', {
     stateFields: ['photoAnalyses', 'characterIdMappings']
   }),
@@ -568,6 +652,7 @@ module.exports = {
   _testing: {
     checkpointInputReview,
     checkpointPaperEvidence,
+    checkpointPhotos,
     checkpointCharacterIds,
     checkpointPreCuration,
     checkpointAwaitRoster,

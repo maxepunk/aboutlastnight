@@ -34,6 +34,9 @@ const CHECKPOINT_TYPES = {
   ARC_SELECTION: 'arc-selection',
   OUTLINE: 'outline',
   ARTICLE: 'article',
+  // Photo late-join: the photo chain runs AFTER arc selection, and this gate
+  // collects the folder when the director had no photos at session start.
+  PHOTOS: 'photos',
   // Incremental input checkpoints (new - for parallel branch architecture)
   AWAIT_ROSTER: 'await-roster',
   AWAIT_FULL_CONTEXT: 'await-full-context'

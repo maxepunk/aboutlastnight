@@ -5,7 +5,7 @@
  * Uses native LangGraph interrupt() for human checkpoints with DEDICATED
  * checkpoint nodes (SRP - separate data from checkpoints).
  *
- * Graph Flow (30+ nodes - Commit 8.26: SRP checkpoint separation):
+ * Graph Flow (45 nodes - Commit 8.26: SRP checkpoint separation):
  *
  * PHASE 0: Input Parsing (reached from checkpointAwaitContext, not from START)
  * 0.1 parseRawInput → checkpointInputReview [interrupt: input-review]
@@ -14,16 +14,15 @@
  * PHASE 1: Data Acquisition (SEQUENTIAL)
  * 1.1 initializeSession → 1.2 loadDirectorNotes
  *   → fetchMemoryTokens → fetchPaperEvidence
- *   → fetchSessionPhotos → preprocessPhotos → analyzePhotos
- *   → detectWhiteboard
  *
  * NOTE: Data acquisition runs as a single sequential addEdge chain — no parallel
- * branches, no Send() fan-in.
+ * branches, no Send() fan-in. The photo chain is NOT here: see PHASE 2.36.
  *
  * PHASE 1.35-1.8: Sequential Checkpoints & Processing
  * → checkpointPaperEvidence [interrupt: paper-evidence-selection]
- * → checkpointCharacterIds [interrupt: character-ids]
- * → parseCharacterIds → finalizePhotoAnalyses
+ * → checkpointAwaitRoster [interrupt: await-roster]
+ * → checkpointAwaitContext [interrupt: await-full-context]
+ * → parseRawInput → checkpointInputReview [interrupt: input-review]
  * → preprocessEvidence → extractCharacterData → checkpointPreCuration [interrupt: pre-curation]
  * → curateEvidenceBundle → checkpointEvidenceAndPhotos [interrupt: evidence-photos] → processRescuedItems
  *
@@ -31,6 +30,14 @@
  * → analyzeArcs → validateArcs → evaluateArcs
  * → checkpointArcSelection [interrupt: arc-selection] → buildArcEvidencePackages
  * → [revision loop]
+ *
+ * PHASE 2.36: Photo branch (photo late-join)
+ * checkpointArcSelection --forward--> checkpointPhotos [interrupt: photos]
+ *   → fetchSessionPhotos → preprocessPhotos → analyzePhotos → detectWhiteboard
+ *   → checkpointCharacterIds [interrupt: character-ids] → parseCharacterIds
+ *   → finalizePhotoAnalyses → buildArcEvidencePackages
+ * (The chain's PHASE numbers — 1.4/1.42/1.43/1.65/1.66/1.665/1.67 — are historical;
+ *  they predate the move and are display-only strings.)
  *
  * PHASE 3: Outline Generation
  * → generateOutline → evaluateOutline
@@ -420,6 +427,9 @@ function createGraphBuilder() {
   // Checkpoint: Paper evidence selection
   builder.addNode('checkpointPaperEvidence', nodes.checkpointPaperEvidence);
 
+  // Checkpoint: Photos (photo late-join) — head of the Phase 2.36 photo branch
+  builder.addNode('checkpointPhotos', nodes.checkpointPhotos);
+
   // Checkpoint: Await roster (incremental input - Phase 4f)
   // Pauses for user to provide roster via /approve endpoint
   builder.addNode('checkpointAwaitRoster', nodes.checkpointAwaitRoster);
@@ -543,18 +553,13 @@ function createGraphBuilder() {
 
   builder.addEdge('initializeSession', 'loadDirectorNotes');
 
-  // Sequential data acquisition: evidence → photos → whiteboard detection.
-  // Evidence fetching
+  // Sequential data acquisition: evidence only (the photo chain left Phase 1).
   builder.addEdge('loadDirectorNotes', 'fetchMemoryTokens');
   builder.addEdge('fetchMemoryTokens', 'fetchPaperEvidence');
 
-  // Photo processing
-  builder.addEdge('fetchPaperEvidence', 'fetchSessionPhotos');
-  builder.addEdge('fetchSessionPhotos', 'preprocessPhotos');
-  builder.addEdge('preprocessPhotos', 'analyzePhotos');
-
-  // Whiteboard detection
-  builder.addEdge('analyzePhotos', 'detectWhiteboard');
+  // Photo processing MOVED to Phase 2.36 (photo late-join): nothing before
+  // buildArcEvidencePackages consumes photo analyses, and the director needs the
+  // run to progress while the photos are still being curated and cleaned.
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 1.35-1.8: Sequential Checkpoints & Processing
@@ -562,21 +567,15 @@ function createGraphBuilder() {
   // preprocessEvidence runs AFTER tagTokenDispositions so tokens have correct disposition
   // ═══════════════════════════════════════════════════════
 
-  // After data acquisition, proceed to paper evidence checkpoint
-  builder.addEdge('detectWhiteboard', 'checkpointPaperEvidence');
+  // After evidence fetching, proceed to paper evidence checkpoint
+  builder.addEdge('fetchPaperEvidence', 'checkpointPaperEvidence');
 
   // Paper evidence selection → await roster (skip preprocessEvidence - runs later after tokens tagged)
   builder.addEdge('checkpointPaperEvidence', 'checkpointAwaitRoster');
 
-  // After roster provided → character ID mapping
-  builder.addEdge('checkpointAwaitRoster', 'checkpointCharacterIds');
-
-  // Character IDs → parsing → finalize analyses
-  builder.addEdge('checkpointCharacterIds', 'parseCharacterIds');
-  builder.addEdge('parseCharacterIds', 'finalizePhotoAnalyses');
-
-  // Photo finalization → await full context (incremental input)
-  builder.addEdge('finalizePhotoAnalyses', 'checkpointAwaitContext');
+  // After roster provided → await full context (incremental input). The photo
+  // chain used to sit between these two; it now hangs off arc selection.
+  builder.addEdge('checkpointAwaitRoster', 'checkpointAwaitContext');
 
   // After full context provided → parse raw input (produces playerFocus, sessionConfig)
   builder.addEdge('checkpointAwaitContext', 'parseRawInput');
@@ -634,9 +633,9 @@ function createGraphBuilder() {
     error: END
   });
 
-  // Checkpoint → conditional: approve forwards, reject enters revision loop
+  // Checkpoint → conditional: approve enters the PHOTO BRANCH, reject enters the revision loop
   builder.addConditionalEdges('checkpointArcSelection', routeAfterArcCheckpoint, {
-    forward: 'buildArcEvidencePackages',
+    forward: 'checkpointPhotos',
     revise: 'incrementArcRevision'
   });
 
@@ -644,6 +643,23 @@ function createGraphBuilder() {
   // reviseArcs receives previous output + feedback for TARGETED fixes
   builder.addEdge('incrementArcRevision', 'reviseArcs');
   builder.addEdge('reviseArcs', 'validateArcs');
+
+  // ═══════════════════════════════════════════════════════
+  // ADD EDGES - Phase 2.36: Photo branch (photo late-join)
+  // An independent INPUT branch, not a stage of the main line: it hangs off arc
+  // selection and joins at buildArcEvidencePackages, the first node that folds
+  // photo analyses into arc data. Placing it here also gives analyzePhotos a
+  // populated playerFocus, which was always null when the chain ran at 1.65.
+  // ═══════════════════════════════════════════════════════
+
+  builder.addEdge('checkpointPhotos', 'fetchSessionPhotos');
+  builder.addEdge('fetchSessionPhotos', 'preprocessPhotos');
+  builder.addEdge('preprocessPhotos', 'analyzePhotos');
+  builder.addEdge('analyzePhotos', 'detectWhiteboard');
+  builder.addEdge('detectWhiteboard', 'checkpointCharacterIds');
+  builder.addEdge('checkpointCharacterIds', 'parseCharacterIds');
+  builder.addEdge('parseCharacterIds', 'finalizePhotoAnalyses');
+  builder.addEdge('finalizePhotoAnalyses', 'buildArcEvidencePackages');
 
   // Arc evidence packages → outline generation
   builder.addEdge('buildArcEvidencePackages', 'generateOutline');

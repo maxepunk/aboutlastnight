@@ -456,12 +456,14 @@ async function fetchPaperEvidence(state, config) {
 /**
  * Fetch session photos from filesystem
  *
- * Loads photo paths from the session's inputs directory.
- * Photos are analyzed in the next phase (analyzePhotos) using Haiku vision.
+ * Loads photo paths from state.photosPath, which the `photos` checkpoint supplies
+ * (photo late-join). Photos are analyzed in the next phase (analyzePhotos) using
+ * Haiku vision.
  *
- * @param {Object} state - Current state with sessionId
- * @param {Object} config - Graph config with optional configurable.dataDir
+ * @param {Object} state - Current state with sessionId, photosPath
+ * @param {Object} config - Graph config
  * @returns {Object} Partial state update with sessionPhotos, currentPhase
+ * @throws {Error} When photosPath is unset or names a directory that is not there
  */
 async function fetchSessionPhotos(state, config) {
   // Skip if already fetched (resume case or pre-populated)
@@ -472,38 +474,48 @@ async function fetchSessionPhotos(state, config) {
     };
   }
 
-  // Use custom photosPath from rawSessionInput or sessionConfig if provided
-  // Priority: rawSessionInput (incremental input) > sessionConfig (file-based) > default
-  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
-  const photosDir = state.rawSessionInput?.photosPath
-    || state.sessionConfig?.photosPath
-    || path.join(dataDir, state.sessionId, 'inputs', 'photos');
+  // C1: state.photosPath is the ONE owner of this directory. It is seeded by
+  // POST /start or captured at the `photos` checkpoint. rawSessionInput and
+  // sessionConfig are deliberately NOT read: the gate skipped on a scan of
+  // data/<id>/photos while this fell back to data/<id>/inputs/photos, so a run
+  // could reach the article with zero photos and no error anywhere.
+  const photosDir = state.photosPath;
+  if (!photosDir) {
+    throw new Error(
+      '[fetchSessionPhotos] state.photosPath is not set. The photos checkpoint supplies it; ' +
+      'this node must not run before that gate has been answered.'
+    );
+  }
 
   try {
-    // Check if photos directory exists
     await fs.access(photosDir);
-
-    // List all image files in the directory
-    const files = await fs.readdir(photosDir);
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-    const photos = files
-      .filter(file => imageExtensions.includes(path.extname(file).toLowerCase()))
-      .map(file => path.join(photosDir, file));
-
-    console.log(`[fetchSessionPhotos] Found ${photos.length} photos in ${photosDir}`);
-
-    return {
-      sessionPhotos: photos,
-      currentPhase: PHASES.ANALYZE_PHOTOS
-    };
   } catch (error) {
-    // Photos directory doesn't exist or is inaccessible - that's okay
-    console.log(`[fetchSessionPhotos] No photos directory found at ${photosDir}`);
-    return {
-      sessionPhotos: [],
-      currentPhase: PHASES.ANALYZE_PHOTOS
-    };
+    // Fail loud (C1). Returning [] here is how a typo produced a photo-less
+    // article: preprocess/analyze both no-op on zero photos, character-ids
+    // paused showing nothing, and --auto answered it with {}.
+    //
+    // This is the BACKSTOP (v2 C1): POST /start and the `photos` approval both
+    // reject a non-existent folder, so reaching here means it was removed between
+    // the approval and the fetch. Name the recovery - the console's failure card
+    // offers a rollback to the last GATE seen, not to this node (F26).
+    throw new Error(
+      `[fetchSessionPhotos] Photos directory not found: ${photosDir} ` +
+      `(${error.code || error.message}). Roll back to the photos step and supply the folder again.`
+    );
   }
+
+  const files = await fs.readdir(photosDir);
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  const photos = files
+    .filter(file => imageExtensions.includes(path.extname(file).toLowerCase()))
+    .map(file => path.join(photosDir, file));
+
+  console.log(`[fetchSessionPhotos] Found ${photos.length} photos in ${photosDir}`);
+
+  return {
+    sessionPhotos: photos,
+    currentPhase: PHASES.ANALYZE_PHOTOS
+  };
 }
 
 /**
