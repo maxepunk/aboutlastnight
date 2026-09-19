@@ -208,6 +208,30 @@ describe('changedScopes', () => {
     expect(D.changedScopes(bundleDiff, reordered)).toEqual([]);
   });
 
+  test('an index-addressed edit survives the reviser inserting a block before it', () => {
+    const a = bundleBefore(); a.sections[0].content[1].text = 'Second paragraph, rewritten.';
+    const bundleDiff = D.diffBundle(bundleBefore(), a);
+    expect(bundleDiff.scopes[0].changes[0].path).toBe('sections[#intro].content[1]');
+    const shifted = clone(a);
+    shifted.sections[0].content.unshift({ type: 'paragraph', text: 'A new opening the reviser added.' });
+    expect(D.changedScopes(bundleDiff, shifted)).toEqual([]);
+  });
+
+  test('an index-addressed edit the reviser REMOVED names its scope', () => {
+    const a = bundleBefore(); a.sections[0].content[1].text = 'Second paragraph, rewritten.';
+    const bundleDiff = D.diffBundle(bundleBefore(), a);
+    const dropped = clone(a); dropped.sections[0].content.splice(1, 1);
+    expect(D.changedScopes(bundleDiff, dropped)).toEqual(['section:intro']);
+  });
+
+  test('an edited pull quote survives the reviser inserting a quote before it', () => {
+    const a = bundleBefore(); a.pullQuotes[0].text = 'Q1 edited';
+    const bundleDiff = D.diffBundle(bundleBefore(), a);
+    expect(bundleDiff.scopes[0].changes[0].path).toBe('pullQuotes[0]');
+    const shifted = clone(a); shifted.pullQuotes.unshift({ text: 'Q0 the reviser added' });
+    expect(D.changedScopes(bundleDiff, shifted)).toEqual([]);
+  });
+
   test('readAtPath resolves ids, indexes and missing segments', () => {
     const b = bundleBefore();
     expect(D.readAtPath(b, 'sections[#intro].content[1].text')).toBe('Second paragraph about the money.');

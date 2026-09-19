@@ -10,6 +10,17 @@
  * `[-]` marks a removed item (not resolvable). readAtPath resolves the same grammar,
  * so changedScopes can check a REVISED object at exactly the places the director
  * changed — on any reviser pass, against the diff's own `after` values.
+ *
+ * changedScopes reads an ID-addressed change (`sections[#intro].heading`,
+ * `evidenceCards[#alr001]`) and a plain field path THROUGH readAtPath, because the id
+ * survives reordering. An INDEX-addressed change (`sections[#intro].content[2]`,
+ * `pullQuotes[1]`, `photos[0]`) is not read at its index at all: the diff paired blocks
+ * by type + a 40-character text prefix, so the index is only where the block sat in the
+ * director's own object, and a reviser that inserts or removes a block ahead of it
+ * shifts it. Such a change counts as KEPT when an element canonically equal to its
+ * `after` value exists ANYWHERE in the addressed collection of the revised object
+ * (the section's `content` array, or `pullQuotes` / `photos`). Removals (`after` null)
+ * stay unchecked either way.
  */
 'use strict';
 
@@ -244,13 +255,33 @@ function readAtPath(obj, pathStr) {
   return cur;
 }
 
-/** Scope keys whose `after` value no longer matches `revised` at that path. Removals are not checked. */
+/** A trailing bare-number selector: the part of a path that a reviser's insert/remove shifts. */
+const INDEX_TAIL = /\[(\d+)\]$/;
+
+/**
+ * Is this change still present in `revised`?
+ *
+ * Index-addressed changes are searched for across the whole addressed collection
+ * (see the module header); everything else is read at its path.
+ */
+function changeSurvives(revised, change) {
+  const m = INDEX_TAIL.exec(change.path);
+  if (!m) return same(readAtPath(revised, change.path), change.after);
+  const collection = readAtPath(revised, change.path.slice(0, m.index));
+  if (!Array.isArray(collection)) return false;
+  return collection.some((el) => same(el, change.after));
+}
+
+/**
+ * Scope keys whose edits `revised` no longer carries. Removals are not checked:
+ * the director deleted the item, so there is no `after` value to look for.
+ */
 function changedScopes(diff, revised) {
   const out = [];
   groups(diff).forEach((g) => {
     const changed = (g.changes || []).some((c) => {
       if (c.after === null || c.after === undefined) return false;
-      return !same(readAtPath(revised, c.path), c.after);
+      return !changeSurvives(revised, c);
     });
     if (changed) out.push(g.key);
   });
@@ -259,5 +290,5 @@ function changedScopes(diff, revised) {
 
 module.exports = {
   diffOutline, diffBundle, isEmpty, scopeKeys, formatHandEditsBlock, changedScopes, readAtPath,
-  _testing: { matchBlocks, blockKey, canon, same }
+  _testing: { matchBlocks, blockKey, canon, same, changeSurvives }
 };
