@@ -4,6 +4,9 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
  *
  * Covers outline approval/rejection routing AND schema validation of outlineEdits.
  */
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { buildResumePayload } = require('../../server.js');
 
 function validJournalistOutline() {
@@ -322,5 +325,153 @@ describe('fullContext approval clears the parse it replaces (operator gate 2026-
     expect(stateUpdates.sessionConfig).toBeNull();
     expect(stateUpdates.directorNotes).toBeNull();
     expect(stateUpdates.playerFocus).toBeNull();
+  });
+});
+
+describe('buildResumePayload — photosPath is a photos-gate-only approval (C1/I3/v2 M2)', () => {
+  let dir;
+  beforeAll(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-approve-')); });
+
+  it('accepts an existing path at the photos checkpoint', () => {
+    const result = buildResumePayload({ photosPath: dir }, {}, 'journalist', 'photos');
+    expect(result.error).toBeNull();
+    expect(result.resume.photosPath).toBe(dir);
+    expect(result.stateUpdates.photosPath).toBe(dir);
+  });
+
+  it('strips surrounding quotes and whitespace', () => {
+    const result = buildResumePayload({ photosPath: '  "' + dir + '" ' }, {}, 'journalist', 'photos');
+    expect(result.resume.photosPath).toBe(dir);
+    expect(result.stateUpdates.photosPath).toBe(dir);
+  });
+
+  it('refuses a folder that does not exist, naming the path (v2 C1)', () => {
+    // The whole point: catch the typo HERE, not an hour later in fetchSessionPhotos
+    // where the console cannot offer the photos step as a rollback target (F26).
+    const missing = path.join(dir, 'nope');
+    const result = buildResumePayload({ photosPath: missing }, {}, 'journalist', 'photos');
+    expect(result.error).toBe('Photos directory not found: ' + missing);
+    expect('photosPath' in result.stateUpdates).toBe(false);
+    expect(result.resume.photosPath).toBeUndefined();
+  });
+
+  // REGRESSION PIN, not a red test (v2 M9): a bare {photosPath} already yields
+  // "No valid approval" on today's code, because no block reads the key at all.
+  // It is kept so the fourth argument cannot later be widened by accident.
+  it('is NOT an approval on its own at outline, article or arc-selection (I3)', () => {
+    // checkpointOutline returns {currentPhase} for a resume that is neither
+    // approved:true nor approved:false+feedback, routeAfterOutlineCheckpoint sends
+    // it to 'revise', and incrementOutlineRevision + reviseOutline + evaluateOutline
+    // all run — unattended and paid. Same shape at article and arc-selection.
+    ['outline', 'article', 'arc-selection'].forEach((type) => {
+      const result = buildResumePayload({ photosPath: dir }, {}, 'journalist', type);
+      expect(result.error).toEqual(expect.stringContaining('No valid approval'));
+      expect(result.resume.photosPath).toBeUndefined();
+    });
+  });
+
+  it('writes the state channel at the two convenience gates (I3)', () => {
+    // The optional inputs on the evidence and arc-selection gates: the folder lands
+    // in state so the `photos` gate skips, without the path being what advanced the
+    // graph.
+    const evidence = buildResumePayload(
+      { evidenceBundle: true, photosPath: '  "' + dir + '"  ' }, {}, 'journalist', 'evidence-and-photos'
+    );
+    expect(evidence.error).toBeNull();
+    expect(evidence.stateUpdates.photosPath).toBe(dir);
+    expect(evidence.resume.photosPath).toBeUndefined();
+
+    const arcs = buildResumePayload(
+      { selectedArcs: ['a'], photosPath: dir }, {}, 'journalist', 'arc-selection'
+    );
+    expect(arcs.error).toBeNull();
+    expect(arcs.stateUpdates.photosPath).toBe(dir);
+  });
+
+  it('does NOT write the state channel at gates downstream of the fetch (v2 M2)', () => {
+    // sessionPhotos has already been scanned from a different value by then, so the
+    // write would only make state lie about where the photos came from until the
+    // next `photos` rollback.
+    ['character-ids', 'outline', 'article'].forEach((type) => {
+      const result = buildResumePayload({ article: true, photosPath: dir }, {}, 'journalist', type);
+      expect('photosPath' in result.stateUpdates).toBe(false);
+    });
+  });
+
+  it('ignores a blank or non-string path everywhere', () => {
+    ['', '   ', null, 42, undefined].forEach((value) => {
+      const result = buildResumePayload({ photosPath: value }, {}, 'journalist', 'photos');
+      expect(result.error).toEqual(expect.stringContaining('No valid approval'));
+      expect('photosPath' in result.stateUpdates).toBe(false);
+    });
+  });
+});
+
+describe('buildResumePayload — whiteboardPhotoPath rides along, never approves (R1)', () => {
+  const current = { rawSessionInput: { photosPath: 'data/091926/photos', journalistFirstName: 'Cass' } };
+
+  it('merges into rawSessionInput on a full-context approval', () => {
+    const result = buildResumePayload({
+      fullContext: { accusation: 'a', sessionReport: 's', directorNotes: 'd' },
+      whiteboardPhotoPath: '  "D:/shoots/whiteboard.jpg"  '
+    }, current, 'journalist', 'await-full-context');
+    expect(result.error).toBeNull();
+    // The parse has not run at this point, so nothing is re-paid.
+    expect(result.stateUpdates.rawSessionInput).toEqual({
+      photosPath: 'data/091926/photos',
+      journalistFirstName: 'Cass',
+      whiteboardPhotoPath: 'D:/shoots/whiteboard.jpg'
+    });
+  });
+
+  it('nulls the parse outputs so the re-parse actually happens (v2 I3)', () => {
+    // Without this the promise in the console copy is false on every replay:
+    // Command.update is applied BEFORE the interrupted node re-executes (F25), so
+    // checkpointAwaitContext's own gate (accusation && sessionReport &&
+    // directorNotesRaw) is already satisfied, it takes the SKIP branch, and its
+    // "ROLL-4 re-parse" arm — the code that nulls sessionConfig — never runs.
+    // parseRawInput then skips on the sessionConfig that loadDirectorNotes
+    // rehydrated from inputs/session-config.json, and the whiteboard is never read.
+    const result = buildResumePayload({
+      fullContext: { accusation: 'a', sessionReport: 's', directorNotes: 'd' }
+    }, current, 'journalist', 'await-full-context');
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates.sessionConfig).toBeNull();
+    expect(result.stateUpdates.directorNotes).toBeNull();
+    expect(result.stateUpdates.playerFocus).toBeNull();
+  });
+
+  it('does not null the parse outputs when the fullContext is incomplete', () => {
+    const result = buildResumePayload(
+      { fullContext: { accusation: 'a' } }, current, 'journalist', 'await-full-context'
+    );
+    expect(result.error).toEqual(expect.stringContaining('No valid approval'));
+    expect('sessionConfig' in result.stateUpdates).toBe(false);
+  });
+
+  it('merges on an input-review reject with corrections (that path already re-parses)', () => {
+    const result = buildResumePayload({
+      inputReview: false,
+      inputFeedback: 'Blake said the dead-man line',
+      whiteboardPhotoPath: 'D:/shoots/whiteboard.jpg'
+    }, current, 'journalist', 'input-review');
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates.rawSessionInput.whiteboardPhotoPath).toBe('D:/shoots/whiteboard.jpg');
+  });
+
+  it('is not itself a valid approval anywhere', () => {
+    ['await-full-context', 'input-review', 'photos'].forEach((type) => {
+      const result = buildResumePayload({ whiteboardPhotoPath: 'D:/x.jpg' }, current, 'journalist', type);
+      expect(result.error).toEqual(expect.stringContaining('No valid approval'));
+    });
+  });
+
+  it('is ignored at every other gate', () => {
+    const result = buildResumePayload({
+      selectedArcs: ['a'],
+      whiteboardPhotoPath: 'D:/x.jpg'
+    }, current, 'journalist', 'arc-selection');
+    expect(result.error).toBeNull();
+    expect('rawSessionInput' in result.stateUpdates).toBe(false);
   });
 });

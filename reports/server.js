@@ -291,10 +291,16 @@ async function getCheckpointData(checkpointType, state) {
  * The payload becomes the return value of interrupt() in the paused node.
  *
  * @param {object} approvals - Approval decisions from request body
- * @param {object} currentState - Current graph state values (used for the theme default)
+ * @param {object} currentState - Current graph state values (theme default + rawSessionInput merge)
+ * @param {string} [theme]
+ * @param {string|null} [checkpointType] - The interrupt's `type` (CHECKPOINT_TYPES value).
+ *   I3: some approval shapes are only meaningful at one gate. `{photosPath}` posted at
+ *   `outline`/`article`/`arc-selection` used to count as a valid approval whose resume
+ *   value was neither an approve nor a reject-with-feedback, which routes straight into
+ *   a PAID revision loop. Gate those shapes on the type.
  * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
  */
-function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist')) {
+function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist'), checkpointType = null) {
     const resume = {};
     const stateUpdates = {};
     let error = null;
@@ -468,6 +474,59 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
             stateUpdates.playerFocus = null;
             resume.fullContext = approvals.fullContext;
         }
+    }
+
+    // Photos folder (photo late-join).
+    //
+    // WHERE THE STATE WRITE IS ACCEPTED (v2 M2): the three gates at or before the
+    // fetch. evidence-and-photos and arc-selection carry it as a convenience, so a
+    // director whose photos are already clean is not stopped later. It is NOT
+    // accepted at character-ids, outline or article: those run AFTER
+    // fetchSessionPhotos has already scanned sessionPhotos from some other value,
+    // so the write would only make state lie about where the photos came from.
+    //
+    // WHERE IT IS AN APPROVAL (I3): `photos` only. Posted alone at
+    // outline/article/arc-selection, its resume value is neither an approve nor a
+    // reject-with-feedback, and that routes straight into a PAID revision loop
+    // (checkpointOutline -> routeAfterOutlineCheckpoint -> incrementOutlineRevision
+    // -> reviseOutline + evaluateOutline).
+    const PHOTOS_PATH_GATES = [
+        CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS,
+        CHECKPOINT_TYPES.ARC_SELECTION,
+        CHECKPOINT_TYPES.PHOTOS
+    ];
+    if (PHOTOS_PATH_GATES.includes(checkpointType)
+        && typeof approvals.photosPath === 'string' && approvals.photosPath.trim()) {
+        // Absolute, like the gate's own defaultDir: state.photosPath is the one
+        // owner of this folder and is read again after a rollback, when the
+        // process cwd is no longer guaranteed to be what it was at start.
+        const p = path.resolve(approvals.photosPath.trim().replace(/^["']|["']$/g, ''));
+        // v2 C1: refuse a folder that is not there, HERE. fetchSessionPhotos is the
+        // backstop, but it runs after arc analysis and the console's failure card
+        // can only offer a rollback to the last GATE seen, which re-pays the arcs
+        // and then throws again on the same bad path (F26).
+        if (!fs.existsSync(p)) {
+            error = `Photos directory not found: ${p}`;
+            return { resume, stateUpdates, error };
+        }
+        stateUpdates.photosPath = p;
+        if (checkpointType === CHECKPOINT_TYPES.PHOTOS) {
+            validApprovalDetected = true;
+            resume.photosPath = p;
+        }
+    }
+
+    // Whiteboard photo, added late (R1). It rides along with the full-context
+    // approval or an input-review reject — the two points from which the parse
+    // still runs — and is NEVER itself a valid approval. rawSessionInput is
+    // EXEMPT from rollback, so this write survives one.
+    const WHITEBOARD_PATH_GATES = [CHECKPOINT_TYPES.AWAIT_FULL_CONTEXT, CHECKPOINT_TYPES.INPUT_REVIEW];
+    if (WHITEBOARD_PATH_GATES.includes(checkpointType)
+        && typeof approvals.whiteboardPhotoPath === 'string' && approvals.whiteboardPhotoPath.trim()) {
+        stateUpdates.rawSessionInput = {
+            ...(currentState.rawSessionInput || {}),
+            whiteboardPhotoPath: approvals.whiteboardPhotoPath.trim().replace(/^["']|["']$/g, '')
+        };
     }
 
     if (!validApprovalDetected) {
@@ -970,22 +1029,36 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         });
     }
 
-    // Validate minimal required input for incremental flow
-    // Phase 1: Only sessionId + photosPath required to start
-    // Roster provided at await-roster checkpoint
-    // Full context (accusation, sessionReport, directorNotes) at await-full-context checkpoint
+    // Validate minimal required input for incremental flow.
+    // Photo late-join: NOTHING but sessionId is required to start. The roster
+    // arrives at await-roster, the full context at await-full-context, and the
+    // photo folder at the `photos` gate AFTER arc selection — so a session can be
+    // parsed, curated and arc-analysed while the photos are still being curated.
     if (!rawSessionInput) {
         return res.status(400).json({ error: 'rawSessionInput is required' });
     }
 
-    // photosPath is the only required field for incremental start
-    // If not provided, will use default: data/{sessionId}/photos
-    if (!rawSessionInput.photosPath) {
-        rawSessionInput.photosPath = `data/${sessionId}/photos`;
+    // Sanitize photosPath when the caller gave one (a pasted path often carries
+    // quotes). `delete` rather than '' so downstream reads see undefined.
+    if (typeof rawSessionInput.photosPath === 'string' && rawSessionInput.photosPath.trim()) {
+        rawSessionInput.photosPath = path.resolve(
+            rawSessionInput.photosPath.trim().replace(/^["']|["']$/g, '')
+        );
+        // v2 C1: refuse a folder that is not there. fetchSessionPhotos is the
+        // backstop, but it does not run until AFTER arc analysis, and the console's
+        // failure card then offers a rollback to the last GATE seen (arc-selection),
+        // which re-pays the Opus arc analysis and throws again — `photos` is not a
+        // clickable step in that state (F26).
+        if (!fs.existsSync(rawSessionInput.photosPath)) {
+            return res.status(400).json({
+                sessionId,
+                error: `Photos directory not found: ${rawSessionInput.photosPath}. `
+                     + 'Leave the field blank to supply it at the photos step after arc selection.'
+            });
+        }
+    } else {
+        delete rawSessionInput.photosPath;
     }
-
-    // Sanitize photosPath - strip surrounding quotes (user may paste path with quotes)
-    rawSessionInput.photosPath = rawSessionInput.photosPath.replace(/^["']|["']$/g, '');
 
     console.log(`[${new Date().toISOString()}] POST /api/session/${sessionId}/start: theme=${theme}`);
 
@@ -1016,6 +1089,12 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         // CRITICAL: theme must be in state (not just config) because initializeSession
         // and all nodes read state.theme, which defaults to 'journalist' in the annotation.
         const initialState = { theme, rawSessionInput, ...buildFreshStartState() };
+        // I2: AFTER the spread. FRESH_START_CLEARS is derived from every channel,
+        // so a seed written before it would be nulled and the `photos` gate would
+        // ask for the folder the director had just supplied.
+        if (rawSessionInput.photosPath) {
+            initialState.photosPath = rawSessionInput.photosPath;
+        }
         const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
 
         // Check if graph is interrupted at a checkpoint
@@ -1085,7 +1164,9 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         config.configurable.theme = theme;
 
         // Build resume payload from approvals (pass current state for incremental input merging)
-        const { resume, stateUpdates, error: validationError } = buildResumePayload(approvals, graphState.values, theme);
+        const { resume, stateUpdates, error: validationError } = buildResumePayload(
+            approvals, graphState.values, theme, getInterruptData(graphState)?.type || null
+        );
         if (validationError) {
             return res.status(400).json({ sessionId, error: validationError });
         }
@@ -1180,6 +1261,14 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
                 sessionReport: session.state.sessionReport || null,
                 directorNotes: session.state.directorNotesRaw || null
             };
+        }
+
+        // v2 M1: same pattern as _previousFullContext above. ROLLBACK_CLEARS['photos']
+        // nulls photosPath so the gate always re-asks (C2), and rawSessionInput is
+        // EXEMPT — so without this the gate would pre-fill the ORIGINAL start-time
+        // path on every rollback, i.e. the typo the director corrected at the gate.
+        if (ROLLBACK_CLEARS[rollbackTo]?.includes('photosPath')) {
+            initialState._previousPhotosPath = session.state.photosPath || null;
         }
 
         if (stateOverrides) {

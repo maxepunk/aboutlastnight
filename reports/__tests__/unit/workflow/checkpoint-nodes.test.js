@@ -15,7 +15,7 @@ jest.mock('../../../lib/workflow/checkpoint-helpers',
 
 const {
   checkpointAwaitRoster,
-  _testing: { checkpointAwaitRoster: rawCheckpointAwaitRoster }
+  _testing: { checkpointAwaitRoster: rawCheckpointAwaitRoster, checkpointCharacterIds }
 } = require('../../../lib/workflow/nodes/checkpoint-nodes');
 
 const { checkpointInterrupt } = require('../../../lib/workflow/checkpoint-helpers');
@@ -109,6 +109,85 @@ describe('checkpoint-nodes', () => {
       const interruptPayload = checkpointInterrupt.mock.calls[0][1];
       expect(interruptPayload.genericPhotoAnalyses).toBe(correctData);
       expect(interruptPayload.genericPhotoAnalyses).not.toBe(staleData);
+    });
+  });
+
+  describe('checkpointCharacterIds old-graph guard (C5)', () => {
+    it('throws when reached without arcs having ever been analysed', async () => {
+      // A thread paused at character-ids on the PREVIOUS graph triggers this node
+      // on its first Resume (a plain edge is a channel named after the TARGET, so
+      // the pending write still fires it), and the node's outgoing writes then
+      // follow the NEW graph: parseCharacterIds, finalizePhotoAnalyses,
+      // buildArcEvidencePackages with zero arcs, then a PAID generateOutline and
+      // evaluateOutline. Fail before the interrupt instead.
+      await expect(checkpointCharacterIds({ photoAnalyses: { analyses: [] }, roster: ['Vic'] }, {}))
+        .rejects.toThrow(/previous graph/i);
+      await expect(checkpointCharacterIds({ photoAnalyses: null, roster: null }, {}))
+        .rejects.toThrow(/await-full-context/);
+    });
+
+    it('does not throw on the normal path', async () => {
+      const out = await checkpointCharacterIds({
+        photoAnalyses: { analyses: [] }, roster: ['Vic'],
+        narrativeArcs: [{ id: 'arc-1' }], selectedArcs: ['arc-1'], characterIdMappings: null
+      }, {});
+      expect(out.currentPhase).toBeDefined();
+    });
+
+    it('does not throw on the human-revision-cap forward, where selectedArcs IS empty (v2 I1)', async () => {
+      // routeAfterArcCheckpoint forces `forward` with an EMPTY selection once the
+      // human cap is reached, and under the new edges that path runs through this
+      // gate. Discriminating on selectedArcs would kill it with a message that is
+      // false ("previous graph") and a recovery that is wrong ("roll back to
+      // await-full-context"). narrativeArcs is the real discriminator: an
+      // old-graph thread never ran analyzeArcs.
+      const { REVISION_CAPS } = require('../../../lib/workflow/state');
+      const out = await checkpointCharacterIds({
+        photoAnalyses: { analyses: [] }, roster: ['Vic'],
+        selectedArcs: [],
+        narrativeArcs: [{ id: 'arc-1' }],
+        humanArcRevisionCount: REVISION_CAPS.HUMAN_ARCS,
+        characterIdMappings: null
+      }, {});
+      expect(out.currentPhase).toBeDefined();
+    });
+
+    it('accepts _arcAnalysisCache alone, for an analysed run whose arcs were all filtered', async () => {
+      // validateArcStructure drops arcs with no evidence AND no characters, and
+      // routeArcValidation/routeArcEvaluation escalate the resulting 0-arc state to
+      // the human gate instead of revising futilely. That run HAS analysed its arcs,
+      // so it must not be told it was started on the previous graph.
+      const out = await checkpointCharacterIds({
+        photoAnalyses: { analyses: [] }, roster: ['Vic'],
+        narrativeArcs: [], selectedArcs: [],
+        _arcAnalysisCache: { synthesizedAt: '2026-09-19T00:00:00.000Z', architecture: 'split-call' },
+        characterIdMappings: null
+      }, {});
+      expect(out.currentPhase).toBeDefined();
+    });
+
+    it('accepts an arcs evaluation entry alone (arcs seeded, then all filtered)', async () => {
+      // checkpointArcSelection is only reachable through evaluateArcs, so every
+      // new-graph path to this gate carries an `arcs` entry — including a resumed
+      // run whose seeded arcs were filtered away and whose evaluation was skipped
+      // on that pre-seeded entry, so nothing wrote _arcAnalysisCache.
+      const out = await checkpointCharacterIds({
+        photoAnalyses: { analyses: [] }, roster: ['Vic'],
+        narrativeArcs: [],
+        evaluationHistory: [{ phase: 'arcs', ready: true }],
+        characterIdMappings: null
+      }, {});
+      expect(out.currentPhase).toBeDefined();
+    });
+
+    it('accepts _previousArcs alone as evidence that arcs were analysed', async () => {
+      // reviseArcs stashes the prior arcs there and nulls narrativeArcs on the way
+      // into a revision; a timeout can leave the state in exactly that shape.
+      const out = await checkpointCharacterIds({
+        photoAnalyses: null, roster: ['Vic'],
+        narrativeArcs: [], _previousArcs: [{ id: 'arc-1' }], characterIdMappings: null
+      }, {});
+      expect(out.currentPhase).toBeDefined();
     });
   });
 });

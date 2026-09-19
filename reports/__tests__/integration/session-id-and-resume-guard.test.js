@@ -12,6 +12,9 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
 process.env.ACCESS_PASSWORD = 'test-password';
 
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 // Assigned per test; the factory only closes over it (name starts with "mock",
 // so jest allows the out-of-scope reference).
@@ -166,7 +169,10 @@ describe('POST /resume on a complete session (B9)', () => {
 // 1.2 — B1 companion: the session ID is the emailer's report-link contract
 // ─────────────────────────────────────────────────────────────────────────────
 describe('POST /start session-ID contract (B1 companion)', () => {
-  const START_BODY = { theme: 'journalist', rawSessionInput: { photosPath: 'data/x/photos' } };
+  // No photosPath: every rawSessionInput field is optional now (photo late-join),
+  // and a path that is not on disk is refused, so the id contract is exercised on
+  // the minimal body a director can actually post.
+  const START_BODY = { theme: 'journalist', rawSessionInput: {} };
 
   afterEach(() => {
     delete process.env.ALLOW_NONSTANDARD_SESSION_ID;
@@ -220,12 +226,16 @@ describe('POST /start session-ID contract (B1 companion)', () => {
 // never read the new photosPath.
 // ─────────────────────────────────────────────────────────────────────────────
 describe('POST /start on an existing thread (C1)', () => {
-  const START_BODY = { theme: 'journalist', rawSessionInput: { photosPath: 'data/new/photos' } };
+  // A real directory: /start now refuses a photosPath that is not on disk (v2 C1),
+  // so the body cannot carry a made-up literal any more.
+  let photosDir;
+  beforeAll(() => { photosDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-start-')); });
+  const START_BODY = () => ({ theme: 'journalist', rawSessionInput: { photosPath: photosDir } });
 
   it('409s with the phase instead of silently reusing the old state', async () => {
     mockGraph = graphAtPhase({ currentPhase: 2.35, theme: 'journalist' });
 
-    const res = await send('POST', '/api/session/091826/start', START_BODY);
+    const res = await send('POST', '/api/session/091826/start', START_BODY());
 
     expect(res.status).toBe(409);
     expect(res.body.currentPhase).toBe(2.35);
@@ -238,7 +248,7 @@ describe('POST /start on an existing thread (C1)', () => {
   it('starts over when the body carries force:true', async () => {
     mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
 
-    const res = await send('POST', '/api/session/091826/start', { ...START_BODY, force: true });
+    const res = await send('POST', '/api/session/091826/start', { ...START_BODY(), force: true });
 
     expect(res.status).toBe(200);
     expect(mockGraph.invoke).toHaveBeenCalled();
@@ -247,7 +257,7 @@ describe('POST /start on an existing thread (C1)', () => {
   it('seeds a forced start with the photo, roster, raw-context and parse channels null', async () => {
     mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
 
-    await send('POST', '/api/session/091826/start', { ...START_BODY, force: true });
+    await send('POST', '/api/session/091826/start', { ...START_BODY(), force: true });
 
     const seeded = mockGraph.invoke.mock.calls[0][0];
     expect(seeded.sessionPhotos).toBeNull();
@@ -264,19 +274,109 @@ describe('POST /start on an existing thread (C1)', () => {
     expect(seeded.memoryTokens).toBeNull();
     // ...while the three channels a fresh start is defined by are the caller's.
     expect(seeded.theme).toBe('journalist');
-    expect(seeded.rawSessionInput.photosPath).toBe('data/new/photos');
+    expect(seeded.rawSessionInput.photosPath).toBe(photosDir);
   });
 
   it('seeds the same nulls on a first start (no thread yet)', async () => {
     mockGraph = graphFreshStartTo({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
 
-    const res = await send('POST', '/api/session/091826/start', START_BODY);
+    const res = await send('POST', '/api/session/091826/start', START_BODY());
 
     expect(res.status).toBe(200);
     const seeded = mockGraph.invoke.mock.calls[0][0];
     expect(seeded.sessionPhotos).toBeNull();
     expect(seeded.photoAnalyses).toBeNull();
     expect(seeded.evaluationHistory).toEqual([]);
+  });
+
+  it('seeds state.photosPath from the body, after the fresh-start spread (I2)', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
+
+    await send('POST', '/api/session/091826/start', { ...START_BODY(), force: true });
+
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    // FRESH_START_CLEARS is derived from every channel, so a seed written BEFORE
+    // the spread would be nulled and the gate would ask the director for the
+    // folder they just typed.
+    expect(seeded.photosPath).toBe(photosDir);
+  });
+
+  it('leaves photosPath unset when the body carries none (photo late-join)', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
+
+    await send('POST', '/api/session/091826/start', { theme: 'journalist', rawSessionInput: {}, force: true });
+
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    expect(seeded.rawSessionInput.photosPath).toBeUndefined();
+    expect(seeded.photosPath).toBeNull();
+  });
+
+  it('400s on a photosPath that does not exist, naming the path (v2 C1)', async () => {
+    // Without this, a typo is discovered by fetchSessionPhotos AFTER arc analysis —
+    // an hour and three paid phases later — and the console's failure card then
+    // offers a rollback to the last GATE seen (arc-selection), which re-pays the
+    // Opus arc analysis and throws again because photosPath still holds the typo.
+    // `photos` is not clickable in that state (F26).
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
+    const missing = path.join(photosDir, 'does-not-exist');
+
+    const res = await send('POST', '/api/session/091826/start', {
+      theme: 'journalist', rawSessionInput: { photosPath: missing }, force: true
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain(missing);
+    expect(res.body.error).toMatch(/Photos directory not found/);
+    expect(res.body.error).toMatch(/blank/);   // names the alternative
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it('strips quotes from a pasted path on both copies', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
+
+    await send('POST', '/api/session/091826/start', {
+      theme: 'journalist',
+      rawSessionInput: { photosPath: `  "${photosDir}"  ` },
+      force: true
+    });
+
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    expect(seeded.photosPath).toBe(photosDir);
+    expect(seeded.rawSessionInput.photosPath).toBe(photosDir);
+  });
+});
+
+describe('POST /rollback stashes the outgoing photos path (v2 M1)', () => {
+  it('stashes photosPath as _previousPhotosPath when the list clears it', async () => {
+    // rawSessionInput is rollback-EXEMPT, so without the stash a rollback to
+    // `photos` re-offers the ORIGINAL start-time path — the bad one the director
+    // already corrected at the gate.
+    mockGraph = graphAtPhase({
+      currentPhase: '2.36', theme: 'journalist',
+      photosPath: 'D:/shoots/091926-CORRECTED',
+      rawSessionInput: { photosPath: 'D:/shoots/091926-typo' }
+    });
+
+    const res = await send('POST', '/api/session/091826/rollback', { rollbackTo: 'photos' });
+    expect(res.status).toBe(200);
+    await flushBackground();
+
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    expect(seeded.photosPath).toBeNull();                                  // cleared
+    expect(seeded._previousPhotosPath).toBe('D:/shoots/091926-CORRECTED'); // stashed
+  });
+
+  it('does not stash for a rollback point that keeps photosPath', async () => {
+    mockGraph = graphAtPhase({
+      currentPhase: '2.35', theme: 'journalist', photosPath: 'D:/shoots/091926-clean'
+    });
+
+    await send('POST', '/api/session/091826/rollback', { rollbackTo: 'arc-selection' });
+    await flushBackground();
+
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    expect('_previousPhotosPath' in seeded).toBe(false);
+    expect('photosPath' in seeded).toBe(false);   // arc-selection clears no photo field
   });
 });
 

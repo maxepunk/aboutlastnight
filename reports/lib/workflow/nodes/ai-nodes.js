@@ -22,7 +22,7 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
-const { PHASES } = require('../state');
+const { PHASES, REVISION_CAPS } = require('../state');
 const { SchemaValidator } = require('../../schema-validator');
 const {
   createPromptBuilder,
@@ -669,6 +669,21 @@ async function buildArcEvidencePackages(state, config) {
   if (state.arcEvidencePackages && state.arcEvidencePackages.length > 0) {
     console.log('[buildArcEvidencePackages] Skipping - packages already exist');
     return { currentPhase: PHASES.BUILD_ARC_PACKAGES };
+  }
+
+  // C5 / H18: an empty selection here means the run has lost its arcs — either an
+  // old-graph thread resumed into the new edge chain, or a state clear went wrong.
+  // Emitting `arcEvidencePackages: []` let generateOutline (guarded only on
+  // state.outline) spend a Sonnet call and evaluateOutline an Opus call on an
+  // outline for no arcs. The ONE legitimate empty selection is the forced forward
+  // at the human revision cap (routeAfterArcCheckpoint).
+  const humanArcRevisions = state.humanArcRevisionCount || 0;
+  if (!state.selectedArcs?.length && humanArcRevisions < REVISION_CAPS.HUMAN_ARCS) {
+    throw new Error(
+      '[buildArcEvidencePackages] No selected arcs and the human revision cap is not reached ' +
+      `(${humanArcRevisions}/${REVISION_CAPS.HUMAN_ARCS}). Refusing to package zero arcs and pay for ` +
+      'an outline about nothing. Roll back to arc-selection and choose arcs.'
+    );
   }
 
   const selectedArcIds = state.selectedArcs || [];

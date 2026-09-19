@@ -272,3 +272,27 @@ describe('buildArcEvidencePackages prunes consumed state', () => {
     expect(result.preprocessedEvidence).toBe(null);
   });
 });
+
+describe('buildArcEvidencePackages empty-arc guard (C5 / H18)', () => {
+  const base = {
+    narrativeArcs: [{ id: 'arc-1', title: 'T', keyEvidence: [], characterPlacements: {} }],
+    evidenceBundle: { exposed: { tokens: [], paperEvidence: [] } },
+    photoAnalyses: { analyses: [] }
+  };
+
+  test('throws on empty selectedArcs rather than packaging nothing', async () => {
+    await expect(buildArcEvidencePackages({ ...base, selectedArcs: [] }, {}))
+      .rejects.toThrow(/no selected arcs/i);
+  });
+
+  test('proceeds with empty selectedArcs once the human revision cap is reached', async () => {
+    // routeAfterArcCheckpoint forces `forward` at the cap with no selection, so the
+    // cap is the one legitimate empty-arc path.
+    const { REVISION_CAPS } = require('../workflow/state');
+    const out = await buildArcEvidencePackages(
+      { ...base, selectedArcs: [], humanArcRevisionCount: REVISION_CAPS.HUMAN_ARCS },
+      {}
+    );
+    expect(out.arcEvidencePackages).toEqual([]);
+  });
+});

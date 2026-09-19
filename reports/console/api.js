@@ -103,7 +103,8 @@ const api = {
    * override, sent only after the director confirms (startFreshDecision).
    *
    * @param {string} sessionId - Alphanumeric + hyphens, 1-30 chars
-   * @param {object} rawInput - Raw session input (photosPath required)
+   * @param {object} rawInput - Raw session input. Every field is optional: photosPath
+   *   may be omitted and supplied at the `photos` checkpoint after arc selection.
    * @param {string} [theme]
    * @param {boolean} [force] - discard an existing thread's state on purpose
    * @returns {Promise<object>} Checkpoint or phase response

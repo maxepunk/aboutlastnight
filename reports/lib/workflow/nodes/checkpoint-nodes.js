@@ -220,6 +220,47 @@ async function checkpointPhotos(state, config) {
  * @returns {Object} Partial state update with currentPhase
  */
 async function checkpointCharacterIds(state, config) {
+  // C5: this gate moved BEHIND arc selection. A thread paused here on the previous
+  // graph fires this node on its first Resume (a plain edge is a channel named
+  // after the TARGET node, so the pending write survives the rewiring), and its
+  // outgoing writes then follow the NEW graph: straight into
+  // buildArcEvidencePackages with zero arcs and a paid generateOutline +
+  // evaluateOutline, pausing at `outline` on an outline for no arcs. Stop here
+  // instead, with the recovery in the message.
+  //
+  // v2 I1: the discriminator is whether arcs were ever ANALYSED, not whether any
+  // were SELECTED. routeAfterArcCheckpoint forces `forward` with an empty
+  // selection once the human revision cap is reached, and that legitimate path now
+  // runs through this gate; keying on selectedArcs would kill it with a false
+  // message and the wrong recovery.
+  //
+  // `narrativeArcs` alone is not enough either: validateArcStructure FILTERS arcs
+  // with no evidence and no characters, and routeArcValidation/routeArcEvaluation
+  // deliberately escalate a 0-arc result to the human gate rather than revise
+  // futilely — so a genuinely analysed run can arrive here with narrativeArcs: []
+  // and no _previousArcs stash. Two more signals cover that:
+  //   - `_arcAnalysisCache`, written by analyzeArcsPlayerFocusGuided itself;
+  //   - an `arcs` entry in evaluationHistory, which every new-graph path to this
+  //     gate has (checkpointArcSelection is only reachable via evaluateArcs).
+  // Both are cleared by every rollback list that clears narrativeArcs and by a
+  // fresh start, so they say "the arc phase ran on THIS graph" without saying
+  // anything about how many arcs survived. An old-graph thread paused at
+  // character-ids (phase 1.66, upstream of all of it) has none of the four.
+  const arcPhaseRan = Boolean(
+    state.narrativeArcs?.length
+    || state._previousArcs?.length
+    || state._arcAnalysisCache
+    || (state.evaluationHistory || []).some(entry => entry?.phase === 'arcs')
+  );
+  if (!arcPhaseRan) {
+    throw new Error(
+      '[checkpointCharacterIds] Reached before any arc analysis has run. This thread was started ' +
+      'on the previous graph, where character-ids ran before arc analysis. Roll back to ' +
+      'await-full-context and re-run from there (a rollback replays from START, so nothing ' +
+      'already collected is lost).'
+    );
+  }
+
   // Skip if already have mappings (resume case)
   const skipCondition = state.characterIdMappings !== null && state.characterIdMappings !== undefined
     ? state.characterIdMappings
