@@ -161,6 +161,16 @@ describe('enrichDirectorNotes', () => {
     scoringTimeline: []
   };
 
+  it('runs the enrichment at effort medium, not the global xhigh', async () => {
+    // 2026-09-19 operator gate: at xhigh on Opus 4.8 this call ended its first turn
+    // after thinking alone (25K chars of summary, no output) at ~320s, the SDK's
+    // structured-output enforcement re-requested, and the cycle repeated for 20
+    // minutes. medium completed in 165s and high in 375s, both with a full result.
+    const sdk = jest.fn().mockResolvedValue({ characterMentions: {}, quotes: [], transactionReferences: [], whiteboard: null, playerFocus: null, entityNotes: {}, postInvestigationDevelopments: [] });
+    await enrichDirectorNotes(baseContext, sdk);
+    expect(sdk.mock.calls[0][0].effort).toBe('medium');
+  });
+
   it('invokes sdk with opus model, schema, and disableTools', async () => {
     const sdk = jest.fn().mockResolvedValue({
       rawProse: baseContext.rawProse,

@@ -284,6 +284,13 @@ async function enrichDirectorNotes(context, sdk) {
       prompt: userPrompt,
       systemPrompt,
       model: 'opus',
+      // Extraction, not judgement. At the client's global xhigh, Opus 4.8 ended its
+      // first turn after thinking alone (~320s, no output), the SDK's structured-output
+      // enforcement re-requested, and the call cycled for 20 minutes without completing
+      // (operator gate 2026-09-19). medium completed in 165s with the full result; high
+      // in 375s. The verbatim-substring validation below catches anything a lighter
+      // think gets wrong.
+      effort: 'medium',
       disableTools: true,
       jsonSchema: DIRECTOR_NOTES_ENRICHED_SCHEMA,
       label: 'Director notes enrichment'
