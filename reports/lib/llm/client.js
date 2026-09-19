@@ -14,6 +14,7 @@
  * @module llm/client
  */
 
+const crypto = require('crypto');
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('./structured-output-extractor');
 
@@ -193,6 +194,12 @@ async function sdkQueryImpl({
   const startTime = Date.now();
   const progressLabel = label || prompt.slice(0, 25).replace(/\n/g, ' ');
 
+  // Spec 2026-09-19 §3.1: one id per call on EVERY progress message, so the per-call
+  // log can pair a start with its completion when eight concurrent calls share one
+  // context string. `emit` is the only way this function talks to onProgress.
+  const callId = crypto.randomUUID();
+  const emit = (m) => { if (onProgress) onProgress({ callId, ...m }); };
+
   // Idle (stall) timer: abort only after idleTimeoutMs of NO streamed activity.
   // resetIdle() is called once before the loop and again on EVERY message inside
   // it, so a healthy long-running call that keeps streaming never aborts — only a
@@ -336,7 +343,7 @@ async function sdkQueryImpl({
 
     // Emit llm_start event with FULL prompt (no truncation)
     if (onProgress) {
-      onProgress({
+      emit({
         type: 'llm_start',
         model,
         label: progressLabel,
@@ -373,7 +380,7 @@ async function sdkQueryImpl({
           if (deltaText.length > 0 && ttftMs === null) {
             ttftMs = Date.now() - startTime;
           }
-          onProgress({
+          emit({
             type: 'llm_delta',
             phase,
             deltaText,
@@ -429,7 +436,7 @@ async function sdkQueryImpl({
           }
         }
 
-        onProgress({
+        emit({
           type: msg.type,
           subtype: msg.subtype,
           elapsed,
@@ -542,7 +549,7 @@ async function sdkQueryImpl({
           resultErr.sdkSubtype = reason;            // preserved through the abort-race catch (see below)
           if (status !== null) resultErr.apiErrorStatus = status;
           if (onProgress) {
-            onProgress({
+            emit({
               type: 'llm_error',
               elapsed: (Date.now() - startTime) / 1000,
               error: resultErr.message,
@@ -583,7 +590,7 @@ async function sdkQueryImpl({
         // llm_complete on success; llm_error on extraction failure. Same envelope.
         if (onProgress) {
           if (extractionError) {
-            onProgress({
+            emit({
               type: 'llm_error',
               elapsed: (Date.now() - startTime) / 1000,
               error: extractionError.message,
@@ -593,7 +600,7 @@ async function sdkQueryImpl({
               ...sdkDiagnostics
             });
           } else {
-            onProgress({
+            emit({
               type: 'llm_complete',
               elapsed: (Date.now() - startTime) / 1000,
               result: finalResult,

@@ -482,3 +482,32 @@ describe('sanitizeSchemaForSdk (#277 channel-skip guardrail)', () => {
     expect(out.properties.format.format).toBeUndefined();  // inner format KEYWORD stripped
   });
 });
+
+describe('sdkQueryImpl callId (spec 2026-09-19 §3.1)', () => {
+  afterEach(() => clearMockQuery());
+
+  async function capture() {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'system', subtype: 'init', model: 'claude-haiku-4-5', tools: [] },
+      { type: 'result', subtype: 'success', result: 'ok' }
+    ]));
+    await sdkQueryImpl({ prompt: 'x', model: 'haiku', onProgress: (e) => events.push(e) });
+    return events;
+  }
+
+  test('every progress message of one call carries the same non-empty callId', async () => {
+    const events = await capture();
+    const types = events.map((e) => e.type);
+    expect(types).toEqual(expect.arrayContaining(['llm_start', 'system', 'llm_complete']));
+    const ids = new Set(events.map((e) => e.callId));
+    expect(ids.size).toBe(1);
+    expect([...ids][0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+
+  test('two calls get different callIds', async () => {
+    const first = (await capture())[0].callId;
+    const second = (await capture())[0].callId;
+    expect(first).not.toBe(second);
+  });
+});
