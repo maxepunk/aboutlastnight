@@ -116,3 +116,28 @@ describe('state channels for the input-review checkpoint', () => {
     expect(state._inputCorrections).toBeNull();
   });
 });
+
+describe('parseRawInput consumes the corrections (no re-parse loop)', () => {
+  const { _testing } = require('../../../lib/workflow/nodes/input-nodes');
+
+  it('clears _inputCorrections when a file-based run cannot re-parse', async () => {
+    // A reject nulls sessionConfig and routes back to parseRawInput. With no
+    // rawSessionInput there is nothing to re-parse, so the corrections must be
+    // consumed or the gate keeps offering a re-parse that cannot happen.
+    const { parseRawInput } = require('../../../lib/workflow/nodes/input-nodes');
+    const result = await parseRawInput(
+      { sessionConfig: null, rawSessionInput: null, _inputCorrections: 'Blake said it' },
+      {}
+    );
+    expect(result._inputCorrections).toBeNull();
+  });
+
+  it('leaves the channel alone on an ordinary skip', async () => {
+    const { parseRawInput } = require('../../../lib/workflow/nodes/input-nodes');
+    const result = await parseRawInput(
+      { sessionConfig: { roster: ['Vic'] }, rawSessionInput: {}, _inputCorrections: null },
+      {}
+    );
+    expect(result).not.toHaveProperty('_inputCorrections');
+  });
+});

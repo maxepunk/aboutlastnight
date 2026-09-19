@@ -52,7 +52,7 @@ npx @langchain/langgraph-cli dev --tunnel  # With tunnel (for Safari/remote)
 
 ## Architecture
 
-### LangGraph Workflow (6 Phases, 43 Nodes)
+### LangGraph Workflow (6 Phases, 45 Nodes)
 
 ```
 Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
@@ -72,15 +72,27 @@ For data flow at each checkpoint, see `PIPELINE_DEEP_DIVE.md#phase-by-phase-brea
 | `await-roster` | 1.51 | Wait for roster input (incremental input - enables character ID mapping) |
 | `character-ids` | 1.66 | Map characters to photos based on Haiku's visual descriptions |
 | `await-full-context` | 1.52 | Wait for accusation/sessionReport/directorNotes (incremental input) |
-| `input-review` | 0.2 | Review AI-parsed session input (after await-full-context) |
+| `input-review` | 0.2 | Review AI-parsed session input. Dedicated node `checkpointInputReview`, reached as `parseRawInput → checkpointInputReview` (so an approve does not re-pay the parse), gating on the `inputReviewApproved` channel |
 | `pre-curation` | 1.75 | Review preprocessed evidence before curation |
 | `evidence-and-photos` | 1.8 | Approve curated three-layer evidence bundle |
 | `arc-selection` | 2.35 | Select which narrative arcs to develop (3-5 recommended) |
 | `outline` | 3.25 | Approve article structure and photo placements |
 | `article` | 4.25 | Final article approval before HTML assembly |
 
+**Checkpoint payload keys** (added by `getCheckpointData` in `server.js`; the console consumes these names):
+
+| Checkpoint | Keys beyond the interrupt payload |
+|---|---|
+| `input-review` | `enrichment: {quotes, characterMentions, transactionReferences, fallback, warnings}` — counts from the director-notes enricher, so an empty enrichment is distinguishable from empty notes |
+| `arc-selection` / `outline` / `article` | `lastEvaluation` — the most recent evaluation **for that phase** (`evaluationHistory` is append-only and mixes phases, so its last entry is routinely another phase's verdict). Raw `evaluationHistory` is kept alongside it |
+| `article` | `htmlPreview` (the pending bundle rendered through the publishing `TemplateAssembler`, with `<base href="/">` injected; `null` on any render failure), `sessionPhotos`, `factCheck` (see below) |
+
+**Approval payloads** (`buildResumePayload`): `{inputReview: true}` approves the parse; `{inputReview: false, inputFeedback}` rejects it with prose corrections, which `checkpointInputReview` stores as `_inputCorrections` and `routeAfterInputReview` routes back to `parseRawInput` (appended to the Step-1/Step-2/enrichment prompts, then cleared). `{selectedArcs, outlineGuidance?}` carries the director's emphasis into the outline AND article prompts as their final `<DIRECTOR_GUIDANCE>` section.
+
+**Programmatic article fact-check** (`lib/content-bundle-fact-check.js`): `evaluateArticle` runs `factCheckContentBundle` BEFORE the Opus evaluation, mirroring how `validateArcStructure` gates `evaluateArcs`. Pure string checks, no LLM: evidence-card fidelity (every substantial sentence of a card's `content` must appear in its source's `fullContent`/`content`/`description`/`text` — never its `summary`, which is the paraphrase a fabrication imitates), unknown card sources, leaked prompt-example strings, roster coverage, photo references, reporter mode, and NPC pronouns. A structural failure under `REVISION_CAPS.ARTICLE` short-circuits the Opus call and routes straight to `reviseContentBundle` with one actionable line per defect; at the cap Opus runs and escalates to the human with the fact-check attached. The result lives in `_articleFactCheck` and reaches the article checkpoint as `factCheck`. **Every judgement call in the module errs toward NOT flagging** — a false structural failure costs a paid Opus revision.
+
 **Session Config Inputs** (captured at session start, NOT extracted from director notes):
-- `reportingMode`: `'on-site' | 'remote'` (journalist theme only) — stamped from `rawInput` in `parseRawInput` (input-nodes.js:424).
+- `reportingMode`: `'on-site' | 'remote'` — stamped from `rawInput` in `parseRawInput` (Step 1). It REPLACES the reporter persona: `PromptBuilder._buildReportingModeBlock` puts one `REPORTING_MODE_BLOCKS` entry in the article SYSTEM prompt right after the identity line. It used to arrive as a late override in `character-voice.md` and lost to the on-site persona stated earlier in the same file, so both remote sessions of the last five shipped as on-site. The evaluator has a structural `reporterMode` criterion (journalist only) and the fact-check scans for presence/vote claims.
 - `guestReporter`: `{name, ...} | null` — optional reporter identity override; displayed on InputReview checkpoint (gated on journalist theme).
 
 **Revision Loops:** Arcs (max 2), Outline (max 3), Article (max 3). See `PIPELINE_DEEP_DIVE.md#evaluation--revision-architecture` for structural vs advisory criteria.
@@ -116,6 +128,7 @@ lib/notion-client.js                # Raw (uncached) Notion API client — consu
 lib/schema-validator.js             # JSON schema validation helpers
 lib/sdk-client/
 └── subagents.js                    # Programmatic SDK subagent defs (arc orchestrator, commits 8.8-8.11)
+lib/content-bundle-fact-check.js    # Pure programmatic article fact-check (pre-Opus gate)
 lib/evidence-preprocessor.js        # Evidence batch preprocessing
 lib/image-preprocessor.js           # Image analysis preprocessing
 lib/image-prompt-builder.js         # Image prompt construction for Haiku
@@ -124,7 +137,7 @@ lib/template-helpers.js             # Handlebars helper registration
 lib/theme-config.js                 # Theme settings, NPC definitions, validation rules
 lib/prompt-builder.js               # Prompt assembly for each phase
 lib/workflow/
-├── graph.js                        # LangGraph StateGraph (43 nodes, edges)
+├── graph.js                        # LangGraph StateGraph (45 nodes, edges)
 ├── state.js                        # State annotations, phases, reducers
 ├── checkpoint-helpers.js           # Native interrupt() helpers (DRY)
 ├── reference-loader.js             # Load reference files for prompts
@@ -289,6 +302,7 @@ For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 | Phase | Required Prompts |
 |-------|-----------------|
 | arcAnalysis | character-voice, evidence-boundaries, narrative-structure, anti-patterns |
+| revision | character-voice, evidence-boundaries, anti-patterns (appended LAST as `<RULES>` to all three revision prompts — they previously carried no craft rules at all) |
 | outlineGeneration | section-rules, editorial-design, narrative-structure, formatting |
 | articleGeneration | All prompts (8 files) |
 
@@ -305,7 +319,7 @@ For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 |--------|-----------------|-----------|
 | AI Calls | `sdkQuery()` makes all Claude requests | Routes between nodes |
 | Structured Output | JSON schemas via `jsonSchema` param | N/A |
-| State Management | N/A | 60 state fields with reducers |
+| State Management | N/A | 67 state fields with reducers |
 | Checkpointing | N/A | MemorySaver/SqliteSaver |
 | Human Approval | N/A | Native `interrupt()` pattern |
 | Revision Loops | N/A | Conditional edges with caps |
@@ -365,7 +379,7 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 **Requirements:** LangSmith account + `LANGSMITH_API_KEY` in `.env`
 **Config:** `langgraph.json` defines graph as `./lib/studio/entry.js:graph`
 
-**Features:** Graph visualization (43 nodes), state inspection, time-travel debugging, prompt iteration
+**Features:** Graph visualization (45 nodes), state inspection, time-travel debugging, prompt iteration
 
 ## Console Frontend
 

@@ -400,6 +400,21 @@ async function parseRawInput(state, config) {
   // config reads below (photosPath/journalistFirstName/etc.) survive the rollback replay.
   if ((state.sessionConfig && Object.keys(state.sessionConfig).length > 0) || !state.rawSessionInput) {
     console.log('[parseRawInput] sessionConfig populated or no rawSessionInput — skipping parse');
+    // B2: a reject-with-corrections at the input-review gate nulls sessionConfig and
+    // routes back here. If there is no rawSessionInput (a from-files run), there is
+    // nothing to re-parse — say so loudly and consume the corrections so the gate
+    // does not keep offering a re-parse that cannot happen.
+    if (typeof state._inputCorrections === 'string' && state._inputCorrections.trim()) {
+      console.warn(
+        '[parseRawInput] Director corrections supplied but there is no raw session input to ' +
+        're-parse (file-based run). Edit data/<session>/inputs/*.json directly, or roll back ' +
+        'to await-full-context to re-collect the source text.'
+      );
+      return {
+        _inputCorrections: null,
+        currentPhase: PHASES.LOAD_DIRECTOR_NOTES
+      };
+    }
     return {
       currentPhase: PHASES.LOAD_DIRECTOR_NOTES
     };
