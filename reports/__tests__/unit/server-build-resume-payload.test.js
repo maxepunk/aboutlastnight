@@ -274,3 +274,34 @@ describe('buildResumePayload — input review (CODE-REVIEW B2/B8)', () => {
     expect(result.error).toEqual(expect.stringContaining('No valid approval'));
   });
 });
+
+describe('buildResumePayload — arc-selection director guidance (Q2)', () => {
+  it('carries trimmed outlineGuidance alongside the arc selection', () => {
+    const result = buildResumePayload({
+      selectedArcs: ['a'],
+      outlineGuidance: '  Lead with the money, not the vote. '
+    });
+    expect(result.error).toBeNull();
+    expect(result.resume.selectedArcs).toEqual(['a']);
+    expect(result.stateUpdates.selectedArcs).toEqual(['a']);
+    expect(result.stateUpdates._outlineGuidance).toBe('Lead with the money, not the vote.');
+  });
+
+  it('omits the key entirely for blank guidance', () => {
+    ['', '   ', undefined, null, 42].forEach((guidance) => {
+      const result = buildResumePayload({ selectedArcs: ['a'], outlineGuidance: guidance });
+      expect('_outlineGuidance' in result.stateUpdates).toBe(false);
+    });
+  });
+
+  it('does not attach guidance to an arc REJECTION', () => {
+    const result = buildResumePayload({
+      selectedArcs: false,
+      arcFeedback: 'these arcs miss the vote',
+      outlineGuidance: 'Lead with the money'
+    });
+    expect(result.error).toBeNull();
+    expect(result.resume.approved).toBe(false);
+    expect('_outlineGuidance' in result.stateUpdates).toBe(false);
+  });
+});

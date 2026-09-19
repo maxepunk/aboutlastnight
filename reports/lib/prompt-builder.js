@@ -188,6 +188,25 @@ class PromptBuilder {
   }
 
   /**
+   * Build the <DIRECTOR_GUIDANCE> section (Q2 decision).
+   *
+   * Appended LAST to the outline and article user prompts. Recency bias is the
+   * point: the director reviewed the ARCS and is telling the writer where to put
+   * the weight, which has to survive several thousand tokens of craft rules.
+   *
+   * @param {string|null} directorGuidance - free text from the arc-selection gate
+   * @returns {string} XML section, or '' when there is no guidance
+   */
+  _buildDirectorGuidance(directorGuidance) {
+    if (typeof directorGuidance !== 'string' || !directorGuidance.trim()) return '';
+    return '\n' + labelPromptSection(
+      'DIRECTOR_GUIDANCE',
+      'The director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\n' +
+      directorGuidance.trim()
+    );
+  }
+
+  /**
    * Generate FINANCIAL_SUMMARY XML section from shell account data
    * Returns empty string if no accounts with positive totals
    *
@@ -232,7 +251,7 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null) {
+  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
     const rawPrompts = await this.theme.loadPhasePrompts('outlineGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -578,6 +597,9 @@ Return JSON with the following structure:
 }`;
     }
 
+    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
+    userPrompt += this._buildDirectorGuidance(options.directorGuidance);
+
     return { systemPrompt, userPrompt };
   }
 
@@ -600,7 +622,7 @@ Return JSON with the following structure:
    * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null) {
+  async buildArticlePrompt(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
     const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
     // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
     const prompts = Object.fromEntries(
@@ -1060,6 +1082,9 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
 </SCHEMA>
 </GENERATION_INSTRUCTION>`;
     }
+
+    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
+    userPrompt += this._buildDirectorGuidance(options.directorGuidance);
 
     return { systemPrompt, userPrompt };
   }

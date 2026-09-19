@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (65 total - includes revision context + human feedback):
+ * State Fields (66 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections
@@ -664,6 +664,20 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Director guidance captured at the arc-selection gate (Q2 decision).
+   *
+   * The director picks the arcs and then has no say until the outline is already
+   * written, where the only lever is reject-and-regenerate. This carries their
+   * emphasis into BOTH the outline and the article prompts as the final section.
+   * Set by: /approve (buildResumePayload) alongside selectedArcs.
+   * Consumed by: generateOutline, generateContentBundle, buildArticleRevisionPrompt.
+   */
+  _outlineGuidance: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
    * Arc validation results from validateArcStructure (Commit 8.xx)
    * Set by: validateArcStructure in arc-specialist-nodes.js
    * Consumed by: routeArcValidation in graph.js for routing decision
@@ -676,7 +690,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (65 fields; +2 for the input-review gate channels)
+ * Get default state with all fields initialized (66 fields; +2 input-review gate channels, +1 director guidance)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -767,6 +781,8 @@ function getDefaultState() {
     _previousFullContext: null,
     // Arc validation routing (Commit 8.xx)
     _arcValidation: null,
+    // Director guidance captured at arc selection (Q2)
+    _outlineGuidance: null,
     // Human rejection feedback (consumed by revision nodes, cleared after use)
     _outlineFeedback: null,
     _articleFeedback: null,
@@ -950,6 +966,7 @@ const ROLLBACK_CLEARS = {
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_outlineGuidance',
     // Generation
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -970,6 +987,7 @@ const ROLLBACK_CLEARS = {
     'photoAnalyses', 'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_outlineGuidance',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
@@ -987,6 +1005,7 @@ const ROLLBACK_CLEARS = {
     'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_outlineGuidance',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
@@ -1001,6 +1020,7 @@ const ROLLBACK_CLEARS = {
     // Note: photoAnalyses preserved - only mappings need re-entry
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_outlineGuidance',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
@@ -1025,6 +1045,7 @@ const ROLLBACK_CLEARS = {
     'inputReviewApproved',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_outlineGuidance',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
@@ -1036,6 +1057,7 @@ const ROLLBACK_CLEARS = {
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_outlineGuidance',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
@@ -1049,6 +1071,7 @@ const ROLLBACK_CLEARS = {
     'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData', 'narrativeTensions',
     'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_outlineGuidance',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
@@ -1062,6 +1085,10 @@ const ROLLBACK_CLEARS = {
     'narrativeTensions',
     'arcEvidencePackages',
     'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    // Q2: _outlineGuidance is captured AT this gate, so re-picking arcs must re-collect
+    // it. Every point at-or-upstream of here clears it; the outline/article points do
+    // NOT — rolling back there keeps the arcs, so it keeps the emphasis chosen for them.
+    '_outlineGuidance',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
     'contentBundle', 'articleApproved', '_articleFeedback',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -1127,7 +1154,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 65
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 66
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

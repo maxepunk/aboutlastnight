@@ -269,6 +269,12 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         validApprovalDetected = true;
         stateUpdates.selectedArcs = approvals.selectedArcs;
         resume.selectedArcs = approvals.selectedArcs;
+        // Q2: optional director emphasis, carried into the outline AND article
+        // prompts. Only on an APPROVAL -- a rejection regenerates the arcs, and
+        // arcFeedback is the channel for that.
+        if (typeof approvals.outlineGuidance === 'string' && approvals.outlineGuidance.trim()) {
+            stateUpdates._outlineGuidance = approvals.outlineGuidance.trim();
+        }
     } else if (approvals.selectedArcs === false && typeof approvals.arcFeedback === 'string' && approvals.arcFeedback.trim()) {
         validApprovalDetected = true;
         resume.approved = false;

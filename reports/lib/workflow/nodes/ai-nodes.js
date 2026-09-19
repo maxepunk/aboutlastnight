@@ -895,7 +895,8 @@ async function generateOutline(state, config) {
     availablePhotos,  // Available photos
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     shellAccounts,  // Deterministic shell account data for financial summary
-    sessionFacts  // Session facts for player count and roster guardrail
+    sessionFacts,  // Session facts for player count and roster guardrail
+    { directorGuidance: state._outlineGuidance || null }  // Q2: arc-selection emphasis
   );
 
   const theme = config?.configurable?.theme || 'journalist';
@@ -1170,7 +1171,8 @@ async function generateContentBundle(state, config) {
     shellAccounts,  // Deterministic shell account data for financial summary
     sessionFacts,  // RC3: non-roster character guardrail
     state.directorNotes || null,  // RC5: director observations for article grounding
-    state.narrativeTensions || null  // Task F: programmatic contradictions for narrative weaving
+    state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
+    { directorGuidance: state._outlineGuidance || null }  // Q2: arc-selection emphasis
   );
 
   // Get JSON schema for structured output
