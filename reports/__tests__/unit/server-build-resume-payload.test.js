@@ -305,3 +305,22 @@ describe('buildResumePayload — arc-selection director guidance (Q2)', () => {
     expect('_outlineGuidance' in result.stateUpdates).toBe(false);
   });
 });
+
+describe('fullContext approval clears the parse it replaces (operator gate 2026-09-19)', () => {
+  // loadDirectorNotes rehydrates sessionConfig/directorNotes from data/<id>/inputs/*.json on
+  // any replay where directorNotes is null (a forced Start Fresh of a reused id, a rollback
+  // to await-full-context), and parseRawInput skips whenever sessionConfig is populated.
+  // The interrupted node re-executes with the update already applied, so the gate's own
+  // "capture" branch never runs on the API path: the re-parse trigger must ride on the update.
+  const { buildResumePayload } = require('../../server.js');
+  const full = { accusation: 'Vic, 9 votes', sessionReport: '# Session Report', directorNotes: 'notes' };
+
+  test('nulls sessionConfig, directorNotes and playerFocus so parseRawInput runs on the new inputs', () => {
+    const { stateUpdates, error } = buildResumePayload({ fullContext: full }, { sessionConfig: { roster: ['Old'] } }, 'journalist');
+    expect(error).toBeNull();
+    expect(stateUpdates.directorNotesRaw).toBe('notes');
+    expect(stateUpdates.sessionConfig).toBeNull();
+    expect(stateUpdates.directorNotes).toBeNull();
+    expect(stateUpdates.playerFocus).toBeNull();
+  });
+});

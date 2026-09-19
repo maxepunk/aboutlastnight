@@ -455,6 +455,17 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
             stateUpdates.accusation = accusation;
             stateUpdates.sessionReport = sessionReport;
             stateUpdates.directorNotesRaw = directorNotes;
+            // Clear the parse these inputs replace. loadDirectorNotes rehydrates
+            // sessionConfig/directorNotes from data/<id>/inputs/*.json on any replay
+            // where directorNotes is null (a forced Start Fresh of a reused id, a
+            // rollback to await-full-context), and parseRawInput skips whenever
+            // sessionConfig is populated. The interrupted node re-executes with this
+            // update already applied, so the gate's own capture branch never runs on
+            // the API path: the re-parse trigger has to ride on the update itself
+            // (operator gate 2026-09-19; plan-review-v2 I3).
+            stateUpdates.sessionConfig = null;
+            stateUpdates.directorNotes = null;
+            stateUpdates.playerFocus = null;
             resume.fullContext = approvals.fullContext;
         }
     }
