@@ -393,15 +393,16 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 
 ```
 console/
-├── index.html                      # SPA shell, CDN scripts, 29 script tags in load order
+├── index.html                      # SPA shell, CDN scripts, 30 script tags in load order
 ├── api.js                          # REST client + SSE-before-POST pattern, plus attach() (SSE-only, no POST)
-├── state.js                        # useReducer: 24 actions, initialState, RESET_SESSION
+├── state.js                        # useReducer: 25 actions, initialState, RESET_SESSION
 ├── utils.js                        # Badge, CollapsibleSection, JsonViewer, safeStringify, etc. (republishes CHECKPOINT_ORDER)
-├── session-start-logic.js         # Dual-export PURE module: isValidSessionId (MMDDYY contract, mirrors server.js), classifyCheckpointResponse (not-found | at-checkpoint | in-progress | complete | resumable), buildReportLinks, CHECKPOINT_ORDER. Must load before utils.js AND components/SessionStart.js.
+├── session-start-logic.js         # Dual-export PURE module: isValidSessionId (MMDDYY contract, mirrors server.js), classifyCheckpointResponse (not-found | at-checkpoint | in-progress | complete | resumable), buildReportLinks, completedResultFrom, CHECKPOINT_ORDER. Must load before utils.js AND components/SessionStart.js.
 ├── session-status-logic.js        # Dual-export PURE module: SET_ERROR / CLEAR_ERROR reducer fragments. Must load before state.js.
 ├── llm-stream-logic.js            # Dual-export PURE module: llmActivity lifecycle, eventLog append, failure/llm_error message derivation. Must load before state.js and app.js.
 ├── input-review-logic.js          # Dual-export PURE module for the InputReview checkpoint.
 ├── await-roster-logic.js          # Dual-export PURE module: roster entry validation against canonicalCharacters.
+├── checkpoint-view-logic.js       # Dual-export PURE module: the read side of the four intervention gates — lastEvaluationFrom + evaluationView (the Opus verdict), arcCardModel + defaultArcSelection + arcSelectionNote, accusationView, whiteboardView, factCheckSummary, wordTail. Must load before InputReview / AwaitFullContext / ArcSelection / Outline / Article.
 ├── outline-edit-logic.js          # Dual-export PURE module: all Outline-editor init/build/merge/validate/reset logic (browser: window.Console.outlineEditLogic; node: module.exports). Unit-tested in node-env. Must load before Outline.js/Article.js.
 ├── app.js                          # Root: auth gate, checkpoint routing, rollback flow, attach-to-in-flight-run
 ├── console.css                     # All styles (~1800 lines, BEM naming, noir theme)
@@ -409,21 +410,21 @@ console/
     ├── LoginOverlay.js             # Auth overlay
     ├── SessionStart.js             # Session ID + Start Fresh; Resume classifies the session first (never resumes a complete thread; attaches to an in-flight one)
     ├── ProgressStream.js           # SSE progress + LLM activity display
-    ├── PipelineProgress.js         # 10-step checkpoint stepper
+    ├── PipelineProgress.js         # 10-step checkpoint stepper (pass completedCheckpoints: CHECKPOINT_ORDER to make every step a rollback target)
     ├── CheckpointShell.js          # Shared checkpoint wrapper
-    ├── RevisionDiff.js             # Shallow diff for revision loops
+    ├── RevisionDiff.js             # Revision banner + budget + previous feedback (from the server payload) and, when a previous version is cached client-side, the shallow diff. MUST load before ArcSelection/Outline/Article — all three destructure it at load time.
     ├── RollbackPanel.js            # Rollback confirmation modal
     ├── CompletionView.js           # Success screen with report link
     ├── FileBrowser.js              # Session file browser
     └── checkpoints/
-        ├── InputReview.js          # Parsed session input display
+        ├── InputReview.js          # Parsed session input: accusation (accused/charge/notes), whiteboard, enrichment counts, approve or reject-with-corrections
         ├── PaperEvidence.js        # Selectable paper evidence list
         ├── PreCuration.js          # Evidence preprocessing summary
         ├── AwaitRoster.js          # Tag-style roster name input
         ├── CharacterIds.js         # Photo gallery + character mapping
         ├── AwaitFullContext.js      # Accusation/report/notes collection
         ├── EvidenceBundle.js       # Three-layer evidence display + rescue
-        ├── ArcSelection.js         # Arc card grid with selection
+        ├── ArcSelection.js         # Arc card grid with selection + outline guidance
         ├── Outline.js              # Article outline + approve/edit/reject
         └── Article.js              # Content bundle + HTML preview iframe
 ```
@@ -432,11 +433,36 @@ console/
 
 Each checkpoint component follows the same pattern:
 1. Registers on `window.Console.checkpoints`
-2. Receives `{ data, onApprove, onReject, dispatch, revisionCache }` props
+2. Receives `{ data, sessionId, theme, onApprove, onReject, onRollback, dispatch, revisionCache, pendingEdits }` props
 3. Renders checkpoint-specific UI from `data`
-4. Calls `onApprove(payload)` or `onReject(payload)` with checkpoint-specific payload
+4. Calls `onApprove(payload)` / `onReject(payload)` with the checkpoint-specific payload, or `onRollback(checkpointType)` to open the rollback modal
 
 **Conventions:** `const` not `var`, direct destructured imports (no aliasing), `safeStringify` instead of `JSON.stringify`, CSS utility classes over inline styles, aria-labels on interactive elements, functional state updaters for Set manipulation, `useEffect` reset on data change.
+
+**`onRollback` is the only way a checkpoint may open the rollback modal.** It is the same `setRollbackTarget` callback the stepper uses, so Confirm goes through the existing streaming rollback. A component must NOT dispatch its own rollback action — ArcSelection's zero-arc dead end dispatched `SHOW_ROLLBACK`, which no reducer handles, so the only offered recovery logged `[state] Unknown action` and did nothing.
+
+### Checkpoint payload keys the gates read
+
+The server sends these on BOTH delivery paths (`GET /checkpoint` and the SSE `complete` of approve/resume/rollback both merge `getCheckpointData(state)` under the `interrupt()` value via `buildCompleteCheckpointData`). Read them through `checkpoint-view-logic.js`, not inline: every one of them replaced a field name that did not exist.
+
+| Key | On | Read by |
+|---|---|---|
+| `lastEvaluation` | arc-selection, outline, article | `lastEvaluationFrom(data, phase)` → `evaluationView` → the shared `utils.js` `EvalBar`. The last `evaluationHistory` entry FOR THAT PHASE; `evaluationHistory` is an append-only array mixing all three phases, and reading `.overallScore` off the array is why no gate ever rendered a verdict. The score is 0–1, `structuralPassed` is only on the fact-check-sourced entry (fall back to `ready`), and `advisoryWarnings` is the field (not `advisoryNotes`). |
+| `factCheck` | article | `factCheckSummary(factCheck)` → the defect list above the article body, and the `Approve anyway (N unresolved)` label. `{structuralIssues, advisoryWarnings, cardFidelity[], rosterCoverage.missing[], photoReferences.invalid[], reporterMode.violations[]}` from `lib/content-bundle-fact-check.js`. |
+| `htmlPreview` | article | The preview iframe's `srcDoc`, after a client-side `<script>` strip. Rendered from the PENDING bundle with the publishing `TemplateAssembler` and already carrying `<base href="/">`, so it exists on the first pass — `assembledHtml` does not (it is written two nodes later). |
+| `sessionPhotos` | article, character-ids | `photoUrl(filename)` matches on basename and serves `/api/file?path=<abs>`. `/sessionphotos/<id>/<file>` only exists after `assembleHtml` copies the photos, i.e. after the gate. |
+| `enrichment` | input-review | The enrichment panel: `{quotes, characterMentions, transactionReferences, fallback:{reason}|null, warnings:{droppedQuotes}}`. A `fallback` means the article will have NO quote bank and must be surfaced in red. |
+| `previousFeedback`, `revisionCount`, `humanRevisionCount`, `maxRevisions` | arc-selection, outline, article | `RevisionDiff`, which renders the banner/budget/feedback from these alone; only the diff listing needs the client-side `revisionCache`. |
+
+`parsedInput` is **gone** — `_parsedInput` was never an Annotation channel, so LangGraph dropped every write. Do not re-add a read of it.
+
+### Input-review reject flow (re-parse, not rollback)
+
+`InputReview` is not approve-only. Approve sends `{ inputReview: true }`; Reject with Corrections sends `{ inputReview: false, inputFeedback: '<prose>' }`. `buildResumePayload` turns that into `{approved: false, feedback}`, and `checkpointInputReview` stores it as `_inputCorrections`, nulls `sessionConfig`/`directorNotes`/`playerFocus` so `parseRawInput` re-runs, and routes the graph back — `parseRawInput` appends the corrections to every parse prompt. A mis-parsed roster, accusation or journalist name is therefore fixed with a note, not with a rollback and a full re-collection. There is no `inputEdits` path (the key wrote a state channel nothing declared or read).
+
+### Rolling back a COMPLETE session
+
+A finished thread has no checkpoint (`GET /checkpoint` returns `checkpoint: null`), so neither rollback opener could be reached for it. `SessionStart`'s `'complete'` branch therefore loads the completion instead of resuming (resuming re-runs the whole paid pipeline): `SET_THEME` → `SET_SESSION` → `SESSION_COMPLETE_LOADED`, whose payload comes from `sessionStartLogic.completedResultFrom(checkpointResponse)`. That action sets `completedResult` plus `completedStepper`, and `app.js` renders `PipelineProgress` with `completedCheckpoints: CHECKPOINT_ORDER` above `CompletionView`, so every step is a rollback target and the existing `RollbackPanel` flow applies. Nothing is POSTed until Confirm. `CHECKPOINT_RECEIVED` clears `completedResult`/`completedStepper`, because App renders the completion branch BEFORE the checkpoint branch and a stale completion would hide the checkpoint the rollback just produced.
 
 ### Outline Editor Architecture (`Outline.js` + `outline-edit-logic.js`)
 
@@ -444,6 +470,8 @@ The Outline checkpoint's per-section editors (journalist LEDE / THE STORY / FOLL
 
 - **All save/build/merge/validate logic is PURE and lives in `outline-edit-logic.js`, not in the React components.** Builders `deepClone` the original section, so untouched required/extra keys are preserved and NO stray keys are emitted (every section is `additionalProperties:false`). Builders keep blank rows — pruning/non-empty enforcement is the validation layer's job.
 - **Edited outlines are schema-validated before article generation** (the B7 gate): client-side via `EditLogic.validateOutlineShape(outline, theme)` (dependency-free — blocks Approve + renders `.validation-error`) and server-side in `buildResumePayload` (`SchemaValidator` against `outline` / `detective-outline`, rejects invalid edits). Distinct from the generation-time `validateOutlineStructure` removed in 8.23 — this specifically gates HUMAN edits.
+- **Edited ARTICLES have the same two gates:** `EditLogic.validateBundleShape(bundle)` client-side (blocks Approve from both the inline editors and the JSON editor) and the `content-bundle` schema server-side. `validateBundleShape` is deliberately never STRICTER than `content-bundle.schema.json` — `heading` stays optional, `metadata.generatedAt` is not required — because a false block on a bundle the server would accept is a dead end the director cannot clear. A test pins that direction.
+- **Every container that holds a pencil must carry `article-block--editable`.** It supplies the `position: relative` the absolutely-positioned button needs AND is the hook the reveal rules key on; `Outline.js` emitted it at zero of its 13 call sites, so the whole editor layer was `display: none` forever. The pencil is now always rendered at low opacity and goes full opacity on hover, on `:focus-within`, and on a section carrying `outline-section--editing` — do not put it back behind `:hover` only.
 - **Reset effect** is keyed on `EditLogic.computeResetKey(data, revisionCount)` (collision-resistant) in both `Outline.js` and `Article.js`. Do NOT revert to a truncated `safeStringify(...).slice(0, N)` — it collides across revisions and leaks stale edits.
 - **Wiring debugging:** the section→editor→builder→`saveSectionEdit` key→schema map is documented in `docs/superpowers/plans/2026-05-28-outline-rich-editor-fixes.md` (the implementation plan + bug→task table).
 - **Known minor:** the list widgets key rows by array index, so removing a mid-list row can momentarily drop input focus (no data-correctness impact).
@@ -495,7 +523,7 @@ cp .env.example .env
 
 See test files for mock usage examples.
 
-**Console has NO DOM/React test harness** (node test env only — no jsdom/testing-library/babel-jest, by design). Test console logic by extracting it into a **dual-export** module (`window.Console.X` for the browser + an `if (typeof module !== 'undefined' && module.exports)` node guard) and unit-testing the pure functions in node-env — see `outline-edit-logic.test.js` and `server-build-resume-payload.test.js` (which `require('../../server.js')`; `server.js` is guarded by `require.main === module` so requiring it doesn't start the server). React component **wiring** (which control opens which editor, save routing, error rendering) has no automated test — verify it with a manual browser click-through.
+**Console has NO DOM/React test harness** (node test env only — no jsdom/testing-library/babel-jest, by design). Test console logic by extracting it into a **dual-export** module (`window.Console.X` for the browser + an `if (typeof module !== 'undefined' && module.exports)` node guard) and unit-testing the pure functions in node-env — see `checkpoint-view-logic.test.js`, `outline-edit-logic.test.js` and `server-build-resume-payload.test.js` (which `require('../../server.js')`; `server.js` is guarded by `require.main === module` so requiring it doesn't start the server). React component **wiring** (which control opens which editor, save routing, error rendering) has no automated test — verify it with a manual browser click-through.
 
 ## Troubleshooting
 
