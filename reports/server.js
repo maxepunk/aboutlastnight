@@ -335,23 +335,6 @@ function sanitizePhotosPath(raw) {
 }
 
 /**
- * Build resume payload from approval decisions (DRY helper)
- * Used by /api/session/:id/approve endpoint with Command({ resume })
- *
- * Returns a payload that will be passed to graph.invoke(new Command({ resume: payload }))
- * The payload becomes the return value of interrupt() in the paused node.
- *
- * @param {object} approvals - Approval decisions from request body
- * @param {object} currentState - Current graph state values (theme default + rawSessionInput merge)
- * @param {string} [theme]
- * @param {string|null} [checkpointType] - The interrupt's `type` (CHECKPOINT_TYPES value).
- *   I3: some approval shapes are only meaningful at one gate. `{photosPath}` posted at
- *   `outline`/`article`/`arc-selection` used to count as a valid approval whose resume
- *   value was neither an approve nor a reject-with-feedback, which routes straight into
- *   a PAID revision loop. Gate those shapes on the type.
- * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
- */
-/**
  * Append one director gate note (spec 2026-09-19 §5.2). The channel is a REPLACE
  * channel, so this writes the full array; buildResumePayload has the current state
  * and the per-session lock rules out a concurrent writer. `round` counts the
@@ -373,6 +356,23 @@ function validateEdits(schemaName, edits, noun) {
     return 'Edited ' + noun + ' failed schema validation (' + schemaName + '): ' + detail;
 }
 
+/**
+ * Build resume payload from approval decisions (DRY helper)
+ * Used by /api/session/:id/approve endpoint with Command({ resume })
+ *
+ * Returns a payload that will be passed to graph.invoke(new Command({ resume: payload }))
+ * The payload becomes the return value of interrupt() in the paused node.
+ *
+ * @param {object} approvals - Approval decisions from request body
+ * @param {object} currentState - Current graph state values (theme default + rawSessionInput merge)
+ * @param {string} [theme]
+ * @param {string|null} [checkpointType] - The interrupt's `type` (CHECKPOINT_TYPES value).
+ *   I3: some approval shapes are only meaningful at one gate. `{photosPath}` posted at
+ *   `outline`/`article`/`arc-selection` used to count as a valid approval whose resume
+ *   value was neither an approve nor a reject-with-feedback, which routes straight into
+ *   a PAID revision loop. Gate those shapes on the type.
+ * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
+ */
 function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist'), checkpointType = null) {
     const resume = {};
     const stateUpdates = {};

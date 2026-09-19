@@ -892,15 +892,15 @@ function getDefaultState() {
     _articleFactCheck: null,
     // Human rejection feedback (consumed by revision nodes, cleared after use)
     _outlineFeedback: null,
+    _articleFeedback: null,
+    _arcFeedback: null,
     // Director steering (spec 2026-09-19): hand edits sent with a rejection, what the
     // rework did to them, and the standing gate notes
     _outlineHandEdits: null,
     _articleHandEdits: null,
     _outlineHandEditReport: null,
     _articleHandEditReport: null,
-    directorGateNotes: [],
-    _articleFeedback: null,
-    _arcFeedback: null
+    directorGateNotes: []
   };
 }
 
