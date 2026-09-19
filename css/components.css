@@ -437,7 +437,8 @@
 }
 
 .faq-item.expanded .faq-answer {
-    max-height: 500px;
+    /* Must exceed the tallest FAQ answer at mobile widths, or the text gets clipped */
+    max-height: 3000px;
     opacity: 1;
     margin-top: 0.5rem;
 }
