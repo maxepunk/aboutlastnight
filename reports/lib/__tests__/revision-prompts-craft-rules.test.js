@@ -134,3 +134,53 @@ describe('arc revision prompt gives the model usable evidence (PROMPT-REVIEW)', 
     expect(prompt).toContain('Marcus');
   });
 });
+
+describe('buildRevisionRulesSection — the REAL PromptBuilder over the REAL ThemeLoader', () => {
+  // The suite above composes prompts with createMockPromptBuilder(), whose
+  // buildRevisionRulesSection is a SECOND implementation that hardcodes the three
+  // filenames. That left the production method — the one the pipeline actually
+  // calls — with no test at all.
+  const { PromptBuilder, createPromptBuilder } = require('../prompt-builder');
+  const { createThemeLoader, PHASE_REQUIREMENTS } = require('../theme-loader');
+
+  ['journalist', 'detective'].forEach((theme) => {
+    it(`${theme}: wraps the real content of all three revision prompts in <RULES>`, async () => {
+      const builder = createPromptBuilder({ theme });
+      const section = await builder.buildRevisionRulesSection();
+
+      expect(section.startsWith('<RULES>')).toBe(true);
+      expect(section.trim().endsWith('</RULES>')).toBe(true);
+
+      const loader = createThemeLoader({ theme });
+      for (const name of PHASE_REQUIREMENTS.revision) {
+        const content = await loader.loadPrompt(name);
+        expect(content.length).toBeGreaterThan(50);      // the file really exists
+        expect(section).toContain(`<${name}>`);
+        // The whole file's text, with {{VARIABLES}} resolved the way the
+        // production method resolves them.
+        expect(section).toContain(builder.resolvePromptVariables(content).trim());
+      }
+    });
+  });
+
+  it('resolves {{JOURNALIST_FIRST_NAME}} from the session config', async () => {
+    const builder = createPromptBuilder({
+      theme: 'journalist',
+      sessionConfig: { journalistFirstName: 'Wilhelmina' }
+    });
+    const section = await builder.buildRevisionRulesSection();
+    expect(section).not.toContain('{{JOURNALIST_FIRST_NAME}}');
+    expect(section).toContain('Wilhelmina');
+  });
+
+  it('FAILS LOUD when a revision prompt file is missing', async () => {
+    // ThemeLoader.loadPrompt warns and returns '' for a missing file, so without
+    // this guard the reviser would silently run with no craft rules at all —
+    // exactly the unguarded regeneration this phase is meant to prevent.
+    const builder = new PromptBuilder(
+      createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
+      'journalist'
+    );
+    await expect(builder.buildRevisionRulesSection()).rejects.toThrow(/revision prompt/i);
+  });
+});

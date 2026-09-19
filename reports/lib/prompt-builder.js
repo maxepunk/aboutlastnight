@@ -1343,15 +1343,30 @@ ${validationReturnFormat}`;
    * so the reviser edits under the same voice/boundary/anti-pattern contract the
    * generator wrote under.
    *
-   * Fails loud: a revision that silently loses its rules is the unguarded
-   * regeneration this is meant to prevent.
+   * Fails loud: ThemeLoader.loadPrompt WARNS and returns '' for a file it cannot
+   * read, so without this check a missing or renamed prompt would leave the
+   * reviser running with no craft rules at all — the unguarded regeneration this
+   * whole phase exists to prevent, and invisible in the output.
    *
    * @returns {Promise<string>} labelled <RULES> section
+   * @throws {Error} if any required revision prompt is empty or missing
    */
   async buildRevisionRulesSection() {
     const rawPrompts = await this.theme.loadPhasePrompts('revision');
-    const body = Object.entries(rawPrompts)
-      .map(([name, content]) => labelPromptSection(name, this.resolvePromptVariables(content)))
+
+    const empty = PHASE_REQUIREMENTS.revision.filter(
+      name => !rawPrompts[name] || !String(rawPrompts[name]).trim()
+    );
+    if (empty.length > 0) {
+      throw new Error(
+        `[PromptBuilder] Missing revision prompt${empty.length > 1 ? 's' : ''} for theme ` +
+        `"${this.themeName}": ${empty.join(', ')}. ThemeLoader returns '' for an unreadable ` +
+        `file, so revising now would silently drop the craft rules.`
+      );
+    }
+
+    const body = PHASE_REQUIREMENTS.revision
+      .map(name => labelPromptSection(name, this.resolvePromptVariables(rawPrompts[name])))
       .filter(Boolean)
       .join('\n');
     return labelPromptSection('RULES', body);

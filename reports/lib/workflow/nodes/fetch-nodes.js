@@ -151,14 +151,14 @@ async function initializeSession(state, config) {
  * Extracts playerFocus from director notes for downstream arc analysis.
  * If playerFocus is missing (legacy files), synthesizes it from available data.
  *
- * COMMIT 8.10 FIX: Also loads orchestrator-parsed.json and populates _parsedInput
+ * COMMIT 8.10 FIX: Also loads orchestrator-parsed.json (for shellAccounts)
  * so that fetchMemoryTokens can access exposed/buried token lists for disposition
  * tagging. Previously this data was only available when parseRawInput ran (fresh mode),
  * causing all tokens to be tagged 'unknown' on resume.
  *
  * @param {Object} state - Current state with sessionId
  * @param {Object} config - Graph config with optional configurable.dataDir
- * @returns {Object} Partial state update with directorNotes, sessionConfig, playerFocus, _parsedInput, currentPhase
+ * @returns {Object} Partial state update with directorNotes, sessionConfig, playerFocus, currentPhase
  */
 async function loadDirectorNotes(state, config) {
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
@@ -178,14 +178,13 @@ async function loadDirectorNotes(state, config) {
     console.log(`[loadDirectorNotes] No orchestrator-parsed.json found (optional)`);
   }
 
-  // Skip full loading if already loaded (resume case or pre-populated by parseRawInput)
-  // But still return _parsedInput for fetchMemoryTokens disposition tagging
+  // Skip full loading if already loaded (resume case or pre-populated by parseRawInput).
+  // orchestratorParsed is still read above, for shellAccounts: the old
+  // `_parsedInput` return was never an Annotation channel, so LangGraph dropped it
+  // and fetchMemoryTokens reads orchestrator-parsed.json from disk instead.
   if (state.directorNotes && Object.keys(state.directorNotes).length > 0) {
     console.log('[loadDirectorNotes] Skipping full load - directorNotes already in state');
     const result = {
-      _parsedInput: {
-        orchestratorParsed
-      },
       currentPhase: PHASES.FETCH_TOKENS
     };
     // Populate shellAccounts from file if not already in state
@@ -239,10 +238,6 @@ async function loadDirectorNotes(state, config) {
     directorNotes: Object.keys(directorNotes).length > 0 ? directorNotes : null,
     sessionConfig: Object.keys(sessionConfig).length > 0 ? sessionConfig : null,
     playerFocus,
-    // Store orchestratorParsed for fetchMemoryTokens disposition tagging
-    _parsedInput: {
-      orchestratorParsed
-    },
     currentPhase: PHASES.FETCH_TOKENS
   };
 
@@ -271,7 +266,7 @@ async function loadDirectorNotes(state, config) {
  * The disposition is determined from orchestrator-parsed.json which contains
  * the exposedTokens and buriedTokens lists from session report parsing.
  *
- * @param {Object} state - Current state with directorNotes, _parsedInput
+ * @param {Object} state - Current state with directorNotes
  * @param {Object} config - Graph config with optional configurable.dataDir
  * @returns {Object} Partial state update with memoryTokens, currentPhase
  */
@@ -325,8 +320,9 @@ async function fetchMemoryTokens(state, config) {
   // EVIDENCE BOUNDARY: Tag each token with disposition
   // ─────────────────────────────────────────────────────
 
-  // Load orchestrator-parsed.json directly from files
-  // Files are the source of truth (LangGraph doesn't persist _parsedInput)
+  // Load orchestrator-parsed.json directly from files. Files are the source of
+  // truth: passing this through state was attempted via an undeclared
+  // `_parsedInput` key, which LangGraph silently dropped on every write.
   const orchestratorPath = path.join(dataDir, state.sessionId, 'inputs', 'orchestrator-parsed.json');
   let orchestratorParsed = {};
   try {

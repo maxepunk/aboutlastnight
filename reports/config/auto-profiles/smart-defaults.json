@@ -4,7 +4,7 @@
   "checkpoints": {
     "input-review": {
       "strategy": "approve",
-      "notes": "Input parsing is reliable - auto-approve"
+      "notes": "Auto-approve. NOTE: this gate never actually fired before B2/B8 (its skip condition was satisfied by the parse that had just run), so \"parsing is reliable\" was never verified by anyone. A reject needs prose corrections, which only a human can supply."
     },
     "paper-evidence-selection": {
       "strategy": "select-all",

@@ -134,6 +134,14 @@ describe('getCheckpointData — enrichment counts (H25)', () => {
     });
   });
 
+  it('no longer returns the dead parsedInput key', async () => {
+    // `_parsedInput` was never an Annotation channel, so LangGraph dropped every
+    // write and this key was always undefined. The writes are gone too
+    // (fetch-nodes.js, input-nodes.js).
+    const data = await getCheckpointData(CHECKPOINT_TYPES.INPUT_REVIEW, { _parsedInput: { parsedAt: 'x' } });
+    expect('parsedInput' in data).toBe(false);
+  });
+
   it('reports zeroes rather than throwing when directorNotes is absent', async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.INPUT_REVIEW, {});
     expect(data.enrichment).toEqual({

@@ -70,9 +70,12 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
   // GRAPH EXECUTION / REPLAY order (derived from graph.js edges) — deliberately NOT the
   // frontend DISPLAY order in console/utils.js (which lists 'input-review' first). On
   // rollback the graph replays from START in THIS order, so a field captured at checkpoint C
-  // is "downstream" of every point at-or-before C here. 'input-review' is an interrupt INSIDE
-  // parseRawInput and executes LATE (after await-full-context) despite its 0.2 label —
-  // edge checkpointAwaitContext -> parseRawInput.
+  // is "downstream" of every point at-or-before C here. 'input-review' executes LATE
+  // (after await-full-context) despite its 0.2 label: the graph reaches it via
+  // checkpointAwaitContext -> parseRawInput -> checkpointInputReview, a DEDICATED
+  // interrupt node (B2 — hosting the interrupt inside parseRawInput made every approve
+  // re-pay the parse). Its conditional edge routes a reject-with-corrections back to
+  // parseRawInput and an approve forward to finalizeInput.
   const CHECKPOINT_SEQUENCE = [
     'paper-evidence-selection',
     'await-roster',

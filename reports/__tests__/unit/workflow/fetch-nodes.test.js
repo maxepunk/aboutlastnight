@@ -167,10 +167,13 @@ describe('fetch-nodes', () => {
       const result = await loadDirectorNotes(state, config);
 
       const keys = Object.keys(result).sort();
-      // shellAccounts may be present if orchestrator-parsed.json has them
+      // shellAccounts may be present if orchestrator-parsed.json has them.
+      // `_parsedInput` is gone: it was never an Annotation channel, so LangGraph
+      // dropped every write; fetchMemoryTokens reads the file directly.
       expect(keys).toEqual(
-        expect.arrayContaining(['_parsedInput', 'currentPhase', 'directorNotes', 'playerFocus', 'sessionConfig'])
+        expect.arrayContaining(['currentPhase', 'directorNotes', 'playerFocus', 'sessionConfig'])
       );
+      expect(keys).not.toContain('_parsedInput');
     });
   });
 

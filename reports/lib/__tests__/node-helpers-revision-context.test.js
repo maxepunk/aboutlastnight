@@ -47,8 +47,11 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
 
   it('lists structural issues and advisory warnings', () => {
     const section = build();
-    expect(section).toContain('Missing roster members: Quinn');
-    expect(section).toContain('x');
+    // Assert the rendered ISSUES lines, not a bare 'x' — which matched any 'x'
+    // anywhere in several hundred characters of boilerplate and could not fail.
+    expect(section).toContain('  - Missing roster members: Quinn');
+    expect(section).toContain('  - x');
+    expect(section).toMatch(/ISSUES TO ADDRESS:\n  - Missing roster members: Quinn\n  - x/);
   });
 
   it('names the high-scoring criteria to preserve', () => {

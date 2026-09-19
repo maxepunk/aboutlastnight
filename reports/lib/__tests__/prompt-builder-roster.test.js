@@ -122,6 +122,37 @@ describe('fact-check pronoun scan (class 3)', () => {
     expect(result.structuralIssues).toEqual([]);
   });
 
+  it('does NOT flag a plural subject joined by a conjunction', () => {
+    // The module's own invariant is to err toward NOT flagging: a structural
+    // issue skips the Opus evaluation, burns a paid revision and tells the
+    // reviser to break correct text. "Marcus and Alex ... their" is correct.
+    const result = factCheckContentBundle(prose('Marcus and Alex had their own arrangement about the compound.'));
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it('does NOT flag a comma-joined list of subjects', () => {
+    const result = factCheckContentBundle(prose('Marcus, Vic and Sarah kept their shares quiet.'));
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it('does NOT flag a they/them when another known name shares the sentence', () => {
+    // "before they voted" is the room, not Marcus.
+    const result = factCheckContentBundle(prose('Nova asked Marcus about the deal before they voted.'));
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it('does NOT flag a roster member sharing the sentence', () => {
+    const args = prose('Vic watched Marcus sign, and neither of them said what they had agreed.');
+    args.roster = ['Vic'];
+    expect(factCheckContentBundle(args).structuralIssues).toEqual([]);
+  });
+
+  it('STILL flags a true positive where the NPC is the only named subject', () => {
+    const result = factCheckContentBundle(prose('Marcus was found in the study; they had been dead for hours.'));
+    expect(result.structuralIssues.join(' ')).toMatch(/pronoun/i);
+    expect(result.structuralIssues.join(' ')).toContain('Marcus');
+  });
+
   it('does not flag a they/them more than six words away from the name', () => {
     const result = factCheckContentBundle(prose(
       'Marcus signed the compound release in February, and long before the party ended the others had already made up their minds.'

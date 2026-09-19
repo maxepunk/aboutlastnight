@@ -753,14 +753,10 @@ Return structured JSON matching the schema.${correctionsBlock}`;
     sessionConfig,
     directorNotes,
     playerFocus,
-    shellAccounts: orchestratorParsed?.shellAccounts || [],
-    _parsedInput: {
-      sessionConfig,
-      directorNotes,
-      orchestratorParsed,
-      parsedAt: new Date().toISOString(),
-      processingTimeMs
-    }
+    shellAccounts: orchestratorParsed?.shellAccounts || []
+    // No `_parsedInput`: it was never an Annotation channel, so LangGraph dropped
+    // every write and its only reader (getCheckpointData) always saw undefined.
+    // The parse outputs above are the checkpoint's data.
   };
 
   // B2: the input-review interrupt USED to live here, after the three SDK calls and

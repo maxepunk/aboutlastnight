@@ -141,3 +141,42 @@ describe('parseRawInput consumes the corrections (no re-parse loop)', () => {
     expect(result).not.toHaveProperty('_inputCorrections');
   });
 });
+
+describe('the e2e harness speaks the new gate contract', () => {
+  // scripts/e2e-walkthrough.js is the operator's dry-run tool and has no test
+  // harness of its own, so this asserts on its source. Its old [E]dit path built
+  // an `inputEdits` map of dotted field paths and sent it with
+  // `{inputReview: true}` — the server wrote it to a `_inputEdits` key that was
+  // never an Annotation channel, so the operator's edits were DISCARDED while the
+  // run reported success.
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'scripts', 'e2e-walkthrough.js'), 'utf8'
+  );
+
+  it('no longer builds or sends inputEdits in any form', () => {
+    // `/inputEdits:/` alone would have passed on the old file, which used the
+    // object shorthand `return { inputReview: true, inputEdits };`.
+    expect(src).not.toMatch(/inputEdits/);
+  });
+
+  it('offers reject-with-corrections and sends inputFeedback', () => {
+    expect(src).toContain('[R]eject with corrections');
+    expect(src).toContain('{ inputReview: false, inputFeedback: feedback.trim() }');
+  });
+
+  it('still offers a plain approve', () => {
+    expect(src).toContain('{ inputReview: true }');
+  });
+
+  it('every --auto profile approves this gate', () => {
+    const dir = path.join(__dirname, '..', '..', '..', 'config', 'auto-profiles');
+    const profiles = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+    expect(profiles.length).toBeGreaterThan(0);
+    profiles.forEach((f) => {
+      const cfg = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      expect(cfg.checkpoints['input-review'].strategy).toBe('approve');
+    });
+  });
+});

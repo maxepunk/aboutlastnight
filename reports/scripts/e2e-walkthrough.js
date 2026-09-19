@@ -817,6 +817,8 @@ function applyAutoApproval(checkpointType, checkpointData, profile) {
 function getDefaultApprovalForProfile(checkpointType, checkpointData) {
   switch (checkpointType) {
     case 'input-review':
+      // Auto mode always APPROVES. A reject needs prose corrections, which only a
+      // human can supply, so there is no sensible automatic rejection.
       return { inputReview: true };
     case 'paper-evidence-selection':
       return { selectedPaperEvidence: checkpointData.paperEvidence || [] };
@@ -1669,14 +1671,27 @@ async function handleInputReview(checkpoint, currentPhase) {
   const sessionConfig = checkpoint.sessionConfig || {};
   const playerFocus = checkpoint.playerFocus || {};
   const directorNotes = checkpoint.directorNotes || {};
-  const parsedInput = checkpoint.parsedInput || {};
+  const enrichment = checkpoint.enrichment || null;
 
   // Header with session info
   sectionBox('INPUT REVIEW');
-  displayField('Session ID', sessionConfig.sessionId || parsedInput.sessionId, { indent: 2 });
+  displayField('Session ID', sessionConfig.sessionId, { indent: 2 });
   displayField('Journalist', sessionConfig.journalistFirstName, { indent: 2 });
-  if (parsedInput.parsedAt) {
-    console.log(color(`  Parsed: ${new Date(parsedInput.parsedAt).toLocaleString()} (${parsedInput.processingTimeMs || 0}ms)`, 'dim'));
+  displayField('Reporting mode', sessionConfig.reportingMode, { indent: 2 });
+  if (enrichment) {
+    // H25: an empty enrichment used to look identical to notes with nothing in
+    // them. `fallback` is the enricher's own marker for "this is not a result".
+    console.log(color(
+      `  Enrichment: ${enrichment.quotes} quote(s), ${enrichment.characterMentions} character(s), ` +
+      `${enrichment.transactionReferences} transaction link(s)`,
+      'dim'
+    ));
+    if (enrichment.fallback) {
+      console.log(color(`  WARNING: enrichment fell back - ${enrichment.fallback.reason}`, 'red'));
+    }
+    if (enrichment.warnings) {
+      console.log(color(`  Note: ${JSON.stringify(enrichment.warnings)}`, 'yellow'));
+    }
   }
 
   // Roster section
@@ -1744,43 +1759,23 @@ async function handleInputReview(checkpoint, currentPhase) {
   const autoApproval = handleAutoApproval('input-review', checkpoint, '[AUTO] Approving input...');
   if (autoApproval) return autoApproval;
 
-  const choice = await prompt('\n[A]pprove, [E]dit, or [Q]uit? ');
+  // B2: the old [E]dit option built an `inputEdits` map of dotted field paths and
+  // sent it with `{inputReview: true}`. Nothing consumed it -- the server wrote it
+  // to a `_inputEdits` state key that was never an Annotation channel -- so the
+  // operator's edits were discarded while the run reported success. The gate's
+  // real contract is approve, or reject with prose corrections that drive a
+  // re-parse (checkpointInputReview -> parseRawInput).
+  const choice = await prompt('\n[A]pprove, [R]eject with corrections, or [Q]uit? ');
   handleUserQuit(choice);
 
-  if (choice.toLowerCase() === 'e') {
-    // Field-by-field edit mode
-    const fieldDefs = {
-      roster: { label: 'Roster', type: 'array', value: sessionConfig.roster || [] },
-      primaryInvestigation: { label: 'Primary Investigation', type: 'string', value: playerFocus.primaryInvestigation },
-      primarySuspects: { label: 'Primary Suspects', type: 'array', value: playerFocus.primarySuspects || [] },
-      secondaryThreads: { label: 'Secondary Threads', type: 'array', value: playerFocus.secondaryThreads || [] }
-    };
-
-    const edits = await showEditMenu(fieldDefs);
-
-    if (Object.keys(edits).length > 0) {
-      // Build inputEdits in the expected format
-      const inputEdits = {};
-      if (edits.roster) inputEdits['sessionConfig.roster'] = edits.roster;
-      if (edits.primaryInvestigation) inputEdits['playerFocus.primaryInvestigation'] = edits.primaryInvestigation;
-      if (edits.primarySuspects) inputEdits['playerFocus.primarySuspects'] = edits.primarySuspects;
-      if (edits.secondaryThreads) inputEdits['playerFocus.secondaryThreads'] = edits.secondaryThreads;
-
-      showConfirmationPreview(
-        { roster: sessionConfig.roster, primaryInvestigation: playerFocus.primaryInvestigation,
-          primarySuspects: playerFocus.primarySuspects, secondaryThreads: playerFocus.secondaryThreads },
-        edits,
-        fieldDefs
-      );
-
-      const confirm = await prompt('\n[C]onfirm changes, [E]dit more, or [R]eset? ');
-      if (confirm.toLowerCase() === 'c') {
-        return { inputReview: true, inputEdits };
-      } else if (confirm.toLowerCase() === 'r') {
-        console.log(color('Changes reset - approving original', 'yellow'));
-      }
-      // else fall through to approve original
+  if (choice.toLowerCase() === 'r') {
+    console.log(color('\nDescribe what the parse got wrong. This text is appended to every', 'cyan'));
+    console.log(color('parse prompt on the re-parse and overrides the source text:', 'cyan'));
+    const feedback = await promptMultiline('');
+    if (feedback.trim()) {
+      return { inputReview: false, inputFeedback: feedback.trim() };
     }
+    console.log(color('No corrections provided, approving as-is', 'yellow'));
   }
 
   return { inputReview: true };
@@ -3029,8 +3024,10 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
   switch (checkpointType) {
     case 'input-review':
       checkpointHeader('INPUT_REVIEW', currentPhase);
-      console.log(color('Parsed Input:', 'bright'));
-      if (checkpoint.parsedInput) prettyPrint(checkpoint.parsedInput);
+      if (checkpoint.enrichment) {
+        console.log(color('Director-notes enrichment:', 'bright'));
+        prettyPrint(checkpoint.enrichment);
+      }
       console.log('\n' + color('Session Config:', 'bright'));
       if (checkpoint.sessionConfig) {
         console.log(`  Roster: ${checkpoint.sessionConfig.roster?.join(', ')}`);

@@ -39,6 +39,7 @@ function normalize(value) {
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[–—]/g, '-')
+    .replace(/…/g, '...')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
@@ -151,37 +152,83 @@ const THEY_THEM = ['they', 'them', 'their', 'theirs', 'themselves'];
 const PRONOUN_WINDOW = 6;
 
 /**
- * Find NPC names followed within PRONOUN_WINDOW words by a they/them pronoun
- * that contradicts the canon.
+ * Find NPC names followed, within PRONOUN_WINDOW words, by a they/them pronoun
+ * that contradicts the canon — but ONLY where that pronoun can only be about
+ * the NPC.
  *
- * Window-limited on purpose: a they/them anywhere later in the sentence usually
- * refers to the room, not the NPC, and a false positive here costs a paid
- * revision. Only NPCs whose pronouns the canon actually states are scanned.
+ * The first cut of this scan flagged correct prose. `"Marcus and Alex had their
+ * own arrangement"`, `"Marcus, Vic and Sarah kept their shares quiet"` and
+ * `"Nova asked Marcus about the deal before they voted"` are all right, and all
+ * three produced a structural issue — which skips the Opus evaluation, burns a
+ * paid revision and instructs the reviser to break correct text. That is a
+ * direct violation of this module's err-toward-NOT-flagging invariant, so the
+ * scan now suppresses a hit on either sign of a plural or shared referent:
+ *
+ *   1. the span between the name and the pronoun joins another capitalised name
+ *      with a conjunction or a comma ("Marcus and Alex ... their");
+ *   2. any OTHER known person (another NPC, or a roster member) is named in the
+ *      same sentence ("Nova asked Marcus ... they voted").
+ *
+ * Rule 2 is deliberately broad: it also suppresses genuine errors in sentences
+ * that name someone else. That is the correct direction to be wrong in. The
+ * scan keeps the case the baseline actually measured — the victim as the only
+ * named subject, carrying they/them.
  *
  * @param {string} prose
  * @param {Object<string,string>} npcPronouns - name -> 'he/him'
+ * @param {string[]} [otherNames] - roster names, for rule 2
  * @returns {Array<{name: string, pronoun: string, excerpt: string}>}
  */
-function scanNpcPronouns(prose, npcPronouns) {
-  const hits = [];
+function scanNpcPronouns(prose, npcPronouns, otherNames = []) {
   const map = npcPronouns && typeof npcPronouns === 'object' ? npcPronouns : {};
+  const scannable = Object.entries(map)
+    .filter(([, declared]) => typeof declared === 'string' && !declared.toLowerCase().includes('they'));
+  if (scannable.length === 0) return [];
 
-  for (const [name, declared] of Object.entries(map)) {
-    if (typeof declared !== 'string' || declared.toLowerCase().includes('they')) continue;
-    const pattern = new RegExp(
-      `\\b${escapeRegExp(name)}\\b((?:\\W+\\w+){0,${PRONOUN_WINDOW}})`,
-      'gi'
-    );
-    let match;
-    while ((match = pattern.exec(prose)) !== null) {
-      const window = String(match[1] || '').toLowerCase();
-      const pronoun = THEY_THEM.find(pn => new RegExp(`\\b${pn}\\b`).test(window));
-      if (pronoun) {
-        hits.push({ name, pronoun, excerpt: match[0].trim() });
-        break;   // one report per NPC is enough to act on
+  // Every other person the text could be talking about: the other NPCs plus the
+  // session roster.
+  const allKnown = [...Object.keys(map), ...asArray(otherNames)]
+    .filter(n => typeof n === 'string' && n.trim())
+    .map(n => n.trim());
+
+  const sentences = String(prose == null ? '' : prose).split(/[.?!]+/);
+  const hits = [];
+
+  for (const [name, declared] of scannable) {
+    const others = allKnown.filter(n => n.toLowerCase() !== name.toLowerCase());
+    const nameRe = new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i');
+
+    for (const sentence of sentences) {
+      if (!nameRe.test(sentence)) continue;
+
+      // Rule 2: somebody else is named here, so a they/them is ambiguous.
+      if (others.some(other => new RegExp(`\\b${escapeRegExp(other)}\\b`, 'i').test(sentence))) {
+        continue;
       }
+
+      const windowRe = new RegExp(
+        `\\b${escapeRegExp(name)}\\b((?:\\W+\\w+){0,${PRONOUN_WINDOW}})`,
+        'gi'
+      );
+      let match;
+      let flagged = false;
+      while (!flagged && (match = windowRe.exec(sentence)) !== null) {
+        const span = String(match[1] || '');
+        const pronoun = THEY_THEM.find(pn => new RegExp(`\\b${pn}\\b`, 'i').test(span));
+        if (!pronoun) continue;
+
+        // Rule 1: a conjunction or comma joining another capitalised name makes
+        // the subject plural ("Marcus and Alex", "Marcus, Vic and Sarah").
+        const upToPronoun = span.split(new RegExp(`\\b${pronoun}\\b`, 'i'))[0] || '';
+        if (/(?:\band\b|\bor\b|\bnor\b|,)\s+[A-Z]/.test(upToPronoun)) continue;
+
+        hits.push({ name, pronoun, excerpt: match[0].trim() });
+        flagged = true;
+      }
+      if (flagged) break;   // one report per NPC is enough to act on
     }
   }
+
   return hits;
 }
 
@@ -447,7 +494,7 @@ function factCheckContentBundle({
   }
 
   // ── 5. NPC pronouns (BASELINE class 3) ───────────────────────────────────
-  for (const hit of scanNpcPronouns(prose, npcPronouns)) {
+  for (const hit of scanNpcPronouns(prose, npcPronouns, names)) {
     structuralIssues.push(
       `Pronoun error: ${hit.name} takes ${npcPronouns[hit.name]}, but the article writes ` +
       `"${hit.excerpt}". The roster block's non-player-character line is the authority. ` +

@@ -219,7 +219,9 @@ async function getCheckpointData(checkpointType, state) {
     switch (checkpointType) {
         case CHECKPOINT_TYPES.INPUT_REVIEW:
             return {
-                parsedInput: state._parsedInput,
+                // `_parsedInput` is deliberately absent: it was never an Annotation
+                // channel, so LangGraph dropped every write and this key was always
+                // undefined. The writes are gone too (fetch-nodes, input-nodes).
                 sessionConfig: state.sessionConfig,
                 directorNotes: state.directorNotes,
                 playerFocus: state.playerFocus,
