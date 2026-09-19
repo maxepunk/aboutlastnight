@@ -1,0 +1,351 @@
+/**
+ * checkpoint-view-logic.js — PURE read-side logic for the four intervention
+ * checkpoint screens (arc-selection, outline, article, input-review).
+ *
+ * Dual-export: registers on window.Console.checkpointViewLogic for the browser
+ * AND exposes the same surface via module.exports under Node so it can be
+ * unit-tested in node-env Jest (reports/CLAUDE.md: the console has no DOM/React
+ * harness, so anything testable lives in a module like this one and the React
+ * component is a thin consumer).
+ *
+ * WHY IT EXISTS: every function here replaces an inline read of a field name
+ * that the pipeline does not emit. The director approved four of the last five
+ * articles first-pass at every checkpoint and then made 20-41 fixes each,
+ * because the gates were rendering nothing:
+ *
+ *   lastEvaluationFrom / evaluationView
+ *     state.evaluationHistory is an APPEND-ONLY ARRAY mixing all three phases;
+ *     Outline.js and Article.js read `.overallScore` straight off the array and
+ *     ArcSelection.js read a per-arc `arc.evaluationHistory` that is never
+ *     populated, so the Opus verdict — the entire point of the evaluate/revise
+ *     loop — never appeared on any screen (R5 F4, CODE-REVIEW H6). The server
+ *     now sends `lastEvaluation` pre-selected per phase; the array fallback is
+ *     kept for a payload captured before Task 3.
+ *
+ *   arcCardModel
+ *     the cards read keyMoments / financialConnections / thematicLinks / hook;
+ *     the arc schema emits keyEvidence / caveats / unansweredQuestions /
+ *     emotionalHook, and characterPlacements is an OBJECT MAP of name -> role
+ *     (CODE-REVIEW H7).
+ *
+ *   accusationView
+ *     the block read `reasoning` and `confidence`; the parse emits `charge` and
+ *     `notes`, so the whole parsed accusation (votes, motive, alternative
+ *     theories) was invisible on the one screen that exists to verify it
+ *     (R5 F7, CODE-REVIEW H25).
+ *
+ *   whiteboardView
+ *     the panel read connectionsMade / questionsRaised / votingResults; the
+ *     whiteboard schema (input-nodes.js WHITEBOARD_SCHEMA) emits names /
+ *     connections / groups / notes / structureType / ambiguities.
+ *
+ *   factCheckSummary
+ *     the programmatic fact-check (lib/content-bundle-fact-check.js) reached the
+ *     reviser as prompt text and the operator not at all; half the refinement
+ *     work was already computed and thrown away (BASELINE §5).
+ *
+ * MUST NOT reference React, and must not touch `window` at module-evaluation
+ * time except the guarded window.Console write.
+ */
+(function () {
+  'use strict';
+
+  function asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function asString(value) {
+    return typeof value === 'string' ? value : '';
+  }
+
+  /** Every entry of `value` that is a non-empty string, trimmed of nothing. */
+  function stringList(value) {
+    return asArray(value).filter(function (v) { return typeof v === 'string' && v.length > 0; });
+  }
+
+  // ── Evaluation ────────────────────────────────────────────────────────────
+
+  /**
+   * The evaluation to render on this screen.
+   *
+   * `data.lastEvaluation` is what server.js#lastEvaluationFor already selected
+   * for the phase. The `evaluationHistory` branch is the fallback for a payload
+   * produced before that existed: the array mixes phases AND revision-invalidated
+   * stubs, so "the last entry" is routinely another phase's verdict — filter by
+   * phase and take the last, exactly as the server does.
+   *
+   * @param {object|null} data - checkpoint payload
+   * @param {string} [phase] - 'arcs' | 'outline' | 'article'
+   * @returns {object|null}
+   */
+  function lastEvaluationFrom(data, phase) {
+    var payload = data || {};
+    if (payload.lastEvaluation) return payload.lastEvaluation;
+    var entries = asArray(payload.evaluationHistory)
+      .filter(function (e) { return e && e.phase === phase; });
+    return entries.length > 0 ? entries[entries.length - 1] : null;
+  }
+
+  /**
+   * Display shape for the evaluation bar, shared by all three gates.
+   *
+   * Two field-name hazards handled here rather than in three components:
+   *   - the score is 0-1, and the old bars printed it as `0.95/10`;
+   *   - `structuralPassed` is only on the fact-check-sourced entry; the Opus
+   *     history entry (evaluator-nodes.js historyEntry) carries `ready` instead.
+   *
+   * @param {object|null} evaluation
+   * @returns {{score: string|null, passed: boolean, structuralIssues: string[],
+   *            advisoryWarnings: string[], revisionGuidance: string,
+   *            confidence: string, revisionNumber: number|null,
+   *            escalated: boolean, escalationReason: string, source: string}|null}
+   */
+  function evaluationView(evaluation) {
+    if (!evaluation || typeof evaluation !== 'object') return null;
+    var score = typeof evaluation.overallScore === 'number' && !Number.isNaN(evaluation.overallScore)
+      ? evaluation.overallScore.toFixed(2)
+      : null;
+    var passed = evaluation.structuralPassed !== undefined
+      ? evaluation.structuralPassed === true
+      : evaluation.ready === true;
+    return {
+      score: score,
+      passed: passed,
+      structuralIssues: stringList(evaluation.structuralIssues),
+      advisoryWarnings: stringList(evaluation.advisoryWarnings),
+      revisionGuidance: asString(evaluation.revisionGuidance),
+      confidence: asString(evaluation.confidence),
+      revisionNumber: typeof evaluation.revisionNumber === 'number' ? evaluation.revisionNumber : null,
+      escalated: evaluation.escalatedToHuman === true,
+      escalationReason: asString(evaluation.escalationReason),
+      source: asString(evaluation.source)
+    };
+  }
+
+  // ── Arc cards ─────────────────────────────────────────────────────────────
+
+  /**
+   * One evidence reference as a display string.
+   *
+   * keyEvidence is a plain array of ids in the current schema, but the arc
+   * evidence packages carry `{id, owner}` objects, and an id with no owner is
+   * unreadable on a card, so both shapes render.
+   */
+  function evidenceLabel(entry) {
+    if (typeof entry === 'string') return entry;
+    if (!entry || typeof entry !== 'object') return '';
+    var id = asString(entry.id) || asString(entry.tokenId) || asString(entry.description) || '';
+    var owner = asString(entry.owner);
+    if (!id) return '';
+    return owner ? id + ' (' + owner + ')' : id;
+  }
+
+  /**
+   * characterPlacements normalised to a list.
+   *
+   * The arc schema emits an object map (`{ "Vic": "central" }`) and the
+   * validator rebuilds it as one; an array of `{character|name, role}` is
+   * accepted too so an older or hand-built payload still renders.
+   */
+  function placementList(placements) {
+    if (Array.isArray(placements)) {
+      return placements
+        .map(function (p) {
+          if (!p || typeof p !== 'object') return null;
+          var name = asString(p.name) || asString(p.character);
+          if (!name) return null;
+          return { name: name, role: asString(p.role) };
+        })
+        .filter(Boolean);
+    }
+    if (!placements || typeof placements !== 'object') return [];
+    return Object.keys(placements).map(function (name) {
+      var role = placements[name];
+      return { name: name, role: typeof role === 'string' ? role : (role == null ? '' : String(role)) };
+    });
+  }
+
+  /**
+   * Display model for one arc card.
+   *
+   * @param {object|null} arc
+   * @returns {{title: string, summary: string, keyEvidence: string[], hook: string,
+   *            caveats: string[], unansweredQuestions: string[], source: string,
+   *            strength: string, characters: Array<{name: string, role: string}>}}
+   */
+  function arcCardModel(arc) {
+    var a = arc || {};
+    var evidence = Array.isArray(a.keyEvidence) ? a.keyEvidence : a.keyMoments;
+    return {
+      title: asString(a.title),
+      summary: asString(a.summary),
+      keyEvidence: asArray(evidence).map(evidenceLabel).filter(function (s) { return s.length > 0; }),
+      // `emotionalHook` is the schema field; `hook` is what the cards used to read.
+      hook: asString(a.emotionalHook) || asString(a.hook),
+      caveats: stringList(a.caveats),
+      unansweredQuestions: stringList(a.unansweredQuestions),
+      source: asString(a.arcSource),
+      strength: asString(a.evidenceStrength),
+      characters: placementList(a.characterPlacements)
+    };
+  }
+
+  // ── Input review ──────────────────────────────────────────────────────────
+
+  /**
+   * Display shape for the parsed accusation.
+   *
+   * `accused` is an array in sessionConfig; it is joined here so the screen can
+   * render it and, when it is empty, say so in red rather than hiding the whole
+   * block (which is what "the one thing this checkpoint exists to verify" did).
+   * `reasoning` is accepted as `notes` for an older payload.
+   *
+   * @param {object|null} accusation
+   * @returns {{accused: string, charge: string, notes: string}}
+   */
+  function accusationView(accusation) {
+    var a = accusation || {};
+    var accused = Array.isArray(a.accused)
+      ? a.accused.filter(function (n) { return typeof n === 'string' && n.trim().length > 0; }).join(', ')
+      : asString(a.accused);
+    return {
+      accused: accused,
+      charge: asString(a.charge),
+      notes: asString(a.notes) || asString(a.reasoning)
+    };
+  }
+
+  /**
+   * Display shape for the whiteboard analysis: the six fields
+   * input-nodes.js WHITEBOARD_SCHEMA actually emits.
+   *
+   * `ambiguities` is first in the returned object AND first on the screen: it is
+   * the parser's own list of what it could not read, which is exactly what the
+   * director can correct and nothing else can.
+   *
+   * @param {object|null} wb
+   * @returns {{ambiguities: any[], names: any[], groups: any[], connections: any[],
+   *            notes: any[], structureType: string}}
+   */
+  function whiteboardView(wb) {
+    var w = wb || {};
+    return {
+      ambiguities: asArray(w.ambiguities),
+      names: asArray(w.names),
+      groups: asArray(w.groups),
+      connections: asArray(w.connections),
+      notes: asArray(w.notes),
+      structureType: asString(w.structureType)
+    };
+  }
+
+  // ── Article fact-check ────────────────────────────────────────────────────
+
+  /**
+   * The prefixes lib/content-bundle-fact-check.js gives the structural issues it
+   * ALSO reports through a structured sub-object (cardFidelity, rosterCoverage,
+   * photoReferences, reporterMode).
+   *
+   * Anything else it can emit — a leaked prompt example, an NPC pronoun error —
+   * has no structured counterpart, so it would be invisible if the screen showed
+   * only the four groups. Those land in the `other` group.
+   *
+   * Prefix matching is deliberate and fails safe: if a message is reworded, its
+   * issue moves INTO `other` (still on screen, just ungrouped) rather than out
+   * of the list.
+   */
+  var GROUPED_ISSUE_PREFIXES = [
+    'Evidence card "',
+    'Roster coverage gap:',
+    'Invalid photo reference "',
+    'Reporter-mode violation'
+  ];
+
+  function isGroupedIssue(text) {
+    return GROUPED_ISSUE_PREFIXES.some(function (prefix) { return text.indexOf(prefix) === 0; });
+  }
+
+  function group(key, label, severity, items) {
+    return { key: key, label: label, severity: severity, items: items };
+  }
+
+  /**
+   * The article fact-check as a defect list the gate can render.
+   *
+   * @param {object|null} factCheck - state._articleFactCheck
+   * @returns {{structural: number, advisory: number, total: number,
+   *            groups: Array<{key: string, label: string, severity: string,
+   *                           items: Array<{text: string, tokenId?: string}>}>}}
+   */
+  function factCheckSummary(factCheck) {
+    var fc = factCheck || {};
+    var structuralIssues = stringList(fc.structuralIssues);
+    var advisoryWarnings = stringList(fc.advisoryWarnings);
+    var groups = [];
+
+    var badCards = asArray(fc.cardFidelity)
+      .filter(function (c) { return c && c.ok === false; })
+      .map(function (c) {
+        var tokenId = asString(c.tokenId);
+        var reason = asString(c.reason) || 'failed the fidelity check';
+        return { text: (tokenId || '(no tokenId)') + ': ' + reason, tokenId: tokenId };
+      });
+    if (badCards.length > 0) {
+      groups.push(group('cards', 'Evidence cards that are not verbatim', 'structural', badCards));
+    }
+
+    var missing = stringList(fc.rosterCoverage && fc.rosterCoverage.missing)
+      .map(function (name) { return { text: name }; });
+    if (missing.length > 0) {
+      groups.push(group('roster', 'Roster members never mentioned', 'structural', missing));
+    }
+
+    var invalidPhotos = stringList(fc.photoReferences && fc.photoReferences.invalid)
+      .map(function (filename) { return { text: filename }; });
+    if (invalidPhotos.length > 0) {
+      groups.push(group('photos', 'Invalid photo references', 'structural', invalidPhotos));
+    }
+
+    var violations = stringList(fc.reporterMode && fc.reporterMode.violations)
+      .map(function (phrase) { return { text: phrase }; });
+    if (violations.length > 0) {
+      groups.push(group('reporter', 'Reporter-mode violations', 'structural', violations));
+    }
+
+    var other = structuralIssues
+      .filter(function (text) { return !isGroupedIssue(text); })
+      .map(function (text) { return { text: text }; });
+    if (other.length > 0) {
+      groups.push(group('other', 'Other structural issues', 'structural', other));
+    }
+
+    if (advisoryWarnings.length > 0) {
+      groups.push(group('advisory', 'Advisory', 'advisory',
+        advisoryWarnings.map(function (text) { return { text: text }; })));
+    }
+
+    return {
+      structural: structuralIssues.length,
+      advisory: advisoryWarnings.length,
+      total: structuralIssues.length + advisoryWarnings.length,
+      groups: groups
+    };
+  }
+
+  var api = {
+    lastEvaluationFrom: lastEvaluationFrom,
+    evaluationView: evaluationView,
+    arcCardModel: arcCardModel,
+    accusationView: accusationView,
+    whiteboardView: whiteboardView,
+    factCheckSummary: factCheckSummary
+  };
+
+  if (typeof window !== 'undefined') {
+    window.Console = window.Console || {};
+    window.Console.checkpointViewLogic = api;
+  }
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = api;
+  }
+})();
