@@ -25,7 +25,9 @@
 const fs = require('fs');
 const path = require('path');
 const { PHASES } = require('../state');
-const { safeParseJson, getSdkClient } = require('./node-helpers');
+const { safeParseJson, getSdkClient,
+  resolveRoster  // H4: roster may live in the incremental channel, not sessionConfig
+} = require('./node-helpers');
 const { createSemaphore, MODEL_TIMEOUTS } = require('../../llm');
 const { traceNode } = require('../../observability');
 const { preprocessImages, formatFileSize } = require('../../image-preprocessor');
@@ -439,8 +441,9 @@ async function analyzePhotos(state, config) {
   const imagePromptBuilder = getImagePromptBuilder(config);
   const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
 
-  // Get roster from sessionConfig for photo analysis context (optional - may not exist yet)
-  const roster = state.sessionConfig?.roster || [];
+  // H4: the roster is captured at await-roster, which runs BEFORE parseRawInput
+  // stamps it onto sessionConfig, so read the incremental channel first.
+  const roster = resolveRoster(state);
 
   try {
     const analysisPromises = photoPaths.map((photoPath, index) => {
@@ -634,7 +637,7 @@ async function parseCharacterIds(state, config) {
     const { systemPrompt, userPrompt } = await imagePromptBuilder.buildCharacterIdParsingPrompt({
       photoAnalyses: state.photoAnalyses.analyses,
       naturalLanguageInput: state.characterIdsRaw,
-      roster: state.sessionConfig?.roster || []
+      roster: resolveRoster(state)   // H4
     });
 
     const parsed = await sdk({
@@ -769,7 +772,7 @@ async function finalizePhotoAnalyses(state, config) {
   if (failedAnalyses.length > 0) {
     console.log(`[finalizePhotoAnalyses] Retrying ${failedAnalyses.length} failed photo analyses...`);
     const sessionPhotos = state.sessionPhotos || [];
-    const roster = state.sessionConfig?.roster || [];
+    const roster = resolveRoster(state);   // H4
     const retrySemaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
 
     const retryResults = await Promise.all(failedAnalyses.map(failed => {
@@ -811,7 +814,7 @@ async function finalizePhotoAnalyses(state, config) {
 
   // Build sessionData for enrichment context
   const sessionData = {
-    roster: state.sessionConfig?.roster || [],
+    roster: resolveRoster(state),   // H4
     directorNotes: state.directorNotes || null
   };
 

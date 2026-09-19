@@ -18,7 +18,7 @@ const _store = new Map();
 
 /**
  * Normalize a workflow result/response into a single outcome record.
- * @param {object} result - { interrupted?, checkpoint?, currentPhase, outputPath?, error?, details?, errors? }
+ * @param {object} result - { interrupted?, checkpoint?, currentPhase, outputPath?, htmlUrl?, error?, details?, errors? }
  * @returns {object} record with a discriminating `outcome` field
  */
 function buildOutcomeRecord(result = {}) {
@@ -45,6 +45,10 @@ function buildOutcomeRecord(result = {}) {
     outcome: 'complete',
     currentPhase: result.currentPhase ?? 'complete',
     outputPath: result.outputPath || null,
+    // H5: outputPath is an absolute filesystem path; htmlUrl is the same file as
+    // something the browser can actually GET. Dropping it here left a client that
+    // recovered a lost SSE via GET /state with no usable link to the report.
+    htmlUrl: result.htmlUrl || null,
     photosCopied: result.photosCopied || null,
     recordedAt
   };

@@ -1084,6 +1084,25 @@ function validateFinancialData(financialTracker, shellAccounts) {
 }
 
 /**
+ * Resolve the session roster from wherever it currently lives (CODE-REVIEW H4).
+ *
+ * The roster arrives at the `await-roster` checkpoint, which the graph reaches at
+ * 1.51 -- BEFORE parseRawInput stamps it onto sessionConfig at 0.1. Nodes that
+ * read only `state.sessionConfig?.roster` therefore saw NOTHING during the whole
+ * photo branch: the character-ID parser had no valid-name list to disambiguate
+ * against and the caption writer had no names to use.
+ *
+ * The incremental channel wins when it has entries; sessionConfig is the
+ * fallback for a from-files run, where there is no await-roster capture.
+ *
+ * @param {Object|null} state - workflow state
+ * @returns {string[]} roster names (possibly empty)
+ */
+function resolveRoster(state) {
+  return state?.roster?.length ? state.roster : (state?.sessionConfig?.roster || []);
+}
+
+/**
  * Normalize a director-typed rosterPronouns map to canonical first-name keys (F1 / X-1).
  *
  * generateRosterSection iterates state.canonicalCharacters (Notion-derived,
@@ -1184,6 +1203,7 @@ module.exports = {
   // Non-roster PC validation (Commit 8.xx) - Three-category character model
   isNonRosterPC,
   getNonRosterPCs,
+  resolveRoster,
 
   // Canonical character extraction (RC2)
   extractCanonicalCharacters,

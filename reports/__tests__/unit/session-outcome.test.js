@@ -55,3 +55,27 @@ describe('record/get/clear store', () => {
     expect(getSessionOutcome('1221')).toBeNull();
   });
 });
+
+describe('buildOutcomeRecord — htmlUrl (Task 2 concern)', () => {
+  const { buildOutcomeRecord } = require('../../lib/session-outcome');
+
+  it('preserves htmlUrl beside outputPath', () => {
+    const record = buildOutcomeRecord({
+      currentPhase: 'complete',
+      outputPath: 'C:/x/outputs/report-071826.html',
+      htmlUrl: '/outputs/report-071826.html'
+    });
+    // outputPath is an absolute filesystem path; htmlUrl is the same file as
+    // something the browser can GET (H5). The outcome record kept only the
+    // former, so a client that recovered a dropped SSE via GET /state had no
+    // usable link to the report.
+    expect(record.outcome).toBe('complete');
+    expect(record.outputPath).toBe('C:/x/outputs/report-071826.html');
+    expect(record.htmlUrl).toBe('/outputs/report-071826.html');
+  });
+
+  it('is null when the response carried no htmlUrl', () => {
+    const record = buildOutcomeRecord({ currentPhase: 'complete', outputPath: null });
+    expect(record.htmlUrl).toBeNull();
+  });
+});

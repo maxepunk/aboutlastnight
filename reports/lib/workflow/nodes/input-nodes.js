@@ -32,7 +32,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { PHASES } = require('../state');
-const { getSdkClient, synthesizePlayerFocus, normalizeRosterPronounsToCanonical } = require('./node-helpers');
+const { getSdkClient, synthesizePlayerFocus, normalizeRosterPronounsToCanonical, resolveRoster } = require('./node-helpers');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { traceNode } = require('../../observability');
 const { enrichDirectorNotes } = require('../../director-enricher');
@@ -427,8 +427,11 @@ async function parseRawInput(state, config) {
     ? `Use sessionId: "${configSessionId}" (provided by caller)`
     : `Derive sessionId from: ${state.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'current date'}`;
 
-  // Use state.roster if available (from await-roster checkpoint), otherwise fall back to rawInput.roster
-  const rosterForParsing = state.roster?.length > 0 ? state.roster : rawInput.roster;
+  // Use state.roster if available (from await-roster checkpoint), otherwise fall
+  // back to sessionConfig and finally to the at-start rawInput.roster (H4: one
+  // shared resolver for the incremental-channel-vs-sessionConfig precedence).
+  const resolvedRoster = resolveRoster(state);
+  const rosterForParsing = resolvedRoster.length > 0 ? resolvedRoster : rawInput.roster;
 
   // B2: on a re-parse the director's corrections ride along on every parse prompt.
   const correctionsBlock = buildCorrectionsBlock(state._inputCorrections);
