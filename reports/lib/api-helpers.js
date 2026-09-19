@@ -66,6 +66,21 @@ function buildRollbackState(rollbackPoint = 'input-review') {
 }
 
 /**
+ * The phases a rollback point regenerates, and therefore invalidates. Module scope
+ * because pruneGateNotes and the server's rollback handler need the same table
+ * (spec 2026-09-19 §5.4).
+ */
+const PHASES_INVALIDATED_BY = {
+  // The photo branch (photo late-join) preserves evaluationHistory the way the
+  // outline point does — the arc verdict is upstream and still valid — and
+  // regenerates the outline AND the article, so both are invalidated (R2/M1).
+  photos: ['outline', 'article'],
+  'character-ids': ['outline', 'article'],
+  outline: ['outline', 'article'],
+  article: ['article']
+};
+
+/**
  * The `ready: false` stubs a rollback to `rollbackPoint` appends (I1).
  *
  * Only the points that REGENERATE evaluated output need them, and only where the
@@ -86,15 +101,6 @@ function buildRollbackState(rollbackPoint = 'input-review') {
  * @returns {Array<object>} stub entries, appended via appendSingleReducer
  */
 function buildEvaluationInvalidationStubs(rollbackPoint) {
-  const PHASES_INVALIDATED_BY = {
-    // The photo branch (photo late-join) preserves evaluationHistory the way the
-    // outline point does — the arc verdict is upstream and still valid — and
-    // regenerates the outline AND the article, so both are invalidated (R2/M1).
-    photos: ['outline', 'article'],
-    'character-ids': ['outline', 'article'],
-    outline: ['outline', 'article'],
-    article: ['article']
-  };
   const timestamp = new Date().toISOString();
   return (PHASES_INVALIDATED_BY[rollbackPoint] || []).map(phase => ({
     phase,
@@ -103,6 +109,27 @@ function buildEvaluationInvalidationStubs(rollbackPoint) {
     source: 'rollback',
     timestamp
   }));
+}
+
+/**
+ * The director's gate notes that survive a rollback to `rollbackTo` (spec 2026-09-19 §5.4).
+ *
+ * A rollback into the outline/article region regenerates content the later notes
+ * described, so those notes are dropped; the arc-selection notes always survive.
+ * Points OUTSIDE PHASES_INVALIDATED_BY are not pruned here — they clear the whole
+ * channel through ROLLBACK_CLEARS — so this returns every note unchanged for them,
+ * and the rollback handler must check membership before writing (a write of "all
+ * notes" would undo the list's clear).
+ *
+ * @param {Array|null} notes - state.directorGateNotes
+ * @param {string} rollbackTo
+ * @returns {Array} survivors (a new array)
+ */
+function pruneGateNotes(notes, rollbackTo) {
+  const list = (Array.isArray(notes) ? notes : []).filter((n) => n && typeof n === 'object');
+  const invalidated = new Set(PHASES_INVALIDATED_BY[rollbackTo] || []);
+  if (invalidated.size === 0) return list.slice();
+  return list.filter((n) => !invalidated.has(n.gate));
 }
 
 /**
@@ -210,5 +237,7 @@ module.exports = {
   buildFreshStartState,
   createGraphAndConfig,
   sendErrorResponse,
-  confineToBase
+  confineToBase,
+  pruneGateNotes,
+  PHASES_INVALIDATED_BY
 };

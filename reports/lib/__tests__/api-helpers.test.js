@@ -19,7 +19,7 @@ jest.mock('../workflow/graph', () => ({
 }));
 
 const { createReportGraphWithCheckpointer } = require('../workflow/graph');
-const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('../api-helpers');
+const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('../api-helpers');
 
 // ═══════════════════════════════════════════════════════
 // buildRollbackState
@@ -402,5 +402,39 @@ describe('confineToBase', () => {
   test('throws on empty/missing requestedPath', () => {
     expect(() => confineToBase(base, '')).toThrow(/missing path/i);
     expect(() => confineToBase(base, null)).toThrow(/missing path/i);
+  });
+});
+
+describe('pruneGateNotes (spec 2026-09-19 §5.4)', () => {
+  const notes = [
+    { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'a', at: 't1' },
+    { gate: 'outline', kind: 'rejection', round: 1, text: 'o', at: 't2' },
+    { gate: 'outline', kind: 'rejection', round: 2, text: 'o2', at: 't3' },
+    { gate: 'article', kind: 'rejection', round: 1, text: 'r', at: 't4' }
+  ];
+
+  test('PHASES_INVALIDATED_BY is exported with exactly the four regenerating points', () => {
+    expect(Object.keys(PHASES_INVALIDATED_BY).sort()).toEqual(['article', 'character-ids', 'outline', 'photos']);
+    expect(PHASES_INVALIDATED_BY.outline).toEqual(['outline', 'article']);
+    expect(PHASES_INVALIDATED_BY.article).toEqual(['article']);
+  });
+
+  test('article keeps the arc and outline notes', () => {
+    expect(pruneGateNotes(notes, 'article').map((n) => n.text)).toEqual(['a', 'o', 'o2']);
+  });
+
+  test.each(['outline', 'photos', 'character-ids'])('%s keeps only the arc-selection notes', (point) => {
+    expect(pruneGateNotes(notes, point).map((n) => n.text)).toEqual(['a']);
+  });
+
+  test('a point outside the table returns every note unchanged (the caller clears via ROLLBACK_CLEARS)', () => {
+    expect(pruneGateNotes(notes, 'arc-selection')).toEqual(notes);
+    expect(pruneGateNotes(notes, 'input-review')).toEqual(notes);
+  });
+
+  test('returns a new array and tolerates null/garbage', () => {
+    expect(pruneGateNotes(notes, 'article')).not.toBe(notes);
+    expect(pruneGateNotes(null, 'outline')).toEqual([]);
+    expect(pruneGateNotes([null, 'x', { gate: 'arc-selection', text: 'k' }], 'outline')).toEqual([{ gate: 'arc-selection', text: 'k' }]);
   });
 });
