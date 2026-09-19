@@ -26,7 +26,7 @@ const { PHASES } = require('./workflow/state');
  * @param {string}   a.sessionId
  * @param {() => Promise<object>} a.invoke      - wraps graph.invoke(invokeArg, {...config, durability:'sync', recursionLimit})
  * @param {() => Promise<object>} a.getState    - wraps graph.getState(config)
- * @param {(result:object, graphState:object) => object} a.buildResponse - endpoint-specific SSE payload
+ * @param {(result:object, graphState:object) => object|Promise<object>} a.buildResponse - endpoint-specific SSE payload
  * @param {object}   a.res                      - Express response (runner sends 409 or 200-processing)
  * @param {Set}      a.inFlightTasks            - server-owned Set for SIGINT drain (DUR-2)
  * @param {object}   [a.processingExtra]        - extra fields merged into the {status:'processing'} body
@@ -67,7 +67,9 @@ function runGraphInBackground({
         try {
           const result = await invoke();
           const graphState = await getState();
-          const response = buildResponse(result, graphState);
+          // buildResponse may be async (the article gate renders an HTML preview, H13).
+          // `await` is a no-op for the sync callbacks.
+          const response = await buildResponse(result, graphState);
           // DEL-1: persist the outcome FIRST so a dropped SSE is recoverable via GET /state.
           _record(sessionId, _buildOutcome(response));
           _emitComplete(sessionId, response);

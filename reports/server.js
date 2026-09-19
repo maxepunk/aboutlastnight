@@ -36,6 +36,7 @@ const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessio
 const { isSessionLocked } = require('./lib/session-locks');
 const { runGraphInBackground } = require('./lib/api-background-runner');
 const { SchemaValidator } = require('./lib/schema-validator');
+const { createTemplateAssembler } = require('./lib/template-assembler');
 const outlineValidator = new SchemaValidator();
 
 // Shared checkpointer instance - DURABLE (DUR-1): sessions survive restart/crash/deploy.
@@ -134,20 +135,95 @@ async function getSessionState(sessionId) {
 }
 
 /**
+ * The most recent evaluation FOR ONE PHASE (H6).
+ *
+ * evaluationHistory is append-only and mixes all three phases plus
+ * 'revision-invalidated' stubs, so "the last entry" is routinely another phase's
+ * verdict. Every gate shipped the whole array and the console rendered none of
+ * it: the operator approved arcs/outline/article without ever seeing what the
+ * Opus evaluation said, including its escalations.
+ *
+ * @param {Array} history - state.evaluationHistory
+ * @param {string} phase - 'arcs' | 'outline' | 'article'
+ * @returns {object|null}
+ */
+function lastEvaluationFor(history, phase) {
+    const entries = (Array.isArray(history) ? history : []).filter(e => e && e.phase === phase);
+    return entries.length > 0 ? entries[entries.length - 1] : null;
+}
+
+/**
+ * Render the pending ContentBundle to HTML for the article gate (H13).
+ *
+ * Uses the same TemplateAssembler the pipeline publishes with, so the operator
+ * approves the thing they can read rather than a JSON blob. Nothing is written
+ * to disk and no photos are copied — that is assembleHtml's job, after approval.
+ *
+ * `<base href="/">` is injected because the published page uses relative
+ * `sessionphotos/...` URLs, which would otherwise resolve against /console/ in
+ * the preview iframe and 404.
+ *
+ * Returns null on ANY failure: a bundle too malformed to render is exactly when
+ * the operator most needs the gate to open (with the JSON and the reject box).
+ *
+ * @param {object} state
+ * @returns {Promise<string|null>}
+ */
+async function renderArticlePreview(state) {
+    if (!state.contentBundle) return null;
+    try {
+        const assembler = createTemplateAssembler(state.theme || 'journalist');
+        const html = await assembler.assemble(state.contentBundle, {
+            sessionId: state.sessionId,
+            shellAccounts: state.shellAccounts || []
+        });
+        return html.replace('<head>', '<head>\n  <base href="/">');
+    } catch (err) {
+        console.warn(`[renderArticlePreview] preview unavailable: ${err.message}`);
+        return null;
+    }
+}
+
+/**
+ * Counts of what the director-notes enricher actually indexed (H25).
+ *
+ * An enrichment that came back empty looked identical to a session whose notes
+ * had nothing in them. `_enrichmentFallback` (the enricher's own marker for "this
+ * is a fallback, not a result") was carried in directorNotes and read by nobody.
+ *
+ * @param {object|null} directorNotes
+ * @returns {{quotes:number, characterMentions:number, transactionReferences:number, fallback:object|null, warnings:object|null}}
+ */
+function summarizeEnrichment(directorNotes) {
+    const notes = directorNotes || {};
+    return {
+        quotes: (notes.quotes || []).length,
+        characterMentions: Object.keys(notes.characterMentions || {}).length,
+        transactionReferences: (notes.transactionReferences || []).length,
+        fallback: notes._enrichmentFallback || null,
+        warnings: notes._enrichmentWarnings || null
+    };
+}
+
+/**
  * Build response data for a specific checkpoint type (DRY helper)
  * Extracts relevant fields from state based on checkpoint type
+ *
+ * ASYNC because the article gate renders an HTML preview (H13).
+ *
  * @param {string} checkpointType - The checkpoint type constant
  * @param {object} state - The current state object
- * @returns {object} - Checkpoint-specific data for response
+ * @returns {Promise<object>} - Checkpoint-specific data for response
  */
-function getCheckpointData(checkpointType, state) {
+async function getCheckpointData(checkpointType, state) {
     switch (checkpointType) {
         case CHECKPOINT_TYPES.INPUT_REVIEW:
             return {
                 parsedInput: state._parsedInput,
                 sessionConfig: state.sessionConfig,
                 directorNotes: state.directorNotes,
-                playerFocus: state.playerFocus
+                playerFocus: state.playerFocus,
+                enrichment: summarizeEnrichment(state.directorNotes)
             };
         case CHECKPOINT_TYPES.PAPER_EVIDENCE_SELECTION:
             return { paperEvidence: state.paperEvidence };
@@ -162,6 +238,8 @@ function getCheckpointData(checkpointType, state) {
         case CHECKPOINT_TYPES.ARC_SELECTION:
             return {
                 narrativeArcs: state.narrativeArcs,
+                lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'arcs'),
+                evaluationHistory: state.evaluationHistory,
                 revisionCount: state.arcRevisionCount || 0,
                 humanRevisionCount: state.humanArcRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARCS,
@@ -173,6 +251,8 @@ function getCheckpointData(checkpointType, state) {
         case CHECKPOINT_TYPES.OUTLINE:
             return {
                 outline: state.outline,
+                lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'outline'),
+                evaluationHistory: state.evaluationHistory,
                 revisionCount: state.outlineRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.OUTLINE,
                 previousFeedback: state._outlineFeedback || null
@@ -181,6 +261,10 @@ function getCheckpointData(checkpointType, state) {
             return {
                 contentBundle: state.contentBundle,
                 articleHtml: state.assembledHtml,
+                htmlPreview: await renderArticlePreview(state),
+                sessionPhotos: state.sessionPhotos,
+                lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'article'),
+                evaluationHistory: state.evaluationHistory,
                 sessionId: state.sessionId,
                 revisionCount: state.articleRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARTICLE,
@@ -441,11 +525,11 @@ function buildCompletionResponse(result, sessionId, extra = {}) {
  *
  * @param {Object} interruptData - Data from interrupt() payload (includes type)
  * @param {Object} state - Current graph state values
- * @returns {Object} Complete checkpoint data for response
+ * @returns {Promise<Object>} Complete checkpoint data for response
  */
-function buildCompleteCheckpointData(interruptData, state) {
+async function buildCompleteCheckpointData(interruptData, state) {
     const checkpointType = interruptData?.type;
-    const stateBasedData = getCheckpointData(checkpointType, state);
+    const stateBasedData = await getCheckpointData(checkpointType, state);
     // Merge: state-based data first, then interrupt data (interrupt takes precedence)
     return { ...stateBasedData, ...interruptData };
 }
@@ -705,12 +789,15 @@ app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
         // endpoint renders degraded. H2: theme, or a journalist thread is rendered
         // with whatever the console's toggle happens to say. H8: inProgress +
         // lastOutcome let a client reattach to a run instead of 409-ing blind.
+        const checkpoint = interrupted
+            ? await buildCompleteCheckpointData(interruptData, graphState.values)
+            : null;
         res.json({
             sessionId,
             currentPhase: graphState.values.currentPhase,
             interrupted,
             checkpointType: interruptData?.type || null,
-            checkpoint: interrupted ? buildCompleteCheckpointData(interruptData, graphState.values) : null,
+            checkpoint,
             theme: graphState.values.theme || 'journalist',
             inProgress: isSessionLocked(sessionId),
             lastOutcome: getSessionOutcome(sessionId) || null
@@ -907,7 +994,7 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         // Build response with new interrupt format
         if (interrupted) {
             const interruptData = getInterruptData(graphState);
-            const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
+            const checkpointData = await buildCompleteCheckpointData(interruptData, graphState.values);
             return res.json(buildInterruptResponse(sessionId, checkpointData, result.currentPhase));
         }
 
@@ -984,10 +1071,10 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
                 { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }
             ),
             getState: () => graph.getState(config),
-            buildResponse: (result, newGraphState) => {
+            buildResponse: async (result, newGraphState) => {
                 if (isGraphInterrupted(newGraphState)) {
                     const interruptData = getInterruptData(newGraphState);
-                    const checkpointData = buildCompleteCheckpointData(interruptData, newGraphState.values);
+                    const checkpointData = await buildCompleteCheckpointData(interruptData, newGraphState.values);
                     return {
                         ...buildInterruptResponse(sessionId, checkpointData, result.currentPhase),
                         previousPhase
@@ -1080,12 +1167,12 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             sessionId,
             invoke: () => graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }),
             getState: () => graph.getState(config),
-            buildResponse: (result, graphState) => {
+            buildResponse: async (result, graphState) => {
                 const interrupted = isGraphInterrupted(graphState);
                 const base = interrupted
                     ? buildInterruptResponse(
                         sessionId,
-                        buildCompleteCheckpointData(getInterruptData(graphState), graphState.values),
+                        await buildCompleteCheckpointData(getInterruptData(graphState), graphState.values),
                         result.currentPhase
                       )
                     : buildCompletionResponse(result, sessionId);
@@ -1149,10 +1236,10 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
             sessionId,
             invoke: () => graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }),
             getState: () => graph.getState(config),
-            buildResponse: (result, graphState) => {
+            buildResponse: async (result, graphState) => {
                 if (isGraphInterrupted(graphState)) {
                     const interruptData = getInterruptData(graphState);
-                    const checkpointData = buildCompleteCheckpointData(interruptData, graphState.values);
+                    const checkpointData = await buildCompleteCheckpointData(interruptData, graphState.values);
                     return buildInterruptResponse(sessionId, checkpointData, result.currentPhase);
                 }
                 return buildCompletionResponse(result, sessionId);
@@ -1421,4 +1508,4 @@ process.on('SIGINT', async () => {
 
 // Export helpers for testing. `app` is exported so integration tests can boot the
 // real route table over http (listen() stays behind the require.main guard above).
-module.exports = { app, isAllowedSessionId, buildResumePayload, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
+module.exports = { app, isAllowedSessionId, buildResumePayload, getCheckpointData, buildCompleteCheckpointData, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
