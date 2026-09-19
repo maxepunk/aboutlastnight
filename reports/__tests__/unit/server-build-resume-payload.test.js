@@ -429,9 +429,21 @@ describe('buildResumePayload — photosPath is a photos-gate-only approval (C1/I
     // sessionPhotos has already been scanned from a different value by then, so the
     // write would only make state lie about where the photos came from until the
     // next `photos` rollback.
-    ['character-ids', 'outline', 'article'].forEach((type) => {
-      const result = buildResumePayload({ article: true, photosPath: dir }, {}, 'journalist', type);
+    //
+    // v2 M10: each gate carries ITS OWN approval shape. This used to post
+    // {article: true} at all three, which is not an approval at character-ids or
+    // outline — so those two cases passed because the whole call was refused, not
+    // because the photosPath block declined to write.
+    const APPROVAL_BY_TYPE = {
+      'character-ids': { characterIds: { 'Person in red': 'Sarah' } },
+      outline: { outline: true },
+      article: { article: true }
+    };
+    Object.entries(APPROVAL_BY_TYPE).forEach(([type, approval]) => {
+      const result = buildResumePayload({ ...approval, photosPath: dir }, {}, 'journalist', type);
+      expect(result.error).toBeNull();          // the gate's own approval IS valid here
       expect('photosPath' in result.stateUpdates).toBe(false);
+      expect(result.resume.photosPath).toBeUndefined();
     });
   });
 
