@@ -677,7 +677,26 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
   function handleReject() {
     if (!feedbackText.trim()) return;
-    // Cache current outline for diff on next revision
+    // Spec 2026-09-19 §4.6: hand edits travel with the note. Validate exactly as
+    // approve does; an invalid edit is shown, not sent. The EDITED outline is cached
+    // as the revision's previous version so the diff view compares the rework
+    // against what the director actually sent.
+    if (hasEdits && editedOutline) {
+      const themeForValidation = isDetective ? 'detective' : 'journalist';
+      const result = EditLogic.validateOutlineShape(editedOutline, themeForValidation);
+      if (!result.valid) {
+        setEditError('Cannot send, edited outline is invalid: ' +
+          result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
+        return;
+      }
+      setEditError('');
+      if (dispatch) {
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
+        dispatch({ type: 'CACHE_REVISION', contentType: 'outline', data: editedOutline });
+      }
+      onReject({ outline: false, outlineFeedback: feedbackText.trim(), outlineEdits: editedOutline });
+      return;
+    }
     if (dispatch) {
       dispatch({ type: 'CACHE_REVISION', contentType: 'outline', data: outline });
     }
@@ -1255,6 +1274,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     // Reject mode
     mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
       React.createElement('label', { className: 'form-group__label' }, 'Feedback for revision'),
+      hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
+        'Your hand edits will be sent with this note. The reviser is told to keep them.'),
       React.createElement('textarea', {
         className: 'input feedback-area',
         value: feedbackText,

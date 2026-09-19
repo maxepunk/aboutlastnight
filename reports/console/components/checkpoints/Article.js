@@ -667,6 +667,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const sessionPhotos = (data && data.sessionPhotos) || [];
   // Task 3.6's programmatic fact-check of THIS bundle (baseline §5).
   const factCheck = ViewLogic.factCheckSummary((data && data.factCheck) || null);
+  // Thesis echo (spec 2026-09-19 §6.2): the approved outline's LEDE thesis, read-only.
+  const outlineThesis = (data && data.outlineThesis) || null;
   const previousArticle = (revisionCache && revisionCache.article) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -901,6 +903,21 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   function handleReject() {
     if (!feedbackText.trim()) return;
+    if (hasEdits && editedBundle) {
+      const result = ArticleEditLogic.validateBundleShape(editedBundle);
+      if (!result.valid) {
+        setEditError('Cannot send, edited article is invalid: ' +
+          result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
+        return;
+      }
+      setEditError('');
+      if (dispatch) {
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
+        dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: editedBundle });
+      }
+      onReject({ article: false, articleFeedback: feedbackText.trim(), articleEdits: editedBundle });
+      return;
+    }
     if (dispatch) {
       dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: contentBundle });
     }
@@ -1349,6 +1366,15 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     // Hero image
     renderHeroImage(),
 
+    // Thesis echo (spec 2026-09-19 §6.2): read-only, from the approved outline, so the
+    // headline is judged against the thesis it must serve. No pencil, no opt-in class.
+    outlineThesis && React.createElement('div', { className: 'article-thesis-echo' },
+      React.createElement('h4', { className: 'outline-section__title' }, 'THESIS (from the approved outline)'),
+      React.createElement('p', { className: 'text-sm mb-sm' }, React.createElement('strong', null, 'Hook: '), outlineThesis.hook || '(empty)'),
+      React.createElement('p', { className: 'text-sm mb-sm' }, React.createElement('strong', null, 'Key tension: '), outlineThesis.keyTension || '(empty)'),
+      React.createElement('p', { className: 'text-sm' }, React.createElement('strong', null, 'Primary arc: '), outlineThesis.primaryArc || '(empty)')
+    ),
+
     // Headline (editable)
     isEditing('headline')
       ? React.createElement(HeadlineEditor, {
@@ -1489,6 +1515,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     // Reject mode
     mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
       React.createElement('label', { className: 'form-group__label' }, 'Feedback for revision'),
+      hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
+        'Your hand edits will be sent with this note. The reviser is told to keep them.'),
       React.createElement('textarea', {
         className: 'input feedback-area',
         value: feedbackText,
