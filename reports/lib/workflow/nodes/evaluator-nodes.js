@@ -36,6 +36,7 @@ const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCs } = require('../../theme-config');
+const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -962,6 +963,70 @@ function createEvaluator(phase, options = {}) {
       }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // ARTICLE: programmatic fact-check BEFORE the Opus evaluation
+    // (BASELINE.md §4 classes 1, 2, 5, 7 — mirrors validateArcStructure/evaluateArcs)
+    //
+    // The measured top failure class is evidence cards carrying invented text
+    // under real token IDs: 15 items across 4 of 5 sessions, each a section-level
+    // rewrite, and "invisible to the pipeline" — no criterion, no check. All five
+    // sessions' article evaluations returned ready:true at 0.88-0.97 on articles
+    // that then needed 20-41 manual fixes.
+    //
+    // These are string checks, so they run first and for free. A structural
+    // failure under the revision cap short-circuits the Opus call entirely: there
+    // is no sense paying for a quality opinion on a bundle we can already prove
+    // misquotes its own sources. At the cap we DO run Opus and escalate to the
+    // human with the fact-check attached, because a human needs the full picture.
+    // ─────────────────────────────────────────────────────────────────────────
+    let factCheck = null;
+    if (phase === 'article') {
+      factCheck = factCheckContentBundle({
+        contentBundle: state.contentBundle,
+        arcEvidencePackages: state.arcEvidencePackages,
+        evidenceBundle: state.evidenceBundle,
+        roster: state.sessionConfig?.roster,
+        sessionPhotos: state.sessionPhotos,
+        reportingMode: state.sessionConfig?.reportingMode
+      });
+
+      if (factCheck.structuralIssues.length > 0) {
+        console.log(`[evaluateArticle] Fact-check found ${factCheck.structuralIssues.length} structural issue(s):`);
+        factCheck.structuralIssues.forEach(i => console.log(`  - ${i}`));
+      }
+      if (factCheck.advisoryWarnings.length > 0) {
+        factCheck.advisoryWarnings.forEach(w => console.log(`[evaluateArticle] fact-check advisory: ${w}`));
+      }
+
+      if (factCheck.structuralIssues.length > 0 && currentRevisions < revisionCap) {
+        console.log('[evaluateArticle] Skipping Opus evaluation - routing straight to revision');
+        return {
+          evaluationHistory: {
+            phase: 'article',
+            timestamp: new Date().toISOString(),
+            ready: false,
+            source: 'fact-check',
+            overallScore: 0,
+            structuralPassed: false,
+            structuralIssues: factCheck.structuralIssues,
+            advisoryWarnings: factCheck.advisoryWarnings,
+            revisionNumber: currentRevisions
+          },
+          validationResults: {
+            phase: 'article',
+            passed: false,
+            structuralIssues: factCheck.structuralIssues,
+            advisoryWarnings: factCheck.advisoryWarnings,
+            // Each issue string already names the card/tokenId/name and says what
+            // to do; buildRevisionContext prints them verbatim to the reviser.
+            feedback: factCheck.structuralIssues.join('\n')
+          },
+          _articleFactCheck: factCheck,
+          currentPhase: phaseConstant
+        };
+      }
+    }
+
     const sdk = getSdkClient(config, `evaluate-${phase}`);
     const systemPrompt = buildEvaluationSystemPrompt(phase, criteria, theme);
     const prompt = buildEvaluationUserPrompt(phase, state);
@@ -1029,6 +1094,7 @@ function createEvaluator(phase, options = {}) {
         // Evaluator just returns evaluationHistory; graph routes to checkpoint node
         return {
           evaluationHistory: historyEntry,
+          ...(factCheck && { _articleFactCheck: factCheck }),
           currentPhase: phaseConstant
         };
       }
@@ -1046,16 +1112,23 @@ function createEvaluator(phase, options = {}) {
           ...(Array.isArray(evaluation.issues) ? evaluation.issues : [])
         ]);
 
+        // At the cap the human gets the WHOLE picture: the Opus findings plus the
+        // programmatic ones we can prove (the fact-check ran above but did not
+        // short-circuit, precisely because we are at the cap).
+        const factCheckText = factCheck && factCheck.structuralIssues.length > 0
+          ? ` Fact-check: ${factCheck.structuralIssues.join(' ')}`
+          : '';
         const escalatedHistoryEntry = {
           ...historyEntry,
           escalatedToHuman: true,
-          escalationReason: `Reached revision cap (${revisionCap}) with issues: ${issuesText}`
+          escalationReason: `Reached revision cap (${revisionCap}) with issues: ${issuesText}${factCheckText}`
         };
 
         // Commit 8.26 (SRP): Checkpoint logic moved to dedicated checkpoint nodes
         // Evaluator just returns escalated evaluationHistory; graph routes to checkpoint node
         return {
           evaluationHistory: escalatedHistoryEntry,
+          ...(factCheck && { _articleFactCheck: factCheck }),
           currentPhase: phaseConstant
         };
       }
@@ -1065,6 +1138,7 @@ function createEvaluator(phase, options = {}) {
 
       return {
         evaluationHistory: historyEntry,
+        ...(factCheck && { _articleFactCheck: factCheck }),
         // Note: revision count incremented by incrementXxxRevision nodes in graph.js
         currentPhase: phaseConstant,
         // Return revision guidance in validationResults for revision nodes.
@@ -1078,7 +1152,10 @@ function createEvaluator(phase, options = {}) {
           phase,
           passed: false,
           feedback: evaluation.revisionGuidance,
-          structuralIssues: evaluation.structuralIssues || [],
+          structuralIssues: [
+            ...(evaluation.structuralIssues || []),
+            ...(factCheck ? factCheck.structuralIssues : [])
+          ],
           advisoryWarnings: evaluation.advisoryWarnings || [],
           issues: evaluation.issues,
           criteriaScores: evaluation.criteriaScores,
@@ -1102,6 +1179,7 @@ function createEvaluator(phase, options = {}) {
           _error: error.message,
           revisionNumber: currentRevisions
         },
+        ...(factCheck && { _articleFactCheck: factCheck }),
         errors: [{
           phase: phaseConstant,
           type: `${phase}-evaluation-failed`,

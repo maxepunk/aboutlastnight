@@ -62,3 +62,37 @@ describe('routeAfterInputReview (CODE-REVIEW B2/B8)', () => {
     expect(routeAfterInputReview({ _inputCorrections: '   ' })).toBe('forward');
   });
 });
+
+describe('routeArticleEvaluation — programmatic fact-check path (BASELINE class 1)', () => {
+  const { routeArticleEvaluation } = _testing;
+  const { REVISION_CAPS } = require('../../../lib/workflow/state');
+
+  const factCheckFailure = {
+    phase: 'article',
+    ready: false,
+    source: 'fact-check',
+    structuralPassed: false,
+    structuralIssues: ['Evidence card "rem004" is not verbatim: ...']
+  };
+
+  test('a fact-check failure under the cap routes to the revision loop', () => {
+    expect(routeArticleEvaluation({
+      evaluationHistory: [factCheckFailure],
+      articleRevisionCount: 0
+    })).toBe('revise');
+  });
+
+  test('a fact-check failure AT the cap goes to the human checkpoint', () => {
+    expect(routeArticleEvaluation({
+      evaluationHistory: [factCheckFailure],
+      articleRevisionCount: REVISION_CAPS.ARTICLE
+    })).toBe('checkpoint');
+  });
+
+  test('it ignores another phase’s last entry', () => {
+    expect(routeArticleEvaluation({
+      evaluationHistory: [factCheckFailure, { phase: 'outline', ready: true }],
+      articleRevisionCount: 0
+    })).toBe('revise');
+  });
+});

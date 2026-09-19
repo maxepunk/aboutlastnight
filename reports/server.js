@@ -263,6 +263,7 @@ async function getCheckpointData(checkpointType, state) {
                 articleHtml: state.assembledHtml,
                 htmlPreview: await renderArticlePreview(state),
                 sessionPhotos: state.sessionPhotos,
+                factCheck: state._articleFactCheck || null,
                 lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'article'),
                 evaluationHistory: state.evaluationHistory,
                 sessionId: state.sessionId,

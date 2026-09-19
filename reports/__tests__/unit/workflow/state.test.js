@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 66 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 67 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -287,6 +287,8 @@ describe('ReportStateAnnotation', () => {
         '_arcValidation',
         // Director guidance captured at arc selection (Q2)
         '_outlineGuidance',
+        // Programmatic article fact-check (BASELINE §4)
+        '_articleFactCheck',
         // Human rejection feedback (consumed by revision nodes, cleared after use)
         '_outlineFeedback',
         '_articleFeedback',
@@ -438,7 +440,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(66);
+      expect(Object.keys(getDefaultState()).length).toBe(67);
     });
   });
 

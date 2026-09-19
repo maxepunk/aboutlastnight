@@ -1046,3 +1046,84 @@ describe('evaluator-nodes', () => {
     });
   });
 });
+
+describe('evaluateArticle — programmatic fact-check pre-check (BASELINE class 1)', () => {
+  const { factCheckContentBundle } = require('../../../lib/content-bundle-fact-check');
+
+  const SOURCE = 'You are standing by the bar when Vic leans in and hands you the number twice over.';
+
+  function stateWith(cardContent, extra = {}) {
+    return {
+      theme: 'journalist',
+      contentBundle: {
+        sections: [{ id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: 'Vic and Mel argued.' }] }],
+        evidenceCards: [{ tokenId: 'vic001', headline: 'The Offer', content: cardContent }]
+      },
+      arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+      sessionConfig: { roster: ['Vic', 'Mel'], reportingMode: 'on-site' },
+      outline: {},
+      ...extra
+    };
+  }
+
+  it('skips the Opus call and routes to revision when a card is fabricated', async () => {
+    const mockClient = jest.fn();
+    const state = stateWith('Vic told me the job was already handed out to somebody else.');
+
+    const result = await evaluateArticle(state, { configurable: { sdkClient: mockClient } });
+
+    // The whole point: the $5 Opus evaluation is not paid for a bundle we can
+    // already prove is wrong.
+    expect(mockClient).not.toHaveBeenCalled();
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.evaluationHistory.source).toBe('fact-check');
+    expect(result.evaluationHistory.structuralPassed).toBe(false);
+    expect(result.evaluationHistory.phase).toBe('article');
+    expect(result.validationResults.phase).toBe('article');
+    expect(result.validationResults.passed).toBe(false);
+    // The feedback IS the revision instruction.
+    expect(result.validationResults.feedback).toContain('vic001');
+    expect(result.validationResults.structuralIssues.length).toBeGreaterThan(0);
+    expect(result._articleFactCheck.cardFidelity[0].ok).toBe(false);
+  });
+
+  it('runs Opus as usual and still stores the fact-check when the bundle is clean', async () => {
+    const mockClient = jest.fn().mockResolvedValue({
+      ready: true, structuralPassed: true, overallScore: 0.93, confidence: 'high'
+    });
+    const state = stateWith(SOURCE);
+
+    const result = await evaluateArticle(state, { configurable: { sdkClient: mockClient } });
+
+    expect(mockClient).toHaveBeenCalled();
+    expect(result.evaluationHistory.ready).toBe(true);
+    expect(result._articleFactCheck.structuralIssues).toEqual([]);
+  });
+
+  it('at the revision cap it runs Opus and escalates WITH the fact-check attached', async () => {
+    const mockClient = jest.fn().mockResolvedValue({
+      ready: false, structuralPassed: false, overallScore: 0.6, structuralIssues: ['thin closing']
+    });
+    const state = stateWith(
+      'Vic told me the job was already handed out to somebody else.',
+      { articleRevisionCount: REVISION_CAPS.ARTICLE }
+    );
+
+    const result = await evaluateArticle(state, { configurable: { sdkClient: mockClient } });
+
+    expect(mockClient).toHaveBeenCalled();
+    expect(result.evaluationHistory.escalatedToHuman).toBe(true);
+    expect(result.evaluationHistory.escalationReason).toContain('vic001');
+    expect(result._articleFactCheck.structuralIssues.length).toBeGreaterThan(0);
+  });
+
+  it('does not fact-check the arcs or outline phases', async () => {
+    const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.9 });
+    const result = await evaluateOutline(
+      { outline: { lede: {} }, selectedArcs: ['a'], narrativeArcs: [{ id: 'a' }] },
+      { configurable: { sdkClient: mockClient } }
+    );
+    expect(mockClient).toHaveBeenCalled();
+    expect(result._articleFactCheck).toBeUndefined();
+  });
+});
