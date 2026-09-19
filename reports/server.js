@@ -29,7 +29,8 @@ const {
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
-const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('./lib/api-helpers');
+const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
+const { diffOutline, diffBundle, isEmpty: isEmptyDiff } = require('./lib/hand-edit-diff');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
@@ -340,6 +341,28 @@ function sanitizePhotosPath(raw) {
  *   a PAID revision loop. Gate those shapes on the type.
  * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
  */
+/**
+ * Append one director gate note (spec 2026-09-19 §5.2). The channel is a REPLACE
+ * channel, so this writes the full array; buildResumePayload has the current state
+ * and the per-session lock rules out a concurrent writer. `round` counts the
+ * SURVIVING notes for the gate, so it restarts after a pruning rollback.
+ */
+function appendGateNote(stateUpdates, currentState, gate, text) {
+    const existing = Array.isArray(currentState.directorGateNotes)
+        ? currentState.directorGateNotes.filter(n => n && typeof n === 'object')
+        : [];
+    const round = existing.filter(n => n.gate === gate).length + 1;
+    stateUpdates.directorGateNotes = [...existing, { gate, kind: 'rejection', round, text, at: new Date().toISOString() }];
+}
+
+/** Schema-check a director's edited object the same way the approve path does. */
+function validateEdits(schemaName, edits, noun) {
+    const { valid, errors } = outlineValidator.validate(schemaName, edits);
+    if (valid) return null;
+    const detail = (errors || []).map(function (e) { return (e.path || '/') + ' ' + e.message; }).join('; ');
+    return 'Edited ' + noun + ' failed schema validation (' + schemaName + '): ' + detail;
+}
+
 function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist'), checkpointType = null) {
     const resume = {};
     const stateUpdates = {};
@@ -413,6 +436,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         resume.approved = false;
         resume.feedback = approvals.arcFeedback.trim();
         stateUpdates._arcFeedback = approvals.arcFeedback.trim();
+        appendGateNote(stateUpdates, currentState, 'arc-selection', approvals.arcFeedback.trim());
     } else if (approvals.selectedArcs && !Array.isArray(approvals.selectedArcs)) {
         error = 'selectedArcs must be an array or false (for rejection)';
     }
@@ -423,21 +447,33 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         resume.approved = true;
         if (approvals.outlineEdits && typeof approvals.outlineEdits === 'object') {
             const schemaName = theme === 'detective' ? 'detective-outline' : 'outline';
-            const { valid, errors } = outlineValidator.validate(schemaName, approvals.outlineEdits);
-            if (!valid) {
-                const detail = (errors || [])
-                    .map(function (e) { return (e.path || '/') + ' ' + e.message; })
-                    .join('; ');
-                error = 'Edited outline failed schema validation (' + schemaName + '): ' + detail;
-                return { resume, stateUpdates, error };
-            }
+            error = validateEdits(schemaName, approvals.outlineEdits, 'outline');
+            if (error) return { resume, stateUpdates, error };
             stateUpdates.outline = approvals.outlineEdits;
         }
     } else if (approvals.outline === false && typeof approvals.outlineFeedback === 'string' && approvals.outlineFeedback.trim()) {
+        // Spec 2026-09-19 §4.1: hand edits may travel with the note. Validate FIRST so
+        // an invalid edit writes nothing at all.
+        const hasEdits = approvals.outlineEdits && typeof approvals.outlineEdits === 'object';
+        if (hasEdits) {
+            const schemaName = theme === 'detective' ? 'detective-outline' : 'outline';
+            error = validateEdits(schemaName, approvals.outlineEdits, 'outline');
+            if (error) return { resume, stateUpdates, error };
+        }
         validApprovalDetected = true;
         resume.approved = false;
         resume.feedback = approvals.outlineFeedback.trim();
-        stateUpdates._outlineFeedback = approvals.outlineFeedback.trim();
+        stateUpdates._outlineFeedback = resume.feedback;
+        appendGateNote(stateUpdates, currentState, 'outline', resume.feedback);
+        // Every reject resets both steering fields (C3): a second reject after a
+        // rework must not carry the previous round's diff or report.
+        stateUpdates._outlineHandEdits = null;
+        stateUpdates._outlineHandEditReport = null;
+        if (hasEdits) {
+            stateUpdates.outline = approvals.outlineEdits;   // incrementOutlineRevision hands it to the reviser
+            const diff = diffOutline(currentState.outline, approvals.outlineEdits);
+            stateUpdates._outlineHandEdits = isEmptyDiff(diff) ? null : diff;
+        }
     }
 
     // Article: approve, approve-with-edits, or reject-with-feedback
@@ -449,21 +485,28 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
             // validateContentBundle, which routes a bad bundle straight to END --
             // after ten checkpoints and five-plus Opus calls, with Retry failing
             // identically and rollback discarding the approved draft.
-            const { valid, errors } = outlineValidator.validate('content-bundle', approvals.articleEdits);
-            if (!valid) {
-                const detail = (errors || [])
-                    .map(function (e) { return (e.path || '/') + ' ' + e.message; })
-                    .join('; ');
-                error = 'Edited article failed schema validation (content-bundle): ' + detail;
-                return { resume, stateUpdates, error };
-            }
+            error = validateEdits('content-bundle', approvals.articleEdits, 'article');
+            if (error) return { resume, stateUpdates, error };
             stateUpdates.contentBundle = approvals.articleEdits;
         }
     } else if (approvals.article === false && typeof approvals.articleFeedback === 'string' && approvals.articleFeedback.trim()) {
+        const hasEdits = approvals.articleEdits && typeof approvals.articleEdits === 'object';
+        if (hasEdits) {
+            error = validateEdits('content-bundle', approvals.articleEdits, 'article');
+            if (error) return { resume, stateUpdates, error };
+        }
         validApprovalDetected = true;
         resume.approved = false;
         resume.feedback = approvals.articleFeedback.trim();
-        stateUpdates._articleFeedback = approvals.articleFeedback.trim();
+        stateUpdates._articleFeedback = resume.feedback;
+        appendGateNote(stateUpdates, currentState, 'article', resume.feedback);
+        stateUpdates._articleHandEdits = null;
+        stateUpdates._articleHandEditReport = null;
+        if (hasEdits) {
+            stateUpdates.contentBundle = approvals.articleEdits;   // incrementArticleRevision hands it to the reviser
+            const diff = diffBundle(currentState.contentBundle, approvals.articleEdits);
+            stateUpdates._articleHandEdits = isEmptyDiff(diff) ? null : diff;
+        }
     }
 
     // Pre-curation approval (Phase 4f)

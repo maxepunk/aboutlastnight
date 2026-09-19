@@ -144,15 +144,18 @@ describe('buildResumePayload — outlineEdits routing (regression, validation ac
     expect(result.stateUpdates.outline).toEqual(edits);
   });
 
-  it('does not include outlineEdits when outline:false (rejection)', () => {
+  // Spec 2026-09-19 §4.1: edits now travel WITH a rejection, so a reject applies a
+  // VALID edited outline (see 'reject WITH hand edits' below). A malformed one is
+  // still refused, and refusing it writes nothing at all -- not even the feedback.
+  it('refuses a malformed outlineEdits on outline:false instead of applying it', () => {
     const result = buildResumePayload({
       outline: false,
       outlineFeedback: 'needs more detail',
       outlineEdits: { lede: { hook: 'should not be applied' } }
     });
-    expect(result.resume.approved).toBe(false);
+    expect(result.error).toMatch(/Edited outline failed schema validation \(outline\)/);
     expect(result.stateUpdates.outline).toBeUndefined();
-    expect(result.stateUpdates._outlineFeedback).toBe('needs more detail');
+    expect(result.stateUpdates._outlineFeedback).toBeUndefined();
   });
 
   it('approves without edits when outlineEdits is omitted', () => {
@@ -223,16 +226,15 @@ describe('buildResumePayload — articleEdits validation (B6)', () => {
     expect(result.stateUpdates.contentBundle).toBeUndefined();
   });
 
-  it('does not apply articleEdits on rejection (article:false)', () => {
+  it('refuses a malformed articleEdits on rejection (article:false)', () => {
     const result = buildResumePayload({
       article: false,
       articleFeedback: 'tighten the lede',
       articleEdits: { headline: { main: 'should not be applied' } }
     });
-    expect(result.error).toBeNull();
-    expect(result.resume.approved).toBe(false);
+    expect(result.error).toMatch(/Edited article failed schema validation \(content-bundle\)/);
     expect(result.stateUpdates.contentBundle).toBeUndefined();
-    expect(result.stateUpdates._articleFeedback).toBe('tighten the lede');
+    expect(result.stateUpdates._articleFeedback).toBeUndefined();
   });
 
   it('approves without edits when articleEdits is omitted', () => {
@@ -522,5 +524,133 @@ describe('buildResumePayload — whiteboardPhotoPath rides along, never approves
     }, current, 'journalist', 'arc-selection');
     expect(result.error).toBeNull();
     expect('rawSessionInput' in result.stateUpdates).toBe(false);
+  });
+});
+
+describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
+  const bundleFixture = () => JSON.parse(JSON.stringify(require('../fixtures/content-bundles/valid-journalist.json')));
+
+  test('outline: valid edits are written as the current outline with a diff and a null report', () => {
+    const before = validJournalistOutline();
+    const edits = validJournalistOutline();
+    edits.lede.hook = 'A sharper hook.';
+    const { resume, stateUpdates, error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Tighten the lede', outlineEdits: edits },
+      { outline: before, directorGateNotes: [] }
+    );
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: false, feedback: 'Tighten the lede' });
+    expect(stateUpdates.outline).toEqual(edits);
+    expect(stateUpdates._outlineFeedback).toBe('Tighten the lede');
+    expect(stateUpdates._outlineHandEdits).toEqual({
+      kind: 'outline',
+      sections: [{ key: 'lede', changes: [{ path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }] }]
+    });
+    expect(stateUpdates._outlineHandEditReport).toBeNull();
+  });
+
+  test('outline: edits identical to the current outline write the outline but a null diff', () => {
+    const before = validJournalistOutline();
+    const { stateUpdates } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Rework the closing', outlineEdits: validJournalistOutline() },
+      { outline: before }
+    );
+    expect(stateUpdates.outline).toEqual(before);
+    expect(stateUpdates._outlineHandEdits).toBeNull();
+  });
+
+  test('outline: invalid edits return the schema error and write nothing', () => {
+    const edits = validJournalistOutline();
+    edits.lede = {};                                   // hook/keyTension/primaryArc required
+    const { stateUpdates, error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'x', outlineEdits: edits },
+      { outline: validJournalistOutline() }
+    );
+    expect(error).toMatch(/Edited outline failed schema validation \(outline\)/);
+    expect(stateUpdates.outline).toBeUndefined();
+    expect(stateUpdates._outlineHandEdits).toBeUndefined();
+    expect(stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  test('outline: a reject WITHOUT edits resets the diff and report to null', () => {
+    const { stateUpdates } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Rework it' },
+      { outline: validJournalistOutline(), _outlineHandEdits: { kind: 'outline', sections: [] }, _outlineHandEditReport: { checked: ['lede'], changed: [] } }
+    );
+    expect(stateUpdates.outline).toBeUndefined();
+    expect(stateUpdates._outlineHandEdits).toBeNull();
+    expect(stateUpdates._outlineHandEditReport).toBeNull();
+  });
+
+  test('outline: detective theme validates against detective-outline', () => {
+    const { error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'x', outlineEdits: validJournalistOutline() },
+      { theme: 'detective', outline: {} }
+    );
+    expect(error).toMatch(/detective-outline/);
+  });
+
+  test('article: valid edits are written with a diff scoped to the headline', () => {
+    const before = bundleFixture();
+    const edits = bundleFixture();
+    edits.headline.main = 'A different headline';
+    const { stateUpdates, error } = buildResumePayload(
+      { article: false, articleFeedback: 'Cut the second section', articleEdits: edits },
+      { contentBundle: before }
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates.contentBundle).toEqual(edits);
+    expect(stateUpdates._articleHandEdits.kind).toBe('bundle');
+    expect(stateUpdates._articleHandEdits.scopes.map((s) => s.key)).toEqual(['headline']);
+    expect(stateUpdates._articleHandEditReport).toBeNull();
+  });
+
+  test('article: invalid edits return the schema error and write nothing', () => {
+    const edits = bundleFixture();
+    delete edits.headline;
+    const { stateUpdates, error } = buildResumePayload(
+      { article: false, articleFeedback: 'x', articleEdits: edits },
+      { contentBundle: bundleFixture() }
+    );
+    expect(error).toMatch(/Edited article failed schema validation \(content-bundle\)/);
+    expect(stateUpdates.contentBundle).toBeUndefined();
+    expect(stateUpdates._articleHandEdits).toBeUndefined();
+  });
+
+  test('article: a reject WITHOUT edits resets the diff and report to null', () => {
+    const { stateUpdates } = buildResumePayload({ article: false, articleFeedback: 'Rework it' }, { contentBundle: bundleFixture() });
+    expect(stateUpdates._articleHandEdits).toBeNull();
+    expect(stateUpdates._articleHandEditReport).toBeNull();
+  });
+});
+
+describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
+  const existing = [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the vote arc.', at: '2026-09-19T10:00:00.000Z' }];
+
+  test('an arc rejection appends one arc-selection entry with round = existing arc notes + 1', () => {
+    const { stateUpdates } = buildResumePayload({ selectedArcs: false, arcFeedback: 'Merge arcs 2 and 3.' }, { directorGateNotes: existing });
+    expect(stateUpdates.directorGateNotes).toHaveLength(2);
+    expect(stateUpdates.directorGateNotes[0]).toEqual(existing[0]);
+    expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'arc-selection', kind: 'rejection', round: 2, text: 'Merge arcs 2 and 3.' });
+    expect(stateUpdates.directorGateNotes[1].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  test('an outline rejection appends an outline entry, round 1 when no outline notes exist', () => {
+    const { stateUpdates } = buildResumePayload({ outline: false, outlineFeedback: 'Lead with the ledger.' }, { outline: validJournalistOutline(), directorGateNotes: existing });
+    expect(stateUpdates.directorGateNotes.map((n) => n.gate)).toEqual(['arc-selection', 'outline']);
+    expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'outline', round: 1, text: 'Lead with the ledger.' });
+  });
+
+  test('an article rejection appends an article entry; a missing channel counts as empty', () => {
+    const { stateUpdates } = buildResumePayload({ article: false, articleFeedback: 'Name the shell account.' }, { contentBundle: {} });
+    expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'article', kind: 'rejection', round: 1, text: 'Name the shell account.' })]);
+  });
+
+  test('approvals append nothing, and arc GUIDANCE is not recorded as a note', () => {
+    const a = buildResumePayload({ selectedArcs: ['arc-1'], outlineGuidance: 'Lead with the money.' }, { directorGateNotes: existing });
+    expect(a.stateUpdates._outlineGuidance).toBe('Lead with the money.');
+    expect(a.stateUpdates.directorGateNotes).toBeUndefined();
+    const o = buildResumePayload({ outline: true }, { directorGateNotes: existing });
+    expect(o.stateUpdates.directorGateNotes).toBeUndefined();
   });
 });
