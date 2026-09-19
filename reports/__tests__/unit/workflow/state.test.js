@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 63 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 65 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -207,6 +207,9 @@ describe('ReportStateAnnotation', () => {
         'sessionConfig',
         'directorNotes',
         'playerFocus',
+        // Input-review checkpoint (B2/B8)
+        'inputReviewApproved',
+        '_inputCorrections',
         // Fetched data
         'memoryTokens',
         'canonicalCharacters',
@@ -433,7 +436,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(63);
+      expect(Object.keys(getDefaultState()).length).toBe(65);
     });
   });
 
@@ -634,12 +637,21 @@ describe('ReportStateAnnotation', () => {
       expect(fields).not.toContain('narrativeArcs');
     });
 
-    it('input-review clears everything', () => {
+    it('input-review clears its own gate plus everything downstream of the parse (B2)', () => {
       const fields = ROLLBACK_CLEARS['input-review'];
-      expect(fields).toContain('sessionConfig');
-      expect(fields).toContain('memoryTokens');
+      expect(fields).toContain('inputReviewApproved');
+      expect(fields).toContain('_inputCorrections');
       expect(fields).toContain('narrativeArcs');
       expect(fields).toContain('assembledHtml');
+      // NOT the parse outputs (loadDirectorNotes rehydrates them from disk on the
+      // replay; a reject-with-corrections is what re-parses) and NOT the upstream
+      // checkpoints' captured inputs — the graph reaches parseRawInput AFTER
+      // paper-evidence-selection / await-roster / character-ids.
+      expect(fields).not.toContain('sessionConfig');
+      expect(fields).not.toContain('memoryTokens');
+      expect(fields).not.toContain('roster');
+      expect(fields).not.toContain('selectedPaperEvidence');
+      expect(fields).not.toContain('sessionPhotos');
     });
 
     it('all rollback clear lists are arrays', () => {

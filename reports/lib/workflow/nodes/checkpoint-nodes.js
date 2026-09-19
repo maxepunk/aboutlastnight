@@ -20,6 +20,80 @@ const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers
 const { traceNode } = require('../../observability');
 
 /**
+ * Input Review Checkpoint (CODE-REVIEW B2, B8)
+ *
+ * Pauses for the director to review the AI-parsed session input before the run
+ * commits to it.
+ *
+ * WHY THIS IS ITS OWN NODE (B2): the interrupt used to live at the bottom of
+ * parseRawInput, after three SDK calls and three file writes. LangGraph
+ * re-executes an interrupted node from its top on resume, so every approve
+ * re-paid the entire parse. The interrupt belongs in a node that does nothing
+ * else (the SRP pattern every other checkpoint in this file follows).
+ *
+ * WHY IT GATES ON inputReviewApproved (B8): the old skip condition was
+ * `sessionConfig.roster?.length > 0`, satisfied by the parse that had just run,
+ * so the checkpoint never fired in any of the last five real sessions. The gate
+ * now has its own approval channel.
+ *
+ * The parse OUTPUTS are deliberately not cleared by a rollback to this point:
+ * loadDirectorNotes rehydrates sessionConfig/directorNotes from inputs/*.json on
+ * every replay, so the checkpoint shows the restored parse. A REJECT with
+ * corrections is what nulls them (here, immediately before parseRawInput) and
+ * triggers the re-parse.
+ *
+ * @param {Object} state - Current state with the parse outputs
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with inputReviewApproved, _inputCorrections
+ */
+async function checkpointInputReview(state, config) {
+  // Skip only when the director has explicitly approved this parse.
+  const skipCondition = state.inputReviewApproved === true ? true : null;
+
+  const resumeValue = checkpointInterrupt(
+    CHECKPOINT_TYPES.INPUT_REVIEW,
+    {
+      sessionConfig: state.sessionConfig,
+      directorNotes: state.directorNotes,
+      playerFocus: state.playerFocus,
+      canonicalCharacters: state.canonicalCharacters || {}
+    },
+    skipCondition
+  );
+
+  if (skipCondition) {
+    return {
+      inputReviewApproved: true,
+      currentPhase: PHASES.REVIEW_INPUT
+    };
+  }
+
+  // Reject WITH corrections → re-parse. Null the parse outputs so parseRawInput
+  // (which skips when sessionConfig is populated) actually re-runs.
+  const feedback = typeof resumeValue?.feedback === 'string' ? resumeValue.feedback.trim() : '';
+  if (resumeValue?.approved === false && feedback) {
+    console.log('[checkpointInputReview] Rejected with corrections — re-parsing input');
+    return {
+      inputReviewApproved: false,
+      _inputCorrections: feedback,
+      sessionConfig: null,
+      directorNotes: null,
+      playerFocus: null,
+      currentPhase: PHASES.REVIEW_INPUT
+    };
+  }
+
+  // Approve (the only other resume shape the API produces). A reject with no
+  // usable feedback is treated as an approve so the graph cannot loop forever.
+  console.log('[checkpointInputReview] Parse approved');
+  return {
+    inputReviewApproved: true,
+    _inputCorrections: null,
+    currentPhase: PHASES.REVIEW_INPUT
+  };
+}
+
+/**
  * Paper Evidence Selection Checkpoint
  *
  * Pauses for user to select which paper evidence items were unlocked during gameplay.
@@ -450,6 +524,9 @@ async function checkpointArticle(state, config) {
 
 module.exports = {
   // Checkpoint nodes (wrapped with LangSmith tracing)
+  checkpointInputReview: traceNode(checkpointInputReview, 'checkpointInputReview', {
+    stateFields: ['sessionConfig', 'directorNotes', 'playerFocus', 'inputReviewApproved']
+  }),
   checkpointPaperEvidence: traceNode(checkpointPaperEvidence, 'checkpointPaperEvidence', {
     stateFields: ['paperEvidence', 'selectedPaperEvidence']
   }),
@@ -489,6 +566,7 @@ module.exports = {
 
   // Export for testing
   _testing: {
+    checkpointInputReview,
     checkpointPaperEvidence,
     checkpointCharacterIds,
     checkpointPreCuration,

@@ -62,6 +62,7 @@ module.exports = {
   surfaceContradictions: contradictionNodes.surfaceContradictions,
 
   // Checkpoint nodes (from checkpoint-nodes.js) - Parallel branch architecture
+  checkpointInputReview: checkpointNodes.checkpointInputReview,  // B2/B8: input-review is its own node
   checkpointPaperEvidence: checkpointNodes.checkpointPaperEvidence,
   checkpointCharacterIds: checkpointNodes.checkpointCharacterIds,
   checkpointPreCuration: checkpointNodes.checkpointPreCuration,

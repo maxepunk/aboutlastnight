@@ -7,9 +7,9 @@
  *
  * Graph Flow (30+ nodes - Commit 8.26: SRP checkpoint separation):
  *
- * PHASE 0: Input Parsing (conditional entry)
- * START → [conditional] → parseRawInput OR initializeSession
- * 0.1 parseRawInput [interrupt: input-review] → 0.2 finalizeInput
+ * PHASE 0: Input Parsing (reached from checkpointAwaitContext, not from START)
+ * 0.1 parseRawInput → checkpointInputReview [interrupt: input-review]
+ *   → [conditional] reparse: back to parseRawInput | forward: 0.2 finalizeInput
  *
  * PHASE 1: Data Acquisition (SEQUENTIAL)
  * 1.1 initializeSession → 1.2 loadDirectorNotes
@@ -206,6 +206,29 @@ function routeAfterArcCheckpoint(state) {
 // Trust Opus evaluators for quality judgment instead
 
 /**
+ * Route function after the input-review checkpoint (CODE-REVIEW B2/B8)
+ *
+ * The director either approves the parse (forward) or rejects it with written
+ * corrections (reparse). checkpointInputReview nulls the parse outputs on a
+ * reject, so parseRawInput actually re-runs; it consumes and clears
+ * _inputCorrections, so the loop terminates at the next gate.
+ *
+ * Anything else — including a reject with blank feedback — forwards, because a
+ * 'reparse' with nothing to correct would spin.
+ *
+ * @param {Object} state - Current graph state
+ * @returns {string} 'reparse' or 'forward'
+ */
+function routeAfterInputReview(state) {
+  const corrections = state._inputCorrections;
+  if (typeof corrections === 'string' && corrections.trim()) {
+    console.log('[routeAfterInputReview] Corrections supplied — re-parsing input');
+    return 'reparse';
+  }
+  return 'forward';
+}
+
+/**
  * Route function for schema validation
  * @param {Object} state - Current graph state
  * @returns {string} 'error' or 'continue'
@@ -365,6 +388,10 @@ function createGraphBuilder() {
   // ═══════════════════════════════════════════════════════
 
   builder.addNode('parseRawInput', nodes.parseRawInput, LLM_RETRY);
+  // B2: the input-review interrupt lives in its own node. LangGraph re-executes an
+  // interrupted node from its top on resume, so hosting it inside parseRawInput made
+  // every approve re-pay three SDK calls and three file writes.
+  builder.addNode('checkpointInputReview', nodes.checkpointInputReview);
   builder.addNode('finalizeInput', nodes.finalizeInput);
 
   // ═══════════════════════════════════════════════════════
@@ -554,8 +581,14 @@ function createGraphBuilder() {
   // After full context provided → parse raw input (produces playerFocus, sessionConfig)
   builder.addEdge('checkpointAwaitContext', 'parseRawInput');
 
-  // Parse raw input → finalize (input-review checkpoint inside parseRawInput)
-  builder.addEdge('parseRawInput', 'finalizeInput');
+  // Parse raw input → input-review checkpoint (B2: dedicated interrupt node)
+  builder.addEdge('parseRawInput', 'checkpointInputReview');
+
+  // Input review → conditional: approve forwards, reject-with-corrections re-parses
+  builder.addConditionalEdges('checkpointInputReview', routeAfterInputReview, {
+    reparse: 'parseRawInput',
+    forward: 'finalizeInput'
+  });
 
   // Finalize input → tag token dispositions (re-tag with orchestratorParsed)
   builder.addEdge('finalizeInput', 'tagTokenDispositions');
@@ -751,6 +784,7 @@ module.exports = {
     routeArticleEvaluation,
     routeSchemaValidation,
     // Routing functions - checkpoint-based (human approval routing)
+    routeAfterInputReview,
     routeAfterArcCheckpoint,
     routeAfterOutlineCheckpoint,
     routeAfterArticleCheckpoint,

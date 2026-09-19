@@ -239,3 +239,38 @@ describe('buildResumePayload — articleEdits validation (B6)', () => {
     expect(result.stateUpdates.contentBundle).toBeUndefined();
   });
 });
+
+describe('buildResumePayload — input review (CODE-REVIEW B2/B8)', () => {
+  it('approves the parse with inputReview:true', () => {
+    const result = buildResumePayload({ inputReview: true });
+    expect(result.error).toBeNull();
+    expect(result.resume.approved).toBe(true);
+    expect(result.resume.feedback).toBeUndefined();
+  });
+
+  it('no longer writes the dead _inputEdits channel', () => {
+    const result = buildResumePayload({ inputReview: true, inputEdits: { 'sessionConfig.roster': ['Vic'] } });
+    expect(result.error).toBeNull();
+    expect('_inputEdits' in result.stateUpdates).toBe(false);
+  });
+
+  it('rejects with corrections on inputReview:false + inputFeedback', () => {
+    const result = buildResumePayload({
+      inputReview: false,
+      inputFeedback: '  Blake said the dead-man line, not Casper  '
+    });
+    expect(result.error).toBeNull();
+    expect(result.resume.approved).toBe(false);
+    expect(result.resume.feedback).toBe('Blake said the dead-man line, not Casper');
+  });
+
+  it('is not a valid approval when inputReview:false carries no feedback', () => {
+    const result = buildResumePayload({ inputReview: false });
+    expect(result.error).toEqual(expect.stringContaining('No valid approval'));
+  });
+
+  it('is not a valid approval when inputFeedback is blank', () => {
+    const result = buildResumePayload({ inputReview: false, inputFeedback: '   ' });
+    expect(result.error).toEqual(expect.stringContaining('No valid approval'));
+  });
+});

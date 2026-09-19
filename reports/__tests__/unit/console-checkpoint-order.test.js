@@ -39,9 +39,11 @@ describe('CHECKPOINT_ORDER', () => {
   });
 
   it('matches the forward addEdge chain in lib/workflow/graph.js', () => {
-    // Derived from graph.js:539-568. The checkpoint NODES, in the order this list
-    // claims, must appear as a forward chain; input-review is hosted inside
-    // parseRawInput, which the graph reaches from checkpointAwaitContext.
+    // Derived from the graph.js forward addEdge chain. The checkpoint NODES, in the
+    // order this list claims, must appear as a forward chain. input-review is reached
+    // via parseRawInput (checkpointAwaitContext -> parseRawInput ->
+    // checkpointInputReview, B2), so parseRawInput stands in for it here: its outgoing
+    // addEdge is the one that leads to the input-review interrupt.
     const graphSrc = fs.readFileSync(
       path.join(__dirname, '..', '..', 'lib', 'workflow', 'graph.js'), 'utf8'
     );
@@ -50,7 +52,7 @@ describe('CHECKPOINT_ORDER', () => {
       'checkpointAwaitRoster',        // await-roster
       'checkpointCharacterIds',       // character-ids
       'checkpointAwaitContext',       // await-full-context
-      'parseRawInput',                // input-review (interrupt lives in this node)
+      'parseRawInput',                // -> checkpointInputReview (input-review interrupt)
       'checkpointPreCuration',        // pre-curation
       'checkpointEvidenceAndPhotos'   // evidence-and-photos
     ];

@@ -136,7 +136,8 @@ function buildEnrichmentPrompt({
   npcs,
   shellAccounts,
   detectiveEvidenceLog,
-  scoringTimeline
+  scoringTimeline,
+  corrections = null
 } = {}) {
   // Coerce any non-array input to an empty array for safe downstream handling
   const rosterArr = Array.isArray(roster) ? roster : [];
@@ -166,6 +167,17 @@ function buildEnrichmentPrompt({
   const timelineBlock = timelineArr.length > 0
     ? JSON.stringify(timelineArr, null, 2)
     : '(none)';
+
+  // B2: on a re-parse the director rejected the previous parse and typed what was
+  // wrong. Placed LAST so it carries the most weight.
+  const correctionsBlock = (typeof corrections === 'string' && corrections.trim())
+    ? `
+<DIRECTOR_CORRECTIONS>
+${corrections.trim()}
+</DIRECTOR_CORRECTIONS>
+Apply these corrections; they override anything in the source text.
+`
+    : '';
 
   const userPrompt = `<ROSTER>
 ${rosterBlock}
@@ -203,7 +215,7 @@ ${rawProse}
 5. postInvestigationDevelopments only for passages with explicit post-investigation markers.
 6. Empty arrays are valid. Never fabricate.
 </ENRICHMENT_RULES>
-`;
+${correctionsBlock}`;
 
   return { systemPrompt: ENRICHMENT_SYSTEM_PROMPT, userPrompt };
 }

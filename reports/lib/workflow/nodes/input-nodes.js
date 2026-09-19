@@ -32,7 +32,6 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { PHASES } = require('../state');
-const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
 const { getSdkClient, synthesizePlayerFocus, normalizeRosterPronounsToCanonical } = require('./node-helpers');
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { traceNode } = require('../../observability');
@@ -376,6 +375,23 @@ function resolveRosterPronouns(state, rawInput) {
   return {};
 }
 
+/**
+ * Build the <DIRECTOR_CORRECTIONS> suffix appended to every parse prompt on a
+ * re-parse (B2).
+ *
+ * The director rejected the previous parse at the input-review gate and typed
+ * what was wrong. Those corrections outrank the source text: the source text is
+ * exactly what produced the bad parse.
+ *
+ * @param {string|null} corrections - state._inputCorrections
+ * @returns {string} '' when there are no corrections
+ */
+function buildCorrectionsBlock(corrections) {
+  if (typeof corrections !== 'string' || !corrections.trim()) return '';
+  return '\n\n<DIRECTOR_CORRECTIONS>\n' + corrections.trim() +
+    '\n</DIRECTOR_CORRECTIONS>\nApply these corrections; they override anything in the source text.';
+}
+
 async function parseRawInput(state, config) {
   // ROLL-4: gate the skip on the parsed OUTPUT (sessionConfig), not the raw input, so a
   // rollback to await-full-context (which clears sessionConfig) re-parses; a normal resume
@@ -414,6 +430,12 @@ async function parseRawInput(state, config) {
   // Use state.roster if available (from await-roster checkpoint), otherwise fall back to rawInput.roster
   const rosterForParsing = state.roster?.length > 0 ? state.roster : rawInput.roster;
 
+  // B2: on a re-parse the director's corrections ride along on every parse prompt.
+  const correctionsBlock = buildCorrectionsBlock(state._inputCorrections);
+  if (correctionsBlock) {
+    console.log('[parseRawInput] Re-parsing with director corrections');
+  }
+
   // Step 1 Promise: Parse roster and accusation
   const step1Promise = (async () => {
     console.log('[parseRawInput] Step 1: Parsing roster and accusation');
@@ -434,7 +456,7 @@ Rules for parsing:
 3. For sessionId: If a specific sessionId is provided above, use it exactly. Otherwise derive in MMDD format.
 4. sessionDate should be YYYY-MM-DD format
 
-Return structured JSON matching the schema.`;
+Return structured JSON matching the schema.${correctionsBlock}`;
 
     const result = await sdk({
       prompt: sessionConfigPrompt,
@@ -510,7 +532,7 @@ OTHER FIELDS:
 
 If you can't find a section, return an empty array for that field rather than failing. The downstream pipeline tolerates missing data better than wrong data.
 
-Return structured JSON matching the schema.`;
+Return structured JSON matching the schema.${correctionsBlock}`;
 
     // N1 fail-loud: the session report is the AUTHORITATIVE token-disposition +
     // financial source. An empty fallback makes every token default to buried and
@@ -576,7 +598,8 @@ Return structured JSON matching the schema.`;
       npcs: themeNPCs,
       shellAccounts: orchestratorParsed.shellAccounts || [],
       detectiveEvidenceLog: orchestratorParsed.exposedTokens || [],
-      scoringTimeline: projectBuriedTokensToScoringTimeline(orchestratorParsed.buriedTokens || [])
+      scoringTimeline: projectBuriedTokensToScoringTimeline(orchestratorParsed.buriedTokens || []),
+      corrections: state._inputCorrections || null   // B2: re-parse corrections
     }, sdk);
 
     const counts = {
@@ -722,21 +745,16 @@ Return structured JSON matching the schema.`;
     }
   };
 
-  // Interrupt for input review - skip if sessionConfig already populated (resume case)
-  // NOTE: On resume, interrupt() returns the user's approval/edits
-  // Spread parsedData directly so e2e-walkthrough can access checkpoint.sessionConfig, checkpoint.playerFocus
-  // IDEM-3: everything above this interrupt (the step1/step2/whiteboard SDK calls and the
-  // file writes) RE-RUNS on every /resume — keep it idempotent (writes overwrite; SDK calls
-  // are read-only). Do not introduce a non-idempotent side effect before this point.
-  checkpointInterrupt(
-    CHECKPOINT_TYPES.INPUT_REVIEW,
-    { ...parsedData, canonicalCharacters: state.canonicalCharacters || {} },
-    sessionConfig.roster?.length > 0 ? true : null
-  );
-
-  // Return parsed data (on first run, this executes after resume with approval)
+  // B2: the input-review interrupt USED to live here, after the three SDK calls and
+  // the three file writes above. LangGraph re-executes an interrupted node from its
+  // top on resume, so every approve re-paid the whole parse. The interrupt now lives
+  // in checkpointInputReview (the next node); this node is pure data again.
+  //
+  // _inputCorrections is consumed above and cleared here: a second reject re-supplies
+  // it, and routeAfterInputReview only loops back while it is non-empty.
   return {
     ...parsedData,
+    _inputCorrections: null,
     currentPhase: PHASES.REVIEW_INPUT
   };
 }
@@ -758,52 +776,13 @@ Return structured JSON matching the schema.`;
  * @returns {Object} Partial state update with finalized data, currentPhase
  */
 async function finalizeInput(state, config) {
-  // Check if user provided edits
-  const editedInput = config?.configurable?.approvals?.inputReview;
-
-  if (editedInput && !editedInput.approved) {
-    // User provided edits - update files
-    console.log('[finalizeInput] Applying user edits to input files');
-
-    const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
-    const sessionId = state.sessionId;
-    const inputsDir = path.join(dataDir, sessionId, 'inputs');
-
-    if (editedInput.sessionConfig) {
-      await fs.writeFile(
-        path.join(inputsDir, 'session-config.json'),
-        JSON.stringify(editedInput.sessionConfig, null, 2),
-        'utf-8'
-      );
-    }
-
-    if (editedInput.directorNotes) {
-      await fs.writeFile(
-        path.join(inputsDir, 'director-notes.json'),
-        JSON.stringify(editedInput.directorNotes, null, 2),
-        'utf-8'
-      );
-    }
-
-    if (editedInput.orchestratorParsed) {
-      await fs.writeFile(
-        path.join(inputsDir, 'orchestrator-parsed.json'),
-        JSON.stringify(editedInput.orchestratorParsed, null, 2),
-        'utf-8'
-      );
-    }
-
-    // Update state with edited values
-    return {
-      sessionConfig: editedInput.sessionConfig || state.sessionConfig,
-      directorNotes: editedInput.directorNotes || state.directorNotes,
-      playerFocus: editedInput.playerFocus || state.playerFocus,
-      shellAccounts: editedInput.orchestratorParsed?.shellAccounts || state.shellAccounts,
-      currentPhase: PHASES.LOAD_DIRECTOR_NOTES
-    };
-  }
-
-  // User approved without edits - proceed
+  // B2: the `config.configurable.approvals.inputReview` edit branch that used to live
+  // here was dead code. Nothing ever populated config.configurable.approvals - the
+  // /approve endpoint delivers decisions through Command({ resume }), and the field-edit
+  // path it implemented wrote to a `_inputEdits` state key that was never an Annotation
+  // channel (LangGraph drops undeclared keys). Corrections now arrive as prose at the
+  // input-review gate and are applied by a re-parse (checkpointInputReview ->
+  // parseRawInput), which also rewrites inputs/*.json.
   console.log('[finalizeInput] Input approved, proceeding to workflow');
 
   return {

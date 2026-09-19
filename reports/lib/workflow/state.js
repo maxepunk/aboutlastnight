@@ -9,10 +9,10 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (63 total - includes revision context + human feedback):
+ * State Fields (65 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
- *   - Input Data: sessionConfig, directorNotes, playerFocus
+ *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections
  *   - Fetched Data: memoryTokens, paperEvidence, sessionPhotos
  *   - User Selection (8.9): selectedPaperEvidence
  *   - Photo Analysis (8.6): photoAnalyses, characterIdMappings
@@ -127,6 +127,31 @@ const ReportStateAnnotation = Annotation.Root({
   shellAccounts: Annotation({
     reducer: replaceReducer,
     default: () => ([])
+  }),
+
+  /**
+   * Input-review checkpoint approval flag (B2/B8 — dedicated checkpoint node).
+   *
+   * The interrupt used to live inside parseRawInput and gate on
+   * `sessionConfig.roster?.length > 0` — satisfied by the parse two statements
+   * earlier, so the checkpoint never fired. checkpointInputReview gates on THIS
+   * channel instead: it is the only thing that makes the gate skip.
+   * Set by: checkpointInputReview in checkpoint-nodes.js
+   */
+  inputReviewApproved: Annotation({
+    reducer: replaceReducer,
+    default: () => false
+  }),
+
+  /**
+   * Director corrections captured when the input-review gate is REJECTED (B2).
+   * Consumed by parseRawInput (appended to the Step-1/Step-2/enrichment prompts)
+   * and nulled in the same node return. Non-empty => routeAfterInputReview
+   * sends the graph back to parseRawInput.
+   */
+  _inputCorrections: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   }),
 
   // ═══════════════════════════════════════════════════════
@@ -651,7 +676,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (63 fields after human feedback + revision budget additions)
+ * Get default state with all fields initialized (65 fields; +2 for the input-review gate channels)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -666,6 +691,9 @@ function getDefaultState() {
     sessionConfig: {},
     directorNotes: {},
     playerFocus: {},
+    // Input-review checkpoint (B2/B8)
+    inputReviewApproved: false,
+    _inputCorrections: null,
     // Fetched data
     memoryTokens: [],
     canonicalCharacters: null,  // RC2: firstName -> fullName map from Notion tokens
@@ -872,6 +900,14 @@ const ROLLBACK_CLEARS_EXEMPT = new Set([
   'canonicalCharacters', 'shellAccounts',
   // Photo branch inputs cleared transitively / re-discovered on replay
   'genericPhotoAnalyses', 'whiteboardPhotoPath', 'preprocessStats',
+  // Photo PATHS — every checkpoint is downstream of fetchSessionPhotos, so no rollback
+  // point can meaningfully re-pause it, and the directory scan is deterministic. It is
+  // also NOT safely clearable: preprocessPhotos overwrites sessionPhotos with the
+  // PROCESSED paths and gates on preprocessStats (exempt above), so clearing
+  // sessionPhotos alone re-fetches the originals and then skips the resize, leaving the
+  // article pointing at un-processed images. Reusing the scanned+processed list is the
+  // correct replay behaviour, not stale input. (B2: 'input-review' used to clear it.)
+  'sessionPhotos',
   // Default-only channels never written by any node return
   'preCurationSummary',
   // Raw character-ID text — paired with characterIdMappings (which IS cleared)
@@ -889,16 +925,27 @@ const ROLLBACK_CLEARS_EXEMPT = new Set([
 ]);
 
 const ROLLBACK_CLEARS = {
-  // Phase 0.2: Input review - clears everything (essentially fresh start)
+  // Phase 0.2: Input review — re-open the parse-review gate and clear everything
+  // DOWNSTREAM of the parse.
+  //
+  // B2/B8: this point used to clear the whole run (roster, rosterPronouns,
+  // memoryTokens, paperEvidence, selectedPaperEvidence, sessionPhotos,
+  // photoAnalyses, characterIdMappings) plus the parse outputs themselves. Both
+  // halves were wrong:
+  //  - The upstream clears re-paused checkpoints that run BEFORE this one in the
+  //    graph's replay order (paper-evidence-selection, await-roster,
+  //    character-ids all precede parseRawInput), so "roll back to input-review"
+  //    actually threw the operator back to the first checkpoint of the run. And
+  //    clearing sessionPhotos while preprocessStats survived made preprocessPhotos
+  //    skip, leaving the article pointing at un-processed photo paths.
+  //  - Clearing sessionConfig/directorNotes/playerFocus was futile anyway:
+  //    loadDirectorNotes rehydrates them from inputs/*.json on the replay. The
+  //    checkpoint now SHOWS the restored parse, and a reject-with-corrections
+  //    (which nulls them inside checkpointInputReview, immediately before
+  //    parseRawInput) is what triggers a re-parse.
   'input-review': [
-    // Input phase outputs
-    'sessionConfig', 'directorNotes', 'playerFocus',
-    // ROLL-3: incremental-input roster must clear too, else await-roster reuses stale roster
-    'roster', 'rosterPronouns',
-    // Fetch phase outputs
-    'memoryTokens', 'paperEvidence', 'selectedPaperEvidence', 'sessionPhotos',
-    // Photo analysis
-    'photoAnalyses', 'characterIdMappings',
+    // The gate's own approval flag + its transient correction channel
+    'inputReviewApproved', '_inputCorrections',
     // Preprocessing and curation
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
@@ -913,6 +960,9 @@ const ROLLBACK_CLEARS = {
   // Phase 1.35: Paper evidence selection (8.9.4)
   'paper-evidence-selection': [
     'selectedPaperEvidence',
+    // Per-point re-pause: input-review is DOWNSTREAM of this point (the graph reaches
+    // parseRawInput after this checkpoint), so its approval flag must clear here too.
+    'inputReviewApproved',
     // Per-point re-pause: await-roster + await-full-context are DOWNSTREAM of this point;
     // clear their captured inputs so they re-pause when rolling back here (else they skip on
     // stale roster/full-context). Mirrors the already-cleared downstream characterIdMappings.
@@ -930,8 +980,9 @@ const ROLLBACK_CLEARS = {
   // state.roster?.length > 0) re-pauses instead of silently reusing stale input.
   'await-roster': [
     'roster', 'rosterPronouns',
-    // Per-point re-pause: await-full-context is downstream — clear full-context so it re-pauses.
-    'accusation', 'sessionReport', 'directorNotesRaw',
+    // Per-point re-pause: await-full-context + input-review are downstream — clear
+    // full-context so it re-pauses, and the input-review approval flag so its gate re-opens.
+    'accusation', 'sessionReport', 'directorNotesRaw', 'inputReviewApproved',
     'whiteboardAnalysis',
     'characterIdMappings',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
@@ -944,8 +995,9 @@ const ROLLBACK_CLEARS = {
   // Phase 1.65+: Character ID mappings (8.9.5)
   'character-ids': [
     'characterIdMappings',
-    // Per-point re-pause: await-full-context is downstream — clear full-context so it re-pauses.
-    'accusation', 'sessionReport', 'directorNotesRaw',
+    // Per-point re-pause: await-full-context + input-review are downstream — clear
+    // full-context so it re-pauses, and the input-review approval flag so its gate re-opens.
+    'accusation', 'sessionReport', 'directorNotesRaw', 'inputReviewApproved',
     // Note: photoAnalyses preserved - only mappings need re-entry
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
@@ -968,6 +1020,9 @@ const ROLLBACK_CLEARS = {
   'await-full-context': [
     'accusation', 'sessionReport', 'directorNotesRaw',
     'sessionConfig', 'directorNotes', 'playerFocus',
+    // Per-point re-pause: the re-collected context is re-parsed, so the input-review
+    // gate must re-open to show (and let the director reject) the NEW parse.
+    'inputReviewApproved',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback',
@@ -1072,7 +1127,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 63
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 65
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null
@@ -1108,7 +1163,7 @@ if (require.main === module) {
   console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, HUMAN_ARCS: 4, OUTLINE: 3, ARTICLE: 3 }
 
   // Test rollback points
-  console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 8
+  console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 10
 
   console.log('\nSelf-test complete.');
 }

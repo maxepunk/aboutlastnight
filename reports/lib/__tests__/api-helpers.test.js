@@ -134,10 +134,28 @@ describe('buildRollbackState re-pause correctness', () => {
     expect(state).toHaveProperty('rosterPronouns', null);
   });
 
-  test('input-review nulls roster + rosterPronouns (ROLL-3 — compounds ROLL-1)', () => {
+  test('input-review nulls its own approval gate, NOT the upstream roster (B2)', () => {
     const state = buildRollbackState('input-review');
-    expect(state).toHaveProperty('roster', null);
-    expect(state).toHaveProperty('rosterPronouns', null);
+    // checkpointInputReview skips on inputReviewApproved === true — must be cleared.
+    expect(state).toHaveProperty('inputReviewApproved', null);
+    expect(state).toHaveProperty('_inputCorrections', null);
+    // ROLL-3 used to clear roster/rosterPronouns here. The roster is captured at
+    // await-roster, which the graph reaches BEFORE parseRawInput, so clearing it
+    // threw the operator back to an UPSTREAM checkpoint. await-roster owns it.
+    expect(state).not.toHaveProperty('roster');
+    expect(state).not.toHaveProperty('rosterPronouns');
+    // Same for the parse outputs: loadDirectorNotes rehydrates them from disk on the
+    // replay, so the gate shows the restored parse and a reject re-parses.
+    expect(state).not.toHaveProperty('sessionConfig');
+  });
+
+  test('every rollback point at/upstream of input-review clears inputReviewApproved', () => {
+    // The gate skips on an approval FLAG, not on a re-derivable parse output, so a
+    // rollback to any earlier point must re-open it.
+    ['paper-evidence-selection', 'await-roster', 'character-ids', 'await-full-context', 'input-review']
+      .forEach((point) => {
+        expect(buildRollbackState(point)).toHaveProperty('inputReviewApproved', null);
+      });
   });
 
   test('await-roster still clears its existing downstream fields', () => {

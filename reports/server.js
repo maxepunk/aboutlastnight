@@ -213,13 +213,20 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     let error = null;
     let validApprovalDetected = false;
 
-    // Input review approval (Commit 8.9)
+    // Input review: approve the parse, or reject it with written corrections (B2/B8).
+    //
+    // `inputEdits` is gone: it wrote a `_inputEdits` state key that was never an
+    // Annotation channel (LangGraph drops undeclared keys) and that no node read.
+    // A reject sends the director's prose corrections back through interrupt();
+    // checkpointInputReview stores them as _inputCorrections and routes the graph
+    // back to parseRawInput, which appends them to every parse prompt.
     if (approvals.inputReview === true) {
         validApprovalDetected = true;
         resume.approved = true;
-        if (approvals.inputEdits) {
-            stateUpdates._inputEdits = approvals.inputEdits;
-        }
+    } else if (approvals.inputReview === false && typeof approvals.inputFeedback === 'string' && approvals.inputFeedback.trim()) {
+        validApprovalDetected = true;
+        resume.approved = false;
+        resume.feedback = approvals.inputFeedback.trim();
     }
 
     // Paper evidence selection (Commit 8.9.4)

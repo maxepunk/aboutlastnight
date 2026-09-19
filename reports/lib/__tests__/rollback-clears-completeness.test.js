@@ -88,16 +88,20 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
 
   // The human-captured skip-field(s) whose presence makes each checkpoint SKIP (silently reuse
   // stale input) on the replay — verified against checkpoint-nodes.js + input-nodes.js skip
-  // conditions. 'input-review' is intentionally [] : its skip-field (sessionConfig) is
-  // RE-DERIVED deterministically by parseRawInput on every replay, so it is not a stale-input
-  // reuse risk and upstream points need not clear it. (rosterPronouns travels with roster:
+  // conditions. 'input-review' is now a DEDICATED checkpoint node (checkpointInputReview, B2/B8)
+  // whose skip-field is its own `inputReviewApproved` channel — an approval flag, NOT a
+  // re-derivable parse output, so every point at-or-before it must clear it or the gate
+  // silently stays approved. (Its parse OUTPUTS sessionConfig/directorNotes/playerFocus are
+  // deliberately NOT cleared by this point: loadDirectorNotes rehydrates them from
+  // inputs/*.json on every replay, so the checkpoint shows the restored parse and a reject
+  // with corrections is what triggers a re-parse.) (rosterPronouns travels with roster:
   // both are captured at await-roster and cleared as a unit.)
   const SKIP_FIELDS = {
     'paper-evidence-selection': ['selectedPaperEvidence'],
     'await-roster': ['roster', 'rosterPronouns'],
     'character-ids': ['characterIdMappings'],
     'await-full-context': ['accusation', 'sessionReport', 'directorNotesRaw'],
-    'input-review': [],
+    'input-review': ['inputReviewApproved'],
     'pre-curation': ['preCurationApproved'],
     'evidence-and-photos': ['_evidenceApproved'],
     'arc-selection': ['selectedArcs'],

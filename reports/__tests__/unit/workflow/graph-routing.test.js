@@ -44,3 +44,21 @@ describe('routeAfterArticleCheckpoint', () => {
     expect(routeAfterArticleCheckpoint({})).toBe('revise');
   });
 });
+
+describe('routeAfterInputReview (CODE-REVIEW B2/B8)', () => {
+  const { routeAfterInputReview } = _testing;
+
+  test('returns reparse when the director supplied corrections', () => {
+    expect(routeAfterInputReview({ _inputCorrections: 'x' })).toBe('reparse');
+  });
+
+  test('returns forward when the parse was approved', () => {
+    expect(routeAfterInputReview({ inputReviewApproved: true })).toBe('forward');
+  });
+
+  test('returns forward on blank/absent corrections (no re-parse loop)', () => {
+    expect(routeAfterInputReview({})).toBe('forward');
+    expect(routeAfterInputReview({ _inputCorrections: null })).toBe('forward');
+    expect(routeAfterInputReview({ _inputCorrections: '   ' })).toBe('forward');
+  });
+});
