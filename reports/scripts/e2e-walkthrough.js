@@ -614,7 +614,9 @@ async function loadSessionInput(sessionId) {
   }
 
   // NORMAL MODE: Incremental input flow via /start
-  // 1. /start gets minimal input (photosPath only)
+  // 1. /start gets no photosPath (photo late-join), so the `photos` gate asks for
+  //    the folder after arc selection. It would only skip if a path had been
+  //    supplied at /start, which this harness deliberately never does.
   // 2. Checkpoints gather remaining data (roster, accusation, etc.)
 
   // Try to pre-load files for checkpoint handlers (optional - not required)

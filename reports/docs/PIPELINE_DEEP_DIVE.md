@@ -253,7 +253,7 @@ Nova's article is NOT just a factual record. It reflects:
 - Whiteboard photo/content
 
 **Outputs**:
-- `sessionConfig`: { roster, accusation, journalistFirstName, photosPath }
+- `sessionConfig`: { roster, accusation, journalistFirstName } (NOT photosPath: the photo folder lives on `rawSessionInput` and the `photosPath` channel, collected at the `photos` gate after arc selection)
 - `directorNotes`: { playerFocus, observations, whiteboard, accusationContext }
 
 **Checkpoint**:
@@ -965,7 +965,7 @@ item.fullDescription || item.rawData?.fullDescription || item.content || item.su
 ```
 data/{sessionId}/
 ├── inputs/
-│   ├── session-config.json       # Roster, accusation, photosPath
+│   ├── session-config.json       # Roster, accusation, journalistFirstName
 │   ├── director-notes.json       # Observations, whiteboard
 │   └── orchestrator-parsed.json  # Exposed/buried token lists
 ├── fetched/
