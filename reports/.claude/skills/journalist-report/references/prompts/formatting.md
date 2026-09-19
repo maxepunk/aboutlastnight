@@ -81,10 +81,13 @@ Visual components are emitted as **content blocks within section content arrays*
 { "type": "photo", "filename": "20251221_205807.png", "caption": "Vic before the vote" }
 ```
 
+Every `<...>` below is a PLACEHOLDER describing what goes there, not text to copy.
+Quoted evidence text always comes from the session's own tokens and documents.
+
 ### Evidence Card Content Block
 
 ```json
-{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Kingsley", "significance": "critical" }
+{ "type": "evidence-card", "tokenId": "<real token id from the evidence>", "headline": "<headline you write>", "content": "<verbatim sentence(s) copied from the token's full description>", "owner": "<canonical full name>", "significance": "critical" }
 ```
 
 ### Sidebar vs Inline Evidence
@@ -116,11 +119,11 @@ The authoritative field list (required vs. optional) lives in
 ```
 
 ```json
-{ "type": "quote", "text": "The job is yours.", "attribution": "Vic Kingsley" }
+{ "type": "quote", "text": "<verbatim line from the source>", "attribution": "<canonical full name of the speaker>" }
 ```
 
 ```json
-{ "type": "evidence-reference", "tokenId": "rat031", "caption": "The offer" }
+{ "type": "evidence-reference", "tokenId": "<real token id from the evidence>", "caption": "<short caption you write>" }
 ```
 
 ```json
@@ -132,7 +135,7 @@ The authoritative field list (required vs. optional) lives in
 ```
 
 ```json
-{ "type": "evidence-card", "tokenId": "rat031", "headline": "The Offer", "content": "The job is yours. The CEO isn't even cold yet.", "owner": "Vic Kingsley", "significance": "critical" }
+{ "type": "evidence-card", "tokenId": "<real token id from the evidence>", "headline": "<headline you write>", "content": "<verbatim sentence(s) copied from the token's full description>", "owner": "<canonical full name>", "significance": "critical" }
 ```
 
 ### Top-Level Arrays
@@ -140,7 +143,7 @@ The authoritative field list (required vs. optional) lives in
 `pullQuotes[]` (OPTIONAL legacy array, not rendered by the current template; prefer inline `quote` content blocks). Two shapes if used:
 
 ```json
-{ "type": "verbatim", "text": "The job is yours.", "attribution": "Vic Kingsley", "sourceTokenId": "rat031", "placement": "right" }
+{ "type": "verbatim", "text": "<verbatim line from the source>", "attribution": "<canonical full name of the speaker>", "sourceTokenId": "<real token id from the evidence>", "placement": "right" }
 ```
 
 ```json

@@ -375,8 +375,8 @@ WHY: Generic, could apply to any session, vague attribution.
 
 **Example - CORRECT Pull Quote:**
 ```
-> "The job is yours." That's Vic's voice. The CEO isn't even cold yet.
-> — From Jamie's extracted memory
+> "<the damning line, copied verbatim from the memory>" That's <speaker>'s voice. <the one sentence of context that makes it land>
+> — From <owner>'s extracted memory
 ```
 WHY: Specific, damning, sourced to actual evidence.
 

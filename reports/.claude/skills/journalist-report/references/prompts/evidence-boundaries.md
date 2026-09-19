@@ -21,7 +21,7 @@ Memory tokens submitted to the Detective become PUBLIC RECORD.
 
 > A cease and desist letter came across my desk. Patchwork Law Firm, representing Alex Reeves, demanding NeurAI stop using the stolen algorithm.
 
-> Jamie's memory shows Vic offering Alex the position Marcus held. "He's gone. The job is yours." That's Vic's voice. Jamie witnessed it.
+> <Witness>'s memory shows <speaker> offering <character> the position Marcus held. "<the offer, copied verbatim from the memory>" That's <speaker>'s voice. <Witness> witnessed it.
 
 ### What Makes Exposed Evidence Usable
 
