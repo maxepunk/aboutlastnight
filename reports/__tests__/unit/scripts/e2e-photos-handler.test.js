@@ -35,7 +35,13 @@ describe('e2e-walkthrough photo late-join wiring', () => {
 
   it('creates the folder in the interactive handler too (v2 I4)', () => {
     const block = SRC.slice(SRC.indexOf('async function handlePhotos'));
-    expect(block.slice(0, block.indexOf('\n}\n'))).toMatch(/mkdirSync/);
+    const fn = block.slice(0, block.indexOf('\n}\n'));
+    expect(fn).toMatch(/mkdirSync/);
+    // The guard must compare the RETURNED path against checkpoint.defaultDir, not
+    // against the prefill (which can be a previously-typed custom path after a
+    // rollback). Creating a custom path here would hide a missing custom folder
+    // instead of letting it reach the server's "Photos directory not found" 400.
+    expect(fn).toMatch(/photosPath === checkpoint\.defaultDir[\s\S]*?mkdirSync\(checkpoint\.defaultDir/);
   });
 
   it('no longer forces a photosPath into /start from the session directory', () => {

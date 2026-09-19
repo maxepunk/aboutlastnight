@@ -2014,12 +2014,15 @@ async function handlePhotos(checkpoint, currentPhase) {
     return { photosPath: '' };
   }
 
-  // v2 I4: create the DEFAULT when that is what the operator accepted, so a fixture
-  // session that has no data/<id>/photos still runs. An EMPTY folder is the explicit
-  // "this session has no photographs" answer and reproduces the pre-plan behaviour:
+  // v2 I4: create the folder ONLY when the returned path IS checkpoint.defaultDir,
+  // so a fixture session that has no data/<id>/photos still runs. A CUSTOM path
+  // (e.g. the _previousPhotosPath prefill after a rollback) is never created here —
+  // a missing custom folder must reach the server's "Photos directory not found"
+  // 400, which is the designed fail-loud. An EMPTY folder is the explicit "this
+  // session has no photographs" answer and reproduces the pre-plan behaviour:
   // fetchSessionPhotos returns [], every photo node no-ops, and the report is
-  // written without photographs. A missing folder, by contrast, is now an error.
-  if (photosPath === prefill && checkpoint.defaultDir) {
+  // written without photographs.
+  if (photosPath === checkpoint.defaultDir) {
     fs.mkdirSync(checkpoint.defaultDir, { recursive: true });
   }
   return { photosPath };
