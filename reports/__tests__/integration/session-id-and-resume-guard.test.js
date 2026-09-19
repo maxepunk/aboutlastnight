@@ -331,6 +331,28 @@ describe('POST /start on an existing thread (C1)', () => {
     expect(mockGraph.invoke).not.toHaveBeenCalled();
   });
 
+  it('400s on a photosPath that is a FILE, not a directory (v2 I1)', async () => {
+    // existsSync() is TRUE for a file. A director who pastes the path of a photo
+    // instead of the folder holding it used to pass this gate, pass
+    // fetchSessionPhotos's fs.access, and then die on readdir's ENOTDIR — outside
+    // the labelled catch, after arc analysis, with a raw scandir error and no
+    // recovery sentence. And because the path came from /start, the `photos` gate
+    // had skipped, so the console's failure card only offered arc-selection (F26).
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
+    const file = path.join(photosDir, 'a.jpg');
+    fs.writeFileSync(file, 'x');
+
+    const res = await send('POST', '/api/session/091826/start', {
+      theme: 'journalist', rawSessionInput: { photosPath: file }, force: true
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain(file);
+    expect(res.body.error).toMatch(/not a directory/);
+    expect(res.body.error).toMatch(/blank/);   // still names the alternative
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
   it('strips quotes from a pasted path on both copies', async () => {
     mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
 

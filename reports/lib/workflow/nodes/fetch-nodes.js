@@ -463,7 +463,7 @@ async function fetchPaperEvidence(state, config) {
  * @param {Object} state - Current state with sessionId, photosPath
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update with sessionPhotos, currentPhase
- * @throws {Error} When photosPath is unset or names a directory that is not there
+ * @throws {Error} When photosPath is unset, or does not name a readable directory
  */
 async function fetchSessionPhotos(state, config) {
   // Skip if already fetched (resume case or pre-populated)
@@ -487,8 +487,20 @@ async function fetchSessionPhotos(state, config) {
     );
   }
 
+  let files;
   try {
-    await fs.access(photosDir);
+    // v2 I1: stat, not access — access() passes for a FILE, and the readdir below
+    // then threw a raw ENOTDIR from OUTSIDE this catch, losing both the label and
+    // the recovery sentence. The readdir lives in here for the same reason: a
+    // folder that becomes unreadable between the stat and the scan is the same
+    // operator problem with the same recovery.
+    const stats = await fs.stat(photosDir);
+    if (!stats.isDirectory()) {
+      const notDir = new Error('not a directory');
+      notDir.code = 'ENOTDIR';
+      throw notDir;
+    }
+    files = await fs.readdir(photosDir);
   } catch (error) {
     // Fail loud (C1). Returning [] here is how a typo produced a photo-less
     // article: preprocess/analyze both no-op on zero photos, character-ids
@@ -504,7 +516,6 @@ async function fetchSessionPhotos(state, config) {
     );
   }
 
-  const files = await fs.readdir(photosDir);
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
   const photos = files
     .filter(file => imageExtensions.includes(path.extname(file).toLowerCase()))

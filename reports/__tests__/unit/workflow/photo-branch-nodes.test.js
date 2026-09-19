@@ -58,6 +58,20 @@ describe('fetchSessionPhotos', () => {
       .rejects.toThrow(/Roll back to the photos step and supply the folder again/);
   });
 
+  it('throws the SAME labelled message for a FILE path (v2 I1)', async () => {
+    // fs.access passes for a file, so this used to fall through to readdir and
+    // throw a raw ENOTDIR scandir error from OUTSIDE the labelled catch — losing
+    // both the "[fetchSessionPhotos]" label and the recovery sentence the console's
+    // failure card relies on to pick the `photos` rollback target.
+    const file = path.join(tmp, 'a.jpg');
+    fs.writeFileSync(file, 'x');
+    const state = () => ({ sessionId: '091926', sessionPhotos: null, photosPath: file });
+    await expect(fetchSessionPhotos(state(), {})).rejects.toThrow(/Photos directory not found/);
+    await expect(fetchSessionPhotos(state(), {}))
+      .rejects.toThrow(/Roll back to the photos step and supply the folder again/);
+    await expect(fetchSessionPhotos(state(), {})).rejects.toThrow(/\[fetchSessionPhotos\]/);
+  });
+
   it('still skips on an already-set sessionPhotos, including [] (resume/replay)', async () => {
     const out = await fetchSessionPhotos({ sessionId: '091926', sessionPhotos: [], photosPath: null }, {});
     expect(out).not.toHaveProperty('sessionPhotos');

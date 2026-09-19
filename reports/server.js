@@ -284,6 +284,46 @@ async function getCheckpointData(checkpointType, state) {
 }
 
 /**
+ * Is `p` a directory that exists? (v2 I1)
+ *
+ * `fs.existsSync` is TRUE for a FILE, and both photos-path entry points used it.
+ * A director who pastes the path of a photograph instead of the folder holding it
+ * (typed/pasted paths are the documented route for anything outside `data/` —
+ * Browse is in `directory` mode) therefore passed both gates, passed
+ * `fetchSessionPhotos`'s `fs.access`, and died on `fs.readdir`'s ENOTDIR AFTER the
+ * paid arc analysis, with a raw scandir error instead of the recovery sentence.
+ *
+ * @param {string} p
+ * @returns {boolean}
+ */
+function isDirectory(p) {
+    try { return fs.statSync(p).isDirectory(); } catch { return false; }
+}
+
+/**
+ * Sanitize and validate a photos folder supplied over the API (v2 I1).
+ *
+ * The same chain at both entry points (`POST /start` and the `photos`-gate arm of
+ * `buildResumePayload`): strip a pasted path's quotes and surrounding whitespace,
+ * `path.resolve` so `state.photosPath` holds an absolute path like the gate's own
+ * `defaultDir` (the process cwd is not guaranteed to be the same after a
+ * rollback), then refuse anything that is not a directory on disk.
+ *
+ * The caller owns the ERROR TEXT it shows: `/start` appends the "leave it blank"
+ * alternative, which is not an option at the gate itself.
+ *
+ * @param {string} raw - the caller's path
+ * @returns {{path: string|null, error: string|null}}
+ */
+function sanitizePhotosPath(raw) {
+    const resolved = path.resolve(raw.trim().replace(/^["']|["']$/g, ''));
+    if (!isDirectory(resolved)) {
+        return { path: null, error: `Photos directory not found or not a directory: ${resolved}` };
+    }
+    return { path: resolved, error: null };
+}
+
+/**
  * Build resume payload from approval decisions (DRY helper)
  * Used by /api/session/:id/approve endpoint with Command({ resume })
  *
@@ -497,18 +537,17 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     ];
     if (PHOTOS_PATH_GATES.includes(checkpointType)
         && typeof approvals.photosPath === 'string' && approvals.photosPath.trim()) {
-        // Absolute, like the gate's own defaultDir: state.photosPath is the one
-        // owner of this folder and is read again after a rollback, when the
-        // process cwd is no longer guaranteed to be what it was at start.
-        const p = path.resolve(approvals.photosPath.trim().replace(/^["']|["']$/g, ''));
         // v2 C1: refuse a folder that is not there, HERE. fetchSessionPhotos is the
         // backstop, but it runs after arc analysis and the console's failure card
         // can only offer a rollback to the last GATE seen, which re-pays the arcs
-        // and then throws again on the same bad path (F26).
-        if (!fs.existsSync(p)) {
-            error = `Photos directory not found: ${p}`;
+        // and then throws again on the same bad path (F26). v2 I1: "not there"
+        // includes "is a file" — existsSync() said yes to a pasted photo path.
+        const sanitized = sanitizePhotosPath(approvals.photosPath);
+        if (sanitized.error) {
+            error = sanitized.error;
             return { resume, stateUpdates, error };
         }
+        const p = sanitized.path;
         stateUpdates.photosPath = p;
         if (checkpointType === CHECKPOINT_TYPES.PHOTOS) {
             validApprovalDetected = true;
@@ -1041,21 +1080,21 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
     // Sanitize photosPath when the caller gave one (a pasted path often carries
     // quotes). `delete` rather than '' so downstream reads see undefined.
     if (typeof rawSessionInput.photosPath === 'string' && rawSessionInput.photosPath.trim()) {
-        rawSessionInput.photosPath = path.resolve(
-            rawSessionInput.photosPath.trim().replace(/^["']|["']$/g, '')
-        );
         // v2 C1: refuse a folder that is not there. fetchSessionPhotos is the
         // backstop, but it does not run until AFTER arc analysis, and the console's
         // failure card then offers a rollback to the last GATE seen (arc-selection),
         // which re-pays the Opus arc analysis and throws again — `photos` is not a
-        // clickable step in that state (F26).
-        if (!fs.existsSync(rawSessionInput.photosPath)) {
+        // clickable step in that state (F26). v2 I1: "not there" includes "is a
+        // file", which existsSync() accepted.
+        const sanitized = sanitizePhotosPath(rawSessionInput.photosPath);
+        if (sanitized.error) {
             return res.status(400).json({
                 sessionId,
-                error: `Photos directory not found: ${rawSessionInput.photosPath}. `
+                error: `${sanitized.error}. `
                      + 'Leave the field blank to supply it at the photos step after arc selection.'
             });
         }
+        rawSessionInput.photosPath = sanitized.path;
     } else {
         delete rawSessionInput.photosPath;
     }

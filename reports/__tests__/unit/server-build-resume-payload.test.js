@@ -350,7 +350,20 @@ describe('buildResumePayload — photosPath is a photos-gate-only approval (C1/I
     // where the console cannot offer the photos step as a rollback target (F26).
     const missing = path.join(dir, 'nope');
     const result = buildResumePayload({ photosPath: missing }, {}, 'journalist', 'photos');
-    expect(result.error).toBe('Photos directory not found: ' + missing);
+    expect(result.error).toBe('Photos directory not found or not a directory: ' + missing);
+    expect('photosPath' in result.stateUpdates).toBe(false);
+    expect(result.resume.photosPath).toBeUndefined();
+  });
+
+  it('refuses a FILE path, not just a missing one (v2 I1)', () => {
+    // existsSync() is TRUE for a file, so pasting the path of a photo instead of
+    // its folder used to pass this gate, pass fetchSessionPhotos's fs.access, and
+    // then die on readdir's ENOTDIR — OUTSIDE the labelled catch, after the paid
+    // arc analysis, with a raw scandir error instead of the recovery sentence.
+    const file = path.join(dir, 'a.jpg');
+    fs.writeFileSync(file, 'x');
+    const result = buildResumePayload({ photosPath: file }, {}, 'journalist', 'photos');
+    expect(result.error).toBe('Photos directory not found or not a directory: ' + file);
     expect('photosPath' in result.stateUpdates).toBe(false);
     expect(result.resume.photosPath).toBeUndefined();
   });
