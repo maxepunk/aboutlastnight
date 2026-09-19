@@ -5,7 +5,7 @@
  * Focuses on correct data wiring (what state fields reach the UI).
  *
  * Bug regression tests:
- * - checkpointAwaitRoster must pass photoAnalyses (not genericPhotoAnalyses) to interrupt
+ * - checkpointAwaitRoster must carry NO photo keys (the photo chain runs later)
  * - tagTokenDispositions must re-tag tokens even when all have existing dispositions
  */
 
@@ -26,65 +26,34 @@ describe('checkpoint-nodes', () => {
   });
 
   describe('checkpointAwaitRoster', () => {
-    it('passes photoAnalyses to interrupt data (not genericPhotoAnalyses)', async () => {
-      const mockPhotoAnalyses = {
-        analyses: [
-          { filename: 'photo1.jpg', visualContent: 'Two people talking', narrativeMoment: 'Discussion' },
-          { filename: 'whiteboard.jpg', visualContent: 'Whiteboard with notes', narrativeMoment: 'Evidence' }
-        ],
-        stats: { totalPhotos: 2, analyzedPhotos: 2 }
-      };
-
+    it('no longer sends photo data — the photos are not fetched yet (M3)', async () => {
+      // Photo late-join: the chain runs after arc selection, so photoAnalyses and
+      // whiteboardPhotoPath were ALWAYS empty at this gate. The console rendered a
+      // "Photo Analyses (0 total)" block and a red "Whiteboard: Not Found" badge on
+      // every run, which is worse than saying nothing.
       const state = {
-        photoAnalyses: mockPhotoAnalyses,
-        genericPhotoAnalyses: null, // This orphaned field should NOT be used
-        whiteboardPhotoPath: 'data/0216/photos/whiteboard.jpg',
+        photoAnalyses: { analyses: [{ filename: 'stale.jpg' }] },   // cannot exist here
+        whiteboardPhotoPath: 'data/0216/photos/whiteboard.jpg',      // cannot exist here
+        canonicalCharacters: { Vic: 'Victoria Blackwood' },
         roster: null
       };
 
       await checkpointAwaitRoster(state, {});
 
-      // checkpointInterrupt should have been called with the real photo analyses
-      expect(checkpointInterrupt).toHaveBeenCalledWith(
-        'await-roster',
-        expect.objectContaining({
-          genericPhotoAnalyses: mockPhotoAnalyses, // Keyed as genericPhotoAnalyses for UI compat
-          whiteboardPhotoPath: 'data/0216/photos/whiteboard.jpg'
-        }),
-        null // skipCondition = null when no roster
-      );
-    });
-
-    it('passes null photo analyses when no photos were analyzed', async () => {
-      const state = {
-        photoAnalyses: null,
-        genericPhotoAnalyses: null,
-        whiteboardPhotoPath: null,
-        roster: null
-      };
-
-      await checkpointAwaitRoster(state, {});
-
-      expect(checkpointInterrupt).toHaveBeenCalledWith(
-        'await-roster',
-        expect.objectContaining({
-          genericPhotoAnalyses: null,
-          whiteboardPhotoPath: null
-        }),
-        null
-      );
+      const payload = checkpointInterrupt.mock.calls[0][1];
+      expect('genericPhotoAnalyses' in payload).toBe(false);
+      expect('whiteboardPhotoPath' in payload).toBe(false);
+      expect(payload.canonicalCharacters).toEqual({ Vic: 'Victoria Blackwood' });
+      expect(payload.message).toBe('Provide the roster (names and pronouns). Photos are not needed yet.');
+      expect(checkpointInterrupt.mock.calls[0][0]).toBe('await-roster');
+      expect(checkpointInterrupt.mock.calls[0][2]).toBeNull();
     });
 
     it('skips interrupt when roster is already provided', async () => {
-      const state = {
-        photoAnalyses: { analyses: [] },
-        whiteboardPhotoPath: 'some/path.jpg',
-        roster: ['Alice', 'Bob', 'Charlie']
-      };
+      const state = { canonicalCharacters: {}, roster: ['Alice', 'Bob', 'Charlie'] };
 
       await checkpointAwaitRoster(state, {});
 
-      // skipCondition should be the roster array (truthy = skip)
       expect(checkpointInterrupt).toHaveBeenCalledWith(
         'await-roster',
         expect.any(Object),
@@ -92,23 +61,9 @@ describe('checkpoint-nodes', () => {
       );
     });
 
-    it('never reads from genericPhotoAnalyses state field', async () => {
-      // Scenario: genericPhotoAnalyses has stale/wrong data, photoAnalyses has correct data
-      const correctData = { analyses: [{ filename: 'real.jpg' }] };
-      const staleData = { analyses: [{ filename: 'stale.jpg' }] };
-
-      const state = {
-        photoAnalyses: correctData,
-        genericPhotoAnalyses: staleData, // Should be ignored
-        whiteboardPhotoPath: 'wb.jpg',
-        roster: null
-      };
-
-      await checkpointAwaitRoster(state, {});
-
-      const interruptPayload = checkpointInterrupt.mock.calls[0][1];
-      expect(interruptPayload.genericPhotoAnalyses).toBe(correctData);
-      expect(interruptPayload.genericPhotoAnalyses).not.toBe(staleData);
+    it('defaults canonicalCharacters to {} so the console can always index it', async () => {
+      await checkpointAwaitRoster({ roster: null }, {});
+      expect(checkpointInterrupt.mock.calls[0][1].canonicalCharacters).toEqual({});
     });
   });
 

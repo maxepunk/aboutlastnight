@@ -30,6 +30,11 @@ function EvidenceBundle({ data, onApprove }) {
   // Rescue state: Set of excluded item names user wants to rescue
   const [rescuedItems, setRescuedItems] = React.useState(new Set());
 
+  // M4: the photos folder rides along with this approval as a STATE write, so a
+  // director whose photos are already clean is not stopped at the `photos` gate
+  // two steps later. Nothing on this screen uses photos.
+  const [photosPath, setPhotosPath] = React.useState('');
+
   // Expand/collapse states for token and paper lists beyond preview
   const [showAllTokens, setShowAllTokens] = React.useState(false);
   const [showAllPaper, setShowAllPaper] = React.useState(false);
@@ -56,11 +61,14 @@ function EvidenceBundle({ data, onApprove }) {
   }
 
   function handleApprove() {
+    const payload = { evidenceBundle: true };
     if (rescuedItems.size > 0) {
-      onApprove({ evidenceBundle: true, rescuedItems: Array.from(rescuedItems) });
-    } else {
-      onApprove({ evidenceBundle: true });
+      payload.rescuedItems = Array.from(rescuedItems);
     }
+    if (photosPath.trim()) {
+      payload.photosPath = photosPath.trim();
+    }
+    onApprove(payload);
   }
 
   // Counts for summary stats
@@ -75,7 +83,7 @@ function EvidenceBundle({ data, onApprove }) {
       React.createElement('div', { className: 'flex gap-md mt-md' },
         React.createElement('button', {
           className: 'btn btn-primary',
-          onClick: function () { onApprove({ evidenceBundle: true }); }
+          onClick: handleApprove
         }, 'Continue')
       )
     );
@@ -334,6 +342,24 @@ function EvidenceBundle({ data, onApprove }) {
           )
         )
       ),
+
+    // ── Photos folder (optional, M4) ──
+    React.createElement('div', { className: 'checkpoint-section' },
+      React.createElement('h4', { className: 'checkpoint-section__title' }, 'Photos folder (optional, for the photos step after arc selection)'),
+      React.createElement('input', {
+        id: 'eb-photos-path',
+        type: 'text',
+        className: 'input input-mono text-sm',
+        placeholder: 'leave blank to be asked after arc selection',
+        value: photosPath,
+        onChange: (e) => setPhotosPath(e.target.value),
+        'aria-label': 'Directory containing session photos'
+      }),
+      React.createElement('p', { className: 'text-muted text-xs mt-xs' },
+        'Supply it here if the photos are already clean and you would rather not be stopped later. ' +
+        'Nothing on this screen uses photos.'
+      )
+    ),
 
     // ── Action Buttons ──
     React.createElement('div', { className: 'flex gap-md mt-md' },

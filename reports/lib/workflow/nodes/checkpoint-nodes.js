@@ -333,11 +333,11 @@ async function checkpointPreCuration(state, config) {
  *
  * Pauses for user to provide roster via /approve endpoint.
  * This is a NEW checkpoint for incremental input flow.
- * Enables: Whiteboard OCR with roster disambiguation, and (later, in the Phase
- * 2.36 photo branch) the character ID mapping and the Haiku photo prompts — which
- * is why a rollback to this point clears photoAnalyses + characterIdMappings.
+ * Enables: the pronoun authority for every downstream reference, and the
+ * character ID mapping that runs later in the Phase 2.36 photo branch — which is
+ * why a rollback to this point clears photoAnalyses + characterIdMappings.
  *
- * @param {Object} state - Current state with genericPhotoAnalyses
+ * @param {Object} state - Current state with roster and canonicalCharacters
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update with currentPhase
  */
@@ -350,10 +350,11 @@ async function checkpointAwaitRoster(state, config) {
   const resumeValue = checkpointInterrupt(
     CHECKPOINT_TYPES.AWAIT_ROSTER,
     {
-      genericPhotoAnalyses: state.photoAnalyses,
-      whiteboardPhotoPath: state.whiteboardPhotoPath,
+      // M3: no photo keys. The photo chain runs after arc selection now, so
+      // photoAnalyses and whiteboardPhotoPath are necessarily empty at this gate
+      // and the console rendered two permanently-empty sections from them.
       canonicalCharacters: state.canonicalCharacters || {},
-      message: 'Provide roster to enable whiteboard OCR and character identification'
+      message: 'Provide the roster (names and pronouns). Photos are not needed yet.'
     },
     skipCondition
   );
@@ -662,7 +663,7 @@ module.exports = {
     stateFields: ['preprocessedEvidence', 'preCurationApproved']
   }),
   checkpointAwaitRoster: traceNode(checkpointAwaitRoster, 'checkpointAwaitRoster', {
-    stateFields: ['photoAnalyses', 'roster', 'whiteboardPhotoPath']
+    stateFields: ['roster', 'rosterPronouns', 'canonicalCharacters']
   }),
   checkpointAwaitContext: traceNode(checkpointAwaitContext, 'checkpointAwaitContext', {
     stateFields: ['accusation', 'sessionReport', 'directorNotesRaw', 'roster']

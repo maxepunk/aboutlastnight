@@ -61,6 +61,17 @@ function RollbackPanel({ targetCheckpoint, onConfirm, onCancel }) {
         'This will clear all data from this point forward.'
       ),
 
+      // v2 M4: a `photos` rollback re-runs Haiku on every photo (5+ minutes for
+      // seven) and re-asks for the character mappings; a `character-ids` rollback
+      // re-asks for the mappings. The generic warning does not say either.
+      (targetCheckpoint === 'photos' || targetCheckpoint === 'character-ids') && React.createElement(
+        'p', { className: 'rollback-modal__warning' },
+        targetCheckpoint === 'photos'
+          ? 'The photos will be re-analysed by Haiku and the character mappings re-collected.'
+          : 'The character mappings will be re-collected. (Captions keep the names they were '
+            + 'already enriched with — roll back to Photos to redo those.)'
+      ),
+
       // State Overrides (collapsed by default)
       React.createElement('div', { className: 'mt-md' },
         React.createElement(CollapsibleSection, {

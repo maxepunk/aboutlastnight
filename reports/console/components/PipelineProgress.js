@@ -1,6 +1,6 @@
 /**
  * PipelineProgress Component
- * Horizontal stepper bar showing all 10 pipeline checkpoints.
+ * Horizontal stepper bar showing all 11 pipeline checkpoints (photos is conditional).
  * Completed steps are clickable for rollback, active step pulses cyan,
  * pending steps are dimmed.
  * Exports to window.Console.PipelineProgress

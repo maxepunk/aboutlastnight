@@ -35,6 +35,7 @@ const CHECKPOINT_COMPONENTS = {
   'await-full-context': window.Console.checkpoints && window.Console.checkpoints.AwaitFullContext,
   'evidence-and-photos': window.Console.checkpoints && window.Console.checkpoints.EvidenceBundle,
   'arc-selection': window.Console.checkpoints && window.Console.checkpoints.ArcSelection,
+  'photos': window.Console.checkpoints && window.Console.checkpoints.Photos,
   'outline': window.Console.checkpoints && window.Console.checkpoints.Outline,
   'article': window.Console.checkpoints && window.Console.checkpoints.Article
 };
@@ -638,6 +639,9 @@ function App() {
                       'pre-curation': { preCuration: true },
                       'evidence-and-photos': { evidenceBundle: true },
                       'arc-selection': { selectedArcs: (state.checkpointData.narrativeArcs || []).map(a => a.id || a.title) },
+                      // M6: if Photos.js fails to register, the fallback must still
+                      // post a shape the server accepts at this gate.
+                      'photos': { photosPath: state.checkpointData.defaultDir || '' },
                       'outline': { outline: true },
                       'article': { article: true }
                     };

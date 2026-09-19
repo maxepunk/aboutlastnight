@@ -1986,26 +1986,9 @@ async function handleAwaitRoster(checkpoint, currentPhase) {
   checkpointHeader('AWAIT_ROSTER', currentPhase);
 
   console.log(color('Awaiting Roster Input (Incremental Input)', 'bright'));
-  console.log(color('\nThis checkpoint pauses for roster to enable:', 'dim'));
-  console.log('  • Whiteboard OCR with name disambiguation');
-  console.log('  • Character ID mapping');
-
-  // Show generic photo analyses if available
-  const genericAnalyses = checkpoint.genericPhotoAnalyses?.analyses || [];
-  if (genericAnalyses.length > 0) {
-    console.log(color(`\nGeneric Photo Analyses (${genericAnalyses.length} photos):`, 'bright'));
-    genericAnalyses.slice(0, 3).forEach((analysis, i) => {
-      console.log(`  ${i + 1}. ${truncate(analysis.visualContent || 'No content', 80)}`);
-    });
-    if (genericAnalyses.length > 3) {
-      console.log(color(`  ... and ${genericAnalyses.length - 3} more`, 'dim'));
-    }
-  }
-
-  // Show whiteboard if detected
-  if (checkpoint.whiteboardPhotoPath) {
-    console.log(color(`\nWhiteboard detected: ${checkpoint.whiteboardPhotoPath}`, 'green'));
-  }
+  console.log(color('\nThe roster is the pronoun authority for every downstream reference', 'dim'));
+  console.log(color('and the basis of the character ID mapping later in the photo branch.', 'dim'));
+  console.log(color('Photos are not needed yet.', 'dim'));
 
   // Prefer pre-loaded incremental data (roster + pronouns from session-config) when available
   if (incrementalInputData?.roster) {
@@ -3079,22 +3062,9 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
     case 'await-roster':
       checkpointHeader('AWAIT_ROSTER', currentPhase);
       console.log(color('Awaiting Roster Input (Incremental Input)', 'bright'));
-      console.log(color('\nThis checkpoint pauses for roster to enable:', 'dim'));
-      console.log('  • Whiteboard OCR with name disambiguation');
-      console.log('  • Character ID mapping');
-      const genericAnalyses = checkpoint.genericPhotoAnalyses?.analyses || [];
-      if (genericAnalyses.length > 0) {
-        console.log(color(`\nGeneric Photo Analyses (${genericAnalyses.length} photos):`, 'bright'));
-        genericAnalyses.slice(0, 3).forEach((analysis, i) => {
-          console.log(`  ${i + 1}. ${analysis.visualContent?.substring(0, 80) || 'No content'}...`);
-        });
-        if (genericAnalyses.length > 3) {
-          console.log(color(`  ... and ${genericAnalyses.length - 3} more`, 'dim'));
-        }
-      }
-      if (checkpoint.whiteboardPhotoPath) {
-        console.log(color(`\nWhiteboard detected: ${checkpoint.whiteboardPhotoPath}`, 'green'));
-      }
+      console.log(color('\nThe roster is the pronoun authority for every downstream reference', 'dim'));
+      console.log(color('and the basis of the character ID mapping later in the photo branch.', 'dim'));
+      console.log(color('Photos are not needed yet.', 'dim'));
       console.log(color('\nProvide roster as array: { "roster": ["Name1", "Name2", ...] }', 'cyan'));
       break;
 

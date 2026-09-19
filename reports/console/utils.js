@@ -189,7 +189,7 @@ const CHECKPOINT_LABELS = {
   'pre-curation': 'Pre-Curation',
   'evidence-and-photos': 'Evidence Bundle',
   'arc-selection': 'Arc Selection',
-  'photos': 'Photos',
+  'photos': 'Photos (optional)',
   'character-ids': 'Character IDs',
   'outline': 'Outline',
   'article': 'Article'

@@ -55,7 +55,10 @@ function SessionStart({ dispatch, theme }) {
   // directories — which already happened to 071126. POST /start rejects those now;
   // this keeps the button from promising otherwise.
   const isValid = isValidSessionId(sessionId, allowNonstandardId);
-  const defaultPhotosPath = sessionId ? 'data/' + sessionId + '/photos' : '';
+  // Photo late-join: this is a PLACEHOLDER, not a default. buildRawInput omits
+  // photosPath entirely when the field is blank, so the run reaches the `photos`
+  // gate after arc selection and asks for the folder then.
+  const suggestedPhotosPath = sessionId ? 'data/' + sessionId + '/photos' : '';
 
   /** Clear whatever the last attempt left on screen. */
   function resetStatus() {
@@ -67,9 +70,10 @@ function SessionStart({ dispatch, theme }) {
    * Build rawSessionInput from form fields
    */
   function buildRawInput() {
-    const raw = {
-      photosPath: photosPath.trim() || defaultPhotosPath
-    };
+    const raw = {};
+    if (photosPath.trim()) {
+      raw.photosPath = photosPath.trim();
+    }
     if (whiteboardPath.trim()) {
       raw.whiteboardPhotoPath = whiteboardPath.trim();
     }
@@ -94,7 +98,7 @@ function SessionStart({ dispatch, theme }) {
     setBrowseMode(mode);
     // Use current value as initial path, or fall back to default
     if (target === 'photos') {
-      setBrowseInitialPath(photosPath.trim() || defaultPhotosPath || '');
+      setBrowseInitialPath(photosPath.trim() || suggestedPhotosPath || '');
     } else {
       setBrowseInitialPath(whiteboardPath.trim() || '');
     }
@@ -443,13 +447,13 @@ function SessionStart({ dispatch, theme }) {
 
     // Photos Path (with Browse button)
     React.createElement('div', { className: 'session-start__input-group mt-md' },
-      React.createElement('label', { htmlFor: 'photos-path' }, 'Photos Path'),
+      React.createElement('label', { htmlFor: 'photos-path' }, 'Photos Path (optional)'),
       React.createElement('div', { className: 'file-browser__input-row' },
         React.createElement('input', {
           id: 'photos-path',
           type: 'text',
           className: 'input input-mono text-sm',
-          placeholder: defaultPhotosPath || 'data/{sessionId}/photos',
+          placeholder: suggestedPhotosPath || 'data/{sessionId}/photos',
           value: photosPath,
           onChange: (e) => setPhotosPath(e.target.value),
           disabled: loading,
@@ -464,9 +468,9 @@ function SessionStart({ dispatch, theme }) {
         }, 'Browse')
       ),
       React.createElement('p', { className: 'text-muted text-xs mt-xs' },
-        defaultPhotosPath
-          ? 'Default: ' + defaultPhotosPath
-          : 'Enter session ID to see default path'
+        'Optional. Leave it blank and the pipeline will ask for the folder after arc selection, ' +
+        'so parsing, curation and arc analysis run while you are still curating the photos.' +
+        (suggestedPhotosPath ? ' Usual location: ' + suggestedPhotosPath + '.' : '')
       )
     ),
 
@@ -497,8 +501,9 @@ function SessionStart({ dispatch, theme }) {
             }, 'Browse')
           ),
           React.createElement('p', { className: 'text-muted text-xs mt-xs' },
-            'Only needed if the whiteboard photo is outside the photos directory. ' +
-            'The pipeline auto-detects whiteboard images by filename.'
+            'Optional. Give the whiteboard photo here, or at the Full Context stop, if you want it ' +
+            'read into the parse. A whiteboard inside the photos folder is kept OUT of the article ' +
+            'by filename, but it is NOT read.'
           )
         )
       )

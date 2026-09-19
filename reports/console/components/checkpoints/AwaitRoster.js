@@ -1,20 +1,15 @@
 /**
  * AwaitRoster Checkpoint Component
- * Tag-style input for entering player roster names.
- * Displays generic photo analyses and whiteboard status if available.
+ * Tag-style input for entering player roster names and pronouns.
  * Exports to window.Console.checkpoints.AwaitRoster
  */
 
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, truncate } = window.Console.utils;
 const { validateRosterEntry, knownCharacterList } = window.Console.awaitRosterLogic;
 
 function AwaitRoster({ data, onApprove }) {
-  const rawAnalyses = data && data.genericPhotoAnalyses;
-  const genericPhotoAnalyses = Array.isArray(rawAnalyses) ? rawAnalyses : (rawAnalyses && rawAnalyses.analyses) || [];
-  const whiteboardPhotoPath = (data && data.whiteboardPhotoPath) || null;
   const canonicalCharacters = (data && data.canonicalCharacters) || {};
   const knownCharacters = knownCharacterList(canonicalCharacters);
   const hasCanon = knownCharacters.length > 0;
@@ -81,46 +76,12 @@ function AwaitRoster({ data, onApprove }) {
     onApprove(buildPayload(finalTags));
   }
 
-  const previewAnalyses = genericPhotoAnalyses.slice(0, 3);
-
   return React.createElement('div', { className: 'flex flex-col gap-md' },
 
     React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Why Roster Is Needed'),
       React.createElement('p', { className: 'text-sm text-secondary' },
-        'The roster is the set of CHARACTERS who were played this session \u2014 their in-game identities, not the real people. It sets each character\u2019s pronouns (the universe is gender-neutral, so the roster is the pronoun authority). This drives article references, enables character ID mapping, and prevents pronoun errors.'
-      )
-    ),
-
-    previewAnalyses.length > 0 && React.createElement('div', { className: 'checkpoint-section' },
-      React.createElement('h4', { className: 'checkpoint-section__title' },
-        'Photo Analyses (' + genericPhotoAnalyses.length + ' total)'
-      ),
-      React.createElement('div', { className: 'flex flex-col gap-sm' },
-        previewAnalyses.map(function (analysis, i) {
-          const content = (analysis && analysis.visualContent) || (typeof analysis === 'string' ? analysis : '');
-          return React.createElement('div', { key: 'analysis-' + i, className: 'evidence-item' },
-            React.createElement('div', { className: 'evidence-item__header' },
-              React.createElement('span', { className: 'evidence-item__number' }, '#' + (i + 1)),
-              React.createElement('span', { className: 'text-sm text-secondary' },
-                truncate(typeof content === 'string' ? content : String(content), 120)
-              )
-            )
-          );
-        })
-      ),
-      genericPhotoAnalyses.length > 3 && React.createElement('p', { className: 'text-xs text-muted mt-sm' },
-        '+ ' + (genericPhotoAnalyses.length - 3) + ' more analyses'
-      )
-    ),
-
-    React.createElement('div', { className: 'checkpoint-section' },
-      React.createElement('h4', { className: 'checkpoint-section__title' }, 'Whiteboard Status'),
-      React.createElement('div', { className: 'flex gap-sm items-center' },
-        whiteboardPhotoPath
-          ? React.createElement(Badge, { label: 'Detected', color: 'var(--accent-green)' })
-          : React.createElement(Badge, { label: 'Not Found', color: 'var(--accent-red)' }),
-        whiteboardPhotoPath && React.createElement('span', { className: 'text-xs text-muted' }, whiteboardPhotoPath)
+        'The roster is the set of CHARACTERS who were played this session \u2014 their in-game identities, not the real people. It sets each character\u2019s pronouns (the universe is gender-neutral, so the roster is the pronoun authority). This drives article references, enables character ID mapping, and prevents pronoun errors. Photos are not needed yet \u2014 the pipeline asks for the folder after arc selection.'
       )
     ),
 

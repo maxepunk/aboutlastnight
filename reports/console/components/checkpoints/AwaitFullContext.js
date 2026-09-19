@@ -44,6 +44,7 @@ function AwaitFullContext({ data, onApprove, dispatch, pendingEdits }) {
   const [accusation, setAccusation] = React.useState(seed.accusation || '');
   const [sessionReport, setSessionReport] = React.useState(seed.sessionReport || '');
   const [directorNotes, setDirectorNotes] = React.useState(seed.directorNotes || '');
+  const [whiteboardPath, setWhiteboardPath] = React.useState('');
 
   // Re-seed when the checkpoint data changes (e.g., a fresh rollback delivers new prefill).
   React.useEffect(function () {
@@ -80,13 +81,18 @@ function AwaitFullContext({ data, onApprove, dispatch, pendingEdits }) {
 
   function handleSubmit() {
     if (!isValid) return;
-    onApprove({
+    const payload = {
       fullContext: {
         accusation: accusation.trim(),
         sessionReport: sessionReport.trim(),
         directorNotes: directorNotes.trim()
       }
-    });
+    };
+    // R1: the parse has not run yet, so adding the whiteboard here costs nothing.
+    if (whiteboardPath.trim()) {
+      payload.whiteboardPhotoPath = whiteboardPath.trim();
+    }
+    onApprove(payload);
   }
 
   return React.createElement('div', { className: 'flex flex-col gap-md' },
@@ -181,6 +187,28 @@ function AwaitFullContext({ data, onApprove, dispatch, pendingEdits }) {
         'that stops early is silent everywhere downstream, and anything a player ' +
         'said has to appear here word for word to reach the article.'
       )
+    ),
+
+    // Whiteboard photo, added late (R1). This is the last gate before parseRawInput.
+    React.createElement('div', { className: 'form-group' },
+      React.createElement('label', { className: 'form-group__label', htmlFor: 'fc-whiteboard' }, 'Whiteboard Photo (optional)'),
+      React.createElement('input', {
+        id: 'fc-whiteboard',
+        type: 'text',
+        className: 'input input-mono text-sm',
+        placeholder: 'path/to/whiteboard.jpg',
+        value: whiteboardPath,
+        onChange: (e) => setWhiteboardPath(e.target.value),
+        'aria-label': 'Path to the whiteboard photo to read into the parse'
+      }),
+      React.createElement('p', { className: 'text-muted text-xs mt-xs' },
+        'Only if you did not give one at session start. This is the last stop before the parse runs, ' +
+        'so it is the last free chance to have the whiteboard read.'
+      )
+      // This sentence is TRUE only because the full-context approval nulls
+      // sessionConfig/directorNotes/playerFocus (v2 I3, checkpointAwaitContext).
+      // Without that, a rollback to this gate reuses the parse loadDirectorNotes
+      // rehydrated from disk and the whiteboard is never read.
     ),
 
     // Submit button
