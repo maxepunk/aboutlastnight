@@ -184,3 +184,61 @@ describe('buildRevisionRulesSection — the REAL PromptBuilder over the REAL The
     await expect(builder.buildRevisionRulesSection()).rejects.toThrow(/revision prompt/i);
   });
 });
+
+describe('a missing revision prompt becomes the node error contract, not a graph rejection', () => {
+  // buildRevisionRulesSection throws on a missing prompt file (round 1). Both
+  // node call sites awaited the prompt builder ABOVE their try, so the throw
+  // escaped as a graph-level rejection: the node's
+  // { errors: [...], currentPhase: PHASES.ERROR } return is what clears the
+  // _previous* scratch and leaves the run resumable.
+  const { reviseOutline, reviseContentBundle } = require('../workflow/nodes/ai-nodes');
+  const { PHASES } = require('../workflow/state');
+  const { createThemeLoader } = require('../theme-loader');
+  const { PromptBuilder } = require('../prompt-builder');
+
+  /** A PromptBuilder whose revision prompts cannot be read. */
+  const brokenBuilder = () => new PromptBuilder(
+    createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
+    'journalist'
+  );
+
+  const config = () => ({
+    configurable: {
+      sdkClient: jest.fn(),                 // must never be reached
+      promptBuilder: brokenBuilder(),
+      theme: 'journalist'
+    }
+  });
+
+  it('reviseOutline returns the error contract', async () => {
+    const cfg = config();
+    const result = await reviseOutline(
+      { _previousOutline: { lede: {} }, outlineRevisionCount: 1, validationResults: null },
+      cfg
+    );
+
+    expect(result.currentPhase).toBe(PHASES.ERROR);
+    expect(result.outline).toBeNull();
+    expect(result._previousOutline).toBeNull();
+    expect(result._outlineFeedback).toBeNull();
+    expect(result.errors[0].type).toBe('outline-revision-failed');
+    expect(result.errors[0].message).toMatch(/revision prompt/i);
+    expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
+  });
+
+  it('reviseContentBundle returns the error contract', async () => {
+    const cfg = config();
+    const result = await reviseContentBundle(
+      { _previousContentBundle: { sections: [] }, articleRevisionCount: 1, validationResults: null },
+      cfg
+    );
+
+    expect(result.currentPhase).toBe(PHASES.ERROR);
+    expect(result.contentBundle).toBeNull();
+    expect(result._previousContentBundle).toBeNull();
+    expect(result._articleFeedback).toBeNull();
+    expect(result.errors[0].type).toBe('article-revision-failed');
+    expect(result.errors[0].message).toMatch(/revision prompt/i);
+    expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
+  });
+});

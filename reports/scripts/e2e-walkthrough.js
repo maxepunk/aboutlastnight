@@ -1759,12 +1759,12 @@ async function handleInputReview(checkpoint, currentPhase) {
   const autoApproval = handleAutoApproval('input-review', checkpoint, '[AUTO] Approving input...');
   if (autoApproval) return autoApproval;
 
-  // B2: the old [E]dit option built an `inputEdits` map of dotted field paths and
-  // sent it with `{inputReview: true}`. Nothing consumed it -- the server wrote it
-  // to a `_inputEdits` state key that was never an Annotation channel -- so the
-  // operator's edits were discarded while the run reported success. The gate's
-  // real contract is approve, or reject with prose corrections that drive a
-  // re-parse (checkpointInputReview -> parseRawInput).
+  // B2: the old [E]dit option built a map of dotted field paths and sent it with
+  // `{inputReview: true}`. Nothing consumed it -- the server wrote that map to a
+  // state key that was never an Annotation channel -- so the operator's edits were
+  // discarded while the run reported success. The gate's real contract is approve,
+  // or reject with prose corrections that drive a re-parse
+  // (checkpointInputReview -> parseRawInput).
   const choice = await prompt('\n[A]pprove, [R]eject with corrections, or [Q]uit? ');
   handleUserQuit(choice);
 

@@ -988,13 +988,16 @@ async function reviseOutline(state, config) {
   const sdk = getSdkClient(config, 'reviseOutline');
   const promptBuilder = getPromptBuilder(config, state);
 
-  // Build revision prompt
-  const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
-
   const theme = config?.configurable?.theme || 'journalist';
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
 
   try {
+    // INSIDE the try: buildOutlineRevisionPrompt loads the revision craft rules and
+    // THROWS if any are missing. Outside, that throw escaped as a graph-level
+    // rejection instead of this node's error-contract return, which is what clears
+    // _previousOutline / _outlineFeedback and leaves the run resumable.
+    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
+
     const result = await sdk({
       prompt: revisionPrompt,
       systemPrompt: getOutlineRevisionSystemPrompt(theme),
@@ -1420,10 +1423,13 @@ async function reviseContentBundle(state, config) {
   const sdk = getSdkClient(config, 'reviseContent');
   const promptBuilder = getPromptBuilder(config, state);
 
-  // Build revision prompt with full context
-  const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
-
   try {
+    // INSIDE the try: buildArticleRevisionPrompt loads the revision craft rules and
+    // THROWS if any are missing. Outside, that throw escaped as a graph-level
+    // rejection instead of this node's error-contract return, which is what clears
+    // _previousContentBundle / _articleFeedback and leaves the run resumable.
+    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
+
     const revised = await sdk({
       prompt: revisionPrompt,
       systemPrompt: getArticleRevisionSystemPrompt(config?.configurable?.theme || state?.theme || 'journalist'),

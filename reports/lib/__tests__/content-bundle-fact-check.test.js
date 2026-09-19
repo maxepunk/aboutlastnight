@@ -384,3 +384,31 @@ describe('reporter-mode false positives', () => {
     expect(result.reporterMode.violations).toEqual([]);
   });
 });
+
+describe('ellipsis normalisation', () => {
+  // The source elides with three dots; a model retyping it commonly produces the
+  // single U+2026 character. Before `normalize` folded it, the two spellings got
+  // OPPOSITE verdicts on identical content.
+  const SOURCE = 'You are standing by the bar when Vic leans in and says the job is already decided...';
+
+  const verdictFor = (cardContent) => factCheckContentBundle(baseArgs({
+    arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+    contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'vic001', content: cardContent })] }
+  })).cardFidelity[0];
+
+  it('gives the same verdict whether the card elides with … or with ...', () => {
+    const withDots = verdictFor(SOURCE);
+    const withChar = verdictFor(SOURCE.replace('...', '…'));
+    expect(withDots.ok).toBe(true);
+    expect(withChar).toEqual(withDots);
+  });
+
+  it('folds the character in the other direction too', () => {
+    const unicodeSource = 'You are standing by the bar when Vic leans in and says the job is already decided…';
+    const result = factCheckContentBundle(baseArgs({
+      arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: unicodeSource }] }],
+      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'vic001', content: SOURCE })] }
+    }));
+    expect(result.cardFidelity[0].ok).toBe(true);
+  });
+});

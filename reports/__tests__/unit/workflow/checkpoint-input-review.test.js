@@ -144,8 +144,8 @@ describe('parseRawInput consumes the corrections (no re-parse loop)', () => {
 
 describe('the e2e harness speaks the new gate contract', () => {
   // scripts/e2e-walkthrough.js is the operator's dry-run tool and has no test
-  // harness of its own, so this asserts on its source. Its old [E]dit path built
-  // an `inputEdits` map of dotted field paths and sent it with
+  // harness of its own, so this asserts on its source. Its old field-by-field
+  // edit path built a map of dotted field paths and sent it with
   // `{inputReview: true}` — the server wrote it to a `_inputEdits` key that was
   // never an Annotation channel, so the operator's edits were DISCARDED while the
   // run reported success.
@@ -155,10 +155,25 @@ describe('the e2e harness speaks the new gate contract', () => {
     path.join(__dirname, '..', '..', '..', 'scripts', 'e2e-walkthrough.js'), 'utf8'
   );
 
-  it('no longer builds or sends inputEdits in any form', () => {
-    // `/inputEdits:/` alone would have passed on the old file, which used the
-    // object shorthand `return { inputReview: true, inputEdits };`.
-    expect(src).not.toMatch(/inputEdits/);
+  // The identifier this guard forbids, assembled from pieces so it does NOT
+  // appear literally in this file. Otherwise the guard could only ever be
+  // written by naming the very thing it forbids.
+  const DEAD_FIELD = 'input' + 'Edits';
+
+  it('no longer builds or sends the dead edits field, in any form', () => {
+    // Word-bounded, and built with new RegExp from a string: the first version
+    // of this guard was written through a shell heredoc that collapsed its \b
+    // escapes into literal 0x08 BACKSPACE bytes, so not.toMatch passed
+    // vacuously against a harness that still contained the identifier.
+    expect(src).not.toMatch(new RegExp('\\b' + DEAD_FIELD + '\\b'));
+  });
+
+  it('contains no stray C0 control bytes of its own', () => {
+    // Pins the failure mode above: a 0x08 in this file means an escape was
+    // collapsed on the way in, and any regex built from it is untrustworthy.
+    const own = fs.readFileSync(__filename, 'utf8');
+    const controls = own.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || [];
+    expect(controls).toEqual([]);
   });
 
   it('offers reject-with-corrections and sends inputFeedback', () => {
