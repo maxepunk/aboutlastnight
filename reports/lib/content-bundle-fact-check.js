@@ -131,6 +131,52 @@ const LEAKED_PROMPT_EXAMPLES = [
 const NEVER_VOTES = ['i voted', 'my vote', 'one of them was mine'];
 const PRESENCE_CLAIMS = ['i was in the room', 'i was there in the room', 'from inside the room', 'i sat in that room'];
 
+/**
+ * They/them pronouns, for the NPC pronoun scan.
+ *
+ * BASELINE §4 class 3: 26 fact errors across 4 of 5 sessions, "above all Marcus
+ * written they/them". The victim is never on the session roster, so his pronouns
+ * came from nowhere. Within WINDOW words of the NPC's name, a they/them pronoun
+ * contradicting the canon is a defect the reviser can fix mechanically.
+ */
+const THEY_THEM = ['they', 'them', 'their', 'theirs', 'themselves'];
+const PRONOUN_WINDOW = 6;
+
+/**
+ * Find NPC names followed within PRONOUN_WINDOW words by a they/them pronoun
+ * that contradicts the canon.
+ *
+ * Window-limited on purpose: a they/them anywhere later in the sentence usually
+ * refers to the room, not the NPC, and a false positive here costs a paid
+ * revision. Only NPCs whose pronouns the canon actually states are scanned.
+ *
+ * @param {string} prose
+ * @param {Object<string,string>} npcPronouns - name -> 'he/him'
+ * @returns {Array<{name: string, pronoun: string, excerpt: string}>}
+ */
+function scanNpcPronouns(prose, npcPronouns) {
+  const hits = [];
+  const map = npcPronouns && typeof npcPronouns === 'object' ? npcPronouns : {};
+
+  for (const [name, declared] of Object.entries(map)) {
+    if (typeof declared !== 'string' || declared.toLowerCase().includes('they')) continue;
+    const pattern = new RegExp(
+      `\\b${escapeRegExp(name)}\\b((?:\\W+\\w+){0,${PRONOUN_WINDOW}})`,
+      'gi'
+    );
+    let match;
+    while ((match = pattern.exec(prose)) !== null) {
+      const window = String(match[1] || '').toLowerCase();
+      const pronoun = THEY_THEM.find(pn => new RegExp(`\\b${pn}\\b`).test(window));
+      if (pronoun) {
+        hits.push({ name, pronoun, excerpt: match[0].trim() });
+        break;   // one report per NPC is enough to act on
+      }
+    }
+  }
+  return hits;
+}
+
 /** Basename of a path, tolerating both separators. */
 function basename(p) {
   return String(p == null ? '' : p).split(/[/\\]/).filter(Boolean).pop() || '';
@@ -241,6 +287,7 @@ function visibleText(contentBundle) {
  * @param {Array}    args.sessionPhotos        - photo paths available to this session
  * @param {string}   args.reportingMode        - 'on-site' | 'remote' (default 'on-site')
  * @param {Object}   [args.npcPronouns]        - name -> 'he/him' for NPCs (victim pronoun scan)
+ * @see BASELINE.md §4 for the measured failure classes each check addresses
  * @returns {{structuralIssues: string[], advisoryWarnings: string[],
  *            cardFidelity: Array<{tokenId: string, ok: boolean, reason: string|null}>,
  *            rosterCoverage: {missing: string[]},
@@ -253,7 +300,8 @@ function factCheckContentBundle({
   evidenceBundle,
   roster,
   sessionPhotos,
-  reportingMode
+  reportingMode,
+  npcPronouns
 } = {}) {
   const structuralIssues = [];
   const advisoryWarnings = [];
@@ -390,6 +438,15 @@ function factCheckContentBundle({
     }
   }
 
+  // ── 5. NPC pronouns (BASELINE class 3) ───────────────────────────────────
+  for (const hit of scanNpcPronouns(prose, npcPronouns)) {
+    structuralIssues.push(
+      `Pronoun error: ${hit.name} takes ${npcPronouns[hit.name]}, but the article writes ` +
+      `"${hit.excerpt}". The roster block's non-player-character line is the authority. ` +
+      `Correct every pronoun used of ${hit.name}.`
+    );
+  }
+
   return {
     structuralIssues,
     advisoryWarnings,
@@ -408,6 +465,7 @@ module.exports = {
     stripCardPrefix,
     isVerbatim,
     buildSourceMap,
+    scanNpcPronouns,
     visibleText,
     LEAKED_PROMPT_EXAMPLES,
     NEVER_VOTES,

@@ -58,7 +58,7 @@ NEVER refer to "memory tokens" as objects. These are people's private, extracted
 
 ## Pronouns (CRITICAL)
 
-Use each character's pronouns exactly as given in the roster block (every roster line ends with the character's pronouns, e.g. `Vic Kingsley (she/her)`). The universe is gender-neutral; the roster is the authority. When a character's pronouns are `they/them`, use they/them. NEVER infer a character's gender from their name, their role, or anything in their memories.
+Use each character's pronouns exactly as given in the roster block (every roster line ends with the character's pronouns, e.g. `Vic Kingsley (she/her)`). The universe is gender-neutral. TWO parts of that block are authoritative and they cover everyone you may name: the session roster, and the `Non-player characters` line beneath it, which carries the pronouns for the victim and the narrator. The victim is NOT on the session roster, so his pronouns come from that non-player-character line and nowhere else. When a character's pronouns are `they/them`, use they/them. NEVER infer a character's gender from their name, their role, or anything in their memories, and never fall back to they/them for a character whose pronouns either list gives.
 
 ## POV: First-Person Witness (CRITICAL)
 

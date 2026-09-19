@@ -8,6 +8,7 @@
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
 const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
+const { getThemeNPCEntries } = require('./theme-config');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
 /**
@@ -43,6 +44,27 @@ function generateRosterSection(theme = 'journalist', canonicalCharacters = null,
   let result = `CANONICAL CHARACTER ROSTER:
 Use ONLY these full names in ALL article text. NEVER invent different last names:
 ${lines}`;
+
+  // BASELINE §4 class 3: the NPCs are fixed canon and are NOT on the session
+  // roster, so the victim had no pronoun anywhere in the prompt and the model
+  // guessed (Marcus written they/them on 4 of 5 sessions). Aliases and NPCs whose
+  // pronouns the canon never states are listed without a pronoun rather than
+  // given an invented one.
+  const npcLines = getThemeNPCEntries(theme)
+    .filter(e => e && typeof e === 'object' && !e.aliasOf)
+    .map(e => {
+      const display = e.fullName || e.name;
+      const pronouns = showPronouns && e.pronouns ? ` (${e.pronouns})` : '';
+      const role = e.role ? ` - ${e.role}` : '';
+      return `- ${display}${pronouns}${role}`;
+    });
+
+  if (npcLines.length > 0) {
+    result += `
+
+Non-player characters (fixed canon, NOT on the session roster; these pronouns are as authoritative as the roster's):
+${npcLines.join('\n')}`;
+  }
 
   if (characterData && Object.keys(characterData).length > 0) {
     result += '\n\nCHARACTER CONTEXT (extracted from evidence — use for factual accuracy):';

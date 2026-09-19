@@ -17,13 +17,21 @@
 
 const THEME_CONFIGS = {
   journalist: {
-    // NPCs for the NovaNews investigative journalism theme
-    // These characters are valid in arc characterPlacements but don't count toward roster coverage
+    // NPCs for the NovaNews investigative journalism theme.
+    // Valid in arc characterPlacements but don't count toward roster coverage.
+    //
+    // `pronouns` is here because the NPCs are FIXED CANON while rosterPronouns is
+    // per-session and keyed by the roster. The victim is never on the roster, so
+    // Marcus had no pronoun anywhere in the prompt and the model guessed -- 26
+    // pronoun/fact errors across 4 of 5 sessions, "above all Marcus written
+    // they/them" (BASELINE.md §4 class 3). Omit the field rather than invent it:
+    // the references use they/them for Blake in prose but never DECLARE Blake's
+    // pronouns, so Blake carries none.
     npcs: [
-      'Marcus',   // The murder victim - central to every arc
-      'Nova',     // The journalist narrator (matches "Nova" or "* Nova" patterns)
-      'Blake',    // The valet NPC
-      'Valet',    // Alias for Blake
+      { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the murder victim - central to every arc' },
+      { name: 'Nova', fullName: 'Nova', pronouns: 'she/her', role: 'the journalist narrator' },
+      { name: 'Blake', fullName: 'Blake', role: 'the valet NPC' },
+      { name: 'Valet', aliasOf: 'Blake', role: 'alias for Blake' }
     ],
 
     // Outline structure rules (Commit 8.19)
@@ -67,12 +75,12 @@ const THEME_CONFIGS = {
   },
 
   detective: {
-    // NPCs for the detective investigation theme
-    // Same game universe, different narrator (Detective Anondono)
+    // NPCs for the detective investigation theme.
+    // Same game universe, different narrator (Detective Anondono).
     npcs: [
-      'Marcus',   // The murder victim
-      'Blake',    // The valet NPC
-      'Valet',    // Alias for Blake
+      { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the murder victim' },
+      { name: 'Blake', fullName: 'Blake', role: 'the valet NPC' },
+      { name: 'Valet', aliasOf: 'Blake', role: 'alias for Blake' }
     ],
 
     // Outline structure rules for detective case report
@@ -107,12 +115,46 @@ const THEME_CONFIGS = {
 };
 
 /**
- * Get NPCs for a theme
+ * Get the raw NPC entries for a theme.
+ * @param {string} theme - Theme name (e.g., 'journalist')
+ * @returns {Array<{name: string, fullName?: string, pronouns?: string, aliasOf?: string, role?: string}>}
+ */
+function getThemeNPCEntries(theme) {
+  return THEME_CONFIGS[theme]?.npcs || [];
+}
+
+/**
+ * Get NPC NAMES for a theme.
+ *
+ * Unchanged contract (a flat array of name strings) so every existing consumer
+ * -- isKnownNPC, getNonRosterPCs, the evaluator's NPC allowlist, the arc
+ * character-categories block -- keeps working after the entries gained fields.
+ *
  * @param {string} theme - Theme name (e.g., 'journalist')
  * @returns {string[]} Array of NPC names, empty array if theme not found
  */
 function getThemeNPCs(theme) {
-  return THEME_CONFIGS[theme]?.npcs || [];
+  return getThemeNPCEntries(theme).map(n => (typeof n === 'string' ? n : n.name)).filter(Boolean);
+}
+
+/**
+ * Get a name -> pronouns map for the NPCs whose pronouns the canon states.
+ *
+ * Consumed by the article roster block (the authority the pronoun rule points at)
+ * and by the fact-check's pronoun scan. Aliases and NPCs without declared
+ * pronouns are absent, so nothing here is an invention.
+ *
+ * @param {string} theme
+ * @returns {Object<string,string>}
+ */
+function getThemeNPCPronouns(theme) {
+  const out = {};
+  for (const entry of getThemeNPCEntries(theme)) {
+    if (entry && typeof entry === 'object' && entry.pronouns && !entry.aliasOf) {
+      out[entry.name] = entry.pronouns;
+    }
+  }
+  return out;
 }
 
 /**
@@ -174,6 +216,8 @@ function getThemeCharacters(theme = 'journalist') {
 module.exports = {
   THEME_CONFIGS,
   getThemeNPCs,
+  getThemeNPCEntries,
+  getThemeNPCPronouns,
   getThemeConfig,
   isValidTheme,
   getOutlineRules,

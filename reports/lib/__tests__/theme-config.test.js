@@ -23,9 +23,15 @@ describe('theme-config', () => {
     });
 
     it('journalist should have npcs array', () => {
+      // BASELINE §4 class 3: the entries are objects now, so each NPC can carry
+      // the pronouns the canon states (the victim is never on the session roster
+      // and so had no pronoun anywhere in the prompt). getThemeNPCs still returns
+      // plain names for every existing consumer.
       expect(Array.isArray(THEME_CONFIGS.journalist.npcs)).toBe(true);
-      expect(THEME_CONFIGS.journalist.npcs).toContain('Marcus');
-      expect(THEME_CONFIGS.journalist.npcs).toContain('Nova');
+      expect(THEME_CONFIGS.journalist.npcs.map(n => n.name)).toContain('Marcus');
+      expect(THEME_CONFIGS.journalist.npcs.map(n => n.name)).toContain('Nova');
+      expect(getThemeNPCs('journalist')).toContain('Marcus');
+      expect(getThemeNPCs('journalist')).toContain('Nova');
     });
 
     it('journalist should have outlineRules object', () => {

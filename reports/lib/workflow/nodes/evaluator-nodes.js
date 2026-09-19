@@ -35,7 +35,7 @@ const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = require('./node-helpers');
 const { traceNode } = require('../../observability');
-const { getThemeNPCs } = require('../../theme-config');
+const { getThemeNPCs, getThemeNPCPronouns } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -987,7 +987,8 @@ function createEvaluator(phase, options = {}) {
         evidenceBundle: state.evidenceBundle,
         roster: state.sessionConfig?.roster,
         sessionPhotos: state.sessionPhotos,
-        reportingMode: state.sessionConfig?.reportingMode
+        reportingMode: state.sessionConfig?.reportingMode,
+        npcPronouns: getThemeNPCPronouns(theme)
       });
 
       if (factCheck.structuralIssues.length > 0) {
