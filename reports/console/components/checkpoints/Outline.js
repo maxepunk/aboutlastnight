@@ -269,6 +269,23 @@ function KeyValueEditor(props) {
 // Editor components at module scope
 // ═══════════════════════════════════════════════════════
 
+/**
+ * Thesis editor (spec 2026-09-19 §6.1): the three LEDE fields the director rewrites
+ * most, with their own pencil. Saves through the LEDE path via EditLogic.buildThesisPayload.
+ */
+function ThesisEditor({ lede, onSave, onCancel }) {
+  const [form, setForm] = React.useState(EditLogic.initThesis(lede));
+  function set(key) {
+    return function (value) { setForm(function (prev) { return Object.assign({}, prev, { [key]: value }); }); };
+  }
+  return React.createElement('div', { className: 'edit-form' },
+    React.createElement(TextField, { label: 'Hook', value: form.hook, onChange: set('hook'), multiline: true }),
+    React.createElement(TextField, { label: 'Key tension', value: form.keyTension, onChange: set('keyTension'), multiline: true }),
+    React.createElement(TextField, { label: 'Primary arc', value: form.primaryArc, onChange: set('primaryArc') }),
+    actionsRow(function () { onSave(EditLogic.buildThesisPayload(form, lede)); }, onCancel)
+  );
+}
+
 function LedeEditor({ lede, onSave, onCancel }) {
   const [state, setState] = React.useState(function () { return EditLogic.initLede(lede); });
   function set(field, val) { setState(Object.assign({}, state, { [field]: val })); }
@@ -670,6 +687,39 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   // ═══════════════════════════════════════════════════════
   // Journalist section renderers
   // ═══════════════════════════════════════════════════════
+
+  // Thesis panel (spec 2026-09-19 §6.1). Journalist only. Its editing key is 'thesis',
+  // never 'lede', so opening it does not flip the LEDE section into edit mode; its
+  // original is the CURRENT lede (edited when edits are pending) so a thesis save after
+  // a LEDE edit keeps that edit's evidence selection.
+  function renderThesis(lede) {
+    if (isDetective || !lede) return null;
+    const editing = isEditing('section', 'thesis');
+    const field = function (label, value) {
+      return React.createElement('p', { className: 'text-sm mb-sm' },
+        React.createElement('strong', null, label + ': '),
+        typeof value === 'string' && value.trim() ? value : React.createElement('span', { className: 'text-muted' }, '(empty)')
+      );
+    };
+    if (editing) {
+      return React.createElement('div', { key: 'thesis', className: 'outline-section outline-section--editing outline-thesis' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'THESIS'),
+        React.createElement(ThesisEditor, { lede: lede, onSave: function (updated) { saveSectionEdit('lede', updated); }, onCancel: cancelEdit })
+      );
+    }
+    return React.createElement('div', { key: 'thesis', className: EDITABLE + ' outline-thesis' },
+      React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
+        React.createElement('h4', { className: 'outline-section__title' }, 'THESIS'),
+        editBtn(function () { setEditingBlock({ type: 'section', key: 'thesis' }); })
+      ),
+      React.createElement('div', { className: 'outline-section__content' },
+        field('Hook', lede.hook),
+        field('Key tension', lede.keyTension),
+        field('Primary arc', lede.primaryArc),
+        React.createElement('p', { className: 'text-xs text-muted' }, 'Shown again at the article gate. The headline must serve this.')
+      )
+    );
+  }
 
   function renderLede(lede) {
     if (!lede) return null;
@@ -1133,6 +1183,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     }
     // Journalist (default)
     return [
+      renderThesis(current.lede),
       renderLede(current.lede),
       renderTheStory(current.theStory),
       renderFollowTheMoney(current.followTheMoney),

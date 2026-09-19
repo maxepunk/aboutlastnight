@@ -85,9 +85,9 @@ describe('Outline.js opts in at every pencil host', () => {
     expect(src).toContain("const EDITABLE = 'outline-section ' + ALWAYS;");
   });
 
-  it('routes all 13 pencil hosts through it: 11 section wrappers + the 2 THE STORY rows', () => {
-    // The 11 `.outline-section` wrappers.
-    expect(count(src, 'className: EDITABLE')).toBe(11);
+  it('routes all 14 pencil hosts through it: 12 section wrappers + the 2 THE STORY rows', () => {
+    // The 12 `.outline-section` wrappers.
+    expect(count(src, 'className: EDITABLE')).toBe(12);
     // The arc row and the arc-interweaving row, which are not section wrappers.
     expect(count(src, "'outline-section__arc ' + ALWAYS")).toBe(1);
     expect(count(src, "gap-sm mt-sm ' + ALWAYS")).toBe(1);
@@ -98,7 +98,14 @@ describe('Outline.js opts in at every pencil host', () => {
       count(src, "'outline-section__arc ' + ALWAYS") +
       count(src, "gap-sm mt-sm ' + ALWAYS");
     expect(count(src, 'editBtn(')).toBe(hosts);
-    expect(hosts).toBe(13);
+    expect(hosts).toBe(14);
+  });
+
+  it('renders the thesis panel through the opt-in host and its own editing key (spec 2026-09-19 §6.1)', () => {
+    expect(src).toContain("className: EDITABLE + ' outline-thesis'");
+    expect(src).toContain("setEditingBlock({ type: 'section', key: 'thesis' })");
+    expect(src).toContain("isEditing('section', 'thesis')");
+    expect(src).toContain('EditLogic.buildThesisPayload(');
   });
 
   it('never writes a bare --editable host (which would be hover-only again)', () => {

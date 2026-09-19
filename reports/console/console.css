@@ -2753,3 +2753,19 @@ textarea.input {
 }
 .progress-eventlog__item--error { color: var(--accent-red, #f87171); }
 .progress-eventlog__item--retry { color: var(--accent-amber, #fbbf24); }
+
+/* Thesis panel at the outline gate (spec 2026-09-19 §6.1) */
+.outline-thesis {
+  border-left-color: rgba(212, 168, 83, 0.6);
+  background: rgba(212, 168, 83, 0.06);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 4px;
+}
+/* Read-only echo of the thesis at the article gate (§6.2) */
+.article-thesis-echo {
+  border-left: 2px solid rgba(212, 168, 83, 0.6);
+  background: rgba(212, 168, 83, 0.06);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  border-radius: 4px;
+}
