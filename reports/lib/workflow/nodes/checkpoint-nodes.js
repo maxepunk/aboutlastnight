@@ -171,9 +171,17 @@ async function checkpointPaperEvidence(state, config) {
  * CORRECTION offers the corrected path, not the original typo, because /rollback
  * stashes the cleared value in _previousPhotosPath.
  *
+ * NO CAPTURE BRANCH (v2 I2): this node never writes photosPath. /approve invokes
+ * Command({resume, update: stateUpdates}) and the update is applied BEFORE the
+ * interrupted node re-executes (F25), so on re-execution state.photosPath already
+ * holds the approved value, skipCondition is truthy, and a capture branch would be
+ * unreachable on every HTTP path (console and harness alike) — the ROLL-4
+ * dead-branch pattern. `buildResumePayload`'s photos arm is the writer: it
+ * validates the folder, writes the channel, and nulls the consumed pre-fill stash.
+ *
  * @param {Object} state - Current state with sessionId, photosPath
  * @param {Object} config - Graph config with optional configurable.dataDir
- * @returns {Object} Partial state update with photosPath, currentPhase
+ * @returns {Object} Partial state update with currentPhase
  */
 async function checkpointPhotos(state, config) {
   const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
@@ -181,7 +189,7 @@ async function checkpointPhotos(state, config) {
 
   const skipCondition = state.photosPath ? state.photosPath : null;
 
-  const resumeValue = checkpointInterrupt(
+  checkpointInterrupt(
     CHECKPOINT_TYPES.PHOTOS,
     {
       photosPath: state.photosPath || state._previousPhotosPath || state.rawSessionInput?.photosPath || null,
@@ -191,20 +199,6 @@ async function checkpointPhotos(state, config) {
     },
     skipCondition
   );
-
-  if (!skipCondition) {
-    const supplied = typeof resumeValue?.photosPath === 'string'
-      ? resumeValue.photosPath.trim().replace(/^["']|["']$/g, '')
-      : '';
-    if (supplied) {
-      console.log(`[checkpointPhotos] Captured photos path from resume: ${supplied}`);
-      return {
-        photosPath: supplied,
-        _previousPhotosPath: null,   // consumed — clear the pre-fill stash (v2 M1)
-        currentPhase: PHASES.PHOTOS
-      };
-    }
-  }
 
   return { currentPhase: PHASES.PHOTOS };
 }

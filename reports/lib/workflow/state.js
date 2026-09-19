@@ -222,8 +222,11 @@ const ReportStateAnnotation = Annotation.Root({
    * gate-time correction would re-offer the ORIGINAL start-time path, which is the
    * bad one the director just corrected. `/rollback` stashes the cleared value here
    * (exactly as ROLL-4 stashes `_previousFullContext`), the gate pre-fills from it,
-   * and the capture return nulls it. Display only: it can neither make the gate skip
-   * nor redirect `fetchSessionPhotos`.
+   * and the approval that ANSWERS the gate nulls it — `buildResumePayload`'s photos
+   * arm, not the node (v2 I2: a `Command` update lands before the interrupted node
+   * re-executes, so `checkpointPhotos` always skips and could never consume it).
+   * Display only: it can neither make the gate skip nor redirect
+   * `fetchSessionPhotos`.
    */
   _previousPhotosPath: Annotation({
     reducer: replaceReducer,

@@ -94,27 +94,30 @@ describe('checkpointPhotos payload', () => {
   });
 });
 
-describe('checkpointPhotos capture', () => {
-  it('captures the resumed path, stripped of quotes and whitespace, and consumes the stash', async () => {
+describe('checkpointPhotos writes nothing but the phase (v2 I2)', () => {
+  // The node has NO capture branch. /approve invokes
+  // Command({resume, update: stateUpdates}) and the update is applied BEFORE the
+  // interrupted node re-executes (F25), so on re-execution state.photosPath is
+  // already the approved value, the skip condition is truthy, and any capture
+  // branch is unreachable on every HTTP path (console and harness alike). The
+  // writers are POST /start and buildResumePayload's photos arm — the latter also
+  // consumes the pre-fill stash, pinned in server-build-resume-payload.test.js.
+  it('writes only currentPhase when the resume carries a path', async () => {
     checkpointInterrupt.mockImplementationOnce(() => ({ photosPath: '  "D:/shoots/091926-clean"  ' }));
     const out = await checkpointPhotos(
       { sessionId: '091926', photosPath: null, _previousPhotosPath: 'D:/old' }, cfg()
     );
-    expect(out.photosPath).toBe('D:/shoots/091926-clean');
-    expect(out.currentPhase).toBe(PHASES.PHOTOS);
-    // v2 M1: consumed, exactly as checkpointAwaitContext clears _previousFullContext.
-    expect(out._previousPhotosPath).toBeNull();
+    expect(out).toEqual({ currentPhase: PHASES.PHOTOS });
   });
 
-  it('writes no photosPath when the resume carries none', async () => {
+  it('writes only currentPhase when the resume carries none', async () => {
     checkpointInterrupt.mockImplementationOnce(() => ({ photosPath: '   ' }));
     const out = await checkpointPhotos({ sessionId: '091926', photosPath: null }, cfg());
-    expect('photosPath' in out).toBe(false);
-    expect(out.currentPhase).toBe(PHASES.PHOTOS);
+    expect(out).toEqual({ currentPhase: PHASES.PHOTOS });
   });
 
-  it('writes no photosPath on the skip path (the value is already in state)', async () => {
+  it('writes only currentPhase on the skip path', async () => {
     const out = await checkpointPhotos({ sessionId: '091926', photosPath: 'D:/x' }, cfg());
-    expect('photosPath' in out).toBe(false);
+    expect(out).toEqual({ currentPhase: PHASES.PHOTOS });
   });
 });

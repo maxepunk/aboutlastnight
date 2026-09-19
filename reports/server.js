@@ -552,6 +552,10 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         if (checkpointType === CHECKPOINT_TYPES.PHOTOS) {
             validApprovalDetected = true;
             resume.photosPath = p;
+            // v2 I2: the approval that ANSWERS the gate consumes the pre-fill stash.
+            // checkpointPhotos cannot: this update is applied before the interrupted
+            // node re-executes (F25), so the node skips and never runs a capture.
+            stateUpdates._previousPhotosPath = null;
         }
     }
 

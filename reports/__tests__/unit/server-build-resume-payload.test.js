@@ -339,6 +339,30 @@ describe('buildResumePayload — photosPath is a photos-gate-only approval (C1/I
     expect(result.stateUpdates.photosPath).toBe(dir);
   });
 
+  it('consumes the pre-fill stash on the approval that answers the gate (v2 I2)', () => {
+    // The APPROVAL clears _previousPhotosPath, not the node. /approve invokes
+    // Command({resume, update: stateUpdates}) and the update is applied BEFORE the
+    // interrupted node re-executes (F25), so on re-execution state.photosPath is
+    // already set, checkpointPhotos skips, and a capture branch inside it could
+    // never run on any HTTP path.
+    const result = buildResumePayload({ photosPath: dir }, {}, 'journalist', 'photos');
+    expect(result.stateUpdates._previousPhotosPath).toBeNull();
+  });
+
+  it('does not touch the stash at the two convenience gates (v2 I2)', () => {
+    // Those gates do not ANSWER the photos interrupt, so there is no pre-fill to
+    // consume — the gate has not been shown yet.
+    const evidence = buildResumePayload(
+      { evidenceBundle: true, photosPath: dir }, {}, 'journalist', 'evidence-and-photos'
+    );
+    expect('_previousPhotosPath' in evidence.stateUpdates).toBe(false);
+
+    const arcs = buildResumePayload(
+      { selectedArcs: ['a'], photosPath: dir }, {}, 'journalist', 'arc-selection'
+    );
+    expect('_previousPhotosPath' in arcs.stateUpdates).toBe(false);
+  });
+
   it('strips surrounding quotes and whitespace', () => {
     const result = buildResumePayload({ photosPath: '  "' + dir + '" ' }, {}, 'journalist', 'photos');
     expect(result.resume.photosPath).toBe(dir);
