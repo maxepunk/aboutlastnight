@@ -72,8 +72,18 @@ const STATUS_PREFIX = {
 };
 
 function RevisionDiff({ previous, current, revisionCount, maxRevisions, previousFeedback, humanRevisionCount, maxHumanRevisions }) {
-  // Only render if we have a previous version to compare
-  if (previous === null || previous === undefined) {
+  const hasPrevious = previous !== null && previous !== undefined;
+
+  // R5 F10: the whole component used to bail out on `!previous`, which took the
+  // revision banner, the "N remaining" budget, the max-revisions warning AND the
+  // director's own last feedback with it - even when the server HAD sent
+  // revisionCount, humanRevisionCount, maxRevisions and previousFeedback.
+  // `previous` is client-only (revisionCache, written by the reject handlers), so
+  // after a refresh or a laptop sleep the director resumed with no idea how many
+  // revisions remained (the arc cap is 2) or what they had asked for last time.
+  // Server data drives the banner; only the DIFF LISTING needs `previous`.
+  const hasRevisionState = revisionCount > 0 || humanRevisionCount > 0 || !!previousFeedback;
+  if (!hasPrevious && !hasRevisionState) {
     return null;
   }
 
@@ -86,14 +96,14 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
   const budgetColor = budgetRemaining > 1 ? 'var(--accent-green)' :
                       budgetRemaining === 1 ? 'var(--accent-amber)' :
                       'var(--accent-red)';
-  const atMax = displayCount >= displayMax;
-
-  const diffItems = shallowDiff(previous, current);
+  // A cap of 0/undefined means "this gate reported no budget", not "at the cap".
+  const atMax = displayMax > 0 && displayCount >= displayMax;
+  const showBanner = displayCount > 0 && displayMax > 0;
 
   return React.createElement('div', { className: 'revision-diff fade-in' },
 
     // Revision number banner
-    React.createElement('div', { className: 'revision-diff__banner' },
+    showBanner && React.createElement('div', { className: 'revision-diff__banner' },
       React.createElement('span', { className: 'revision-diff__banner-text' },
         (isHumanRevision ? 'Human Revision ' : 'Revision ') + displayCount + ' of ' + displayMax
       ),
@@ -114,12 +124,13 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
       React.createElement('p', { className: 'revision-diff__feedback-text' }, previousFeedback)
     ),
 
-    // Shallow diff listing
-    React.createElement('div', { className: 'revision-diff__changes' },
+    // Shallow diff listing. Only this part needs the client-cached previous
+    // version; everything above comes from the server payload.
+    hasPrevious && React.createElement('div', { className: 'revision-diff__changes' },
       React.createElement('span', { className: 'text-xs text-muted mb-sm d-block' },
         'Changes from previous version'
       ),
-      diffItems.map(function (item) {
+      shallowDiff(previous, current).map(function (item) {
         return React.createElement('div', {
           key: item.key,
           className: 'revision-diff__item revision-diff__item--' + item.status

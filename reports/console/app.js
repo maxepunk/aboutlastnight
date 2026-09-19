@@ -235,6 +235,15 @@ function App() {
     return () => eventSourceClose(sseRef);
   }, []);
 
+  // R5 F13: a new checkpoint rendered at the PREVIOUS screen's scroll offset.
+  // Measured on first arrival: scrollY 86.5 with the stepper at top 22px, i.e.
+  // sitting behind the 69px sticky header with only the bottom of its labels
+  // showing. The article checkpoint is 7400px tall and the outline 2057px, so
+  // approving from the bottom of one landed the next checkpoint mid-page.
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [state.checkpointType]);
+
   // Check auth on mount
   React.useEffect(() => {
     appApi.checkAuth().then((result) => {

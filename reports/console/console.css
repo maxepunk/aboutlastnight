@@ -696,6 +696,9 @@ textarea.input {
   padding: var(--space-md) var(--space-sm);
   margin-bottom: var(--space-lg);
   overflow-x: auto;
+  /* R5 F13: the console header is position:sticky at 69px, so anything scrolled
+     to sits behind it. Clears the header when the stepper is the scroll target. */
+  scroll-margin-top: 80px;
 }
 
 .pipeline-step {
