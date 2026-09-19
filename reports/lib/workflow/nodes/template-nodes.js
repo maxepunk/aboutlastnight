@@ -160,17 +160,8 @@ async function assembleHtml(state, config) {
   if (sessionId) {
     const sourcePhotosDir = path.join(baseDir, 'data', sessionId, 'photos');
     const destPhotosDir = path.join(outputDir, 'sessionphotos', sessionId);
-
-    if (fs.existsSync(sourcePhotosDir)) {
-      fs.mkdirSync(destPhotosDir, { recursive: true });
-      const photos = fs.readdirSync(sourcePhotosDir);
-      for (const photo of photos) {
-        fs.copyFileSync(
-          path.join(sourcePhotosDir, photo),
-          path.join(destPhotosDir, photo)
-        );
-      }
-      photosCopied = photos.length;
+    photosCopied = copySessionPhotos(sourcePhotosDir, destPhotosDir);
+    if (photosCopied > 0) {
       console.log(`[assembleHtml] Copied ${photosCopied} photos to ${destPhotosDir}`);
     }
   }
@@ -205,6 +196,26 @@ function createMockTemplateAssembler(options = {}) {
   };
 }
 
+/**
+ * Copy the top-level FILES of a session photos folder into the published
+ * sessionphotos/<id>/ folder. Subdirectories are skipped: the 071826 photo set
+ * carries a group/ subfolder, and copyFileSync on a directory throws EPERM at the
+ * last node of the run, after every paid call has completed (operator gate
+ * 2026-09-19). Returns the number of files copied; 0 when the source is missing.
+ */
+function copySessionPhotos(sourcePhotosDir, destPhotosDir) {
+  if (!fs.existsSync(sourcePhotosDir)) return 0;
+  const files = fs.readdirSync(sourcePhotosDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name);
+  if (files.length === 0) return 0;
+  fs.mkdirSync(destPhotosDir, { recursive: true });
+  for (const name of files) {
+    fs.copyFileSync(path.join(sourcePhotosDir, name), path.join(destPhotosDir, name));
+  }
+  return files.length;
+}
+
 module.exports = {
   // Node functions (wrapped with LangSmith tracing)
   assembleHtml: traceNode(assembleHtml, 'assembleHtml', {
@@ -219,6 +230,7 @@ module.exports = {
 
   // Internal functions for testing
   _testing: {
+    copySessionPhotos,
     getTemplateAssembler,
     createStubAssembler
   }
