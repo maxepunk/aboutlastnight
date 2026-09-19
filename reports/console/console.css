@@ -1879,6 +1879,60 @@ textarea.input {
   margin: var(--space-xs) 0 0;
 }
 
+/* ── Article Fact-Check (baseline §5) ──
+   The programmatic check of the bundle being approved. Structural items read as
+   errors, advisory as amber, matching the evaluation bar's convention. */
+.fact-check {
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid var(--accent-red);
+  border-radius: var(--radius-md);
+}
+
+.fact-check__title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--accent-red);
+  margin: 0 0 var(--space-sm);
+}
+
+.fact-check__group {
+  margin-bottom: var(--space-sm);
+}
+
+.fact-check__group-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.fact-check__group-label--structural {
+  color: var(--accent-red);
+}
+
+.fact-check__group-label--advisory {
+  color: var(--accent-amber);
+}
+
+.fact-check__list {
+  list-style: disc;
+  padding-left: 1.2rem;
+  margin: var(--space-xs) 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.fact-check__list--structural {
+  color: var(--accent-red);
+}
+
+.fact-check__list--advisory {
+  color: var(--accent-amber);
+}
+
 /* ── Word Count ── */
 .word-count {
   display: flex;

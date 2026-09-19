@@ -30,6 +30,45 @@ function stripScripts(html) {
     .replace(/<script[^>]*\/>/gi, '');
 }
 
+/**
+ * The programmatic fact-check, in front of the person approving the article
+ * (baseline §5: "half the refinement work was already on screen as an advisory
+ * and was ignored" - in fact it was not on screen at all; lib/content-bundle-
+ * fact-check.js reached the reviser as prompt text and the operator never).
+ *
+ * The four measured failure classes it reports are evidence cards carrying
+ * invented text under real token ids (15 items across 4 of 5 sessions, each a
+ * section-level rewrite), roster members never named, invalid photo references,
+ * and reporter-mode violations. Structural reads as an error, advisory as amber.
+ */
+function FactCheckPanel({ summary, cardHeadlines }) {
+  if (!summary || summary.groups.length === 0) return null;
+
+  return React.createElement('div', { className: 'fact-check mb-md' },
+    React.createElement('h4', { className: 'fact-check__title' },
+      'Fact-check: ' + summary.structural + ' structural, ' + summary.advisory + ' advisory'
+    ),
+    summary.groups.map(function (group) {
+      return React.createElement('div', { key: group.key, className: 'fact-check__group' },
+        React.createElement('p', {
+          className: 'fact-check__group-label fact-check__group-label--' + group.severity
+        }, group.label + ' (' + group.items.length + ')'),
+        React.createElement('ul', { className: 'fact-check__list fact-check__list--' + group.severity },
+          group.items.map(function (item, i) {
+            var headline = item.tokenId && cardHeadlines ? cardHeadlines[item.tokenId] : null;
+            return React.createElement('li', { key: group.key + '-' + i },
+              item.text,
+              headline && React.createElement('span', { className: 'text-muted' },
+                ' \u2014 \u201C' + headline + '\u201D'
+              )
+            );
+          })
+        )
+      );
+    })
+  );
+}
+
 /** Last path segment, tolerating both separators (the photo paths are Windows). */
 function baseName(filepath) {
   const value = String(filepath == null ? '' : filepath);
@@ -626,6 +665,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
   // Absolute paths of this session's photos, for photoUrl (H13/F9).
   const sessionPhotos = (data && data.sessionPhotos) || [];
+  // Task 3.6's programmatic fact-check of THIS bundle (baseline §5).
+  const factCheck = ViewLogic.factCheckSummary((data && data.factCheck) || null);
   const previousArticle = (revisionCache && revisionCache.article) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -1255,6 +1296,20 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   // -- Main render --
 
+  // tokenId -> headline for the fact-check card group, so a flagged card is
+  // identifiable by what it SAYS and not only by its id.
+  var cardHeadlines = {};
+  (getCurrentBundle().evidenceCards || []).forEach(function (card) {
+    if (card && card.tokenId && card.headline) cardHeadlines[card.tokenId] = card.headline;
+  });
+  (getCurrentBundle().sections || []).forEach(function (section) {
+    (section && section.content || []).forEach(function (block) {
+      if (block && block.type === 'evidence-card' && block.tokenId && block.headline) {
+        cardHeadlines[block.tokenId] = block.headline;
+      }
+    });
+  });
+
   var currentHeadline = getCurrentBundle().headline || headline;
   var currentByline = getCurrentBundle().byline || byline;
   var currentSections = (getCurrentBundle().sections || sections);
@@ -1276,6 +1331,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
     // Evaluation bar
     React.createElement(EvalBar, { view: evaluation }),
+
+    // Fact-check defect list, above the article body
+    React.createElement(FactCheckPanel, { summary: factCheck, cardHeadlines: cardHeadlines }),
 
     // Word count + edit indicator
     React.createElement('div', { className: 'flex gap-md items-center' },
@@ -1390,8 +1448,15 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       React.createElement('button', {
         className: 'action-modes__btn' + (mode === 'view' ? ' action-modes__btn--active' : '') + ' btn btn-primary',
         onClick: handleApprove,
-        'aria-label': hasEdits ? 'Approve article with edits' : 'Approve article'
-      }, hasEdits ? 'Approve with Edits' : 'Approve'),
+        // When the fact-check found something, shipping it has to READ like a
+        // choice. Four of the last five articles were approved first-pass here
+        // and then needed 20-41 manual fixes.
+        'aria-label': factCheck.total > 0
+          ? 'Approve the article despite ' + factCheck.total + ' unresolved fact-check item(s)'
+          : (hasEdits ? 'Approve article with edits' : 'Approve article')
+      }, factCheck.total > 0
+        ? (hasEdits ? 'Approve with Edits anyway (' : 'Approve anyway (') + factCheck.total + ' unresolved)'
+        : (hasEdits ? 'Approve with Edits' : 'Approve')),
       React.createElement('button', {
         className: 'action-modes__btn' + (mode === 'json' ? ' action-modes__btn--active' : '') + ' btn btn-secondary',
         onClick: function () { handleModeChange('json'); },
