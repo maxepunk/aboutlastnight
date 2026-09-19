@@ -11,9 +11,18 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, safeStringify, editBtn } = window.Console.utils;
+const { Badge, safeStringify, editBtn, EvalBar } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const EditLogic = window.Console.outlineEditLogic;
+const ViewLogic = window.Console.checkpointViewLogic;
+
+// R4 F1 / R5 F5: every container that holds a pencil must carry
+// `article-block--editable` — it supplies the `position: relative` the
+// absolutely-positioned button needs AND is the hook the reveal rules key on.
+// Outline.js emitted it at zero of its 13 call sites, so the whole rich editor
+// (outline-edit-logic.js, its unit tests and the client-side validateOutlineShape
+// gate) was unreachable from the UI.
+const EDITABLE = 'outline-section article-block--editable';
 
 // ═══════════════════════════════════════════════════════
 // Shared edit widgets (pure-presentational; call EditLogic primitives)
@@ -119,6 +128,77 @@ function ObjectListEditor(props) {
       className: 'btn btn-sm btn-ghost mb-sm',
       onClick: function () { onChange(EditLogic.addRow(rows, makeRow())); }
     }, '+ Add')
+  );
+}
+
+// ═════════════════════════════════════════════════════
+// View-mode content (R4 F1 companion: FOLLOW THE MONEY, THE PLAYERS and
+// WHAT'S MISSING rendered ONLY item counts, so with the pencils invisible the
+// director was approving half an outline they could not read)
+// ═════════════════════════════════════════════════════
+
+/**
+ * `arcName → <angle>` per row. `angleField` is the per-section field name in
+ * outline.schema.json: financialAngle / characterAngle / openQuestion.
+ */
+function arcConnectionList(connections, angleField) {
+  const rows = Array.isArray(connections) ? connections : [];
+  if (rows.length === 0) return null;
+  return React.createElement('ul', { className: 'outline-section__list' },
+    rows.map(function (row, i) {
+      const angle = row && row[angleField];
+      return React.createElement('li', { key: 'ac-' + i, className: 'text-sm' },
+        React.createElement('strong', null, (row && row.arcName) || 'Arc ' + (i + 1)),
+        React.createElement('span', { className: 'text-muted' }, ' → '),
+        React.createElement('span', { className: 'text-secondary' },
+          typeof angle === 'string' ? angle : (angle == null ? '(not set)' : safeStringify(angle))
+        )
+      );
+    })
+  );
+}
+
+/** characterHighlights is an object map of name -> highlight. */
+function characterHighlightList(highlights) {
+  const rows = EditLogic.mapToRows(highlights);
+  if (rows.length === 0) return null;
+  return React.createElement('ul', { className: 'outline-section__list' },
+    rows.map(function (row, i) {
+      return React.createElement('li', { key: 'ch-' + i, className: 'text-sm' },
+        React.createElement('strong', null, row.key),
+        React.createElement('span', { className: 'text-muted' }, ' → '),
+        React.createElement('span', { className: 'text-secondary' }, row.value)
+      );
+    })
+  );
+}
+
+/** A labelled row of name badges (exposed / buried / buried items). */
+function nameRow(label, names, color) {
+  const list = Array.isArray(names) ? names.filter(Boolean) : [];
+  if (list.length === 0) return null;
+  return React.createElement('div', { className: 'flex gap-sm items-center mt-sm' },
+    React.createElement('span', { className: 'text-xs text-muted' }, label + ': '),
+    React.createElement('div', { className: 'tag-list' },
+      list.map(function (name, i) {
+        return React.createElement(Badge, { key: label + '-' + i, label: String(name), color: color });
+      })
+    )
+  );
+}
+
+/**
+ * Say "empty" out loud. A section the generator left blank must not look
+ * identical to one this screen simply failed to render — that ambiguity is what
+ * the count-only renderers created.
+ */
+function emptyNote() {
+  for (let i = 0; i < arguments.length; i += 1) {
+    const value = arguments[i];
+    if (Array.isArray(value) ? value.length > 0 : !!value) return null;
+  }
+  return React.createElement('p', { className: 'text-xs text-muted' },
+    'This section is empty in the generated outline.'
   );
 }
 
@@ -414,7 +494,12 @@ function FinalAssessmentEditor({ section, onSave, onCancel }) {
 
 function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pendingEdits }) {
   const outline = (data && data.outline) || {};
-  const evaluationHistory = (data && data.evaluationHistory) || {};
+  // H6: the outline gate rendered no evaluation at all, because
+  // `data.evaluationHistory` is an append-only ARRAY mixing all three phases and
+  // the old renderEvalBar read `.overallScore` (and `advisoryNotes`, not a field)
+  // off it. Task 3 sends `lastEvaluation` pre-selected for 'outline';
+  // lastEvaluationFrom keeps the array fallback for an older payload.
+  const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'outline'));
   const previousOutline = (revisionCache && revisionCache.outline) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -570,7 +655,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'LEDE'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'lede' }); })
@@ -607,7 +692,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
               })
             );
           }
-          return React.createElement('div', { key: (arc.name || 'arc') + '-' + i, className: 'outline-section__arc mb-sm' },
+          return React.createElement('div', { key: (arc.name || 'arc') + '-' + i, className: 'outline-section__arc article-block--editable mb-sm' },
             React.createElement('div', { className: 'flex items-center gap-sm' },
               React.createElement('p', { className: 'text-sm flex-1' },
                 React.createElement('strong', null, arc.name || 'Arc ' + (i + 1)),
@@ -632,7 +717,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
               onSave: function (u) { saveInterweaving(u); },
               onCancel: cancelEdit
             })
-          : React.createElement('div', { className: 'flex items-center gap-sm mt-sm' },
+          : React.createElement('div', { className: 'flex items-center gap-sm mt-sm article-block--editable' },
               React.createElement('div', { className: 'outline-section__content flex-1' },
                 React.createElement('p', { className: 'text-xs text-muted' }, 'Interleaving Plan:'),
                 React.createElement('p', null, (theStory.arcInterweaving && theStory.arcInterweaving.interleavingPlan) || ''),
@@ -648,7 +733,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   function renderFollowTheMoney(section) {
     if (!section) return null;
     const editing = isEditing('section', 'followTheMoney');
-    return React.createElement('div', { key: 'followTheMoney', className: 'outline-section' + (editing ? ' outline-section--editing' : '') },
+    return React.createElement('div', { key: 'followTheMoney', className: EDITABLE + (editing ? ' outline-section--editing' : '') },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'FOLLOW THE MONEY'),
         !editing && editBtn(function () { setEditingBlock({ type: 'section', key: 'followTheMoney' }); })
@@ -656,14 +741,30 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       editing
         ? React.createElement(FollowTheMoneyEditor, { section: section, onSave: function (u) { saveSectionEdit('followTheMoney', u); }, onCancel: cancelEdit })
         : React.createElement('div', { className: 'outline-section__content' },
-            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' arc connection(s), ' + ((section.shellAccounts || []).length) + ' shell account(s)'))
+            arcConnectionList(section.arcConnections, 'financialAngle'),
+            (section.shellAccounts || []).length > 0 && React.createElement('ul', { className: 'outline-section__list' },
+              section.shellAccounts.map(function (account, i) {
+                return React.createElement('li', { key: 'sa-' + i, className: 'text-sm' },
+                  React.createElement('strong', null, account.name || '(unnamed account)'),
+                  account.total != null && account.total !== '' && React.createElement('span', { className: 'text-secondary' }, ' · ' + account.total),
+                  account.relatedArc && React.createElement('span', { className: 'text-xs text-muted' }, ' · ' + account.relatedArc),
+                  account.inference && React.createElement('p', { className: 'text-sm text-secondary' }, account.inference)
+                );
+              })
+            ),
+            section.photoPlacement && section.photoPlacement.filename && React.createElement('p', { className: 'text-xs text-muted' },
+              'Photo: ' + section.photoPlacement.filename +
+                (section.photoPlacement.purpose ? ' (' + section.photoPlacement.purpose + ')' : '')
+            ),
+            emptyNote(section.arcConnections, section.shellAccounts)
+          )
     );
   }
 
   function renderThePlayers(section) {
     if (!section) return null;
     const editing = isEditing('section', 'thePlayers');
-    return React.createElement('div', { key: 'thePlayers', className: 'outline-section' + (editing ? ' outline-section--editing' : '') },
+    return React.createElement('div', { key: 'thePlayers', className: EDITABLE + (editing ? ' outline-section--editing' : '') },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'THE PLAYERS'),
         !editing && editBtn(function () { setEditingBlock({ type: 'section', key: 'thePlayers' }); })
@@ -671,14 +772,20 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       editing
         ? React.createElement(ThePlayersEditor, { section: section, onSave: function (u) { saveSectionEdit('thePlayers', u); }, onCancel: cancelEdit })
         : React.createElement('div', { className: 'outline-section__content' },
-            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' arc connection(s)'))
+            arcConnectionList(section.arcConnections, 'characterAngle'),
+            characterHighlightList(section.characterHighlights),
+            nameRow('Exposed', section.exposed, 'var(--layer-exposed)'),
+            nameRow('Buried', section.buried, 'var(--layer-buried)'),
+            emptyNote(section.arcConnections, section.exposed, section.buried,
+              EditLogic.mapToRows(section.characterHighlights))
+          )
     );
   }
 
   function renderWhatsMissing(section) {
     if (!section) return null;
     const editing = isEditing('section', 'whatsMissing');
-    return React.createElement('div', { key: 'whatsMissing', className: 'outline-section' + (editing ? ' outline-section--editing' : '') },
+    return React.createElement('div', { key: 'whatsMissing', className: EDITABLE + (editing ? ' outline-section--editing' : '') },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, "WHAT'S MISSING"),
         !editing && editBtn(function () { setEditingBlock({ type: 'section', key: 'whatsMissing' }); })
@@ -686,7 +793,19 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       editing
         ? React.createElement(WhatsMissingEditor, { section: section, onSave: function (u) { saveSectionEdit('whatsMissing', u); }, onCancel: cancelEdit })
         : React.createElement('div', { className: 'outline-section__content' },
-            React.createElement('p', { className: 'text-xs text-muted' }, (section.arcConnections || []).length + ' open question(s)'))
+            arcConnectionList(section.arcConnections, 'openQuestion'),
+            (section.knownUnknowns || []).length > 0 && React.createElement('ul', { className: 'outline-section__list' },
+              section.knownUnknowns.map(function (q, i) {
+                return React.createElement('li', { key: 'ku-' + i, className: 'text-sm' }, q);
+              })
+            ),
+            section.narrativePurpose && React.createElement('p', { className: 'text-sm text-secondary' },
+              React.createElement('strong', null, 'Narrative purpose: '),
+              section.narrativePurpose
+            ),
+            nameRow('Buried items', section.buriedItems, 'var(--layer-buried)'),
+            emptyNote(section.arcConnections, section.knownUnknowns, section.buriedItems)
+          )
     );
   }
 
@@ -702,7 +821,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'CLOSING'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'closing' }); })
@@ -738,7 +857,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'EXECUTIVE SUMMARY'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'executiveSummary' }); })
@@ -775,7 +894,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'EVIDENCE LOCKER'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'evidenceLocker' }); })
@@ -818,7 +937,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'MEMORY ANALYSIS'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'memoryAnalysis' }); })
@@ -856,7 +975,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'SUSPECT NETWORK'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'suspectNetwork' }); })
@@ -906,7 +1025,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'OUTSTANDING QUESTIONS'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'outstandingQuestions' }); })
@@ -938,7 +1057,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       );
     }
 
-    return React.createElement('div', { className: 'outline-section' },
+    return React.createElement('div', { className: EDITABLE },
       React.createElement('div', { className: 'outline-section__header flex items-center gap-sm' },
         React.createElement('h4', { className: 'outline-section__title' }, 'FINAL ASSESSMENT'),
         editBtn(function () { setEditingBlock({ type: 'section', key: 'finalAssessment' }); })
@@ -960,28 +1079,6 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   }
 
 
-  // ═══════════════════════════════════════════════════════
-  // Evaluation bar (shared)
-  // ═══════════════════════════════════════════════════════
-
-  function renderEvalBar() {
-    const score = evaluationHistory.overallScore;
-    const issues = evaluationHistory.structuralIssues;
-    const advisory = evaluationHistory.advisoryNotes;
-    if (score == null && issues == null && advisory == null) return null;
-
-    return React.createElement('div', { className: 'eval-bar mb-md' },
-      score != null && React.createElement('span', { className: 'eval-bar__score' },
-        'Score: ' + score + '/10'
-      ),
-      issues != null && React.createElement('span', { className: 'eval-bar__issues' },
-        issues + ' structural issue' + (issues !== 1 ? 's' : '')
-      ),
-      advisory != null && React.createElement('span', { className: 'text-xs text-muted' },
-        Array.isArray(advisory) ? advisory.length + ' advisory note' + (advisory.length !== 1 ? 's' : '') : advisory
-      )
-    );
-  }
 
   // ═══════════════════════════════════════════════════════
   // Render outline sections based on theme
@@ -1023,8 +1120,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       maxHumanRevisions: 0
     }),
 
-    // Evaluation bar
-    renderEvalBar(),
+    // Evaluation bar (what Opus said about THIS outline)
+    React.createElement(EvalBar, { view: evaluation }),
 
     // Outline sections (theme-aware)
     ...renderOutlineSections(),

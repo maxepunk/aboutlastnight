@@ -633,6 +633,7 @@ textarea.input {
 .flex-1 { flex: 1; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
+.items-start { align-items: flex-start; }
 .gap-sm { gap: var(--space-sm); }
 .gap-md { gap: var(--space-md); }
 
@@ -1636,6 +1637,22 @@ textarea.input {
   gap: var(--space-xs);
 }
 
+/* View-mode content for FOLLOW THE MONEY / THE PLAYERS / WHAT'S MISSING, which
+   used to render only item counts. */
+.outline-section__list {
+  list-style: disc;
+  padding-left: var(--space-lg);
+  margin: 0;
+}
+
+.outline-section__list li {
+  margin-bottom: var(--space-xs);
+}
+
+.outline-section__list li p {
+  margin: 0;
+}
+
 /* ── Article Content Blocks ── */
 .article-block {
   margin-bottom: var(--space-sm);
@@ -1798,6 +1815,28 @@ textarea.input {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--accent-red);
+}
+
+/* H6: the evaluation's own sentences, not just its counts. Structural reads as
+   an error, advisory as amber (the same convention the article fact-check list
+   uses). */
+.eval-bar__list {
+  margin: var(--space-xs) 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.eval-bar__list--structural {
+  color: var(--accent-red);
+}
+
+.eval-bar__list--advisory {
+  color: var(--accent-amber);
+}
+
+.eval-bar__escalation {
+  margin: var(--space-xs) 0 0;
 }
 
 /* ── Word Count ── */
@@ -1974,7 +2013,16 @@ textarea.input {
   border-radius: var(--radius-md);
 }
 
-/* ── Inline Edit Button ── */
+/* ── Inline Edit Button ──
+   R4 F1 / R5 F5: the pencil used to be `display: none` with ONE rule to reveal
+   it (`.article-block--editable:hover`), and Outline.js emitted the
+   `--editable` class at zero of its 13 call sites — so the entire rich outline
+   editor was unreachable and the only edit path was a raw JSON textarea. The
+   class is now on all 13 containers AND the affordance no longer hides behind
+   hover: it is always rendered at low opacity (discoverable, touch-usable,
+   focusable) and goes full opacity on hover, on keyboard focus, and while that
+   section's editor is open. Position is absolute, so the always-on state costs
+   no layout. */
 .article-block--editable {
   position: relative;
 }
@@ -1983,7 +2031,8 @@ textarea.input {
   position: absolute;
   top: var(--space-xs);
   right: var(--space-xs);
-  display: none;
+  display: inline-flex;
+  opacity: 0.45;
   align-items: center;
   justify-content: center;
   width: 24px;
@@ -1996,15 +2045,23 @@ textarea.input {
   cursor: pointer;
   font-size: 0.75rem;
   z-index: 5;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
 }
 
-.article-block--editable:hover .article-block__edit-btn {
+/* Full opacity on hover, on keyboard focus anywhere in the block, and while the
+   page is in edit mode (a section carries `--editing` while its editor is open,
+   so the other pencils stay legible as the director moves between sections). */
+.article-block--editable:hover .article-block__edit-btn,
+.article-block--editable:focus-within .article-block__edit-btn,
+.outline-section--editing .article-block__edit-btn {
   display: inline-flex;
+  opacity: 1;
 }
 
-.article-block__edit-btn:hover {
+.article-block__edit-btn:hover,
+.article-block__edit-btn:focus-visible {
   background: rgba(212, 168, 83, 0.3);
+  opacity: 1;
 }
 
 /* ── Inline Edit Form ── */

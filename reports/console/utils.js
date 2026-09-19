@@ -103,6 +103,64 @@ function formatElapsed(ms) {
 }
 
 /**
+ * The Opus evaluation for one gate (R5 F4 / CODE-REVIEW H6).
+ *
+ * Shared by arc-selection, outline and article: all three used to own a private
+ * `renderEvalBar` that read `.overallScore` off the evaluationHistory ARRAY (and
+ * `advisoryNotes`, which is not a field), so the evaluator's verdict — the whole
+ * point of the evaluate/revise loop — rendered on no screen in any session.
+ *
+ * Takes an already-computed view so utils.js keeps no dependency on
+ * checkpoint-view-logic.js (which loads after it): callers pass
+ * `checkpointViewLogic.evaluationView(checkpointViewLogic.lastEvaluationFrom(data, phase))`.
+ *
+ * The structural issues are listed, not just counted: showing "3 structural
+ * issues" without the sentences would repeat the original failure, since each
+ * string is the self-contained instruction the reviser would have been given.
+ *
+ * @param {{view: object|null}} props
+ */
+function EvalBar({ view }) {
+  if (!view) return null;
+
+  const parts = [];
+  if (view.score !== null) parts.push('Score ' + view.score);
+  parts.push('structural: ' + (view.passed ? 'passed' : 'failed'));
+  parts.push(view.structuralIssues.length + ' structural issue' +
+    (view.structuralIssues.length === 1 ? '' : 's'));
+  if (view.confidence) parts.push('confidence: ' + view.confidence);
+  if (view.revisionNumber !== null) parts.push('after revision ' + view.revisionNumber);
+  if (view.source) parts.push('source: ' + view.source);
+
+  return React.createElement('div', { className: 'eval-bar mb-md flex-col items-start' },
+    React.createElement('span', {
+      className: view.passed ? 'eval-bar__score' : 'eval-bar__issues'
+    }, parts.join(' · ')),
+
+    view.escalationReason && React.createElement('p', {
+      className: 'eval-bar__escalation validation-error',
+      role: 'alert'
+    }, 'Escalated to you: ' + view.escalationReason),
+
+    view.structuralIssues.length > 0 && React.createElement('ul', { className: 'eval-bar__list eval-bar__list--structural' },
+      view.structuralIssues.map((issue, i) =>
+        React.createElement('li', { key: 'si-' + i }, issue)
+      )
+    ),
+
+    view.advisoryWarnings.length > 0 && React.createElement('ul', { className: 'eval-bar__list eval-bar__list--advisory' },
+      view.advisoryWarnings.map((warning, i) =>
+        React.createElement('li', { key: 'aw-' + i }, warning)
+      )
+    ),
+
+    view.revisionGuidance && React.createElement('p', { className: 'text-xs text-muted' },
+      'Revision guidance: ' + view.revisionGuidance
+    )
+  );
+}
+
+/**
  * Edit button (pencil icon)
  * @param {function} onClick
  * @returns {React.ReactElement}
@@ -142,6 +200,7 @@ window.Console.utils = {
   CollapsibleSection,
   JsonViewer,
   formatElapsed,
+  EvalBar,
   editBtn,
   CHECKPOINT_ORDER,
   CHECKPOINT_LABELS
