@@ -256,6 +256,16 @@ async function sdkQueryImpl({
 
   // Enable 1M context window for Opus and Sonnet (beta)
   // Haiku doesn't support 1M
+  // Control 3: MCP isolation. settingSources: [] scopes filesystem SETTINGS only;
+  // the SDK still loads every MCP server from the user's ~/.claude.json (the
+  // claude.ai connectors: Gmail, Google Drive, Calendar, Notion, Claude Docs). A
+  // live probe on 2026-09-19 showed a `tools: []` call under bypassPermissions
+  // reporting 103 mcp__ tools at init. `mcpServers: {}` + `strictMcpConfig: true`
+  // (the CLI's --strict-mcp-config: use ONLY this MCP config) leaves exactly the
+  // declared tool set — the same probe then reported 1 tool (Read), no servers.
+  options.mcpServers = {};
+  options.strictMcpConfig = true;
+
   if (model !== 'haiku') {
     options.betas = ['context-1m-2025-08-07'];
   }
