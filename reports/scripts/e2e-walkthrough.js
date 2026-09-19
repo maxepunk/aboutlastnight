@@ -3413,7 +3413,11 @@ async function runWalkthrough() {
     console.log(color(`\n─── Starting Session via /start ───`, 'dim'));
     const startBody = {
       theme: THEME,
-      rawSessionInput: inputData.rawSessionInput
+      rawSessionInput: inputData.rawSessionInput,
+      // C1: /start 409s on a session id whose thread already exists, because in the
+      // console Start Fresh is one destructive click. Reaching this branch is an
+      // explicit choice here (the harness ran without --resume), so it says so.
+      force: true
     };
     const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/start`, startBody, 'POST', sessionId);
 

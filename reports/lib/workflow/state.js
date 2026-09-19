@@ -1124,6 +1124,42 @@ const ROLLBACK_CLEARS = {
 };
 
 /**
+ * Channels a FRESH START keeps. Everything else is cleared (C1).
+ *
+ * `theme` and `rawSessionInput` are what the POST body carries and `sessionId` is
+ * the thread; they ARE the fresh start. Nothing else may survive it.
+ */
+const FRESH_START_KEEPS = new Set(['theme', 'sessionId', 'rawSessionInput']);
+
+/**
+ * What a fresh start clears — its own list, NOT a rollback point (C1).
+ *
+ * `/start` seeded `initialState` with `buildRollbackState('input-review')`. A
+ * rollback list is the wrong tool: 'input-review' deliberately preserves
+ * everything UPSTREAM of the parse (the graph reaches paper-evidence-selection,
+ * await-roster, character-ids and await-full-context before it), and Task 3.1
+ * additionally moved `sessionPhotos` into ROLLBACK_CLEARS_EXEMPT because no
+ * rollback point can meaningfully re-pause the photo scan. Correct for a
+ * rollback; wrong for a start. On a second `/start` for a session id whose thread
+ * exists, roster, rosterPronouns, selectedPaperEvidence, characterIdMappings,
+ * photoAnalyses, sessionPhotos, preprocessStats, accusation, sessionReport,
+ * directorNotesRaw, sessionConfig, directorNotes, playerFocus, memoryTokens and
+ * paperEvidence all survived — so `fetchSessionPhotos` skipped on a non-null list
+ * (including `[]`), `preprocessPhotos` skipped on preprocessStats, `analyzePhotos`
+ * skipped on photoAnalyses, every checkpoint before input-review skipped, and the
+ * run paused once at input-review showing the OLD parse of the OLD photos. The
+ * new `rawSessionInput.photosPath` was never read.
+ *
+ * DERIVED from the channel set rather than hand-listed, so a channel added later
+ * is cleared by default. That is the fail-safe direction here: the cost of
+ * clearing a channel on a fresh start is re-deriving it, while the cost of keeping
+ * one is a paid run against stale input. (The rollback lists are hand-maintained
+ * for the opposite reason — there, preserving upstream work is the point.)
+ */
+const FRESH_START_CLEARS = Object.keys(ReportStateAnnotation.spec)
+  .filter(field => !FRESH_START_KEEPS.has(field));
+
+/**
  * Revision counters to reset for each rollback point.
  * Rolling back past a phase resets its revision counter for fresh attempts.
  */
@@ -1155,6 +1191,9 @@ module.exports = {
   ROLLBACK_CLEARS_EXEMPT,
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS,
+  // Fresh-start configuration (C1) — a separate list, not a rollback target
+  FRESH_START_CLEARS,
+  FRESH_START_KEEPS,
   // Export reducers for testing
   _testing: {
     replaceReducer,

@@ -11,7 +11,26 @@
 
 const path = require('path');
 const { createReportGraphWithCheckpointer } = require('./workflow/graph');
-const { ROLLBACK_CLEARS, ROLLBACK_COUNTER_RESETS, PHASES } = require('./workflow/state');
+const {
+  ROLLBACK_CLEARS,
+  ROLLBACK_COUNTER_RESETS,
+  FRESH_START_CLEARS,
+  PHASES
+} = require('./workflow/state');
+
+/**
+ * Channels whose reducer needs `[]` (not null) to clear.
+ *
+ * appendReducer and appendSingleReducer both special-case an empty array as the
+ * clear sentinel and IGNORE null, so nulling one of these leaves the old array in
+ * place. Shared by buildRollbackState and buildFreshStartState.
+ */
+const APPEND_REDUCER_FIELDS = new Set(['evaluationHistory', 'errors']);
+
+/** null for a replace channel, [] for an append channel. */
+function clearedValueFor(field) {
+  return APPEND_REDUCER_FIELDS.has(field) ? [] : null;
+}
 
 /**
  * Build state object for rolling back to a checkpoint.
@@ -25,13 +44,35 @@ function buildRollbackState(rollbackPoint = 'input-review') {
     throw new Error(`Invalid rollback point: '${rollbackPoint}'`);
   }
   const state = {};
-  // Fields using append reducers need [] (not null) to clear — see appendSingleReducer/appendReducer
-  const appendReducerFields = new Set(['evaluationHistory', 'errors']);
   ROLLBACK_CLEARS[rollbackPoint].forEach(field => {
-    state[field] = appendReducerFields.has(field) ? [] : null;
+    state[field] = clearedValueFor(field);
   });
   Object.assign(state, ROLLBACK_COUNTER_RESETS[rollbackPoint]);
   state.currentPhase = null;
+  return state;
+}
+
+/**
+ * Build the state object a FRESH START seeds (C1).
+ *
+ * Distinct from buildRollbackState by intent: a rollback preserves the work
+ * upstream of its point, a fresh start keeps nothing but `theme`, `sessionId` and
+ * the new `rawSessionInput` (which the caller supplies). `/start` used to seed
+ * `buildRollbackState('input-review')`, so a second start on an existing session
+ * id kept the old photo list, roster, raw context and parse, and paused once at
+ * input-review showing them. See FRESH_START_CLEARS.
+ *
+ * Reducer-aware exactly as buildRollbackState is: `[]` for the append channels,
+ * null for the rest. The revision counters are nulled rather than zeroed, which
+ * every reader tolerates (`state.xRevisionCount || 0`).
+ *
+ * @returns {object} State object with every non-kept channel cleared
+ */
+function buildFreshStartState() {
+  const state = {};
+  FRESH_START_CLEARS.forEach(field => {
+    state[field] = clearedValueFor(field);
+  });
   return state;
 }
 
@@ -111,4 +152,10 @@ function confineToBase(baseDir, requestedPath) {
   return resolved;
 }
 
-module.exports = { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase };
+module.exports = {
+  buildRollbackState,
+  buildFreshStartState,
+  createGraphAndConfig,
+  sendErrorResponse,
+  confineToBase
+};

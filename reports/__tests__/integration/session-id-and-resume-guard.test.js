@@ -84,6 +84,29 @@ function graphInterruptedAt(values, interruptValue) {
   };
 }
 
+/**
+ * A graph with NO thread yet, which then interrupts at `interruptValue` — the real
+ * shape of a fresh `/start`.
+ *
+ * LangGraph returns a snapshot with `values: {}` for a thread that has never run
+ * (getSessionState treats exactly that as "no session"), and `/start` reads state
+ * TWICE now: once to refuse a second start on an existing thread (C1), then again
+ * after invoke to build the interrupt response.
+ */
+function graphFreshStartTo(values, interruptValue) {
+  const before = { values: {}, config: { configurable: {} }, tasks: [] };
+  const after = {
+    values,
+    config: { configurable: { checkpoint_id: 'ckpt-1' } },
+    createdAt: 'now',
+    tasks: [{ id: 't1', interrupts: [{ value: interruptValue }] }]
+  };
+  return {
+    getState: jest.fn().mockResolvedValueOnce(before).mockResolvedValue(after),
+    invoke: jest.fn().mockResolvedValue(values)
+  };
+}
+
 beforeAll(async () => {
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
@@ -150,7 +173,7 @@ describe('POST /start session-ID contract (B1 companion)', () => {
   });
 
   it('rejects a non-date session ID with a 400 naming the MMDDYY format', async () => {
-    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+    mockGraph = graphFreshStartTo({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
 
     const res = await send('POST', '/api/session/march-15/start', START_BODY);
 
@@ -160,7 +183,7 @@ describe('POST /start session-ID contract (B1 companion)', () => {
   });
 
   it('accepts MMDDYY plus one session digit (second session the same day)', async () => {
-    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+    mockGraph = graphFreshStartTo({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
 
     const res = await send('POST', '/api/session/0918262/start', START_BODY);
 
@@ -169,7 +192,7 @@ describe('POST /start session-ID contract (B1 companion)', () => {
   });
 
   it('accepts a plain MMDDYY session ID', async () => {
-    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+    mockGraph = graphFreshStartTo({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
 
     const res = await send('POST', '/api/session/091826/start', START_BODY);
 
@@ -178,11 +201,82 @@ describe('POST /start session-ID contract (B1 companion)', () => {
 
   it('accepts any ID when ALLOW_NONSTANDARD_SESSION_ID is set (e2e harness escape hatch)', async () => {
     process.env.ALLOW_NONSTANDARD_SESSION_ID = 'true';
-    mockGraph = graphInterruptedAt({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+    mockGraph = graphFreshStartTo({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
 
     const res = await send('POST', '/api/session/march-15/start', START_BODY);
 
     expect(res.status).toBe(200);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1.2b — C1: a second /start on an existing thread, and what a forced one seeds
+//
+// `/start` seeded its state from buildRollbackState('input-review'), which
+// preserves everything upstream of the parse (by design, for a rollback) plus
+// sessionPhotos (ROLLBACK_CLEARS_EXEMPT). So the most likely director action after
+// a mistake — Start Fresh on the same session id — silently kept the old photos,
+// the old roster and the old parse, paused once at input-review showing them, and
+// never read the new photosPath.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('POST /start on an existing thread (C1)', () => {
+  const START_BODY = { theme: 'journalist', rawSessionInput: { photosPath: 'data/new/photos' } };
+
+  it('409s with the phase instead of silently reusing the old state', async () => {
+    mockGraph = graphAtPhase({ currentPhase: 2.35, theme: 'journalist' });
+
+    const res = await send('POST', '/api/session/091826/start', START_BODY);
+
+    expect(res.status).toBe(409);
+    expect(res.body.currentPhase).toBe(2.35);
+    expect(res.body.error).toMatch(/already exists/i);
+    expect(res.body.error).toMatch(/Resume/);
+    expect(res.body.error).toMatch(/force/);
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it('starts over when the body carries force:true', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
+
+    const res = await send('POST', '/api/session/091826/start', { ...START_BODY, force: true });
+
+    expect(res.status).toBe(200);
+    expect(mockGraph.invoke).toHaveBeenCalled();
+  });
+
+  it('seeds a forced start with the photo, roster, raw-context and parse channels null', async () => {
+    mockGraph = graphInterruptedAt({ currentPhase: 1.35, theme: 'journalist' }, { type: 'paper-evidence-selection' });
+
+    await send('POST', '/api/session/091826/start', { ...START_BODY, force: true });
+
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    expect(seeded.sessionPhotos).toBeNull();
+    expect(seeded.preprocessStats).toBeNull();
+    expect(seeded.photoAnalyses).toBeNull();
+    expect(seeded.roster).toBeNull();
+    expect(seeded.rosterPronouns).toBeNull();
+    expect(seeded.accusation).toBeNull();
+    expect(seeded.sessionReport).toBeNull();
+    expect(seeded.directorNotesRaw).toBeNull();
+    expect(seeded.sessionConfig).toBeNull();
+    expect(seeded.selectedPaperEvidence).toBeNull();
+    expect(seeded.characterIdMappings).toBeNull();
+    expect(seeded.memoryTokens).toBeNull();
+    // ...while the three channels a fresh start is defined by are the caller's.
+    expect(seeded.theme).toBe('journalist');
+    expect(seeded.rawSessionInput.photosPath).toBe('data/new/photos');
+  });
+
+  it('seeds the same nulls on a first start (no thread yet)', async () => {
+    mockGraph = graphFreshStartTo({ currentPhase: 1.35 }, { type: 'paper-evidence-selection' });
+
+    const res = await send('POST', '/api/session/091826/start', START_BODY);
+
+    expect(res.status).toBe(200);
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    expect(seeded.sessionPhotos).toBeNull();
+    expect(seeded.photoAnalyses).toBeNull();
+    expect(seeded.evaluationHistory).toEqual([]);
   });
 });
 

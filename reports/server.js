@@ -29,7 +29,7 @@ const {
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
-const { buildRollbackState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('./lib/api-helpers');
+const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase } = require('./lib/api-helpers');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
@@ -950,8 +950,7 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         });
     }
 
-    clearSessionOutcome(sessionId); // DEL-1: a fresh start wipes any prior run's outcome for this id
-    const { theme = 'journalist', rawSessionInput } = req.body;
+    const { theme = 'journalist', rawSessionInput, force } = req.body;
 
     // Validate theme
     if (!VALID_THEMES.includes(theme)) {
@@ -984,10 +983,28 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
             checkpointer: sharedCheckpointer
         });
 
-        // Clear all state fields for fresh start
+        // C1: a thread already exists for this id. Start Fresh is the most likely
+        // action after a mistake, and it is destructive: it discards the run's state
+        // and re-pays for everything. Refuse unless the caller says so out loud.
+        // (An unrun thread reports `values: {}` — see getSessionState.)
+        const existingPhase = (await graph.getState(config))?.values?.currentPhase;
+        if (existingPhase && force !== true) {
+            return res.status(409).json({
+                sessionId,
+                error: `Session ${sessionId} already exists (phase ${existingPhase}). Start Fresh would discard its state and re-run everything. Use Resume, or POST { "force": true } to start over deliberately.`,
+                currentPhase: existingPhase
+            });
+        }
+
+        clearSessionOutcome(sessionId); // DEL-1: a fresh start wipes any prior run's outcome for this id
+
+        // Clear all state fields for fresh start (C1: buildFreshStartState, NOT a
+        // rollback list — buildRollbackState('input-review') preserved the photo
+        // list, roster, raw context and parse, so a second start silently reused
+        // them and never read the new photosPath).
         // CRITICAL: theme must be in state (not just config) because initializeSession
         // and all nodes read state.theme, which defaults to 'journalist' in the annotation.
-        const initialState = { theme, rawSessionInput, ...buildRollbackState('input-review') };
+        const initialState = { theme, rawSessionInput, ...buildFreshStartState() };
         const result = await graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT });
 
         // Check if graph is interrupted at a checkpoint
