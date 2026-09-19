@@ -19,6 +19,11 @@ const path = require('path');
 
 const DEFAULT_ROOT = path.resolve(__dirname, '..', '..', 'data');
 const LOGGED_TYPES = new Set(['llm_start', 'llm_complete', 'llm_error']);
+// Each in-flight entry holds the call's FULL prompt (~250KB for the article call), so the
+// map is bounded: a start whose terminal event never arrives (a caller that drops
+// onProgress, a process-level abort) must not pin memory in a long-lived server. The
+// pipeline's widest fan-out is the photo batch, an order of magnitude below this.
+const MAX_IN_FLIGHT = 64;
 
 let logRoot = process.env.LLM_CALL_LOG_DIR || null;
 let explicitlyEnabled = false;
@@ -99,8 +104,12 @@ function recordLlmEvent(sessionId, context, msg) {
         callId, context, label: msg.label || null, model: msg.model || null, startedAt,
         prompt: { system: msg.systemPrompt || '', user: msg.prompt || '', schema: msg.jsonSchema || null }
       };
-      inFlight.set(callId, { file, record });
+      // Write FIRST: a failed write must leave nothing behind (the catch below only
+      // warns, so an entry set beforehand would never be deleted).
       writeJson(file, record);
+      // Map iteration order is insertion order, so the oldest pending call goes first.
+      while (inFlight.size >= MAX_IN_FLIGHT) inFlight.delete(inFlight.keys().next().value);
+      inFlight.set(callId, { file, record });
       return;
     }
 
@@ -124,15 +133,27 @@ function recordLlmEvent(sessionId, context, msg) {
     } else {
       record.error = { message: msg.error || null, errorName: msg.errorName || null, schemaErrors: msg.schemaErrors || null };
     }
-    writeJson(entry.file, record);
-    fs.appendFileSync(path.join(dir, 'index.jsonl'), JSON.stringify({
-      ts: completedAt, callId, context, model: record.model, elapsed: record.elapsed,
-      channel: diagnostics.channel, usage: diagnostics.usage, file: path.basename(entry.file), outcome: record.outcome
-    }) + '\n');
-    inFlight.delete(callId);
+    // finally: the call is over either way — a failed write must not strand the entry.
+    try {
+      writeJson(entry.file, record);
+      fs.appendFileSync(path.join(dir, 'index.jsonl'), JSON.stringify({
+        ts: completedAt, callId, context, model: record.model, elapsed: record.elapsed,
+        channel: diagnostics.channel, usage: diagnostics.usage, file: path.basename(entry.file), outcome: record.outcome
+      }) + '\n');
+    } finally {
+      inFlight.delete(callId);
+    }
   } catch (err) {
     warnOnce(err, dir);
   }
 }
 
-module.exports = { recordLlmEvent, setLogRoot, resolveLogDir, isEnabled, _resetForTests };
+module.exports = {
+  recordLlmEvent,
+  setLogRoot,
+  resolveLogDir,
+  isEnabled,
+  _resetForTests,
+  /** Test-only: pending starts held in memory. Must return to 0 after every terminal event. */
+  _inFlightSize: () => inFlight.size
+};

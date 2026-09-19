@@ -127,3 +127,40 @@ test('is disabled under Jest unless a test opts in with setLogRoot', () => {
 test('resolveLogDir is <root>/<sessionId>/llm-log', () => {
   expect(log.resolveLogDir('091926')).toBe(path.join(root, '091926', 'llm-log'));
 });
+
+/**
+ * Fix round 1: the in-flight map holds the FULL prompt per pending call (~250KB for the
+ * article call), so no path may retain an entry indefinitely. The client now emits an
+ * llm_error on every failure path, but a failing fs write must not leak either.
+ */
+describe('in-flight bookkeeping is bounded', () => {
+  test('a failed llm_start write retains nothing', () => {
+    jest.spyOn(fs, 'writeFileSync').mockImplementation(() => { throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); });
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    log.recordLlmEvent('S1', 'x', start('a3a3a3a3-2222-4333-8444-555555555555'));
+    expect(log._inFlightSize()).toBe(0);
+  });
+
+  test('a failed terminal write still frees the in-flight entry', () => {
+    log.recordLlmEvent('S1', 'x', start('a4a4a4a4-2222-4333-8444-555555555555'));
+    expect(log._inFlightSize()).toBe(1);
+    jest.spyOn(fs, 'writeFileSync').mockImplementation(() => { throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); });
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    log.recordLlmEvent('S1', 'x', complete('a4a4a4a4-2222-4333-8444-555555555555'));
+    expect(log._inFlightSize()).toBe(0);
+  });
+
+  test('a completion frees its entry', () => {
+    log.recordLlmEvent('S1', 'x', start('a5a5a5a5-2222-4333-8444-555555555555'));
+    log.recordLlmEvent('S1', 'x', complete('a5a5a5a5-2222-4333-8444-555555555555'));
+    expect(log._inFlightSize()).toBe(0);
+  });
+
+  test('starts that never complete are capped, oldest evicted first', () => {
+    for (let i = 0; i < 200; i++) {
+      log.recordLlmEvent('S1', 'x', start(`${String(i).padStart(8, '0')}-2222-4333-8444-555555555555`));
+    }
+    expect(log._inFlightSize()).toBeLessThanOrEqual(64);
+    expect(log._inFlightSize()).toBeGreaterThan(0);
+  });
+});
