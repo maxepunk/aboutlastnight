@@ -11,7 +11,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, truncate, EvalBar } = window.Console.utils;
+const { Badge, EvalBar } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ViewLogic = window.Console.checkpointViewLogic;
 
