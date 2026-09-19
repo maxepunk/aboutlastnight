@@ -42,7 +42,17 @@ const outlineValidator = new SchemaValidator();
 
 // Shared checkpointer instance - DURABLE (DUR-1): sessions survive restart/crash/deploy.
 // SqliteSaver.fromConnString opens (and creates) the db; .db is the better-sqlite3 handle.
-const CHECKPOINT_DB_PATH = path.join(__dirname, 'data', 'checkpoints.sqlite');
+/**
+ * Spec 2026-09-19 §7.4: a live gate runs against a COPY of the checkpoint database,
+ * never the production file, so the path is overridable through the environment.
+ * Pure so the default can be tested without opening any database.
+ */
+function resolveCheckpointDbPath(env = process.env, baseDir = __dirname) {
+    return env.CHECKPOINT_DB_PATH
+        ? path.resolve(env.CHECKPOINT_DB_PATH)
+        : path.join(baseDir, 'data', 'checkpoints.sqlite');
+}
+const CHECKPOINT_DB_PATH = resolveCheckpointDbPath();
 fs.mkdirSync(path.dirname(CHECKPOINT_DB_PATH), { recursive: true });
 const sharedCheckpointer = SqliteSaver.fromConnString(CHECKPOINT_DB_PATH);
 
@@ -696,7 +706,7 @@ async function buildCompleteCheckpointData(interruptData, state) {
 const { isClaudeAvailable } = require('./lib/llm');
 
 const app = express();
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;   // throwaway gate servers must not collide with the director's 3001
 
 // Server timeout: workflow steps can take several minutes
 // (e.g., finalizePhotoAnalyses ~90s, preprocessEvidence ~110s)
@@ -1357,6 +1367,15 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             initialState._previousPhotosPath = session.state.photosPath || null;
         }
 
+        // Spec 2026-09-19 §5.4: a rollback into the outline/article region drops the
+        // director's gate notes about content this point regenerates and keeps the
+        // earlier ones. Membership is checked first: points at or above arc-selection
+        // clear the whole channel through ROLLBACK_CLEARS, and writing "all notes"
+        // here would undo that clear.
+        if (Object.prototype.hasOwnProperty.call(PHASES_INVALIDATED_BY, rollbackTo)) {
+            initialState.directorGateNotes = pruneGateNotes(session.state.directorGateNotes, rollbackTo);
+        }
+
         if (stateOverrides) {
             Object.assign(initialState, stateOverrides);
         }
@@ -1714,4 +1733,4 @@ process.on('SIGINT', async () => {
 
 // Export helpers for testing. `app` is exported so integration tests can boot the
 // real route table over http (listen() stays behind the require.main guard above).
-module.exports = { app, isAllowedSessionId, buildResumePayload, getCheckpointData, buildCompleteCheckpointData, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState };
+module.exports = { app, isAllowedSessionId, buildResumePayload, getCheckpointData, buildCompleteCheckpointData, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState, resolveCheckpointDbPath, CHECKPOINT_DB_PATH, PORT };
