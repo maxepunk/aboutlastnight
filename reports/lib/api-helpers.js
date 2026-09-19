@@ -36,6 +36,14 @@ function clearedValueFor(field) {
  * Build state object for rolling back to a checkpoint.
  * Clears all fields from the rollback point forward and resets revision counters.
  *
+ * It also INVALIDATES the evaluations the rollback makes stale (I1). `evaluatePhase`
+ * skip logic 2 reads the most recent history entry for the phase and returns early
+ * when it is `ready: true`, which it is on every real session — and the outline and
+ * article rollback points deliberately preserve `evaluationHistory`. So a rollback
+ * to `article` regenerated the article and then skipped both the Opus evaluation
+ * AND the programmatic fact-check that gates it: the article gate opened with
+ * `factCheck: null` beside the previous article's green verdict.
+ *
  * @param {string} [rollbackPoint='input-review'] - Valid rollback point name
  * @returns {object} State object with cleared fields and reset counters
  */
@@ -49,7 +57,47 @@ function buildRollbackState(rollbackPoint = 'input-review') {
   });
   Object.assign(state, ROLLBACK_COUNTER_RESETS[rollbackPoint]);
   state.currentPhase = null;
+
+  const stubs = buildEvaluationInvalidationStubs(rollbackPoint);
+  if (stubs.length > 0) {
+    state.evaluationHistory = stubs;
+  }
   return state;
+}
+
+/**
+ * The `ready: false` stubs a rollback to `rollbackPoint` appends (I1).
+ *
+ * Only the points that REGENERATE evaluated output need them, and only where the
+ * point does not already empty the whole history:
+ *   - `arc-selection` and everything upstream of it list `evaluationHistory` in
+ *     ROLLBACK_CLEARS, so the history is emptied and no phase can skip. No stub,
+ *     and none is emitted, so the `[]` clear stands.
+ *   - `outline` preserves the history (it may hold useful arc evaluations) and
+ *     regenerates the outline AND the article, so both are invalidated. Appending
+ *     two entries in one update is why appendSingleReducer spreads an array.
+ *   - `article` preserves the history and regenerates only the article.
+ *
+ * The stub is a history entry, not a deletion: the previous verdict stays on the
+ * record (the console's RevisionDiff and lastEvaluationFor both read this array),
+ * and `source: 'rollback'` says why the phase is being evaluated again.
+ *
+ * @param {string} rollbackPoint
+ * @returns {Array<object>} stub entries, appended via appendSingleReducer
+ */
+function buildEvaluationInvalidationStubs(rollbackPoint) {
+  const PHASES_INVALIDATED_BY = {
+    outline: ['outline', 'article'],
+    article: ['article']
+  };
+  const timestamp = new Date().toISOString();
+  return (PHASES_INVALIDATED_BY[rollbackPoint] || []).map(phase => ({
+    phase,
+    ready: false,
+    reason: 'rollback-invalidated',
+    source: 'rollback',
+    timestamp
+  }));
 }
 
 /**

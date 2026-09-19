@@ -55,14 +55,23 @@ const appendReducer = (oldValue, newValue) => {
 /**
  * Append single reducer: appends a single item to existing array (Commit 8.6)
  * Used for evaluationHistory where each evaluation adds one entry
+ *
+ * An EMPTY array is the clear sentinel (checked first, as in appendReducer). A
+ * NON-EMPTY array appends its items — one state update sometimes has to add more
+ * than one entry, and buildRollbackState('outline') is the case: it invalidates
+ * both the outline AND the article evaluation (I1). Without this, the array would
+ * be appended as a single nested element and neither phase's skip check would see
+ * its stub.
+ *
  * @param {Array} oldValue - Previous array
- * @param {*} newValue - Single item to append (or null to skip)
- * @returns {Array} Array with new item appended
+ * @param {*} newValue - Item to append, array of items, [] to clear, or null to skip
+ * @returns {Array} Array with the new item(s) appended
  */
 const appendSingleReducer = (oldValue, newValue) => {
   if (Array.isArray(newValue) && newValue.length === 0) return [];
   const prev = oldValue || [];
   if (newValue === null || newValue === undefined) return prev;
+  if (Array.isArray(newValue)) return [...prev, ...newValue];
   return [...prev, newValue];
 };
 

@@ -109,7 +109,12 @@ describe('buildRollbackState', () => {
     const expectedKeys = [
       ...ROLLBACK_CLEARS['article'],
       ...Object.keys(ROLLBACK_COUNTER_RESETS['article']),
-      'currentPhase'
+      'currentPhase',
+      // I1: the one deliberate addition — a ready:false stub that stops
+      // evaluateArticle skipping the Opus evaluation and the fact-check on the
+      // previous article's verdict. `article` does not clear evaluationHistory,
+      // so the stub is appended to it. See rollback-invalidates-evaluation.test.js.
+      'evaluationHistory'
     ];
 
     for (const key of Object.keys(state)) {
