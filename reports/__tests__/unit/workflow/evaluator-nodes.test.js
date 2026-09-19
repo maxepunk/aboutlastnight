@@ -900,6 +900,50 @@ describe('evaluator-nodes', () => {
     });
   });
 
+  describe('validationResults for revision — PROMPT-REVIEW B4 / shared channel', () => {
+    it('stamps the phase so a different phase reviser cannot consume it', async () => {
+      const mockClient = jest.fn().mockResolvedValue({
+        ready: false, structuralPassed: false, overallScore: 0.5,
+        structuralIssues: ['Missing roster members: Quinn']
+      });
+      const result = await evaluateArcs({ narrativeArcs: [{ id: 'a' }] }, { configurable: { sdkClient: mockClient } });
+      expect(result.validationResults.phase).toBe('arcs');
+    });
+
+    it('forwards structuralIssues and advisoryWarnings to the reviser', async () => {
+      const mockClient = jest.fn().mockResolvedValue({
+        ready: false, structuralPassed: false, overallScore: 0.5,
+        structuralIssues: ['Missing roster members: Quinn'],
+        advisoryWarnings: ['coherence is thin'],
+        confidence: 'high'
+      });
+      const result = await evaluateArcs({ narrativeArcs: [{ id: 'a' }] }, { configurable: { sdkClient: mockClient } });
+      // These were computed, logged, stored in evaluationHistory — and then dropped
+      // on the floor instead of being handed to the revision node.
+      expect(result.validationResults.structuralIssues).toEqual(['Missing roster members: Quinn']);
+      expect(result.validationResults.advisoryWarnings).toEqual(['coherence is thin']);
+      expect(result.validationResults.confidence).toBe('high');
+    });
+
+    it('escalates at the cap with the structural+advisory findings, not `issues`', async () => {
+      const mockClient = jest.fn().mockResolvedValue({
+        ready: false, structuralPassed: false, overallScore: 0.4,
+        structuralIssues: ['Missing roster members: Quinn'],
+        advisoryWarnings: ['thin coherence']
+      });
+      const result = await evaluateArcs(
+        { narrativeArcs: [{ id: 'a' }], _previousArcs: [{ id: 'a' }], arcRevisionCount: REVISION_CAPS.ARCS },
+        { configurable: { sdkClient: mockClient } }
+      );
+      expect(result.evaluationHistory.escalatedToHuman).toBe(true);
+      // `evaluation.issues` is absent in the structural/advisory schema, so the old
+      // formatIssuesForMessage(evaluation.issues) produced "unspecified issues".
+      expect(result.evaluationHistory.escalationReason).toContain('Missing roster members: Quinn');
+      expect(result.evaluationHistory.escalationReason).toContain('thin coherence');
+      expect(result.evaluationHistory.escalationReason).not.toContain('unspecified issues');
+    });
+  });
+
   describe('validationResults for revision', () => {
     it('includes passed=false when not ready', async () => {
       const mockClient = jest.fn().mockResolvedValue({

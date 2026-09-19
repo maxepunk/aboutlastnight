@@ -272,6 +272,58 @@ function getArticleCriteria(theme = 'journalist') {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// EVALUATION OUTPUT SCHEMA
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Structured-output schema for every phase evaluator (Commit 8.21 shape).
+ *
+ * PROMPT-REVIEW B4: `criteriaScores: {type:'object'}` and bare `{type:'array'}`
+ * issue lists left the emitted shape entirely up to the model, and nothing
+ * downstream could read it — buildRevisionContext rendered the per-criterion
+ * objects as `[object Object]`. The per-criterion shape (and the string-ness of
+ * the two issue lists) is now part of the contract, so the notes/fix the prompt
+ * asks for actually survive into the revision prompt.
+ *
+ * NOTE: no `format` keyword anywhere (SDK #277 — see reports/CLAUDE.md).
+ */
+const EVALUATION_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    ready: { type: 'boolean' },
+    overallScore: { type: 'number' },
+    structuralPassed: { type: 'boolean' },
+    criteriaScores: {
+      type: 'object',
+      description: 'One entry per criterion, keyed by criterion name.',
+      additionalProperties: {
+        type: 'object',
+        required: ['score'],
+        properties: {
+          score: { type: 'number' },
+          type: { type: 'string', description: 'structural or advisory' },
+          notes: { type: 'string', description: 'Specific explanation naming the characters, IDs or sections at fault' },
+          fix: { type: 'string', description: 'One concrete action that would raise this score' }
+        }
+      }
+    },
+    structuralIssues: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Issues that MUST be fixed, one self-contained sentence each'
+    },
+    advisoryWarnings: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Suggestions, not blockers, one self-contained sentence each'
+    },
+    revisionGuidance: { type: 'string' },
+    confidence: { type: 'string' }
+  },
+  required: ['ready', 'overallScore', 'structuralPassed']
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -915,21 +967,7 @@ function createEvaluator(phase, options = {}) {
     const prompt = buildEvaluationUserPrompt(phase, state);
 
     try {
-      // Commit 8.21: All phases use structural/advisory schema
-      const jsonSchema = {
-        type: 'object',
-        properties: {
-          ready: { type: 'boolean' },
-          overallScore: { type: 'number' },
-          structuralPassed: { type: 'boolean' },
-          criteriaScores: { type: 'object' },
-          structuralIssues: { type: 'array' },
-          advisoryWarnings: { type: 'array' },
-          revisionGuidance: { type: 'string' },
-          confidence: { type: 'string' }
-        },
-        required: ['ready', 'overallScore', 'structuralPassed']
-      };
+      const jsonSchema = EVALUATION_JSON_SCHEMA;
 
       // SDK returns parsed object directly when jsonSchema is provided
       // Commit 8.23: disableTools prevents evaluator from using Grep/Read during evaluation
@@ -999,8 +1037,14 @@ function createEvaluator(phase, options = {}) {
       if (currentRevisions >= revisionCap) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] At revision cap - escalating to human (score: ${evaluation.overallScore})`);
 
-        // Use shared helper for safe issue formatting
-        const issuesText = formatIssuesForMessage(evaluation.issues);
+        // B4: `evaluation.issues` is not part of the structural/advisory schema, so
+        // this read produced "unspecified issues" on every real escalation. Use the
+        // two lists the evaluator actually fills.
+        const issuesText = formatIssuesForMessage([
+          ...(evaluation.structuralIssues || []),
+          ...(evaluation.advisoryWarnings || []),
+          ...(Array.isArray(evaluation.issues) ? evaluation.issues : [])
+        ]);
 
         const escalatedHistoryEntry = {
           ...historyEntry,
@@ -1023,12 +1067,22 @@ function createEvaluator(phase, options = {}) {
         evaluationHistory: historyEntry,
         // Note: revision count incremented by incrementXxxRevision nodes in graph.js
         currentPhase: phaseConstant,
-        // Return revision guidance in validationResults for revision nodes
+        // Return revision guidance in validationResults for revision nodes.
+        //
+        // B4 + shared channel: validationResults is ONE channel shared by the arc,
+        // outline and article revisers, so it carries a `phase` stamp — a reviser
+        // drops a block stamped for another phase rather than acting on it. And the
+        // structuralIssues/advisoryWarnings the evaluator computed now travel with
+        // it instead of being dropped after the log line above.
         validationResults: {
+          phase,
           passed: false,
           feedback: evaluation.revisionGuidance,
+          structuralIssues: evaluation.structuralIssues || [],
+          advisoryWarnings: evaluation.advisoryWarnings || [],
           issues: evaluation.issues,
-          criteriaScores: evaluation.criteriaScores
+          criteriaScores: evaluation.criteriaScores,
+          confidence: evaluation.confidence || 'medium'
         }
       };
 
@@ -1179,6 +1233,7 @@ module.exports = {
   // Export for testing
   _testing: {
     QUALITY_CRITERIA,
+    EVALUATION_JSON_SCHEMA,
     getOutlineCriteria,
     getArticleCriteria,
     getNpcDescriptions,

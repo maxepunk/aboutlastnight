@@ -1546,6 +1546,10 @@ function validateArcStructure(state, config) {
 
   // Build validationResults for revision node (same format as evaluator)
   const validationFeedback = structuralPassed ? null : {
+    // B4 shared channel: validationResults is shared by all three revisers, so the
+    // phase stamp is what stops reviseOutline/reviseContentBundle acting on arc
+    // findings that happen to still be sitting in the channel.
+    phase: 'arcs',
     ready: false,
     structuralPassed: false,
     issues: structuralIssues,

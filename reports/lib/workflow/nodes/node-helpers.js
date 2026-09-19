@@ -829,55 +829,102 @@ function buildRevisionContext(options) {
   // Build context section (feedback, issues, criteria)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const issues = validationResults?.issues || [];
-  const feedback = validationResults?.revisionGuidance ||
-                   validationResults?.feedback ||
-                   '';
-  const criteria = validationResults?.criteriaScores || {};
-  const confidence = validationResults?.confidence || 0;
-  const ready = validationResults?.ready || false;
+  // ───────────────────────────────────────────────────────────────────────────
+  // PROMPT-REVIEW B4: the evaluator's feedback has to arrive in a form the
+  // reviser can act on.
+  //
+  // The evaluator emits criteriaScores as {score, type, notes, fix} objects and
+  // splits its findings into structuralIssues/advisoryWarnings. This builder used
+  // to interpolate the objects directly (`[object Object]`) and only read a legacy
+  // `issues` array (absent from the current schema, so every revision prompt said
+  // "(no specific issues listed)"). Measured on five consecutive sessions: the
+  // reviser was told to make targeted fixes with nothing to target.
+  //
+  // Shared-channel half: validationResults is ONE channel for all three phases,
+  // so the outline reviser consumed the arc evaluator's leftovers. A mismatched
+  // stamp now drops the block entirely — no feedback beats wrong feedback.
+  // ───────────────────────────────────────────────────────────────────────────
 
-  // Format issues as bullet list
-  const issuesList = issues.length > 0
-    ? issues.map(i => {
-        if (typeof i === 'string') return `  - ${i}`;
-        if (i.message) return `  - ${i.message}${i.severity ? ` (${i.severity})` : ''}`;
-        return `  - ${JSON.stringify(i)}`;
-      }).join('\n')
-    : '  (no specific issues listed)';
+  /** Accept both the current {score,...} object and the legacy bare number. */
+  const scoreOf = v => typeof v === 'number' ? v : (v && typeof v.score === 'number' ? v.score : null);
 
-  // Format criteria scores as bullet list
+  const stamped = validationResults?.phase;
+  const phaseMismatch = !!(stamped && stamped !== phase);
+
+  const criteria = phaseMismatch ? {} : (validationResults?.criteriaScores || {});
+
+  // `issues` when a legacy writer supplied it; otherwise the evaluator's split lists.
+  const rawIssues = phaseMismatch
+    ? []
+    : (Array.isArray(validationResults?.issues) && validationResults.issues.length > 0
+        ? validationResults.issues
+        : [
+            ...(validationResults?.structuralIssues || []),
+            ...(validationResults?.advisoryWarnings || [])
+          ]);
+
+  const feedback = phaseMismatch
+    ? ''
+    : (validationResults?.revisionGuidance || validationResults?.feedback || '');
+
+  const confidence = phaseMismatch ? null : validationResults?.confidence;
+  const ready = phaseMismatch ? false : (validationResults?.ready || false);
+
+  const hasEvaluation = !phaseMismatch && (
+    Object.keys(criteria).length > 0 || rawIssues.length > 0 || !!feedback
+  );
+
+  const formatIssue = (i) => {
+    if (typeof i === 'string') return `  - ${i}`;
+    if (i && i.message) return `  - ${i.message}${i.severity ? ` (${i.severity})` : ''}`;
+    return `  - ${JSON.stringify(i)}`;
+  };
+
+  const issuesList = rawIssues.length > 0
+    ? rawIssues.map(formatIssue).join('\n')
+    : '  (none reported)';
+
+  // Per-criterion: score, structural/advisory label, and the evaluator's own
+  // notes + concrete fix. The notes and fix are the actionable part.
   const criteriaList = Object.keys(criteria).length > 0
     ? Object.entries(criteria)
-        .map(([name, score]) => `  - ${name}: ${typeof score === 'number' ? score.toFixed(2) : score}`)
+        .map(([name, value]) => {
+          const score = scoreOf(value);
+          const scoreText = score === null ? 'unscored' : score.toFixed(2);
+          const kind = (value && typeof value === 'object' && value.type) ? ` [${value.type}]` : '';
+          const lines = [`  - ${name}: ${scoreText}${kind}`];
+          if (value && typeof value === 'object') {
+            if (value.notes && String(value.notes).trim()) lines.push(`      notes: ${value.notes}`);
+            if (value.fix && String(value.fix).trim()) lines.push(`      fix: ${value.fix}`);
+          }
+          return lines.join('\n');
+        })
         .join('\n')
     : '  (no criteria scores available)';
 
-  // Identify what's working well (criteria scoring high)
-  const workingWell = Object.entries(criteria)
-    .filter(([_, score]) => typeof score === 'number' && score >= 0.8)
-    .map(([name]) => name);
+  const scored = Object.entries(criteria)
+    .map(([name, value]) => [name, scoreOf(value)])
+    .filter(([, score]) => score !== null);
 
+  const workingWell = scored.filter(([, score]) => score >= 0.8).map(([name]) => name);
   const workingWellText = workingWell.length > 0
-    ? `These aspects are working well (PRESERVE THESE): ${workingWell.join(', ')}`
+    ? `These aspects are working well, PRESERVE THESE: ${workingWell.join(', ')}`
     : 'Focus on the issues identified below.';
 
-  // Identify what needs improvement (criteria scoring low)
-  const needsWork = Object.entries(criteria)
-    .filter(([_, score]) => typeof score === 'number' && score < 0.7)
-    .map(([name]) => name);
-
+  const needsWork = scored.filter(([, score]) => score < 0.7).map(([name]) => name);
   const needsWorkText = needsWork.length > 0
     ? `These aspects need improvement: ${needsWork.join(', ')}`
     : '';
 
-  const contextSection = `
-═══════════════════════════════════════════════════════════════════════════════
-REVISION CONTEXT: ${phase.toUpperCase()} (Attempt ${revisionCount})
-═══════════════════════════════════════════════════════════════════════════════
+  // Confidence is a string ('high'|'medium'|'low') in the current schema and a
+  // number in the legacy one; the old code multiplied both by 100 -> "NaN%".
+  const confidenceText = typeof confidence === 'number'
+    ? `${(confidence * 100).toFixed(0)}%`
+    : (confidence || 'unknown');
 
-EVALUATION SUMMARY:
-  Confidence: ${(confidence * 100).toFixed(0)}%
+  const evaluationBlock = hasEvaluation
+    ? `EVALUATION SUMMARY:
+  Confidence: ${confidenceText}
   Ready: ${ready ? 'YES (but still improving)' : 'NO (must address issues)'}
 
 ${workingWellText}
@@ -890,7 +937,15 @@ ISSUES TO ADDRESS:
 ${issuesList}
 
 EVALUATOR FEEDBACK:
-${feedback || '(no specific feedback provided)'}
+${feedback || '(no specific feedback provided)'}`
+    : '(no evaluator feedback for this phase)';
+
+  const contextSection = `
+═══════════════════════════════════════════════════════════════════════════════
+REVISION CONTEXT: ${phase.toUpperCase()} (Attempt ${revisionCount})
+═══════════════════════════════════════════════════════════════════════════════
+
+${evaluationBlock}
 
 ${humanFeedback ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
 ${humanFeedback}
