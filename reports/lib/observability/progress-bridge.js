@@ -11,6 +11,7 @@
 const { progressEmitter } = require('./progress-emitter');
 const { isProgressEnabled } = require('./config');
 const { SSE_EVENT_TYPES, STRUCTURED_OUTPUT_CHANNELS } = require('./constants');
+const { recordLlmEvent } = require('./llm-call-log');
 
 // ── llm_delta coalescing (P5) ─────────────────────────────────────────────
 // The SDK fires a stream_event per token; forwarding each as its own SSE frame
@@ -332,6 +333,20 @@ function formatProgressEvent(msg) {
 }
 
 /**
+ * Progress callback for one SDK call: records to the per-call log (spec 2026-09-19
+ * §3.2) and, when SDK_PROGRESS is not 'false', forwards to the console + SSE logger.
+ * The log is deliberately ahead of the gate: that flag silences the stream, not the
+ * record.
+ */
+function createProgressFromTrace(context, sessionId = null) {
+  const consoleAndSse = isProgressEnabled() ? createConsoleAndSseLogger(context, sessionId) : null;
+  return (msg) => {
+    recordLlmEvent(sessionId, context, msg);
+    if (consoleAndSse) consoleAndSse(msg);
+  };
+}
+
+/**
  * Create a progress callback from trace events
  *
  * Unified progress logging - both console and SSE from single source.
@@ -341,11 +356,7 @@ function formatProgressEvent(msg) {
  * @param {string} [sessionId] - Session ID for SSE streaming (optional)
  * @returns {Function} Progress callback for SDK
  */
-function createProgressFromTrace(context, sessionId = null) {
-  if (!isProgressEnabled()) {
-    return () => {}; // No-op
-  }
-
+function createConsoleAndSseLogger(context, sessionId) {
   return (msg) => {
     const timestamp = new Date().toISOString();
 
