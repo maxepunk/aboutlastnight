@@ -291,3 +291,35 @@ describe('completedResultFrom', () => {
     expect(completedResultFrom(null)).toBeNull();
   });
 });
+
+describe('startFreshDecision', () => {
+  // C1: Start Fresh POSTed /start unconditionally, and /start seeded its state from
+  // buildRollbackState('input-review') — which preserves everything upstream of the
+  // parse plus the photo channels. So the most likely action after a mistake kept
+  // the old photos, roster and parse and paused once on them. The route refuses an
+  // existing thread now (409 unless force:true); this is the screen's half, so the
+  // director is asked before anything is discarded rather than after.
+  const { startFreshDecision } = require('../session-start-logic');
+
+  it('goes straight ahead when nothing has ever run under this id', () => {
+    expect(startFreshDecision({ error: 'Session not found' })).toBe('go');
+    expect(startFreshDecision({ interrupted: false })).toBe('go');
+    expect(startFreshDecision(null)).toBe('go');
+    expect(startFreshDecision({})).toBe('go');
+  });
+
+  it('asks first when the id already has state, whatever kind', () => {
+    expect(startFreshDecision({ interrupted: true, checkpoint: { type: 'outline' } })).toBe('confirm');
+    expect(startFreshDecision({ interrupted: false, currentPhase: '2.1' })).toBe('confirm');
+    expect(startFreshDecision({ interrupted: false, currentPhase: 'complete' })).toBe('confirm');
+  });
+
+  it('refuses outright while a run holds the session lock', () => {
+    // A start here would 409 on the lock anyway, and re-seeding state under a
+    // running graph is not something to offer a confirm button for.
+    expect(startFreshDecision({ interrupted: false, inProgress: true, currentPhase: '2.1' }))
+      .toBe('not-allowed');
+    expect(startFreshDecision({ interrupted: false, inProgress: true, currentPhase: 'complete' }))
+      .toBe('not-allowed');
+  });
+});

@@ -24,6 +24,12 @@
  *                               report — unattended, from one click on a button that
  *                               does not sound destructive. The old guard only
  *                               rejected a thread with no phase at all.
+ *
+ *   startFreshDecision        — C1: "Start Fresh" on an id that already has state
+ *                               discarded it without asking, and re-seeded the run
+ *                               from a rollback list that kept the old photos,
+ *                               roster and parse. Ask first; the route 409s without
+ *                               `force: true` either way.
  */
 (function () {
   'use strict';
@@ -66,6 +72,38 @@
     if (resp.currentPhase === 'complete') return 'complete';
     if (resp.currentPhase) return 'resumable';
     return 'not-found';
+  }
+
+  /**
+   * What "Start Fresh" may do, given what GET /checkpoint says about the id (C1).
+   *
+   * Start Fresh POSTed /start unconditionally, and /start seeded its initial state
+   * from buildRollbackState('input-review') — a list that deliberately preserves
+   * everything upstream of the parse, plus the photo channels. So the most likely
+   * action after a mistake (start over on the same session date) silently kept the
+   * old photo list, the old roster and the old parse: the run paused once, at
+   * input-review, showing them, and the newly typed photosPath was never read.
+   *
+   * The route refuses an existing thread now (409 unless the body says
+   * `force: true`). This is the screen's half of that contract, so the question is
+   * asked BEFORE anything is discarded rather than reported as an error after.
+   *
+   *   'go'          - nothing has ever run under this id; start
+   *   'confirm'     - the id has state (paused, stopped, or complete); ask first,
+   *                   then re-POST with force:true
+   *   'not-allowed' - a run holds the session lock; a start would 409 on it, and
+   *                   re-seeding state under a running graph is not a choice worth
+   *                   offering
+   *
+   * @param {object|null} checkpointResponse - GET /api/session/:id/checkpoint body
+   * @returns {'go'|'confirm'|'not-allowed'}
+   */
+  function startFreshDecision(checkpointResponse) {
+    switch (classifyCheckpointResponse(checkpointResponse)) {
+      case 'not-found': return 'go';
+      case 'in-progress': return 'not-allowed';
+      default: return 'confirm';
+    }
   }
 
   /**
@@ -189,6 +227,7 @@
   const api = {
     isValidSessionId,
     classifyCheckpointResponse,
+    startFreshDecision,
     decideAttachFallback,
     buildReportLinks,
     completedResultFrom,

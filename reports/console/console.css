@@ -441,6 +441,25 @@ textarea.input {
   min-height: 1.2em;
 }
 
+/* C1: the Start Fresh confirmation, shown when the typed session id already has
+   state. Amber warning treatment (same language as .enrichment__warning) rather
+   than a modal: the session id and the photos path are still on screen behind it,
+   and changing one of those is a likely answer to the question. */
+.session-start__confirm {
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-left: 2px solid var(--accent-amber);
+  background: rgba(212, 168, 83, 0.08);
+  color: var(--accent-amber);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.session-start__confirm-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
 /* ── Theme Selector ── */
 .theme-selector {
   margin-bottom: var(--space-lg);

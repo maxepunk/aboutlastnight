@@ -97,16 +97,23 @@ const api = {
 
   /**
    * Start a new session with raw input
+   *
+   * C1: the route 409s when a thread already exists for this id, because Start
+   * Fresh discards its state and re-runs everything. `force` is the deliberate
+   * override, sent only after the director confirms (startFreshDecision).
+   *
    * @param {string} sessionId - Alphanumeric + hyphens, 1-30 chars
    * @param {object} rawInput - Raw session input (photosPath required)
+   * @param {string} [theme]
+   * @param {boolean} [force] - discard an existing thread's state on purpose
    * @returns {Promise<object>} Checkpoint or phase response
    */
-  async startSession(sessionId, rawInput, theme = 'journalist') {
+  async startSession(sessionId, rawInput, theme = 'journalist', force = false) {
     const res = await fetch(`/api/session/${sessionId}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ theme, rawSessionInput: rawInput })
+      body: JSON.stringify({ theme, rawSessionInput: rawInput, force: force === true })
     });
     return res.json();
   },

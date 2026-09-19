@@ -16,7 +16,7 @@ const { FileBrowser } = window.Console;
 // Pure, node-tested (console/__tests__/session-start-logic.test.js). This component
 // is a thin consumer: it does not decide what a valid ID is or what a session state
 // means, it only renders the answer.
-const { isValidSessionId, classifyCheckpointResponse, completedResultFrom } =
+const { isValidSessionId, classifyCheckpointResponse, startFreshDecision, completedResultFrom } =
   window.Console.sessionStartLogic;
 
 function SessionStart({ dispatch, theme }) {
@@ -25,6 +25,9 @@ function SessionStart({ dispatch, theme }) {
   const [whiteboardPath, setWhiteboardPath] = React.useState('');
   const [status, setStatus] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  // C1: `{ phase }` while the director is being asked whether to discard an
+  // existing session's state; null the rest of the time.
+  const [pendingStart, setPendingStart] = React.useState(null);
   // Mirrors the server's ALLOW_NONSTANDARD_SESSION_ID so this screen accepts exactly
   // what POST /start accepts. Defaults to the strict contract until /api/config answers.
   const [allowNonstandardId, setAllowNonstandardId] = React.useState(false);
@@ -57,6 +60,7 @@ function SessionStart({ dispatch, theme }) {
   /** Clear whatever the last attempt left on screen. */
   function resetStatus() {
     setStatus('');
+    setPendingStart(null);
   }
 
   /**
@@ -107,17 +111,16 @@ function SessionStart({ dispatch, theme }) {
   };
 
   /**
-   * Handle Start Fresh — calls api.startSession
+   * POST /start. `force` discards an existing thread's state on purpose (C1).
    * On checkpoint response: dispatches SET_SESSION then CHECKPOINT_RECEIVED
    */
-  const handleStart = async () => {
-    if (!isValid) return;
+  const postStart = async (force) => {
     setLoading(true);
-    resetStatus();
-    setStatus('Starting fresh session...');
+    setPendingStart(null);
+    setStatus(force ? 'Starting over, discarding the old state...' : 'Starting fresh session...');
 
     try {
-      const result = await sessionApi.startSession(sessionId, buildRawInput(), theme);
+      const result = await sessionApi.startSession(sessionId, buildRawInput(), theme, force);
 
       if (result.error) {
         setStatus('Error: ' + result.error);
@@ -140,6 +143,55 @@ function SessionStart({ dispatch, theme }) {
     } catch (err) {
       setStatus('Connection failed. Is the server running?');
       setLoading(false);
+    }
+  };
+
+  /**
+   * Handle Start Fresh — read GET /checkpoint first, and never discard a session's
+   * state without being asked to (C1).
+   *
+   * This button POSTed /start unconditionally, and /start seeded its state from
+   * buildRollbackState('input-review'): a list that preserves everything upstream
+   * of the parse, plus the photo channels. So starting over on the same session
+   * date — the most likely thing to do after a mistake — silently kept the old
+   * photo list, the old roster and the old parse, paused once at input-review
+   * showing them, and never read the newly typed photosPath. The route refuses an
+   * existing thread now; asking here is what makes the refusal a choice instead of
+   * an error message.
+   */
+  const handleStart = async () => {
+    if (!isValid) return;
+    setLoading(true);
+    resetStatus();
+    setStatus('Checking session state...');
+
+    let checkpoint;
+    try {
+      checkpoint = await sessionApi.getCheckpoint(sessionId);
+    } catch (err) {
+      setStatus('Connection failed. Is the server running?');
+      setLoading(false);
+      return;
+    }
+
+    switch (startFreshDecision(checkpoint)) {
+      case 'not-allowed':
+        // H8: a run holds the session lock. /start would 409 on it, and re-seeding
+        // state under a running graph is not something to offer a button for.
+        setStatus('A run is already in progress for this session. Use Resume to attach to it.');
+        setLoading(false);
+        return;
+
+      case 'confirm':
+        setPendingStart({ phase: checkpoint.currentPhase || 'an earlier step' });
+        setStatus('');
+        setLoading(false);
+        return;
+
+      case 'go':
+      default:
+        await postStart(false);
+        return;
     }
   };
 
@@ -464,6 +516,38 @@ function SessionStart({ dispatch, theme }) {
         onClick: handleResume,
         disabled: !isValid || loading
       }, 'Resume')
+    ),
+
+    // C1: the Start Fresh confirmation. Inline rather than a modal because the
+    // director may want to change the session ID or the photos path instead, and
+    // both inputs are still on screen behind it.
+    pendingStart && React.createElement('div', {
+      className: 'session-start__confirm',
+      role: 'alertdialog',
+      'aria-label': 'Confirm starting over'
+    },
+      React.createElement('p', null,
+        'Session ' + sessionId + ' already has state at ' + pendingStart.phase +
+        '. Start over and discard it?'
+      ),
+      React.createElement('p', { className: 'text-xs mt-xs' },
+        'Everything that run produced is discarded and the pipeline re-runs from the top, ' +
+        'including the paid model calls. Resume picks it up where it stopped instead.'
+      ),
+      React.createElement('div', { className: 'session-start__confirm-actions mt-sm' },
+        React.createElement('button', {
+          className: 'btn btn-danger btn-sm',
+          onClick: () => postStart(true),
+          disabled: loading,
+          type: 'button'
+        }, 'Start over, discard it'),
+        React.createElement('button', {
+          className: 'btn btn-secondary btn-sm',
+          onClick: () => setPendingStart(null),
+          disabled: loading,
+          type: 'button'
+        }, 'Cancel')
+      )
     ),
 
     status && React.createElement('p', { className: 'session-start__status' }, status),
