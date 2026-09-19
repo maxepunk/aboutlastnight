@@ -54,6 +54,26 @@ function resolveCheckpointDbPath(env = process.env, baseDir = __dirname) {
 }
 const CHECKPOINT_DB_PATH = resolveCheckpointDbPath();
 fs.mkdirSync(path.dirname(CHECKPOINT_DB_PATH), { recursive: true });
+
+/**
+ * Spec 2026-09-19 §7.4: a throwaway gate server listens on a port of its own so it
+ * cannot collide with the director's production 3001 — which means a PORT the
+ * environment got wrong must FAIL, not quietly resolve to that very port.
+ * Unset or empty is the only fallback; anything that is not a positive integer throws.
+ * Pure, so it can be tested without starting a listener.
+ */
+function resolvePort(env = process.env) {
+    const raw = env.PORT;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return 3001;
+    const text = String(raw).trim();
+    if (!/^\d+$/.test(text) || Number(text) === 0) {
+        throw new Error(
+            `Invalid PORT "${raw}": must be a positive integer (unset it to use the default 3001). ` +
+            "Refusing to fall back to 3001, which is the director's production port."
+        );
+    }
+    return Number(text);
+}
 const sharedCheckpointer = SqliteSaver.fromConnString(CHECKPOINT_DB_PATH);
 
 // Base directory all browse/file requests are confined to (SEC-1/SEC-2)
@@ -706,7 +726,7 @@ async function buildCompleteCheckpointData(interruptData, state) {
 const { isClaudeAvailable } = require('./lib/llm');
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3001;   // throwaway gate servers must not collide with the director's 3001
+const PORT = resolvePort();   // throwaway gate servers must not collide with the director's 3001
 
 // Server timeout: workflow steps can take several minutes
 // (e.g., finalizePhotoAnalyses ~90s, preprocessEvidence ~110s)
@@ -1733,4 +1753,4 @@ process.on('SIGINT', async () => {
 
 // Export helpers for testing. `app` is exported so integration tests can boot the
 // real route table over http (listen() stays behind the require.main guard above).
-module.exports = { app, isAllowedSessionId, buildResumePayload, getCheckpointData, buildCompleteCheckpointData, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState, resolveCheckpointDbPath, CHECKPOINT_DB_PATH, PORT };
+module.exports = { app, isAllowedSessionId, buildResumePayload, getCheckpointData, buildCompleteCheckpointData, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState, resolveCheckpointDbPath, resolvePort, CHECKPOINT_DB_PATH, PORT };
