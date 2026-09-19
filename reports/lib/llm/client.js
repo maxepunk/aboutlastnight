@@ -266,6 +266,14 @@ async function sdkQueryImpl({
   options.mcpServers = {};
   options.strictMcpConfig = true;
 
+  // Control 3b: auto-memory isolation. settingSources: [] does not stop the Claude
+  // Code subprocess loading the operator's auto-memory directory
+  // (~/.claude/projects/<cwd>/memory/): a probe with these exact options reported
+  // memory_paths.auto and the model listed every memory file — editorial notes about
+  // ALN reports included — as visible context (2026-09-19). autoMemoryEnabled is a
+  // settings.json key, unread here, so the switch is the CLI's env var.
+  options.env = { ...process.env, CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
+
   if (model !== 'haiku') {
     options.betas = ['context-1m-2025-08-07'];
   }
