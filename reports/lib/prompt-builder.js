@@ -199,7 +199,7 @@ const THEME_CONSTRAINTS = {
 VOICE MECHANICS:
 - First-person participatory, reported the way your REPORTING MODE allows
 - NOT observer mode: "The group decided", "They concluded", "It was noted"
-- Transform: "The group came to a conclusion" -> "I watched them reach their conclusion"
+- Transform: "The group came to a conclusion" -> "<who> pushed the room to its verdict" (name who acted; claim only what your REPORTING MODE lets you witness)
 - Transform: "From my notes that night" -> remove attribution or use "- Nova"
 - Sentence rhythm: Short punchy, then longer building, then short again`
   },

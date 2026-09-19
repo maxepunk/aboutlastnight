@@ -125,6 +125,13 @@ describe('article REVISION system prompt', () => {
     expect(revisionPrompt).not.toContain('in-the-muck');
   });
 
+  it('does not prescribe a presence claim as the rewrite for observer voice', () => {
+    // The transform example told every revision, remote sessions included, to turn
+    // "The group came to a conclusion" into "I watched them reach their conclusion".
+    expect(revisionPrompt).not.toMatch(/I watched them/);
+    expect(revisionPrompt).not.toMatch(/I was there when/);
+  });
+
   it('still asks for the first-person participatory voice', () => {
     expect(revisionPrompt).toMatch(/first-person participatory/i);
   });
