@@ -293,7 +293,11 @@ describe('factCheckSummary', () => {
     expect(summary.total).toBe(0);
   });
 
-  it('keeps a structural issue that has no structured group of its own (pronoun errors, leaked prompt examples)', () => {
+  // I2b moved the pronoun and leaked-example messages to `advisoryWarnings`, where
+  // they render in the `advisory` group. The `other` group still has to exist for
+  // any structural message the four structured groups do not recognise — including
+  // one of these two if a live run promotes it back.
+  it('keeps a structural issue that has no structured group of its own', () => {
     const summary = factCheckSummary({
       structuralIssues: ['Pronoun error: Marcus takes he/him, but the article writes "Marcus … their"'],
       advisoryWarnings: [],

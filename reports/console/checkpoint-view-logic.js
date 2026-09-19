@@ -324,9 +324,12 @@
    * ALSO reports through a structured sub-object (cardFidelity, rosterCoverage,
    * photoReferences, reporterMode).
    *
-   * Anything else it can emit — a leaked prompt example, an NPC pronoun error —
-   * has no structured counterpart, so it would be invisible if the screen showed
-   * only the four groups. Those land in the `other` group.
+   * Anything else it can emit has no structured counterpart, so it would be
+   * invisible if the screen showed only the four groups. Those land in the `other`
+   * group. (I2b: the two messages that used to arrive this way — a leaked prompt
+   * example and an NPC pronoun error — are advisories now and render in the
+   * `advisory` group. Their prefixes were left unchanged so that promoting one back
+   * to structural needs no change here.)
    *
    * Prefix matching is deliberate and fails safe: if a message is reworded, its
    * issue moves INTO `other` (still on screen, just ungrouped) rather than out

@@ -110,6 +110,32 @@ function isVerbatim(cardContent, sourceText) {
 }
 
 /**
+ * The checks that report ADVISORIES ONLY, until a live run calibrates them (I2b).
+ *
+ * Both are string heuristics that demonstrably fire on correct prose, and a
+ * structural verdict is expensive in a way an advisory is not: `evaluateArticle`
+ * short-circuits the Opus evaluation on any structural issue and routes straight
+ * to a revision, of which an article gets three, all paid. This module's standing
+ * invariant is to err toward NOT flagging; these two could not honour it as
+ * structural checks.
+ *
+ *   'npcPronouns'  - a they/them pronoun within six words of an NPC whose canon
+ *                    pronouns differ. Two suppression rules already exist for
+ *                    plural and shared referents, and correct prose still slipped
+ *                    through the first cut.
+ *   'leakedExample'- a two-word substring match on illustrative prompt strings.
+ *                    The prompt files ship placeholders now, so a hit is far more
+ *                    likely to be a session that legitimately wrote the sentence.
+ *
+ * To PROMOTE one back to structural after a live session's data supports it:
+ * remove its name from this list and push its message to `structuralIssues`
+ * instead of `advisoryWarnings` at the call site (both are marked with the key).
+ * The message strings themselves must not change — `console/checkpoint-view-logic.js`
+ * groups the fact-check by message PREFIX.
+ */
+const FACT_CHECK_ADVISORY_ONLY = ['npcPronouns', 'leakedExample'];
+
+/**
  * Illustrative strings shipped in the prompt files that a model has been
  * observed copying into a real card (BASELINE §6(b): 071826's `jam003` card
  * reproduced formatting.md's "The job is yours"). The placeholders that replaced
@@ -332,6 +358,39 @@ function visibleText(contentBundle) {
 }
 
 /**
+ * What the REPORTER says in their own voice: paragraph blocks and the headline
+ * (main, kicker, deck). Nothing else (I2a).
+ *
+ * The reporter-mode scan used to read `visibleText`, which is generous ON PURPOSE
+ * — it answers "can the reader see this roster name anywhere", so captions, card
+ * text and pull quotes all count. Run over first-person reporter-mode phrases,
+ * that same generosity turns a correctly attributed player quote into a structural
+ * failure: "I voted for Vic" is what a player SAYS, and quoting them is the
+ * article doing its job. Same for an evidence card, which is a verbatim extract of
+ * someone's memory in the second or first person by construction, and for a
+ * caption quoting a line.
+ *
+ * So the two scans read different text, deliberately: coverage stays generous,
+ * reporter mode stays narrow. Narrow here is also the lenient direction — the
+ * phrases are narrator claims, and a claim the narrator does not make in their own
+ * prose is not a persona breach.
+ *
+ * @param {Object} contentBundle
+ * @returns {string}
+ */
+function narratorText(contentBundle) {
+  const bundle = contentBundle || {};
+  const headline = bundle.headline || {};
+  const parts = [headline.main, headline.kicker, headline.deck];
+
+  for (const block of contentBlocks(bundle)) {
+    if (block.type === 'paragraph') parts.push(block.text);
+  }
+
+  return parts.filter(v => typeof v === 'string').join('\n');
+}
+
+/**
  * Fact-check a generated ContentBundle against the session's own record.
  *
  * @param {Object}   args
@@ -376,9 +435,11 @@ function factCheckContentBundle({
     const content = String(c.content == null ? '' : c.content);
     const normContent = normalize(content);
 
+    // 'leakedExample' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): a two-word substring
+    // match, on strings the prompt files no longer ship.
     const leaked = LEAKED_PROMPT_EXAMPLES.find(ex => normContent.includes(ex));
     if (leaked) {
-      structuralIssues.push(
+      advisoryWarnings.push(
         `Prompt example leaked into evidence card "${tokenId}": "${leaked}" is an illustrative ` +
         `string from the prompt files, not session evidence. Quote the real source verbatim or drop the card.`
       );
@@ -406,13 +467,13 @@ function factCheckContentBundle({
   }
 
   // Leaked examples can also arrive as a quote block (formatting.md ships the
-  // same string as a "text" example).
+  // same string as a "text" example). ADVISORY, as above.
   for (const block of contentBlocks(bundle)) {
     if (block.type !== 'quote') continue;
     const normText = normalize(block.text);
     const leaked = LEAKED_PROMPT_EXAMPLES.find(ex => normText.includes(ex));
     if (leaked) {
-      structuralIssues.push(
+      advisoryWarnings.push(
         `Prompt example leaked into a quote block: "${leaked}" is an illustrative string from ` +
         `the prompt files, not something anyone said. Quote the source verbatim or cut the quote.`
       );
@@ -467,8 +528,10 @@ function factCheckContentBundle({
   }
 
   // ── 4. Reporter mode (BASELINE class 6) ──────────────────────────────────
+  // NARRATOR text only (I2a): a player quote, an evidence card or a caption may
+  // legitimately say "I voted" — the reporter's own prose may not.
   const mode = reportingMode === 'remote' ? 'remote' : 'on-site';
-  const normProse = normalize(prose);
+  const normProse = normalize(narratorText(bundle));
   const violations = [];
 
   for (const phrase of NEVER_VOTES) {
@@ -494,8 +557,11 @@ function factCheckContentBundle({
   }
 
   // ── 5. NPC pronouns (BASELINE class 3) ───────────────────────────────────
+  // 'npcPronouns' — ADVISORY (FACT_CHECK_ADVISORY_ONLY) until a live run
+  // calibrates it: two suppression rules are in place and correct prose still
+  // slipped through the first cut, and a structural verdict costs a paid revision.
   for (const hit of scanNpcPronouns(prose, npcPronouns, names)) {
-    structuralIssues.push(
+    advisoryWarnings.push(
       `Pronoun error: ${hit.name} takes ${npcPronouns[hit.name]}, but the article writes ` +
       `"${hit.excerpt}". The roster block's non-player-character line is the authority. ` +
       `Correct every pronoun used of ${hit.name}.`
@@ -514,6 +580,7 @@ function factCheckContentBundle({
 
 module.exports = {
   factCheckContentBundle,
+  FACT_CHECK_ADVISORY_ONLY,
   // Exported for targeted unit tests and reuse
   _testing: {
     normalize,
@@ -522,6 +589,7 @@ module.exports = {
     buildSourceMap,
     scanNpcPronouns,
     visibleText,
+    narratorText,
     LEAKED_PROMPT_EXAMPLES,
     NEVER_VOTES,
     PRESENCE_CLAIMS

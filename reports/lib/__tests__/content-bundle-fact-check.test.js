@@ -312,7 +312,13 @@ describe('reporter mode (class 6)', () => {
 });
 
 describe('leaked prompt examples (§6(b))', () => {
-  it('(i) flags the illustrative formatting.md card strings as card content', () => {
+  // I2(b): ADVISORY, not structural. A structural issue skips the Opus evaluation
+  // and spends one of three paid article revisions, and this guard fires on a
+  // two-word substring match: "the job is yours" is a sentence a session could
+  // legitimately produce. The placeholders that replaced the examples in the prompt
+  // files cannot leak any more, so the guard is now a note to the director rather
+  // than a reason to rewrite an article. See FACT_CHECK_ADVISORY_ONLY.
+  it('(i) reports the illustrative formatting.md card strings as an advisory', () => {
     const result = factCheckContentBundle(baseArgs({
       contentBundle: {
         sections: [], evidenceCards: [card({
@@ -321,18 +327,86 @@ describe('leaked prompt examples (§6(b))', () => {
         })]
       }
     }));
-    expect(result.structuralIssues.join(' ')).toMatch(/prompt example leaked/i);
-    expect(result.structuralIssues.join(' ')).toContain('vic001');
+    expect(result.advisoryWarnings.join(' ')).toMatch(/prompt example leaked/i);
+    expect(result.advisoryWarnings.join(' ')).toContain('vic001');
+    expect(result.structuralIssues.join(' ')).not.toMatch(/prompt example leaked/i);
   });
 
-  it('(i) flags them in a quote block too', () => {
+  it('(i) reports them in a quote block too, also as an advisory', () => {
     const result = factCheckContentBundle(baseArgs({
       contentBundle: {
         sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'quote', text: 'The job is yours.', attribution: 'Vic' }] }],
         evidenceCards: []
       }
     }));
-    expect(result.structuralIssues.join(' ')).toMatch(/prompt example leaked/i);
+    expect(result.advisoryWarnings.join(' ')).toMatch(/prompt example leaked/i);
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it('keeps the message prefix stable, so the console keeps grouping it', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'quote', text: 'The job is yours.' }] }],
+        evidenceCards: []
+      }
+    }));
+    expect(result.advisoryWarnings[0]).toMatch(/^Prompt example leaked into /);
+  });
+});
+
+describe('advisory-only checks (I2b)', () => {
+  // The two checks that are NOT calibrated on a live run yet. Both are string
+  // heuristics that can fire on correct prose, and a structural verdict costs an
+  // Opus revision (three per article, all payable), so until a session's worth of
+  // data says otherwise they inform the director and nothing else.
+  const { FACT_CHECK_ADVISORY_ONLY } = require('../content-bundle-fact-check');
+
+  it('names exactly the two uncalibrated checks', () => {
+    expect(FACT_CHECK_ADVISORY_ONLY).toEqual(['npcPronouns', 'leakedExample']);
+  });
+
+  it('reports an NPC pronoun contradiction as an advisory, not a structural failure', () => {
+    const result = factCheckContentBundle(baseArgs({
+      npcPronouns: { Marcus: 'he/him' },
+      contentBundle: {
+        sections: [{
+          id: 'lede',
+          type: 'narrative',
+          content: [{ type: 'paragraph', text: 'Marcus signed their own name to the transfer.' }]
+        }],
+        evidenceCards: []
+      }
+    }));
+    expect(result.advisoryWarnings.join(' ')).toMatch(/^Pronoun error: Marcus takes he\/him/);
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it('still keeps card fidelity, unknown sources, roster coverage, photos and narrator reporter mode structural', () => {
+    const result = factCheckContentBundle(baseArgs({
+      roster: ['Mel'],
+      sessionPhotos: ['a.jpg'],
+      reportingMode: 'remote',
+      contentBundle: {
+        sections: [{
+          id: 'lede',
+          type: 'narrative',
+          content: [
+            { type: 'paragraph', text: 'I was in the room when the vote turned.' },
+            { type: 'photo', filename: 'not-ours.jpg', caption: 'x' }
+          ]
+        }],
+        evidenceCards: [
+          card({ tokenId: 'vic001', content: 'A sentence that appears nowhere in the source text at all.' }),
+          card({ tokenId: 'nope999', content: 'Whatever this is, no session item carries that id.' })
+        ]
+      }
+    }));
+    const joined = result.structuralIssues.join(' ');
+    expect(joined).toMatch(/not verbatim/i);
+    expect(joined).toMatch(/unknown source/i);
+    expect(joined).toMatch(/roster coverage gap/i);
+    expect(joined).toMatch(/invalid photo reference/i);
+    expect(joined).toMatch(/reporter-mode violation/i);
   });
 });
 
@@ -382,6 +456,96 @@ describe('reporter-mode false positives', () => {
       'They were in the room when it happened, and none of them said so afterwards.'
     ));
     expect(result.reporterMode.violations).toEqual([]);
+  });
+});
+
+describe('reporter mode reads NARRATOR text only (I2a)', () => {
+  // The scan read `visibleText`, which is deliberately generous (it exists for
+  // roster coverage: headline, captions, card text and pull quotes all count as
+  // "the reader can see this name"). Run over reporter-mode phrases instead, that
+  // generosity makes a CORRECTLY attributed player quote a structural failure —
+  // "I voted for Vic" is what a player says, and the reporter quoting them is the
+  // article doing its job. A structural failure skips the Opus evaluation and
+  // spends one of three paid revisions instructing a reviser to break correct text.
+  const withBlocks = (content, over = {}) => baseArgs({
+    contentBundle: { sections: [{ id: 'lede', type: 'narrative', content }], evidenceCards: [], ...over },
+    ...(over.reportingMode ? { reportingMode: over.reportingMode } : {})
+  });
+
+  it('does NOT flag a quote block in which a player says they voted', () => {
+    const result = factCheckContentBundle(withBlocks([
+      { type: 'quote', text: 'I voted for Vic, and I would do it again.', attribution: 'Mel Reyes' }
+    ]));
+    expect(result.reporterMode.violations).toEqual([]);
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it('DOES flag the same claim in a narrator paragraph', () => {
+    const result = factCheckContentBundle(withBlocks([
+      { type: 'paragraph', text: 'Six memories went to the market and one of them was mine.' }
+    ]));
+    expect(result.reporterMode.violations).toContain('one of them was mine');
+    expect(result.structuralIssues.join(' ')).toMatch(/reporter-mode violation/i);
+  });
+
+  it('DOES flag it in the headline, kicker or deck (all narrator)', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        headline: { main: 'The night I voted with them', kicker: 'k', deck: 'd' },
+        sections: [],
+        evidenceCards: []
+      }
+    }));
+    expect(result.reporterMode.violations).toContain('i voted');
+  });
+
+  it('does NOT flag evidence-card content that quotes a memory in first person', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [],
+        evidenceCards: [card({ content: 'My vote was already promised before I walked in.' })]
+      }
+    }));
+    expect(result.reporterMode.violations).toEqual([]);
+  });
+
+  it('does NOT flag a photo caption or a pull quote', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [{ id: 's', type: 'narrative', content: [{ type: 'photo', filename: 'a.jpg', caption: 'I voted, Mel said afterwards' }] }],
+        photos: [{ filename: 'a.jpg', caption: 'My vote is on that board' }],
+        pullQuotes: [{ text: 'I was in the room', attribution: 'Mel' }],
+        evidenceCards: []
+      },
+      sessionPhotos: ['a.jpg'],
+      reportingMode: 'remote'
+    }));
+    expect(result.reporterMode.violations).toEqual([]);
+  });
+
+  it('still reads every narrator paragraph, not just the first', () => {
+    const result = factCheckContentBundle(withBlocks([
+      { type: 'paragraph', text: 'The vote came down in the second hour.' },
+      { type: 'quote', text: 'I voted the way I had to.', attribution: 'Mel' },
+      { type: 'paragraph', text: 'My vote would not have changed the arithmetic.' }
+    ]));
+    expect(result.reporterMode.violations).toContain('my vote');
+    expect(result.reporterMode.violations).not.toContain('i voted');
+  });
+
+  it('keeps roster coverage generous: a name only in a caption still counts', () => {
+    // The two scans read DIFFERENT text on purpose. Coverage must not narrow with
+    // reporter mode, or an article that names someone in a caption gets sent back.
+    const result = factCheckContentBundle(baseArgs({
+      roster: ['Mel'],
+      contentBundle: {
+        sections: [{ id: 's', type: 'narrative', content: [{ type: 'photo', filename: 'a.jpg', caption: 'Mel at the whiteboard' }] }],
+        evidenceCards: []
+      },
+      sessionPhotos: ['a.jpg']
+    }));
+    expect(result.rosterCoverage.missing).toEqual([]);
+    expect(result.structuralIssues).toEqual([]);
   });
 });
 
