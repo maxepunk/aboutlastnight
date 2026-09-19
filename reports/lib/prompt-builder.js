@@ -127,6 +127,25 @@ function buildDirectorGuidanceSection(directorGuidance) {
 // covers PromptBuilder instances constructed without that stamp (e.g. tests, skill).
 const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
 
+/**
+ * Reporting-mode blocks (BASELINE.md §4 class 6).
+ *
+ * BOTH remote sessions of the last five were written as on-site. The rule
+ * existed (character-voice.md lines 89-94) but arrived as an OVERRIDE, appended
+ * after the on-site persona stated at line 10 and the "in-the-muck-with-everyone"
+ * voice at line 19 — and it lost. So the mode does not override the persona any
+ * more: it IS the persona, stated once, in the system prompt, immediately after
+ * the identity line.
+ *
+ * "You did not vote" is in both blocks. The reporter covers the room; they are
+ * never a member of it. hardConstraints used to say the opposite in so many words
+ * (`use "We decided"`).
+ */
+const REPORTING_MODE_BLOCKS = {
+  'on-site': 'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.',
+  remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there; write from what they told you and attribute it. You did not vote and you were not at the party.'
+};
+
 // Theme-specific system prompt framing
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
@@ -155,9 +174,8 @@ const THEME_CONSTRAINTS = {
 - NO em-dashes (use commas or periods)
 - NO "tokens" - say "extracted memories" or "memories"
 - NO game mechanics ("buried memories", "first-buried bonus")
-- NO passive observer voice ("The group decided") - use "We decided" or "I watched them decide"
-- NO third-person self-reference ("The Detective noted") - you ARE the detective
 - NO countable memories ("5 memories") - memories are experiences, not inventory
+- NO passive observer voice ("The group decided") - name who acted, in whatever way your REPORTING MODE allows
 - NO inventing last names - use ONLY canonical names from the roster above`,
     voiceCheckpoint: `Before generating, internalize Nova's voice:`,
     voiceQuestion: 'Ask yourself: "Am I writing AS Nova who experienced this, or ABOUT events Nova observed?"\nThe answer must be AS Nova. Every sentence should feel like it\'s coming from someone who was in that room.',
@@ -225,6 +243,19 @@ class PromptBuilder {
    */
   _rosterSection() {
     return generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns);
+  }
+
+  /**
+   * The session's reporting-mode block (BASELINE §4 class 6).
+   *
+   * Placed in the SYSTEM prompt right after the identity line, where it replaces
+   * the persona rather than overriding it later in a rules file.
+   *
+   * @returns {string}
+   */
+  _buildReportingModeBlock() {
+    const mode = this.sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
+    return REPORTING_MODE_BLOCKS[mode];
   }
 
   /**
@@ -669,6 +700,8 @@ Return JSON with the following structure:
     // Roster in system prompt for higher salience (prevents name hallucination)
     const constraints = THEME_CONSTRAINTS[this.themeName];
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
+
+${this._buildReportingModeBlock()}
 
 ${this._rosterSection()}
 
@@ -1369,6 +1402,7 @@ module.exports = {
   createPromptBuilder,
   generateRosterSection,
   buildDirectorGuidanceSection,
+  REPORTING_MODE_BLOCKS,
   // Theme framing, consumed by the revision system prompts in ai-nodes.js
   THEME_SYSTEM_PROMPTS,
   THEME_CONSTRAINTS

@@ -106,3 +106,87 @@ describe('_outlineGuidance state channel', () => {
     expect(ROLLBACK_CLEARS['article']).not.toContain('_outlineGuidance');
   });
 });
+
+describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
+  // Both remote sessions of the last five were written as on-site. The rule
+  // existed at character-voice.md lines 89-94 but lost to the on-site persona
+  // stated earlier in the same file and to hardConstraints' own
+  // `use "We decided"` line. One mode block, stated once, wins.
+  const REMOTE = 'You were not in the room';
+  const ONSITE = 'You watched the investigation from inside the room';
+
+  it('remote: says you were not in the room and never voted', async () => {
+    const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
+      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+    expect(systemPrompt).toContain(REMOTE);
+    expect(systemPrompt).toMatch(/you did not vote/i);
+    expect(systemPrompt).not.toContain(ONSITE);
+  });
+
+  it('on-site: says you watched from the room and still never voted', async () => {
+    const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'on-site' })
+      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+    expect(systemPrompt).toContain(ONSITE);
+    expect(systemPrompt).toMatch(/you did not vote/i);
+    expect(systemPrompt).not.toContain(REMOTE);
+  });
+
+  it('defaults to on-site when the session config says nothing', async () => {
+    const { systemPrompt } = await makeBuilder('journalist', {})
+      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+    expect(systemPrompt).toContain(ONSITE);
+  });
+
+  it('no longer tells the reporter to write "We decided"', async () => {
+    const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
+      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+    // This line directly contradicted the remote rule AND made Nova a member of
+    // the room in both modes. It is gone, along with the stray detective line
+    // that sat beside it in the JOURNALIST constraints.
+    expect(systemPrompt).not.toContain('We decided');
+    expect(systemPrompt).not.toContain('you ARE the detective');
+  });
+
+  it('states the mode for the detective theme too', async () => {
+    const { systemPrompt } = await makeBuilder('detective', { reportingMode: 'remote' })
+      .buildArticlePrompt({ executiveSummary: {} }, [], null, [], null, null, null);
+    expect(systemPrompt).toContain(REMOTE);
+  });
+});
+
+describe('the evaluator scores reporter mode (BASELINE §4 class 6)', () => {
+  const {
+    _testing: { getArticleCriteria, buildEvaluationUserPrompt }
+  } = require('../workflow/nodes/evaluator-nodes');
+
+  it('journalist article criteria include reporterMode as STRUCTURAL', () => {
+    const criteria = getArticleCriteria('journalist');
+    expect(criteria.reporterMode).toBeDefined();
+    expect(criteria.reporterMode.type).toBe('structural');
+    expect(criteria.reporterMode.weight).toBe(0.10);
+  });
+
+  it('detective has no reporterMode criterion', () => {
+    expect(getArticleCriteria('detective').reporterMode).toBeUndefined();
+  });
+
+  it('both themes’ weights still sum to 1', () => {
+    ['journalist', 'detective'].forEach((theme) => {
+      const total = Object.values(getArticleCriteria(theme)).reduce((sum, c) => sum + c.weight, 0);
+      expect(total).toBeCloseTo(1.0, 5);
+    });
+  });
+
+  it('the evaluation user prompt states the session mode', () => {
+    const remote = buildEvaluationUserPrompt('article', {
+      contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' }
+    });
+    expect(remote).toMatch(/REPORTING MODE/i);
+    expect(remote).toContain('remote');
+
+    const onsite = buildEvaluationUserPrompt('article', {
+      contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'on-site' }
+    });
+    expect(onsite).toContain('on-site');
+  });
+});

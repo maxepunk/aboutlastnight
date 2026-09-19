@@ -237,10 +237,23 @@ function getArticleCriteria(theme = 'journalist') {
       weight: 0.15,
       type: 'structural'
     },
+    // BASELINE §4 class 6: both remote sessions of the last five were written as
+    // on-site, and there was no criterion for it at all -- the violation was
+    // caught only by the human, after publication. Journalist-only: the detective
+    // report is third-person and has no reporter presence to misstate.
+    ...(isDetective ? {} : {
+      reporterMode: {
+        description: 'Does the article respect this session\'s REPORTING MODE (stated in the evaluation prompt)? On-site: the reporter watched the investigation from the room but was NOT at the party. Remote: the reporter was not in the room at all and must attribute every exposure, observation and the verdict to the people who were there. In BOTH modes the reporter never votes and owns no exposed memory.',
+        weight: 0.10,
+        type: 'structural'
+      }
+    }),
     // Visual distribution - advisory, not blocking (Commit 8.25)
     visualDistribution: {
       description: 'Are visual components distributed for compelling narrative flow (not clustered)? Goal is a compelling GIFT for players, not quota compliance.',
-      weight: 0.10,
+      // Journalist rebalance for reporterMode (0.10): visualDistribution 0.10 -> 0.05
+      // and emotionalResonance 0.15 -> 0.10 keep the total at 1.00.
+      weight: isDetective ? 0.10 : 0.05,
       type: 'advisory'
     },
     arcThreading: {
@@ -266,7 +279,7 @@ function getArticleCriteria(theme = 'journalist') {
     },
     emotionalResonance: {
       description: 'Does article deliver the promised experience?',
-      weight: 0.15,
+      weight: isDetective ? 0.15 : 0.10,
       type: 'advisory'
     }
   };
@@ -781,8 +794,19 @@ Check for narrative momentum:
 
 Is this outline ready for human review?`;
 
-    case 'article':
+    case 'article': {
+      // BASELINE §4 class 6: the evaluator could not score reporter mode because
+      // it was never told which mode the session ran in.
+      const reportingMode = state.sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
+      const modeRule = reportingMode === 'remote'
+        ? 'The reporter was NOT in the room. Every exposure, observation and the verdict reached them as tips from people who were there, and must be written and attributed that way. A first-person claim to have been present is a STRUCTURAL failure.'
+        : 'The reporter watched the investigation from inside the room and spoke to people there, but was NOT at the party; the party reaches them only through exposed memories.';
+
       return `Evaluate this article content:
+
+REPORTING MODE FOR THIS SESSION: ${reportingMode}
+${modeRule}
+In BOTH modes the reporter never votes and owns no exposed memory. "I voted", "my vote" and "one of them was mine" are STRUCTURAL failures either way.
 
 CONTENT BUNDLE:
 ${JSON.stringify(state.contentBundle || {}, null, 2)}
@@ -791,6 +815,7 @@ OUTLINE:
 ${JSON.stringify(state.outline || {}, null, 2)}
 
 Is this article ready for human review?`;
+    }
 
     default:
       throw new Error(`Unknown evaluation phase: ${phase}`);
