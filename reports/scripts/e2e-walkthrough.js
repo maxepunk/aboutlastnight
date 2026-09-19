@@ -838,18 +838,26 @@ function getDefaultApprovalForProfile(checkpointType, checkpointData) {
     case 'arc-selection':
       const arcs = checkpointData.narrativeArcs || [];
       return { selectedArcs: arcs.slice(0, 3).map(a => a.id || a.title) };
-    case 'photos':
-      // The gate reports the folder it counted; --auto takes it. v2 I4: CREATE it
-      // first. fetchSessionPhotos throws on a missing directory and
-      // buildResumePayload refuses one, so a fixture session with no
-      // data/<id>/photos would dead-end every unattended run. An EMPTY folder is
-      // the explicit "no photographs" answer and reproduces the pre-plan
-      // behaviour: the fetch returns [], the photo nodes no-op, and the report is
-      // written without photos.
-      if (checkpointData.defaultDir) {
+    case 'photos': {
+      // v2 M1: PREFER the gate's own pre-fill, exactly as handlePhotos does.
+      // Answering defaultDir unconditionally re-analysed data/<id>/photos — the
+      // PROCESSED copies from the first pass — instead of the folder the gate
+      // offered: after a `photos` rollback that is the custom folder the director
+      // corrected to (_previousPhotosPath), and on an old thread it is
+      // rawSessionInput.photosPath. Same images, wrong folder.
+      const answer = checkpointData.photosPath || checkpointData.defaultDir || '';
+      // v2 I4: CREATE it, but only when the answer IS the default dir.
+      // fetchSessionPhotos throws on a missing directory and buildResumePayload
+      // refuses one, so a fixture session with no data/<id>/photos would dead-end
+      // every unattended run; an EMPTY folder is the explicit "no photographs"
+      // answer and reproduces the pre-plan behaviour (the fetch returns [], the
+      // photo nodes no-op, the report is written without photos). A CUSTOM path is
+      // never created here — a missing one must reach the server's 400.
+      if (answer && answer === checkpointData.defaultDir) {
         fs.mkdirSync(checkpointData.defaultDir, { recursive: true });
       }
-      return { photosPath: checkpointData.defaultDir || '' };
+      return { photosPath: answer };
+    }
     case 'outline':
       return { outline: true };
     case 'article':

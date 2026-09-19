@@ -23,7 +23,7 @@ describe('e2e-walkthrough photo late-join wiring', () => {
     expect(SRC).toMatch(/function handlePhotos\(/);
   });
 
-  it('answers the photos gate in --auto mode from the payload default dir', () => {
+  it('answers the photos gate in --auto mode from the gate pre-fill, then the default dir', () => {
     const block = SRC.slice(SRC.indexOf('function getDefaultApprovalForProfile'));
     const fn = block.slice(0, block.indexOf('\n}\n'));
     expect(fn).toMatch(/case 'photos':/);
@@ -31,6 +31,17 @@ describe('e2e-walkthrough photo late-join wiring', () => {
     // on a missing directory and buildResumePayload refuses one, so a fixture
     // session with no data/<id>/photos would otherwise dead-end --auto.
     expect(fn).toMatch(/mkdirSync\([^)]*defaultDir/);
+    // v2 M1: --auto must PREFER checkpointData.photosPath. Answering defaultDir
+    // unconditionally re-analyses data/<id>/photos — the PROCESSED copies from the
+    // first pass — instead of the folder the gate offered, which after a `photos`
+    // rollback is the custom one the director just corrected to (via
+    // _previousPhotosPath) and on an old thread is rawSessionInput.photosPath.
+    // Same images, wrong folder.
+    expect(fn).toMatch(/checkpointData\.photosPath\s*\|\|\s*checkpointData\.defaultDir/);
+    // And it must mkdir ONLY when the answer IS the default dir, mirroring
+    // handlePhotos: creating a custom path hides a missing custom folder instead of
+    // letting it reach the server's "Photos directory not found" 400.
+    expect(fn).toMatch(/===\s*checkpointData\.defaultDir[\s\S]*?mkdirSync\(checkpointData\.defaultDir/);
   });
 
   it('creates the folder in the interactive handler too (v2 I4)', () => {
