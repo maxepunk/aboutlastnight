@@ -412,3 +412,56 @@ describe('wordTail', () => {
     expect(wordTail(12345)).toEqual({ words: 0, tail: '', truncated: false });
   });
 });
+
+// ── Approve label (review fix: the count must be structural-only) ───────────
+//
+// 4.7 made the label warn when the fact-check list is non-empty, but counted
+// structural + advisory together, so an article with one cosmetic advisory read
+// as having an unresolved defect. Advisories are explicitly "suggestions, not
+// blockers" (evaluator-nodes.js), so they are reported separately and they never
+// put "anyway" on the button.
+describe('approveLabel', () => {
+  const { approveLabel, factCheckSummary } = require('../checkpoint-view-logic');
+
+  const summaryOf = (structural, advisory) => factCheckSummary({
+    structuralIssues: Array.from({ length: structural }, (_, i) => 'Pronoun error: ' + i),
+    advisoryWarnings: Array.from({ length: advisory }, (_, i) => 'advisory ' + i)
+  });
+
+  it('is a plain Approve when the fact-check found nothing', () => {
+    expect(approveLabel(summaryOf(0, 0), false).label).toBe('Approve');
+    expect(approveLabel(summaryOf(0, 0), true).label).toBe('Approve with Edits');
+  });
+
+  it('counts only the structural issues as unresolved', () => {
+    expect(approveLabel(summaryOf(4, 0), false).label).toBe('Approve anyway (4 unresolved)');
+  });
+
+  it('reports the advisories alongside, not inside, the unresolved count', () => {
+    expect(approveLabel(summaryOf(4, 1), false).label)
+      .toBe('Approve anyway (4 unresolved, 1 advisory)');
+    expect(approveLabel(summaryOf(4, 2), false).label)
+      .toBe('Approve anyway (4 unresolved, 2 advisory)');
+  });
+
+  it('does not say "anyway" when only advisories were found', () => {
+    expect(approveLabel(summaryOf(0, 1), false).label).toBe('Approve (1 advisory)');
+    expect(approveLabel(summaryOf(0, 3), true).label).toBe('Approve with Edits (3 advisory)');
+  });
+
+  it('keeps the edited-bundle wording in the warning cases', () => {
+    expect(approveLabel(summaryOf(2, 0), true).label)
+      .toBe('Approve with Edits anyway (2 unresolved)');
+  });
+
+  it('gives an aria-label that names what is being overridden', () => {
+    expect(approveLabel(summaryOf(4, 1), false).ariaLabel)
+      .toBe('Approve the article despite 4 unresolved fact-check issue(s)');
+    expect(approveLabel(summaryOf(0, 0), true).ariaLabel).toBe('Approve article with edits');
+    expect(approveLabel(summaryOf(0, 0), false).ariaLabel).toBe('Approve article');
+  });
+
+  it('tolerates a missing summary', () => {
+    expect(approveLabel(null, false).label).toBe('Approve');
+  });
+});

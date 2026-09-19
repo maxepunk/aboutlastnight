@@ -22,7 +22,15 @@ const ViewLogic = window.Console.checkpointViewLogic;
 // Outline.js emitted it at zero of its 13 call sites, so the whole rich editor
 // (outline-edit-logic.js, its unit tests and the client-side validateOutlineShape
 // gate) was unreachable from the UI.
-const EDITABLE = 'outline-section article-block--editable';
+//
+// `--editable-always` is the OPT-IN always-visible state (review fix 1): these
+// hosts carry a short ALL-CAPS <h4> at the top-LEFT, so the button's top-right
+// corner is empty and the affordance can be discoverable without hover. The
+// ARTICLE gate must NOT use it — its hosts are full-width per-block containers
+// whose own first line runs under the button. Pinned by
+// __tests__/unit/console-editable-pencils.test.js.
+const ALWAYS = 'article-block--editable article-block--editable-always';
+const EDITABLE = 'outline-section ' + ALWAYS;
 
 // ═══════════════════════════════════════════════════════
 // Shared edit widgets (pure-presentational; call EditLogic primitives)
@@ -171,6 +179,25 @@ function characterHighlightList(highlights) {
       );
     })
   );
+}
+
+/**
+ * `filename after paragraph N, purpose` (review fix 3).
+ *
+ * `photoPlacement` is `{filename, afterParagraph, purpose}`; both call sites used
+ * to hand the object to safeStringify, so the outline gate printed raw JSON at
+ * the one place the director decides whether a photo is in the right place.
+ */
+function photoPlacementLine(placement) {
+  if (!placement) return null;
+  if (typeof placement === 'string') return placement;
+  if (typeof placement !== 'object') return null;
+  const filename = typeof placement.filename === 'string' ? placement.filename : '';
+  if (!filename) return null;
+  let line = filename;
+  if (placement.afterParagraph != null) line += ' after paragraph ' + placement.afterParagraph;
+  if (placement.purpose) line += ', ' + placement.purpose;
+  return line;
 }
 
 /** A labelled row of name badges (exposed / buried / buried items). */
@@ -692,7 +719,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
               })
             );
           }
-          return React.createElement('div', { key: (arc.name || 'arc') + '-' + i, className: 'outline-section__arc article-block--editable mb-sm' },
+          return React.createElement('div', { key: (arc.name || 'arc') + '-' + i, className: 'outline-section__arc ' + ALWAYS + ' mb-sm' },
             React.createElement('div', { className: 'flex items-center gap-sm' },
               React.createElement('p', { className: 'text-sm flex-1' },
                 React.createElement('strong', null, arc.name || 'Arc ' + (i + 1)),
@@ -705,8 +732,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
                 return React.createElement(Badge, { key: 'ec-' + j, label: typeof card === 'string' ? card : (card.id || card.title || 'Card ' + (j + 1)), color: 'var(--accent-amber)' });
               })
             ),
-            arc.photoPlacement && React.createElement('p', { className: 'text-xs text-muted mt-sm' },
-              'Photo: ' + (typeof arc.photoPlacement === 'string' ? arc.photoPlacement : safeStringify(arc.photoPlacement))
+            photoPlacementLine(arc.photoPlacement) && React.createElement('p', { className: 'text-xs text-muted mt-sm' },
+              'Photo: ' + photoPlacementLine(arc.photoPlacement)
             )
           );
         }),
@@ -717,7 +744,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
               onSave: function (u) { saveInterweaving(u); },
               onCancel: cancelEdit
             })
-          : React.createElement('div', { className: 'flex items-center gap-sm mt-sm article-block--editable' },
+          : React.createElement('div', { className: 'flex items-center gap-sm mt-sm ' + ALWAYS },
               React.createElement('div', { className: 'outline-section__content flex-1' },
                 React.createElement('p', { className: 'text-xs text-muted' }, 'Interleaving Plan:'),
                 React.createElement('p', null, (theStory.arcInterweaving && theStory.arcInterweaving.interleavingPlan) || ''),
@@ -752,9 +779,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
                 );
               })
             ),
-            section.photoPlacement && section.photoPlacement.filename && React.createElement('p', { className: 'text-xs text-muted' },
-              'Photo: ' + section.photoPlacement.filename +
-                (section.photoPlacement.purpose ? ' (' + section.photoPlacement.purpose + ')' : '')
+            photoPlacementLine(section.photoPlacement) && React.createElement('p', { className: 'text-xs text-muted' },
+              'Photo: ' + photoPlacementLine(section.photoPlacement)
             ),
             emptyNote(section.arcConnections, section.shellAccounts)
           )
@@ -812,7 +838,10 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   function renderClosing(closing) {
     if (!closing) return null;
     const editing = isEditing('section', 'closing');
-    const resolutions = closing.arcResolutions || closing.theme || null;
+    // `arcResolutions` is [{arcName, resolution}] (outline.schema.json); `theme`
+    // is the older free-text form. safeStringify printed the array as raw JSON.
+    const resolutionRows = Array.isArray(closing.arcResolutions) ? closing.arcResolutions : null;
+    const resolutionText = !resolutionRows && typeof closing.theme === 'string' ? closing.theme : '';
 
     if (editing) {
       return React.createElement('div', { className: 'outline-section outline-section--editing' },
@@ -827,9 +856,15 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
         editBtn(function () { setEditingBlock({ type: 'section', key: 'closing' }); })
       ),
       React.createElement('div', { className: 'outline-section__content' },
-        resolutions && React.createElement('p', { className: 'text-sm mb-sm' },
+        resolutionRows && resolutionRows.length > 0 && React.createElement('div', { className: 'mb-sm' },
+          React.createElement('p', { className: 'text-sm' },
+            React.createElement('strong', null, 'Resolutions')
+          ),
+          arcConnectionList(resolutionRows, 'resolution')
+        ),
+        resolutionText && React.createElement('p', { className: 'text-sm mb-sm' },
           React.createElement('strong', null, 'Resolutions: '),
-          typeof resolutions === 'string' ? resolutions : safeStringify(resolutions)
+          resolutionText
         ),
         closing.systemicAngle && React.createElement('p', { className: 'text-sm mb-sm' },
           React.createElement('strong', null, 'Systemic Angle: '),

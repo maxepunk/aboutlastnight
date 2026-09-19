@@ -26,8 +26,8 @@ const ViewLogic = window.Console.checkpointViewLogic;
  */
 function stripScripts(html) {
   return String(html == null ? '' : html)
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<script[^>]*\/>/gi, '');
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<script\b[^>]*\/>/gi, '');
 }
 
 /**
@@ -1310,6 +1310,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     });
   });
 
+  var approve = ViewLogic.approveLabel(factCheck, hasEdits);
+
   var currentHeadline = getCurrentBundle().headline || headline;
   var currentByline = getCurrentBundle().byline || byline;
   var currentSections = (getCurrentBundle().sections || sections);
@@ -1448,15 +1450,12 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       React.createElement('button', {
         className: 'action-modes__btn' + (mode === 'view' ? ' action-modes__btn--active' : '') + ' btn btn-primary',
         onClick: handleApprove,
-        // When the fact-check found something, shipping it has to READ like a
-        // choice. Four of the last five articles were approved first-pass here
-        // and then needed 20-41 manual fixes.
-        'aria-label': factCheck.total > 0
-          ? 'Approve the article despite ' + factCheck.total + ' unresolved fact-check item(s)'
-          : (hasEdits ? 'Approve article with edits' : 'Approve article')
-      }, factCheck.total > 0
-        ? (hasEdits ? 'Approve with Edits anyway (' : 'Approve anyway (') + factCheck.total + ' unresolved)'
-        : (hasEdits ? 'Approve with Edits' : 'Approve')),
+        // When the fact-check found something STRUCTURAL, shipping it has to READ
+        // like a choice. Four of the last five articles were approved first-pass
+        // here and then needed 20-41 manual fixes. Advisories are counted
+        // separately: they are suggestions, not blockers (see approveLabel).
+        'aria-label': approve.ariaLabel
+      }, approve.label),
       React.createElement('button', {
         className: 'action-modes__btn' + (mode === 'json' ? ' action-modes__btn--active' : '') + ' btn btn-secondary',
         onClick: function () { handleModeChange('json'); },

@@ -410,6 +410,44 @@
     };
   }
 
+  /**
+   * The article gate's Approve button copy.
+   *
+   * The count is STRUCTURAL ONLY. Advisory warnings are "suggestions, not
+   * blockers" by the evaluator's own definition, so counting them as unresolved
+   * (which the first cut did) makes a cosmetic note read like a defect and
+   * cheapens the warning it is there to carry. They are reported alongside
+   * instead, and they never put "anyway" on the button — there is nothing to
+   * approve *anyway* when nothing structural failed.
+   *
+   * @param {object|null} summary - factCheckSummary result
+   * @param {boolean} hasEdits - whether the bundle carries hand-edits
+   * @returns {{label: string, ariaLabel: string}}
+   */
+  function approveLabel(summary, hasEdits) {
+    var base = hasEdits ? 'Approve with Edits' : 'Approve';
+    var structural = (summary && summary.structural) || 0;
+    var advisory = (summary && summary.advisory) || 0;
+
+    if (structural === 0 && advisory === 0) {
+      return {
+        label: base,
+        ariaLabel: hasEdits ? 'Approve article with edits' : 'Approve article'
+      };
+    }
+    if (structural === 0) {
+      return {
+        label: base + ' (' + advisory + ' advisory)',
+        ariaLabel: 'Approve the article with ' + advisory + ' advisory fact-check note(s)'
+      };
+    }
+    var tail = structural + ' unresolved' + (advisory > 0 ? ', ' + advisory + ' advisory' : '');
+    return {
+      label: base + ' anyway (' + tail + ')',
+      ariaLabel: 'Approve the article despite ' + structural + ' unresolved fact-check issue(s)'
+    };
+  }
+
   var api = {
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
@@ -419,6 +457,7 @@
     accusationView: accusationView,
     whiteboardView: whiteboardView,
     factCheckSummary: factCheckSummary,
+    approveLabel: approveLabel,
     wordTail: wordTail
   };
 

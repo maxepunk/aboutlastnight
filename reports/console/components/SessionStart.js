@@ -16,7 +16,7 @@ const { FileBrowser } = window.Console;
 // Pure, node-tested (console/__tests__/session-start-logic.test.js). This component
 // is a thin consumer: it does not decide what a valid ID is or what a session state
 // means, it only renders the answer.
-const { isValidSessionId, classifyCheckpointResponse, buildReportLinks, completedResultFrom } =
+const { isValidSessionId, classifyCheckpointResponse, completedResultFrom } =
   window.Console.sessionStartLogic;
 
 function SessionStart({ dispatch, theme }) {
@@ -24,9 +24,6 @@ function SessionStart({ dispatch, theme }) {
   const [photosPath, setPhotosPath] = React.useState('');
   const [whiteboardPath, setWhiteboardPath] = React.useState('');
   const [status, setStatus] = React.useState('');
-  // Report links rendered under the status line (the complete branch). Kept apart
-  // from `status` because they have to be real anchors, not text.
-  const [reportLinks, setReportLinks] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   // Mirrors the server's ALLOW_NONSTANDARD_SESSION_ID so this screen accepts exactly
   // what POST /start accepts. Defaults to the strict contract until /api/config answers.
@@ -60,7 +57,6 @@ function SessionStart({ dispatch, theme }) {
   /** Clear whatever the last attempt left on screen. */
   function resetStatus() {
     setStatus('');
-    setReportLinks([]);
   }
 
   /**
@@ -197,7 +193,7 @@ function SessionStart({ dispatch, theme }) {
           dispatch({ type: SESSION_ACTIONS.ATTACH_REQUESTED, sessionId });
           return;
 
-        case 'complete': {
+        case 'complete':
           // B9: do NOT resume — re-invoking a complete thread re-runs the whole
           // paid pipeline unattended and overwrites the session's own files.
           //
@@ -210,25 +206,23 @@ function SessionStart({ dispatch, theme }) {
           // existing RollbackPanel flow becomes reachable. Nothing is POSTed
           // here, and nothing is POSTed until the director confirms a rollback.
           //
-          // The links stay on this screen too: the status renders before the
-          // dispatch takes effect, and a recorded outcome naming a DIFFERENT
-          // file (B1: 071126 published as report-0711.html) is worth seeing.
-          setStatus(
-            'This session is complete. Open the report below, or roll back to a ' +
-            'step to re-run it with a note. Start Fresh begins a new run.'
-          );
-          setReportLinks(buildReportLinks(sessionId, checkpoint.lastOutcome));
-          setLoading(false);
-          const completed = completedResultFrom(checkpoint, sessionId);
-          if (completed) {
-            // H2: theme first, as in the at-checkpoint branch — a rollback from
-            // here renders checkpoint editors that are theme-specific.
-            dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
-            dispatch({ type: SESSION_ACTIONS.SET_SESSION, sessionId });
-            dispatch({ type: SESSION_ACTIONS.SESSION_COMPLETE_LOADED, result: completed });
-          }
+          // This screen sets NO status and NO link list: `SET_SESSION` unmounts
+          // it immediately, so anything rendered here would never be seen.
+          // `CompletionView` carries the report link, and completedResultFrom
+          // derives it with buildReportLinks — including the B1 case where the
+          // run published under a different id (071126 -> report-0711.html).
+          //
+          // H2: theme first, as in the at-checkpoint branch — a rollback from
+          // here renders checkpoint editors that are theme-specific.
+          dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
+          dispatch({ type: SESSION_ACTIONS.SET_SESSION, sessionId });
+          dispatch({
+            type: SESSION_ACTIONS.SESSION_COMPLETE_LOADED,
+            // Never null here: `isValid` guarantees a non-empty sessionId, which
+            // is all completedResultFrom needs (pinned by its unit tests).
+            result: completedResultFrom(checkpoint, sessionId)
+          });
           return;
-        }
 
         case 'resumable':
         default:
@@ -473,26 +467,6 @@ function SessionStart({ dispatch, theme }) {
     ),
 
     status && React.createElement('p', { className: 'session-start__status' }, status),
-
-    // B9: a complete session is offered its report instead of a Resume that would
-    // re-run the pipeline. Real anchors, opened in a new tab so the console survives.
-    reportLinks.length > 0 && React.createElement('p', { className: 'session-start__status' },
-      'Report: ',
-      reportLinks.map(function (href, i) {
-        return React.createElement(React.Fragment, { key: href },
-          i > 0 ? ' · ' : null,
-          React.createElement('a', {
-            href: href,
-            target: '_blank',
-            rel: 'noopener',
-            // Per-link label: two anchors can appear (the conventional path and the
-            // file the run actually wrote), and one shared label would name neither.
-            'aria-label': 'Open ' + href + ' in a new tab'
-          }, href)
-        );
-      }),
-      ' (opens in a new tab)'
-    ),
 
     // FileBrowser modal
     React.createElement(FileBrowser, {

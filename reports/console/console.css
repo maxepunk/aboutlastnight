@@ -2136,15 +2136,29 @@ textarea.input {
 }
 
 /* ── Inline Edit Button ──
-   R4 F1 / R5 F5: the pencil used to be `display: none` with ONE rule to reveal
-   it (`.article-block--editable:hover`), and Outline.js emitted the
-   `--editable` class at zero of its 13 call sites — so the entire rich outline
-   editor was unreachable and the only edit path was a raw JSON textarea. The
-   class is now on all 13 containers AND the affordance no longer hides behind
-   hover: it is always rendered at low opacity (discoverable, touch-usable,
-   focusable) and goes full opacity on hover, on keyboard focus, and while that
-   section's editor is open. Position is absolute, so the always-on state costs
-   no layout. */
+   R4 F1 / R5 F5: the pencil was `display: none` with ONE rule to reveal it
+   (`.article-block--editable:hover`), and Outline.js emitted the `--editable`
+   class at zero of its 13 call sites — so the entire rich outline editor was
+   unreachable and the only edit path was a raw JSON textarea. The class is on
+   all 13 containers now.
+
+   TWO REVEAL MODES, and the distinction is load-bearing (review fix 1):
+
+   - DEFAULT (`--editable`): hidden until hover or `:focus-within`. This is what
+     the ARTICLE gate needs. Its 13 hosts are full-width per-block containers
+     (paragraph, quote, list, evidence card, photo, pull quote, financial row,
+     one-line byline), and an always-on 24px button at their top-right lands ON
+     the block's own first line — measured live at 19 of 54 rendered blocks.
+   - OPT-IN (`--editable-always`): rendered at low opacity, full opacity on
+     hover/focus. Only for hosts whose top-right corner is known to be empty:
+     Outline.js's section wrappers (a short ALL-CAPS `<h4>` at the top-LEFT) and
+     its two THE STORY rows. Those are the ones that must be discoverable,
+     touch-usable and focusable without hover, because the editor layer behind
+     them is the whole point of the gate.
+
+   Do NOT put `--editable-always` on an Article host; pinned by
+   __tests__/unit/console-editable-pencils.test.js. Position is absolute, so
+   neither mode costs layout. */
 .article-block--editable {
   position: relative;
 }
@@ -2153,8 +2167,7 @@ textarea.input {
   position: absolute;
   top: var(--space-xs);
   right: var(--space-xs);
-  display: inline-flex;
-  opacity: 0.45;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 24px;
@@ -2170,13 +2183,35 @@ textarea.input {
   transition: background var(--transition-fast), opacity var(--transition-fast);
 }
 
-/* Full opacity on hover, on keyboard focus anywhere in the block, and while the
-   page is in edit mode (a section carries `--editing` while its editor is open,
-   so the other pencils stay legible as the director moves between sections). */
+/* Reveal on hover, on keyboard focus anywhere in the block, and while that
+   section's editor is open (so the other pencils stay legible as the director
+   moves between sections). */
 .article-block--editable:hover .article-block__edit-btn,
 .article-block--editable:focus-within .article-block__edit-btn,
 .outline-section--editing .article-block__edit-btn {
   display: inline-flex;
+  opacity: 1;
+}
+
+/* The opt-in always-visible state (outline hosts only — see the block above).
+   `padding-right` reserves the button's gutter so a long section title can never
+   run under it either. */
+.article-block--editable-always {
+  padding-right: 32px;
+}
+
+/* A DESCENDANT selector, not a child one: across the three opt-in host shapes
+   the button sits at three different depths (direct child of the interweaving
+   row, inside `.outline-section__header` on a section wrapper, inside a plain
+   `.flex` row on a THE STORY arc). No opt-in host is ever nested inside another,
+   so there is nothing for the looser selector to leak into. */
+.article-block--editable-always .article-block__edit-btn {
+  display: inline-flex;
+  opacity: 0.45;
+}
+
+.article-block--editable-always:hover .article-block__edit-btn,
+.article-block--editable-always:focus-within .article-block__edit-btn {
   opacity: 1;
 }
 

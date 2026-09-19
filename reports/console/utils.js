@@ -129,7 +129,8 @@ function EvalBar({ view }) {
   parts.push(view.structuralIssues.length + ' structural issue' +
     (view.structuralIssues.length === 1 ? '' : 's'));
   if (view.confidence) parts.push('confidence: ' + view.confidence);
-  if (view.revisionNumber !== null) parts.push('after revision ' + view.revisionNumber);
+  // Only on a real revision: "after revision 0" on a first pass is noise.
+  if (view.revisionNumber > 0) parts.push('after revision ' + view.revisionNumber);
   if (view.source) parts.push('source: ' + view.source);
 
   return React.createElement('div', { className: 'eval-bar mb-md flex-col items-start' },

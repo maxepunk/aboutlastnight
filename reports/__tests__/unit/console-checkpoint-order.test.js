@@ -99,11 +99,90 @@ describe('CHECKPOINT_ORDER', () => {
     expect(at('app.js')).toBeGreaterThan(at('llm-stream-logic.js'));
     // session-status-logic: state.js SET_ERROR / CLEAR_ERROR.
     expect(at('state.js')).toBeGreaterThan(at('session-status-logic.js'));
-    // session-start-logic: app.js reads decideAttachFallback + buildReportLinks.
+    // session-start-logic: app.js reads decideAttachFallback + completedResultFrom,
+    // SessionStart.js reads isValidSessionId / classifyCheckpointResponse /
+    // buildReportLinks / completedResultFrom.
     expect(at('app.js')).toBeGreaterThan(at('session-start-logic.js'));
     // api.js still precedes every component that destructures window.Console.api.
     expect(at('components/SessionStart.js')).toBeGreaterThan(at('api.js'));
     expect(at('app.js')).toBeGreaterThan(at('api.js'));
+
+    // checkpoint-view-logic: FIVE load-time consumers. Each of these does
+    // `const ViewLogic = window.Console.checkpointViewLogic;` at load, so a later
+    // tag means every field read on that gate throws on first render.
+    [
+      'components/checkpoints/InputReview.js',
+      'components/checkpoints/AwaitFullContext.js',
+      'components/checkpoints/ArcSelection.js',
+      'components/checkpoints/Outline.js',
+      'components/checkpoints/Article.js'
+    ].forEach((consumer) => {
+      expect(at(consumer)).toBeGreaterThan(at('checkpoint-view-logic.js'));
+    });
+
+    // RevisionDiff: three load-time destructures of `window.Console.RevisionDiff`.
+    // It USED to load after ArcSelection.js, so on that one screen the name was
+    // undefined and the revision banner, the budget badge and the director's own
+    // last feedback could not render at all (R5 F10 observed exactly that, live).
+    [
+      'components/checkpoints/ArcSelection.js',
+      'components/checkpoints/Outline.js',
+      'components/checkpoints/Article.js'
+    ].forEach((consumer) => {
+      expect(at(consumer)).toBeGreaterThan(at('components/RevisionDiff.js'));
+    });
+
+    // outline-edit-logic: Outline.js and Article.js alias it at module scope.
+    expect(at('components/checkpoints/Outline.js')).toBeGreaterThan(at('outline-edit-logic.js'));
+    expect(at('components/checkpoints/Article.js')).toBeGreaterThan(at('outline-edit-logic.js'));
+  });
+
+  it('every load-time window.Console destructure in a console script is satisfied by the tag order', () => {
+    // The generalisation of the test above: rather than listing the pairs we happen
+    // to know about, read every `window.Console.<name>` / `= window.Console;`
+    // destructure that runs at MODULE SCOPE and check the provider's tag comes
+    // first. This is what catches the NEXT file added out of order.
+    const html = fs.readFileSync(path.join(CONSOLE_DIR, 'index.html'), 'utf8');
+    const tags = [...html.matchAll(/<script type="text\/babel" src="([^"]+)"><\/script>/g)]
+      .map((m) => m[1]);
+
+    // name on window.Console -> the script that assigns it
+    const providers = {};
+    tags.forEach((src) => {
+      const code = fs.readFileSync(path.join(CONSOLE_DIR, src), 'utf8');
+      const assigns = [...code.matchAll(/window\.Console\.([A-Za-z_$][\w$]*)\s*=/g)];
+      assigns.forEach((m) => {
+        if (!(m[1] in providers)) providers[m[1]] = src;
+      });
+    });
+
+    const problems = [];
+    tags.forEach((src, i) => {
+      const code = fs.readFileSync(path.join(CONSOLE_DIR, src), 'utf8');
+      // Module-scope lines only: a destructure or read that is NOT indented.
+      const moduleScope = code.split('\n').filter((line) => /^(const|let|var)\s/.test(line));
+      moduleScope.forEach((line) => {
+        // `window.Console.foo` and `{ A, B } = window.Console`
+        const direct = [...line.matchAll(/window\.Console\.([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
+        const bag = line.includes('= window.Console;')
+          ? (line.match(/\{([^}]*)\}/) || [null, ''])[1]
+              .split(',')
+              .map((n) => n.split(':')[0].trim())
+              .filter(Boolean)
+          : [];
+        [...direct, ...bag].forEach((name) => {
+          const provider = providers[name];
+          // `window.Console.checkpoints = window.Console.checkpoints || {}` and the
+          // guarded self-registration in the dual-export modules are not reads.
+          if (!provider || provider === src) return;
+          if (tags.indexOf(provider) > i) {
+            problems.push(`${src} reads window.Console.${name} at load but ${provider} loads later`);
+          }
+        });
+      });
+    });
+
+    expect(problems).toEqual([]);
   });
 
   it('labels every step it orders', () => {
