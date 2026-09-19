@@ -129,7 +129,15 @@ const LEAKED_PROMPT_EXAMPLES = [
  * reached the reporter as a tip from someone who was there.
  */
 const NEVER_VOTES = ['i voted', 'my vote', 'one of them was mine'];
-const PRESENCE_CLAIMS = ['i was in the room', 'i was there in the room', 'from inside the room', 'i sat in that room'];
+// First-person presence claims only. 'from inside the room' was tempting and
+// wrong: "the tip came from inside the room" is exactly how a remote reporter
+// SHOULD attribute, and flagging it would burn a revision on correct prose.
+const PRESENCE_CLAIMS = [
+  'i was in the room',
+  'i was there in the room',
+  'i sat in that room',
+  'i watched from the room'
+];
 
 /**
  * They/them pronouns, for the NPC pronoun scan.

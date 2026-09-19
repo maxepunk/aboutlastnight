@@ -1127,3 +1127,17 @@ describe('evaluateArticle — programmatic fact-check pre-check (BASELINE class 
     expect(result._articleFactCheck).toBeUndefined();
   });
 });
+
+describe('evaluateArticle fact-check guard', () => {
+  it('does not fact-check a MISSING content bundle (reviseContentBundle error path)', async () => {
+    const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.9 });
+    const result = await evaluateArticle(
+      { contentBundle: null, sessionConfig: { roster: ['Vic', 'Mel'] }, outline: {} },
+      { configurable: { sdkClient: mockClient } }
+    );
+    // A missing bundle would otherwise report every roster member as uncovered
+    // and route to a reviser with nothing to revise.
+    expect(mockClient).toHaveBeenCalled();
+    expect(result._articleFactCheck).toBeUndefined();
+  });
+});

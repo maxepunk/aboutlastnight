@@ -358,3 +358,29 @@ describe('shape and resilience', () => {
     })).not.toThrow();
   });
 });
+
+describe('reporter-mode false positives', () => {
+  const prose = (text) => baseArgs({
+    reportingMode: 'remote',
+    contentBundle: {
+      sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text }] }],
+      evidenceCards: []
+    }
+  });
+
+  it('does NOT flag correct remote attribution that mentions the room', () => {
+    // "the tip came from inside the room" is exactly what remote mode asks for.
+    const result = factCheckContentBundle(prose(
+      'The tip came from inside the room, from someone who watched the vote turn.'
+    ));
+    expect(result.reporterMode.violations).toEqual([]);
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it('does NOT flag third-person prose about people in the room', () => {
+    const result = factCheckContentBundle(prose(
+      'They were in the room when it happened, and none of them said so afterwards.'
+    ));
+    expect(result.reporterMode.violations).toEqual([]);
+  });
+});
