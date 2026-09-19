@@ -1,7 +1,9 @@
 /**
  * InputReview Checkpoint Component
  * Displays parsed session input for approval: session info, roster,
- * accusation, player focus, and director observations.
+ * accusation (accused + charge + the full notes), player focus, director
+ * observations, the whiteboard analysis, and what the director-notes enricher
+ * actually indexed. Approve, or reject with written corrections that re-parse.
  * Exports to window.Console.checkpoints.InputReview
  */
 
@@ -11,6 +13,40 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 const { Badge, safeStringify } = window.Console.utils;
 const { resolveRosterPronoun } = window.Console.inputReviewLogic;
 const { validateRosterEntry } = window.Console.awaitRosterLogic;
+const ViewLogic = window.Console.checkpointViewLogic;
+
+/**
+ * What the director-notes enricher indexed (CODE-REVIEW H25 / B2).
+ *
+ * An enrichment that came back empty looked identical to a session whose notes
+ * had nothing in them: `_enrichmentFallback` was carried in directorNotes and
+ * read by nobody, so a silent enricher failure - which costs the article its
+ * entire quote bank - reached the gate invisible. Task 3 summarises it as
+ * `data.enrichment`.
+ */
+function EnrichmentPanel({ enrichment }) {
+  if (!enrichment) return null;
+  const fallback = enrichment.fallback || null;
+  const warnings = enrichment.warnings || null;
+
+  return React.createElement('div', { className: 'checkpoint-section' },
+    React.createElement('h4', { className: 'checkpoint-section__title' }, 'Director-Notes Enrichment'),
+    React.createElement('p', { className: 'text-sm text-secondary' },
+      'Quotes indexed: ' + (enrichment.quotes || 0) +
+      ' \u00B7 Character mentions: ' + (enrichment.characterMentions || 0) +
+      ' \u00B7 Transaction links: ' + (enrichment.transactionReferences || 0)
+    ),
+    fallback && React.createElement('p', { className: 'validation-error', role: 'alert' },
+      'Director-notes enrichment failed (' + (fallback.reason || 'no reason recorded') + '). ' +
+      'The article will have no quote bank. Reject with corrections to retry.'
+    ),
+    warnings && warnings.droppedQuotes > 0 && React.createElement('p', { className: 'enrichment__warning' },
+      warnings.droppedQuotes + ' quote' + (warnings.droppedQuotes === 1 ? '' : 's') +
+      ' dropped: not found verbatim in the prose. Anything a player actually said ' +
+      'has to be in the notes word for word to reach the article.'
+    )
+  );
+}
 
 function CharacterMentionsSection({ mentions, roster }) {
   const [selected, setSelected] = React.useState(null);
@@ -54,17 +90,34 @@ function CharacterMentionsSection({ mentions, roster }) {
   );
 }
 
-function InputReview({ data, onApprove, theme }) {
-  const parsedInput = (data && data.parsedInput) || {};
+function InputReview({ data, onApprove, onReject, theme }) {
+  // `data.parsedInput` is gone: `_parsedInput` was never an Annotation channel,
+  // so LangGraph dropped every write and the "Parsed at / processing time" line
+  // was dead on both delivery paths. Task 3 removed the key and the writes.
   const sessionConfig = (data && data.sessionConfig) || {};
   const directorNotes = (data && data.directorNotes) || {};
   const playerFocus = (data && data.playerFocus) || {};
-  const accusation = sessionConfig.accusation || {};
-  const whiteboard = directorNotes.whiteboard || {};
+  // H25: the block used to read accusation.reasoning + .confidence, neither of
+  // which the parse emits, so the ONE thing this checkpoint exists to verify
+  // rendered as "Accused: Vic" with the charge and the 400-character notes
+  // (votes, motive, alternative theories) never shown.
+  const accusation = ViewLogic.accusationView(sessionConfig.accusation);
+  // The panel used to read connectionsMade / questionsRaised / votingResults;
+  // WHITEBOARD_SCHEMA emits names/connections/groups/notes/structureType/
+  // ambiguities, so the whole panel was permanently absent.
+  const whiteboard = ViewLogic.whiteboardView(directorNotes.whiteboard);
   const roster = sessionConfig.roster || [];
   const rosterPronouns = sessionConfig.rosterPronouns || {};
   const canonicalCharacters = (data && data.canonicalCharacters) || {};
   const hasCanon = Object.keys(canonicalCharacters).length > 0;
+
+  // B2: reject-with-corrections. The checkpoint was approve-only, so a wrong
+  // roster, accusation or journalist name could only be fixed by a rollback and
+  // a full re-collection. The corrections go back through interrupt() as
+  // _inputCorrections and parseRawInput appends them to every parse prompt.
+  const [mode, setMode] = React.useState('view');
+  const [corrections, setCorrections] = React.useState('');
+  React.useEffect(function () { setMode('view'); setCorrections(''); }, [data]);
 
   // Confidence badge color mapping
   const confidenceColor = {
@@ -81,7 +134,7 @@ function InputReview({ data, onApprove, theme }) {
       React.createElement('div', { className: 'flex gap-md flex-col' },
         React.createElement('span', { className: 'text-sm' },
           React.createElement('span', { className: 'text-muted' }, 'Session ID: '),
-          React.createElement('span', { className: 'text-secondary' }, sessionConfig.sessionId || parsedInput.sessionId || 'N/A')
+          React.createElement('span', { className: 'text-secondary' }, sessionConfig.sessionId || 'N/A')
         ),
         sessionConfig.journalistFirstName && React.createElement('span', { className: 'text-sm' },
           React.createElement('span', { className: 'text-muted' }, 'Journalist: '),
@@ -97,13 +150,9 @@ function InputReview({ data, onApprove, theme }) {
             sessionConfig.guestReporter.name + ' | ' + (sessionConfig.guestReporter.role || 'Guest Reporter')
           )
         ),
-        parsedInput.parsedAt && React.createElement('span', { className: 'text-sm' },
-          React.createElement('span', { className: 'text-muted' }, 'Parsed at: '),
-          React.createElement('span', { className: 'text-secondary' }, parsedInput.parsedAt)
-        ),
-        parsedInput.processingTimeMs != null && React.createElement('span', { className: 'text-sm' },
-          React.createElement('span', { className: 'text-muted' }, 'Processing time: '),
-          React.createElement('span', { className: 'text-secondary' }, parsedInput.processingTimeMs + 'ms')
+        React.createElement('span', { className: 'text-sm' },
+          React.createElement('span', { className: 'text-muted' }, 'Theme: '),
+          React.createElement('span', { className: 'text-secondary' }, theme || 'journalist')
         )
       )
     ),
@@ -127,18 +176,27 @@ function InputReview({ data, onApprove, theme }) {
       )
     ),
 
-    // Accusation
-    accusation.accused && React.createElement('div', { className: 'checkpoint-section' },
+    // Accusation. Rendered even when nothing parsed: a missing accusation is
+    // the loudest thing this screen can tell the director, and hiding the block
+    // on `!accused` is what made it silent.
+    React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Accusation'),
-      React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
-        React.createElement('span', { className: 'text-sm text-muted' }, 'Accused: '),
-        React.createElement('span', { className: 'text-sm' }, accusation.accused),
-        accusation.confidence && React.createElement(Badge, {
-          label: accusation.confidence,
-          color: confidenceColor[accusation.confidence] || 'var(--accent-amber)'
-        })
+      accusation.accused
+        ? React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
+            React.createElement('span', { className: 'text-sm text-muted' }, 'Accused: '),
+            React.createElement('span', { className: 'text-sm' }, accusation.accused)
+          )
+        : React.createElement('p', { className: 'validation-error', role: 'alert' },
+            'Accusation: not parsed. Reject with corrections naming who the room ' +
+            'accused and of what, or the article has no verdict to write against.'
+          ),
+      accusation.charge && React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Charge: '),
+        React.createElement('span', { className: 'text-sm' }, accusation.charge)
       ),
-      accusation.reasoning && React.createElement('p', { className: 'text-sm text-secondary' }, accusation.reasoning)
+      accusation.notes && React.createElement('p', { className: 'text-sm text-secondary accusation__notes' },
+        accusation.notes
+      )
     ),
 
     // Player Focus
@@ -288,35 +346,88 @@ function InputReview({ data, onApprove, theme }) {
         )
       ),
 
-    // Whiteboard
-    (whiteboard.connectionsMade || whiteboard.questionsRaised || whiteboard.votingResults) &&
-      React.createElement('div', { className: 'checkpoint-section' },
-        React.createElement('h4', { className: 'checkpoint-section__title' }, 'Whiteboard'),
-        whiteboard.connectionsMade && React.createElement('div', { className: 'mb-sm' },
-          React.createElement('span', { className: 'text-sm text-muted' }, 'Connections Made: '),
-          React.createElement('span', { className: 'text-sm text-secondary' },
-            typeof whiteboard.connectionsMade === 'string'
-              ? whiteboard.connectionsMade
-              : safeStringify(whiteboard.connectionsMade)
-          )
-        ),
-        whiteboard.questionsRaised && React.createElement('div', { className: 'mb-sm' },
-          React.createElement('span', { className: 'text-sm text-muted' }, 'Questions Raised: '),
-          React.createElement('span', { className: 'text-sm text-secondary' },
-            typeof whiteboard.questionsRaised === 'string'
-              ? whiteboard.questionsRaised
-              : safeStringify(whiteboard.questionsRaised)
-          )
-        ),
-        whiteboard.votingResults && React.createElement('div', null,
-          React.createElement('span', { className: 'text-sm text-muted' }, 'Voting Results: '),
-          React.createElement('span', { className: 'text-sm text-secondary' },
-            typeof whiteboard.votingResults === 'string'
-              ? whiteboard.votingResults
-              : safeStringify(whiteboard.votingResults)
-          )
+    // Whiteboard. `ambiguities` comes FIRST and in amber: it is the parser's own
+    // list of what it could not read off the photo, which is exactly the thing
+    // the director can correct and nothing downstream can.
+    React.createElement('div', { className: 'checkpoint-section' },
+      React.createElement('h4', { className: 'checkpoint-section__title' }, 'Whiteboard'),
+
+      whiteboard.ambiguities.length > 0 && React.createElement('div', { className: 'mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Ambiguities the parser flagged:'),
+        React.createElement('ul', { className: 'checkpoint-section__list whiteboard__ambiguities' },
+          whiteboard.ambiguities.map(function (item, i) {
+            return React.createElement('li', { key: 'amb-' + i, className: 'text-sm' },
+              typeof item === 'string' ? item : safeStringify(item)
+            );
+          })
         )
       ),
+
+      whiteboard.names.length > 0 && React.createElement('div', { className: 'mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Names on the board: '),
+        React.createElement('div', { className: 'tag-list mt-sm' },
+          whiteboard.names.map(function (name, i) {
+            return React.createElement(Badge, {
+              key: 'wbn-' + i,
+              label: typeof name === 'string' ? name : safeStringify(name),
+              color: 'var(--accent-cyan)'
+            });
+          })
+        )
+      ),
+
+      whiteboard.groups.length > 0 && React.createElement('div', { className: 'mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Groups:'),
+        React.createElement('ul', { className: 'checkpoint-section__list' },
+          whiteboard.groups.map(function (group, i) {
+            return React.createElement('li', { key: 'wbg-' + i, className: 'text-sm' },
+              React.createElement('strong', null, (group && group.label) || 'Group ' + (i + 1)),
+              React.createElement('span', { className: 'text-secondary' },
+                ': ' + ((group && Array.isArray(group.members)) ? group.members.join(', ') : '')
+              )
+            );
+          })
+        )
+      ),
+
+      whiteboard.connections.length > 0 && React.createElement('div', { className: 'mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Connections drawn:'),
+        React.createElement('ul', { className: 'checkpoint-section__list' },
+          whiteboard.connections.map(function (conn, i) {
+            return React.createElement('li', { key: 'wbc-' + i, className: 'text-sm' },
+              (conn && conn.from) || '?',
+              React.createElement('span', { className: 'text-muted' }, ' \u2192 '),
+              (conn && conn.to) || '?',
+              conn && conn.label && React.createElement('span', { className: 'text-muted' }, ' (' + conn.label + ')')
+            );
+          })
+        )
+      ),
+
+      whiteboard.notes.length > 0 && React.createElement('div', { className: 'mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Notes:'),
+        React.createElement('ul', { className: 'checkpoint-section__list' },
+          whiteboard.notes.map(function (note, i) {
+            return React.createElement('li', { key: 'wbt-' + i, className: 'text-sm' },
+              typeof note === 'string' ? note : safeStringify(note)
+            );
+          })
+        )
+      ),
+
+      whiteboard.structureType && React.createElement('p', { className: 'text-xs text-muted' },
+        'Structure: ' + whiteboard.structureType
+      ),
+
+      whiteboard.ambiguities.length === 0 && whiteboard.names.length === 0 &&
+        whiteboard.groups.length === 0 && whiteboard.connections.length === 0 &&
+        whiteboard.notes.length === 0 &&
+        React.createElement('p', { className: 'enrichment__warning' },
+          'No whiteboard analysis reached this checkpoint. The players\u2019 own ' +
+          'conclusions drive arc selection, so the arcs will be built from the ' +
+          'accusation and the director notes alone.'
+        )
+    ),
 
     // Entity Notes (NPCs + flagged shell accounts)
     directorNotes.entityNotes && (
@@ -350,12 +461,51 @@ function InputReview({ data, onApprove, theme }) {
         )
       ),
 
-    // Approve button
-    React.createElement('div', { className: 'flex gap-md mt-md' },
+    // What the enricher indexed (H25)
+    React.createElement(EnrichmentPanel, { enrichment: data && data.enrichment }),
+
+    // Approve / Reject
+    React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
-        className: 'btn btn-primary',
-        onClick: function () { onApprove({ inputReview: true }); }
-      }, 'Approve Input')
+        className: 'action-modes__btn btn btn-primary',
+        onClick: function () { onApprove({ inputReview: true }); },
+        'aria-label': 'Approve the parsed input'
+      }, 'Approve Input'),
+      React.createElement('button', {
+        className: 'action-modes__btn' + (mode === 'reject' ? ' action-modes__btn--active' : '') + ' btn btn-danger',
+        onClick: function () { setMode(mode === 'reject' ? 'view' : 'reject'); },
+        'aria-label': 'Reject the parse and send corrections'
+      }, 'Reject with Corrections')
+    ),
+
+    // Reject mode: corrections go back through the parse, not a rollback.
+    mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
+      React.createElement('label', { className: 'form-group__label', htmlFor: 'input-corrections' },
+        'Corrections (who said what, roster fixes, accusation details)'
+      ),
+      React.createElement('textarea', {
+        id: 'input-corrections',
+        className: 'input feedback-area',
+        value: corrections,
+        onChange: function (e) { setCorrections(e.target.value); },
+        rows: 6,
+        placeholder: 'e.g. Blake said "he was a dead man", not Casper. Remi is on the ' +
+          'roster, Remy is not a character. The room accused Vic of the murder, 9 votes.',
+        'aria-label': 'Corrections to the parsed input'
+      }),
+      React.createElement('p', { className: 'text-xs text-muted' },
+        'This re-runs the input parse with your corrections appended to every ' +
+        'parse prompt. It does not roll anything back.'
+      ),
+      React.createElement('button', {
+        className: 'btn btn-danger',
+        onClick: function () {
+          if (!corrections.trim()) return;
+          (onReject || onApprove)({ inputReview: false, inputFeedback: corrections.trim() });
+        },
+        disabled: !corrections.trim(),
+        'aria-label': 'Submit corrections and re-parse'
+      }, 'Submit Corrections')
     )
   );
 }

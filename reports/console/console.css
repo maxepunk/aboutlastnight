@@ -839,6 +839,29 @@ textarea.input {
   margin-bottom: var(--space-xs);
 }
 
+/* H25 input-review additions. `enrichment__warning` is the amber "this is a
+   degraded input, not an empty one" note; the fallback banner itself uses the
+   error colour via .validation-error. */
+.enrichment__warning {
+  padding: var(--space-xs) var(--space-md);
+  border-left: 2px solid var(--accent-amber);
+  background: rgba(212, 168, 83, 0.08);
+  color: var(--accent-amber);
+  font-size: 0.8rem;
+}
+
+/* The parsed accusation notes are the vote count, the motive and the
+   alternative theories: several hundred characters that must read as prose. */
+.accusation__notes {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+/* What the whiteboard parser could not read. Amber, and first on the panel. */
+.whiteboard__ambiguities {
+  color: var(--accent-amber);
+}
+
 /* ── Tag List ── */
 .tag-list {
   display: flex;
