@@ -757,3 +757,36 @@ describe('validateBundleShape (article client gate)', () => {
     );
   });
 });
+
+describe('thesis editor logic (spec 2026-09-19 §6.1)', () => {
+  test('initThesis reads the three fields and tolerates a missing lede', () => {
+    expect(L.initThesis({ hook: 'H', keyTension: 'T', primaryArc: 'A', selectedEvidence: ['e'] })).toEqual({ hook: 'H', keyTension: 'T', primaryArc: 'A' });
+    expect(L.initThesis(null)).toEqual({ hook: '', keyTension: '', primaryArc: '' });
+    expect(L.initThesis({ hook: 7 })).toEqual({ hook: '', keyTension: '', primaryArc: '' });
+  });
+
+  test('buildThesisPayload replaces the three fields and preserves selectedEvidence and unknown keys', () => {
+    const original = { ...validJournalistOutline().lede, extraKey: { kept: true } };
+    const out = L.buildThesisPayload({ hook: 'New hook', keyTension: 'New tension', primaryArc: 'New arc' }, original);
+    expect(out).toEqual({ ...original, hook: 'New hook', keyTension: 'New tension', primaryArc: 'New arc' });
+    expect(out).not.toBe(original);
+    expect(original.hook).toBe(validJournalistOutline().lede.hook);   // no mutation
+  });
+
+  test('buildThesisPayload keeps blank fields blank (the validation layer decides)', () => {
+    const out = L.buildThesisPayload({ hook: '', keyTension: 'T', primaryArc: '' }, validJournalistOutline().lede);
+    expect(out.hook).toBe('');
+    expect(out.primaryArc).toBe('');
+  });
+
+  test('a thesis save on a LEDE with no selectedEvidence emits no selectedEvidence key', () => {
+    const out = L.buildThesisPayload({ hook: 'h', keyTension: 't', primaryArc: 'a' }, { hook: 'x', keyTension: 'y', primaryArc: 'z' });
+    expect(out).toEqual({ hook: 'h', keyTension: 't', primaryArc: 'a' });
+  });
+
+  test('the result passes the journalist outline schema inside a valid outline', () => {
+    const outline = validJournalistOutline();
+    outline.lede = L.buildThesisPayload({ hook: 'h', keyTension: 't', primaryArc: 'a' }, outline.lede);
+    expect(validate('outline', outline).valid).toBe(true);
+  });
+});

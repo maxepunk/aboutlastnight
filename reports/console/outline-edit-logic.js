@@ -137,6 +137,15 @@
     };
   }
 
+  function initThesis(lede) {
+    var s = lede || {};
+    return {
+      hook: typeof s.hook === 'string' ? s.hook : '',
+      keyTension: typeof s.keyTension === 'string' ? s.keyTension : '',
+      primaryArc: typeof s.primaryArc === 'string' ? s.primaryArc : ''
+    };
+  }
+
   function initArc(arc) {
     var s = arc || {};
     return {
@@ -199,6 +208,19 @@
     setOrDeleteArray(out, 'selectedEvidence',
       Array.isArray(formState.selectedEvidence) ? formState.selectedEvidence.filter(nonEmpty) : splitCsv(formState.selectedEvidence));
     return out;
+  }
+
+  // Thesis panel (spec 2026-09-19 §6.1): three LEDE fields with their own editor.
+  // Delegates to buildLedePayload so the LEDE builder stays the single writer of
+  // that section and selectedEvidence survives untouched.
+  function buildThesisPayload(formState, originalLede) {
+    var base = initLede(originalLede);
+    return buildLedePayload({
+      hook: formState.hook,
+      keyTension: formState.keyTension,
+      primaryArc: formState.primaryArc,
+      selectedEvidence: base.selectedEvidence
+    }, originalLede);
   }
 
   function buildArcPayload(formState, originalArc) {
@@ -677,6 +699,7 @@
     computeResetKey: computeResetKey,
 
     initLede: initLede,
+    initThesis: initThesis,
     initArc: initArc,
     initArcInterweaving: initArcInterweaving,
     initFollowTheMoney: initFollowTheMoney,
@@ -685,6 +708,7 @@
     initClosing: initClosing,
 
     buildLedePayload: buildLedePayload,
+    buildThesisPayload: buildThesisPayload,
     buildArcPayload: buildArcPayload,
     buildArcInterweavingPayload: buildArcInterweavingPayload,
     buildFollowTheMoneyPayload: buildFollowTheMoneyPayload,
