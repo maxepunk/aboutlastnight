@@ -147,6 +147,35 @@
   }
 
   /**
+   * v2 I3: which checkpoint should the failure card's [Roll back] open?
+   *
+   * The card used to open the modal at the LAST GATE SEEN. That is right for
+   * almost every failure and wrong for the one the photo late-join introduced:
+   * when `photosPath` came from `/start` the `photos` gate SKIPS, so a
+   * `fetchSessionPhotos` throw — which happens after arc analysis — leaves
+   * `arc-selection` as the last gate. A rollback there preserves `photosPath`
+   * (deliberately, C4), so the replay re-pays the Opus arc analysis and evaluation
+   * and throws again on the same bad path, and `photos` is not a clickable step in
+   * that state (F26). The free recovery is a rollback to `photos`, which clears
+   * `photosPath` and re-asks.
+   *
+   * The discriminator is the fetch's own recovery sentence, which
+   * `fetchSessionPhotos` puts in every unreadable-folder throw for exactly this
+   * purpose. Anything else falls through to the last gate seen.
+   *
+   * @param {{message?: *, checkpointType?: string|null}} [failure]
+   * @returns {string|null} the rollback point to open the modal at
+   */
+  const PHOTOS_RECOVERY = /Roll back to the photos step/;
+
+  function failureRollbackTarget(failure) {
+    const f = failure || {};
+    const message = typeof f.message === 'string' ? f.message : '';
+    if (PHOTOS_RECOVERY.test(message)) return 'photos';
+    return f.checkpointType || null;
+  }
+
+  /**
    * Run `fn`; if it rejects or throws, close `stream` before rethrowing.
    *
    * api.js opens the progress stream BEFORE it posts (the SSE-before-POST contract),
@@ -182,6 +211,7 @@
     applyLlmFailure,
     formatLlmErrorMessage,
     formatFailureMessage,
+    failureRollbackTarget,
     closeOnThrow,
     appendEvent,
     describePhase,

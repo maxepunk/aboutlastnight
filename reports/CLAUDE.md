@@ -539,6 +539,7 @@ See test files for mock usage examples.
 **SDK not available:** `claude /login` then `npm install`
 **Workflow errors:** Check logs for missing input files, expired Notion token, or SDK timeouts
 **Resume behavior:** State persists via `MemorySaver` checkpointer
+**Photos directory not found after arc selection with a start-time path:** the failure card now offers a rollback to `photos` (free); the API form is `POST /rollback {rollbackTo:'photos'}` / harness `--rollback photos`; do not roll back to `arc-selection` (it re-pays the arc analysis and keeps the path).
 
 See `PIPELINE_DEEP_DIVE.md#common-debugging-scenarios` for detailed debugging guides.
 

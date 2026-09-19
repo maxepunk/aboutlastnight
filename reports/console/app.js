@@ -13,7 +13,7 @@ const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
 const { RollbackPanel, CompletionView } = window.Console;
 const { CHECKPOINT_LABELS, CHECKPOINT_ORDER } = window.Console.utils;
 // H10 message derivation (pure, node-tested in __tests__/unit/llm-stream-logic.test.js).
-const { formatLlmErrorMessage, formatFailureMessage } = window.Console.llmStreamLogic;
+const { formatLlmErrorMessage, formatFailureMessage, failureRollbackTarget } = window.Console.llmStreamLogic;
 // Attach watchdog decision + report links (pure, node-tested in
 // console/__tests__/session-start-logic.test.js).
 const { decideAttachFallback, shouldApplyAttachPoll, completedResultFrom } = window.Console.sessionStartLogic;
@@ -560,8 +560,15 @@ function App() {
         eventLog: state.eventLog,
         // [Retry] = re-run the failed node via streaming resume.
         onRetry: () => streamingResume(state.sessionId),
-        // [Roll back] = open the existing rollback modal at the current checkpoint.
-        onRollback: () => setRollbackTarget(state.checkpointType)
+        // [Roll back] = open the existing rollback modal. Normally at the current
+        // checkpoint; v2 I3: a fetchSessionPhotos failure names the `photos` step
+        // as its recovery, and that is NOT the last gate seen when the path came
+        // from /start (the gate skipped). Rolling back to arc-selection there
+        // re-pays the Opus arc analysis and throws again on the same path.
+        onRollback: () => setRollbackTarget(failureRollbackTarget({
+          message: state.llmActivity && state.llmActivity.error,
+          checkpointType: state.checkpointType
+        }))
       })
     );
   } else if (state.completedResult) {

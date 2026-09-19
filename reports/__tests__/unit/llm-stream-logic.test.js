@@ -250,3 +250,53 @@ describe('formatFailureMessage with a non-string headline', () => {
       .not.toThrow();
   });
 });
+
+describe('failureRollbackTarget (v2 I3)', () => {
+  // The failure card's [Roll back] used to open the modal at the LAST GATE SEEN.
+  // When photosPath came from /start the `photos` gate skips, so a fetchSessionPhotos
+  // throw after arc analysis left arc-selection as the last gate — and a rollback
+  // there PRESERVES photosPath (C4, correctly), so the replay re-pays the Opus arc
+  // analysis and throws again on the same path. `photos` is not clickable in the
+  // stepper. The free recovery is a rollback to `photos`, so the card must offer it.
+  const FETCH_FAILURE =
+    '[fetchSessionPhotos] Photos directory not found: D:/shoots/091926 (ENOENT). '
+    + 'Roll back to the photos step and supply the folder again.';
+
+  test('offers photos when the failure names the photos-step recovery', () => {
+    expect(L.failureRollbackTarget({ message: FETCH_FAILURE, checkpointType: 'arc-selection' }))
+      .toBe('photos');
+  });
+
+  test('offers photos even when the last gate seen was photos itself', () => {
+    expect(L.failureRollbackTarget({ message: FETCH_FAILURE, checkpointType: 'photos' }))
+      .toBe('photos');
+  });
+
+  test('offers photos when the fetch threw with no gate recorded at all', () => {
+    expect(L.failureRollbackTarget({ message: FETCH_FAILURE, checkpointType: null }))
+      .toBe('photos');
+  });
+
+  test('falls through to the last gate seen for any other failure', () => {
+    expect(L.failureRollbackTarget({
+      message: 'SDK timeout after 900000ms idle with no streamed activity',
+      checkpointType: 'article'
+    })).toBe('article');
+  });
+
+  test('does not match a message that merely mentions photos', () => {
+    // Only the fetch's own recovery sentence selects the photos target; an article
+    // failure that talks about photo references must not send the director back
+    // through the Haiku analysis.
+    expect(L.failureRollbackTarget({
+      message: 'Article fact-check: 2 photo references name files not in sessionPhotos',
+      checkpointType: 'article'
+    })).toBe('article');
+  });
+
+  test('tolerates a missing argument, a missing message and a non-string message', () => {
+    expect(L.failureRollbackTarget()).toBeNull();
+    expect(L.failureRollbackTarget({ checkpointType: 'outline' })).toBe('outline');
+    expect(L.failureRollbackTarget({ message: { code: 500 }, checkpointType: 'outline' })).toBe('outline');
+  });
+});
