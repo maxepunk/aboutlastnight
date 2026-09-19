@@ -16,7 +16,7 @@ const { CHECKPOINT_LABELS, CHECKPOINT_ORDER } = window.Console.utils;
 const { formatLlmErrorMessage, formatFailureMessage } = window.Console.llmStreamLogic;
 // Attach watchdog decision + report links (pure, node-tested in
 // console/__tests__/session-start-logic.test.js).
-const { decideAttachFallback, completedResultFrom } = window.Console.sessionStartLogic;
+const { decideAttachFallback, shouldApplyAttachPoll, completedResultFrom } = window.Console.sessionStartLogic;
 
 // How long an attached stream may say nothing before the watchdog re-reads
 // /checkpoint, and how often it looks. The server's heartbeat is an SSE COMMENT
@@ -229,6 +229,23 @@ function App() {
   const [attachedSession, setAttachedSession] = React.useState(null);
   const sseActivityRef = React.useRef(0);
   const attachWaitLoggedRef = React.useRef(false);
+  // I4: what was true when the watchdog's /checkpoint poll RESOLVES, not when it
+  // was sent. The interval's callback closes over the render that armed it, and
+  // the SSE handler runs during the await, so the current values have to come from
+  // refs.
+  //
+  // `processing` is the load-bearing one: EVERY terminal SSE branch clears it
+  // (SSE_COMPLETE, WORKFLOW_COMPLETE, SSE_ERROR), so it covers "the SSE got there
+  // first" for all of them. `state.checkpointType` is deliberately NOT mirrored
+  // here: the only use for it would be to suppress a dispatch whose type already
+  // matches the screen, and that would drop a NEW payload of the SAME type — the
+  // second arc-selection of a revision loop is exactly that.
+  const processingRef = React.useRef(false);
+  const attachedSessionRef = React.useRef(null);
+  React.useEffect(() => {
+    processingRef.current = state.processing;
+    attachedSessionRef.current = attachedSession;
+  }, [state.processing, attachedSession]);
 
   // Cleanup EventSource on unmount
   React.useEffect(() => {
@@ -369,6 +386,10 @@ function App() {
    * /checkpoint what actually happened and act on it, so a run that ended while
    * nobody was listening cannot leave the console spinning forever with no exit but
    * a page reload. The decision itself is pure (decideAttachFallback).
+   *
+   * Both decisions here are pure and node-tested: `shouldApplyAttachPoll` for
+   * whether the resolved answer is still current (I4), then `decideAttachFallback`
+   * for what it means.
    */
   const attachWatchdog = async (sessionId) => {
     if (Date.now() - sseActivityRef.current < ATTACH_IDLE_MS) {
@@ -383,6 +404,19 @@ function App() {
     } catch (err) {
       // The console is unreachable, not the run. Try again on the next tick rather
       // than tearing down a stream that may still deliver.
+      return;
+    }
+
+    // I4: the run may have reported in through the SSE while that request was in
+    // flight. Every terminal SSE branch clears `processing`, and approve/resume/
+    // rollback release the attach, so either condition means this answer is stale.
+    // Acting on it anyway re-dispatched CHECKPOINT_RECEIVED for a checkpoint the
+    // SSE had already delivered, and the reducer resets `pendingEdits: {}` — an
+    // edit the director had started on that gate disappeared with no trace.
+    if (!shouldApplyAttachPoll({
+      stillProcessing: processingRef.current === true,
+      stillAttached: attachedSessionRef.current === sessionId
+    })) {
       return;
     }
 
@@ -439,8 +473,12 @@ function App() {
 
   // Runs only while we are riding someone else's stream AND still processing. Every
   // terminal SSE branch clears `processing` (SSE_COMPLETE / WORKFLOW_COMPLETE /
-  // SSE_ERROR), so the interval tears itself down the moment the run reports in —
-  // it can never fire after a checkpoint has been delivered.
+  // SSE_ERROR), so the interval tears itself down the moment the run reports in.
+  //
+  // I4: tearing the interval down does NOT stop a poll that is already awaiting —
+  // clearInterval cancels the next tick, not the request in flight. That is why
+  // attachWatchdog re-checks the refs after its await; this effect cannot be the
+  // only guard.
   React.useEffect(() => {
     // The sessionId match is structural, not defensive: attachedSession is App-local
     // state that outlives RESET_SESSION/LOGOUT, so without it a stale attach could

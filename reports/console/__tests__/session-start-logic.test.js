@@ -323,3 +323,34 @@ describe('startFreshDecision', () => {
       .toBe('not-allowed');
   });
 });
+
+describe('shouldApplyAttachPoll', () => {
+  // I4: attachWatchdog awaits GET /checkpoint. If the SSE `complete` branch lands
+  // during that await it has already dispatched CHECKPOINT_RECEIVED (and cleared
+  // `processing`); the resolved poll then dispatched the same checkpoint a second
+  // time, and the reducer resets `pendingEdits: {}` — silently wiping an edit the
+  // director had started on the newly opened gate.
+  const { shouldApplyAttachPoll } = require('../session-start-logic');
+
+  it('applies while the run is still processing and the attach still holds', () => {
+    expect(shouldApplyAttachPoll({ stillProcessing: true, stillAttached: true })).toBe(true);
+  });
+
+  it('does not apply once processing has ended (the SSE got there first)', () => {
+    expect(shouldApplyAttachPoll({ stillProcessing: false, stillAttached: true })).toBe(false);
+  });
+
+  it('does not apply once the attach was released (another call owns the stream)', () => {
+    expect(shouldApplyAttachPoll({ stillProcessing: true, stillAttached: false })).toBe(false);
+  });
+
+  it('does not apply on missing or partial input', () => {
+    expect(shouldApplyAttachPoll({})).toBe(false);
+    expect(shouldApplyAttachPoll(null)).toBe(false);
+    expect(shouldApplyAttachPoll(undefined)).toBe(false);
+  });
+
+  it('requires booleans, not truthy values (both refs are read straight)', () => {
+    expect(shouldApplyAttachPoll({ stillProcessing: 1, stillAttached: '091826' })).toBe(false);
+  });
+});

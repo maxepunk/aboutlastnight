@@ -139,6 +139,34 @@
   }
 
   /**
+   * May the attach watchdog's resolved /checkpoint poll still be acted on? (I4)
+   *
+   * `attachWatchdog` awaits GET /checkpoint. That await is a window, and the SSE
+   * handler runs inside it: if `complete` arrives while the poll is in flight it
+   * has already dispatched CHECKPOINT_RECEIVED (or WORKFLOW_COMPLETE) and cleared
+   * `processing`. The poll would then dispatch the SAME checkpoint a second time —
+   * and CHECKPOINT_RECEIVED resets `pendingEdits: {}`, so an edit the director had
+   * already started on the newly opened gate is silently wiped.
+   *
+   * Both flags are read from refs an effect keeps current, because the interval's
+   * callback closes over the render that armed it.
+   *
+   *   stillProcessing - state.processing is STILL true (no terminal SSE branch ran)
+   *   stillAttached   - attachedSession is STILL this sessionId (no approve /
+   *                     resume / rollback has taken ownership of the stream)
+   *
+   * Booleans only, deliberately: both are computed from refs at the call site, and
+   * a truthy session id or a number would make this guard a no-op.
+   *
+   * @param {{stillProcessing: boolean, stillAttached: boolean}} conditions
+   * @returns {boolean}
+   */
+  function shouldApplyAttachPoll(conditions) {
+    const c = conditions || {};
+    return c.stillProcessing === true && c.stillAttached === true;
+  }
+
+  /**
    * The report links a COMPLETE session should be offered instead of a Resume.
    *
    * Always offers the conventional path. A recorded outcome that names a DIFFERENT
@@ -229,6 +257,7 @@
     classifyCheckpointResponse,
     startFreshDecision,
     decideAttachFallback,
+    shouldApplyAttachPoll,
     buildReportLinks,
     completedResultFrom,
     SESSION_ID_PATTERN,

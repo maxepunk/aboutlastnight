@@ -397,7 +397,7 @@ console/
 ├── api.js                          # REST client + SSE-before-POST pattern, plus attach() (SSE-only, no POST)
 ├── state.js                        # useReducer: 25 actions, initialState, RESET_SESSION
 ├── utils.js                        # Badge, CollapsibleSection, JsonViewer, safeStringify, etc. (republishes CHECKPOINT_ORDER)
-├── session-start-logic.js         # Dual-export PURE module: isValidSessionId (MMDDYY contract, mirrors server.js), classifyCheckpointResponse (not-found | at-checkpoint | in-progress | complete | resumable), buildReportLinks, completedResultFrom, CHECKPOINT_ORDER. Must load before utils.js AND components/SessionStart.js.
+├── session-start-logic.js         # Dual-export PURE module: isValidSessionId (MMDDYY contract, mirrors server.js), classifyCheckpointResponse (not-found | at-checkpoint | in-progress | complete | resumable), startFreshDecision (go | confirm | not-allowed — C1), decideAttachFallback, shouldApplyAttachPoll (I4: the attach poll may not act on a stale answer — app.js mirrors state.processing + attachedSession into refs because the SSE handler runs during the await, and a duplicate CHECKPOINT_RECEIVED resets pendingEdits), buildReportLinks, completedResultFrom, CHECKPOINT_ORDER. Must load before utils.js AND components/SessionStart.js.
 ├── session-status-logic.js        # Dual-export PURE module: SET_ERROR / CLEAR_ERROR reducer fragments. Must load before state.js.
 ├── llm-stream-logic.js            # Dual-export PURE module: llmActivity lifecycle, eventLog append, failure/llm_error message derivation. Must load before state.js and app.js.
 ├── input-review-logic.js          # Dual-export PURE module for the InputReview checkpoint.
