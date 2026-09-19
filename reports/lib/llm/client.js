@@ -199,6 +199,9 @@ async function sdkQueryImpl({
   // context string. `emit` is the only way this function talks to onProgress.
   const callId = crypto.randomUUID();
   const emit = (m) => { if (onProgress) onProgress({ callId, ...m }); };
+  // Set by whichever site emits the call's terminal llm_error, so the catch below can
+  // close every OTHER failure path without double-emitting for those two.
+  let errorEmitted = false;
 
   // Idle (stall) timer: abort only after idleTimeoutMs of NO streamed activity.
   // resetIdle() is called once before the loop and again on EVERY message inside
@@ -549,6 +552,7 @@ async function sdkQueryImpl({
           resultErr.sdkSubtype = reason;            // preserved through the abort-race catch (see below)
           if (status !== null) resultErr.apiErrorStatus = status;
           if (onProgress) {
+            errorEmitted = true;
             emit({
               type: 'llm_error',
               elapsed: (Date.now() - startTime) / 1000,
@@ -590,6 +594,7 @@ async function sdkQueryImpl({
         // llm_complete on success; llm_error on extraction failure. Same envelope.
         if (onProgress) {
           if (extractionError) {
+            errorEmitted = true;
             emit({
               type: 'llm_error',
               elapsed: (Date.now() - startTime) / 1000,
@@ -655,32 +660,57 @@ async function sdkQueryImpl({
   } catch (error) {
     clearTimeout(timeoutId);
 
-    // Preserve structured-output extraction errors as-is (they carry diagnostics)
+    // Resolve the error we will actually throw BEFORE emitting, so the llm_error below
+    // carries the same message the caller (and the retry classifier) sees.
+    let finalError;
     if (error instanceof StructuredOutputExtractionError) {
-      throw error;
-    }
-
-    // Our own enriched SDK errors (budget overrun / generic error-result) were thrown from the
-    // stream loop, NOT by the idle abort — preserve them so a concurrent abort can't reclassify
-    // a PERMANENT budget error as a retryable timeout (the cost ceiling must never auto-retry).
-    if (error && error.sdkSubtype) throw error;
-
-    // Check if it was an idle/stall abort. Message must still start with
-    // "SDK timeout after" so isSdkTimeoutError (and thus isTransientError) keeps
-    // classifying it as transient — the wording past that is diagnostic.
-    if (error.name === 'AbortError' || abortController.signal.aborted) {
+      // Preserve structured-output extraction errors as-is (they carry diagnostics)
+      finalError = error;
+    } else if (error && error.sdkSubtype) {
+      // Our own enriched SDK errors (budget overrun / generic error-result) were thrown from the
+      // stream loop, NOT by the idle abort — preserve them so a concurrent abort can't reclassify
+      // a PERMANENT budget error as a retryable timeout (the cost ceiling must never auto-retry).
+      finalError = error;
+    } else if ((error && error.name === 'AbortError') || abortController.signal.aborted) {
+      // It was an idle/stall abort. Message must still start with
+      // "SDK timeout after" so isSdkTimeoutError (and thus isTransientError) keeps
+      // classifying it as transient — the wording past that is diagnostic.
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       // Measure idle from the abort instant (captured in the timer callback), not
       // from the catch block which runs after iterator teardown — otherwise a real
       // stall reads e.g. "idle 900.1s (idle limit: 900s)", slightly self-contradictory.
       const idleSec = (((idleAbortedAt ?? Date.now()) - lastActivityAt) / 1000).toFixed(1);
-      throw new Error(
+      finalError = new Error(
         `SDK timeout after ${elapsed}s idle ${idleSec}s with no streamed activity ` +
         `(idle limit: ${idleTimeoutMs / 1000}s) - ${progressLabel}`
       );
+    } else {
+      finalError = error;
     }
 
-    throw error;
+    // Close the per-call record on EVERY failure path. Only two sites inside the loop
+    // emit llm_error (an is_error success result, an extraction failure); an idle
+    // abort, error_max_budget_usd, a generic error result, "no result received" and
+    // any iterator throw all land here. Without this emission the per-call log
+    // (lib/observability/llm-call-log.js) keeps a prompt-only file with no outcome,
+    // no index.jsonl line, and a retained in-flight entry holding the full prompt
+    // (~250KB for the article call) — once per node-level retry, since each retry
+    // mints a fresh callId. Wrapped because a throwing onProgress must not replace
+    // the real failure with the logger's.
+    if (!errorEmitted) {
+      errorEmitted = true;
+      try {
+        emit({
+          type: 'llm_error',
+          elapsed: (Date.now() - startTime) / 1000,
+          error: finalError && finalError.message,
+          errorName: finalError && finalError.name,
+          jsonSchema
+        });
+      } catch { /* the pipeline error below is the one that matters */ }
+    }
+
+    throw finalError;
   }
 }
 

@@ -511,3 +511,100 @@ describe('sdkQueryImpl callId (spec 2026-09-19 §3.1)', () => {
     expect(first).not.toBe(second);
   });
 });
+
+describe('sdkQueryImpl closes the record on every failure path (fix round 1)', () => {
+  afterEach(() => clearMockQuery());
+
+  /**
+   * Every throw out of sdkQueryImpl must be preceded by exactly one llm_error, so the
+   * per-call log's prompt-only file gets an outcome and its in-flight entry (which
+   * holds the full prompt) is freed. Only two sites emitted one before this fix.
+   */
+  async function runAndCollect(mockImpl, opts = {}) {
+    const events = [];
+    setMockQuery(mockImpl);
+    let thrown;
+    try {
+      await sdkQueryImpl({ prompt: 'test', model: 'haiku', label: 'err-test', onProgress: (m) => events.push(m), ...opts });
+    } catch (e) { thrown = e; }
+    expect(thrown).toBeDefined();
+    const errEvents = events.filter((e) => e.type === 'llm_error');
+    expect(events.filter((e) => e.type === 'llm_complete')).toHaveLength(0);
+    return { events, errEvents, thrown };
+  }
+
+  test('an idle/stall abort emits one llm_error carrying the thrown timeout message', async () => {
+    const { events, errEvents, thrown } = await runAndCollect(
+      ({ options }) => (async function* () {
+        await new Promise((resolve) => options.abortController.signal.addEventListener('abort', resolve, { once: true }));
+        const abortErr = new Error('The operation was aborted');
+        abortErr.name = 'AbortError';
+        throw abortErr;
+      })(),
+      { timeoutMs: 20 }
+    );
+
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].error).toBe(thrown.message);
+    expect(errEvents[0].error).toMatch(/^SDK timeout after/);
+    expect(typeof errEvents[0].elapsed).toBe('number');
+    expect(errEvents[0].callId).toBe(events[0].callId);   // pairs with the llm_start file
+  });
+
+  test('error_max_budget_usd emits one llm_error', async () => {
+    const { errEvents, thrown } = await runAndCollect(() => makeAsyncIterable([
+      { type: 'result', subtype: 'error_max_budget_usd', total_cost_usd: 5.5, errors: [] }
+    ]));
+
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].error).toBe(thrown.message);
+    expect(errEvents[0].error).toMatch(/error_max_budget_usd/);
+    expect(errEvents[0].errorName).toBe('Error');
+  });
+
+  test('a generic error result emits one llm_error', async () => {
+    const { errEvents, thrown } = await runAndCollect(() => makeAsyncIterable([
+      { type: 'result', subtype: 'error_during_execution', errors: ['overloaded_error'] }
+    ]));
+
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].error).toBe(thrown.message);
+    expect(errEvents[0].error).toMatch(/overloaded_error/);
+  });
+
+  test('a stream that ends with no result emits one llm_error', async () => {
+    const { errEvents, thrown } = await runAndCollect(() => makeAsyncIterable([
+      { type: 'system', subtype: 'init', model: 'claude-haiku-4-5', tools: [] }
+    ]));
+
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].error).toBe(thrown.message);
+    expect(errEvents[0].error).toMatch(/No result received/);
+  });
+
+  test('an iterator that throws emits one llm_error naming the error', async () => {
+    const { errEvents, thrown } = await runAndCollect(() => (async function* () {
+      throw new TypeError('socket exploded');
+    })());
+
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].error).toBe(thrown.message);
+    expect(errEvents[0].errorName).toBe('TypeError');
+  });
+
+  test('the two in-loop emitters are not double-counted by the catch', async () => {
+    const isError = await runAndCollect(() => makeAsyncIterable([
+      { type: 'result', subtype: 'success', is_error: true, api_error_status: 529, result: 'API Error: 529 overloaded' }
+    ]));
+    expect(isError.errEvents).toHaveLength(1);
+    expect(isError.errEvents[0].apiErrorStatus).toBe(529);   // still the in-loop envelope, not the catch's
+
+    const extraction = await runAndCollect(
+      () => makeAsyncIterable([{ type: 'result', subtype: 'success', result: 'no json here' }]),
+      { jsonSchema: SIMPLE_SCHEMA }
+    );
+    expect(extraction.thrown).toBeInstanceOf(StructuredOutputExtractionError);
+    expect(extraction.errEvents).toHaveLength(1);
+    expect(extraction.errEvents[0].structuredOutputPresent).toBe(false);
+  });
+});
