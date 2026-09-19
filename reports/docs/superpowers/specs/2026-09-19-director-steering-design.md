@@ -485,14 +485,16 @@ verified — not by a paid run. `[I11]`
 
 ### 7.4 Live deploy gate (one paid exercise, on a copy)
 
-`server.js` gains a `CHECKPOINT_DB_PATH` env override (default unchanged; one line, one
-test). `[C2]` Procedure:
+`server.js` gains a `CHECKPOINT_DB_PATH` env override (default unchanged) and a `PORT`
+override (the port was hardcoded to 3001, so a throwaway server would have collided with
+the director's), both pinned by one test that never opens the production file. `[C2]`
+Procedure:
 
 1. The director's `main` server is DOWN for the duration (stated, not assumed).
 2. Copy `data/checkpoints.sqlite` and `data/0919269/` to a scratch directory; record
    the mtimes of the originals and of `outputs/report-0919269.html`.
-3. Start the branch server with `CHECKPOINT_DB_PATH=<copy>`, a throwaway password, and
-   `LLM_CALL_LOG_DIR=<scratch>`.
+3. Start the branch server with `CHECKPOINT_DB_PATH=<copy>`, `PORT=3011`, a throwaway
+   password, and `LLM_CALL_LOG_DIR=<scratch>`.
 4. Roll the copied `0919269` back to `outline` (pays `generateOutline` + `evaluateOutline`
    on Opus); at the gate edit the thesis by hand; reject with a note (pays
    `reviseOutline` + `evaluateOutline`, up to three pairs if the evaluator loops).
@@ -512,7 +514,7 @@ problem 5; no percentage of the weekly allowance is claimed in advance.
 `reports/CLAUDE.md`: approval-payload paragraph (edits on reject, both fields reset on
 every reject), checkpoint payload keys table (`handEditReport`, `directorGateNotes`,
 `outlineThesis`), state channels, the log folder under Session Data Directory Structure,
-`callId`, `CHECKPOINT_DB_PATH` and `LLM_CALL_LOG_DIR`. Memory file updated after merge.
+`callId`, `CHECKPOINT_DB_PATH`, `PORT` and `LLM_CALL_LOG_DIR`. Memory file updated after merge.
 
 ## 8. Delivery
 
@@ -524,7 +526,7 @@ one pruning line, and the `CHECKPOINT_DB_PATH` line; T3 owns `getCheckpointData`
 | Task | Owns | Wave |
 |---|---|---|
 | T1 Instrumentation | `lib/llm/client.js`, `lib/observability/llm-call-log.js`, `progress-bridge.js`, `lib/__tests__/llm-call-log.test.js`, `lib/llm/__tests__/client-contract.test.js` | 1 |
-| T2 Diff module, state, rollback, resume payload, DB path | `lib/hand-edit-diff.js`, `lib/workflow/state.js` (+`getDefaultState`), `lib/api-helpers.js` (`PHASES_INVALIDATED_BY` hoist, `pruneGateNotes`), `server.js#buildResumePayload`, `server.js` rollback pruning line, `server.js` `CHECKPOINT_DB_PATH`, `__tests__/unit/workflow/state.test.js` pin, `server-build-resume-payload.test.js`, `rollback-clears-completeness.test.js`, `api-helpers.test.js`, `rollback-invalidates-evaluation.test.js`, `hand-edit-diff.test.js` | 1 |
+| T2 Diff module, state, rollback, resume payload, DB path + port | `lib/hand-edit-diff.js`, `lib/workflow/state.js` (+`getDefaultState`), `lib/api-helpers.js` (`PHASES_INVALIDATED_BY` hoist, `pruneGateNotes`), `server.js#buildResumePayload`, `server.js` rollback pruning line, `server.js` `CHECKPOINT_DB_PATH`, `__tests__/unit/workflow/state.test.js` pin, `server-build-resume-payload.test.js`, `rollback-clears-completeness.test.js`, `api-helpers.test.js`, `rollback-invalidates-evaluation.test.js`, `hand-edit-diff.test.js` | 1 |
 | T4a Thesis panel + reject payloads | `console/components/checkpoints/Outline.js`, `Article.js`, `console/outline-edit-logic.js`, `console/console.css`, `__tests__/unit/outline-edit-logic.test.js`, `__tests__/unit/console-editable-pencils.test.js` | 1 |
 | T3 Prompt side + checkpoint payload keys | `lib/prompt-builder.js`, `lib/workflow/nodes/node-helpers.js`, `ai-nodes.js`, `checkpoint-nodes.js`, `server.js#getCheckpointData`, `prompt-builder-director-guidance.test.js`, revise/generate tests, `get-checkpoint-data.test.js` | 2 (after T2) |
 | T4b Advisory line + standing notes display | `console/components/RevisionDiff.js`; then, shared-after-T4a: `Outline.js`, `Article.js`, `ArcSelection.js`, `console.css` for the prop wiring | 2 (after T3 and T4a) |
