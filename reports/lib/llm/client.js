@@ -270,6 +270,19 @@ async function sdkQueryImpl({
     options.betas = ['context-1m-2025-08-07'];
   }
 
+  // Control 4: visible thinking. On Opus 4.8 / Sonnet 5 the SDK's thinking display
+  // defaults to "omitted", so thinking streams as EMPTY blocks and a long think at
+  // effort xhigh is a silent stream. On 2026-09-19 the live Opus enrichment call
+  // cycled "empty thinking delta → status: requesting" every ~340s for 20 minutes
+  // (a ~5-min stream watchdog re-requesting), never completing, while each cycle
+  // re-armed our idle timer. "summarized" streams readable thinking text as it
+  // happens (1.3K chars in the first 20s on the same prompt), which keeps the
+  // stream alive and gives the console's THINKING stage real content. Haiku 4.5
+  // has no adaptive thinking, so it gets no thinking option.
+  if (model !== 'haiku') {
+    options.thinking = { type: 'adaptive', display: 'summarized' };
+  }
+
   // Pass effort explicitly so the SDK doesn't traverse the legacy
   // server-pushed taskIntensityOverride chain (which returns null
   // client_data for accounts using Opus 4.8's adaptive-thinking semantics).
