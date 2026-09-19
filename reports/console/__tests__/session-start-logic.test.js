@@ -221,3 +221,73 @@ describe('decideAttachFallback', () => {
       .toBe('stranded');
   });
 });
+
+describe('completedResultFrom', () => {
+  // Task 2 review finding 3 (ruled): a completed session has NO checkpoint, so
+  // neither rollback opener (PipelineProgress, ProgressStream) could be reached
+  // for it - yet re-running the article or outline of a finished session with a
+  // note is a real need, and the baseline shows sessions republished after
+  // edits. This builds the completedResult that lets App render the stepper
+  // above the completion view, from the GET /checkpoint response alone (there is
+  // no SSE completion payload on this path).
+  const { completedResultFrom } = require('../session-start-logic');
+
+  it('builds the completion result from the response and its recorded outcome', () => {
+    expect(completedResultFrom({
+      sessionId: '091826',
+      currentPhase: 'complete',
+      interrupted: false,
+      lastOutcome: {
+        outcome: 'complete',
+        outputPath: 'C:\\Users\\dir\\reports\\outputs\\report-091826.html',
+        photosCopied: 5,
+        recordedAt: '2026-09-18T12:00:00Z'
+      }
+    })).toEqual({
+      outcome: 'complete',
+      outputPath: 'C:\\Users\\dir\\reports\\outputs\\report-091826.html',
+      photosCopied: 5,
+      recordedAt: '2026-09-18T12:00:00Z',
+      sessionId: '091826',
+      currentPhase: 'complete',
+      htmlUrl: '/outputs/report-091826.html'
+    });
+  });
+
+  it('prefers the file the run actually wrote when it differs from the convention (B1)', () => {
+    // 071126 published as report-0711.html; the director must be sent to the
+    // file that exists, not to a 404 on the conventional path.
+    const result = completedResultFrom({
+      sessionId: '071126',
+      lastOutcome: { outcome: 'complete', htmlUrl: '/outputs/report-0711.html' }
+    });
+    expect(result.htmlUrl).toBe('/outputs/report-0711.html');
+  });
+
+  it('still produces a servable link with no recorded outcome (in-memory, cleared by a restart)', () => {
+    expect(completedResultFrom({ sessionId: '091826', lastOutcome: null })).toEqual({
+      sessionId: '091826',
+      currentPhase: 'complete',
+      htmlUrl: '/outputs/report-091826.html'
+    });
+  });
+
+  it('accepts a fallback session id when the response carries none', () => {
+    expect(completedResultFrom({ lastOutcome: null }, '091826').htmlUrl)
+      .toBe('/outputs/report-091826.html');
+  });
+
+  it('never lets a recorded currentPhase or sessionId override the derived ones', () => {
+    const result = completedResultFrom({
+      sessionId: '091826',
+      lastOutcome: { outcome: 'complete', currentPhase: 'error', sessionId: 'wrong' }
+    });
+    expect(result.currentPhase).toBe('complete');
+    expect(result.sessionId).toBe('091826');
+  });
+
+  it('returns null without a session id (nothing to link to)', () => {
+    expect(completedResultFrom({ lastOutcome: null })).toBeNull();
+    expect(completedResultFrom(null)).toBeNull();
+  });
+});

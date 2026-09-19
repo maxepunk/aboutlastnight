@@ -130,6 +130,40 @@
     return links;
   }
 
+  /**
+   * The `completedResult` for a session that is already finished.
+   *
+   * Task 2 review finding 3 (ruled): a completed session has NO checkpoint, so
+   * neither rollback opener could be reached for it — `GET /checkpoint` returns
+   * `checkpoint: null` and both openers require `state.checkpointType`. Yet
+   * re-running the article or the outline of a finished session with a note is a
+   * real need; the baseline shows sessions republished after edits. Loading the
+   * completion view for it (with the stepper above) is what makes the existing
+   * RollbackPanel flow reachable.
+   *
+   * There is no SSE completion payload on this path, so everything CompletionView
+   * needs is rebuilt from the response: the recorded outcome (in-memory, so null
+   * after a server restart) plus a SERVABLE `htmlUrl` derived from the session id.
+   * `sessionId` and `currentPhase` are stamped last so a stale recorded value
+   * cannot override them.
+   *
+   * @param {object|null} checkpointResponse - GET /api/session/:id/checkpoint body
+   * @param {string} [fallbackSessionId] - when the response carries no sessionId
+   * @returns {object|null}
+   */
+  function completedResultFrom(checkpointResponse, fallbackSessionId) {
+    const resp = checkpointResponse || {};
+    const sessionId = resp.sessionId || fallbackSessionId || null;
+    if (typeof sessionId !== 'string' || sessionId.length === 0) return null;
+    const links = buildReportLinks(sessionId, resp.lastOutcome);
+    return {
+      ...(resp.lastOutcome || {}),
+      sessionId: sessionId,
+      currentPhase: 'complete',
+      htmlUrl: links[links.length - 1] || null
+    };
+  }
+
   // H3: the order the graph actually interrupts in — the plain addEdge chain from
   // detectWhiteboard onward (lib/workflow/graph.js:539-568). `input-review` fires
   // INSIDE parseRawInput, which the graph reaches from checkpointAwaitContext, so it
@@ -157,6 +191,7 @@
     classifyCheckpointResponse,
     decideAttachFallback,
     buildReportLinks,
+    completedResultFrom,
     SESSION_ID_PATTERN,
     CHECKPOINT_ORDER
   };

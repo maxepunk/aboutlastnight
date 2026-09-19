@@ -35,6 +35,11 @@ const initialState = {
   error: null,
   // Completed
   completedResult: null,
+  // Task 2 review finding 3: this completion was LOADED for a session that had
+  // already finished, not produced by a run in this session. App renders the
+  // stepper above CompletionView when it is set, which is the only way the
+  // existing RollbackPanel flow can be reached for a complete thread.
+  completedStepper: false,
   // Hand-off: set by SessionStart's reconnect-resume so App drives the streaming resume
   // (SessionStart unmounts once sessionId is set, so it can't own the EventSource).
   pendingResume: null,
@@ -62,6 +67,7 @@ const ACTIONS = {
   SSE_COMPLETE: 'SSE_COMPLETE',
   SSE_ERROR: 'SSE_ERROR',
   WORKFLOW_COMPLETE: 'WORKFLOW_COMPLETE',
+  SESSION_COMPLETE_LOADED: 'SESSION_COMPLETE_LOADED',
   CACHE_REVISION: 'CACHE_REVISION',
   SAVE_PENDING_EDITS: 'SAVE_PENDING_EDITS',
   RESET_SESSION: 'RESET_SESSION',
@@ -133,6 +139,13 @@ function reducer(state, action) {
         phase: action.phase || state.phase,
         processing: false,
         llmActivity: null,
+        // A checkpoint supersedes any completion on screen. App renders the
+        // `completedResult` branch BEFORE the `checkpointType` one, so leaving a
+        // stale completion here would hide the checkpoint a rollback just
+        // produced — which is exactly the path 4.9 opens up (roll back from a
+        // complete session), and was already latent after WORKFLOW_COMPLETE.
+        completedResult: null,
+        completedStepper: false,
         // Clear all checkpoint edit slots when a new checkpoint arrives
         // (deliberate substitute for a dedicated RESET_PENDING_EDITS action)
         pendingEdits: {}
@@ -212,11 +225,30 @@ function reducer(state, action) {
       return {
         ...state,
         completedResult: action.result,
+        // A run that finished HERE: the stepper is not offered, because the
+        // director has just watched the pipeline arrive at this screen.
+        completedStepper: false,
         processing: false,
         checkpointType: null,
         llmActivity: null,
         // Clear all checkpoint edit slots on workflow completion
         pendingEdits: {}
+      };
+
+    case ACTIONS.SESSION_COMPLETE_LOADED:
+      // A session the console did NOT just run: opened from the Session screen
+      // and found already complete. Same completion view as WORKFLOW_COMPLETE,
+      // plus `completedStepper` so App renders the stepper above it and the
+      // rollback modal becomes reachable for a thread with no checkpoint.
+      // Nothing is POSTed by this action.
+      return {
+        ...state,
+        completedResult: action.result,
+        completedStepper: true,
+        checkpointType: null,
+        processing: false,
+        llmActivity: null,
+        error: null
       };
 
     case ACTIONS.CACHE_REVISION:

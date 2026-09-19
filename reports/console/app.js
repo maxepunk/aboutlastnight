@@ -11,12 +11,12 @@ const { api: appApi } = window.Console;
 const { useAppState, ACTIONS: APP_ACTIONS, LoginOverlay, SessionStart } = window.Console;
 const { ProgressStream, PipelineProgress, CheckpointShell } = window.Console;
 const { RollbackPanel, CompletionView } = window.Console;
-const { CHECKPOINT_LABELS } = window.Console.utils;
+const { CHECKPOINT_LABELS, CHECKPOINT_ORDER } = window.Console.utils;
 // H10 message derivation (pure, node-tested in __tests__/unit/llm-stream-logic.test.js).
 const { formatLlmErrorMessage, formatFailureMessage } = window.Console.llmStreamLogic;
 // Attach watchdog decision + report links (pure, node-tested in
 // console/__tests__/session-start-logic.test.js).
-const { decideAttachFallback, buildReportLinks } = window.Console.sessionStartLogic;
+const { decideAttachFallback, completedResultFrom } = window.Console.sessionStartLogic;
 
 // How long an attached stream may say nothing before the watchdog re-reads
 // /checkpoint, and how often it looks. The server's heartbeat is an SSE COMMENT
@@ -394,18 +394,14 @@ function App() {
         eventSourceClose(sseRef);
         setAttachedSession(null);
         dispatch({ type: APP_ACTIONS.SET_THEME, theme: resp.theme || 'journalist' });
-        // No SSE completion payload to forward, so rebuild what CompletionView needs
-        // from the persisted outcome. Last link = the file the run actually wrote
-        // when that differs from the conventional path (see buildReportLinks).
-        const links = buildReportLinks(sessionId, resp.lastOutcome);
+        // No SSE completion payload to forward, so rebuild what CompletionView
+        // needs from the persisted outcome. completedResultFrom is the same
+        // rebuild the Session screen's complete branch uses — one copy,
+        // node-tested, and it derives a SERVABLE htmlUrl (buildReportLinks) so
+        // "View Report" cannot open a filesystem path.
         dispatch({
           type: APP_ACTIONS.WORKFLOW_COMPLETE,
-          result: {
-            ...(resp.lastOutcome || {}),
-            sessionId,
-            currentPhase: 'complete',
-            htmlUrl: links[links.length - 1] || null
-          }
+          result: completedResultFrom(resp, sessionId)
         });
         return;
       }
@@ -521,11 +517,24 @@ function App() {
       })
     );
   } else if (state.completedResult) {
-    // Complete: show CompletionView
-    content = React.createElement(CompletionView, {
-      result: { ...state.completedResult, sessionId: state.sessionId },
-      onNewSession: () => dispatch({ type: APP_ACTIONS.RESET_SESSION })
-    });
+    // Complete. When the completion was LOADED for a session that had already
+    // finished (Task 2 review finding 3), the stepper goes above it with every
+    // step completed and clickable: a complete thread has no checkpoint, so this
+    // is the only route to the existing RollbackPanel flow, and re-running the
+    // article or outline of a finished session with a note is a real need.
+    // Clicking a step only OPENS the modal; nothing is POSTed until Confirm, and
+    // Cancel returns here untouched.
+    content = React.createElement(React.Fragment, null,
+      state.completedStepper && React.createElement(PipelineProgress, {
+        currentCheckpoint: 'article',
+        completedCheckpoints: CHECKPOINT_ORDER,
+        onRollback: (target) => setRollbackTarget(target)
+      }),
+      React.createElement(CompletionView, {
+        result: { ...state.completedResult, sessionId: state.sessionId },
+        onNewSession: () => dispatch({ type: APP_ACTIONS.RESET_SESSION })
+      })
+    );
   } else if (state.checkpointType) {
     // At checkpoint: render PipelineProgress + CheckpointShell with generic content
     // (Checkpoint-specific components added in Batches 3B.3-3B.6)

@@ -16,7 +16,7 @@ const { FileBrowser } = window.Console;
 // Pure, node-tested (console/__tests__/session-start-logic.test.js). This component
 // is a thin consumer: it does not decide what a valid ID is or what a session state
 // means, it only renders the answer.
-const { isValidSessionId, classifyCheckpointResponse, buildReportLinks } =
+const { isValidSessionId, classifyCheckpointResponse, buildReportLinks, completedResultFrom } =
   window.Console.sessionStartLogic;
 
 function SessionStart({ dispatch, theme }) {
@@ -197,19 +197,38 @@ function SessionStart({ dispatch, theme }) {
           dispatch({ type: SESSION_ACTIONS.ATTACH_REQUESTED, sessionId });
           return;
 
-        case 'complete':
-          // B9: do NOT resume. Offer the report and the routes that actually exist.
-          // The copy names only those: rollback from a complete thread has no entry
-          // point today (/checkpoint returns checkpoint:null, and both rollback
-          // openers require state.checkpointType), so pointing at it sent the
-          // director looking for a control that is not there. It is a real need and
-          // is being added separately — do not promise it here until it exists.
+        case 'complete': {
+          // B9: do NOT resume — re-invoking a complete thread re-runs the whole
+          // paid pipeline unattended and overwrites the session's own files.
+          //
+          // Task 2 review finding 3: load the COMPLETION instead. A complete
+          // thread has no checkpoint, so until now neither rollback opener could
+          // be reached for it, and re-running the article or outline of a
+          // finished session with a note is a real need (the baseline shows
+          // sessions republished after edits). SESSION_COMPLETE_LOADED puts the
+          // completion view up with the stepper above it, which is how the
+          // existing RollbackPanel flow becomes reachable. Nothing is POSTed
+          // here, and nothing is POSTed until the director confirms a rollback.
+          //
+          // The links stay on this screen too: the status renders before the
+          // dispatch takes effect, and a recorded outcome naming a DIFFERENT
+          // file (B1: 071126 published as report-0711.html) is worth seeing.
           setStatus(
-            'This session is complete. Open the report below, or use Start Fresh for a new run.'
+            'This session is complete. Open the report below, or roll back to a ' +
+            'step to re-run it with a note. Start Fresh begins a new run.'
           );
           setReportLinks(buildReportLinks(sessionId, checkpoint.lastOutcome));
           setLoading(false);
+          const completed = completedResultFrom(checkpoint, sessionId);
+          if (completed) {
+            // H2: theme first, as in the at-checkpoint branch — a rollback from
+            // here renders checkpoint editors that are theme-specific.
+            dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
+            dispatch({ type: SESSION_ACTIONS.SET_SESSION, sessionId });
+            dispatch({ type: SESSION_ACTIONS.SESSION_COMPLETE_LOADED, result: completed });
+          }
           return;
+        }
 
         case 'resumable':
         default:
