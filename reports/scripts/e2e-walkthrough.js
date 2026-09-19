@@ -40,7 +40,8 @@ const API_BASE = process.env.API_BASE || 'http://localhost:3001';
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD;
 const DEFAULT_THEME = 'journalist';
 
-// Timeout configuration (in ms) - photo analysis can take 5+ minutes for 7 photos
+// Timeout configuration (in ms) - photo analysis can take 5+ minutes for 7 photos,
+// and it now runs AFTER arc selection (photo late-join), not during Phase 1.
 const API_TIMEOUT_MS = parseInt(process.env.API_TIMEOUT_MS) || 20 * 60 * 1000; // 20 minutes default (matches server)
 const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
 
@@ -516,8 +517,9 @@ ${color('OPTIONS:', 'cyan')}
   --help, -h         Show this help message
 
 ${color('ROLLBACK VALUES:', 'cyan')}
-  input-review, paper-evidence-selection, await-roster, character-ids,
-  pre-curation, evidence-bundle, arc-selection, outline, article
+  paper-evidence-selection, await-roster, await-full-context, input-review,
+  pre-curation, evidence-and-photos, arc-selection, photos, character-ids,
+  outline, article
 
 ${color('EXAMPLES:', 'cyan')}
   # Interactive mode - gather input from prompts
@@ -581,32 +583,29 @@ async function gatherRawInput() {
 
   const sessionId = await prompt(color('Session ID (e.g., 1221): ', 'cyan'));
 
-  const defaultPhotosPath = path.join(__dirname, '..', 'data', sessionId, 'photos');
-  console.log('\n' + color('Photos Path', 'bright') + ' - Directory containing session photos:');
-  console.log(color(`(Press Enter to use default: ${defaultPhotosPath})`, 'dim'));
+  console.log('\n' + color('Photos Path (optional)', 'bright') + ' - Directory containing session photos:');
+  console.log(color('(Press Enter to skip: the pipeline asks for it after arc selection, so parsing,', 'dim'));
+  console.log(color(' curation and arc analysis run while you are still curating the photos.)', 'dim'));
   const photosPathInput = await prompt(color('> ', 'cyan'));
 
-  const photosPath = photosPathInput || defaultPhotosPath;
+  const photosPath = photosPathInput.trim();
 
   console.log(color('\n─────────────────────────────────────', 'dim'));
   console.log(color('Starting workflow with:', 'green'));
   console.log(`  Session ID: ${sessionId}`);
-  console.log(`  Photos Path: ${photosPath}`);
+  console.log(`  Photos Path: ${photosPath || '(deferred to the photos checkpoint)'}`);
   console.log(color('\nRemaining input gathered at checkpoints:', 'dim'));
   console.log(color('  • Roster → await-roster checkpoint', 'dim'));
   console.log(color('  • Accusation, Session Report, Director Notes → await-full-context checkpoint', 'dim'));
+  console.log(color('  • Photos folder → photos checkpoint (after arc selection)', 'dim'));
 
-  return {
-    sessionId,
-    rawSessionInput: {
-      photosPath
-    }
-  };
+  const rawSessionInput = {};
+  if (photosPath) rawSessionInput.photosPath = photosPath;
+  return { sessionId, rawSessionInput };
 }
 
 async function loadSessionInput(sessionId) {
   const dataDir = path.join(__dirname, '..', 'data', sessionId, 'inputs');
-  const photosDir = path.join(__dirname, '..', 'data', sessionId, 'photos');
 
   // RESUME MODE: Just return sessionId, use /resume to continue existing session
   if (RESUME_MODE) {
@@ -643,13 +642,13 @@ async function loadSessionInput(sessionId) {
     incrementalInputData = null;
   }
 
-  // Return minimal input for /start endpoint
+  // Return minimal input for /start. Photo late-join: NO photosPath — the run
+  // reaches the `photos` gate after arc selection, which is the path this harness
+  // exists to exercise. `photosDir` is what the gate will offer as its default.
   return {
     sessionId,
     fromFiles: false,
-    rawSessionInput: {
-      photosPath: photosDir
-    }
+    rawSessionInput: {}
   };
 }
 
@@ -683,10 +682,9 @@ function loadInputFile(filePath) {
       directorNotes: src.directorNotes
     };
 
-    const rawSessionInput = {
-      photosPath: src.photosPath,
-      whiteboardPhotoPath: src.whiteboardPhotoPath
-    };
+    const rawSessionInput = {};
+    if (src.photosPath) rawSessionInput.photosPath = src.photosPath;
+    if (src.whiteboardPhotoPath) rawSessionInput.whiteboardPhotoPath = src.whiteboardPhotoPath;
 
     console.log(color(`  ✓ Loaded raw session input (full-context routed through await-full-context)`, 'green'));
     return {
@@ -840,6 +838,18 @@ function getDefaultApprovalForProfile(checkpointType, checkpointData) {
     case 'arc-selection':
       const arcs = checkpointData.narrativeArcs || [];
       return { selectedArcs: arcs.slice(0, 3).map(a => a.id || a.title) };
+    case 'photos':
+      // The gate reports the folder it counted; --auto takes it. v2 I4: CREATE it
+      // first. fetchSessionPhotos throws on a missing directory and
+      // buildResumePayload refuses one, so a fixture session with no
+      // data/<id>/photos would dead-end every unattended run. An EMPTY folder is
+      // the explicit "no photographs" answer and reproduces the pre-plan
+      // behaviour: the fetch returns [], the photo nodes no-op, and the report is
+      // written without photos.
+      if (checkpointData.defaultDir) {
+        fs.mkdirSync(checkpointData.defaultDir, { recursive: true });
+      }
+      return { photosPath: checkpointData.defaultDir || '' };
     case 'outline':
       return { outline: true };
     case 'article':
@@ -1982,6 +1992,39 @@ async function handleCharacterIds(checkpoint, currentPhase) {
   return { characterIds: {} };
 }
 
+async function handlePhotos(checkpoint, currentPhase) {
+  checkpointHeader('PHOTOS', currentPhase);
+
+  const defaultDir = checkpoint.defaultDir || '';
+  const prefill = checkpoint.photosPath || defaultDir;
+
+  console.log(color('Photo folder needed (photo late-join)', 'bright'));
+  console.log(color('\nParsing, curation and arc analysis are done. The photo chain runs from here.', 'dim'));
+  console.log(color(`Default: ${defaultDir} (${checkpoint.found || 0} images when the pipeline reached this step)`, 'dim'));
+
+  const autoApproval = handleAutoApproval('photos', checkpoint, '[AUTO] Using the default photo folder...');
+  if (autoApproval) return autoApproval;
+
+  console.log(color(`\nPhotos Path (Enter to use ${prefill}):`, 'cyan'));
+  const typed = await prompt(color('> ', 'cyan'));
+  const photosPath = (typed || prefill || '').trim().replace(/^["']|["']$/g, '');
+
+  if (!photosPath) {
+    console.log(color('No path given. /approve will refuse this — supply a folder.', 'yellow'));
+    return { photosPath: '' };
+  }
+
+  // v2 I4: create the DEFAULT when that is what the operator accepted, so a fixture
+  // session that has no data/<id>/photos still runs. An EMPTY folder is the explicit
+  // "this session has no photographs" answer and reproduces the pre-plan behaviour:
+  // fetchSessionPhotos returns [], every photo node no-ops, and the report is
+  // written without photographs. A missing folder, by contrast, is now an error.
+  if (photosPath === prefill && checkpoint.defaultDir) {
+    fs.mkdirSync(checkpoint.defaultDir, { recursive: true });
+  }
+  return { photosPath };
+}
+
 async function handleAwaitRoster(checkpoint, currentPhase) {
   checkpointHeader('AWAIT_ROSTER', currentPhase);
 
@@ -2997,6 +3040,7 @@ const checkpointHandlers = {
   'pre-curation': handlePreCuration,           // Phase 4f
   'evidence-and-photos': handleEvidenceBundle,
   'arc-selection': handleArcSelection,
+  'photos': handlePhotos,                      // Photo late-join: folder collected after arc selection
   'outline': handleOutline,
   'article': handleArticle
 };

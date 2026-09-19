@@ -31,6 +31,10 @@
       },
       "notes": "Select 3 arcs prioritizing strong evidence and accusation-driven"
     },
+    "photos": {
+      "strategy": "approve",
+      "notes": "Use the default data/<id>/photos folder the gate reports. The gate only fires when no path was given at /start."
+    },
     "outline": {
       "strategy": "approve",
       "notes": "Outline structure is guided by selected arcs"
