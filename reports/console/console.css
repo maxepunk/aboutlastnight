@@ -1879,6 +1879,31 @@ textarea.input {
   margin: var(--space-xs) 0 0;
 }
 
+/* ── Paste receipt (baseline §6(a)) ──
+   `N words - ends with: "..."` under each free-text field, so a paste that
+   stopped early is visible before submit. Session 062726's director notes
+   reached the pipeline two paragraphs short and no screen could have shown it. */
+.paste-receipt {
+  margin: var(--space-xs) 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Visually hidden, still announced. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ── Article Fact-Check (baseline §5) ──
    The programmatic check of the bundle being approved. Structural items read as
    errors, advisory as amber, matching the evaluation bar's convention. */

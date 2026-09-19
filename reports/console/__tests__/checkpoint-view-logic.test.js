@@ -370,3 +370,45 @@ describe('defaultArcSelection', () => {
     expect(arcSelectionNote(0)).toMatch(/Fewer than 3/);
   });
 });
+
+// ── Truncated-paste guard (4.8) ─────────────────────────────────────────────
+//
+// Baseline §6(a): session 062726's director notes reached the pipeline two
+// paragraphs short and nobody could tell, because no screen ever said how much
+// text it had. A word count plus the last few characters makes a truncated
+// paste visible before submit and, on the review screen, before approval.
+describe('wordTail', () => {
+  const { wordTail } = require('../checkpoint-view-logic');
+
+  it('counts words and returns the tail', () => {
+    expect(wordTail('one two three', 20)).toEqual({
+      words: 3,
+      tail: 'one two three',
+      truncated: false
+    });
+  });
+
+  it('returns only the last N characters, marked truncated', () => {
+    const view = wordTail('abcdefghij', 4);
+    expect(view.tail).toBe('ghij');
+    expect(view.truncated).toBe(true);
+  });
+
+  it('collapses newlines so a multi-paragraph tail renders on one line', () => {
+    const view = wordTail('first para.\n\n  second   para.', 60);
+    expect(view.tail).toBe('first para. second para.');
+    expect(view.words).toBe(4);
+  });
+
+  it('defaults to a 60-character tail', () => {
+    const text = 'x'.repeat(200);
+    expect(wordTail(text).tail).toHaveLength(60);
+  });
+
+  it('handles empty, whitespace-only and non-string input', () => {
+    expect(wordTail('')).toEqual({ words: 0, tail: '', truncated: false });
+    expect(wordTail('   \n  ')).toEqual({ words: 0, tail: '', truncated: false });
+    expect(wordTail(null)).toEqual({ words: 0, tail: '', truncated: false });
+    expect(wordTail(12345)).toEqual({ words: 0, tail: '', truncated: false });
+  });
+});

@@ -190,6 +190,37 @@
     };
   }
 
+  // ── Truncated-paste guard ─────────────────────────────────────────────────
+
+  /** How much of the end of a paste to show by default. */
+  var TAIL_LENGTH = 60;
+
+  /**
+   * How much text there is and how it ends.
+   *
+   * Session 062726's director notes reached the pipeline TWO PARAGRAPHS SHORT
+   * and nobody could tell, because no screen ever said how much text it was
+   * holding (baseline §6(a)). A word count plus the last characters makes a
+   * truncated paste visible before submit, and again on the review screen before
+   * approval. Whitespace in the tail is collapsed so a multi-paragraph ending
+   * still renders on one line.
+   *
+   * @param {*} text
+   * @param {number} [tailLength]
+   * @returns {{words: number, tail: string, truncated: boolean}}
+   */
+  function wordTail(text, tailLength) {
+    var limit = typeof tailLength === 'number' && tailLength > 0 ? tailLength : TAIL_LENGTH;
+    if (typeof text !== 'string') return { words: 0, tail: '', truncated: false };
+    var collapsed = text.replace(/\s+/g, ' ').trim();
+    if (collapsed.length === 0) return { words: 0, tail: '', truncated: false };
+    return {
+      words: collapsed.split(' ').filter(function (w) { return w.length > 0; }).length,
+      tail: collapsed.length > limit ? collapsed.slice(-limit) : collapsed,
+      truncated: collapsed.length > limit
+    };
+  }
+
   // ── Arc selection defaults ────────────────────────────────────────────────
 
   /** How many arcs the outline prompt is written for. */
@@ -387,7 +418,8 @@
     arcSelectionNote: arcSelectionNote,
     accusationView: accusationView,
     whiteboardView: whiteboardView,
-    factCheckSummary: factCheckSummary
+    factCheckSummary: factCheckSummary,
+    wordTail: wordTail
   };
 
   if (typeof window !== 'undefined') {

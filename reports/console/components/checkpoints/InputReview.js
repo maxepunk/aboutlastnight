@@ -110,6 +110,8 @@ function InputReview({ data, onApprove, onReject, theme }) {
   const rosterPronouns = sessionConfig.rosterPronouns || {};
   const canonicalCharacters = (data && data.canonicalCharacters) || {};
   const hasCanon = Object.keys(canonicalCharacters).length > 0;
+  // Baseline §6(a): how much director prose the pipeline actually holds.
+  const notesReceipt = ViewLogic.wordTail(directorNotes.rawProse);
 
   // B2: reject-with-corrections. The checkpoint was approve-only, so a wrong
   // roster, accusation or journalist name could only be fixed by a rollback and
@@ -238,8 +240,18 @@ function InputReview({ data, onApprove, onReject, theme }) {
           )
       ),
 
-    // Director Notes (raw prose - source of truth)
+    // Director Notes (raw prose - source of truth).
+    //
+    // Baseline §6(a): 062726's notes reached the pipeline TWO PARAGRAPHS SHORT.
+    // The receipt line states the word count and how the text ends, so the
+    // director can confirm the pipeline got the whole thing before approving -
+    // the only point after submission where a truncated paste is still cheap.
     directorNotes.rawProse && React.createElement('div', { className: 'checkpoint-section' },
+      React.createElement('p', { className: 'paste-receipt' },
+        'Director notes received: ' + notesReceipt.words + ' word' +
+        (notesReceipt.words === 1 ? '' : 's') + ', ends with \u201C' +
+        (notesReceipt.truncated ? '\u2026' : '') + notesReceipt.tail + '\u201D'
+      ),
       React.createElement(window.Console.utils.CollapsibleSection, {
         title: 'Director Notes (' + directorNotes.rawProse.length + ' chars)',
         defaultOpen: true
