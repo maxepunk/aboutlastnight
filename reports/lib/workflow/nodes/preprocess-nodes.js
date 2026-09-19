@@ -75,6 +75,20 @@ async function preprocessEvidence(state, config) {
   // result (what the old catch block wrote) made this guard swallow every retry
   // and trap the session: curateEvidenceBundle then threw "No preprocessed
   // evidence" forever, because the node it needed never ran again.
+  // Skip when curation has already consumed the intermediate: curateEvidenceBundle
+  // prunes preprocessedEvidence (and the raw tokens) to null, so without this
+  // branch every replay from START — a /resume after a failure, a rollback to
+  // arc-selection, outline or article — re-ran the 16 Haiku batches (~3 min) before
+  // curation skipped on the bundle it already had (operator gate 2026-09-19).
+  // Every rollback point upstream of curation clears evidenceBundle, so those
+  // replays still preprocess.
+  if (state.evidenceBundle) {
+    console.log('[preprocessEvidence] Skipping - evidenceBundle already built from it');
+    return {
+      currentPhase: PHASES.PREPROCESS_EVIDENCE
+    };
+  }
+
   if (state.preprocessedEvidence?.items?.length > 0) {
     console.log('[preprocessEvidence] Skipping - preprocessedEvidence already exists');
     return {
