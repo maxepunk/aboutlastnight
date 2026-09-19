@@ -507,9 +507,19 @@ async function fetchSessionPhotos(state, config) {
     // paused showing nothing, and --auto answered it with {}.
     //
     // This is the BACKSTOP (v2 C1): POST /start and the `photos` approval both
-    // reject a non-existent folder, so reaching here means it was removed between
-    // the approval and the fetch. Name the recovery - the console's failure card
-    // offers a rollback to the last GATE seen, not to this node (F26).
+    // reject a path that is not a readable directory, so reaching here means the
+    // folder was moved, renamed or deleted between the approval and the fetch —
+    // which is what "curating the photos while the pipeline runs" means in
+    // practice (F26).
+    //
+    // COUPLING (v2 I3): "Roll back to the photos step" is not just prose. The
+    // console's failure card would otherwise offer the last GATE seen, which is
+    // `arc-selection` whenever the path came from /start (the `photos` gate
+    // skipped) — and a rollback there KEEPS photosPath, so it re-pays the Opus arc
+    // analysis and throws again here. `failureRollbackTarget` in
+    // console/llm-stream-logic.js matches this sentence to offer `photos` instead.
+    // Reword it and that recovery silently reverts; the regex is pinned in
+    // __tests__/unit/llm-stream-logic.test.js.
     throw new Error(
       `[fetchSessionPhotos] Photos directory not found: ${photosDir} ` +
       `(${error.code || error.message}). Roll back to the photos step and supply the folder again.`

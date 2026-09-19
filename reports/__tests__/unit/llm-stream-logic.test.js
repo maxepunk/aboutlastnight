@@ -3,6 +3,8 @@
  * Covers SSE_LLM_DELTA accumulation, eventLog append (no .slice(-49) cap),
  * and llmActivity lifecycle (start → delta → complete/error reset).
  */
+const fs = require('fs');
+const path = require('path');
 const L = require('../../console/llm-stream-logic.js');
 
 describe('applyLlmStart', () => {
@@ -298,5 +300,24 @@ describe('failureRollbackTarget (v2 I3)', () => {
     expect(L.failureRollbackTarget()).toBeNull();
     expect(L.failureRollbackTarget({ checkpointType: 'outline' })).toBe('outline');
     expect(L.failureRollbackTarget({ message: { code: 500 }, checkpointType: 'outline' })).toBe('outline');
+  });
+
+  test('returns a real rollback point the server will accept', () => {
+    const { VALID_ROLLBACK_POINTS } = require('../../lib/workflow/state');
+    expect(VALID_ROLLBACK_POINTS).toContain(
+      L.failureRollbackTarget({ message: FETCH_FAILURE, checkpointType: 'arc-selection' })
+    );
+  });
+
+  test('matches the sentence fetchSessionPhotos actually throws (coupling pin)', () => {
+    // The discriminator is prose in another module. Build the real throw from the
+    // real node so a reworded message fails HERE instead of silently reverting the
+    // recovery: the card would go back to offering arc-selection, which keeps
+    // photosPath and re-pays the arc analysis.
+    const fetchSrc = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'lib', 'workflow', 'nodes', 'fetch-nodes.js'), 'utf8'
+    );
+    const thrown = fetchSrc.slice(fetchSrc.indexOf('async function fetchSessionPhotos'));
+    expect(thrown).toContain('Roll back to the photos step');
   });
 });
