@@ -46,6 +46,8 @@ const outlineValidator = new SchemaValidator();
  * Spec 2026-09-19 §7.4: a live gate runs against a COPY of the checkpoint database,
  * never the production file, so the path is overridable through the environment.
  * Pure so the default can be tested without opening any database.
+ * Under Jest, `__tests__/setup/checkpoint-db-path.js` (setupFiles) points this at a
+ * per-worker temp file before any test module loads, so no test opens the production db.
  */
 function resolveCheckpointDbPath(env = process.env, baseDir = __dirname) {
     return env.CHECKPOINT_DB_PATH

@@ -12,6 +12,19 @@ const path = require('path');
 // load server.js a second time (a second load opens a second SqliteSaver handle).
 let serverModule = null;
 
+/**
+ * Global constraint: the production database data/checkpoints.sqlite is never opened by
+ * a test. server.js opens SqliteSaver at module load, and seven pre-existing suites
+ * require it, so the guarantee is made once in __tests__/setup/checkpoint-db-path.js
+ * (jest.config.js `setupFiles`) rather than suite by suite.
+ */
+test('the Jest setup points CHECKPOINT_DB_PATH away from the production database', () => {
+  expect(process.env.CHECKPOINT_DB_PATH).toBeTruthy();
+  const resolved = path.resolve(process.env.CHECKPOINT_DB_PATH);
+  expect(resolved).not.toBe(path.join(__dirname, '..', '..', 'data', 'checkpoints.sqlite'));
+  expect(resolved.startsWith(path.resolve(os.tmpdir()))).toBe(true);
+});
+
 test('resolveCheckpointDbPath: the env override wins, else data/checkpoints.sqlite under the base dir', () => {
   // Load the resolver from a require that is itself pointed at a temp file (see below);
   // the pure function is what we exercise here.

@@ -1,5 +1,8 @@
 module.exports = {
   testEnvironment: 'node',
+  // Runs before any test module loads: points CHECKPOINT_DB_PATH at a temp file so no
+  // suite that requires server.js opens the production data/checkpoints.sqlite.
+  setupFiles: ['<rootDir>/__tests__/setup/checkpoint-db-path.js'],
   testMatch: ['**/__tests__/**/*.test.js', '**/*.test.js'],
   // Mock ESM-only SDK module to avoid Jest parsing issues
   moduleNameMapper: {
