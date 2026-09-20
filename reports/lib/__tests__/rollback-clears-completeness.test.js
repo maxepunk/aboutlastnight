@@ -16,6 +16,7 @@ const {
   ROLLBACK_CLEARS,
   ROLLBACK_CLEARS_EXEMPT
 } = require('../workflow/state');
+const { PHASES_INVALIDATED_BY } = require('../api-helpers');
 
 describe('ROLLBACK_CLEARS completeness (ROOT-1)', () => {
   // Union of every field cleared by ANY rollback point
@@ -243,6 +244,16 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     test('directorGateNotes is NOT list-cleared by the four downstream points (they prune instead)', () => {
       ['photos', 'character-ids', 'outline', 'article']
         .forEach((p) => expect(ROLLBACK_CLEARS[p]).not.toContain('directorGateNotes'));
+    });
+
+    // The two lists above enumerate today's eleven points by hand. This pins the
+    // PARTITION itself: a twelfth rollback point that is in neither mechanism would
+    // silently keep every standing note, and one in both would be a contradiction
+    // (M1; the per-point-completeness lesson in the memory file is this shape).
+    test.each(points)('%s uses exactly one directorGateNotes mechanism: clear or prune', (point) => {
+      const listClears = ROLLBACK_CLEARS[point].includes('directorGateNotes');
+      const prunes = Object.prototype.hasOwnProperty.call(PHASES_INVALIDATED_BY, point);
+      expect(listClears).toBe(!prunes);
     });
   });
 });

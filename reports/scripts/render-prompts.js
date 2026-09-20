@@ -31,6 +31,9 @@ function parseArgs(argv) {
 }
 const args = parseArgs(process.argv.slice(2));
 
+/** The one database this script must never open, whichever tree renders (M3). */
+const PRODUCTION_DB = path.resolve(path.join(__dirname, '..', 'data', 'checkpoints.sqlite'));
+
 const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-generation.txt', 'article-revision.txt'];
 const FIXED_FEEDBACK = 'RENDER-DIFF FIXED FEEDBACK: tighten the second section.';
 const FIXED_NOTES = [
@@ -47,17 +50,21 @@ if (args.compare) {
 } else { render().catch((e) => { console.error(e); process.exit(2); }); }
 
 async function loadState(dbPath, threadId) {
+  if (path.resolve(dbPath) === PRODUCTION_DB) {
+    console.error('refusing to open the production database ' + PRODUCTION_DB + ' - render against a COPY (spec 2026-09-19 §7.3)');
+    process.exit(2);
+  }
   const Database = require('better-sqlite3');
-  let JsonPlusSerializer;
-  try { ({ JsonPlusSerializer } = require('@langchain/langgraph-checkpoint/dist/serde/jsonplus.cjs')); }
-  catch (_) { ({ JsonPlusSerializer } = require('@langchain/langgraph-checkpoint')); }
   const db = new Database(dbPath, { readonly: true, fileMustExist: true });
   const row = db.prepare(`SELECT type, checkpoint FROM checkpoints WHERE thread_id=? AND checkpoint_ns='' ORDER BY checkpoint_id DESC LIMIT 1`).get(threadId);
   db.close();
   if (!row) throw new Error(`no checkpoint for thread ${threadId} in ${dbPath}`);
-  const cp = row.type === 'json'
-    ? JSON.parse(Buffer.isBuffer(row.checkpoint) ? row.checkpoint.toString('utf8') : String(row.checkpoint))
-    : await new JsonPlusSerializer().loadsTyped(row.type, row.checkpoint);
+  // Every row this repo writes is type 'json'. A JsonPlus row would need a serializer
+  // the installed package does not export, so say so instead of failing obscurely (M6).
+  if (row.type !== 'json') {
+    throw new Error(`unsupported checkpoint serializer type "${row.type}" - this script reads only 'json' rows`);
+  }
+  const cp = JSON.parse(Buffer.isBuffer(row.checkpoint) ? row.checkpoint.toString('utf8') : String(row.checkpoint));
   return cp.channel_values || {};
 }
 
@@ -73,7 +80,10 @@ async function render() {
   const { buildRevisionContext } = req('lib/workflow/nodes/node-helpers.js');
   const { _testing: { buildOutlineRevisionPrompt, buildArticleRevisionPrompt, getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt } } = req('lib/workflow/nodes/ai-nodes.js');
   let diffMod = null;
-  try { diffMod = req('lib/hand-edit-diff.js'); } catch (_) { /* main has no hand-edit module */ }
+  // Only a MISSING module is expected (main has no hand-edit module). Anything else -
+  // a syntax error, a throwing dependency - would make the guard pass vacuously (M4).
+  try { diffMod = req('lib/hand-edit-diff.js'); }
+  catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
 
   const state = await loadState(dbPath, sessionId);
   const theme = state.theme || 'journalist';
@@ -141,12 +151,17 @@ async function render() {
   for (const f of FILES) console.log(`${f}: ${fs.statSync(path.join(outDir, f)).size.toLocaleString()} bytes`);
 }
 
-/** Strip the two permitted additions from a rendered prompt, then normalise blank runs. */
+/**
+ * Strip the three permitted additions from a rendered prompt. Nothing else: a
+ * byte-identity guard that normalises is not one, and the blank-run collapse this
+ * used to end with could absorb a real difference (M5). Each removal consumes its
+ * own adjacent newlines, so equality stays exact without normalising.
+ */
 function stripPermitted(text) {
   let t = text.replace(/<HAND_EDITS>[\s\S]*?<\/HAND_EDITS>\n*/g, '');
   t = t.replace(/\n*Standing notes the director gave at earlier gates, in order\.[\s\S]*?(?=\n<\/DIRECTOR_GUIDANCE>)/g, '');
   t = t.replace(/\n*<DIRECTOR_GUIDANCE>\n<\/DIRECTOR_GUIDANCE>/g, '');
-  return t.replace(/\n{3,}/g, '\n\n').trim();
+  return t.trim();
 }
 
 function compare(dirA, dirB) {

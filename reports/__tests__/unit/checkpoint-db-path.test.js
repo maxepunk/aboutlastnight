@@ -25,6 +25,35 @@ test('the Jest setup points CHECKPOINT_DB_PATH away from the production database
   expect(resolved.startsWith(path.resolve(os.tmpdir()))).toBe(true);
 });
 
+/**
+ * M2: honouring an already-set CHECKPOINT_DB_PATH is how a deliberate override wins,
+ * but a shell that exported the DEFAULT explicitly would have pointed the seven
+ * server suites straight at production. The setup file refuses that value. The check
+ * is a pure string comparison — this test never creates or opens the real file.
+ */
+describe('the setup file refuses the production database', () => {
+  const setup = require('../setup/checkpoint-db-path');
+  const production = path.join(__dirname, '..', '..', 'data', 'checkpoints.sqlite');
+
+  test('an exported CHECKPOINT_DB_PATH that resolves to production throws', () => {
+    expect(() => setup.assertNotProduction({ CHECKPOINT_DB_PATH: production }, production))
+      .toThrow(/CHECKPOINT_DB_PATH/);
+    // A different spelling of the same file is the same file.
+    const spelled = path.join(__dirname, '..', '..', 'data', '.', 'checkpoints.sqlite');
+    expect(() => setup.assertNotProduction({ CHECKPOINT_DB_PATH: spelled }, production))
+      .toThrow(/production/);
+  });
+
+  test('an unset value and any other path are allowed', () => {
+    expect(() => setup.assertNotProduction({}, production)).not.toThrow();
+    expect(() => setup.assertNotProduction({ CHECKPOINT_DB_PATH: path.join(os.tmpdir(), 'copy.sqlite') }, production)).not.toThrow();
+  });
+
+  test('the production path it guards is the repo one', () => {
+    expect(setup.PRODUCTION_DB_PATH).toBe(path.resolve(production));
+  });
+});
+
 test('resolveCheckpointDbPath: the env override wins, else data/checkpoints.sqlite under the base dir', () => {
   // Load the resolver from a require that is itself pointed at a temp file (see below);
   // the pure function is what we exercise here.
