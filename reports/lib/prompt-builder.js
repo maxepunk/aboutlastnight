@@ -131,6 +131,40 @@ function filterGateNotes(gateNotes, currentFeedback) {
 }
 
 /**
+ * What an advisory finding is, said once (brief 1.3).
+ *
+ * The evaluation splits its findings into structural issues, which the writer must
+ * fix, and advisory warnings, which are suggestions. Concatenated into one list the
+ * suggestions read as defects; dropped — as they were until this slice — the outline
+ * evaluation's warnings about frontloading never reached the article writer at all.
+ * The same two lines introduce the list wherever it appears: here in a generation
+ * prompt, and in buildRevisionContext's SHOULD CONSIDER block in a rework prompt.
+ */
+const SHOULD_CONSIDER_PREAMBLE =
+  'These came from the evaluation that ran before this pass. Apply them where they\n' +
+  'serve the piece. They are not requirements.';
+
+/**
+ * Build the <SHOULD_CONSIDER> section: the previous stage's advisory findings.
+ *
+ * Placed immediately before <DIRECTOR_GUIDANCE>, which stays last — the director's
+ * own words outrank an evaluation's suggestions.
+ *
+ * @param {Array<string>} [advisories] - advisoryWarnings from the previous stage
+ * @returns {string} XML section, or '' when there is nothing to consider
+ */
+function buildShouldConsiderSection(advisories = []) {
+  const list = Array.isArray(advisories)
+    ? advisories.filter(a => typeof a === 'string' && a.trim())
+    : [];
+  if (list.length === 0) return '';
+  return labelPromptSection(
+    'SHOULD_CONSIDER',
+    `${SHOULD_CONSIDER_PREAMBLE}\n\n${list.map(a => `- ${a.trim()}`).join('\n')}`
+  );
+}
+
+/**
  * Build the <DIRECTOR_GUIDANCE> section (Q2 decision + spec 2026-09-19 §5.3).
  *
  * Standalone so the revision nodes can append it without going through a
@@ -374,6 +408,21 @@ ${renderDirectorEnrichmentBlock({
    */
   _buildDirectorGuidance(directorGuidance, gateNotes = []) {
     const section = buildDirectorGuidanceSection(directorGuidance, gateNotes);
+    return section ? '\n' + section : '';
+  }
+
+  /**
+   * Build the <SHOULD_CONSIDER> section (brief 1.3).
+   *
+   * Appended to the outline and article user prompts immediately BEFORE
+   * <DIRECTOR_GUIDANCE>: near the end, where the writer will still weigh it, but
+   * never ahead of the director's own words.
+   *
+   * @param {Array<string>} [advisories] - advisoryWarnings from the previous stage
+   * @returns {string} XML section, or '' when there is nothing to consider
+   */
+  _buildShouldConsider(advisories = []) {
+    const section = buildShouldConsiderSection(advisories);
     return section ? '\n' + section : '';
   }
 
@@ -791,6 +840,9 @@ Return JSON with the following structure:
   }
 }`;
     }
+
+    // Brief 1.3: the previous stage's advisory findings, second to last.
+    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
 
     // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
     // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
@@ -1271,6 +1323,9 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
 </GENERATION_INSTRUCTION>`;
     }
 
+    // Brief 1.3: the previous stage's advisory findings, second to last.
+    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
+
     // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
     // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
     // (every rejection note still in state), as a second paragraph inside the same tag.
@@ -1538,6 +1593,10 @@ module.exports = {
   createPromptBuilder,
   generateRosterSection,
   buildDirectorGuidanceSection,
+  buildShouldConsiderSection,
+  // Shared with buildRevisionContext (node-helpers.js) so a rework prompt and a
+  // generation prompt introduce the advisory list in the same words (brief 1.3).
+  SHOULD_CONSIDER_PREAMBLE,
   filterGateNotes,
   REPORTING_MODE_BLOCKS,
   buildReportingModeBlock,

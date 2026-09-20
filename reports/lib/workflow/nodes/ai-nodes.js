@@ -802,6 +802,28 @@ async function buildArcEvidencePackages(state, config) {
 }
 
 /**
+ * The previous stage's advisory findings, for the next writer (brief 1.3).
+ *
+ * The evaluation's advisory warnings used to die where they were computed: the
+ * outline evaluation's two warnings about frontloading never reached the article
+ * writer, and the arc evaluation's never reached the outline writer. They travel as
+ * suggestions, in their own <SHOULD_CONSIDER> section, never as must-fix items.
+ *
+ * validationResults is one channel shared by all three phases, so the phase stamp is
+ * the guard: a block left behind by another stage is ignored rather than handed to a
+ * writer it was not written about.
+ *
+ * @param {Object} state - Current state
+ * @param {string} previousPhase - The phase whose evaluation feeds this writer
+ * @returns {string[]} advisoryWarnings, or [] when the stamp does not match
+ */
+function advisoriesFromPreviousStage(state, previousPhase) {
+  const results = state.validationResults;
+  if (!results || results.phase !== previousPhase) return [];
+  return Array.isArray(results.advisoryWarnings) ? results.advisoryWarnings : [];
+}
+
+/**
  * Generate article outline from selected arcs
  *
  * Uses Claude to create structured outline with section placement,
@@ -929,12 +951,14 @@ async function generateOutline(state, config) {
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     shellAccounts,  // Deterministic shell account data for financial summary
     sessionFacts,  // Session facts for player count and roster guardrail
-    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes.
-    // Brief 1.5: the director's raw notes, which only the article writer used to see.
+    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
+    // brief 1.5: the director's raw notes, which only the article writer used to see;
+    // brief 1.3: the arc evaluation's advisory findings.
     {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
-      directorNotes: state.directorNotes || null
+      directorNotes: state.directorNotes || null,
+      shouldConsider: advisoriesFromPreviousStage(state, 'arcs')
     }
   );
 
@@ -1250,8 +1274,13 @@ async function generateContentBundle(state, config) {
     sessionFacts,  // RC3: non-roster character guardrail
     state.directorNotes || null,  // RC5: director observations for article grounding
     state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
-    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes.
-    { directorGuidance: state._outlineGuidance || null, gateNotes: state.directorGateNotes || [] }
+    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
+    // brief 1.3: the outline evaluation's advisory findings.
+    {
+      directorGuidance: state._outlineGuidance || null,
+      gateNotes: state.directorGateNotes || [],
+      shouldConsider: advisoriesFromPreviousStage(state, 'outline')
+    }
   );
 
   // Get JSON schema for structured output

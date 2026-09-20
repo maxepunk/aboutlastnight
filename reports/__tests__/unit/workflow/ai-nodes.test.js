@@ -647,6 +647,60 @@ describe('ai-nodes', () => {
     });
   });
 
+  /**
+   * Brief 1.3 — the previous stage's advisory findings reach the next writer.
+   *
+   * validationResults is one channel shared by all three phases, so the phase
+   * stamp is the guard: a block left behind by another stage is ignored rather
+   * than handed to a writer it was not written about.
+   */
+  describe('advisories carried forward from the previous stage', () => {
+    const spyBuilder = () => {
+      const builder = createMockPromptBuilder();
+      builder.buildOutlinePrompt = jest.fn().mockResolvedValue({ systemPrompt: 's', userPrompt: 'u' });
+      builder.buildArticlePrompt = jest.fn().mockResolvedValue({ systemPrompt: 's', userPrompt: 'u' });
+      return builder;
+    };
+    const configFor = (builder, result) => ({
+      configurable: { sdkClient: createMockSdkClient(result), promptBuilder: builder }
+    });
+
+    it('hands the arc evaluation advisories to the outline writer', async () => {
+      const builder = spyBuilder();
+      await generateOutline(
+        { validationResults: { phase: 'arcs', passed: true, advisoryWarnings: ['Two arcs share a document'] } },
+        configFor(builder, { outline: mockOutline })
+      );
+      expect(builder.buildOutlinePrompt.mock.calls[0][7].shouldConsider)
+        .toEqual(['Two arcs share a document']);
+    });
+
+    it('hands the outline evaluation advisories to the article writer', async () => {
+      const builder = spyBuilder();
+      await generateContentBundle(
+        { validationResults: { phase: 'outline', passed: true, advisoryWarnings: ['The lede frontloads the verdict'] } },
+        configFor(builder, { contentBundle: mockContentBundle })
+      );
+      expect(builder.buildArticlePrompt.mock.calls[0][7].shouldConsider)
+        .toEqual(['The lede frontloads the verdict']);
+    });
+
+    it('ignores a block stamped for another phase', async () => {
+      const builder = spyBuilder();
+      await generateContentBundle(
+        { validationResults: { phase: 'arcs', passed: true, advisoryWarnings: ['Two arcs share a document'] } },
+        configFor(builder, { contentBundle: mockContentBundle })
+      );
+      expect(builder.buildArticlePrompt.mock.calls[0][7].shouldConsider).toEqual([]);
+    });
+
+    it('passes an empty list when no evaluation has run', async () => {
+      const builder = spyBuilder();
+      await generateOutline({}, configFor(builder, { outline: mockOutline }));
+      expect(builder.buildOutlinePrompt.mock.calls[0][7].shouldConsider).toEqual([]);
+    });
+  });
+
   describe('dependency injection', () => {
     it('uses injected sdkClient from config', async () => {
       const customClient = jest.fn().mockResolvedValue({});

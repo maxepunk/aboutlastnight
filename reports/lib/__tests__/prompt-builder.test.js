@@ -1030,6 +1030,68 @@ describe('PromptBuilder', () => {
     });
   });
 
+  /**
+   * Brief 1.3 — the previous stage's advisory findings reach the next writer.
+   *
+   * The outline evaluation's two warnings about frontloading were computed, logged
+   * and then dropped; the article writer never saw them. They are suggestions, so
+   * they travel as their own section and never as a must-fix.
+   */
+  describe('SHOULD_CONSIDER (advisories carried forward from the previous stage)', () => {
+    const ADVISORIES = ['The lede frontloads the verdict', 'Two arcs rest on the same document'];
+
+    beforeEach(() => {
+      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
+        'character-voice': 'voice', 'evidence-boundaries': 'boundaries',
+        'narrative-structure': 'structure', 'anti-patterns': 'anti-patterns',
+        'section-rules': 'rules', 'formatting': 'formatting',
+        'editorial-design': 'editorial', 'writing-principles': 'writing', 'photo-analysis': 'photo'
+      });
+    });
+
+    it('renders the advisories in the outline prompt, with the preamble', async () => {
+      const { userPrompt } = await builder.buildOutlinePrompt(
+        {}, [], 'hero.png', [], [], [], null, { shouldConsider: ADVISORIES }
+      );
+      expect(userPrompt).toContain('<SHOULD_CONSIDER>');
+      expect(userPrompt).toContain('- The lede frontloads the verdict');
+      expect(userPrompt).toContain('- Two arcs rest on the same document');
+      expect(userPrompt).toContain('They are not requirements.');
+    });
+
+    it('renders them in the article prompt too', async () => {
+      const { userPrompt } = await builder.buildArticlePrompt(
+        {}, [], null, [], null, null, null, { shouldConsider: ADVISORIES }
+      );
+      expect(userPrompt).toContain('<SHOULD_CONSIDER>');
+      expect(userPrompt).toContain('- The lede frontloads the verdict');
+    });
+
+    it('keeps <DIRECTOR_GUIDANCE> the last section of both prompts', async () => {
+      const outline = await builder.buildOutlinePrompt(
+        {}, [], 'hero.png', [], [], [], null,
+        { shouldConsider: ADVISORIES, directorGuidance: 'Lead with the money.' }
+      );
+      const article = await builder.buildArticlePrompt(
+        {}, [], null, [], null, null, null,
+        { shouldConsider: ADVISORIES, directorGuidance: 'Lead with the money.' }
+      );
+      for (const { userPrompt } of [outline, article]) {
+        expect(userPrompt).toContain('<SHOULD_CONSIDER>');
+        expect(userPrompt.indexOf('<SHOULD_CONSIDER>'))
+          .toBeLessThan(userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
+        expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+      }
+    });
+
+    it('omits the section when the previous stage raised nothing', async () => {
+      const outline = await builder.buildOutlinePrompt({}, [], 'hero.png', [], [], [], null, {});
+      const article = await builder.buildArticlePrompt({}, [], null, [], null, null, null, { shouldConsider: [] });
+      expect(outline.userPrompt).not.toContain('SHOULD_CONSIDER');
+      expect(article.userPrompt).not.toContain('SHOULD_CONSIDER');
+    });
+  });
+
   describe('generateRosterSection (Notion-derived)', () => {
     it('should use Notion-derived canonical characters directly', () => {
       const { generateRosterSection } = require('../prompt-builder');
