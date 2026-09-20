@@ -200,11 +200,10 @@ function routeAfterArticleCheckpoint(state) {
  */
 function routeAfterArcCheckpoint(state) {
   if (state.selectedArcs?.length > 0) return 'forward';
-  const humanAtCap = (state.humanArcRevisionCount || 0) >= REVISION_CAPS.HUMAN_ARCS;
-  if (humanAtCap) {
-    console.log('[routeAfterArcCheckpoint] Human revision cap reached, forcing forward');
-    return 'forward';
-  }
+  // Brief 1.4: the director's rounds are not limited, so there is no cap to force
+  // forward at. The forced forward sent an EMPTY selection down the whole paid
+  // pipeline — an outline, an article and an evaluation about nothing — on the
+  // fourth send back.
   return 'revise';
 }
 
@@ -336,21 +335,51 @@ async function incrementArcRevision(state) {
 }
 
 /**
+ * What triggered this automated pass, for the history stub the trace reads: the
+ * programmatic check or the evaluation. The last record for the phase says which —
+ * only the fact-check branch of evaluatePhase stamps `source: 'fact-check'`.
+ *
+ * @param {Object} state - Current graph state
+ * @param {string} phase - 'outline' or 'article'
+ * @returns {string} 'fact-check' or 'evaluator'
+ */
+function automatedRevisionSource(state, phase) {
+  const phaseEvals = (state.evaluationHistory || []).filter(e => e?.phase === phase);
+  const lastEval = phaseEvals[phaseEvals.length - 1];
+  return lastEval?.source === 'fact-check' ? 'fact-check' : 'evaluator';
+}
+
+/**
  * Increment outline revision count and preserve/clear outline for regeneration
  * Preserves current outline in _previousOutline for revision context
  * Clears outline so generateOutline skip logic doesn't trigger
+ *
+ * Brief 1.4: two counters, the way incrementArcRevision has had them. A send back
+ * opens a ROUND (never capped) and starts the automated budget over; a failed check
+ * or a failed evaluation spends one automated pass inside the current round. The
+ * discriminator is the feedback slot, which the server writes on a send back and the
+ * reviser clears as it consumes it, so it is present here on the human pass only.
  */
 async function incrementOutlineRevision(state) {
-  const newCount = (state.outlineRevisionCount || 0) + 1;
-  console.log(`[incrementOutlineRevision] Incrementing count to ${newCount}`);
+  const isHumanDriven = !!state._outlineFeedback;
+  const newCount = isHumanDriven ? 0 : (state.outlineRevisionCount || 0) + 1;
+  const newHumanCount = isHumanDriven
+    ? (state.humanOutlineRevisionCount || 0) + 1
+    : (state.humanOutlineRevisionCount || 0);
+  const source = isHumanDriven ? 'human' : automatedRevisionSource(state, 'outline');
+
+  console.log(`[incrementOutlineRevision] automatedPass=${newCount}, round=${newHumanCount + 1}, source=${source}`);
+
   return {
     outlineRevisionCount: newCount,
+    humanOutlineRevisionCount: newHumanCount,
     _previousOutline: state.outline,
     outline: null,
     evaluationHistory: {
       phase: 'outline',
       ready: false,
       reason: 'revision-invalidated',
+      source,
       timestamp: new Date().toISOString()
     }
   };
@@ -360,12 +389,22 @@ async function incrementOutlineRevision(state) {
  * Increment article revision count and preserve/clear content for regeneration
  * Preserves current contentBundle in _previousContentBundle for revision context
  * Clears contentBundle and assembledHtml so generateContentBundle skip logic doesn't trigger
+ *
+ * Two counters, as incrementOutlineRevision above (brief 1.4).
  */
 async function incrementArticleRevision(state) {
-  const newCount = (state.articleRevisionCount || 0) + 1;
-  console.log(`[incrementArticleRevision] Incrementing count to ${newCount}`);
+  const isHumanDriven = !!state._articleFeedback;
+  const newCount = isHumanDriven ? 0 : (state.articleRevisionCount || 0) + 1;
+  const newHumanCount = isHumanDriven
+    ? (state.humanArticleRevisionCount || 0) + 1
+    : (state.humanArticleRevisionCount || 0);
+  const source = isHumanDriven ? 'human' : automatedRevisionSource(state, 'article');
+
+  console.log(`[incrementArticleRevision] automatedPass=${newCount}, round=${newHumanCount + 1}, source=${source}`);
+
   return {
     articleRevisionCount: newCount,
+    humanArticleRevisionCount: newHumanCount,
     _previousContentBundle: state.contentBundle,
     contentBundle: null,
     assembledHtml: null,
@@ -373,6 +412,7 @@ async function incrementArticleRevision(state) {
       phase: 'article',
       ready: false,
       reason: 'revision-invalidated',
+      source,
       timestamp: new Date().toISOString()
     }
   };

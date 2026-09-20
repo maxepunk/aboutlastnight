@@ -413,12 +413,12 @@ describe('evaluator-nodes', () => {
 
     it('returns REVISION_CAPS.OUTLINE for outline', () => {
       expect(getRevisionCap('outline')).toBe(REVISION_CAPS.OUTLINE);
-      expect(getRevisionCap('outline')).toBe(3);
+      expect(getRevisionCap('outline')).toBe(2);
     });
 
     it('returns REVISION_CAPS.ARTICLE for article', () => {
       expect(getRevisionCap('article')).toBe(REVISION_CAPS.ARTICLE);
-      expect(getRevisionCap('article')).toBe(3);
+      expect(getRevisionCap('article')).toBe(2);
     });
 
     it('returns default 2 for unknown phase', () => {
@@ -794,7 +794,7 @@ describe('evaluator-nodes', () => {
       expect(result2.evaluationHistory.escalatedToHuman).toBe(true);
     });
 
-    it('outline has cap of 3', async () => {
+    it('outline allows 2 automated passes per round, then hands over', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
@@ -803,20 +803,20 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      // At revision 2, should allow another revision (increment happens in graph.js)
-      const result1 = await evaluateOutline({ outline: {}, outlineRevisionCount: 2 }, config);
+      // At automated pass 1, should allow another (increment happens in graph.js)
+      const result1 = await evaluateOutline({ outline: {}, outlineRevisionCount: 1 }, config);
       expect(result1.outlineRevisionCount).toBeUndefined(); // Increment moved to graph.js
       expect(result1.awaitingApproval).toBeUndefined();
       expect(result1.validationResults.passed).toBe(false);
 
-      // At revision 3 (the cap), should escalate
-      const result2 = await evaluateOutline({ outline: {}, outlineRevisionCount: 3 }, config);
+      // At automated pass 2 (the cap), should escalate to the director
+      const result2 = await evaluateOutline({ outline: {}, outlineRevisionCount: 2 }, config);
       // Evaluator no longer sets awaitingApproval - checkpoint handles it
       expect(result2.awaitingApproval).toBeUndefined();
       expect(result2.evaluationHistory.escalatedToHuman).toBe(true);
     });
 
-    it('article has cap of 3', async () => {
+    it('article allows 2 automated passes per round, then hands over', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
@@ -825,8 +825,12 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      // At revision 3 (the cap), should escalate
-      const result = await evaluateArticle({ contentBundle: {}, articleRevisionCount: 3 }, config);
+      // Under the cap the evaluator writes a failing record and the graph reworks
+      const under = await evaluateArticle({ contentBundle: {}, articleRevisionCount: 1 }, config);
+      expect(under.evaluationHistory.escalatedToHuman).toBeUndefined();
+
+      // At automated pass 2 (the cap), should escalate to the director
+      const result = await evaluateArticle({ contentBundle: {}, articleRevisionCount: 2 }, config);
       // Evaluator no longer sets awaitingApproval - checkpoint handles it
       expect(result.awaitingApproval).toBeUndefined();
       expect(result.evaluationHistory.escalatedToHuman).toBe(true);

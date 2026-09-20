@@ -60,10 +60,23 @@ describe('incrementOutlineRevision', () => {
     }));
   });
 
-  test('increments revision count', async () => {
-    const state = { outline: {}, outlineRevisionCount: 1 };
+  test('an automated pass bumps the automated counter and leaves the round alone', async () => {
+    const state = { outline: {}, outlineRevisionCount: 1, humanOutlineRevisionCount: 2 };
     const result = await incrementOutlineRevision(state);
     expect(result.outlineRevisionCount).toBe(2);
+    expect(result.humanOutlineRevisionCount).toBe(2);
+    expect(result.evaluationHistory.source).toBe('evaluator');
+  });
+
+  // Brief 1.4: one counter used to serve both the machine and the director, so two
+  // send-backs exhausted the automated budget and the console declared the outline
+  // final. A send back opens a NEW round with a fresh automated budget.
+  test('a send back opens a round and resets the automated budget', async () => {
+    const state = { outline: {}, outlineRevisionCount: 2, humanOutlineRevisionCount: 0, _outlineFeedback: 'Rethink the closing.' };
+    const result = await incrementOutlineRevision(state);
+    expect(result.humanOutlineRevisionCount).toBe(1);
+    expect(result.outlineRevisionCount).toBe(0);
+    expect(result.evaluationHistory.source).toBe('human');
   });
 });
 
@@ -83,6 +96,35 @@ describe('incrementArticleRevision', () => {
     const result = await incrementArticleRevision(state);
     expect(result.assembledHtml).toBeNull();
   });
+
+  test('an automated pass bumps the automated counter and leaves the round alone', async () => {
+    const state = { contentBundle: {}, articleRevisionCount: 1, humanArticleRevisionCount: 3 };
+    const result = await incrementArticleRevision(state);
+    expect(result.articleRevisionCount).toBe(2);
+    expect(result.humanArticleRevisionCount).toBe(3);
+    expect(result.evaluationHistory.source).toBe('evaluator');
+  });
+
+  test('a send back opens a round and resets the automated budget', async () => {
+    const state = { contentBundle: {}, articleRevisionCount: 2, humanArticleRevisionCount: 1, _articleFeedback: 'Name the shell company.' };
+    const result = await incrementArticleRevision(state);
+    expect(result.humanArticleRevisionCount).toBe(2);
+    expect(result.articleRevisionCount).toBe(0);
+    expect(result.evaluationHistory.source).toBe('human');
+  });
+
+  test('a rework the check triggered is stamped fact-check, not evaluator', async () => {
+    const state = {
+      contentBundle: {},
+      articleRevisionCount: 0,
+      evaluationHistory: [
+        { phase: 'outline', ready: true },
+        { phase: 'article', ready: false, source: 'fact-check' }
+      ]
+    };
+    const result = await incrementArticleRevision(state);
+    expect(result.evaluationHistory.source).toBe('fact-check');
+  });
 });
 
 describe('routeAfterArcCheckpoint', () => {
@@ -90,16 +132,17 @@ describe('routeAfterArcCheckpoint', () => {
     expect(routeAfterArcCheckpoint({ selectedArcs: ['a1', 'a2'] })).toBe('forward');
   });
 
-  test('returns revise when no selectedArcs and under human cap', () => {
+  test('returns revise when no selectedArcs', () => {
     expect(routeAfterArcCheckpoint({ selectedArcs: null, humanArcRevisionCount: 0 })).toBe('revise');
   });
 
-  test('returns forward when at human revision cap', () => {
-    expect(routeAfterArcCheckpoint({ selectedArcs: null, humanArcRevisionCount: 4 })).toBe('forward');
-  });
-
-  test('returns revise when human count below cap', () => {
-    expect(routeAfterArcCheckpoint({ selectedArcs: null, humanArcRevisionCount: 3 })).toBe('revise');
+  // Brief 1.4: the arc stop never forces forward. A fourth send back used to push an
+  // EMPTY selection through the whole paid pipeline — an outline about nothing — on
+  // the theory that the director had run out of rounds. The director's rounds are
+  // not limited, so there is nothing left to run out of.
+  test('never forces forward, however many rounds the director has taken', () => {
+    expect(routeAfterArcCheckpoint({ selectedArcs: null, humanArcRevisionCount: 4 })).toBe('revise');
+    expect(routeAfterArcCheckpoint({ selectedArcs: [], humanArcRevisionCount: 9 })).toBe('revise');
   });
 });
 

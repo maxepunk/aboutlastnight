@@ -94,19 +94,16 @@ describe('checkpoint-nodes', () => {
       expect(out.currentPhase).toBeDefined();
     });
 
-    it('does not throw on the human-revision-cap forward, where selectedArcs IS empty (v2 I1)', async () => {
-      // routeAfterArcCheckpoint forces `forward` with an EMPTY selection once the
-      // human cap is reached, and under the new edges that path runs through this
-      // gate. Discriminating on selectedArcs would kill it with a message that is
-      // false ("previous graph") and a recovery that is wrong ("roll back to
-      // await-full-context"). narrativeArcs is the real discriminator: an
-      // old-graph thread never ran analyzeArcs.
-      const { REVISION_CAPS } = require('../../../lib/workflow/state');
+    it('does not discriminate on selectedArcs, which may be empty (v2 I1)', async () => {
+      // Discriminating on selectedArcs would kill a run with a message that is false
+      // ("previous graph") and a recovery that is wrong ("roll back to
+      // await-full-context"). narrativeArcs is the real discriminator: an old-graph
+      // thread never ran analyzeArcs. (An empty selection used to reach this gate
+      // through the arc stop's forced forward, which brief 1.4 removed.)
       const out = await checkpointCharacterIds({
         photoAnalyses: { analyses: [] }, roster: ['Vic'],
         selectedArcs: [],
         narrativeArcs: [{ id: 'arc-1' }],
-        humanArcRevisionCount: REVISION_CAPS.HUMAN_ARCS,
         characterIdMappings: null
       }, {});
       expect(out.currentPhase).toBeDefined();

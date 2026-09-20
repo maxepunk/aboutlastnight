@@ -285,14 +285,11 @@ describe('buildArcEvidencePackages empty-arc guard (C5 / H18)', () => {
       .rejects.toThrow(/no selected arcs/i);
   });
 
-  test('proceeds with empty selectedArcs once the human revision cap is reached', async () => {
-    // routeAfterArcCheckpoint forces `forward` at the cap with no selection, so the
-    // cap is the one legitimate empty-arc path.
-    const { REVISION_CAPS } = require('../workflow/state');
-    const out = await buildArcEvidencePackages(
-      { ...base, selectedArcs: [], humanArcRevisionCount: REVISION_CAPS.HUMAN_ARCS },
-      {}
-    );
-    expect(out.arcEvidencePackages).toEqual([]);
+  test('still throws however many rounds the director has taken at the arc stop', async () => {
+    // Brief 1.4: the forced forward at four rejections was this guard's one
+    // exception, and it existed only to end the director's rounds. The rounds are
+    // not limited any more, so an empty selection is always the lost-arcs bug.
+    await expect(buildArcEvidencePackages({ ...base, selectedArcs: [], humanArcRevisionCount: 9 }, {}))
+      .rejects.toThrow(/no selected arcs/i);
   });
 });

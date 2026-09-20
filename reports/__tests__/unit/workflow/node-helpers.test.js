@@ -93,14 +93,18 @@ describe('buildRevisionContext', () => {
       expect(contextSection).toContain('OUTLINE');
     });
 
-    test('includes revision count in context section', () => {
+    // Brief 1.4: the counter this prints is the AUTOMATED pass number, which resets
+    // at the start of every round of the director's, so "Attempt 0" was about to
+    // become a routine header. The label says what the number counts.
+    test('names the automated pass number in the context section', () => {
       const { contextSection } = buildRevisionContext({
         phase: 'arcs',
         revisionCount: 2,
         validationResults: {},
         previousOutput: []
       });
-      expect(contextSection).toContain('Attempt 2');
+      expect(contextSection).toContain('automated pass 2');
+      expect(contextSection).not.toContain('Attempt');
     });
 
     test('includes previous output in previousOutputSection', () => {

@@ -999,7 +999,7 @@ ${formatHandEditsBlock(handEdits)}
   // what to preserve from the scope of the send-back instead of from the scores.
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
-REVISION CONTEXT: ${phase.toUpperCase()} (Attempt ${revisionCount})
+REVISION CONTEXT: ${phase.toUpperCase()} (automated pass ${revisionCount})
 ═══════════════════════════════════════════════════════════════════════════════
 
 ${evaluationBlock}

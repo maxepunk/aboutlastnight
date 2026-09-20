@@ -252,6 +252,11 @@ function outlineThesisOf(state) {
  *
  * ASYNC because the article gate renders an HTML preview (H13).
  *
+ * Brief 1.4: at the three writer stops `revisionCount` is the AUTOMATED passes spent
+ * in the current round and `maxRevisions` the automated budget, while
+ * `humanRevisionCount` is the rounds the director has taken. The console reads
+ * "Round N" off the latter; nothing caps it.
+ *
  * @param {string} checkpointType - The checkpoint type constant
  * @param {object} state - The current state object
  * @returns {Promise<object>} - Checkpoint-specific data for response
@@ -286,7 +291,6 @@ async function getCheckpointData(checkpointType, state) {
                 revisionCount: state.arcRevisionCount || 0,
                 humanRevisionCount: state.humanArcRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARCS,
-                maxHumanRevisions: REVISION_CAPS.HUMAN_ARCS,
                 previousFeedback: state._arcFeedback || null,
                 _revisionTimedOut: state._arcAnalysisCache?._revisionTimedOut || false,
                 _generationTimedOut: state._arcAnalysisCache?._generationTimedOut || false,
@@ -298,6 +302,7 @@ async function getCheckpointData(checkpointType, state) {
                 lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'outline'),
                 evaluationHistory: state.evaluationHistory,
                 revisionCount: state.outlineRevisionCount || 0,
+                humanRevisionCount: state.humanOutlineRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.OUTLINE,
                 previousFeedback: state._outlineFeedback || null,
                 handEditReport: state._outlineHandEditReport || null,
@@ -314,6 +319,7 @@ async function getCheckpointData(checkpointType, state) {
                 evaluationHistory: state.evaluationHistory,
                 sessionId: state.sessionId,
                 revisionCount: state.articleRevisionCount || 0,
+                humanRevisionCount: state.humanArticleRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARTICLE,
                 previousFeedback: state._articleFeedback || null,
                 handEditReport: state._articleHandEditReport || null,

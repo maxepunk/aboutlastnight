@@ -25,6 +25,7 @@ jest.mock('../../lib/template-assembler', () => {
 
 const { getCheckpointData } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
+const { REVISION_CAPS } = require('../../lib/workflow/state');
 const { createTemplateAssembler } = require('../../lib/template-assembler');
 
 const VALID_BUNDLE = () => JSON.parse(JSON.stringify(
@@ -194,5 +195,44 @@ describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
   it('arc-selection carries directorGateNotes', async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { evaluationHistory: [], narrativeArcs: [], directorGateNotes: NOTES });
     expect(data.directorGateNotes).toEqual(NOTES);
+  });
+});
+
+// Brief 1.4: the console shows "Round N" from the director's own counter and the
+// automated budget from the other. The outline and article stops sent neither, so
+// RevisionDiff read the automated counter as if it were the round and printed
+// "Maximum revisions reached — this is the final version" after two send-backs.
+describe('rounds (brief 1.4)', () => {
+  it('the outline stop carries the round count beside the automated budget', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
+      evaluationHistory: [], outlineRevisionCount: 1, humanOutlineRevisionCount: 2
+    });
+    expect(data.revisionCount).toBe(1);
+    expect(data.humanRevisionCount).toBe(2);
+    expect(data.maxRevisions).toBe(REVISION_CAPS.OUTLINE);
+  });
+
+  it('the article stop carries the round count beside the automated budget', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: null, articleRevisionCount: 0, humanArticleRevisionCount: 3
+    });
+    expect(data.revisionCount).toBe(0);
+    expect(data.humanRevisionCount).toBe(3);
+    expect(data.maxRevisions).toBe(REVISION_CAPS.ARTICLE);
+  });
+
+  it('both round counts default to 0 on a thread that predates them', async () => {
+    const outline = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [] });
+    expect(outline.humanRevisionCount).toBe(0);
+    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null });
+    expect(article.humanRevisionCount).toBe(0);
+  });
+
+  it('the arc stop no longer reports a cap on the director', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
+      evaluationHistory: [], narrativeArcs: [], humanArcRevisionCount: 5
+    });
+    expect(data.humanRevisionCount).toBe(5);
+    expect(data.maxHumanRevisions).toBeUndefined();
   });
 });

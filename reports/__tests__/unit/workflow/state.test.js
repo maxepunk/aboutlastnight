@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 74 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 76 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -269,7 +269,9 @@ describe('ReportStateAnnotation', () => {
         'arcRevisionCount',
         'humanArcRevisionCount',
         'outlineRevisionCount',
+        'humanOutlineRevisionCount',
         'articleRevisionCount',
+        'humanArticleRevisionCount',
         // Error handling
         'errors',
         // NOTE: awaitingApproval/approvalType removed in interrupt() migration
@@ -378,6 +380,16 @@ describe('ReportStateAnnotation', () => {
       it('articleRevisionCount defaults to 0', () => {
         expect(defaultState.articleRevisionCount).toBe(0);
       });
+
+      // Brief 1.4: the director's rounds are counted apart from the machine's
+      // automated passes, so a send back never spends the automated budget.
+      it('humanOutlineRevisionCount defaults to 0', () => {
+        expect(defaultState.humanOutlineRevisionCount).toBe(0);
+      });
+
+      it('humanArticleRevisionCount defaults to 0', () => {
+        expect(defaultState.humanArticleRevisionCount).toBe(0);
+      });
     });
 
     describe('curated/analysis data defaults', () => {
@@ -448,7 +460,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(74);
+      expect(Object.keys(getDefaultState()).length).toBe(76);
     });
 
     it('declares the steering channels (spec 2026-09-19 §4.5, §5.1)', () => {
@@ -628,20 +640,23 @@ describe('ReportStateAnnotation', () => {
       expect(REVISION_CAPS.ARCS).toBe(2);
     });
 
-    it('defines OUTLINE cap as 3 (more surface area to fix)', () => {
-      expect(REVISION_CAPS.OUTLINE).toBe(3);
+    it('defines OUTLINE cap as 2 automated passes per round', () => {
+      expect(REVISION_CAPS.OUTLINE).toBe(2);
     });
 
-    it('defines ARTICLE cap as 3 (most content to polish)', () => {
-      expect(REVISION_CAPS.ARTICLE).toBe(3);
+    it('defines ARTICLE cap as 2 automated passes per round', () => {
+      expect(REVISION_CAPS.ARTICLE).toBe(2);
     });
 
-    it('defines HUMAN_ARCS cap as 4 (domain knowledge iterations are valuable)', () => {
-      expect(REVISION_CAPS.HUMAN_ARCS).toBe(4);
+    // Brief 1.4: the director's rounds are not capped anywhere, so there is no
+    // HUMAN_ARCS cap to read. The arc stop used to force an empty selection forward
+    // at four rejections and pay for an outline about nothing.
+    it('caps only the automated passes — no cap on the director', () => {
+      expect(REVISION_CAPS.HUMAN_ARCS).toBeUndefined();
     });
 
-    it('defines exactly 4 revision caps', () => {
-      expect(Object.keys(REVISION_CAPS)).toHaveLength(4);
+    it('defines exactly 3 revision caps', () => {
+      expect(Object.keys(REVISION_CAPS)).toHaveLength(3);
     });
 
     it('all revision cap values are positive integers', () => {
@@ -741,6 +756,16 @@ describe('ReportStateAnnotation', () => {
       expect(resets.articleRevisionCount).toBe(0);
       expect(resets.outlineRevisionCount).toBeUndefined();
       expect(resets.arcRevisionCount).toBeUndefined();
+    });
+
+    // Brief 1.4: a round counter travels with its automated counter. Rolling back to
+    // a stop that regenerates an output starts that output's rounds over too.
+    it('resets the round counters wherever it resets their automated counters', () => {
+      for (const [point, resets] of Object.entries(ROLLBACK_COUNTER_RESETS)) {
+        expect(resets.humanOutlineRevisionCount === 0).toBe(resets.outlineRevisionCount === 0);
+        expect(resets.humanArticleRevisionCount === 0).toBe(resets.articleRevisionCount === 0);
+        expect(point).toBeTruthy();
+      }
     });
   });
 

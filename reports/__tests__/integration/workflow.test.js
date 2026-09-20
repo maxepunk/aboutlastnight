@@ -140,7 +140,7 @@ describe('workflow integration', () => {
       it('returns "revise" when not ready and under cap', () => {
         expect(routeArticleEvaluation({
           evaluationHistory: [{ ready: false }],
-          articleRevisionCount: 2
+          articleRevisionCount: 1
         })).toBe('revise');
       });
     });
@@ -467,7 +467,7 @@ describe('workflow integration', () => {
       expect(routeArcEvaluation(state)).toBe('checkpoint');
     });
 
-    it('respects outline revision cap (max 3)', async () => {
+    it('respects the outline automated budget (2 passes per round)', async () => {
       const state = {
         evaluationHistory: [{ ready: false }],
         outlineRevisionCount: REVISION_CAPS.OUTLINE
@@ -476,7 +476,7 @@ describe('workflow integration', () => {
       expect(routeOutlineEvaluation(state)).toBe('checkpoint');
     });
 
-    it('respects article revision cap (max 3)', async () => {
+    it('respects the article automated budget (2 passes per round)', async () => {
       const state = {
         evaluationHistory: [{ ready: false }],
         articleRevisionCount: REVISION_CAPS.ARTICLE

@@ -24,7 +24,9 @@
  *   - Generation: outline, contentBundle
  *   - Output: assembledHtml, validationResults
  *   - Control: currentPhase, errors
- *   - Revision Counters (8.6): arcRevisionCount, humanArcRevisionCount, outlineRevisionCount, articleRevisionCount
+ *   - Revision Counters (8.6, brief 1.4): arcRevisionCount, humanArcRevisionCount,
+ *     outlineRevisionCount, humanOutlineRevisionCount, articleRevisionCount,
+ *     humanArticleRevisionCount
  */
 
 const { Annotation } = require('@langchain/langgraph');
@@ -584,14 +586,36 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => 0
   }),
 
-  /** Outline revision count (max 3 - more surface area to fix) */
+  /**
+   * Outline automated pass count — the machine's own reworks in the CURRENT round,
+   * capped by REVISION_CAPS.OUTLINE. Reset to 0 whenever the director opens a new
+   * round by sending the outline back (brief 1.4).
+   */
   outlineRevisionCount: Annotation({
     reducer: replaceReducer,
     default: () => 0
   }),
 
-  /** Article revision count (max 3 - most content to polish) */
+  /**
+   * Outline rounds the director has taken — one per send back, never capped.
+   * The console renders "Round N" from this. Mirrors humanArcRevisionCount.
+   */
+  humanOutlineRevisionCount: Annotation({
+    reducer: replaceReducer,
+    default: () => 0
+  }),
+
+  /**
+   * Article automated pass count — the machine's own reworks (failed check or
+   * failed evaluation) in the CURRENT round, capped by REVISION_CAPS.ARTICLE.
+   */
   articleRevisionCount: Annotation({
+    reducer: replaceReducer,
+    default: () => 0
+  }),
+
+  /** Article rounds the director has taken — one per send back, never capped. */
+  humanArticleRevisionCount: Annotation({
     reducer: replaceReducer,
     default: () => 0
   }),
@@ -797,7 +821,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (74 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes)
+ * Get default state with all fields initialized (76 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -875,7 +899,9 @@ function getDefaultState() {
     arcRevisionCount: 0,
     humanArcRevisionCount: 0,
     outlineRevisionCount: 0,
+    humanOutlineRevisionCount: 0,
     articleRevisionCount: 0,
+    humanArticleRevisionCount: 0,
     // Error handling
     errors: [],
     // Internal temporary state (Commit 8.10+)
@@ -980,15 +1006,23 @@ const PHASES = {
 // See: lib/workflow/checkpoint-helpers.js
 
 /**
- * Revision cap constants (Commit 8.6)
+ * The automated budget (Commit 8.6; brief 1.4): how many reworks the machine may
+ * trigger on its own, per round of the director's, before it hands the output over.
+ * It never counts the director's own send-backs, which are not limited anywhere.
+ *
  * Arcs: 2 (foundational - escalate early)
- * Outline/Article: 3 (more surface area to fix)
+ * Outline/Article: 2 per round. They were 3 when ONE counter served both the machine
+ * and the director: on 091826 the director's two send-backs exhausted it and the
+ * console declared the article final. A round starts the budget over, so the total
+ * number of reworks a session may run is no longer bounded by this number.
+ *
+ * There is no HUMAN_ARCS entry: the arc stop used to force an empty selection
+ * forward at four rejections, which paid for an outline about nothing.
  */
 const REVISION_CAPS = {
   ARCS: 2,
-  HUMAN_ARCS: 4,
-  OUTLINE: 3,
-  ARTICLE: 3
+  OUTLINE: 2,
+  ARTICLE: 2
 };
 
 /**
@@ -1048,7 +1082,9 @@ const ROLLBACK_CLEARS_EXEMPT = new Set([
   '_previousArcs', '_previousOutline', '_previousContentBundle', '_arcValidation', '_previousFullContext', '_previousPhotosPath',
   // Control flow + counters — handled by buildRollbackState / ROLLBACK_COUNTER_RESETS
   'currentPhase', 'voiceRevisionCount',
-  'arcRevisionCount', 'humanArcRevisionCount', 'outlineRevisionCount', 'articleRevisionCount',
+  'arcRevisionCount', 'humanArcRevisionCount',
+  'outlineRevisionCount', 'humanOutlineRevisionCount',
+  'articleRevisionCount', 'humanArticleRevisionCount',
   // Accumulator — error log intentionally preserved across rollback (no clear list
   // includes it). Not a stale-input risk; unlike evaluationHistory (which IS cleared
   // as [] by the lists that include it), errors is left to accumulate.
@@ -1316,19 +1352,19 @@ const FRESH_START_CLEARS = Object.keys(ReportStateAnnotation.spec)
  * Rolling back past a phase resets its revision counter for fresh attempts.
  */
 const ROLLBACK_COUNTER_RESETS = {
-  'input-review': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'paper-evidence-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'await-roster': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'await-full-context': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'pre-curation': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'evidence-and-photos': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'arc-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, articleRevisionCount: 0 },
+  'input-review': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'paper-evidence-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'await-roster': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'await-full-context': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'pre-curation': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'evidence-and-photos': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'arc-selection': { arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
   // The photo branch joins AFTER the arc verdict, so rolling back into it does not
   // refund an arc revision budget spent upstream (M1).
-  'photos': { outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'character-ids': { outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'outline': { outlineRevisionCount: 0, articleRevisionCount: 0 },
-  'article': { articleRevisionCount: 0 }
+  'photos': { outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'character-ids': { outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'outline': { outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  'article': { articleRevisionCount: 0, humanArticleRevisionCount: 0 }
 };
 
 /**

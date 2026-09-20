@@ -48,8 +48,10 @@ describe('humanArcRevisionCount', () => {
     expect(defaults.humanArcRevisionCount).toBe(0);
   });
 
-  test('REVISION_CAPS includes HUMAN_ARCS', () => {
-    expect(REVISION_CAPS.HUMAN_ARCS).toBe(4);
+  // Brief 1.4: REVISION_CAPS caps the machine's own reworks only. The director's
+  // rounds at the arc stop are not counted against anything.
+  test('REVISION_CAPS no longer caps the director at the arc stop', () => {
+    expect(REVISION_CAPS.HUMAN_ARCS).toBeUndefined();
   });
 
   test('ROLLBACK_COUNTER_RESETS includes humanArcRevisionCount', () => {
