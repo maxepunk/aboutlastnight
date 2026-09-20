@@ -1226,7 +1226,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       maxRevisions: maxRevisions,
       previousFeedback: previousFeedback,
       humanRevisionCount: 0,
-      maxHumanRevisions: 0
+      maxHumanRevisions: 0,
+      handEditReport: (data && data.handEditReport) || null,
+      gateNotes: (data && data.directorGateNotes) || []
     }),
 
     // Evaluation bar (what Opus said about THIS outline)

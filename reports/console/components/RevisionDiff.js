@@ -10,6 +10,8 @@ window.Console = window.Console || {};
 
 const { Badge } = window.Console.utils;
 
+const ViewLogic = window.Console.checkpointViewLogic;
+
 /**
  * Compute shallow diff between two objects.
  * Returns array of { key, status, detail } where status is
@@ -71,8 +73,13 @@ const STATUS_PREFIX = {
   unchanged: '= '
 };
 
-function RevisionDiff({ previous, current, revisionCount, maxRevisions, previousFeedback, humanRevisionCount, maxHumanRevisions }) {
+function RevisionDiff({ previous, current, revisionCount, maxRevisions, previousFeedback, humanRevisionCount, maxHumanRevisions, handEditReport, gateNotes }) {
   const hasPrevious = previous !== null && previous !== undefined;
+
+  // Spec 2026-09-19 §4.4/§5.5: the hand-edit report and the standing notes render
+  // here too, and they must render on a gate with no revision state (the first
+  // outline gate after an arc rejection has notes and nothing else).
+  const steering = ViewLogic.steeringView(handEditReport, gateNotes);
 
   // R5 F10: the whole component used to bail out on `!previous`, which took the
   // revision banner, the "N remaining" budget, the max-revisions warning AND the
@@ -82,7 +89,7 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
   // after a refresh or a laptop sleep the director resumed with no idea how many
   // revisions remained (the arc cap is 2) or what they had asked for last time.
   // Server data drives the banner; only the DIFF LISTING needs `previous`.
-  const hasRevisionState = revisionCount > 0 || humanRevisionCount > 0 || !!previousFeedback;
+  const hasRevisionState = revisionCount > 0 || humanRevisionCount > 0 || !!previousFeedback || steering.any;
   if (!hasPrevious && !hasRevisionState) {
     return null;
   }
@@ -122,6 +129,25 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
     previousFeedback && React.createElement('div', { className: 'revision-diff__feedback' },
       React.createElement('span', { className: 'revision-diff__feedback-label' }, 'Previous Feedback'),
       React.createElement('p', { className: 'revision-diff__feedback-text' }, previousFeedback)
+    ),
+
+    // Hand-edit report: what the rework did to the director's own edits (§4.4)
+    steering.changedLabels.length > 0 && React.createElement('div', {
+      className: 'revision-diff__warning revision-diff__hand-edits', role: 'status'
+    }, 'The rework changed sections you edited by hand: ' + steering.changedLabels.join(', ') + '.'),
+    steering.keptCount > 0 && React.createElement('div', {
+      className: 'text-xs text-muted revision-diff__hand-edits revision-diff__hand-edits--kept', role: 'status'
+    }, 'Rework kept all ' + steering.keptCount + ' hand edit' + (steering.keptCount === 1 ? '' : 's') + '.'),
+
+    // Standing notes the writer will see (§5.5)
+    steering.notes.length > 0 && React.createElement('div', { className: 'revision-diff__feedback revision-diff__notes' },
+      React.createElement('span', { className: 'revision-diff__feedback-label' }, 'Standing notes the writer will see'),
+      React.createElement('ul', { className: 'revision-diff__notes-list' },
+        steering.notes.map(function (n, i) {
+          return React.createElement('li', { key: i, className: 'revision-diff__feedback-text' },
+            React.createElement('span', { className: 'text-muted' }, n.label + ' '), n.text);
+        })
+      )
     ),
 
     // Shallow diff listing. Only this part needs the client-cached previous

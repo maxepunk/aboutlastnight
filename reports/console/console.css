@@ -2775,3 +2775,9 @@ textarea.input {
   margin-bottom: var(--space-md);
   border-radius: 4px;
 }
+
+/* Hand-edit report and standing notes inside RevisionDiff (spec 2026-09-19) */
+.revision-diff__hand-edits { margin-top: var(--space-sm); }
+.revision-diff__hand-edits--kept { padding-left: var(--space-md); }
+.revision-diff__notes-list { list-style: none; padding-left: 0; margin: var(--space-xs) 0 0; }
+.revision-diff__notes-list li { margin-bottom: var(--space-xs); }

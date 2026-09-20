@@ -1356,7 +1356,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       maxRevisions: maxRevisions,
       previousFeedback: previousFeedback,
       humanRevisionCount: 0,
-      maxHumanRevisions: 0
+      maxHumanRevisions: 0,
+      handEditReport: (data && data.handEditReport) || null,
+      gateNotes: (data && data.directorGateNotes) || []
     }),
 
     // Evaluation bar

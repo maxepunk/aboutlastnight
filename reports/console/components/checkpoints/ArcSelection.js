@@ -153,7 +153,9 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
       maxRevisions: maxRevisions,
       previousFeedback: previousFeedback,
       humanRevisionCount: (data && data.humanRevisionCount) || 0,
-      maxHumanRevisions: (data && data.maxHumanRevisions) || 0
+      maxHumanRevisions: (data && data.maxHumanRevisions) || 0,
+      handEditReport: null,
+      gateNotes: (data && data.directorGateNotes) || []
     }),
 
     // Timeout recovery banner — user should know these are preserved arcs, not fresh output
