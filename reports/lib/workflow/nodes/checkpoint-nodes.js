@@ -575,6 +575,11 @@ async function checkpointOutline(state, config) {
     console.log(`[checkpointOutline] Approved by human`);
     return {
       outlineApproved: true,
+      // Spec 2026-09-19 §4.4: the director's hand-edit diff and the rework report belong
+      // to this gate only; the revisers keep them for the whole round (C3), so the gate
+      // is where they end.
+      _outlineHandEdits: null,
+      _outlineHandEditReport: null,
       currentPhase: PHASES.OUTLINE_CHECKPOINT
     };
   }
@@ -622,6 +627,11 @@ async function checkpointArticle(state, config) {
     console.log(`[checkpointArticle] Approved by human`);
     return {
       articleApproved: true,
+      // Spec 2026-09-19 §4.4: the director's hand-edit diff and the rework report belong
+      // to this gate only; the revisers keep them for the whole round (C3), so the gate
+      // is where they end.
+      _articleHandEdits: null,
+      _articleHandEditReport: null,
       currentPhase: PHASES.ARTICLE_CHECKPOINT
     };
   }
