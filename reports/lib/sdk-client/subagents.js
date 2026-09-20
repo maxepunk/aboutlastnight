@@ -182,10 +182,10 @@ CRITICAL PRINCIPLES:
 6. TEMPORAL AWARENESS
    - THE PARTY (past) and THE INVESTIGATION (present) are two different timelines
    - Memory token CONTENT describes THE PARTY (events before Marcus died). Nova was NOT there.
-   - Director observations describe THE INVESTIGATION (the game session). Nova WAS there.
+   - Director observations describe THE INVESTIGATION (the game session); how Nova learned of them is set by the reporting mode above.
    - Burial transactions are INVESTIGATION actions (players choosing to bury during the session)
    - Arc summaries must specify which timeline events belong to
-   - "I watched" / "I saw" = investigation events only
+   - Investigation events are told in the third person ("during the investigation", "was seen"), never as a first-person presence claim
    - "The memory shows" / "In the recording" = party events from extracted memories
 
 OUTPUT:

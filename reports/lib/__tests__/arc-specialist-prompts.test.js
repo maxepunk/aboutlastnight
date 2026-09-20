@@ -81,4 +81,13 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     expect(arcModule._testing.interweavingSystemPrompt(remote)).toContain(REPORTING_MODE_BLOCKS.remote);
     expect(arcModule._testing.coreArcSystemPrompt({})).toContain(REPORTING_MODE_BLOCKS['on-site']);
   });
+
+  it('no arc system prompt hands the writer a first-person presence marker (integrator ruling, phase 1)', () => {
+    const { CORE_ARC_SYSTEM_PROMPT, INTERWEAVING_SYSTEM_PROMPT } = require('../sdk-client/subagents');
+    for (const text of [CORE_ARC_SYSTEM_PROMPT, INTERWEAVING_SYSTEM_PROMPT]) {
+      expect(text).not.toContain('I watched');
+      expect(text).not.toContain('I saw');
+      expect(text).not.toContain('Nova WAS there');
+    }
+  });
 });
