@@ -105,21 +105,52 @@ ${content.trim()}
 }
 
 /**
- * Build the <DIRECTOR_GUIDANCE> section (Q2 decision).
+ * The director's standing notes as a prompt paragraph (spec 2026-09-19 §5.3).
+ * Entries with no usable text are skipped. '' when nothing remains.
+ */
+function formatGateNotes(gateNotes) {
+  const list = Array.isArray(gateNotes)
+    ? gateNotes.filter(n => n && typeof n.text === 'string' && n.text.trim())
+    : [];
+  if (list.length === 0) return '';
+  const lines = list.map(n => `- [${n.gate}, ${n.kind || 'rejection'} ${n.round || 1}] ${n.text.trim()}`);
+  return 'Standing notes the director gave at earlier gates, in order. Each was already applied\n' +
+         'at its own gate; keep honoring it in what you write now.\n' + lines.join('\n');
+}
+
+/**
+ * Drop the note the reviser is acting on RIGHT NOW (it is already in the prompt as
+ * HUMAN FEEDBACK). Matching is by text: on an evaluator-driven second pass the
+ * feedback slot is null, so nothing is excluded and the note stands (spec §5.3 [I10]).
+ */
+function filterGateNotes(gateNotes, currentFeedback) {
+  const list = Array.isArray(gateNotes) ? gateNotes.filter(n => n && typeof n === 'object') : [];
+  const current = typeof currentFeedback === 'string' ? currentFeedback.trim() : '';
+  if (!current) return list;
+  return list.filter(n => (typeof n.text === 'string' ? n.text.trim() : '') !== current);
+}
+
+/**
+ * Build the <DIRECTOR_GUIDANCE> section (Q2 decision + spec 2026-09-19 §5.3).
  *
  * Standalone so the revision nodes can append it without going through a
  * PromptBuilder instance (their tests use a mock builder).
  *
  * @param {string|null} directorGuidance - free text from the arc-selection gate
- * @returns {string} XML section, or '' when there is no guidance
+ * @param {Array} [gateNotes] - directorGateNotes entries (already filtered by the caller)
+ * @returns {string} XML section, or '' when there is neither guidance nor notes
  */
-function buildDirectorGuidanceSection(directorGuidance) {
-  if (typeof directorGuidance !== 'string' || !directorGuidance.trim()) return '';
-  return labelPromptSection(
-    'DIRECTOR_GUIDANCE',
-    'The director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\n' +
-    directorGuidance.trim()
-  );
+function buildDirectorGuidanceSection(directorGuidance, gateNotes = []) {
+  const hasGuidance = typeof directorGuidance === 'string' && !!directorGuidance.trim();
+  const notesText = formatGateNotes(gateNotes);
+  if (!hasGuidance && !notesText) return '';
+  const parts = [];
+  if (hasGuidance) {
+    parts.push('The director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\n' +
+      directorGuidance.trim());
+  }
+  if (notesText) parts.push(notesText);
+  return labelPromptSection('DIRECTOR_GUIDANCE', parts.join('\n\n'));
 }
 
 // Default reporter first name when the director provides none. The pipeline's
@@ -276,10 +307,11 @@ class PromptBuilder {
    * the weight, which has to survive several thousand tokens of craft rules.
    *
    * @param {string|null} directorGuidance - free text from the arc-selection gate
-   * @returns {string} XML section, or '' when there is no guidance
+   * @param {Array} [gateNotes] - directorGateNotes entries carried into this prompt
+   * @returns {string} XML section, or '' when there is neither guidance nor notes
    */
-  _buildDirectorGuidance(directorGuidance) {
-    const section = buildDirectorGuidanceSection(directorGuidance);
+  _buildDirectorGuidance(directorGuidance, gateNotes = []) {
+    const section = buildDirectorGuidanceSection(directorGuidance, gateNotes);
     return section ? '\n' + section : '';
   }
 
@@ -682,7 +714,7 @@ Return JSON with the following structure:
     }
 
     // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
-    userPrompt += this._buildDirectorGuidance(options.directorGuidance);
+    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
   }
@@ -1170,7 +1202,7 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
     }
 
     // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
-    userPrompt += this._buildDirectorGuidance(options.directorGuidance);
+    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
   }
@@ -1434,6 +1466,7 @@ module.exports = {
   createPromptBuilder,
   generateRosterSection,
   buildDirectorGuidanceSection,
+  filterGateNotes,
   REPORTING_MODE_BLOCKS,
   // Theme framing, consumed by the revision system prompts in ai-nodes.js
   THEME_SYSTEM_PROMPTS,

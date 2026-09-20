@@ -193,3 +193,62 @@ describe('the evaluator scores reporter mode (BASELINE §4 class 6)', () => {
     expect(onsite).toContain('on-site');
   });
 });
+
+describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
+  const { buildDirectorGuidanceSection, filterGateNotes } = require('../prompt-builder');
+  const NOTES = [
+    { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the vote arc.', at: '2026-09-19T10:00:00.000Z' },
+    { gate: 'outline', kind: 'rejection', round: 1, text: 'Lead with the ledger.', at: '2026-09-19T11:00:00.000Z' }
+  ];
+  // The pre-change output, captured with:
+  //   node -e "const {buildDirectorGuidanceSection}=require('./lib/prompt-builder');
+  //            console.log(JSON.stringify(buildDirectorGuidanceSection('Lead with the money, not the vote.')))"
+  const EXPECTED_GUIDANCE_ONLY =
+    '<DIRECTOR_GUIDANCE>\nThe director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\nLead with the money, not the vote.\n</DIRECTOR_GUIDANCE>';
+
+  it('guidance only is byte-identical to the pre-notes output, with or without an empty list', () => {
+    expect(buildDirectorGuidanceSection(GUIDANCE)).toBe(EXPECTED_GUIDANCE_ONLY);
+    expect(buildDirectorGuidanceSection(GUIDANCE, [])).toBe(EXPECTED_GUIDANCE_ONLY);
+    expect(buildDirectorGuidanceSection(GUIDANCE, [null, { text: '   ' }])).toBe(EXPECTED_GUIDANCE_ONLY);
+  });
+
+  it('notes only → the section carries only the standing-notes paragraph, in order, labelled', () => {
+    const section = buildDirectorGuidanceSection(null, NOTES);
+    expect(section.startsWith('<DIRECTOR_GUIDANCE>\nStanding notes the director gave at earlier gates, in order.')).toBe(true);
+    expect(section).toContain('keep honoring it in what you write now.');
+    expect(section).not.toContain('outranks');
+    const a = section.indexOf('- [arc-selection, rejection 1] Drop the vote arc.');
+    const b = section.indexOf('- [outline, rejection 1] Lead with the ledger.');
+    expect(a).toBeGreaterThan(-1);
+    expect(b).toBeGreaterThan(a);
+    expect(section.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+  });
+
+  it('both → the guidance paragraph first, then the notes, one section', () => {
+    const section = buildDirectorGuidanceSection(GUIDANCE, NOTES);
+    expect(section.indexOf('outranks')).toBeLessThan(section.indexOf('Standing notes'));
+    expect(section.match(/<DIRECTOR_GUIDANCE>/g)).toHaveLength(1);
+  });
+
+  it('nothing → empty string', () => {
+    expect(buildDirectorGuidanceSection(null, [])).toBe('');
+    expect(buildDirectorGuidanceSection('  ', null)).toBe('');
+  });
+
+  it('filterGateNotes drops only the note whose text is the feedback being acted on', () => {
+    expect(filterGateNotes(NOTES, 'Lead with the ledger.')).toEqual([NOTES[0]]);
+    expect(filterGateNotes(NOTES, null)).toEqual(NOTES);
+    expect(filterGateNotes(NOTES, 'something else')).toEqual(NOTES);
+    expect(filterGateNotes(null, 'x')).toEqual([]);
+  });
+
+  it('buildOutlinePrompt and buildArticlePrompt read options.gateNotes and still end with the section', async () => {
+    const o = await makeBuilder().buildOutlinePrompt({ narrativeArcs: [] }, [], 'hero.png', [], [], [], null, { directorGuidance: null, gateNotes: NOTES });
+    expect(o.userPrompt).toContain('- [outline, rejection 1] Lead with the ledger.');
+    expect(o.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+    const a = await makeBuilder().buildArticlePrompt({ lede: { hook: 'x' } }, [], 'hero.png', [], null, null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
+    expect(a.userPrompt).toContain(GUIDANCE);
+    expect(a.userPrompt).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
+    expect(a.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+  });
+});
