@@ -566,6 +566,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   // and then stands. The name stays `feedbackText` — it is still what the server
   // reads as feedback on a send back.
   const [feedbackText, setFeedbackText] = React.useState('');
+  // Send back takes two clicks (review fix round 1): this flag says the first one
+  // happened. ViewLogic.sendBackButton decides what that means on screen.
+  const [sendBackArmed, setSendBackArmed] = React.useState(false);
   const [editError, setEditError] = React.useState('');
 
   // Reset state when data changes
@@ -578,6 +581,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     setJsonText('');
     setJsonError('');
     setFeedbackText('');
+    setSendBackArmed(false);
     setEditError('');
   }, [dataKey]);
 
@@ -638,6 +642,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   }
 
   function handleModeChange(newMode) {
+    setSendBackArmed(false);
     if (newMode === mode) {
       setMode('view');
       return;
@@ -671,6 +676,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   }
 
   function handleApprove() {
+    setSendBackArmed(false);
     const note = feedbackText.trim();
     if (hasEdits && editedOutline) {
       if (!gateEdits(editedOutline, setEditError)) return;
@@ -701,6 +707,22 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     const note = feedbackText.trim();
     if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: parsed, note: note });
     onApprove(ViewLogic.outlineReviewPayload(parsed, note, 'approve'));
+  }
+
+  /**
+   * The brake on the send back (review fix round 1). One box now serves both
+   * actions, so Send back sits next to a note the director also fills in for an
+   * approve; a mis-click costs a round and, at the article stop, about nine minutes
+   * of Opus. The first click arms the button, the second sends. Editing the note,
+   * pressing anything else in the action row, or a reset of the screen disarms it.
+   */
+  function handleSendBackClick() {
+    if (!feedbackText.trim()) return;
+    if (!sendBackArmed) {
+      setSendBackArmed(true);
+      return;
+    }
+    handleReject();
   }
 
   function handleReject() {
@@ -1235,6 +1257,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     ];
   }
 
+  const sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'outline');
+
   return React.createElement('div', { className: 'flex flex-col gap-md' },
 
     // Revision diff (if this is a revision)
@@ -1267,14 +1291,14 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       React.createElement('label', { className: 'form-group__label', htmlFor: 'outline-note' },
         'Note to the writer, sent with whichever button you press'),
       React.createElement('p', { className: 'text-xs text-muted' },
-        'With Approve it stands as guidance for every later writer. With Send back it drives the rework, and then stands. Send back needs one.'),
+        'With Approve it stands for every later writer. With Send back it drives the rework, and then stands. Send back needs one.'),
       hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
         'Your hand edits are sent with this note. The writer is told to keep them.'),
       React.createElement('textarea', {
         id: 'outline-note',
         className: 'input feedback-area',
         value: feedbackText,
-        onChange: function (e) { setFeedbackText(e.target.value); },
+        onChange: function (e) { setFeedbackText(e.target.value); setSendBackArmed(false); },
         rows: 4,
         placeholder: 'What should the writer do differently, or keep?',
         'aria-label': 'Note to the writer, sent with approve or send back'
@@ -1295,10 +1319,10 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       }, 'Edit & Approve'),
       React.createElement('button', {
         className: 'action-modes__btn btn btn-danger',
-        onClick: handleReject,
-        disabled: !feedbackText.trim(),
-        'aria-label': 'Send the outline back for a rework, with the note'
-      }, 'Send back')
+        onClick: handleSendBackClick,
+        disabled: sendBack.disabled,
+        'aria-label': sendBack.ariaLabel
+      }, sendBack.label)
     ),
 
     // JSON edit mode

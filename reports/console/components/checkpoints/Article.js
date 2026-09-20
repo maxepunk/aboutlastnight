@@ -712,6 +712,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // stands. The name stays `feedbackText` — the server still reads it as feedback on
   // a send back.
   const [feedbackText, setFeedbackText] = React.useState('');
+  // Send back takes two clicks (review fix round 1): this flag says the first one
+  // happened. ViewLogic.sendBackButton decides what that means on screen.
+  const [sendBackArmed, setSendBackArmed] = React.useState(false);
   const [showHtmlPreview, setShowHtmlPreview] = React.useState(false);
   const [expandedPhoto, setExpandedPhoto] = React.useState(null);
 
@@ -726,6 +729,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     setJsonError('');
     setEditError('');
     setFeedbackText('');
+    setSendBackArmed(false);
     setShowHtmlPreview(false);
     setExpandedPhoto(null);
   }, [dataKey]);
@@ -887,6 +891,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function handleApprove() {
+    setSendBackArmed(false);
     const note = feedbackText.trim();
     if (hasEdits && editedBundle) {
       if (!gateEdits(editedBundle, setEditError)) return;
@@ -921,6 +926,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function handleModeChange(newMode) {
+    setSendBackArmed(false);
     if (newMode === mode) {
       setMode('view');
       return;
@@ -930,6 +936,22 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       setJsonText(safeStringify(getCurrentBundle(), 2));
       setJsonError('');
     }
+  }
+
+  /**
+   * The brake on the send back (review fix round 1). One box now serves both
+   * actions, so Send back sits next to a note the director also fills in for an
+   * approve; a mis-click here costs a round and about nine minutes of Opus. The
+   * first click arms the button, the second sends. Editing the note, pressing
+   * anything else in the action row, or a reset of the screen disarms it.
+   */
+  function handleSendBackClick() {
+    if (!feedbackText.trim()) return;
+    if (!sendBackArmed) {
+      setSendBackArmed(true);
+      return;
+    }
+    handleReject();
   }
 
   function handleReject() {
@@ -1359,6 +1381,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   });
 
   var approve = ViewLogic.approveLabel(factCheck, hasEdits);
+  var sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'article');
 
   var currentHeadline = getCurrentBundle().headline || headline;
   var currentByline = getCurrentBundle().byline || byline;
@@ -1512,14 +1535,14 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       React.createElement('label', { className: 'form-group__label', htmlFor: 'article-note' },
         'Note to the writer, sent with whichever button you press'),
       React.createElement('p', { className: 'text-xs text-muted' },
-        'With Approve it stands as guidance for every later writer. With Send back it drives the rework, and then stands. Send back needs one.'),
+        'With Approve it stands for every later writer. With Send back it drives the rework, and then stands. Send back needs one.'),
       hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
         'Your hand edits are sent with this note. The writer is told to keep them.'),
       React.createElement('textarea', {
         id: 'article-note',
         className: 'input feedback-area',
         value: feedbackText,
-        onChange: function (e) { setFeedbackText(e.target.value); },
+        onChange: function (e) { setFeedbackText(e.target.value); setSendBackArmed(false); },
         rows: 4,
         placeholder: 'What should the writer do differently, or keep?',
         'aria-label': 'Note to the writer, sent with approve or send back'
@@ -1544,10 +1567,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       }, 'JSON Editor'),
       React.createElement('button', {
         className: 'action-modes__btn btn btn-danger',
-        onClick: handleReject,
-        disabled: !feedbackText.trim(),
-        'aria-label': 'Send the article back for a rework, with the note'
-      }, 'Send back')
+        onClick: handleSendBackClick,
+        disabled: sendBack.disabled,
+        'aria-label': sendBack.ariaLabel
+      }, sendBack.label)
     ),
 
     // JSON editor mode

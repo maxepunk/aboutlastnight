@@ -514,7 +514,7 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5)', () => {
 });
 
 describe('review payloads for the outline and article stops (phase 1, brief 1.1)', () => {
-  const { outlineReviewPayload, articleReviewPayload, noteSlotKey } = require('../checkpoint-view-logic');
+  const { outlineReviewPayload, articleReviewPayload, sendBackButton, noteSlotKey } = require('../checkpoint-view-logic');
 
   test('approve with no note sends the bare approval', () => {
     expect(outlineReviewPayload(null, '', 'approve')).toEqual({ outline: true });
@@ -556,6 +556,42 @@ describe('review payloads for the outline and article stops (phase 1, brief 1.1)
       .toEqual({ outline: true, outlineNote: 'note' });
     expect(articleReviewPayload(undefined, 'note', 'approve'))
       .toEqual({ article: true, articleNote: 'note' });
+  });
+
+  // Review fix round 1: both of these used to fail open. An unknown action fell
+  // through to the approve branch, so a typo shipped the outline; a send back with
+  // a blank note built {outline:false, outlineFeedback:''}, which no server arm
+  // accepts, and the director saw a dead click.
+  test('an action that is neither approve nor send back throws', () => {
+    expect(() => outlineReviewPayload(null, 'note', 'reject')).toThrow(/approve.*send-back/);
+    expect(() => outlineReviewPayload(null, 'note', undefined)).toThrow(/approve.*send-back/);
+    expect(() => articleReviewPayload(null, 'note', 'Approve')).toThrow(/approve.*send-back/);
+  });
+
+  test('a send back with a blank note builds nothing', () => {
+    expect(outlineReviewPayload(null, '', 'send-back')).toBeNull();
+    expect(outlineReviewPayload({ lede: {} }, '   ', 'send-back')).toBeNull();
+    expect(articleReviewPayload(null, undefined, 'send-back')).toBeNull();
+  });
+
+  // The second click is the only brake on a send back now that one box serves both
+  // actions. The flag lives in the component; what it means on screen is decided here.
+  test('Send back reads as itself until it is armed, and only with a note', () => {
+    const idle = sendBackButton(false, 'Merge the arcs.', 'outline');
+    expect(idle).toMatchObject({ armed: false, disabled: false, label: 'Send back' });
+    expect(idle.ariaLabel).toContain('Send the outline back');
+
+    const armed = sendBackButton(true, 'Merge the arcs.', 'article');
+    expect(armed.armed).toBe(true);
+    expect(armed.disabled).toBe(false);
+    expect(armed.label).toBe('Confirm send back, starts a rework');
+    expect(armed.ariaLabel).toContain('Confirm sending the article back');
+  });
+
+  test('a blank note disables Send back and reads as disarmed however the flag stands', () => {
+    expect(sendBackButton(false, '', 'outline')).toMatchObject({ armed: false, disabled: true, label: 'Send back' });
+    expect(sendBackButton(true, '   ', 'article')).toMatchObject({ armed: false, disabled: true, label: 'Send back' });
+    expect(sendBackButton(true, undefined, 'outline').disabled).toBe(true);
   });
 
   test('the note slot sits beside the edits slot, never on top of it', () => {

@@ -500,13 +500,24 @@
   // so a second key would append the same sentence twice.
 
   /**
+   * Both failure modes here are silent by nature, so both are closed (review fix
+   * round 1): an unrecognised action used to fall through to the approve branch, so
+   * a typo shipped the outline; a send back with a blank note used to build a
+   * payload whose feedback is '' and which no server arm accepts. The components
+   * disable the button and return early on a blank note, so null is never sent.
+   *
    * @param {object} keys - the four payload keys for one stop
    * @param {object|null} edits - the director's edited object, or null
    * @param {string} note - what the director wrote in the stop's note box
    * @param {string} action - 'approve' or 'send-back'
+   * @returns {object|null} the payload, or null for a send back with no note
    */
   function reviewPayload(keys, edits, note, action) {
+    if (action !== 'approve' && action !== 'send-back') {
+      throw new Error("reviewPayload: action must be 'approve' or 'send-back', got " + String(action));
+    }
     var text = typeof note === 'string' ? note.trim() : '';
+    if (action === 'send-back' && !text) return null;
     var payload = {};
     if (action === 'send-back') {
       payload[keys.decision] = false;
@@ -528,6 +539,34 @@
 
   function articleReviewPayload(edits, note, action) {
     return reviewPayload(ARTICLE_REVIEW_KEYS, edits, note, action);
+  }
+
+  /**
+   * The Send back button at the outline and article stops takes TWO clicks (review
+   * fix round 1). One box now serves both actions, so Send back sits beside a note
+   * the director also fills in for approvals, and one mis-click costs a round and,
+   * at the article stop, about nine minutes of Opus. The old two-step reject panel's
+   * second click was the only brake there was; this is that brake.
+   *
+   * The arming FLAG is React state in the component. What it means on screen is
+   * decided here. Arming is meaningless without a note, so a blank note reads as
+   * disarmed however the flag stands.
+   *
+   * @param {boolean} armed - has the director already clicked Send back once
+   * @param {string} note - the stop's note box
+   * @param {string} noun - 'outline' or 'article', for the aria-label
+   */
+  function sendBackButton(armed, note, noun) {
+    var ready = typeof note === 'string' && !!note.trim();
+    var isArmed = !!armed && ready;
+    return {
+      armed: isArmed,
+      disabled: !ready,
+      label: isArmed ? 'Confirm send back, starts a rework' : 'Send back',
+      ariaLabel: isArmed
+        ? 'Confirm sending the ' + noun + ' back, which starts a rework'
+        : 'Send the ' + noun + ' back for a rework, with the note'
+    };
   }
 
   /**
@@ -554,6 +593,7 @@
     steeringView: steeringView,
     outlineReviewPayload: outlineReviewPayload,
     articleReviewPayload: articleReviewPayload,
+    sendBackButton: sendBackButton,
     noteSlotKey: noteSlotKey
   };
 
