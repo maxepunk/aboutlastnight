@@ -620,10 +620,10 @@ Generate → Evaluate → [structuralPassed?]
                               └───► Evaluate ◄────┘
 ```
 
-**Revision Caps**:
-- Arcs: 2 revisions max
-- Outline: 3 revisions max
-- Article: 3 revisions max
+**Automated budget** (`REVISION_CAPS`, per round of the director's; the director's own send-backs are never capped):
+- Arcs: 2 automated reworks per round
+- Outline: 2 automated reworks per round
+- Article: 2 automated reworks per round
 
 **Targeted Fixes Pattern** (DRY):
 - `incrementXxxRevision` preserves `_previousOutput`

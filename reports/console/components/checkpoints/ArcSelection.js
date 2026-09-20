@@ -29,7 +29,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   // (above) counts only the automated budget: incrementArcRevision holds it
   // FLAT on a human-driven pass (graph.js, `isHumanDriven = !!state._arcFeedback`).
   const humanRevisionCount = (data && data.humanRevisionCount) || 0;
-  const maxRevisions = (data && data.maxRevisions) || 2;
+  const maxRevisions = (data && data.maxRevisions) || 0;
   const previousArcs = (revisionCache && revisionCache.arcs) || null;
   // Brief 1.2: id -> {name, owner, type, firstLine} for every exposed document,
   // built by server.js#buildEvidenceIndex. Without it a card lists raw ids.
@@ -185,7 +185,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
       revisionCount: revisionCount,
       maxRevisions: maxRevisions,
       previousFeedback: previousFeedback,
-      humanRevisionCount: (data && data.humanRevisionCount) || 0,
+      humanRevisionCount: humanRevisionCount,
       handEditReport: null,
       gateNotes: (data && data.directorGateNotes) || []
     }),
@@ -276,7 +276,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
                   model.keyEvidence.map(function (entry, j) {
                     return React.createElement('li', { key: 'ev-' + j, className: 'text-xs text-secondary' },
                       entry.label,
-                      React.createElement('span', { className: 'arc-card__document-line text-xs text-muted' }, entry.id),
+                      React.createElement('span', { className: 'arc-card__document-line text-xs text-muted' }, (entry.type ? entry.type + ' · ' : '') + entry.id),
                       entry.firstLine && React.createElement('span', {
                         className: 'arc-card__document-line text-xs text-muted'
                       }, entry.firstLine)

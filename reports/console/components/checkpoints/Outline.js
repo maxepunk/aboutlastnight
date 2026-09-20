@@ -548,7 +548,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   const previousOutline = (revisionCache && revisionCache.outline) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
-  const maxRevisions = (data && data.maxRevisions) || 3;
+  const maxRevisions = (data && data.maxRevisions) || 0;
 
   // Detect theme from outline data if not passed via props
   const isDetective = theme === 'detective' || (!theme && outline.executiveSummary != null);
@@ -572,7 +572,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   const [editError, setEditError] = React.useState('');
 
   // Reset state when data changes
-  const dataKey = EditLogic.computeResetKey(outline, revisionCount);
+  // Both counters: the automated one resets to 0 at every round of the director's,
+  // so on its own it repeats across rounds and could leak stale edits.
+  const dataKey = EditLogic.computeResetKey(outline, ((data && data.humanRevisionCount) || 0) * 1000 + revisionCount);
   React.useEffect(function () {
     setEditedOutline(null);
     setEditingBlock(null);

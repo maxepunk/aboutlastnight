@@ -685,7 +685,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const previousArticle = (revisionCache && revisionCache.article) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
-  const maxRevisions = (data && data.maxRevisions) || 3;
+  const maxRevisions = (data && data.maxRevisions) || 0;
   const sessionId = propSessionId || (data && data.sessionId) || '';
 
   const headline = contentBundle.headline || {};
@@ -719,7 +719,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [expandedPhoto, setExpandedPhoto] = React.useState(null);
 
   // Reset when data changes
-  const dataKey = ArticleEditLogic.computeResetKey(contentBundle, revisionCount);
+  // Both counters: the automated one resets to 0 at every round of the director's,
+  // so on its own it repeats across rounds and could leak stale edits.
+  const dataKey = ArticleEditLogic.computeResetKey(contentBundle, ((data && data.humanRevisionCount) || 0) * 1000 + revisionCount);
   React.useEffect(function () {
     setEditedBundle(null);
     setEditingBlock(null);

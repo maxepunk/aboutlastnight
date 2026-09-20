@@ -2794,7 +2794,7 @@ textarea.input {
 /* Hand-edit report and standing notes inside RevisionDiff (spec 2026-09-19) */
 .revision-diff__hand-edits { margin-top: var(--space-sm); }
 /* Advisory, not a blocker: the muted amber language of `.session-start__confirm`,
-   never the red `.revision-diff__warning` box the revision cap uses (M15). */
+   never the red `.revision-diff__warning` box the arc timeout banner uses (M15; the cap warning is gone, brief 1.4). */
 .revision-diff__hand-edits--changed {
   padding: var(--space-sm) var(--space-md);
   border-left: 2px solid var(--accent-amber);

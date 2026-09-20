@@ -305,8 +305,11 @@ function routeArcValidation(state) {
  */
 async function incrementArcRevision(state) {
   const isHumanDriven = !!state._arcFeedback;
+  // Phase 1 (brief 1.4, integrator ruling): the automated budget is per round of the
+  // director's at every stop, so a send back resets the automated counter here as the
+  // outline and article increments do. "Automated passes this round" is then true here too.
   const newEvalCount = isHumanDriven
-    ? (state.arcRevisionCount || 0)
+    ? 0
     : (state.arcRevisionCount || 0) + 1;
   const newHumanCount = isHumanDriven
     ? (state.humanArcRevisionCount || 0) + 1

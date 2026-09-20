@@ -203,3 +203,12 @@ These amend the briefs above. Wave 2 (briefs 1.4 and 1.2) reads them as part of 
 - **`filterGateNotes(gateNotes, currentFeedback, gate)` requires the gate** and throws without it. `reviewPayload` throws on an unknown action and returns null on a blank send-back.
 - **At the cap, a failing fact check outranks a passing evaluation**: `validationResults.passed` is false whenever the fact check holds structural issues.
 - **Phase gate, render diff expectations** (plain diff against the baseline rendered from main): `outline-generation.txt` differs in the mode block, the `<INVESTIGATION_OBSERVATIONS>` section, the `<SHOULD_CONSIDER>` section before `<DIRECTOR_GUIDANCE>`, and the re-paired photo list; `outline-revision.txt` in the mode block, the system prompt's renumbered rules, the SHOULD CONSIDER list and the Ready line; `article-generation.txt` in the `<SHOULD_CONSIDER>` section only; `article-revision.txt` in the system prompt's rules, the SHOULD CONSIDER list, the Ready line and the standing-notes preamble. Anything else fails the gate.
+
+## Rulings after wave 2 (the integrator's, 2026-09-20)
+
+- **The automated budget is per round at every stop, the arc stop included**: a director send-back resets the automated counter at the arc stop as it does at the outline and article stops, so "Automated passes this round" is true everywhere.
+- **A rollback to the article stop restarts the round numbering**: the rebuilt article is a fresh Round 1. Accepted as implemented.
+- **Brief 1.2 covers SECTION 4.5 of the core arc prompt**: the investigation timeline's language markers are third-person and mode-neutral, and the rules for arc summaries name who did what without a presence claim. The party / investigation / post-investigation distinction stays.
+- **The client shows no budget when the payload carries none** (the `|| 3` and `|| 2` fallbacks are gone); the reset keys at the outline and article stops carry both counters.
+- **The arc stop's note is not kept across a page remount**, unlike the outline and article notes. Known difference, left for the review phase, where the note channel is reworked.
+- **Render diff expectations gain** the `REVISION CONTEXT: <PHASE> (automated pass N)` header line in both revision prompts, and the article-generation prompt also differs in the reworded standing-notes preamble. The arc prompts are not rendered by the harness; SECTION 4.5 and the arc summary instruction are verified live.

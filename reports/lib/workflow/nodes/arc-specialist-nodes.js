@@ -403,12 +403,12 @@ THE PARTY and THE INVESTIGATION are TWO DIFFERENT TIMELINES. Your arc summaries 
 | Timeline | Source | What It Describes | Nova's Access | Language Markers |
 |----------|--------|-------------------|---------------|-----------------|
 | **THE PARTY** (past) | Memory token content, paper evidence | Events from the murder night | Nova VIEWS recordings. She was NOT there. | "The memory shows," "In the recording" |
-| **THE INVESTIGATION** (present) | Director observations, burial transactions, player behavior | The game session where characters piece together what happened | Nova WAS there. She witnessed this directly. | "I watched," "I saw," "In that room" |
+| **THE INVESTIGATION** (present) | Director observations, burial transactions, player behavior | The game session where characters piece together what happened | Set by the reporting mode in your system prompt: on site, Nova witnessed it; remote, it reached her as tips from people who were there. | "During the investigation," "was seen," "the room heard" — third person, never a first-person presence claim |
 
 **Rules for arc summaries:**
 - Memory CONTENT → party-night events (past tense, framed as recordings)
-- Who EXPOSED or BURIED a memory → investigation events (present, Nova witnessed)
-- Director observations → investigation events (behavioral ground truth Nova saw)
+- Who EXPOSED or BURIED a memory → investigation events (present; name who did it, in the third person)
+- Director observations → investigation events (behavioral ground truth from the director; third person, no presence claim)
 - Paper evidence → party context (documents from before the investigation)
 
 **WRONG:** "During the party, Sarah exposed three memories about the lab."

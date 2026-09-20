@@ -20,8 +20,10 @@ describe('incrementArcRevision', () => {
     expect(result.humanArcRevisionCount).toBe(0);
   });
 
-  test('increments human count when human feedback present', async () => {
-    const state = { narrativeArcs: [{ id: 'a1' }], arcRevisionCount: 0, humanArcRevisionCount: 0, _arcFeedback: 'fix burial stuff' };
+  test('a send back opens a round and resets the automated budget at the arc stop', async () => {
+    // Integrator ruling after wave 2: the arc stop's automated counter is per round like
+    // the outline's and article's, so the banner's "this round" is true here too.
+    const state = { narrativeArcs: [{ id: 'a1' }], arcRevisionCount: 2, humanArcRevisionCount: 0, _arcFeedback: 'fix burial stuff' };
     const result = await incrementArcRevision(state);
     expect(result.arcRevisionCount).toBe(0);
     expect(result.humanArcRevisionCount).toBe(1);
