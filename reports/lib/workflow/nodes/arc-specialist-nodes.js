@@ -981,7 +981,7 @@ async function reviseArcs(state, config) {
   try {
     const result = await sdkClient({
       prompt: revisionPrompt,
-      systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback),
+      systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback, state.sessionConfig),
       model: 'opus',
       jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
       disableTools: true,        // Pure analytical task — no tool access needed
@@ -1070,12 +1070,19 @@ async function reviseArcs(state, config) {
  * Human feedback: allows conceptual arc replacement
  * Evaluator feedback: targeted fixes only
  *
+ * Brief 1.5: both branches carry the session's reporting-mode block, from the
+ * same single source as the two arc generation prompts and the two outline
+ * prompts, in the same position — right after the identity line. A rework left
+ * mode-blind would reintroduce the presence claims into a remote session's arcs,
+ * which is exactly the failure the generation prompts were just taught to avoid.
+ *
  * @param {boolean} hasHumanFeedback - Whether revision is driven by human rejection
+ * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
  * @returns {string} System prompt
  */
-function getArcRevisionSystemPrompt(hasHumanFeedback = false) {
+function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined) {
   if (hasHumanFeedback) {
-    return `You are revising narrative arcs based on human reviewer feedback for "About Last Night."
+    return withReportingModeBlock(`You are revising narrative arcs based on human reviewer feedback for "About Last Night."
 
 The human reviewer has domain expertise about the game mechanics. Their feedback takes ABSOLUTE PRIORITY.
 
@@ -1086,11 +1093,11 @@ RULES:
 4. PRESERVE arcs and arc content the feedback does not mention
 5. If the feedback corrects a game mechanic (e.g., burial attribution, evidence boundaries), apply the correction ACROSS ALL arcs, not just the one mentioned
 6. Output complete arcs with all required fields - do not return partial arcs
-7. Maintain the same JSON schema structure as the input arcs`;
+7. Maintain the same JSON schema structure as the input arcs`, sessionConfig);
   }
 
   // Evaluator-driven revision: targeted fixes only
-  return `You are revising narrative arcs for an investigative article about "About Last Night".
+  return withReportingModeBlock(`You are revising narrative arcs for an investigative article about "About Last Night".
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING existing arcs, not generating from scratch
@@ -1113,7 +1120,7 @@ DO:
 - Identify exactly what needs to change
 - Make minimal, surgical fixes
 - Verify your changes address the feedback
-- Return the complete updated arc set`;
+- Return the complete updated arc set`, sessionConfig);
 }
 
 /**
@@ -1805,6 +1812,7 @@ module.exports = {
 
     // Revision path prompt builder (for director-notes enrichment testing)
     buildArcRevisionPrompt,
+    getArcRevisionSystemPrompt,
     buildCharacterCategoriesBlock,
     describeValidEvidence
   }

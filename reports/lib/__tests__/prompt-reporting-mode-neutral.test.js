@@ -138,7 +138,7 @@ describe('article REVISION system prompt', () => {
 });
 
 /**
- * The block now sits in four more system prompts (phase 1, brief 1.5).
+ * The block now sits in six more system prompts (phase 1, brief 1.5).
  *
  * The arc writer and the outline writer were never told the mode: the last
  * remote session's arc summaries said "I watched" and its outline carried six
@@ -163,7 +163,11 @@ describe('the mode block reaches the arc and outline writers', () => {
       'outline generation': outline,
       'outline revision': getOutlineRevisionSystemPrompt('journalist', sessionConfig),
       'core arc generation': arcTesting.coreArcSystemPrompt(sessionConfig),
-      'interweaving enrichment': arcTesting.interweavingSystemPrompt(sessionConfig)
+      'interweaving enrichment': arcTesting.interweavingSystemPrompt(sessionConfig),
+      // Both rework branches: a mode-blind rework puts the presence claims back
+      // into a remote session's arcs one paid call after generation avoided them.
+      'arc rework (director-driven)': arcTesting.getArcRevisionSystemPrompt(true, sessionConfig),
+      'arc rework (evaluation-driven)': arcTesting.getArcRevisionSystemPrompt(false, sessionConfig)
     };
   }
 
@@ -172,7 +176,14 @@ describe('the mode block reaches the arc and outline writers', () => {
       let prompts;
       beforeAll(async () => { prompts = await systemPrompts(mode); });
 
-      it.each(['outline generation', 'outline revision', 'core arc generation', 'interweaving enrichment'])(
+      it.each([
+        'outline generation',
+        'outline revision',
+        'core arc generation',
+        'interweaving enrichment',
+        'arc rework (director-driven)',
+        'arc rework (evaluation-driven)'
+      ])(
         'the %s system prompt states the mode, word for word',
         (name) => {
           expect(prompts[name]).toContain(REPORTING_MODE_BLOCKS[mode]);
