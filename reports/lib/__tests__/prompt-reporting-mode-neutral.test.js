@@ -149,7 +149,7 @@ describe('article REVISION system prompt', () => {
  */
 describe('the mode block reaches the arc and outline writers', () => {
   const { REPORTING_MODE_BLOCKS, createPromptBuilder: makeBuilder } = require('../prompt-builder');
-  const { _testing: { getOutlineRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
+  const { _testing: { getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
   const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
 
   /** Every system prompt that must carry the block, for one reporting mode. */
@@ -162,6 +162,7 @@ describe('the mode block reaches the arc and outline writers', () => {
     return {
       'outline generation': outline,
       'outline revision': getOutlineRevisionSystemPrompt('journalist', sessionConfig),
+      'article revision': getArticleRevisionSystemPrompt('journalist', sessionConfig),
       'core arc generation': arcTesting.coreArcSystemPrompt(sessionConfig),
       'interweaving enrichment': arcTesting.interweavingSystemPrompt(sessionConfig),
       // Both rework branches: a mode-blind rework puts the presence claims back

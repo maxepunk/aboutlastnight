@@ -1532,7 +1532,7 @@ async function reviseContentBundle(state, config) {
 
     const revised = await sdk({
       prompt: revisionPrompt,
-      systemPrompt: getArticleRevisionSystemPrompt(config?.configurable?.theme || state?.theme || 'journalist'),
+      systemPrompt: getArticleRevisionSystemPrompt(config?.configurable?.theme || state?.theme || 'journalist', state?.sessionConfig || {}),
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
       jsonSchema: contentBundleSchema,  // Use full schema (Fix 3)
@@ -1592,10 +1592,13 @@ async function reviseContentBundle(state, config) {
  * Get system prompt for article revision
  * Focuses on TARGETED FIXES, not regeneration
  */
-function getArticleRevisionSystemPrompt(theme = 'journalist') {
+function getArticleRevisionSystemPrompt(theme = 'journalist', sessionConfig = {}) {
   const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
   const constraints = THEME_CONSTRAINTS[theme] || THEME_CONSTRAINTS.journalist;
-  return `${framing.revision || framing.articleGeneration}
+  // Phase 1 (integrator ruling at the live gate): the rework system prompt carries the
+  // reporting mode like the outline and arc reworks do; a remote session's rework must
+  // not be the one writer left able to put the reporter back in the room.
+  return withReportingModeBlock(`${framing.revision || framing.articleGeneration}
 
 ${constraints.revisionVoice}
 
@@ -1616,7 +1619,7 @@ WHAT TO FIX:
 - Low-scoring criteria in the evaluation
 - Any anti-patterns flagged by the evaluator
 
-Return the complete revised article in the same JSON format.`;
+Return the complete revised article in the same JSON format.`, sessionConfig);
 }
 
 /**
