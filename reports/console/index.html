@@ -46,9 +46,12 @@
        after ArcSelection, so on that screen the name was undefined and the
        revision budget + previous-feedback callout could not render at all. -->
   <script type="text/babel" src="components/RevisionDiff.js"></script>
+  <!-- outline-edit-logic.js must load BEFORE ArcSelection, Outline and Article:
+       all three alias window.Console.outlineEditLogic at load time (ArcSelection
+       for computeResetKey). It used to sit after ArcSelection. -->
+  <script type="text/babel" src="outline-edit-logic.js"></script>
   <script type="text/babel" src="components/checkpoints/ArcSelection.js"></script>
   <script type="text/babel" src="components/checkpoints/Photos.js"></script>
-  <script type="text/babel" src="outline-edit-logic.js"></script>
   <script type="text/babel" src="components/checkpoints/Outline.js"></script>
   <script type="text/babel" src="components/checkpoints/Article.js"></script>
   <script type="text/babel" src="components/RollbackPanel.js"></script>

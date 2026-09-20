@@ -17,11 +17,18 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 const { Badge, EvalBar } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ViewLogic = window.Console.checkpointViewLogic;
+// computeResetKey: the collision-resistant, content-sensitive reset key
+// Outline.js and Article.js already use. Loaded before this file in index.html.
+const EditLogic = window.Console.outlineEditLogic;
 
 function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisionCache }) {
   const arcs = (data && data.narrativeArcs) || [];
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
+  // The round the director's send back actually advances. arcRevisionCount
+  // (above) counts only the automated budget: incrementArcRevision holds it
+  // FLAT on a human-driven pass (graph.js, `isHumanDriven = !!state._arcFeedback`).
+  const humanRevisionCount = (data && data.humanRevisionCount) || 0;
   const maxRevisions = (data && data.maxRevisions) || 2;
   const previousArcs = (revisionCache && revisionCache.arcs) || null;
   // Brief 1.2: id -> {name, owner, type, firstLine} for every exposed document,
@@ -54,13 +61,15 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   // means on screen. An arc rework is about eight minutes of Opus.
   const [sendBackArmed, setSendBackArmed] = React.useState(false);
 
-  // Reset selection when arcs change (e.g., after rollback or revision)
-  // Use serialized IDs (not just length) to detect same-count data swaps.
-  // A rework can return the same arc ids with new content, so the round and the
-  // pre-fill are part of the key too: without them the box kept the text the
-  // director already sent and the selection stayed on the previous round's picks.
-  const arcIdKey = arcs.map(function (arc) { return arc.id || arc.title; }).join(',');
-  const resetKey = arcIdKey + '|' + revisionCount + '|' + notePrefill;
+  // Reset selection when arcs change (e.g., after rollback or revision).
+  // The key must see CONTENT, not ids: the arc reviser is told to make targeted
+  // fixes and preserve the set, so a rework routinely returns the same ids with
+  // new text, and an id list cannot tell the two rounds apart. computeResetKey
+  // serializes the arcs themselves. The round in the key is humanRevisionCount,
+  // the counter the director's send back advances; revisionCount (arcRevisionCount)
+  // stays flat on exactly that pass, which is the only pass this reset exists for.
+  // The pre-fill is its own term: it comes from directorGateNotes, not from arcs.
+  const resetKey = EditLogic.computeResetKey(arcs, humanRevisionCount) + '|' + notePrefill;
   React.useEffect(function () {
     setSelectedArcs(new Set(ViewLogic.defaultArcSelection(arcs)));
     setExpandedCards(new Set());

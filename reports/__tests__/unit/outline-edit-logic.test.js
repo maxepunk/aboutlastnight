@@ -209,6 +209,27 @@ describe('primitives', () => {
     const circ = {}; circ.self = circ;
     expect(function () { L.computeResetKey(circ, 0); }).not.toThrow();
   });
+
+  // Brief 1.2: the arc stop keys its reset on this helper too. The arc reviser
+  // is told to make targeted fixes and preserve the set, so a rework comes back
+  // with the SAME ids and new text; an id-list key cannot see that, and the
+  // round that moves on a director send back is humanArcRevisionCount, not
+  // arcRevisionCount (incrementArcRevision holds the latter flat on that pass).
+  it('computeResetKey sees new arc content behind unchanged arc ids', () => {
+    const before = [
+      { id: 'arc-1', title: 'The wire transfers', summary: 'Money left the shell account.' },
+      { id: 'arc-2', title: 'The valet', summary: 'Blake was in the hallway.' }
+    ];
+    const after = [
+      { id: 'arc-1', title: 'The wire transfers', summary: 'Money left the shell account twice.' },
+      { id: 'arc-2', title: 'The valet', summary: 'Blake was in the hallway.' }
+    ];
+    // Same ids, same length, same human round: the key must still move.
+    expect(L.computeResetKey(before, 0)).not.toBe(L.computeResetKey(after, 0));
+    // And the human round alone moves it when the arcs come back byte-identical.
+    expect(L.computeResetKey(before, 0)).not.toBe(L.computeResetKey(before, 1));
+    expect(L.computeResetKey(before, 1)).toBe(L.computeResetKey(before, 1));
+  });
 });
 
 // ── (C) Journalist initializers ───────────────────────────────────────────────
