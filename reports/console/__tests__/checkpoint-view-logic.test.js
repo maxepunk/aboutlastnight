@@ -469,3 +469,41 @@ describe('approveLabel', () => {
     expect(approveLabel(null, false).label).toBe('Approve');
   });
 });
+
+describe('steeringView (spec 2026-09-19 §4.4, §5.5)', () => {
+  const { steeringView } = require('../checkpoint-view-logic');
+
+  test('nothing → any:false with empty parts', () => {
+    expect(steeringView(null, null)).toEqual({ any: false, changedLabels: [], keptCount: 0, notes: [] });
+    expect(steeringView(null, [])).toEqual({ any: false, changedLabels: [], keptCount: 0, notes: [] });
+  });
+
+  test('changed scopes are mapped to the gate labels; section ids and unknown keys are readable', () => {
+    const v = steeringView({ checked: ['lede', 'closing', 'section:intro', 'evidenceCards', 'weird'], changed: ['lede', 'section:intro', 'weird'] }, []);
+    expect(v.any).toBe(true);
+    expect(v.changedLabels).toEqual(['LEDE', 'Section "intro"', 'weird']);
+    expect(v.keptCount).toBe(0);
+  });
+
+  test('a report with nothing changed reports the kept count', () => {
+    const v = steeringView({ checked: ['headline', 'byline'], changed: [] }, []);
+    expect(v).toEqual({ any: true, changedLabels: [], keptCount: 2, notes: [] });
+  });
+
+  test('an empty checked list is treated as no report', () => {
+    expect(steeringView({ checked: [], changed: [] }, []).any).toBe(false);
+  });
+
+  test('notes become labelled lines in order; malformed entries are skipped', () => {
+    const v = steeringView(null, [
+      { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the vote arc.' },
+      null, { gate: 'outline', text: '' },
+      { gate: 'outline', round: 2, text: 'Lead with the ledger.' }
+    ]);
+    expect(v.any).toBe(true);
+    expect(v.notes).toEqual([
+      { label: '[arc-selection, rejection 1]', text: 'Drop the vote arc.' },
+      { label: '[outline, rejection 2]', text: 'Lead with the ledger.' }
+    ]);
+  });
+});

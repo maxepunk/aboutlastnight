@@ -451,6 +451,40 @@
     };
   }
 
+  // ── steeringView (spec 2026-09-19 §4.4, §5.5) ─────────────────────────────
+  // The hand-edit report and the standing notes as RevisionDiff renders them.
+  var SCOPE_LABELS = {
+    lede: 'LEDE', theStory: 'THE STORY', followTheMoney: 'FOLLOW THE MONEY', thePlayers: 'THE PLAYERS',
+    whatsMissing: "WHAT'S MISSING", closing: 'CLOSING',
+    executiveSummary: 'EXECUTIVE SUMMARY', evidenceLocker: 'EVIDENCE LOCKER', memoryAnalysis: 'MEMORY ANALYSIS',
+    suspectNetwork: 'SUSPECT NETWORK', outstandingQuestions: 'OUTSTANDING QUESTIONS', finalAssessment: 'FINAL ASSESSMENT',
+    headline: 'Headline', byline: 'Byline', pullQuotes: 'Pull quotes', evidenceCards: 'Evidence cards',
+    financialTracker: 'Financial tracker', photos: 'Photos', heroImage: 'Hero image'
+  };
+
+  function scopeLabel(key) {
+    if (SCOPE_LABELS[key]) return SCOPE_LABELS[key];
+    if (typeof key === 'string' && key.indexOf('section:') === 0) return 'Section "' + key.slice(8) + '"';
+    return String(key);
+  }
+
+  function steeringView(handEditReport, gateNotes) {
+    var report = handEditReport && Array.isArray(handEditReport.checked) && handEditReport.checked.length > 0
+      ? handEditReport : null;
+    var changed = report ? (Array.isArray(report.changed) ? report.changed : []) : [];
+    var notes = (Array.isArray(gateNotes) ? gateNotes : [])
+      .filter(function (n) { return n && typeof n.text === 'string' && n.text.trim(); })
+      .map(function (n) {
+        return { label: '[' + n.gate + ', ' + (n.kind || 'rejection') + ' ' + (n.round || 1) + ']', text: n.text.trim() };
+      });
+    return {
+      any: !!report || notes.length > 0,
+      changedLabels: changed.map(scopeLabel),
+      keptCount: report && changed.length === 0 ? report.checked.length : 0,
+      notes: notes
+    };
+  }
+
   var api = {
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
@@ -461,7 +495,8 @@
     whiteboardView: whiteboardView,
     factCheckSummary: factCheckSummary,
     approveLabel: approveLabel,
-    wordTail: wordTail
+    wordTail: wordTail,
+    steeringView: steeringView
   };
 
   if (typeof window !== 'undefined') {
