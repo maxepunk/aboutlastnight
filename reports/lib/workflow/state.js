@@ -1432,7 +1432,7 @@ if (require.main === module) {
   // NOTE: APPROVAL_TYPES removed - checkpoint types now in checkpoint-helpers.js
 
   // Test revision caps
-  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, HUMAN_ARCS: 4, OUTLINE: 3, ARTICLE: 3 }
+  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, OUTLINE: 2, ARTICLE: 2 }
 
   // Test rollback points
   console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 11

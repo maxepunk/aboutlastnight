@@ -124,7 +124,8 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
 
     // Hand-edit report: what the rework did to the director's own edits (§4.4).
     // Muted amber, NOT `.revision-diff__warning`: nothing here blocks anything, and
-    // the red "Maximum revisions reached" treatment read as a failure (M15).
+    // that red treatment (then the cap warning, now the arc timeout banner) read as
+    // a failure (M15).
     // The amber lives on the `--changed` modifier so the muted "kept" line below,
     // which shares the base class, stays a plain line of text.
     steering.changedLabels.length > 0 && React.createElement('div', {
