@@ -155,7 +155,7 @@ async function render() {
   const arc = buildRevisionContext({ phase: 'article', revisionCount: 1, validationResults: state.validationResults || null,
     previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: bundleDiff });
   const arPrompt = await buildArticleRevisionPrompt({ ...state, _outlineGuidance: guidance }, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES);
-  write(FILES[3], getArticleRevisionSystemPrompt(theme), arPrompt);
+  write(FILES[3], getArticleRevisionSystemPrompt(theme, state.sessionConfig || {}), arPrompt);
 
   for (const f of FILES) console.log(`${f}: ${fs.statSync(path.join(outDir, f)).size.toLocaleString()} bytes`);
 }

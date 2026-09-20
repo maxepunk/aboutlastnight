@@ -438,3 +438,23 @@ describe('pruneGateNotes (spec 2026-09-19 §5.4)', () => {
     expect(pruneGateNotes([null, 'x', { gate: 'arc-selection', text: 'k' }], 'outline')).toEqual([{ gate: 'arc-selection', text: 'k' }]);
   });
 });
+
+describe('pruneGateNotes keeps approval notes (phase 1, final review I1)', () => {
+  const notes = [
+    { gate: 'outline', kind: 'approval', round: 1, text: 'develop the story through every section', at: 't1' },
+    { gate: 'article', kind: 'rejection', round: 1, text: 'the deck must name the tension', at: 't2' },
+    { gate: 'article', kind: 'approval', round: 1, text: 'keep the closing as it is', at: 't3' }
+  ];
+
+  it('a rollback to the article stop drops its rejection note and keeps its approval note', () => {
+    expect(pruneGateNotes(notes, 'article').map((n) => n.text)).toEqual([
+      'develop the story through every section', 'keep the closing as it is'
+    ]);
+  });
+
+  it('a rollback to the outline stop keeps the approval notes of both stops', () => {
+    expect(pruneGateNotes(notes, 'outline').map((n) => n.text)).toEqual([
+      'develop the story through every section', 'keep the closing as it is'
+    ]);
+  });
+});

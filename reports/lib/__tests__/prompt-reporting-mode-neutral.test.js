@@ -180,6 +180,7 @@ describe('the mode block reaches the arc and outline writers', () => {
       it.each([
         'outline generation',
         'outline revision',
+        'article revision',
         'core arc generation',
         'interweaving enrichment',
         'arc rework (director-driven)',

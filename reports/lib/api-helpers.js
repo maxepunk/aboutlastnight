@@ -129,7 +129,10 @@ function pruneGateNotes(notes, rollbackTo) {
   const list = (Array.isArray(notes) ? notes : []).filter((n) => n && typeof n === 'object');
   const invalidated = new Set(PHASES_INVALIDATED_BY[rollbackTo] || []);
   if (invalidated.size === 0) return list.slice();
-  return list.filter((n) => !invalidated.has(n.gate));
+  // Phase 1 (final review I1): a rejection note at an invalidated stop was about work
+  // the rollback throws away, so it goes; an approval note is forward guidance for
+  // whatever writer comes next, which is exactly the writer this rollback creates.
+  return list.filter((n) => !invalidated.has(n.gate) || n.kind === 'approval');
 }
 
 /**

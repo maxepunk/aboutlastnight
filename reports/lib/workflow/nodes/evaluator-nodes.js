@@ -1123,7 +1123,10 @@ function createEvaluator(phase, options = {}) {
           ...(evaluation.structuralIssues || []),
           ...factCheckIssues
         ],
-        advisoryWarnings: evaluation.advisoryWarnings || [],
+        advisoryWarnings: [
+          ...(evaluation.advisoryWarnings || []),
+          ...((factCheck && factCheck.advisoryWarnings) || [])
+        ],
         issues: evaluation.issues,
         criteriaScores: evaluation.criteriaScores,
         confidence: evaluation.confidence || 'medium',
