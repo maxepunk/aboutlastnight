@@ -238,6 +238,14 @@ function summarizeEnrichment(directorNotes) {
     };
 }
 
+/** The approved outline's thesis for the article gate (spec 2026-09-19 §6.2). Journalist only. */
+function outlineThesisOf(state) {
+    if ((state.theme || 'journalist') === 'detective') return null;
+    const lede = state.outline && state.outline.lede;
+    if (!lede || typeof lede !== 'object') return null;
+    return { hook: lede.hook || '', keyTension: lede.keyTension || '', primaryArc: lede.primaryArc || '' };
+}
+
 /**
  * Build response data for a specific checkpoint type (DRY helper)
  * Extracts relevant fields from state based on checkpoint type
@@ -281,7 +289,8 @@ async function getCheckpointData(checkpointType, state) {
                 maxHumanRevisions: REVISION_CAPS.HUMAN_ARCS,
                 previousFeedback: state._arcFeedback || null,
                 _revisionTimedOut: state._arcAnalysisCache?._revisionTimedOut || false,
-                _generationTimedOut: state._arcAnalysisCache?._generationTimedOut || false
+                _generationTimedOut: state._arcAnalysisCache?._generationTimedOut || false,
+                directorGateNotes: state.directorGateNotes || []
             };
         case CHECKPOINT_TYPES.OUTLINE:
             return {
@@ -290,7 +299,9 @@ async function getCheckpointData(checkpointType, state) {
                 evaluationHistory: state.evaluationHistory,
                 revisionCount: state.outlineRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.OUTLINE,
-                previousFeedback: state._outlineFeedback || null
+                previousFeedback: state._outlineFeedback || null,
+                handEditReport: state._outlineHandEditReport || null,
+                directorGateNotes: state.directorGateNotes || []
             };
         case CHECKPOINT_TYPES.ARTICLE:
             return {
@@ -304,7 +315,10 @@ async function getCheckpointData(checkpointType, state) {
                 sessionId: state.sessionId,
                 revisionCount: state.articleRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARTICLE,
-                previousFeedback: state._articleFeedback || null
+                previousFeedback: state._articleFeedback || null,
+                handEditReport: state._articleHandEditReport || null,
+                directorGateNotes: state.directorGateNotes || [],
+                outlineThesis: outlineThesisOf(state)
             };
         case CHECKPOINT_TYPES.PRE_CURATION:
             return {

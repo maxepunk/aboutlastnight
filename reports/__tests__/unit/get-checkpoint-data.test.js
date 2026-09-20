@@ -160,3 +160,39 @@ describe('getCheckpointData — enrichment counts (H25)', () => {
     expect(data.enrichment.warnings).toEqual({ droppedQuotes: 3 });
   });
 });
+
+describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
+  const NOTES = [{ gate: 'outline', kind: 'rejection', round: 1, text: 'x', at: 't' }];
+
+  it('outline carries handEditReport and directorGateNotes', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], _outlineHandEditReport: { checked: ['lede'], changed: [] }, directorGateNotes: NOTES });
+    expect(data.handEditReport).toEqual({ checked: ['lede'], changed: [] });
+    expect(data.directorGateNotes).toEqual(NOTES);
+  });
+
+  it('outline defaults to a null report and an empty notes list', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [] });
+    expect(data.handEditReport).toBeNull();
+    expect(data.directorGateNotes).toEqual([]);
+  });
+
+  it('article carries handEditReport, directorGateNotes and the journalist outlineThesis', async () => {
+    const lede = { hook: 'H', keyTension: 'T', primaryArc: 'A', selectedEvidence: ['e'] };
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, outline: { lede }, _articleHandEditReport: { checked: ['headline'], changed: ['headline'] }, directorGateNotes: NOTES });
+    expect(data.handEditReport).toEqual({ checked: ['headline'], changed: ['headline'] });
+    expect(data.directorGateNotes).toEqual(NOTES);
+    expect(data.outlineThesis).toEqual({ hook: 'H', keyTension: 'T', primaryArc: 'A' });
+  });
+
+  it('article outlineThesis is null for the detective theme and when the outline has no lede', async () => {
+    const d = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, theme: 'detective', outline: { lede: { hook: 'H' } } });
+    expect(d.outlineThesis).toBeNull();
+    const none = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, outline: {} });
+    expect(none.outlineThesis).toBeNull();
+  });
+
+  it('arc-selection carries directorGateNotes', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { evaluationHistory: [], narrativeArcs: [], directorGateNotes: NOTES });
+    expect(data.directorGateNotes).toEqual(NOTES);
+  });
+});
