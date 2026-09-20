@@ -188,3 +188,18 @@ No new steering control is invented here. Everything in this phase makes words t
 **Done.** The arc stop on the copy shows names, not ids, and a note survives a send-back.
 
 **Out of scope.** The thesis settled at the arc stop; per-arc anchored notes; editing an arc's text; adding an arc.
+
+---
+
+## Rulings after wave 1 (the integrator's, 2026-09-20)
+
+These amend the briefs above. Wave 2 (briefs 1.4 and 1.2) reads them as part of the brief.
+
+- **The note box is on screen in every mode**, JSON mode included, because the JSON panel's Save & Approve sends it. Brief 1.1's "view mode" wording is corrected. Brief 1.2's arc stop keeps the same shape: one box, always visible.
+- **Send back is a two-click action** at every stop: the first click arms the button and names the cost ("Confirm send back, starts a rework"), the second sends; editing the note, pressing another action, or a page reset disarms it. The arming label comes from the pure function `sendBackButton` in `console/checkpoint-view-logic.js`; brief 1.2 reuses it at the arc stop.
+- **Screen copy says "note", never "guidance"** (CONTEXT.md). The prompt-side `<DIRECTOR_GUIDANCE>` tag and the arc stop's `outlineGuidance` payload key keep their existing names.
+- **The ">=80% preserve" rule is gone from every rework prompt**: the CRITICAL block in `buildRevisionContext`, the outline and arc rework system prompts, the article rework system prompt ("High-scoring criteria (0.8+) should be left unchanged" and "Voice elements that score well"), and the "(high-scoring criteria)" parenthetical in the three YOUR TASK lists. Pinned by `lib/__tests__/revision-prompts-craft-rules.test.js`.
+- **The reporting-mode block is in seven system prompts**: article, outline, outline rework, the two arc calls, and both branches of the arc rework. The render harness renders none of the arc prompts; they are verified live.
+- **`filterGateNotes(gateNotes, currentFeedback, gate)` requires the gate** and throws without it. `reviewPayload` throws on an unknown action and returns null on a blank send-back.
+- **At the cap, a failing fact check outranks a passing evaluation**: `validationResults.passed` is false whenever the fact check holds structural issues.
+- **Phase gate, render diff expectations** (plain diff against the baseline rendered from main): `outline-generation.txt` differs in the mode block, the `<INVESTIGATION_OBSERVATIONS>` section, the `<SHOULD_CONSIDER>` section before `<DIRECTOR_GUIDANCE>`, and the re-paired photo list; `outline-revision.txt` in the mode block, the system prompt's renumbered rules, the SHOULD CONSIDER list and the Ready line; `article-generation.txt` in the `<SHOULD_CONSIDER>` section only; `article-revision.txt` in the system prompt's rules, the SHOULD CONSIDER list, the Ready line and the standing-notes preamble. Anything else fails the gate.

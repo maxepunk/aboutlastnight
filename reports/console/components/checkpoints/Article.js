@@ -962,6 +962,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     // and the one that drifts loose ships an invalid bundle). An invalid edit is
     // shown and not sent.
     if (hasEdits && editedBundle) {
+      // A send blocked by an invalid edit disarms the button: the next attempt costs two clicks again.
+      setSendBackArmed(false);
       if (!gateEdits(editedBundle, setEditError, 'send')) return;
       if (dispatch) {
         dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle, note: note });
@@ -1381,7 +1383,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   });
 
   var approve = ViewLogic.approveLabel(factCheck, hasEdits);
-  var sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'article');
+  const sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'article');
 
   var currentHeadline = getCurrentBundle().headline || headline;
   var currentByline = getCurrentBundle().byline || byline;

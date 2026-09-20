@@ -733,6 +733,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     // is cached as the revision's previous version so the diff view compares the
     // rework against what the director actually sent.
     if (hasEdits && editedOutline) {
+      // A send blocked by an invalid edit disarms the button: the next attempt costs two clicks again.
+      setSendBackArmed(false);
       if (!gateEdits(editedOutline, setEditError, 'send')) return;
       if (dispatch) {
         dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline, note: note });

@@ -251,10 +251,11 @@ const REPORTING_MODE_BLOCKS = {
 /**
  * The block for one session, defaulting to on-site.
  *
- * The single source of the wording for all five system prompts that carry it:
+ * The single source of the wording for all seven system prompts that carry it:
  * the article's (PromptBuilder._buildReportingModeBlock), the outline's and the
- * outline rework's, and the two arc calls' (built outside PromptBuilder, in
- * arc-specialist-nodes.js, which reaches this through withReportingModeBlock).
+ * outline rework's, the two arc calls' and the two arc rework branches' (built
+ * outside PromptBuilder, in arc-specialist-nodes.js, which reaches this through
+ * withReportingModeBlock).
  *
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
  * @returns {string}

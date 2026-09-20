@@ -168,7 +168,8 @@ async function render() {
  */
 function stripPermitted(text) {
   let t = text.replace(/<HAND_EDITS>[\s\S]*?<\/HAND_EDITS>\n*/g, '');
-  t = t.replace(/\n*Standing notes the director gave at earlier gates, in order\.[\s\S]*?(?=\n<\/DIRECTOR_GUIDANCE>)/g, '');
+  // Anchored on the first two words only: brief 1.1 reworded the preamble.
+  t = t.replace(/\n*Standing notes[\s\S]*?(?=\n<\/DIRECTOR_GUIDANCE>)/g, '');
   t = t.replace(/\n*<DIRECTOR_GUIDANCE>\n<\/DIRECTOR_GUIDANCE>/g, '');
   return t.trim();
 }

@@ -60,6 +60,18 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
     expect(getArcRevisionSystemPrompt(false)).not.toContain('80%');
   });
 
+  it('the article rework system prompt carries the rule in no wording, either theme', () => {
+    // Integrator ruling after wave 1: the same rule lived here as "High-scoring
+    // criteria (0.8+) should be left unchanged", on the reworker that turned the
+    // director's rethink into a relabel on 091826.
+    for (const theme of ['journalist', 'detective']) {
+      const text = getArticleRevisionSystemPrompt(theme);
+      expect(text).not.toContain('80%');
+      expect(text).not.toContain('0.8+');
+      expect(text).not.toContain('score well');
+    }
+  });
+
   it('both lists stay consecutively numbered after the removal', () => {
     const numbered = (text) => text
       .split('\n')

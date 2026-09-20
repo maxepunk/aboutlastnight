@@ -1188,7 +1188,7 @@ ${previousOutputSection}
 1. Review the PREVIOUS ARCS OUTPUT above
 2. Review the ISSUES TO ADDRESS in the revision context
 3. Make TARGETED FIXES to address those specific issues
-4. PRESERVE everything that's working well (high-scoring criteria)
+4. PRESERVE everything that's working well
 5. Return the complete updated arc set in the same JSON format
 
 Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;

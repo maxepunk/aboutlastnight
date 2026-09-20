@@ -1199,7 +1199,7 @@ ${previousOutputSection}
 1. Review the PREVIOUS OUTLINE OUTPUT above
 2. Review the ISSUES TO ADDRESS in the revision context
 3. Make TARGETED FIXES to address those specific issues
-4. PRESERVE everything that's working well (high-scoring criteria)
+4. PRESERVE everything that's working well
 5. Return the complete updated outline in the same JSON format
 
 Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.
@@ -1604,14 +1604,13 @@ CRITICAL REVISION RULES:
 1. You are IMPROVING an existing article, not generating from scratch
 2. The previous output represents significant work - PRESERVE what's good
 3. Focus ONLY on the specific issues listed in the revision context
-4. High-scoring criteria (0.8+) should be left unchanged
-5. Low-scoring criteria need targeted fixes
+4. Low-scoring criteria need targeted fixes
 
 WHAT TO PRESERVE:
 - Article structure and flow that's working
 - Narrative arcs that are properly developed
 - Evidence integration that's accurate
-- Voice elements that score well
+- Voice elements that are working
 
 WHAT TO FIX:
 - Only the specific issues mentioned in the feedback
@@ -1651,7 +1650,7 @@ ${previousOutputSection}
 1. Review the PREVIOUS ARTICLE OUTPUT above
 2. Review the ISSUES TO ADDRESS in the revision context
 3. Make TARGETED FIXES to address those specific issues
-4. PRESERVE everything that's working well (high-scoring criteria)
+4. PRESERVE everything that's working well
 5. Return the complete updated article in the same JSON format
 
 Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.
