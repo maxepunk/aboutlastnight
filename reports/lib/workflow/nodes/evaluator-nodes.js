@@ -1096,6 +1096,33 @@ function createEvaluator(phase, options = {}) {
         revisionNumber: currentRevisions
       };
 
+      // Brief 1.3: EVERY outcome writes validationResults, not only a failure.
+      //
+      // validationResults is one channel shared by the three revisers, and until
+      // this slice a pass and an escalation both left the PREVIOUS failure sitting
+      // in it. So the next rework prompt — the one the director's send-back
+      // triggers — described an evaluation state an hour out of date: on session
+      // 091826 it said "Ready: NO" and listed four evidence-card defects the
+      // reviser had already fixed.
+      //
+      // `feedback` and `revisionGuidance` carry the same text under both names:
+      // buildRevisionContext reads revisionGuidance first, buildArcRevisionContext
+      // (arc-specialist-nodes.js) reads only feedback.
+      const buildValidationResults = (passed) => ({
+        phase,
+        passed,
+        structuralIssues: [
+          ...(evaluation.structuralIssues || []),
+          ...(factCheck ? factCheck.structuralIssues : [])
+        ],
+        advisoryWarnings: evaluation.advisoryWarnings || [],
+        issues: evaluation.issues,
+        criteriaScores: evaluation.criteriaScores,
+        confidence: evaluation.confidence || 'medium',
+        revisionGuidance: evaluation.revisionGuidance,
+        feedback: evaluation.revisionGuidance
+      });
+
       // Debug: Log evaluation result details
       console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Evaluation result:`);
       console.log(`  - ready: ${isReady}, score: ${evaluation.overallScore}`);
@@ -1126,6 +1153,7 @@ function createEvaluator(phase, options = {}) {
         return {
           evaluationHistory: historyEntry,
           ...(factCheck && { _articleFactCheck: factCheck }),
+          validationResults: buildValidationResults(true),
           currentPhase: phaseConstant
         };
       }
@@ -1160,6 +1188,7 @@ function createEvaluator(phase, options = {}) {
         return {
           evaluationHistory: escalatedHistoryEntry,
           ...(factCheck && { _articleFactCheck: factCheck }),
+          validationResults: buildValidationResults(false),
           currentPhase: phaseConstant
         };
       }
@@ -1179,19 +1208,7 @@ function createEvaluator(phase, options = {}) {
         // drops a block stamped for another phase rather than acting on it. And the
         // structuralIssues/advisoryWarnings the evaluator computed now travel with
         // it instead of being dropped after the log line above.
-        validationResults: {
-          phase,
-          passed: false,
-          feedback: evaluation.revisionGuidance,
-          structuralIssues: [
-            ...(evaluation.structuralIssues || []),
-            ...(factCheck ? factCheck.structuralIssues : [])
-          ],
-          advisoryWarnings: evaluation.advisoryWarnings || [],
-          issues: evaluation.issues,
-          criteriaScores: evaluation.criteriaScores,
-          confidence: evaluation.confidence || 'medium'
-        }
+        validationResults: buildValidationResults(false)
       };
 
     } catch (error) {

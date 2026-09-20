@@ -11,6 +11,7 @@ const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
 const { isEmpty: isEmptyDiff, formatHandEditsBlock } = require('../../hand-edit-diff');
+const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NPC VALIDATION
@@ -810,7 +811,10 @@ function resolveArcs(arcs, availableArcs) {
  * @param {Object} options - Revision context options
  * @param {string} options.phase - Phase name ('arcs', 'outline', 'article')
  * @param {number} options.revisionCount - Current revision attempt number
- * @param {Object} options.validationResults - Evaluation results with criteria, issues, etc.
+ * @param {Object} options.validationResults - The evaluation's own record of what it
+ *   found: `phase`, `passed`, `criteriaScores`, `structuralIssues` (must fix),
+ *   `advisoryWarnings` (should consider), `revisionGuidance`. Every branch of
+ *   evaluatePhase writes one, pass or fail, so this is never a stale verdict.
  * @param {Object|Array} options.previousOutput - The full previous output to improve
  * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
  * @param {Object|null} [options.handEdits] - Hand-edit diff from lib/hand-edit-diff.js (rendered as <HAND_EDITS>)
@@ -855,25 +859,33 @@ function buildRevisionContext(options) {
 
   const criteria = phaseMismatch ? {} : (validationResults?.criteriaScores || {});
 
-  // `issues` when a legacy writer supplied it; otherwise the evaluator's split lists.
+  // Brief 1.3: must-fix and should-consider are two lists, not one. Concatenated,
+  // an advisory suggestion arrived at the writer as a defect it had to fix.
+  // `issues` when a legacy writer supplied it; otherwise the evaluator's own split.
   const rawIssues = phaseMismatch
     ? []
     : (Array.isArray(validationResults?.issues) && validationResults.issues.length > 0
         ? validationResults.issues
-        : [
-            ...(validationResults?.structuralIssues || []),
-            ...(validationResults?.advisoryWarnings || [])
-          ]);
+        : (validationResults?.structuralIssues || []));
+
+  const advisories = phaseMismatch ? [] : (validationResults?.advisoryWarnings || []);
 
   const feedback = phaseMismatch
     ? ''
     : (validationResults?.revisionGuidance || validationResults?.feedback || '');
 
   const confidence = phaseMismatch ? null : validationResults?.confidence;
-  const ready = phaseMismatch ? false : (validationResults?.ready || false);
+  // Brief 1.3: `passed` is the field every evaluator branch writes. This read was
+  // `.ready`, which nothing writes, so the line below said "NO (must address issues)"
+  // on every rework prompt ever sent — including the ones that followed a pass.
+  const passed = phaseMismatch ? false : validationResults?.passed === true;
 
+  // `passed === true` counts on its own: a clean evaluation that found nothing to
+  // say is still the answer to "what did the evaluation think", and it is exactly
+  // the case a send-back after a pass lands in.
   const hasEvaluation = !phaseMismatch && (
-    Object.keys(criteria).length > 0 || rawIssues.length > 0 || !!feedback
+    passed || Object.keys(criteria).length > 0 || rawIssues.length > 0 ||
+    advisories.length > 0 || !!feedback
   );
 
   const formatIssue = (i) => {
@@ -885,6 +897,17 @@ function buildRevisionContext(options) {
   const issuesList = rawIssues.length > 0
     ? rawIssues.map(formatIssue).join('\n')
     : '  (none reported)';
+
+  // Brief 1.3: the suggestions, under their own heading and the same two lines of
+  // preamble a generation prompt gives them. Omitted entirely when there are none.
+  const shouldConsiderBlock = advisories.length > 0
+    ? `
+
+SHOULD CONSIDER:
+${SHOULD_CONSIDER_PREAMBLE}
+
+${advisories.map(formatIssue).join('\n')}`
+    : '';
 
   // Per-criterion: score, structural/advisory label, and the evaluator's own
   // notes + concrete fix. The notes and fix are the actionable part.
@@ -924,10 +947,17 @@ function buildRevisionContext(options) {
     ? `${(confidence * 100).toFixed(0)}%`
     : (confidence || 'unknown');
 
+  // Brief 1.3: when the evaluation passed and the director sent the work back
+  // anyway, say so. Without this line a "Ready: YES" summary sitting above a list
+  // of demands reads as a contradiction the writer has to guess its way out of.
+  const sendBackLine = (passed && humanFeedback)
+    ? '\n\nThis evaluation passed. The director sent the work back anyway; their note below\nis the reason for this rework.'
+    : '';
+
   const evaluationBlock = hasEvaluation
     ? `EVALUATION SUMMARY:
   Confidence: ${confidenceText}
-  Ready: ${ready ? 'YES (but still improving)' : 'NO (must address issues)'}
+  Ready: ${passed ? 'YES' : 'NO (must address issues)'}${sendBackLine}
 
 ${workingWellText}
 ${needsWorkText}
@@ -936,7 +966,7 @@ CRITERIA SCORES:
 ${criteriaList}
 
 ISSUES TO ADDRESS:
-${issuesList}
+${issuesList}${shouldConsiderBlock}
 
 EVALUATOR FEEDBACK:
 ${feedback || '(no specific feedback provided)'}`
@@ -959,6 +989,11 @@ ${formatHandEditsBlock(handEdits)}
 `
     : '';
 
+  // Brief 1.3: the instruction "if a criterion is scoring well (>=80%), do NOT
+  // change anything related to it" used to sit at item 3. On session 091826 every
+  // criterion scored above 0.8, so it told the writer to change nothing, and the
+  // director's "rethink the closing" came back as a relabel. A later slice derives
+  // what to preserve from the scope of the send-back instead of from the scores.
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
 REVISION CONTEXT: ${phase.toUpperCase()} (Attempt ${revisionCount})
@@ -977,9 +1012,8 @@ CRITICAL REVISION INSTRUCTIONS:
 
 1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch
 2. Make TARGETED FIXES only for the specific issues identified above
-3. If a criterion is scoring well (≥80%), do NOT change anything related to it
-4. Output the complete revised ${phase} with all original content plus fixes
-5. Maintain consistency with the original structure and organization
+3. Output the complete revised ${phase} with all original content plus fixes
+4. Maintain consistency with the original structure and organization
 `.trim();
 
   // ─────────────────────────────────────────────────────────────────────────────

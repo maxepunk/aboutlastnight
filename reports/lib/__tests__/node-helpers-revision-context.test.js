@@ -45,13 +45,16 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
     expect(section).toContain('add Quinn');
   });
 
-  it('lists structural issues and advisory warnings', () => {
+  it('lists structural issues as must-fix and advisory warnings as should-consider', () => {
     const section = build();
     // Assert the rendered ISSUES lines, not a bare 'x' — which matched any 'x'
     // anywhere in several hundred characters of boilerplate and could not fail.
     expect(section).toContain('  - Missing roster members: Quinn');
     expect(section).toContain('  - x');
-    expect(section).toMatch(/ISSUES TO ADDRESS:\n  - Missing roster members: Quinn\n  - x/);
+    // Brief 1.3: the two lists are separate. Concatenated, an advisory warning read
+    // to the writer as a defect it had to fix.
+    expect(section).toMatch(/ISSUES TO ADDRESS:\n  - Missing roster members: Quinn\n\n/);
+    expect(section).toMatch(/SHOULD CONSIDER:\n[\s\S]*?\n  - x/);
   });
 
   it('names the high-scoring criteria to preserve', () => {
@@ -151,6 +154,97 @@ describe('buildRevisionContext — phase-stamped feedback (shared-channel bug)',
     expect(contextSection).toContain('(no evaluator feedback for this phase)');
     // Human feedback is a separate channel and must survive.
     expect(contextSection).toContain('tighten the closing');
+  });
+});
+
+/**
+ * Brief 1.3 — the rework prompt tells the truth.
+ *
+ * Measured on session 091826: every rework prompt said "Ready: NO (must address
+ * issues)" and listed four evidence-card defects fixed an hour earlier. Two causes.
+ * The builder read `validationResults.ready`, which no evaluator branch writes (they
+ * write `passed`), so the line was hardcoded to NO. And a passing evaluation wrote
+ * nothing at all, so the previous failure stayed in the channel.
+ */
+describe('buildRevisionContext — the evaluation state it reports (brief 1.3)', () => {
+  const PASSED = {
+    phase: 'article',
+    passed: true,
+    structuralIssues: [],
+    advisoryWarnings: ['the lede frontloads the verdict'],
+    criteriaScores: { voice: { score: 0.92, type: 'advisory', notes: 'strong' } },
+    revisionGuidance: '',
+    confidence: 'high'
+  };
+
+  const build = (overrides = {}) => buildRevisionContext({
+    phase: 'article',
+    revisionCount: 0,
+    validationResults: PASSED,
+    previousOutput: { headline: {} },
+    ...overrides
+  }).contextSection;
+
+  it('reads `passed`, the field the evaluator writes, not the `ready` nobody writes', () => {
+    expect(build()).toContain('Ready: YES');
+    expect(build()).not.toContain('Ready: NO');
+  });
+
+  it('still says NO when the evaluation failed', () => {
+    const section = build({
+      validationResults: { ...PASSED, passed: false, structuralIssues: ['card "T-1" misquotes its source'] }
+    });
+    expect(section).toContain('Ready: NO (must address issues)');
+  });
+
+  it('names the send-back as the reason for a rework the evaluation passed', () => {
+    const section = build({ humanFeedback: 'Rethink the closing.' });
+    expect(section).toContain('Ready: YES');
+    // The line wraps, so compare reflowed (as the <HAND_EDITS> cases below do).
+    expect(section.replace(/\s+/g, ' '))
+      .toContain('This evaluation passed. The director sent the work back anyway; their note below is the reason for this rework.');
+  });
+
+  it('says nothing about a send-back on an automated rework', () => {
+    expect(build({ humanFeedback: null })).not.toContain('reason for this rework');
+  });
+
+  it('keeps a passing evaluation out of the must-fix list and its advisories in should-consider', () => {
+    const section = build();
+    expect(section).toMatch(/ISSUES TO ADDRESS:\n  \(none reported\)/);
+    expect(section).toContain('  - the lede frontloads the verdict');
+    expect(section).toContain('SHOULD CONSIDER:');
+    expect(section).toContain('They are not requirements.');
+  });
+
+  it('still reports the pass when the evaluation had nothing else to say', () => {
+    // A clean evaluation writes empty lists and no guidance. That is an answer, not
+    // an absence — and it is exactly the state a send-back after a pass lands in.
+    const section = build({
+      validationResults: { phase: 'article', passed: true, structuralIssues: [], advisoryWarnings: [] },
+      humanFeedback: 'Rethink the closing.'
+    });
+    expect(section).toContain('Ready: YES');
+    expect(section).not.toContain('(no evaluator feedback for this phase)');
+  });
+
+  it('omits the should-consider list entirely when the evaluation raised none', () => {
+    expect(build({ validationResults: { ...PASSED, advisoryWarnings: [] } }))
+      .not.toContain('SHOULD CONSIDER');
+  });
+
+  it('no longer tells the writer to leave every high-scoring criterion alone', () => {
+    // With every criterion above 0.8 this instruction turned a "rethink the closing"
+    // send-back into a relabel.
+    const section = build();
+    expect(section).not.toContain('scoring well');
+    expect(section).not.toMatch(/do NOT change anything related to it/);
+    // The four surviving instructions are renumbered with no gap.
+    const instructions = section.slice(section.indexOf('CRITICAL REVISION INSTRUCTIONS'));
+    expect(instructions).toContain('1. PRESERVE EVERYTHING');
+    expect(instructions).toContain('3. Output the complete revised article');
+    expect(instructions).toContain('4. Maintain consistency');
+    expect(instructions).not.toContain('5.');
   });
 });
 

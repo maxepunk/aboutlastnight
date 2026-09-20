@@ -988,17 +988,54 @@ describe('evaluator-nodes', () => {
       expect(result.validationResults.criteriaScores.coherence.score).toBe(0.3);
     });
 
-    it('does not include validationResults when ready', async () => {
+    // Brief 1.3: a passing evaluation used to write nothing, so the previous
+    // failure stayed in the shared channel and the next rework prompt described an
+    // evaluation state an hour out of date.
+    it('records the pass instead of leaving the previous failure in the channel', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.9,
-        issues: []
+        issues: [],
+        advisoryWarnings: ['the second arc leans on one document'],
+        criteriaScores: { coherence: { score: 0.9, type: 'advisory' } },
+        confidence: 'high'
       });
       const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs({ narrativeArcs: [] }, config);
 
-      expect(result.validationResults).toBeUndefined();
+      expect(result.validationResults).toEqual(expect.objectContaining({
+        phase: 'arcs',
+        passed: true,
+        structuralIssues: [],
+        advisoryWarnings: ['the second arc leans on one document'],
+        confidence: 'high'
+      }));
+      expect(result.validationResults.criteriaScores.coherence.score).toBe(0.9);
+    });
+
+    it('records the escalation at the cap so the reworks that follow read the current state', async () => {
+      const mockClient = jest.fn().mockResolvedValue({
+        ready: false, structuralPassed: false, overallScore: 0.4,
+        structuralIssues: ['Missing roster members: Quinn'],
+        advisoryWarnings: ['thin coherence'],
+        revisionGuidance: 'Cover Quinn.'
+      });
+      const config = { configurable: { sdkClient: mockClient } };
+
+      const result = await evaluateArcs(
+        { narrativeArcs: [{ id: 'a' }], _previousArcs: [{ id: 'a' }], arcRevisionCount: REVISION_CAPS.ARCS },
+        config
+      );
+
+      expect(result.evaluationHistory.escalatedToHuman).toBe(true);
+      expect(result.validationResults).toEqual(expect.objectContaining({
+        phase: 'arcs',
+        passed: false,
+        structuralIssues: ['Missing roster members: Quinn'],
+        advisoryWarnings: ['thin coherence']
+      }));
+      expect(result.validationResults.revisionGuidance).toBe('Cover Quinn.');
     });
   });
 
