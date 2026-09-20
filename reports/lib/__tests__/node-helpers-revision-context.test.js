@@ -177,3 +177,36 @@ describe('evaluator → reviser wiring (the write side)', () => {
     expect(schema.properties.advisoryWarnings.items).toEqual({ type: 'string' });
   });
 });
+
+describe('<HAND_EDITS> block (spec 2026-09-19 §4.3)', () => {
+  const { diffOutline } = require('../hand-edit-diff');
+  const diff = diffOutline({ lede: { hook: 'Old' } }, { lede: { hook: 'New' } });
+  const base = { phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'New' } } };
+
+  it('sits after HUMAN FEEDBACK and before CRITICAL REVISION INSTRUCTIONS', () => {
+    const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: diff });
+    const hf = contextSection.indexOf('HUMAN FEEDBACK');
+    const he = contextSection.indexOf('<HAND_EDITS>');
+    const cr = contextSection.indexOf('CRITICAL REVISION INSTRUCTIONS');
+    expect(hf).toBeGreaterThan(-1);
+    expect(he).toBeGreaterThan(hf);
+    expect(cr).toBeGreaterThan(he);
+    expect(contextSection).toContain('- lede.hook: was "Old" -> now "New"');
+    // The block text wraps that sentence across a line (spec 4.3), so compare reflowed.
+    expect(contextSection.replace(/\s+/g, ' ')).toContain("The evaluator's notes above were written before these edits.");
+    expect(contextSection).toContain('</HAND_EDITS>');
+    expect(previousOutputSection).not.toContain('HAND_EDITS');
+  });
+
+  it('is present even without human feedback (an evaluator-driven second pass)', () => {
+    const { contextSection } = buildRevisionContext({ ...base, humanFeedback: null, handEdits: diff });
+    expect(contextSection).toContain('<HAND_EDITS>');
+    expect(contextSection.indexOf('<HAND_EDITS>')).toBeLessThan(contextSection.indexOf('CRITICAL REVISION INSTRUCTIONS'));
+  });
+
+  it('is absent when handEdits is null, empty or missing', () => {
+    expect(buildRevisionContext({ ...base, handEdits: null }).contextSection).not.toContain('HAND_EDITS');
+    expect(buildRevisionContext({ ...base, handEdits: diffOutline({}, {}) }).contextSection).not.toContain('HAND_EDITS');
+    expect(buildRevisionContext(base).contextSection).not.toContain('HAND_EDITS');
+  });
+});

@@ -10,6 +10,7 @@
 const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
+const { isEmpty: isEmptyDiff, formatHandEditsBlock } = require('../../hand-edit-diff');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NPC VALIDATION
@@ -812,6 +813,7 @@ function resolveArcs(arcs, availableArcs) {
  * @param {Object} options.validationResults - Evaluation results with criteria, issues, etc.
  * @param {Object|Array} options.previousOutput - The full previous output to improve
  * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
+ * @param {Object|null} [options.handEdits] - Hand-edit diff from lib/hand-edit-diff.js (rendered as <HAND_EDITS>)
  * @returns {Object} { contextSection, previousOutputSection }
  *
  * @example
@@ -823,7 +825,7 @@ function resolveArcs(arcs, availableArcs) {
  * });
  */
 function buildRevisionContext(options) {
-  const { phase, revisionCount, validationResults, previousOutput, humanFeedback } = options;
+  const { phase, revisionCount, validationResults, previousOutput, humanFeedback, handEdits } = options;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Build context section (feedback, issues, criteria)
@@ -940,6 +942,23 @@ EVALUATOR FEEDBACK:
 ${feedback || '(no specific feedback provided)'}`
     : '(no evaluator feedback for this phase)';
 
+  // Spec 2026-09-19 §4.3: what the director changed by hand before sending this
+  // back. Placed after HUMAN FEEDBACK and before the instructions so "PRESERVE"
+  // covers the edits and "feedback above" is literally true. Present on EVERY pass
+  // of the round, not only the first (C3).
+  const handEditsBlock = (handEdits && !isEmptyDiff(handEdits))
+    ? `<HAND_EDITS>
+The director changed these parts by hand before sending this back. They are already
+in the previous version below. Keep them exactly as they are unless the director's
+feedback above asks to change them. The evaluator's notes above were written before
+these edits.
+
+${formatHandEditsBlock(handEdits)}
+</HAND_EDITS>
+
+`
+    : '';
+
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
 REVISION CONTEXT: ${phase.toUpperCase()} (Attempt ${revisionCount})
@@ -952,7 +971,7 @@ ${humanFeedback}
 
 NOTE: The human reviewer has explicitly requested these changes.
 Address human feedback FIRST, then address any remaining evaluator issues.
-` : ''}═══════════════════════════════════════════════════════════════════════════════
+` : ''}${handEditsBlock}═══════════════════════════════════════════════════════════════════════════════
 CRITICAL REVISION INSTRUCTIONS:
 ═══════════════════════════════════════════════════════════════════════════════
 
