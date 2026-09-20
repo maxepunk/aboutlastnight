@@ -27,9 +27,11 @@ const { SchemaValidator } = require('../../schema-validator');
 const {
   createPromptBuilder,
   buildDirectorGuidanceSection,
+  filterGateNotes,
   THEME_SYSTEM_PROMPTS,
   THEME_CONSTRAINTS
 } = require('../../prompt-builder');
+const { scopeKeys, changedScopes } = require('../../hand-edit-diff');
 const outlineSchema = require('../../schemas/outline.schema.json');
 const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
@@ -916,7 +918,8 @@ async function generateOutline(state, config) {
     arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
     shellAccounts,  // Deterministic shell account data for financial summary
     sessionFacts,  // Session facts for player count and roster guardrail
-    { directorGuidance: state._outlineGuidance || null }  // Q2: arc-selection emphasis
+    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes.
+    { directorGuidance: state._outlineGuidance || null, gateNotes: state.directorGateNotes || [] }
   );
 
   const theme = config?.configurable?.theme || 'journalist';
@@ -990,18 +993,27 @@ async function reviseOutline(state, config) {
     };
   }
 
+  // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
+  // round. This node never clears them (C3) — the gate does, on approve.
+  const handEdits = state._outlineHandEdits || null;
+
   // Build revision context using centralized helper (DRY)
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
     phase: 'outline',
     revisionCount,
     validationResults: state.validationResults,
     previousOutput: previousOutline,
-    humanFeedback: state._outlineFeedback || null
+    humanFeedback: state._outlineFeedback || null,
+    handEdits
   });
 
   // Get SDK client and prompt builder
   const sdk = getSdkClient(config, 'reviseOutline');
   const promptBuilder = getPromptBuilder(config, state);
+
+  // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
+  // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
+  const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback);
 
   const theme = config?.configurable?.theme || 'journalist';
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
@@ -1011,7 +1023,7 @@ async function reviseOutline(state, config) {
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousOutline / _outlineFeedback and leaves the run resumable.
-    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
+    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
 
     const result = await sdk({
       prompt: revisionPrompt,
@@ -1033,6 +1045,11 @@ async function reviseOutline(state, config) {
       outline: result || {},
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
+      // Spec §4.4 (C3): verify on EVERY pass and rewrite the report; never clear
+      // _outlineHandEdits here — the checkpoint clears it on approve, the server on reject.
+      _outlineHandEditReport: handEdits
+        ? { checked: scopeKeys(handEdits), changed: changedScopes(handEdits, result || {}) }
+        : null,
       currentPhase: PHASES.GENERATE_OUTLINE
     };
 
@@ -1094,13 +1111,14 @@ DO:
  * @param {Object} state - Current workflow state
  * @param {string} contextSection - Formatted revision context from helper
  * @param {string} previousOutputSection - Formatted previous output from helper
- * @param {Object} promptBuilder - PromptBuilder instance (unused but kept for consistency)
+ * @param {Object} promptBuilder - PromptBuilder instance (loads the revision craft rules)
+ * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
  * @returns {string} Complete revision prompt
  */
-async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
   // PROMPT-REVIEW: the craft rules the GENERATOR wrote under, appended LAST.
   const rulesSection = await promptBuilder.buildRevisionRulesSection();
-  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance);
+  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
   const selectedArcs = state.selectedArcs || [];
   const evidenceBundle = state.evidenceBundle || {};
   const arcEvidencePackages = state.arcEvidencePackages || [];
@@ -1206,7 +1224,8 @@ async function generateContentBundle(state, config) {
     sessionFacts,  // RC3: non-roster character guardrail
     state.directorNotes || null,  // RC5: director observations for article grounding
     state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
-    { directorGuidance: state._outlineGuidance || null }  // Q2: arc-selection emphasis
+    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes.
+    { directorGuidance: state._outlineGuidance || null, gateNotes: state.directorGateNotes || [] }
   );
 
   // Get JSON schema for structured output
@@ -1426,24 +1445,33 @@ async function reviseContentBundle(state, config) {
     };
   }
 
+  // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
+  // round. This node never clears them (C3) — the gate does, on approve.
+  const handEdits = state._articleHandEdits || null;
+
   // Build revision context using centralized helper (DRY)
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
     phase: 'article',
     revisionCount,
     validationResults: state.validationResults,
     previousOutput: previousContentBundle,
-    humanFeedback: state._articleFeedback || null
+    humanFeedback: state._articleFeedback || null,
+    handEdits
   });
 
   const sdk = getSdkClient(config, 'reviseContent');
   const promptBuilder = getPromptBuilder(config, state);
+
+  // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
+  // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
+  const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback);
 
   try {
     // INSIDE the try: buildArticleRevisionPrompt loads the revision craft rules and
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousContentBundle / _articleFeedback and leaves the run resumable.
-    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder);
+    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
 
     const revised = await sdk({
       prompt: revisionPrompt,
@@ -1474,6 +1502,11 @@ async function reviseContentBundle(state, config) {
       },
       _previousContentBundle: null,  // Clear temporary field after use
       _articleFeedback: null,  // Clear human feedback after consumption
+      // Spec §4.4 (C3): verify on EVERY pass and rewrite the report; never clear
+      // _articleHandEdits here — the checkpoint clears it on approve, the server on reject.
+      _articleHandEditReport: handEdits
+        ? { checked: scopeKeys(handEdits), changed: changedScopes(handEdits, updatedBundle) }
+        : null,
       currentPhase: PHASES.GENERATE_CONTENT
     };
 
@@ -1533,12 +1566,13 @@ Return the complete revised article in the same JSON format.`;
  * @param {string} contextSection - Formatted revision context
  * @param {string} previousOutputSection - Formatted previous output
  * @param {Object} promptBuilder - PromptBuilder instance
+ * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
  * @returns {string} Complete revision prompt
  */
-async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder) {
+async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
   // PROMPT-REVIEW: the craft rules the GENERATOR wrote under, appended LAST.
   const rulesSection = await promptBuilder.buildRevisionRulesSection();
-  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance);
+  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
   return `## REVISION CONTEXT
 
 ${contextSection}
