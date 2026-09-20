@@ -327,7 +327,7 @@ For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 |--------|-----------------|-----------|
 | AI Calls | `sdkQuery()` makes all Claude requests | Routes between nodes |
 | Structured Output | JSON schemas via `jsonSchema` param | N/A |
-| State Management | N/A | 67 state fields with reducers |
+| State Management | N/A | 74 state fields with reducers |
 | Checkpointing | N/A | MemorySaver/SqliteSaver |
 | Human Approval | N/A | Native `interrupt()` pattern |
 | Revision Loops | N/A | Conditional edges with caps |
@@ -447,7 +447,7 @@ Each checkpoint component follows the same pattern:
 
 **Conventions:** `const` not `var`, direct destructured imports (no aliasing), `safeStringify` instead of `JSON.stringify`, CSS utility classes over inline styles, aria-labels on interactive elements, functional state updaters for Set manipulation, `useEffect` reset on data change.
 
-Each of `Outline.js` and `Article.js` validates a pending hand edit through ONE local `gateEdits` helper that both the approve and the reject path call (pinned by `__tests__/unit/console-edit-gates.test.js`); a new path that sends edits goes through it too.
+Each of `Outline.js` and `Article.js` validates a pending hand edit through ONE local `gateEdits` helper that both the approve and the reject path call (the reject path passes `verb: 'send'`, so its message reads "Cannot send …"); a new path that sends edits goes through it too. ONE exception: `Outline.js`'s JSON editor (`handleJsonApprove`) keeps its own inline validation and its own message in the JSON error slot — `__tests__/unit/console-edit-gates.test.js` pins that file's validator call count at 2 for exactly that reason, and `Article.js`'s JSON path at 1 because it routes through the helper.
 
 **`onRollback` is the only way a checkpoint may open the rollback modal.** It is the same `setRollbackTarget` callback the stepper uses, so Confirm goes through the existing streaming rollback. A component must NOT dispatch its own rollback action — ArcSelection's zero-arc dead end dispatched `SHOW_ROLLBACK`, which no reducer handles, so the only offered recovery logged `[state] Unknown action` and did nothing.
 
@@ -587,7 +587,7 @@ the server pipeline). Output is structurally identical across both paths.
 | `analysis/` | AI-generated intermediate outputs | evidence-bundle.json, arc-analysis.json, article-outline.json |
 | `summaries/` | Checkpoint-friendly summaries | evidence-summary.json, arc-summary.json, outline-summary.json |
 | `output/` | Final deliverables | article.html, article-metadata.json |
-| `llm-log/` | Per-call prompt/response log (`lib/observability/llm-call-log.js`), written on `llm_start` and rewritten on completion; disabled under Jest unless a test opts in | `<yyyymmdd-HHMMSS>-<context>-<callId8>.json` per call, index.jsonl |
+| `llm-log/` | Per-call prompt/response log (`lib/observability/llm-call-log.js`), written on `llm_start` and rewritten on completion; disabled under Jest unless a test opts in. An ERROR record carries `diagnostics` at the record's TOP level, as a completion does — not nested inside `error`, which holds `{message, errorName, schemaErrors}` | `<yyyymmdd-HHMMSS>-<context>-<callId8>.json` per call, index.jsonl |
 
 For complete directory structure and file descriptions, see `PIPELINE_DEEP_DIVE.md#data-directory-structure`.
 

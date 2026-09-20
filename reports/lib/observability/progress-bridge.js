@@ -347,14 +347,14 @@ function createProgressFromTrace(context, sessionId = null) {
 }
 
 /**
- * Create a progress callback from trace events
- *
- * Unified progress logging - both console and SSE from single source.
- * Emits llm_start and llm_complete events with FULL prompt/response (no truncation).
+ * The console + SSE half of one SDK call's progress stream (the per-call log is the
+ * other half, in createProgressFromTrace above). Console line and SSE event from a
+ * single source, so the two can never disagree; llm_start and llm_complete carry the
+ * FULL prompt and response, never truncated.
  *
  * @param {string} context - Log prefix (e.g., 'generateOutline')
- * @param {string} [sessionId] - Session ID for SSE streaming (optional)
- * @returns {Function} Progress callback for SDK
+ * @param {string} [sessionId] - Session ID for SSE streaming (optional; no SSE without it)
+ * @returns {Function} Progress callback for one SDK call
  */
 function createConsoleAndSseLogger(context, sessionId) {
   return (msg) => {

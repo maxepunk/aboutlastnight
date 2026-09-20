@@ -1056,6 +1056,9 @@ async function reviseOutline(state, config) {
   } catch (error) {
     console.error('[reviseOutline] Error:', error.message);
 
+    // _outlineHandEdits / _outlineHandEditReport are deliberately NOT returned: this
+    // routes to ERROR and never reaches a gate, so the previous pass's report is read
+    // by nobody, and clearing it would lose it for a rollback that replays from here.
     return {
       outline: null,
       _previousOutline: null,  // Clear temporary field
@@ -1513,6 +1516,9 @@ async function reviseContentBundle(state, config) {
   } catch (error) {
     console.error('[reviseContentBundle] Error:', error.message);
 
+    // _articleHandEdits / _articleHandEditReport are deliberately NOT returned: this
+    // routes to ERROR and never reaches a gate, so the previous pass's report is read
+    // by nobody, and clearing it would lose it for a rollback that replays from here.
     return {
       contentBundle: null,
       _previousContentBundle: null,  // Clear temporary field

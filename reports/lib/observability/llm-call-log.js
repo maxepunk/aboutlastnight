@@ -67,10 +67,15 @@ function shortId(callId) {
   return String(callId).replace(/[^A-Za-z0-9]/g, '').slice(0, 8) || 'nocallid';
 }
 
+/**
+ * Report the FIRST write failure and nothing after it. The writer is not disabled by
+ * a failure — it keeps trying on every event — so the wording must not suggest the log
+ * stopped; only the warning is silenced (M9).
+ */
 function warnOnce(err, where) {
   if (warned) return;
   warned = true;
-  console.warn(`[llm-call-log] disabled after a write failure at ${where}: ${err && (err.code || err.message)}`);
+  console.warn(`[llm-call-log] first write failure at ${where}: ${err && (err.code || err.message)} (later write failures are silent; the writer keeps trying)`);
 }
 
 function writeJson(file, obj) {

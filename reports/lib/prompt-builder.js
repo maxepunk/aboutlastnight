@@ -714,6 +714,8 @@ Return JSON with the following structure:
     }
 
     // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
+    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
+    // (every rejection note still in state), as a second paragraph inside the same tag.
     userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
@@ -1202,6 +1204,8 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
     }
 
     // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
+    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
+    // (every rejection note still in state), as a second paragraph inside the same tag.
     userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
