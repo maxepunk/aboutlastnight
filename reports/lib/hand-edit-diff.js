@@ -17,14 +17,22 @@
  * `pullQuotes[1]`, `photos[0]`) is not read at its index at all: the diff paired blocks
  * by type + a 40-character text prefix, so the index is only where the block sat in the
  * director's own object, and a reviser that inserts or removes a block ahead of it
- * shifts it. Such a change counts as KEPT when an element canonically equal to its
- * `after` value exists ANYWHERE in the addressed collection of the revised object
- * (the section's `content` array, or `pullQuotes` / `photos`). Removals (`after` null)
- * stay unchecked either way.
+ * shifts it. Such a change counts as KEPT when a MATCHING element exists ANYWHERE in
+ * the addressed collection of the revised object (the section's `content` array, or
+ * `pullQuotes` / `photos`). Removals (`after` null) stay unchecked either way.
+ *
+ * Equality everywhere in this module is trimmed canonical JSON: keys sorted, every
+ * string trimmed at whatever depth it sits. MATCHING an `after` value adds subset
+ * semantics for objects: a block, quote, card or photo counts as kept when every key
+ * the director's value carries is present in the revised element with a canonically
+ * equal value, so an optional field the reviser ADDED (`attribution`, `placement`,
+ * `significance`, `characters`) is not a change, while a director-set field the reviser
+ * dropped or altered is. Scalar and array `after` values keep exact (trimmed) equality.
  */
 'use strict';
 
-const IGNORED_BUNDLE_KEYS = new Set(['metadata', 'voice_self_check', '_revisionHistory']);
+// Never walked, by construction: the bundle diff visits only the scope lists below,
+// which do not name metadata, voice_self_check or _revisionHistory.
 const BUNDLE_OBJECT_SCOPES = ['headline', 'byline', 'financialTracker'];
 const BUNDLE_SCALAR_SCOPES = ['heroImage'];
 const BUNDLE_INDEX_COLLECTIONS = ['pullQuotes', 'photos'];
@@ -37,7 +45,7 @@ function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray
 function sortKeys(v) {
   if (Array.isArray(v)) return v.map(sortKeys);
   if (isObj(v)) return Object.keys(v).sort().reduce((o, k) => { o[k] = sortKeys(v[k]); return o; }, {});
-  return v;
+  return typeof v === 'string' ? v.trim() : v;
 }
 
 function canon(v) { return v === undefined ? 'undefined' : JSON.stringify(sortKeys(v)); }
@@ -45,6 +53,16 @@ function canon(v) { return v === undefined ? 'undefined' : JSON.stringify(sortKe
 function same(a, b) {
   if (typeof a === 'string' && typeof b === 'string') return a.trim() === b.trim();
   return canon(a) === canon(b);
+}
+
+/**
+ * Does `actual` still carry the director's `after` value? Objects match as a SUBSET
+ * (see the module header); everything else is plain trimmed-canonical equality.
+ */
+function matchesAfter(actual, after) {
+  if (!isObj(after)) return same(actual, after);
+  if (!isObj(actual)) return false;
+  return Object.keys(after).every((k) => same(actual[k], after[k]));
 }
 
 function asText(v) {
@@ -166,7 +184,7 @@ function diffBundle(before, after) {
   const push = (key, changes) => { if (changes.length > 0) scopes.push({ key, changes }); };
 
   BUNDLE_OBJECT_SCOPES.forEach((k) => {
-    if (IGNORED_BUNDLE_KEYS.has(k) || same(before[k], after[k])) return;
+    if (same(before[k], after[k])) return;
     push(k, (isObj(before[k]) && isObj(after[k])) ? diffFields(before[k], after[k], k) : [{ path: k, before: before[k], after: after[k] }]);
   });
   BUNDLE_SCALAR_SCOPES.forEach((k) => {
@@ -266,10 +284,10 @@ const INDEX_TAIL = /\[(\d+)\]$/;
  */
 function changeSurvives(revised, change) {
   const m = INDEX_TAIL.exec(change.path);
-  if (!m) return same(readAtPath(revised, change.path), change.after);
+  if (!m) return matchesAfter(readAtPath(revised, change.path), change.after);
   const collection = readAtPath(revised, change.path.slice(0, m.index));
   if (!Array.isArray(collection)) return false;
-  return collection.some((el) => same(el, change.after));
+  return collection.some((el) => matchesAfter(el, change.after));
 }
 
 /**
@@ -290,5 +308,5 @@ function changedScopes(diff, revised) {
 
 module.exports = {
   diffOutline, diffBundle, isEmpty, scopeKeys, formatHandEditsBlock, changedScopes, readAtPath,
-  _testing: { matchBlocks, blockKey, canon, same, changeSurvives }
+  _testing: { matchBlocks, blockKey, canon, same, matchesAfter, changeSurvives }
 };

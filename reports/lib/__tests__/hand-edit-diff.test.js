@@ -232,6 +232,37 @@ describe('changedScopes', () => {
     expect(D.changedScopes(bundleDiff, shifted)).toEqual([]);
   });
 
+  test('a kept block re-emitted with a trailing newline is not a change', () => {
+    const a = bundleBefore(); a.sections[0].content[1].text = 'Second paragraph, rewritten.';
+    const bundleDiff = D.diffBundle(bundleBefore(), a);
+    const reemitted = clone(a);
+    reemitted.sections[0].content[1].text = 'Second paragraph, rewritten.\n';
+    expect(D.changedScopes(bundleDiff, reemitted)).toEqual([]);
+  });
+
+  test('a kept pull quote the reviser gave an optional field is not a change', () => {
+    const a = bundleBefore(); a.pullQuotes[0].text = 'Q1 edited';
+    const bundleDiff = D.diffBundle(bundleBefore(), a);
+    const enriched = clone(a); enriched.pullQuotes[0].attribution = 'Nova';
+    expect(D.changedScopes(bundleDiff, enriched)).toEqual([]);
+  });
+
+  test('a kept block whose director-set field the reviser removed names its scope', () => {
+    const a = bundleBefore();
+    a.sections[0].content[1] = { type: 'paragraph', text: 'Second paragraph, rewritten.', emphasis: 'strong' };
+    const bundleDiff = D.diffBundle(bundleBefore(), a);
+    const stripped = clone(a); delete stripped.sections[0].content[1].emphasis;
+    expect(D.changedScopes(bundleDiff, stripped)).toEqual(['section:intro']);
+  });
+
+  test('a nested outline value kept with surrounding whitespace is not a change', () => {
+    const after = outlineBefore(); after.lede.selectedEvidence = ['e1', 'e2'];
+    const nestedDiff = D.diffOutline(outlineBefore(), after);
+    expect(nestedDiff.sections[0].changes[0].path).toBe('lede.selectedEvidence');
+    const revised = clone(after); revised.lede.selectedEvidence = [' e1', 'e2\n'];
+    expect(D.changedScopes(nestedDiff, revised)).toEqual([]);
+  });
+
   test('readAtPath resolves ids, indexes and missing segments', () => {
     const b = bundleBefore();
     expect(D.readAtPath(b, 'sections[#intro].content[1].text')).toBe('Second paragraph about the money.');
