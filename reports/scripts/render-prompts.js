@@ -120,7 +120,8 @@ async function render() {
 
   // 1. outline generation
   const og = await promptBuilder.buildOutlinePrompt(arcAnalysis, state.selectedArcs || [], heroImage, availablePhotos,
-    state.arcEvidencePackages || [], state.shellAccounts || [], sessionFacts, { directorGuidance: guidance, gateNotes: FIXED_NOTES });
+    state.arcEvidencePackages || [], state.shellAccounts || [], sessionFacts,
+    { directorGuidance: guidance, gateNotes: FIXED_NOTES, directorNotes: state.directorNotes || null });
   write(FILES[0], og.systemPrompt, og.userPrompt);
 
   // 2. outline revision (fixed hand edit: lede.hook)
@@ -131,7 +132,7 @@ async function render() {
   const orc = buildRevisionContext({ phase: 'outline', revisionCount: 1, validationResults: state.validationResults || null,
     previousOutput: editedOutline, humanFeedback: FIXED_FEEDBACK, handEdits: outlineDiff });
   const orPrompt = await buildOutlineRevisionPrompt({ ...state, _outlineGuidance: guidance }, orc.contextSection, orc.previousOutputSection, promptBuilder, FIXED_NOTES);
-  write(FILES[1], getOutlineRevisionSystemPrompt(theme), orPrompt);
+  write(FILES[1], getOutlineRevisionSystemPrompt(theme, state.sessionConfig || {}), orPrompt);
 
   // 3. article generation
   const ag = await promptBuilder.buildArticlePrompt(outline, state.arcEvidencePackages || [], heroImage, state.shellAccounts || [],

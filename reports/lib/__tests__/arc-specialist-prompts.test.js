@@ -54,4 +54,16 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     expect(prompt).toContain('Alex was seen with Sam in the corner.');
     expect(prompt).not.toMatch(/\*\*Behavior Patterns:\*\*/);
   });
+
+  it('the arc system prompts state the reporting mode of the session (brief 1.5)', () => {
+    // The arc writer was never told where the reporter was, so a remote session's
+    // arc summaries said "I watched". The block is the same constant the article
+    // system prompt carries, in the same position: after the identity line.
+    const { REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+    const remote = { reportingMode: 'remote' };
+
+    expect(arcModule._testing.coreArcSystemPrompt(remote)).toContain(REPORTING_MODE_BLOCKS.remote);
+    expect(arcModule._testing.interweavingSystemPrompt(remote)).toContain(REPORTING_MODE_BLOCKS.remote);
+    expect(arcModule._testing.coreArcSystemPrompt({})).toContain(REPORTING_MODE_BLOCKS['on-site']);
+  });
 });

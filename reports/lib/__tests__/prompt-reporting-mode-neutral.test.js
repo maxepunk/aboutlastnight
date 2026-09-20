@@ -136,3 +136,64 @@ describe('article REVISION system prompt', () => {
     expect(revisionPrompt).toMatch(/first-person participatory/i);
   });
 });
+
+/**
+ * The block now sits in four more system prompts (phase 1, brief 1.5).
+ *
+ * The arc writer and the outline writer were never told the mode: the last
+ * remote session's arc summaries said "I watched" and its outline carried six
+ * presence claims, because the only place the mode was ever stated was the
+ * ARTICLE system prompt, two paid calls later. The wording is one constant
+ * (REPORTING_MODE_BLOCKS) rendered in the same position everywhere: right after
+ * the identity line.
+ */
+describe('the mode block reaches the arc and outline writers', () => {
+  const { REPORTING_MODE_BLOCKS, createPromptBuilder: makeBuilder } = require('../prompt-builder');
+  const { _testing: { getOutlineRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
+  const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
+
+  /** Every system prompt that must carry the block, for one reporting mode. */
+  async function systemPrompts(mode) {
+    const sessionConfig = { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] };
+    const builder = makeBuilder({ theme: 'journalist', sessionConfig });
+    const { systemPrompt: outline } = await builder.buildOutlinePrompt(
+      { narrativeArcs: [] }, [], 'hero.png', [], [], [], null, {}
+    );
+    return {
+      'outline generation': outline,
+      'outline revision': getOutlineRevisionSystemPrompt('journalist', sessionConfig),
+      'core arc generation': arcTesting.coreArcSystemPrompt(sessionConfig),
+      'interweaving enrichment': arcTesting.interweavingSystemPrompt(sessionConfig)
+    };
+  }
+
+  ['remote', 'on-site'].forEach((mode) => {
+    describe(`${mode} session`, () => {
+      let prompts;
+      beforeAll(async () => { prompts = await systemPrompts(mode); });
+
+      it.each(['outline generation', 'outline revision', 'core arc generation', 'interweaving enrichment'])(
+        'the %s system prompt states the mode, word for word',
+        (name) => {
+          expect(prompts[name]).toContain(REPORTING_MODE_BLOCKS[mode]);
+          expect(prompts[name]).not.toContain(REPORTING_MODE_BLOCKS[mode === 'remote' ? 'on-site' : 'remote']);
+        }
+      );
+
+      it('places the block after the identity line, not at the end', () => {
+        Object.entries(prompts).forEach(([name, prompt]) => {
+          const lines = prompt.split('\n');
+          const at = lines.findIndex((l) => l.includes(REPORTING_MODE_BLOCKS[mode]));
+          expect(`${name}:${at}`).toBe(`${name}:2`);
+        });
+      });
+    });
+  });
+
+  it('defaults to on-site when the session carries no mode', async () => {
+    const prompts = await systemPrompts(undefined);
+    Object.values(prompts).forEach((prompt) => {
+      expect(prompt).toContain(REPORTING_MODE_BLOCKS['on-site']);
+    });
+  });
+});

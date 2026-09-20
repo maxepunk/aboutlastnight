@@ -60,6 +60,27 @@ const {
 } = require('../../sdk-client/subagents');
 
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
+const { withReportingModeBlock } = require('../../prompt-builder');
+
+/**
+ * The two arc system prompts, with the session's reporting-mode block.
+ *
+ * Brief 1.5: these are fixed constants, so the mode was never in them. The arc
+ * writer for the last remote session put "I watched" into its summaries, and
+ * those summaries are what the outline and then the article are built from. The
+ * block goes where the article's goes: immediately after the identity line.
+ *
+ * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
+ * @returns {string}
+ */
+function coreArcSystemPrompt(sessionConfig) {
+  return withReportingModeBlock(CORE_ARC_SYSTEM_PROMPT, sessionConfig);
+}
+
+/** @see coreArcSystemPrompt */
+function interweavingSystemPrompt(sessionConfig) {
+  return withReportingModeBlock(INTERWEAVING_SYSTEM_PROMPT, sessionConfig);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -538,7 +559,7 @@ async function generateCoreArcs(state, config) {
   try {
     const result = await sdkClient({
       prompt,
-      systemPrompt: CORE_ARC_SYSTEM_PROMPT,
+      systemPrompt: coreArcSystemPrompt(state.sessionConfig),
       model: 'opus',
       jsonSchema: CORE_ARC_SCHEMA,
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
@@ -575,12 +596,13 @@ async function generateCoreArcs(state, config) {
  * @param {Array} coreArcs - Generated arcs from Call 1 (must be non-empty)
  * @param {Array} roster - Character roster for identifying shared characters
  * @param {Object} config - Graph config with SDK client
+ * @param {Object} [sessionConfig] - state.sessionConfig, for the reporting-mode block
  * @returns {Promise<Object|null>} Interweaving result on success containing:
  *   - arcInterweaving: Array of { arcId, interweaving } objects
  *   - interweavingPlan: { suggestedOrder, convergencePoint, keyCallbacks }
  *   Returns null on failure (graceful degradation - caller should use defaults)
  */
-async function enrichWithInterweaving(coreArcs, roster, config) {
+async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig) {
   console.log('[enrichWithInterweaving] Starting Call 2: Interweaving enrichment');
   const startTime = Date.now();
 
@@ -592,7 +614,7 @@ async function enrichWithInterweaving(coreArcs, roster, config) {
   try {
     const result = await sdkClient({
       prompt,
-      systemPrompt: INTERWEAVING_SYSTEM_PROMPT,
+      systemPrompt: interweavingSystemPrompt(sessionConfig),
       model: 'opus',
       disableTools: true,          // H21: pure analysis over the arcs in the prompt
       jsonSchema: INTERWEAVING_SCHEMA,
@@ -825,7 +847,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // ═══════════════════════════════════════════════════════════════════════
     const call2Start = Date.now();
     const roster = state.sessionConfig?.roster || [];
-    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config);
+    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig);
     const call2Duration = ((Date.now() - call2Start) / 1000).toFixed(1);
 
     if (interweavingResult) {
@@ -1763,6 +1785,8 @@ module.exports = {
     // Commit 8.28: Split-call architecture
     buildCoreArcPrompt,
     buildInterweavingPrompt,
+    coreArcSystemPrompt,
+    interweavingSystemPrompt,
     generateCoreArcs,
     enrichWithInterweaving,
     mergeArcsWithInterweaving,

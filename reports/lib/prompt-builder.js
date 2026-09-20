@@ -182,6 +182,42 @@ const REPORTING_MODE_BLOCKS = {
   remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there; write from what they told you and attribute it. You did not vote and you were not at the party.'
 };
 
+/**
+ * The block for one session, defaulting to on-site.
+ *
+ * The single source of the wording for all five system prompts that carry it:
+ * the article's (PromptBuilder._buildReportingModeBlock), the outline's and the
+ * outline rework's, and the two arc calls' (built outside PromptBuilder, in
+ * arc-specialist-nodes.js, which reaches this through withReportingModeBlock).
+ *
+ * @param {Object} [sessionConfig] - the session's config, with reportingMode
+ * @returns {string}
+ */
+function buildReportingModeBlock(sessionConfig) {
+  const mode = sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
+  return REPORTING_MODE_BLOCKS[mode];
+}
+
+/**
+ * Put the block into a system prompt assembled somewhere else.
+ *
+ * Phase 1 brief 1.5: the arc writer and the outline reworker were never told the
+ * mode, so a remote session's arc summaries said "I watched" and its outline
+ * carried six presence claims. Their system prompts are fixed constants, so the
+ * block is inserted here, in the position the article uses: immediately after the
+ * identity line, before anything else the prompt asserts.
+ *
+ * @param {string} systemPrompt - a system prompt whose FIRST LINE is its identity
+ * @param {Object} [sessionConfig] - the session's config, with reportingMode
+ * @returns {string}
+ */
+function withReportingModeBlock(systemPrompt, sessionConfig) {
+  const text = String(systemPrompt || '');
+  const identityLine = text.split('\n', 1)[0];
+  const rest = text.slice(identityLine.length).replace(/^\n+/, '');
+  return `${identityLine}\n\n${buildReportingModeBlock(sessionConfig)}\n\n${rest}`;
+}
+
 // Theme-specific system prompt framing
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
@@ -295,8 +331,34 @@ class PromptBuilder {
    * @returns {string}
    */
   _buildReportingModeBlock() {
-    const mode = this.sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
-    return REPORTING_MODE_BLOCKS[mode];
+    return buildReportingModeBlock(this.sessionConfig);
+  }
+
+  /**
+   * Build the <INVESTIGATION_OBSERVATIONS> section from the director's raw notes.
+   *
+   * Shared by the article prompt and (phase 1, brief 1.5) the outline prompt: the
+   * planner that decides what each section does had never read the director's own
+   * account of the morning. One renderer, one wording, so the outline and the
+   * article are planned and written against the same observations.
+   *
+   * @param {Object|null} directorNotes - enriched director notes
+   * @returns {string} the XML section, or '' when the director wrote no prose
+   */
+  _buildInvestigationObservations(directorNotes) {
+    if (!directorNotes?.rawProse) return '';
+    return `<INVESTIGATION_OBSERVATIONS>
+What you observed during the investigation this morning.
+These ground your behavioral claims — who you saw talking to whom, notable moments, patterns you noticed.
+For the POST_INVESTIGATION_NEWS sub-block below (if present), write with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…" — do NOT conflate these with things Nova witnessed this morning.
+
+${renderDirectorEnrichmentBlock({
+  rawProse: directorNotes.rawProse,
+  quotes: directorNotes.quotes,
+  transactionReferences: directorNotes.transactionReferences,
+  postInvestigationDevelopments: directorNotes.postInvestigationDevelopments
+})}
+</INVESTIGATION_OBSERVATIONS>`;
   }
 
   /**
@@ -358,6 +420,9 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
    * @param {string} heroImage - Confirmed hero image filename
    * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
    * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
+   * @param {Array} shellAccounts - Deterministic shell account data
+   * @param {Object|null} sessionFacts - Roster and accusation guardrail
+   * @param {Object} options - { directorGuidance, gateNotes, directorNotes }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
@@ -367,7 +432,13 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
       Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
     );
 
+    // The mode block sits where the article's does: right after the identity line,
+    // ahead of every craft rule (brief 1.5). The outline planner used to be told
+    // nothing about where the reporter was, and planned presence beats for a
+    // reporter who was never in the room.
     const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
+
+${this._buildReportingModeBlock()}
 ${labelPromptSection('section-rules', prompts['section-rules'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
 
@@ -388,6 +459,8 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
       unansweredQuestions: arc.unansweredQuestions || [],  // Gaps for narrative tension
       analysisNotes: arc.analysisNotes || {}  // Financial/behavioral/victimization insights
     }));
+
+    const observationsSection = this._buildInvestigationObservations(options.directorNotes);
 
     let userPrompt;
 
@@ -504,14 +577,20 @@ Return JSON with the following structure:
   }
 }`;
     } else {
-      // Journalist (NovaNews article) outline prompt
+      // Journalist (NovaNews article) outline prompt.
+      //
+      // The director's observations sit with the data and BEFORE the arc metadata
+      // (brief 1.5). They are not guidance and must not compete with it:
+      // <DIRECTOR_GUIDANCE> is appended last, and keeps the last word. Journalist
+      // only, as in the article prompt — the detective report has no such section,
+      // and an outline must not plan on material its writer never sees.
       userPrompt = `Generate an article outline using these selected arcs.
 
 SELECTED ARCS (in order of appearance):
 ${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
 
 HERO IMAGE: ${heroImage}
-
+${observationsSection ? `\n${observationsSection}\n` : ''}
 <arc-metadata>
 ${JSON.stringify(arcsWithMetadata, null, 2)}
 
@@ -917,18 +996,7 @@ TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
-${directorNotes?.rawProse ? `<INVESTIGATION_OBSERVATIONS>
-What you observed during the investigation this morning.
-These ground your behavioral claims — who you saw talking to whom, notable moments, patterns you noticed.
-For the POST_INVESTIGATION_NEWS sub-block below (if present), write with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…" — do NOT conflate these with things Nova witnessed this morning.
-
-${renderDirectorEnrichmentBlock({
-  rawProse: directorNotes.rawProse,
-  quotes: directorNotes.quotes,
-  transactionReferences: directorNotes.transactionReferences,
-  postInvestigationDevelopments: directorNotes.postInvestigationDevelopments
-})}
-</INVESTIGATION_OBSERVATIONS>` : ''}
+${this._buildInvestigationObservations(directorNotes)}
 ${(narrativeTensions?.tensions?.length > 0) ? `
 <NARRATIVE_TENSIONS>
 These contradictions between public behavior and Black Market activity are verified
@@ -1472,6 +1540,10 @@ module.exports = {
   buildDirectorGuidanceSection,
   filterGateNotes,
   REPORTING_MODE_BLOCKS,
+  buildReportingModeBlock,
+  // Consumed by the system prompts assembled outside PromptBuilder (the two arc
+  // calls and the outline rework), so the block's wording has one home.
+  withReportingModeBlock,
   // Theme framing, consumed by the revision system prompts in ai-nodes.js
   THEME_SYSTEM_PROMPTS,
   THEME_CONSTRAINTS

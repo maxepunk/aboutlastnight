@@ -120,9 +120,12 @@ describe('generators pass options.gateNotes', () => {
     const builder = createMockPromptBuilder();
     builder.buildOutlinePrompt = jest.fn(builder.buildOutlinePrompt);
     const sdk = sdkReturning(OUTLINE);
-    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [], directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.' }, cfg(sdk, builder));
+    const directorNotes = { rawProse: 'Blake worked the room all morning.' };
+    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [], directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.', directorNotes }, cfg(sdk, builder));
     const options = builder.buildOutlinePrompt.mock.calls[0][7];
-    expect(options).toEqual({ directorGuidance: 'Lead with the money.', gateNotes: NOTES });
+    // brief 1.5 added directorNotes: the outline writer reads the director's own
+    // account of the morning, which until now only the article writer saw.
+    expect(options).toEqual({ directorGuidance: 'Lead with the money.', gateNotes: NOTES, directorNotes });
   });
 
   it('generateContentBundle passes every note as options.gateNotes', async () => {
@@ -138,7 +141,7 @@ describe('generators pass options.gateNotes', () => {
     const builder = createMockPromptBuilder();
     builder.buildOutlinePrompt = jest.fn(builder.buildOutlinePrompt);
     await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [] }, cfg(sdkReturning(OUTLINE), builder));
-    expect(builder.buildOutlinePrompt.mock.calls[0][7]).toEqual({ directorGuidance: null, gateNotes: [] });
+    expect(builder.buildOutlinePrompt.mock.calls[0][7]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null });
   });
 });
 

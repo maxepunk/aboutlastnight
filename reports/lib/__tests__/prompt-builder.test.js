@@ -1204,3 +1204,76 @@ describe('PromptBuilder', () => {
     });
   });
 });
+
+/**
+ * The outline writer sees the director's raw notes (phase 1, brief 1.5).
+ *
+ * <INVESTIGATION_OBSERVATIONS> reached the ARTICLE prompt only, so the planner
+ * that decides what each section does, and which arc carries it, never read the
+ * director's own account of the morning. Same section, same renderer, placed
+ * with the data and BEFORE the arc metadata — <DIRECTOR_GUIDANCE> keeps the last
+ * word.
+ */
+describe('buildOutlinePrompt — the director\'s raw notes', () => {
+  const { PromptBuilder } = require('../prompt-builder');
+
+  const DIRECTOR_NOTES = {
+    rawProse: 'Blake solicited Vic three times. Heated argument at the bar.',
+    quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
+    transactionReferences: [{
+      excerpt: 'Alex paid Blake',
+      linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }],
+      confidence: 'high'
+    }],
+    postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO' }],
+    whiteboard: { suspects: ['Vic'] }
+  };
+
+  function builder() {
+    const themeLoader = {
+      loadPhasePrompts: jest.fn().mockResolvedValue({
+        'section-rules': 'SR', 'editorial-design': 'ED',
+        'narrative-structure': 'NS', 'formatting': 'FM', 'evidence-boundaries': 'EB'
+      }),
+      validate: jest.fn()
+    };
+    return new PromptBuilder(themeLoader, 'journalist', { reportingMode: 'remote' });
+  }
+
+  const render = (options) => builder().buildOutlinePrompt(
+    { narrativeArcs: [{ id: 'arc-1', title: 'The Money Trail' }] },
+    ['arc-1'], 'hero.png', [], [], [], null, options
+  );
+
+  it('renders the section when the director wrote notes', async () => {
+    const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES });
+    expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
+    expect(userPrompt).toContain('Blake solicited Vic three times');
+    expect(userPrompt).toContain('we had to act');
+    expect(userPrompt).toContain('tay004');
+    expect(userPrompt).toContain('Sarah named interim CEO');
+  });
+
+  it('places it before the arc metadata, and leaves the guidance last', async () => {
+    const { userPrompt } = await render({
+      directorNotes: DIRECTOR_NOTES,
+      directorGuidance: 'Lead with the money.'
+    });
+    expect(userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>')).toBeGreaterThan(-1);
+    expect(userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>'))
+      .toBeLessThan(userPrompt.indexOf('<arc-metadata>'));
+    expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+  });
+
+  it('omits it when there are no notes, and when the prose is empty', async () => {
+    expect((await render({})).userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
+    expect((await render({ directorNotes: null })).userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
+    expect((await render({ directorNotes: { rawProse: '' } })).userPrompt)
+      .not.toContain('<INVESTIGATION_OBSERVATIONS>');
+  });
+
+  it('carries the whiteboard nowhere near it — that is Layer 3, and it has its own path', async () => {
+    const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES });
+    expect(userPrompt).not.toContain('suspects');
+  });
+});

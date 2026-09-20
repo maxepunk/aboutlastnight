@@ -29,7 +29,8 @@ const {
   buildDirectorGuidanceSection,
   filterGateNotes,
   THEME_SYSTEM_PROMPTS,
-  THEME_CONSTRAINTS
+  THEME_CONSTRAINTS,
+  withReportingModeBlock
 } = require('../../prompt-builder');
 const { scopeKeys, changedScopes } = require('../../hand-edit-diff');
 const outlineSchema = require('../../schemas/outline.schema.json');
@@ -919,7 +920,12 @@ async function generateOutline(state, config) {
     shellAccounts,  // Deterministic shell account data for financial summary
     sessionFacts,  // Session facts for player count and roster guardrail
     // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes.
-    { directorGuidance: state._outlineGuidance || null, gateNotes: state.directorGateNotes || [] }
+    // Brief 1.5: the director's raw notes, which only the article writer used to see.
+    {
+      directorGuidance: state._outlineGuidance || null,
+      gateNotes: state.directorGateNotes || [],
+      directorNotes: state.directorNotes || null
+    }
   );
 
   const theme = config?.configurable?.theme || 'journalist';
@@ -1027,7 +1033,7 @@ async function reviseOutline(state, config) {
 
     const result = await sdk({
       prompt: revisionPrompt,
-      systemPrompt: getOutlineRevisionSystemPrompt(theme),
+      systemPrompt: getOutlineRevisionSystemPrompt(theme, state.sessionConfig),
       model: 'opus',  // Same as generateOutline
       jsonSchema: activeOutlineSchema,
       disableTools: true,
@@ -1077,10 +1083,17 @@ async function reviseOutline(state, config) {
 /**
  * Get system prompt for outline revision
  * Focuses on TARGETED FIXES, not regeneration
+ *
+ * Brief 1.5: a rework is where a remote outline gets "corrected" back into an
+ * on-site one, so it carries the same reporting-mode block as the generation
+ * prompt, in the same position.
+ *
+ * @param {string} theme - report theme
+ * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
  */
-function getOutlineRevisionSystemPrompt(theme = 'journalist') {
+function getOutlineRevisionSystemPrompt(theme = 'journalist', sessionConfig = {}) {
   const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
-  return `${framing.outlineGeneration}
+  return withReportingModeBlock(`${framing.outlineGeneration}
 
 You are REVISING that outline, not writing it from scratch.
 
@@ -1105,7 +1118,7 @@ DO:
 - Identify exactly what needs to change
 - Make minimal, surgical fixes
 - Verify your changes address the feedback
-- Return the complete updated outline`;
+- Return the complete updated outline`, sessionConfig);
 }
 
 /**
