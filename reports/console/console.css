@@ -2767,6 +2767,13 @@ textarea.input {
   padding-left: var(--space-md);
   border-radius: 4px;
 }
+/* EDIT mode drops `.article-block--editable-always` (there is no pencil while the
+   editor is open), so nothing would set a right padding and the fields would run to
+   the panel edge. The normal inset, NOT the 32px pencil gutter, and scoped to the
+   editing class so the read-mode gutter above is untouched (M14). */
+.outline-section--editing.outline-thesis {
+  padding-right: var(--space-md);
+}
 /* Read-only echo of the thesis at the article gate (§6.2) */
 .article-thesis-echo {
   border-left: 2px solid rgba(212, 168, 83, 0.6);
@@ -2778,6 +2785,16 @@ textarea.input {
 
 /* Hand-edit report and standing notes inside RevisionDiff (spec 2026-09-19) */
 .revision-diff__hand-edits { margin-top: var(--space-sm); }
+/* Advisory, not a blocker: the muted amber language of `.session-start__confirm`,
+   never the red `.revision-diff__warning` box the revision cap uses (M15). */
+.revision-diff__hand-edits--changed {
+  padding: var(--space-sm) var(--space-md);
+  border-left: 2px solid var(--accent-amber);
+  background: rgba(212, 168, 83, 0.08);
+  color: var(--accent-amber);
+  font-size: 0.85rem;
+  margin-bottom: var(--space-md);
+}
 .revision-diff__hand-edits--kept { padding-left: var(--space-md); }
 .revision-diff__notes-list { list-style: none; padding-left: 0; margin: var(--space-xs) 0 0; }
 .revision-diff__notes-list li { margin-bottom: var(--space-xs); }

@@ -43,7 +43,14 @@ describe('Outline.js validates hand edits in one place', () => {
   });
 
   it('routes both the approve and the reject handler through the helper', () => {
-    expect(count(src, 'if (!gateEdits(editedOutline, setEditError)) return;')).toBe(2);
+    expect(count(src, 'if (!gateEdits(editedOutline, setEditError')).toBe(2);
+  });
+
+  it("names the verb, so the reject path does not read 'Cannot approve'", () => {
+    // M13: one call site per verb — approve takes the default, reject passes 'send'.
+    expect(count(src, "if (!gateEdits(editedOutline, setEditError)) return;")).toBe(1);
+    expect(count(src, "if (!gateEdits(editedOutline, setEditError, 'send')) return;")).toBe(1);
+    expect(src).toContain("'Cannot ' + (verb || 'approve') + ', edited outline is invalid: '");
   });
 });
 
@@ -55,7 +62,14 @@ describe('Article.js validates hand edits in one place', () => {
   });
 
   it('routes both the approve and the reject handler through the helper', () => {
-    expect(count(src, 'if (!gateEdits(editedBundle, setEditError)) return;')).toBe(2);
+    expect(count(src, 'if (!gateEdits(editedBundle, setEditError')).toBe(2);
+  });
+
+  it("names the verb, so the reject path does not read 'Cannot approve'", () => {
+    // M13: one call site per verb — approve takes the default, reject passes 'send'.
+    expect(count(src, "if (!gateEdits(editedBundle, setEditError)) return;")).toBe(1);
+    expect(count(src, "if (!gateEdits(editedBundle, setEditError, 'send')) return;")).toBe(1);
+    expect(src).toContain("'Cannot ' + (verb || 'approve') + ', edited article is invalid: '");
   });
 });
 

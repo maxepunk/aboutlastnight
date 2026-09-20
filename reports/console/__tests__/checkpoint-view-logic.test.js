@@ -485,6 +485,11 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5)', () => {
     expect(v.keptCount).toBe(0);
   });
 
+  test('a prototype key is rendered raw, not as the inherited member (M16)', () => {
+    const v = steeringView({ checked: ['constructor'], changed: ['constructor'] }, []);
+    expect(v.changedLabels).toEqual(['constructor']);
+  });
+
   test('a report with nothing changed reports the kept count', () => {
     const v = steeringView({ checked: ['headline', 'byline'], changed: [] }, []);
     expect(v).toEqual({ any: true, changedLabels: [], keptCount: 2, notes: [] });

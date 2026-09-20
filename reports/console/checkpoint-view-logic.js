@@ -463,7 +463,9 @@
   };
 
   function scopeLabel(key) {
-    if (SCOPE_LABELS[key]) return SCOPE_LABELS[key];
+    // Own-property only: a scope key named after an Object.prototype member
+    // ('constructor', 'toString') would otherwise render the inherited function.
+    if (Object.prototype.hasOwnProperty.call(SCOPE_LABELS, key)) return SCOPE_LABELS[key];
     if (typeof key === 'string' && key.indexOf('section:') === 0) return 'Section "' + key.slice(8) + '"';
     return String(key);
   }

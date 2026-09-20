@@ -857,15 +857,18 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
    * bad bundle straight to END: ten checkpoints and five-plus Opus calls spent,
    * Retry failing identically, and rollback discarding the approved draft.
    *
+   * `verb` names what the click would have done, so the reject path does not read
+   * "Cannot approve" (review round 2, M13).
+   *
    * @returns {boolean} whether the edits may be sent
    */
-  function gateEdits(bundle, setError) {
+  function gateEdits(bundle, setError, verb) {
     var result = ArticleEditLogic.validateBundleShape(bundle);
     if (result.valid) {
       setError('');
       return true;
     }
-    setError('Cannot approve, edited article is invalid: ' +
+    setError('Cannot ' + (verb || 'approve') + ', edited article is invalid: ' +
       result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
     return false;
   }
@@ -921,7 +924,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     // and the one that drifts loose ships an invalid bundle). An invalid edit is
     // shown and not sent.
     if (hasEdits && editedBundle) {
-      if (!gateEdits(editedBundle, setEditError)) return;
+      if (!gateEdits(editedBundle, setEditError, 'send')) return;
       if (dispatch) {
         dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
         dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: editedBundle });

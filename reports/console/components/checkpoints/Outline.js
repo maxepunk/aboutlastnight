@@ -643,15 +643,18 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
    * approve and reject validate identically, so they share one implementation and
    * cannot drift apart. Shaped like Article.js's gateEdits. On success it clears
    * the inline error; on failure it shows it and the caller sends nothing.
+   *
+   * `verb` names what the click would have done, so the reject path does not read
+   * "Cannot approve" (review round 2, M13).
    */
-  function gateEdits(candidate, setError) {
+  function gateEdits(candidate, setError, verb) {
     const themeForValidation = isDetective ? 'detective' : 'journalist';
     const result = EditLogic.validateOutlineShape(candidate, themeForValidation);
     if (result.valid) {
       setError('');
       return true;
     }
-    setError('Cannot approve, edited outline is invalid: ' +
+    setError('Cannot ' + (verb || 'approve') + ', edited outline is invalid: ' +
       result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
     return false;
   }
@@ -693,7 +696,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     // is cached as the revision's previous version so the diff view compares the
     // rework against what the director actually sent.
     if (hasEdits && editedOutline) {
-      if (!gateEdits(editedOutline, setEditError)) return;
+      if (!gateEdits(editedOutline, setEditError, 'send')) return;
       if (dispatch) {
         dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
         dispatch({ type: 'CACHE_REVISION', contentType: 'outline', data: editedOutline });

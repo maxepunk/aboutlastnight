@@ -131,9 +131,13 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
       React.createElement('p', { className: 'revision-diff__feedback-text' }, previousFeedback)
     ),
 
-    // Hand-edit report: what the rework did to the director's own edits (§4.4)
+    // Hand-edit report: what the rework did to the director's own edits (§4.4).
+    // Muted amber, NOT `.revision-diff__warning`: nothing here blocks anything, and
+    // the red "Maximum revisions reached" treatment read as a failure (M15).
+    // The amber lives on the `--changed` modifier so the muted "kept" line below,
+    // which shares the base class, stays a plain line of text.
     steering.changedLabels.length > 0 && React.createElement('div', {
-      className: 'revision-diff__warning revision-diff__hand-edits', role: 'status'
+      className: 'revision-diff__hand-edits revision-diff__hand-edits--changed', role: 'status'
     }, 'The rework changed sections you edited by hand: ' + steering.changedLabels.join(', ') + '.'),
     steering.keptCount > 0 && React.createElement('div', {
       className: 'text-xs text-muted revision-diff__hand-edits revision-diff__hand-edits--kept', role: 'status'
