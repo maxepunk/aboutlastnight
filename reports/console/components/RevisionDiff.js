@@ -81,6 +81,17 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
   // outline gate after an arc rejection has notes and nothing else).
   const steering = ViewLogic.steeringView(handEditReport, gateNotes);
 
+  // Brief 1.4: every stop shows rounds the same way. The counters mean different
+  // things — humanRevisionCount is the director's rounds, revisionCount the
+  // machine's own passes inside the current one — and the strings are decided in
+  // the pure module. There is no "final version" line any more: the director's
+  // rounds are not capped, and the one the console printed after two send-backs
+  // was false as well as final-sounding.
+  // Computed BEFORE the bail-out below, and counted by it: on the first visit to a
+  // stop nothing else here is true (no pass spent, no round taken, no note), so the
+  // early return swallowed the one line every stop is supposed to show the same way.
+  const rounds = ViewLogic.roundsBanner(humanRevisionCount, revisionCount, maxRevisions);
+
   // R5 F10: the whole component used to bail out on `!previous`, which took the
   // revision banner, the "N remaining" budget, the max-revisions warning AND the
   // director's own last feedback with it - even when the server HAD sent
@@ -89,18 +100,11 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
   // after a refresh or a laptop sleep the director resumed with no idea how many
   // revisions remained (the arc cap is 2) or what they had asked for last time.
   // Server data drives the banner; only the DIFF LISTING needs `previous`.
-  const hasRevisionState = revisionCount > 0 || humanRevisionCount > 0 || !!previousFeedback || steering.any;
+  const hasRevisionState = rounds.show || revisionCount > 0 || humanRevisionCount > 0
+    || !!previousFeedback || steering.any;
   if (!hasPrevious && !hasRevisionState) {
     return null;
   }
-
-  // Brief 1.4: every stop shows rounds the same way. The counters mean different
-  // things — humanRevisionCount is the director's rounds, revisionCount the
-  // machine's own passes inside the current one — and the strings are decided in
-  // the pure module. There is no "final version" line any more: the director's
-  // rounds are not capped, and the one the console printed after two send-backs
-  // was false as well as final-sounding.
-  const rounds = ViewLogic.roundsBanner(humanRevisionCount, revisionCount, maxRevisions);
 
   return React.createElement('div', { className: 'revision-diff fade-in' },
 
