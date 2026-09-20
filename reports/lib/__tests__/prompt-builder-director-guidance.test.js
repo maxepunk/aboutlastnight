@@ -260,6 +260,16 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
     expect(filterGateNotes(reused, 'Lead with the ledger.', 'article')).toEqual([reused[0], reused[2]]);
   });
 
+  // Review fix round 1: an omitted gate used to match any stop, which is exactly the
+  // cross-stop deletion the narrowing removes. A caller that forgets the gate must
+  // fail loud, not quietly get the old behaviour back.
+  it('filterGateNotes throws when the gate is missing or not a string', () => {
+    expect(() => filterGateNotes(NOTES, 'Lead with the ledger.')).toThrow(/gate is required/);
+    expect(() => filterGateNotes(NOTES, 'Lead with the ledger.', '')).toThrow(/gate is required/);
+    expect(() => filterGateNotes(NOTES, 'Lead with the ledger.', '  ')).toThrow(/gate is required/);
+    expect(() => filterGateNotes(NOTES, null, { gate: 'outline' })).toThrow(/gate is required/);
+  });
+
   it('filterGateNotes treats a note with no kind as a rejection (notes written before approval notes existed)', () => {
     const legacy = [{ gate: 'outline', round: 1, text: 'Lead with the ledger.' }];
     expect(filterGateNotes(legacy, 'Lead with the ledger.', 'outline')).toEqual([]);

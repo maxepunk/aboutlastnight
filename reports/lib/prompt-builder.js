@@ -120,9 +120,9 @@ function formatGateNotes(gateNotes) {
     : [];
   if (list.length === 0) return '';
   const lines = list.map(n => `- [${n.gate}, ${n.kind || 'rejection'} ${n.round || 1}] ${n.text.trim()}`);
-  return 'Standing notes the director gave at earlier stops, in order. Where a note is marked\n' +
-         'rejection, a rejection note was applied by the rework at its own stop; where it is\n' +
-         'marked approval, an approval note is forward guidance no writer has acted on yet.\n' +
+  return 'Standing notes the director gave at earlier stops, in order.\n' +
+         'Each carries its kind: a rejection note was applied by the rework at its own stop;\n' +
+         'an approval note is forward guidance no writer has acted on yet.\n' +
          'Keep honoring each in what you write now.\n' + lines.join('\n');
 }
 
@@ -137,19 +137,28 @@ function formatGateNotes(gateNotes) {
  * reused a sentence. A note written before approval notes existed carries no kind
  * and counts as a rejection, as it does everywhere else.
  *
+ * The gate is REQUIRED and the call fails loud without it: an optional gate silently
+ * restored the cross-stop text match this narrowing exists to remove, and a caller
+ * that forgot to pass one would look correct.
+ *
  * @param {Array} gateNotes - directorGateNotes entries
  * @param {string|null} currentFeedback - the note this rework is acting on
- * @param {string} [gate] - the stop being reworked; omitted matches any stop
+ * @param {string} gate - the stop being reworked; required
  */
 function filterGateNotes(gateNotes, currentFeedback, gate) {
+  if (typeof gate !== 'string' || !gate.trim()) {
+    throw new Error(
+      'filterGateNotes: gate is required (the stop being reworked); without it the ' +
+      "match falls back across stops and drops another stop's note"
+    );
+  }
   const list = Array.isArray(gateNotes) ? gateNotes.filter(n => n && typeof n === 'object') : [];
   const current = typeof currentFeedback === 'string' ? currentFeedback.trim() : '';
   if (!current) return list;
   return list.filter(n => {
     const text = typeof n.text === 'string' ? n.text.trim() : '';
     const isRejection = (n.kind || 'rejection') === 'rejection';
-    const sameGate = !gate || n.gate === gate;
-    return !(text === current && isRejection && sameGate);
+    return !(text === current && isRejection && n.gate === gate);
   });
 }
 
