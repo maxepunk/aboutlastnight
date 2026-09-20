@@ -1053,7 +1053,9 @@ async function reviseOutline(state, config) {
 
   // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
   // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
-  const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback);
+  // The gate narrows the match to THIS stop's rejection note (phase 1 brief 1.1):
+  // an approval note reusing the same sentence must survive.
+  const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback, 'outline');
 
   const theme = config?.configurable?.theme || 'journalist';
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
@@ -1518,7 +1520,9 @@ async function reviseContentBundle(state, config) {
 
   // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
   // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
-  const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback);
+  // The gate narrows the match to THIS stop's rejection note (phase 1 brief 1.1):
+  // an approval note reusing the same sentence must survive.
+  const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback, 'article');
 
   try {
     // INSIDE the try: buildArticleRevisionPrompt loads the revision craft rules and

@@ -638,7 +638,7 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
   test('an outline rejection appends an outline entry, round 1 when no outline notes exist', () => {
     const { stateUpdates } = buildResumePayload({ outline: false, outlineFeedback: 'Lead with the ledger.' }, { outline: validJournalistOutline(), directorGateNotes: existing });
     expect(stateUpdates.directorGateNotes.map((n) => n.gate)).toEqual(['arc-selection', 'outline']);
-    expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'outline', round: 1, text: 'Lead with the ledger.' });
+    expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'outline', kind: 'rejection', round: 1, text: 'Lead with the ledger.' });
   });
 
   test('an article rejection appends an article entry; a missing channel counts as empty', () => {
@@ -646,11 +646,55 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
     expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'article', kind: 'rejection', round: 1, text: 'Name the shell account.' })]);
   });
 
-  test('approvals append nothing, and arc GUIDANCE is not recorded as a note', () => {
+  test('an approval with no note appends nothing, and arc GUIDANCE is not recorded as a note', () => {
     const a = buildResumePayload({ selectedArcs: ['arc-1'], outlineGuidance: 'Lead with the money.' }, { directorGateNotes: existing });
     expect(a.stateUpdates._outlineGuidance).toBe('Lead with the money.');
     expect(a.stateUpdates.directorGateNotes).toBeUndefined();
     const o = buildResumePayload({ outline: true }, { directorGateNotes: existing });
     expect(o.stateUpdates.directorGateNotes).toBeUndefined();
+    const ar = buildResumePayload({ article: true }, { directorGateNotes: existing });
+    expect(ar.stateUpdates.directorGateNotes).toBeUndefined();
+    const blank = buildResumePayload({ outline: true, outlineNote: '   ' }, { directorGateNotes: existing });
+    expect(blank.stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  // Phase 1 brief 1.1: the note box is sent with WHATEVER the director presses.
+  // A note sent with an approval stands for every later writer, labelled as an
+  // approval note so the prompt can say it is forward guidance, not something a
+  // rework already applied.
+  test('an approval WITH a note appends one entry of kind approval, trimmed', () => {
+    const o = buildResumePayload({ outline: true, outlineNote: '  Keep the ledger thread.  ' }, { outline: validJournalistOutline(), directorGateNotes: existing });
+    expect(o.stateUpdates.directorGateNotes).toHaveLength(2);
+    expect(o.stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'outline', kind: 'approval', round: 1, text: 'Keep the ledger thread.' });
+    expect(o.stateUpdates.directorGateNotes[1].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const a = buildResumePayload({ article: true, articleNote: 'Name the shell account.' }, { contentBundle: {} });
+    expect(a.stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'article', kind: 'approval', round: 1, text: 'Name the shell account.' })]);
+  });
+
+  test('an approval note travels with edits, and an invalid edit writes no note at all', () => {
+    const withEdits = buildResumePayload(
+      { outline: true, outlineEdits: validJournalistOutline(), outlineNote: 'Keep my lede.' },
+      { outline: validJournalistOutline(), directorGateNotes: [] }
+    );
+    expect(withEdits.error).toBeNull();
+    expect(withEdits.stateUpdates.directorGateNotes).toHaveLength(1);
+    const bad = buildResumePayload(
+      { outline: true, outlineEdits: { lede: {} }, outlineNote: 'Keep my lede.' },
+      { outline: validJournalistOutline(), directorGateNotes: [] }
+    );
+    expect(bad.error).toContain('failed schema validation');
+    expect(bad.stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  test('round counts per gate AND kind, so an approval 1 and a rejection 1 coexist at one stop', () => {
+    const afterApproval = buildResumePayload({ outline: true, outlineNote: 'Keep the ledger thread.' }, { outline: validJournalistOutline(), directorGateNotes: [] });
+    const notes = afterApproval.stateUpdates.directorGateNotes;
+    const afterReject = buildResumePayload({ outline: false, outlineFeedback: 'Lead with the ledger.' }, { outline: validJournalistOutline(), directorGateNotes: notes });
+    expect(afterReject.stateUpdates.directorGateNotes.map((n) => [n.gate, n.kind, n.round])).toEqual([
+      ['outline', 'approval', 1],
+      ['outline', 'rejection', 1]
+    ]);
+    const afterSecondApproval = buildResumePayload({ outline: true, outlineNote: 'And keep the closing.' }, { outline: validJournalistOutline(), directorGateNotes: afterReject.stateUpdates.directorGateNotes });
+    expect(afterSecondApproval.stateUpdates.directorGateNotes[2]).toMatchObject({ gate: 'outline', kind: 'approval', round: 2 });
   });
 });

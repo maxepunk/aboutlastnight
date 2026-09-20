@@ -767,8 +767,12 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * Every rejection note the director wrote at a gate, in order (spec §5).
-   * Entries: { gate, kind:'rejection', round, text, at }. REPLACE reducer on purpose:
+   * Every note the director wrote at a gate, in order (spec §5).
+   * Entries: { gate, kind, round, text, at }. `kind` is 'rejection' (the note was sent
+   * with a send back, and the rework at that stop acted on it) or 'approval' (phase 1
+   * brief 1.1: the note was sent with an approve at the outline or article stop, and is
+   * forward guidance no writer has acted on yet). `round` counts per gate AND kind, so
+   * [outline, approval 1] and [outline, rejection 1] coexist. REPLACE reducer on purpose:
    * the server appends by writing the full array (it holds current state and the
    * session lock), and a rollback into the outline/article region writes the
    * SURVIVORS after pruning — something an append channel cannot express (C1).

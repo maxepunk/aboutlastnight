@@ -214,8 +214,12 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
 
   it('notes only → the section carries only the standing-notes paragraph, in order, labelled', () => {
     const section = buildDirectorGuidanceSection(null, NOTES);
-    expect(section.startsWith('<DIRECTOR_GUIDANCE>\nStanding notes the director gave at earlier gates, in order.')).toBe(true);
-    expect(section).toContain('keep honoring it in what you write now.');
+    expect(section.startsWith('<DIRECTOR_GUIDANCE>\nStanding notes the director gave at earlier stops, in order.')).toBe(true);
+    // Phase 1 brief 1.1: an approval note has NOT been applied by a rework, so the
+    // old blanket "each was already applied at its own gate" was a lie about it.
+    expect(section).toContain('a rejection note was applied by the rework at its own stop');
+    expect(section).toContain('an approval note is forward guidance');
+    expect(section).toContain('Keep honoring each in what you write now.');
     expect(section).not.toContain('outranks');
     const a = section.indexOf('- [arc-selection, rejection 1] Drop the vote arc.');
     const b = section.indexOf('- [outline, rejection 1] Lead with the ledger.');
@@ -227,6 +231,7 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
   it('both → the guidance paragraph first, then the notes, one section', () => {
     const section = buildDirectorGuidanceSection(GUIDANCE, NOTES);
     expect(section.indexOf('outranks')).toBeLessThan(section.indexOf('Standing notes'));
+    expect(section).toContain('an approval note is forward guidance');
     expect(section.match(/<DIRECTOR_GUIDANCE>/g)).toHaveLength(1);
   });
 
@@ -236,10 +241,28 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
   });
 
   it('filterGateNotes drops only the note whose text is the feedback being acted on', () => {
-    expect(filterGateNotes(NOTES, 'Lead with the ledger.')).toEqual([NOTES[0]]);
-    expect(filterGateNotes(NOTES, null)).toEqual(NOTES);
-    expect(filterGateNotes(NOTES, 'something else')).toEqual(NOTES);
-    expect(filterGateNotes(null, 'x')).toEqual([]);
+    expect(filterGateNotes(NOTES, 'Lead with the ledger.', 'outline')).toEqual([NOTES[0]]);
+    expect(filterGateNotes(NOTES, null, 'outline')).toEqual(NOTES);
+    expect(filterGateNotes(NOTES, 'something else', 'outline')).toEqual(NOTES);
+    expect(filterGateNotes(null, 'x', 'outline')).toEqual([]);
+  });
+
+  // Phase 1 brief 1.1: with approval notes in the channel a text-only match would
+  // silently delete a sentence the director reused. The note being acted on is the
+  // REJECTION at the stop being reworked; nothing else may be dropped.
+  it('filterGateNotes keeps a same-text note of another kind, or from another stop', () => {
+    const reused = [
+      { gate: 'outline', kind: 'approval', round: 1, text: 'Lead with the ledger.' },
+      { gate: 'article', kind: 'rejection', round: 1, text: 'Lead with the ledger.' },
+      { gate: 'outline', kind: 'rejection', round: 1, text: 'Lead with the ledger.' }
+    ];
+    expect(filterGateNotes(reused, 'Lead with the ledger.', 'outline')).toEqual([reused[0], reused[1]]);
+    expect(filterGateNotes(reused, 'Lead with the ledger.', 'article')).toEqual([reused[0], reused[2]]);
+  });
+
+  it('filterGateNotes treats a note with no kind as a rejection (notes written before approval notes existed)', () => {
+    const legacy = [{ gate: 'outline', round: 1, text: 'Lead with the ledger.' }];
+    expect(filterGateNotes(legacy, 'Lead with the ledger.', 'outline')).toEqual([]);
   });
 
   it('buildOutlinePrompt and buildArticlePrompt read options.gateNotes and still end with the section', async () => {

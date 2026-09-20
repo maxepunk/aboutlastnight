@@ -375,13 +375,20 @@ function sanitizePhotosPath(raw) {
  * channel, so this writes the full array; buildResumePayload has the current state
  * and the per-session lock rules out a concurrent writer. `round` counts the
  * SURVIVING notes for the gate, so it restarts after a pruning rollback.
+ *
+ * Phase 1 brief 1.1: `kind` is the caller's, not a constant. The note box at a stop
+ * is sent with whatever the director presses, so one stop can hold both an approval
+ * note and a rejection note, and `round` counts per gate AND kind so the two series
+ * do not share numbers ([outline, approval 1] and [outline, rejection 1] coexist).
+ *
+ * @param {string} kind - 'rejection' (sent with a send back) or 'approval' (sent with an approve)
  */
-function appendGateNote(stateUpdates, currentState, gate, text) {
+function appendGateNote(stateUpdates, currentState, gate, text, kind) {
     const existing = Array.isArray(currentState.directorGateNotes)
         ? currentState.directorGateNotes.filter(n => n && typeof n === 'object')
         : [];
-    const round = existing.filter(n => n.gate === gate).length + 1;
-    stateUpdates.directorGateNotes = [...existing, { gate, kind: 'rejection', round, text, at: new Date().toISOString() }];
+    const round = existing.filter(n => n.gate === gate && (n.kind || 'rejection') === kind).length + 1;
+    stateUpdates.directorGateNotes = [...existing, { gate, kind, round, text, at: new Date().toISOString() }];
 }
 
 /** Schema-check a director's edited object the same way the approve path does. */
@@ -482,7 +489,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         resume.approved = false;
         resume.feedback = approvals.arcFeedback.trim();
         stateUpdates._arcFeedback = approvals.arcFeedback.trim();
-        appendGateNote(stateUpdates, currentState, 'arc-selection', approvals.arcFeedback.trim());
+        appendGateNote(stateUpdates, currentState, 'arc-selection', approvals.arcFeedback.trim(), 'rejection');
     } else if (approvals.selectedArcs && !Array.isArray(approvals.selectedArcs)) {
         error = 'selectedArcs must be an array or false (for rejection)';
     }
@@ -497,6 +504,13 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
             if (error) return { resume, stateUpdates, error };
             stateUpdates.outline = approvals.outlineEdits;
         }
+        // Phase 1 brief 1.1: the stop's note box is sent with the approve too. It
+        // becomes a standing note of kind 'approval' — forward guidance for every
+        // later writer, not something a rework already applied. AFTER the edit
+        // validation, so an invalid edit writes nothing at all. Blank appends nothing.
+        if (typeof approvals.outlineNote === 'string' && approvals.outlineNote.trim()) {
+            appendGateNote(stateUpdates, currentState, 'outline', approvals.outlineNote.trim(), 'approval');
+        }
     } else if (approvals.outline === false && typeof approvals.outlineFeedback === 'string' && approvals.outlineFeedback.trim()) {
         // Spec 2026-09-19 §4.1: hand edits may travel with the note. Validate FIRST so
         // an invalid edit writes nothing at all.
@@ -510,7 +524,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         resume.approved = false;
         resume.feedback = approvals.outlineFeedback.trim();
         stateUpdates._outlineFeedback = resume.feedback;
-        appendGateNote(stateUpdates, currentState, 'outline', resume.feedback);
+        appendGateNote(stateUpdates, currentState, 'outline', resume.feedback, 'rejection');
         // Every reject resets both steering fields (C3): a second reject after a
         // rework must not carry the previous round's diff or report.
         stateUpdates._outlineHandEdits = null;
@@ -535,6 +549,12 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
             if (error) return { resume, stateUpdates, error };
             stateUpdates.contentBundle = approvals.articleEdits;
         }
+        // Phase 1 brief 1.1: as at the outline stop — the note box is sent with the
+        // approve, and stands as an 'approval' note for any writer a later rollback
+        // puts in front of it. AFTER the edit validation. Blank appends nothing.
+        if (typeof approvals.articleNote === 'string' && approvals.articleNote.trim()) {
+            appendGateNote(stateUpdates, currentState, 'article', approvals.articleNote.trim(), 'approval');
+        }
     } else if (approvals.article === false && typeof approvals.articleFeedback === 'string' && approvals.articleFeedback.trim()) {
         const hasEdits = approvals.articleEdits && typeof approvals.articleEdits === 'object';
         if (hasEdits) {
@@ -545,7 +565,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         resume.approved = false;
         resume.feedback = approvals.articleFeedback.trim();
         stateUpdates._articleFeedback = resume.feedback;
-        appendGateNote(stateUpdates, currentState, 'article', resume.feedback);
+        appendGateNote(stateUpdates, currentState, 'article', resume.feedback, 'rejection');
         stateUpdates._articleHandEdits = null;
         stateUpdates._articleHandEditReport = null;
         if (hasEdits) {

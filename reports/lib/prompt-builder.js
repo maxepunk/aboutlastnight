@@ -107,6 +107,12 @@ ${content.trim()}
 /**
  * The director's standing notes as a prompt paragraph (spec 2026-09-19 §5.3).
  * Entries with no usable text are skipped. '' when nothing remains.
+ *
+ * Phase 1 brief 1.1: the note box is now sent with WHATEVER the director presses,
+ * so the channel holds two kinds. The preamble has to tell them apart — a rejection
+ * note was already acted on by the rework at its own stop, but an approval note has
+ * never reached a writer, and calling it "already applied" told the writer to treat
+ * a forward instruction as history.
  */
 function formatGateNotes(gateNotes) {
   const list = Array.isArray(gateNotes)
@@ -114,20 +120,37 @@ function formatGateNotes(gateNotes) {
     : [];
   if (list.length === 0) return '';
   const lines = list.map(n => `- [${n.gate}, ${n.kind || 'rejection'} ${n.round || 1}] ${n.text.trim()}`);
-  return 'Standing notes the director gave at earlier gates, in order. Each was already applied\n' +
-         'at its own gate; keep honoring it in what you write now.\n' + lines.join('\n');
+  return 'Standing notes the director gave at earlier stops, in order. Where a note is marked\n' +
+         'rejection, a rejection note was applied by the rework at its own stop; where it is\n' +
+         'marked approval, an approval note is forward guidance no writer has acted on yet.\n' +
+         'Keep honoring each in what you write now.\n' + lines.join('\n');
 }
 
 /**
  * Drop the note the reviser is acting on RIGHT NOW (it is already in the prompt as
- * HUMAN FEEDBACK). Matching is by text: on an evaluator-driven second pass the
- * feedback slot is null, so nothing is excluded and the note stands (spec §5.3 [I10]).
+ * HUMAN FEEDBACK). On an evaluator-driven second pass the feedback slot is null, so
+ * nothing is excluded and every note stands (spec §5.3 [I10]).
+ *
+ * Phase 1 brief 1.1: the match is kind- and gate-narrowed, not text-only. The note
+ * being acted on can only be the REJECTION at the stop being reworked; a text-only
+ * match deleted an approval note, or another stop's note, whenever the director
+ * reused a sentence. A note written before approval notes existed carries no kind
+ * and counts as a rejection, as it does everywhere else.
+ *
+ * @param {Array} gateNotes - directorGateNotes entries
+ * @param {string|null} currentFeedback - the note this rework is acting on
+ * @param {string} [gate] - the stop being reworked; omitted matches any stop
  */
-function filterGateNotes(gateNotes, currentFeedback) {
+function filterGateNotes(gateNotes, currentFeedback, gate) {
   const list = Array.isArray(gateNotes) ? gateNotes.filter(n => n && typeof n === 'object') : [];
   const current = typeof currentFeedback === 'string' ? currentFeedback.trim() : '';
   if (!current) return list;
-  return list.filter(n => (typeof n.text === 'string' ? n.text.trim() : '') !== current);
+  return list.filter(n => {
+    const text = typeof n.text === 'string' ? n.text.trim() : '';
+    const isRejection = (n.kind || 'rejection') === 'rejection';
+    const sameGate = !gate || n.gate === gate;
+    return !(text === current && isRejection && sameGate);
+  });
 }
 
 /**
