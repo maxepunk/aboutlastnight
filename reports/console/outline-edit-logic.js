@@ -137,13 +137,13 @@
     };
   }
 
+  // Thesis panel (spec 2026-09-19 §6.1): the three LEDE fields the director
+  // rewrites most. Derived from initLede so the two initializers cannot disagree
+  // about how a missing or non-string field is coerced (review fix 1, finding 6);
+  // selectedEvidence is dropped because the thesis editor does not show it.
   function initThesis(lede) {
-    var s = lede || {};
-    return {
-      hook: typeof s.hook === 'string' ? s.hook : '',
-      keyTension: typeof s.keyTension === 'string' ? s.keyTension : '',
-      primaryArc: typeof s.primaryArc === 'string' ? s.primaryArc : ''
-    };
+    var base = initLede(lede);
+    return { hook: base.hook, keyTension: base.keyTension, primaryArc: base.primaryArc };
   }
 
   function initArc(arc) {
