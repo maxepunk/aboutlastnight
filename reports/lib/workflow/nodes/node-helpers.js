@@ -813,8 +813,11 @@ function resolveArcs(arcs, availableArcs) {
  * @param {number} options.revisionCount - Current revision attempt number
  * @param {Object} options.validationResults - The evaluation's own record of what it
  *   found: `phase`, `passed`, `criteriaScores`, `structuralIssues` (must fix),
- *   `advisoryWarnings` (should consider), `revisionGuidance`. Every branch of
- *   evaluatePhase writes one, pass or fail, so this is never a stale verdict.
+ *   `advisoryWarnings` (should consider), `revisionGuidance`. All three of
+ *   evaluatePhase's post-SDK returns write one — pass, fail under the cap, fail
+ *   at the cap — as does the fact-check short-circuit, so a rework that follows
+ *   an evaluation never reads a stale verdict. (Its error branch and its two
+ *   skip branches return no record at all, leaving whatever the channel held.)
  * @param {Object|Array} options.previousOutput - The full previous output to improve
  * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
  * @param {Object|null} [options.handEdits] - Hand-edit diff from lib/hand-edit-diff.js (rendered as <HAND_EDITS>)
