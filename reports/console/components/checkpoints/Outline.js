@@ -1270,8 +1270,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       revisionCount: revisionCount,
       maxRevisions: maxRevisions,
       previousFeedback: previousFeedback,
-      humanRevisionCount: 0,
-      maxHumanRevisions: 0,
+      humanRevisionCount: (data && data.humanRevisionCount) || 0,
       handEditReport: (data && data.handEditReport) || null,
       gateNotes: (data && data.directorGateNotes) || []
     }),

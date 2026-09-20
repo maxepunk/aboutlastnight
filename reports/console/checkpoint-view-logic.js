@@ -487,6 +487,37 @@
     };
   }
 
+  // ── roundsBanner (phase 1, brief 1.4) ─────────────────────────────────────
+  // One counter used to serve both the machine and the director, so RevisionDiff
+  // read "Revision 2 of 3" off the automated budget, called the director's second
+  // send back the last one, and printed "Maximum revisions reached — this is the
+  // final version." The director's rounds are not capped; only the machine's own
+  // reworks inside a round are, and those start over at every send back.
+
+  /**
+   * @param {number} humanRevisionCount - rounds the director has already taken
+   * @param {number} revisionCount - automated passes spent in the current round
+   * @param {number} maxRevisions - the automated budget for a round
+   * @returns {object} {show, roundLabel, automatedLabel, remainingLabel, remainingColor}
+   */
+  function roundsBanner(humanRevisionCount, revisionCount, maxRevisions) {
+    var rounds = Number(humanRevisionCount) || 0;
+    var used = Number(revisionCount) || 0;
+    var budget = Number(maxRevisions) || 0;
+    // A budget of 0 means the stop reported none, not that the machine is out of
+    // passes: say nothing rather than guess.
+    var remaining = Math.max(0, budget - used);
+    return {
+      show: budget > 0,
+      roundLabel: 'Round ' + (rounds + 1),
+      automatedLabel: 'Automated passes this round: ' + used + ' of ' + budget,
+      remainingLabel: remaining + ' automated pass' + (remaining === 1 ? '' : 'es') + ' left',
+      remainingColor: remaining > 1 ? 'var(--accent-green)'
+        : remaining === 1 ? 'var(--accent-amber)'
+          : 'var(--accent-red)'
+    };
+  }
+
   // ── review payloads (phase 1, brief 1.1) ──────────────────────────────────
   // One note box at the outline and article stops, sent with whatever the director
   // presses. Before this the only place to write was behind the Reject button, so a
@@ -591,6 +622,7 @@
     approveLabel: approveLabel,
     wordTail: wordTail,
     steeringView: steeringView,
+    roundsBanner: roundsBanner,
     outlineReviewPayload: outlineReviewPayload,
     articleReviewPayload: articleReviewPayload,
     sendBackButton: sendBackButton,

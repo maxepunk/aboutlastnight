@@ -600,3 +600,56 @@ describe('review payloads for the outline and article stops (phase 1, brief 1.1)
     expect(noteSlotKey('outline')).not.toBe('outline');
   });
 });
+
+// ── roundsBanner (phase 1, brief 1.4) ────────────────────────────────────────
+// RevisionDiff used to read ONE counter as both the director's round and the
+// machine's budget, and print "Maximum revisions reached — this is the final
+// version." when it ran out. On 091826 that line appeared after the director's
+// second send back and ended their rounds on a false statement. The director's
+// rounds are not capped; only the automated passes inside a round are.
+describe('roundsBanner', () => {
+  const { roundsBanner } = require('../checkpoint-view-logic');
+
+  test('the first look is Round 1, with the whole automated budget unspent', () => {
+    const view = roundsBanner(0, 0, 2);
+    expect(view.show).toBe(true);
+    expect(view.roundLabel).toBe('Round 1');
+    expect(view.automatedLabel).toBe('Automated passes this round: 0 of 2');
+    expect(view.remainingLabel).toBe('2 automated passes left');
+  });
+
+  test('a round counts the director’s send-backs, with no maximum anywhere', () => {
+    expect(roundsBanner(2, 0, 2).roundLabel).toBe('Round 3');
+    expect(roundsBanner(11, 1, 2).roundLabel).toBe('Round 12');
+    const text = JSON.stringify(roundsBanner(11, 2, 2));
+    expect(text).not.toMatch(/final version/i);
+    expect(text).not.toMatch(/Maximum/i);
+  });
+
+  test('the budget colour warns as the automated passes run out', () => {
+    expect(roundsBanner(0, 0, 3).remainingColor).toBe('var(--accent-green)');
+    expect(roundsBanner(0, 1, 2).remainingColor).toBe('var(--accent-amber)');
+    expect(roundsBanner(0, 2, 2).remainingColor).toBe('var(--accent-red)');
+  });
+
+  test('a spent budget is 0 left, never a negative count', () => {
+    const view = roundsBanner(1, 5, 2);
+    expect(view.remainingLabel).toBe('0 automated passes left');
+    expect(view.automatedLabel).toBe('Automated passes this round: 5 of 2');
+  });
+
+  test('one pass left reads in the singular', () => {
+    expect(roundsBanner(0, 1, 2).remainingLabel).toBe('1 automated pass left');
+  });
+
+  test('a stop that reports no budget shows nothing', () => {
+    expect(roundsBanner(0, 0, 0).show).toBe(false);
+    expect(roundsBanner(3, 1, undefined).show).toBe(false);
+  });
+
+  test('missing counts read as zero rather than NaN', () => {
+    const view = roundsBanner(undefined, null, 2);
+    expect(view.roundLabel).toBe('Round 1');
+    expect(view.automatedLabel).toBe('Automated passes this round: 0 of 2');
+  });
+});

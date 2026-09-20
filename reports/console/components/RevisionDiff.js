@@ -73,7 +73,7 @@ const STATUS_PREFIX = {
   unchanged: '= '
 };
 
-function RevisionDiff({ previous, current, revisionCount, maxRevisions, previousFeedback, humanRevisionCount, maxHumanRevisions, handEditReport, gateNotes }) {
+function RevisionDiff({ previous, current, revisionCount, maxRevisions, previousFeedback, humanRevisionCount, handEditReport, gateNotes }) {
   const hasPrevious = previous !== null && previous !== undefined;
 
   // Spec 2026-09-19 §4.4/§5.5: the hand-edit report and the standing notes render
@@ -94,35 +94,26 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
     return null;
   }
 
-  // Show whichever revision type is active
-  // Only treat as human revision when both count AND max are explicitly provided
-  const isHumanRevision = humanRevisionCount > 0 && maxHumanRevisions > 0;
-  const displayCount = isHumanRevision ? humanRevisionCount : revisionCount;
-  const displayMax = isHumanRevision ? maxHumanRevisions : maxRevisions;
-  const budgetRemaining = displayMax - displayCount;
-  const budgetColor = budgetRemaining > 1 ? 'var(--accent-green)' :
-                      budgetRemaining === 1 ? 'var(--accent-amber)' :
-                      'var(--accent-red)';
-  // A cap of 0/undefined means "this gate reported no budget", not "at the cap".
-  const atMax = displayMax > 0 && displayCount >= displayMax;
-  const showBanner = displayCount > 0 && displayMax > 0;
+  // Brief 1.4: every stop shows rounds the same way. The counters mean different
+  // things — humanRevisionCount is the director's rounds, revisionCount the
+  // machine's own passes inside the current one — and the strings are decided in
+  // the pure module. There is no "final version" line any more: the director's
+  // rounds are not capped, and the one the console printed after two send-backs
+  // was false as well as final-sounding.
+  const rounds = ViewLogic.roundsBanner(humanRevisionCount, revisionCount, maxRevisions);
 
   return React.createElement('div', { className: 'revision-diff fade-in' },
 
-    // Revision number banner
-    showBanner && React.createElement('div', { className: 'revision-diff__banner' },
-      React.createElement('span', { className: 'revision-diff__banner-text' },
-        (isHumanRevision ? 'Human Revision ' : 'Revision ') + displayCount + ' of ' + displayMax
+    // Round banner: which look this is, and what the machine has spent inside it
+    rounds.show && React.createElement('div', { className: 'revision-diff__banner' },
+      React.createElement('div', null,
+        React.createElement('span', { className: 'revision-diff__banner-text' }, rounds.roundLabel),
+        React.createElement('div', { className: 'text-xs text-muted' }, rounds.automatedLabel)
       ),
       React.createElement(Badge, {
-        label: budgetRemaining + ' remaining',
-        color: budgetColor
+        label: rounds.remainingLabel,
+        color: rounds.remainingColor
       })
-    ),
-
-    // Max revision escalation warning
-    atMax && React.createElement('div', { className: 'revision-diff__warning' },
-      'Maximum revisions reached \u2014 this is the final version.'
     ),
 
     // Previous feedback callout

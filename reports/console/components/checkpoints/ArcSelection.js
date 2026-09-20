@@ -153,7 +153,6 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
       maxRevisions: maxRevisions,
       previousFeedback: previousFeedback,
       humanRevisionCount: (data && data.humanRevisionCount) || 0,
-      maxHumanRevisions: (data && data.maxHumanRevisions) || 0,
       handEditReport: null,
       gateNotes: (data && data.directorGateNotes) || []
     }),
