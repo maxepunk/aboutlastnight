@@ -20,7 +20,7 @@ const {
 } = require('../workflow/nodes/ai-nodes');
 
 const {
-  _testing: { buildArcRevisionPrompt }
+  _testing: { buildArcRevisionPrompt, getArcRevisionSystemPrompt }
 } = require('../workflow/nodes/arc-specialist-nodes');
 
 describe('revision system prompts are theme-aware', () => {
@@ -43,6 +43,32 @@ describe('revision system prompts are theme-aware', () => {
 
   it('defaults to journalist when no theme is given', () => {
     expect(getArticleRevisionSystemPrompt()).toContain('Nova');
+  });
+});
+
+describe('no rework system prompt tells the writer to preserve a high-scoring criterion', () => {
+  // Brief 1.3: the >=80% preserve instruction is gone from the rework USER
+  // prompt; it survived in the system prompts, so a rework whose criteria all
+  // scored above 0.8 was still told to change nothing.
+  it('the outline rework system prompt carries no 80% rule, either theme', () => {
+    for (const theme of ['journalist', 'detective']) {
+      expect(getOutlineRevisionSystemPrompt(theme)).not.toContain('80%');
+    }
+  });
+
+  it('the evaluator-driven arc rework system prompt carries no 80% rule', () => {
+    expect(getArcRevisionSystemPrompt(false)).not.toContain('80%');
+  });
+
+  it('both lists stay consecutively numbered after the removal', () => {
+    const numbered = (text) => text
+      .split('\n')
+      .map((line) => line.match(/^(\d+)\. /))
+      .filter(Boolean)
+      .map((match) => Number(match[1]));
+
+    expect(numbered(getOutlineRevisionSystemPrompt('journalist'))).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(getArcRevisionSystemPrompt(false))).toEqual([1, 2, 3, 4, 5]);
   });
 });
 

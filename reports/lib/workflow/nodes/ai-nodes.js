@@ -1135,9 +1135,8 @@ CRITICAL REVISION RULES:
 1. You are IMPROVING an existing outline, not generating from scratch
 2. The previous outline is provided - PRESERVE everything that's working well
 3. Only modify the specific issues identified in the feedback
-4. If a criterion is scoring ≥80%, do NOT change anything related to it
-5. Maintain the same overall structure and organization
-6. Output complete outline with all required sections
+4. Maintain the same overall structure and organization
+5. Output complete outline with all required sections
 
 Your goal is TARGETED FIXES that address the evaluator's feedback while preserving all the good work from the previous attempt.
 
