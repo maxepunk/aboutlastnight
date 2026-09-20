@@ -69,6 +69,19 @@ function FactCheckPanel({ summary, cardHeadlines }) {
   );
 }
 
+/**
+ * One thesis-echo line (spec 2026-09-19 §6.2), through the same
+ * string-or-'(empty)' guard the outline THESIS panel uses: `outlineThesis` comes
+ * off the approved outline, where a field can be absent or non-string, and a raw
+ * render of a number or object throws on a read-only panel.
+ */
+function thesisField(label, value, className) {
+  return React.createElement('p', { className: className },
+    React.createElement('strong', null, label + ': '),
+    typeof value === 'string' && value.trim() ? value : React.createElement('span', { className: 'text-muted' }, '(empty)')
+  );
+}
+
 /** Last path segment, tolerating both separators (the photo paths are Windows). */
 function baseName(filepath) {
   const value = String(filepath == null ? '' : filepath);
@@ -903,14 +916,12 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   function handleReject() {
     if (!feedbackText.trim()) return;
+    // Spec 2026-09-19 §4.6: hand edits travel with the note, validated through the
+    // SAME gate approve uses (review fix 1, finding 1 — two copies of the gate drift,
+    // and the one that drifts loose ships an invalid bundle). An invalid edit is
+    // shown and not sent.
     if (hasEdits && editedBundle) {
-      const result = ArticleEditLogic.validateBundleShape(editedBundle);
-      if (!result.valid) {
-        setEditError('Cannot send, edited article is invalid: ' +
-          result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
-        return;
-      }
-      setEditError('');
+      if (!gateEdits(editedBundle, setEditError)) return;
       if (dispatch) {
         dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
         dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: editedBundle });
@@ -1370,9 +1381,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     // headline is judged against the thesis it must serve. No pencil, no opt-in class.
     outlineThesis && React.createElement('div', { className: 'article-thesis-echo' },
       React.createElement('h4', { className: 'outline-section__title' }, 'THESIS (from the approved outline)'),
-      React.createElement('p', { className: 'text-sm mb-sm' }, React.createElement('strong', null, 'Hook: '), outlineThesis.hook || '(empty)'),
-      React.createElement('p', { className: 'text-sm mb-sm' }, React.createElement('strong', null, 'Key tension: '), outlineThesis.keyTension || '(empty)'),
-      React.createElement('p', { className: 'text-sm' }, React.createElement('strong', null, 'Primary arc: '), outlineThesis.primaryArc || '(empty)')
+      thesisField('Hook', outlineThesis.hook, 'text-sm mb-sm'),
+      thesisField('Key tension', outlineThesis.keyTension, 'text-sm mb-sm'),
+      thesisField('Primary arc', outlineThesis.primaryArc, 'text-sm')
     ),
 
     // Headline (editable)

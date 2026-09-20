@@ -638,16 +638,27 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     }
   }
 
+  /**
+   * The ONE validation gate for pending hand edits (review fix 1, finding 2):
+   * approve and reject validate identically, so they share one implementation and
+   * cannot drift apart. Shaped like Article.js's gateEdits. On success it clears
+   * the inline error; on failure it shows it and the caller sends nothing.
+   */
+  function gateEdits(candidate, setError) {
+    const themeForValidation = isDetective ? 'detective' : 'journalist';
+    const result = EditLogic.validateOutlineShape(candidate, themeForValidation);
+    if (result.valid) {
+      setError('');
+      return true;
+    }
+    setError('Cannot approve, edited outline is invalid: ' +
+      result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
+    return false;
+  }
+
   function handleApprove() {
     if (hasEdits && editedOutline) {
-      const themeForValidation = isDetective ? 'detective' : 'journalist';
-      const result = EditLogic.validateOutlineShape(editedOutline, themeForValidation);
-      if (!result.valid) {
-        setEditError('Cannot approve, edited outline is invalid: ' +
-          result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
-        return;
-      }
-      setEditError('');
+      if (!gateEdits(editedOutline, setEditError)) return;
       if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
       onApprove({ outline: true, outlineEdits: editedOutline });
     } else {
@@ -677,19 +688,12 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
   function handleReject() {
     if (!feedbackText.trim()) return;
-    // Spec 2026-09-19 §4.6: hand edits travel with the note. Validate exactly as
-    // approve does; an invalid edit is shown, not sent. The EDITED outline is cached
-    // as the revision's previous version so the diff view compares the rework
-    // against what the director actually sent.
+    // Spec 2026-09-19 §4.6: hand edits travel with the note. Validated through the
+    // SAME gate approve uses; an invalid edit is shown, not sent. The EDITED outline
+    // is cached as the revision's previous version so the diff view compares the
+    // rework against what the director actually sent.
     if (hasEdits && editedOutline) {
-      const themeForValidation = isDetective ? 'detective' : 'journalist';
-      const result = EditLogic.validateOutlineShape(editedOutline, themeForValidation);
-      if (!result.valid) {
-        setEditError('Cannot send, edited outline is invalid: ' +
-          result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
-        return;
-      }
-      setEditError('');
+      if (!gateEdits(editedOutline, setEditError)) return;
       if (dispatch) {
         dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
         dispatch({ type: 'CACHE_REVISION', contentType: 'outline', data: editedOutline });
