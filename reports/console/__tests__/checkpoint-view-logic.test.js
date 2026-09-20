@@ -133,7 +133,7 @@ describe('arcCardModel', () => {
     expect(arcCardModel(arc)).toEqual({
       title: 'T',
       summary: 'S',
-      keyEvidence: ['e1'],
+      keyEvidence: [{ id: 'e1', name: '', owner: '', type: '', firstLine: '', label: 'e1' }],
       hook: 'H',
       caveats: ['c'],
       unansweredQuestions: ['q'],
@@ -156,12 +156,38 @@ describe('arcCardModel', () => {
   it('tolerates the old field names hook and keyMoments', () => {
     const model = arcCardModel({ hook: 'old hook', keyMoments: ['a moment'] });
     expect(model.hook).toBe('old hook');
-    expect(model.keyEvidence).toEqual(['a moment']);
+    expect(model.keyEvidence).toEqual([
+      { id: 'a moment', name: '', owner: '', type: '', firstLine: '', label: 'a moment' }
+    ]);
   });
 
-  it('renders an evidence entry that carries an owner as "id (owner)"', () => {
+  it('falls back to the id when the stop sent no index for that document', () => {
     const model = arcCardModel({ keyEvidence: [{ id: 'mor004', owner: 'Vic' }, 'zia002'] });
-    expect(model.keyEvidence).toEqual(['mor004 (Vic)', 'zia002']);
+    expect(model.keyEvidence).toEqual([
+      { id: 'mor004', name: '', owner: 'Vic', type: '', firstLine: '', label: 'mor004 (Vic)' },
+      { id: 'zia002', name: '', owner: '', type: '', firstLine: '', label: 'zia002' }
+    ]);
+  });
+
+  // Brief 1.2: the director judged arcs by ids like 85620c6f-befd-4799-a877.
+  // evidenceIndex is the arc stop's payload map from that id to the document.
+  it('names the document and its owner when the stop sent an evidenceIndex', () => {
+    const index = {
+      mor004: { name: "Victor's ledger page", owner: 'Vic', type: 'paper', firstLine: 'Page three, entries for the week of the party.' },
+      zia002: { name: 'The hallway memory', owner: 'Zia', type: 'memory', firstLine: 'You are standing by the stairs when...' }
+    };
+    const model = arcCardModel({ keyEvidence: ['mor004', { id: 'zia002' }] }, index);
+    expect(model.keyEvidence).toEqual([
+      { id: 'mor004', name: "Victor's ledger page", owner: 'Vic', type: 'paper', firstLine: 'Page three, entries for the week of the party.', label: "Victor's ledger page (Vic)" },
+      { id: 'zia002', name: 'The hallway memory', owner: 'Zia', type: 'memory', firstLine: 'You are standing by the stairs when...', label: 'The hallway memory (Zia)' }
+    ]);
+  });
+
+  it('keeps the id as the label for an id the index does not hold', () => {
+    const model = arcCardModel({ keyEvidence: ['ghost001'] }, { mor004: { name: 'X', owner: 'Vic' } });
+    expect(model.keyEvidence).toEqual([
+      { id: 'ghost001', name: '', owner: '', type: '', firstLine: '', label: 'ghost001' }
+    ]);
   });
 
   it('defaults every field for an empty or missing arc', () => {
@@ -651,5 +677,50 @@ describe('roundsBanner', () => {
     const view = roundsBanner(undefined, null, 2);
     expect(view.roundLabel).toBe('Round 1');
     expect(view.automatedLabel).toBe('Automated passes this round: 0 of 2');
+  });
+});
+
+describe('the arc stop review (phase 1, brief 1.2)', () => {
+  const { arcReviewPayload, arcNotePrefill } = require('../checkpoint-view-logic');
+
+  test('approve carries the selection, and the note on the outlineGuidance key', () => {
+    expect(arcReviewPayload(['a', 'b'], '', 'approve')).toEqual({ selectedArcs: ['a', 'b'] });
+    expect(arcReviewPayload(['a'], '   ', 'approve')).toEqual({ selectedArcs: ['a'] });
+    expect(arcReviewPayload(['a'], '  Lead with the vote.  ', 'approve'))
+      .toEqual({ selectedArcs: ['a'], outlineGuidance: 'Lead with the vote.' });
+  });
+
+  test('send back carries the note as arcFeedback, never as guidance', () => {
+    const payload = arcReviewPayload(['a'], ' Drop the succession thread. ', 'send-back');
+    expect(payload).toEqual({ selectedArcs: false, arcFeedback: 'Drop the succession thread.' });
+    expect(payload.outlineGuidance).toBeUndefined();
+  });
+
+  test('a send back with a blank note builds nothing, and an unknown action throws', () => {
+    expect(arcReviewPayload(['a'], '', 'send-back')).toBeNull();
+    expect(arcReviewPayload(['a'], '   ', 'send-back')).toBeNull();
+    expect(() => arcReviewPayload(['a'], 'note', 'reject')).toThrow(/approve.*send-back/);
+    expect(() => arcReviewPayload(['a'], 'note', undefined)).toThrow(/approve.*send-back/);
+  });
+
+  test('the next round pre-fills the box from the last arc-stop send-back note', () => {
+    const notes = [
+      { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'First try.' },
+      { gate: 'outline', kind: 'rejection', round: 1, text: 'Not this stop.' },
+      { gate: 'arc-selection', kind: 'rejection', round: 2, text: '  Drop the succession thread.  ' }
+    ];
+    expect(arcNotePrefill(notes)).toBe('Drop the succession thread.');
+  });
+
+  test('an approval note is not a pre-fill, and neither is nothing at all', () => {
+    expect(arcNotePrefill([{ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Approved with a note.' }])).toBe('');
+    expect(arcNotePrefill([{ gate: 'outline', kind: 'rejection', round: 1, text: 'x' }])).toBe('');
+    expect(arcNotePrefill([])).toBe('');
+    expect(arcNotePrefill(null)).toBe('');
+    expect(arcNotePrefill([null, { gate: 'arc-selection', text: '   ' }])).toBe('');
+  });
+
+  test('a note with no kind is a send-back note, as the channel has always read it', () => {
+    expect(arcNotePrefill([{ gate: 'arc-selection', text: 'Older note.' }])).toBe('Older note.');
   });
 });

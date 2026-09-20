@@ -246,6 +246,70 @@ function outlineThesisOf(state) {
     return { hook: lede.hook || '', keyTension: lede.keyTension || '', primaryArc: lede.primaryArc || '' };
 }
 
+/** How much of a document's first line the arc card shows. */
+const EVIDENCE_FIRST_LINE_MAX = 160;
+
+/** The first non-blank line of a document, for the arc cards. */
+function firstLineOf(item) {
+    const text = String(item.fullContent || item.content || item.description || item.text || '');
+    const line = text.split(/\r?\n/).map(l => l.trim()).find(l => l.length > 0) || '';
+    return line.length > EVIDENCE_FIRST_LINE_MAX ? line.slice(0, EVIDENCE_FIRST_LINE_MAX).trimEnd() + '...' : line;
+}
+
+/**
+ * The owner of a document, as a name.
+ *
+ * `owners` is the resolved relation (lib/notion/relations.js deletes `ownerIds`
+ * on the join), `owner`/`ownerLogline` are what the preprocessor and the arc
+ * evidence packages carry. Never a relation id: an id is exactly what this whole
+ * index exists to keep off the screen.
+ */
+function ownerNameOf(item) {
+    const candidate = item.owner || item.ownerLogline || (Array.isArray(item.owners) ? item.owners[0] : null);
+    if (typeof candidate === 'string') return candidate.trim();
+    if (candidate && typeof candidate === 'object') {
+        return String(candidate.name || candidate.logline || '').trim();
+    }
+    return '';
+}
+
+/**
+ * Every exposed document at the arc stop, keyed by the id an arc may cite
+ * (phase 1, brief 1.2).
+ *
+ * The arc cards rendered `keyEvidence` as bare ids, so the director was asked to
+ * judge an arc by `85620c6f-befd-4799-a877-8fc25c040d8e`. Ids resolve here the
+ * way the claim-side check resolves them (`lib/content-bundle-fact-check.js`
+ * buildSourceMap: id, then tokenId, then notionId, then pageId, then name), so
+ * the console and the check agree on what an id means. First one wins, as there.
+ *
+ * A memory token keeps the fetched element under `rawData` and has no name of its
+ * own; paper evidence is spread flat. Both are read, and a document with no name
+ * falls back to its id so the card always has something to show.
+ *
+ * @param {object} evidenceBundle - state.evidenceBundle
+ * @returns {Object<string, {name: string, owner: string, type: string, firstLine: string}>}
+ */
+function buildEvidenceIndex(evidenceBundle) {
+    const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
+    const index = {};
+    const add = (item, type) => {
+        if (!item || typeof item !== 'object') return;
+        const raw = (item.rawData && typeof item.rawData === 'object') ? item.rawData : {};
+        const id = item.id || item.tokenId || item.notionId || item.pageId || item.name;
+        if (!id || index[String(id)]) return;
+        index[String(id)] = {
+            name: String(item.name || raw.name || raw.title || id).trim(),
+            owner: ownerNameOf(item) || ownerNameOf(raw),
+            type,
+            firstLine: firstLineOf(item) || firstLineOf(raw)
+        };
+    };
+    (Array.isArray(exposed.tokens) ? exposed.tokens : []).forEach(item => add(item, 'memory'));
+    (Array.isArray(exposed.paperEvidence) ? exposed.paperEvidence : []).forEach(item => add(item, 'paper'));
+    return index;
+}
+
 /**
  * Build response data for a specific checkpoint type (DRY helper)
  * Extracts relevant fields from state based on checkpoint type
@@ -294,7 +358,9 @@ async function getCheckpointData(checkpointType, state) {
                 previousFeedback: state._arcFeedback || null,
                 _revisionTimedOut: state._arcAnalysisCache?._revisionTimedOut || false,
                 _generationTimedOut: state._arcAnalysisCache?._generationTimedOut || false,
-                directorGateNotes: state.directorGateNotes || []
+                directorGateNotes: state.directorGateNotes || [],
+                // Brief 1.2: what each arc's keyEvidence id actually refers to.
+                evidenceIndex: buildEvidenceIndex(state.evidenceBundle)
             };
         case CHECKPOINT_TYPES.OUTLINE:
             return {

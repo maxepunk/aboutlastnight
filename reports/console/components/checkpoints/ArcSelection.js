@@ -2,9 +2,12 @@
  * ArcSelection Checkpoint Component
  * Displays narrative arcs as selectable cards in a responsive grid.
  * Each card shows title, summary, hook, key evidence, caveats, unanswered
- * questions, source and strength badges, and character placements.
- * Supports approve with selection (plus optional outline guidance) and
- * reject-with-feedback for revision.
+ * questions, source and strength badges, and character placements. The evidence
+ * is named, not listed as ids: `data.evidenceIndex` says what each id refers to
+ * (phase 1, brief 1.2).
+ * One note box is always on screen and is sent with whichever button the
+ * director presses: with Approve as the outline's guidance, with Send back as
+ * the arc rework's feedback, which also stands as a note for every later writer.
  * Exports to window.Console.checkpoints.ArcSelection
  */
 
@@ -21,6 +24,12 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   const revisionCount = (data && data.revisionCount) || 0;
   const maxRevisions = (data && data.maxRevisions) || 2;
   const previousArcs = (revisionCache && revisionCache.arcs) || null;
+  // Brief 1.2: id -> {name, owner, type, firstLine} for every exposed document,
+  // built by server.js#buildEvidenceIndex. Without it a card lists raw ids.
+  const evidenceIndex = (data && data.evidenceIndex) || {};
+  // What the director wrote on the send back that produced this round. The box
+  // comes back holding it, so carrying it forward as guidance costs no retyping.
+  const notePrefill = ViewLogic.arcNotePrefill((data && data.directorGateNotes) || []);
   // H6: `data.evaluationHistory` is an append-only ARRAY mixing all three
   // phases, and this screen looked for a per-arc `arc.evaluationHistory` that
   // nothing populates, so the Opus arc verdict rendered nowhere.
@@ -35,22 +44,29 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   // Track which cards are expanded (for long evidence and caveat lists)
   const [expandedCards, setExpandedCards] = React.useState(new Set());
 
-  // Action mode: 'view' (default) or 'reject'
-  const [mode, setMode] = React.useState('view');
-  const [feedbackText, setFeedbackText] = React.useState('');
-  // Q2: optional emphasis, carried into the outline AND article prompts.
-  const [guidanceText, setGuidanceText] = React.useState('');
+  // The stop's ONE note box (brief 1.2). It used to be two: an optional guidance
+  // box for the approve and a feedback box behind the Reject button, which is why
+  // the director wrote "there's just a reject button that doesn't allow me to give
+  // any feedback". One box, on screen, sent with whichever button is pressed.
+  const [noteText, setNoteText] = React.useState(notePrefill);
+  // Send back takes two clicks, as it does at the outline and article stops: this
+  // flag says the first one happened. ViewLogic.sendBackButton decides what that
+  // means on screen. An arc rework is about eight minutes of Opus.
+  const [sendBackArmed, setSendBackArmed] = React.useState(false);
 
   // Reset selection when arcs change (e.g., after rollback or revision)
-  // Use serialized IDs (not just length) to detect same-count data swaps
+  // Use serialized IDs (not just length) to detect same-count data swaps.
+  // A rework can return the same arc ids with new content, so the round and the
+  // pre-fill are part of the key too: without them the box kept the text the
+  // director already sent and the selection stayed on the previous round's picks.
   const arcIdKey = arcs.map(function (arc) { return arc.id || arc.title; }).join(',');
+  const resetKey = arcIdKey + '|' + revisionCount + '|' + notePrefill;
   React.useEffect(function () {
     setSelectedArcs(new Set(ViewLogic.defaultArcSelection(arcs)));
     setExpandedCards(new Set());
-    setMode('view');
-    setFeedbackText('');
-    setGuidanceText('');
-  }, [arcIdKey]);
+    setNoteText(notePrefill);
+    setSendBackArmed(false);
+  }, [resetKey]);
 
   function toggleArc(arcId) {
     setSelectedArcs(function (prev) {
@@ -77,31 +93,38 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   }
 
   function handleSubmit() {
-    const payload = { selectedArcs: Array.from(selectedArcs) };
-    // Only on an APPROVAL: a rejection regenerates the arcs and arcFeedback is
-    // the channel for that (server.js buildResumePayload).
-    if (guidanceText.trim()) payload.outlineGuidance = guidanceText.trim();
-    onApprove(payload);
+    setSendBackArmed(false);
+    // The note rides the approve as outlineGuidance: the director's emphasis for
+    // the outline AND article prompts. On a send back the same box is the arc
+    // rework's feedback instead, which is why the key assembly is one pure
+    // function (ViewLogic.arcReviewPayload) rather than two inline literals.
+    onApprove(ViewLogic.arcReviewPayload(Array.from(selectedArcs), noteText, 'approve'));
   }
 
-  function handleModeChange(newMode) {
-    if (newMode === mode) {
-      setMode('view');
+  /**
+   * The brake on the send back. One box serves both actions here too, so Send
+   * back sits beside a note the director may have written for an approve, and a
+   * mis-click costs a round and about eight minutes of Opus. The first click
+   * arms the button, the second sends; editing the note, pressing Approve or a
+   * reset of the screen disarms it.
+   */
+  function handleSendBackClick() {
+    if (!noteText.trim()) return;
+    if (!sendBackArmed) {
+      setSendBackArmed(true);
       return;
     }
-    setMode(newMode);
-    if (newMode === 'reject') {
-      setFeedbackText('');
-    }
+    handleSendBack();
   }
 
-  function handleReject() {
-    if (!feedbackText.trim()) return;
+  function handleSendBack() {
+    const payload = ViewLogic.arcReviewPayload(Array.from(selectedArcs), noteText, 'send-back');
+    if (!payload) return;
     // Cache current arcs for diff on next revision
     if (dispatch) {
       dispatch({ type: 'CACHE_REVISION', contentType: 'arcs', data: arcs });
     }
-    onReject({ selectedArcs: false, arcFeedback: feedbackText.trim() });
+    onReject(payload);
   }
 
   // The arc schema's evidenceStrength enum is strong | moderate | weak |
@@ -116,6 +139,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   }
 
   const isValid = selectedArcs.size >= 1;
+  const sendBack = ViewLogic.sendBackButton(sendBackArmed, noteText, 'arcs');
 
   if (arcs.length === 0) {
     var isGenTimeout = data && data._generationTimedOut;
@@ -185,9 +209,12 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
         // financialConnections, thematicLinks, emotionalTone) is a field the arc
         // schema does not emit, so the cards showed a title, a red strength
         // badge and nothing else. arcCardModel reads the real names.
-        var model = ViewLogic.arcCardModel(arc);
+        var model = ViewLogic.arcCardModel(arc, evidenceIndex);
         var evidencePreview = isExpanded ? model.keyEvidence : model.keyEvidence.slice(0, 4);
         var hasMoreEvidence = model.keyEvidence.length > 4;
+        var expandLabel = isExpanded
+          ? 'Show fewer'
+          : (hasMoreEvidence ? 'Show all ' + model.keyEvidence.length + ' documents' : 'Show the documents');
         var evalHistory = arc.evaluationHistory || {};
 
         return React.createElement('div', {
@@ -217,7 +244,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
             React.createElement(Badge, { label: 'source: ' + model.source, color: 'var(--accent-cyan)' })
           ),
 
-          // Summary: the 2-3 sentences that say what this arc IS
+          // Summary: the plain claim this thread makes about what happened
           model.summary && React.createElement('p', { className: 'text-sm text-secondary' },
             model.summary
           ),
@@ -227,25 +254,42 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
             model.hook
           ),
 
-          // Key evidence (ids, with owners where the package carries them)
-          evidencePreview.length > 0 && React.createElement('div', { className: 'arc-card__section' },
+          // Key evidence, by name. Collapsed it is a row of badges reading
+          // "document (owner)"; expanded it lists every document with its id and
+          // its first line, which is what the director needs to judge whether the
+          // arc rests on anything (brief 1.2).
+          model.keyEvidence.length > 0 && React.createElement('div', { className: 'arc-card__section' },
             React.createElement('p', { className: 'text-xs text-muted mb-sm' },
               'Key Evidence (' + model.keyEvidence.length + ')'
             ),
-            React.createElement('div', { className: 'tag-list' },
-              evidencePreview.map(function (id, j) {
-                return React.createElement(Badge, {
-                  key: 'ev-' + j,
-                  label: id,
-                  color: 'var(--layer-exposed)'
-                });
-              })
-            ),
-            hasMoreEvidence && React.createElement('button', {
+            isExpanded
+              ? React.createElement('ul', { className: 'arc-card__moments' },
+                  model.keyEvidence.map(function (entry, j) {
+                    return React.createElement('li', { key: 'ev-' + j, className: 'text-xs text-secondary' },
+                      entry.label,
+                      React.createElement('span', { className: 'arc-card__document-line text-xs text-muted' }, entry.id),
+                      entry.firstLine && React.createElement('span', {
+                        className: 'arc-card__document-line text-xs text-muted'
+                      }, entry.firstLine)
+                    );
+                  })
+                )
+              : React.createElement('div', { className: 'tag-list' },
+                  evidencePreview.map(function (entry, j) {
+                    return React.createElement(Badge, {
+                      key: 'ev-' + j,
+                      label: entry.label,
+                      color: 'var(--layer-exposed)'
+                    });
+                  })
+                ),
+            React.createElement('button', {
               className: 'btn btn-ghost btn-sm',
               onClick: function () { toggleExpanded(arcId); },
-              'aria-label': isExpanded ? 'Show fewer evidence ids' : 'Show all evidence ids'
-            }, isExpanded ? 'Show fewer' : '+' + (model.keyEvidence.length - 4) + ' more')
+              'aria-label': isExpanded
+                ? 'Show fewer documents for this arc'
+                : 'Show every document this arc rests on, with its first line'
+            }, expandLabel)
           ),
 
           // Caveats: what complicates this arc
@@ -308,62 +352,45 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
     ),
 
     // Validation hint
-    !isValid && mode !== 'reject' && React.createElement('p', { className: 'validation-error' },
+    !isValid && React.createElement('p', { className: 'validation-error' },
       'Select at least 1 arc to continue.'
     ),
 
-    // Q2: the director's emphasis for the outline. This is the cheapest
-    // intervention on the whole screen - a sentence here steers the outline and
-    // article prompts, instead of a rejection that regenerates the arcs.
+    // The stop's ONE note box (brief 1.2), always on screen and above the
+    // actions. It was two boxes, one of them behind the Reject button, so the
+    // director found "just a reject button that doesn't allow me to give any
+    // feedback" and the cheapest intervention on the screen went unused.
     React.createElement('div', { className: 'form-group mt-md' },
-      React.createElement('label', { className: 'form-group__label', htmlFor: 'outline-guidance' },
-        'Note to the outline (optional): what to lead with, what to play down, ' +
-        'what question the piece should answer'
-      ),
+      React.createElement('label', { className: 'form-group__label', htmlFor: 'arc-note' },
+        'Note to the writer, sent with whichever button you press'),
+      React.createElement('p', { className: 'text-xs text-muted' },
+        'With Approve it steers the outline and the article. With Send back it drives the arc rework, and then stands. Send back needs one.'),
       React.createElement('textarea', {
-        id: 'outline-guidance',
-        className: 'input',
-        value: guidanceText,
-        onChange: function (e) { setGuidanceText(e.target.value); },
-        rows: 3,
+        id: 'arc-note',
+        className: 'input feedback-area',
+        value: noteText,
+        onChange: function (e) { setNoteText(e.target.value); setSendBackArmed(false); },
+        rows: 4,
         placeholder: 'e.g. Lead with the vote, not the money. Play down the Sarah ' +
           'succession thread. Answer: who decided Vic was guilty before the vote?',
-        'aria-label': 'Note to the outline'
+        'aria-label': 'Note to the writer, sent with approve or send back'
       })
     ),
 
-    // Action mode buttons
+    // Action buttons
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
-        className: 'action-modes__btn' + (mode === 'view' ? ' action-modes__btn--active' : '') + ' btn btn-primary',
+        className: 'action-modes__btn action-modes__btn--active btn btn-primary',
         disabled: !isValid,
         onClick: handleSubmit,
-        'aria-label': 'Approve arc selection'
+        'aria-label': 'Approve the arc selection, sending the note with it'
       }, 'Approve Selection (' + selectedArcs.size + ' arc' + (selectedArcs.size !== 1 ? 's' : '') + ')'),
       React.createElement('button', {
-        className: 'action-modes__btn' + (mode === 'reject' ? ' action-modes__btn--active' : '') + ' btn btn-danger',
-        onClick: function () { handleModeChange('reject'); },
-        'aria-label': 'Reject arcs with feedback for revision'
-      }, 'Reject')
-    ),
-
-    // Reject mode
-    mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
-      React.createElement('label', { className: 'form-group__label' }, 'Feedback for arc revision'),
-      React.createElement('textarea', {
-        className: 'input feedback-area',
-        value: feedbackText,
-        onChange: function (e) { setFeedbackText(e.target.value); },
-        rows: 4,
-        placeholder: 'Describe what needs to change about the arcs...',
-        'aria-label': 'Rejection feedback for arcs'
-      }),
-      React.createElement('button', {
-        className: 'btn btn-danger',
-        onClick: handleReject,
-        disabled: !feedbackText.trim(),
-        'aria-label': 'Submit rejection with feedback'
-      }, 'Submit Rejection')
+        className: 'action-modes__btn btn btn-danger',
+        onClick: handleSendBackClick,
+        disabled: sendBack.disabled,
+        'aria-label': sendBack.ariaLabel
+      }, sendBack.label)
     )
   );
 }

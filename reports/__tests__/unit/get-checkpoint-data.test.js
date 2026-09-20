@@ -236,3 +236,57 @@ describe('rounds (brief 1.4)', () => {
     expect(data.maxHumanRevisions).toBeUndefined();
   });
 });
+
+describe('arc stop evidenceIndex (phase 1, brief 1.2)', () => {
+  // The arc cards showed bare ids, so the director judged an arc by
+  // `85620c6f-befd-4799-a877-8fc25c040d8e`. The index is what lets the card name
+  // the document instead. Ids resolve the way the fact check resolves them
+  // (`buildSourceMap`: id, tokenId, notionId, pageId, name), so the console and the
+  // check agree on what an id means.
+  const BUNDLE = {
+    exposed: {
+      tokens: [
+        {
+          id: 'mor004',
+          summary: 'A paraphrase the index must not quote',
+          fullContent: 'You are standing by the stairs.\nThe second line never shows.',
+          rawData: { name: 'The hallway memory', owners: ['Zia'] }
+        },
+        { tokenId: 'vic009', rawData: { name: 'The study memory', owner: 'Vic' }, content: 'A door closes.' }
+      ],
+      paperEvidence: [
+        {
+          id: 'paper-1',
+          name: "Victor's ledger page",
+          owners: ['Vic'],
+          description: '   Page three, entries for the week of the party.   \nMore below.'
+        }
+      ]
+    }
+  };
+
+  it('names each exposed document, its owner, its kind and its first line', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { evaluationHistory: [], narrativeArcs: [], evidenceBundle: BUNDLE });
+    expect(data.evidenceIndex).toEqual({
+      mor004: { name: 'The hallway memory', owner: 'Zia', type: 'memory', firstLine: 'You are standing by the stairs.' },
+      vic009: { name: 'The study memory', owner: 'Vic', type: 'memory', firstLine: 'A door closes.' },
+      'paper-1': { name: "Victor's ledger page", owner: 'Vic', type: 'paper', firstLine: 'Page three, entries for the week of the party.' }
+    });
+  });
+
+  it('is an empty map, not undefined, when the bundle has not been curated yet', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { evaluationHistory: [], narrativeArcs: [] });
+    expect(data.evidenceIndex).toEqual({});
+  });
+
+  it('falls back to the id for a document with no name and leaves an unknown owner blank', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
+      evaluationHistory: [],
+      narrativeArcs: [],
+      evidenceBundle: { exposed: { tokens: [{ id: 'bare001' }] } }
+    });
+    expect(data.evidenceIndex).toEqual({
+      bare001: { name: 'bare001', owner: '', type: 'memory', firstLine: '' }
+    });
+  });
+});

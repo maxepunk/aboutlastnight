@@ -1464,6 +1464,14 @@ textarea.input {
   word-break: break-word;
 }
 
+/* Brief 1.2: under the name of a document an arc cites, its id and its first
+   line, so the director can see what the arc actually rests on. */
+.arc-card__document-line {
+  display: block;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 /* A caveat is the reason an arc might not survive the article; it reads amber,
    not as ordinary secondary text. */
 .arc-card__caveat {

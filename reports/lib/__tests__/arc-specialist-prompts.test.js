@@ -55,6 +55,21 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     expect(prompt).not.toMatch(/\*\*Behavior Patterns:\*\*/);
   });
 
+  it('asks for a plain claim in the summary, not the reporter telling it (brief 1.2)', () => {
+    // The summaries are what the director reads on the arc cards and what the
+    // outline is built from, and they came back in the reporter's voice with
+    // presence claims in them. The field's own instruction is where that is said.
+    const prompt = arcModule._testing.buildCoreArcPrompt(state);
+    expect(prompt).not.toContain('"summary": "2-3 sentences describing this narrative thread"');
+    const summaryLine = prompt.split(String.fromCharCode(10)).find(l => l.trim().startsWith('"summary":'));
+    expect(summaryLine).toBeDefined();
+    expect(summaryLine).toMatch(/1 to 3 plain sentences/);
+    expect(summaryLine).toMatch(/what this thread claims happened/);
+    expect(summaryLine).toMatch(/[Tt]hird person/);
+    expect(summaryLine).toMatch(/no reporter persona/);
+    expect(summaryLine).toMatch(/no presence claims/);
+  });
+
   it('the arc system prompts state the reporting mode of the session (brief 1.5)', () => {
     // The arc writer was never told where the reporter was, so a remote session's
     // arc summaries said "I watched". The block is the same constant the article

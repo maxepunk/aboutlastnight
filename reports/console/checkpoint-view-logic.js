@@ -125,19 +125,45 @@
   // ── Arc cards ─────────────────────────────────────────────────────────────
 
   /**
-   * One evidence reference as a display string.
+   * One evidence reference as the card renders it (brief 1.2).
    *
    * keyEvidence is a plain array of ids in the current schema, but the arc
-   * evidence packages carry `{id, owner}` objects, and an id with no owner is
-   * unreadable on a card, so both shapes render.
+   * evidence packages carry `{id, owner}` objects, so both shapes resolve to an
+   * id. `evidenceIndex` is the arc stop's payload map from that id to the
+   * document behind it (`server.js#buildEvidenceIndex`); without it the director
+   * is judging an arc by `85620c6f-befd-4799-a877-8fc25c040d8e`, which is what
+   * happened last session. An id the index does not hold still renders: the
+   * label falls back to the id, so a stale or hand-built payload shows something
+   * rather than a blank badge.
+   *
+   * @param {string|object} entry
+   * @param {object} index - evidenceIndex from the checkpoint payload
+   * @returns {{id: string, name: string, owner: string, type: string,
+   *            firstLine: string, label: string}|null}
    */
-  function evidenceLabel(entry) {
-    if (typeof entry === 'string') return entry;
-    if (!entry || typeof entry !== 'object') return '';
-    var id = asString(entry.id) || asString(entry.tokenId) || asString(entry.description) || '';
-    var owner = asString(entry.owner);
-    if (!id) return '';
-    return owner ? id + ' (' + owner + ')' : id;
+  function evidenceEntry(entry, index) {
+    var id = '';
+    var entryOwner = '';
+    if (typeof entry === 'string') {
+      id = entry;
+    } else if (entry && typeof entry === 'object') {
+      id = asString(entry.id) || asString(entry.tokenId) || asString(entry.description) || '';
+      entryOwner = asString(entry.owner);
+    }
+    if (!id) return null;
+    var known = (index && typeof index === 'object' && index[id]) || {};
+    // The index falls back to the id when a document has no name of its own, and
+    // repeating it as a name would claim more than the record holds.
+    var name = asString(known.name) === id ? '' : asString(known.name);
+    var owner = asString(known.owner) || entryOwner;
+    return {
+      id: id,
+      name: name,
+      owner: owner,
+      type: asString(known.type),
+      firstLine: asString(known.firstLine),
+      label: (name || id) + (owner ? ' (' + owner + ')' : '')
+    };
   }
 
   /**
@@ -169,17 +195,22 @@
    * Display model for one arc card.
    *
    * @param {object|null} arc
-   * @returns {{title: string, summary: string, keyEvidence: string[], hook: string,
+   * @param {object} [evidenceIndex] - the stop's id -> document map
+   * @returns {{title: string, summary: string, hook: string,
+   *            keyEvidence: Array<{id: string, name: string, owner: string, type: string,
+   *                                firstLine: string, label: string}>,
    *            caveats: string[], unansweredQuestions: string[], source: string,
    *            strength: string, characters: Array<{name: string, role: string}>}}
    */
-  function arcCardModel(arc) {
+  function arcCardModel(arc, evidenceIndex) {
     var a = arc || {};
     var evidence = Array.isArray(a.keyEvidence) ? a.keyEvidence : a.keyMoments;
     return {
       title: asString(a.title),
       summary: asString(a.summary),
-      keyEvidence: asArray(evidence).map(evidenceLabel).filter(function (s) { return s.length > 0; }),
+      keyEvidence: asArray(evidence)
+        .map(function (entry) { return evidenceEntry(entry, evidenceIndex); })
+        .filter(Boolean),
       // `emotionalHook` is the schema field; `hook` is what the cards used to read.
       hook: asString(a.emotionalHook) || asString(a.hook),
       caveats: stringList(a.caveats),
@@ -600,6 +631,64 @@
     };
   }
 
+  // ── the arc stop's review (phase 1, brief 1.2) ────────────────────────────
+
+  /**
+   * The arc stop sends the same one box with either action, but on different keys,
+   * so it cannot share `reviewPayload`: an approve carries the SELECTION and the
+   * note as `outlineGuidance` (its own channel, `_outlineGuidance`, which reaches
+   * the outline and article prompts), while a send back carries
+   * `selectedArcs: false` and the note as `arcFeedback`, which the server also
+   * records as a standing note of kind 'rejection'. Sending the note on both keys
+   * at once would file the same sentence twice, and a guidance recorded on a send
+   * back would outlive the arcs it was written about
+   * (`server-build-resume-payload.test.js`: guidance is not recorded on an arc
+   * rejection).
+   *
+   * @param {string[]} selectedArcIds - the ids the director has ticked
+   * @param {string} note - the stop's note box
+   * @param {string} action - 'approve' or 'send-back'
+   * @returns {object|null} the payload, or null for a send back with no note
+   */
+  function arcReviewPayload(selectedArcIds, note, action) {
+    if (action !== 'approve' && action !== 'send-back') {
+      throw new Error("arcReviewPayload: action must be 'approve' or 'send-back', got " + String(action));
+    }
+    var text = typeof note === 'string' ? note.trim() : '';
+    if (action === 'send-back') {
+      if (!text) return null;
+      return { selectedArcs: false, arcFeedback: text };
+    }
+    var payload = { selectedArcs: asArray(selectedArcIds) };
+    if (text) payload.outlineGuidance = text;
+    return payload;
+  }
+
+  /**
+   * What the arc stop's note box holds when a rework comes back.
+   *
+   * A note sent with a send back drove that rework and then stands, but the box
+   * itself came back empty, so the director had to retype the same sentence to
+   * carry it forward as guidance on the approve. The latest arc-stop note of kind
+   * 'rejection' is that sentence. An approval note is already standing guidance
+   * and is not offered again.
+   *
+   * @param {Array} gateNotes - data.directorGateNotes
+   * @returns {string}
+   */
+  function arcNotePrefill(gateNotes) {
+    var notes = asArray(gateNotes);
+    for (var i = notes.length - 1; i >= 0; i -= 1) {
+      var n = notes[i];
+      if (!n || typeof n !== 'object') continue;
+      if (n.gate !== 'arc-selection') continue;
+      if ((asString(n.kind) || 'rejection') !== 'rejection') continue;
+      var text = asString(n.text).trim();
+      if (text) return text;
+    }
+    return '';
+  }
+
   /**
    * Where a stop's note lives in `pendingEdits`, beside that stop's edits, so a
    * remount while the rework runs restores both. A SIBLING key, never the edits slot
@@ -626,6 +715,8 @@
     outlineReviewPayload: outlineReviewPayload,
     articleReviewPayload: articleReviewPayload,
     sendBackButton: sendBackButton,
+    arcReviewPayload: arcReviewPayload,
+    arcNotePrefill: arcNotePrefill,
     noteSlotKey: noteSlotKey
   };
 

@@ -244,12 +244,17 @@ function buildCoreArcPrompt(state) {
   const allCharacters = Object.keys(state.canonicalCharacters || {});
 
   // Output format at TOP for recency bias
+  //
+  // Brief 1.2: the summary is what the director reads on the arc card and what
+  // the outline is then built from, and "2-3 sentences describing this narrative
+  // thread" came back as the reporter telling the story, presence claims
+  // included. What the stop needs is the claim itself.
   const outputFormat = buildOutputFormatSection(`{
   "narrativeArcs": [
     {
       "id": "arc-[descriptive-slug]",
       "title": "Compelling arc title",
-      "summary": "2-3 sentences describing this narrative thread",
+      "summary": "1 to 3 plain sentences stating what this thread claims happened. Third person, no reporter persona, no presence claims.",
       "arcSource": "accusation" | "whiteboard" | "observation" | "discovered",
       "keyEvidence": ["exact-id-1", "exact-id-2"],
       "characterPlacements": { "RosterName": "Role in this arc" },
