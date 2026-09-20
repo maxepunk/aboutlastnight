@@ -1154,6 +1154,27 @@ describe('evaluateArticle — programmatic fact-check pre-check (BASELINE class 
     expect(result._articleFactCheck.structuralIssues.length).toBeGreaterThan(0);
   });
 
+  it('at the cap a passing Opus verdict cannot pass a bundle the fact-check disproved', async () => {
+    // A proven defect outranks an opinion. Without this the record read
+    // passed:true beside the card defects it carried, and the director's
+    // send-back opened a rework prompt saying "Ready: YES" above its own
+    // ISSUES TO ADDRESS list.
+    const mockClient = jest.fn().mockResolvedValue({
+      ready: true, structuralPassed: true, overallScore: 0.92, confidence: 'high'
+    });
+    const state = stateWith(
+      'Vic told me the job was already handed out to somebody else.',
+      { articleRevisionCount: REVISION_CAPS.ARTICLE }
+    );
+
+    const result = await evaluateArticle(state, { configurable: { sdkClient: mockClient } });
+
+    expect(mockClient).toHaveBeenCalled();
+    expect(result.validationResults.passed).toBe(false);
+    expect(result.validationResults.structuralIssues.length).toBeGreaterThan(0);
+    expect(result.validationResults.structuralIssues.join(' ')).toContain('vic001');
+  });
+
   it('does not fact-check the arcs or outline phases', async () => {
     const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.9 });
     const result = await evaluateOutline(

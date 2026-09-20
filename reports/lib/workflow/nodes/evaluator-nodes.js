@@ -1108,12 +1108,20 @@ function createEvaluator(phase, options = {}) {
       // `feedback` and `revisionGuidance` carry the same text under both names:
       // buildRevisionContext reads revisionGuidance first, buildArcRevisionContext
       // (arc-specialist-nodes.js) reads only feedback.
+      //
+      // A proven defect outranks an opinion. At the cap the fact-check runs
+      // without short-circuiting, so Opus can return structuralPassed:true over
+      // card defects the fact-check demonstrated. Whenever the fact-check holds
+      // structural issues the record says passed:false whatever Opus returned,
+      // so no rework prompt ever reads "Ready: YES" above its own ISSUES TO
+      // ADDRESS list.
+      const factCheckIssues = factCheck ? factCheck.structuralIssues : [];
       const buildValidationResults = (passed) => ({
         phase,
-        passed,
+        passed: passed && factCheckIssues.length === 0,
         structuralIssues: [
           ...(evaluation.structuralIssues || []),
-          ...(factCheck ? factCheck.structuralIssues : [])
+          ...factCheckIssues
         ],
         advisoryWarnings: evaluation.advisoryWarnings || [],
         issues: evaluation.issues,
