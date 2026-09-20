@@ -2758,7 +2758,13 @@ textarea.input {
 .outline-thesis {
   border-left-color: rgba(212, 168, 83, 0.6);
   background: rgba(212, 168, 83, 0.06);
-  padding: var(--space-sm) var(--space-md);
+  /* Longhands, never the `padding` shorthand: this host also carries
+     `.article-block--editable-always`, whose `padding-right: 32px` reserves the
+     absolutely-positioned pencil's gutter. A shorthand here has equal specificity
+     and comes later in the file, so it would silently cancel that gutter. */
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-md);
   border-radius: 4px;
 }
 /* Read-only echo of the thesis at the article gate (§6.2) */

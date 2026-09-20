@@ -278,7 +278,7 @@ function ThesisEditor({ lede, onSave, onCancel }) {
   function set(key) {
     return function (value) { setForm(function (prev) { return Object.assign({}, prev, { [key]: value }); }); };
   }
-  return React.createElement('div', { className: 'edit-form' },
+  return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(TextField, { label: 'Hook', value: form.hook, onChange: set('hook'), multiline: true }),
     React.createElement(TextField, { label: 'Key tension', value: form.keyTension, onChange: set('keyTension'), multiline: true }),
     React.createElement(TextField, { label: 'Primary arc', value: form.primaryArc, onChange: set('primaryArc') }),

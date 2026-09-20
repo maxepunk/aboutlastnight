@@ -75,6 +75,17 @@ describe('inline edit pencil: default reveal is hover/focus', () => {
   it('reserves the button gutter on the opt-in hosts', () => {
     expect(css).toMatch(new RegExp('\\.' + ALWAYS + '\\s*\\{[^}]*padding-right'));
   });
+
+  it('no opt-in host cancels that gutter with a padding shorthand', () => {
+    // `.outline-thesis` is an opt-in host AND carries its own padding. A `padding`
+    // shorthand there has equal specificity and comes later in the file, so it
+    // silently resets padding-right to var(--space-md) and the pencil sits over
+    // the header row it was given a gutter to clear.
+    const hostRule = css.slice(css.indexOf('.outline-thesis {'));
+    const body = hostRule.slice(0, hostRule.indexOf('}'));
+    expect(body).not.toMatch(/(^|[^-])padding:/);
+    expect(body).toMatch(/padding-left:/);
+  });
 });
 
 describe('Outline.js opts in at every pencil host', () => {
