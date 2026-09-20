@@ -598,6 +598,41 @@ async function checkpointOutline(state, config) {
 }
 
 /**
+ * Write the bundle the director approved to the session folder (brief 1.6).
+ *
+ * The writer's last version lives in the checkpoint database and the published
+ * report is rendered HTML, so the director's approved version — edits included —
+ * existed nowhere a run could be read back from afterwards.
+ *
+ * The session id comes from the state, never from the bundle: parseRawInput's
+ * post-mortem (input-nodes.js) is a model-supplied id that wrote session 071126's
+ * inputs to data/0711/. A failed write is logged and swallowed; the file is a side
+ * effect of the gate, not its product, and must never cost the director an approval.
+ *
+ * @param {Object} state - Current state with sessionId and contentBundle
+ * @param {Object} config - Graph config with optional configurable.dataDir
+ */
+function writeApprovedBundle(state, config) {
+  const sessionId = state.sessionId || config?.configurable?.sessionId;
+  if (!sessionId) {
+    console.warn('[checkpointArticle] No sessionId; not writing the approved bundle');
+    return;
+  }
+
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const outputDir = path.join(dataDir, String(sessionId), 'output');
+  const target = path.join(outputDir, 'content-bundle.approved.json');
+
+  try {
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(state.contentBundle ?? null, null, 2), 'utf-8');
+    console.log(`[checkpointArticle] Approved bundle written to ${target}`);
+  } catch (error) {
+    console.error(`[checkpointArticle] Could not write ${target}: ${error.message}`);
+  }
+}
+
+/**
  * Article Checkpoint
  *
  * Pauses for user to approve the final article content.
@@ -625,6 +660,7 @@ async function checkpointArticle(state, config) {
   // Approve (with or without edits — edits applied via Command update before this runs)
   if (resumeValue?.approved === true && !skipCondition) {
     console.log(`[checkpointArticle] Approved by human`);
+    writeApprovedBundle(state, config);
     return {
       articleApproved: true,
       // Spec 2026-09-19 §4.4: the director's hand-edit diff and the rework report belong

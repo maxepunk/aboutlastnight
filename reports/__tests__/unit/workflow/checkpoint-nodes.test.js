@@ -20,6 +20,11 @@ const {
 
 const { checkpointInterrupt } = require('../../../lib/workflow/checkpoint-helpers');
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { _testing: { checkpointArticle } } = require('../../../lib/workflow/nodes/checkpoint-nodes');
+
 describe('checkpoint-nodes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -143,6 +148,80 @@ describe('checkpoint-nodes', () => {
         narrativeArcs: [], _previousArcs: [{ id: 'arc-1' }], characterIdMappings: null
       }, {});
       expect(out.currentPhase).toBeDefined();
+    });
+  });
+  describe('checkpointArticle writes the approved bundle (brief 1.6)', () => {
+    // The director's approved version existed nowhere on disk: the writer's last
+    // version is in the checkpoint database and the published HTML is rendered,
+    // so nothing could be compared after a run without reading the report back.
+    // The update the console sends is applied BEFORE this node re-executes (F25),
+    // so state.contentBundle here IS what the director approved, edits included.
+    let dataDir;
+    const BUNDLE = { headline: { main: 'The Ledger Says Otherwise' }, sections: [] };
+
+    beforeEach(() => {
+      dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-approved-'));
+    });
+
+    const approvedPath = (sessionId) =>
+      path.join(dataDir, sessionId, 'output', 'content-bundle.approved.json');
+
+    it('writes it to the session folder on approve', async () => {
+      const out = await checkpointArticle(
+        { sessionId: '091826', contentBundle: BUNDLE },
+        { configurable: { dataDir } }
+      );
+
+      expect(out.articleApproved).toBe(true);
+      expect(JSON.parse(fs.readFileSync(approvedPath('091826'), 'utf-8'))).toEqual(BUNDLE);
+    });
+
+    it('takes the session id from the state, never from the bundle', async () => {
+      // parseRawInput's post-mortem: a model-supplied id wrote session 071126's
+      // inputs to data/0711/. The id is the thread, and nothing else.
+      await checkpointArticle(
+        { sessionId: '091826', contentBundle: { ...BUNDLE, metadata: { sessionId: '0918' } } },
+        { configurable: { dataDir } }
+      );
+
+      expect(fs.existsSync(approvedPath('091826'))).toBe(true);
+      expect(fs.existsSync(approvedPath('0918'))).toBe(false);
+    });
+
+    it('does not fail the approval when the write fails', async () => {
+      // A full disk or a locked folder must not cost the director the approval:
+      // the file is a side effect of the gate, not its product.
+      const blocked = path.join(dataDir, 'not-a-directory');
+      fs.writeFileSync(blocked, 'this is a file');
+
+      const out = await checkpointArticle(
+        { sessionId: '091826', contentBundle: BUNDLE },
+        { configurable: { dataDir: blocked } }
+      );
+
+      expect(out.articleApproved).toBe(true);
+    });
+
+    it('writes nothing when there is no session id', async () => {
+      const out = await checkpointArticle(
+        { contentBundle: BUNDLE },
+        { configurable: { dataDir } }
+      );
+
+      expect(out.articleApproved).toBe(true);
+      expect(fs.readdirSync(dataDir)).toEqual([]);
+    });
+
+    it('writes nothing on a replay of an already-approved article', async () => {
+      // skipCondition short-circuits the interrupt; the approve branch is not the
+      // director's approval this time, it is the graph walking back through it.
+      const out = await checkpointArticle(
+        { sessionId: '091826', contentBundle: BUNDLE, articleApproved: true },
+        { configurable: { dataDir } }
+      );
+
+      expect(out.articleApproved).toBeUndefined();
+      expect(fs.readdirSync(dataDir)).toEqual([]);
     });
   });
 });

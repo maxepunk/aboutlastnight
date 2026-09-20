@@ -17,6 +17,7 @@
 jest.mock('../../lib/workflow/checkpoint-helpers',
   () => require('../mocks/checkpoint-helpers.mock'));
 
+const fs = require('fs');
 const path = require('path');
 const {
   createReportGraph,
@@ -48,6 +49,13 @@ const mockValidationFailed = require('../fixtures/mock-responses/validation-resu
 const mockPreprocessedEvidence = require('../fixtures/mock-responses/preprocessed-evidence.json');
 
 describe('workflow integration', () => {
+  // checkpointArticle writes the approved bundle to <dataDir>/<sessionId>/output
+  // (brief 1.6), and these tests point dataDir at the COMMITTED fixtures. Clear
+  // the generated folder rather than leave an untracked file behind on every run.
+  afterAll(() => {
+    fs.rmSync(path.join(FIXTURES_DATA_DIR, 'test-session', 'output'), { recursive: true, force: true });
+  });
+
   describe('routing functions', () => {
     // NOTE: routeEvidenceApproval tests removed in interrupt() migration
     // Checkpoints now use native LangGraph interrupt() in nodes themselves

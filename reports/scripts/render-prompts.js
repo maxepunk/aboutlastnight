@@ -104,10 +104,15 @@ async function render() {
   const nameOf = (p) => typeof p === 'string' ? p.split(/[/\\]/).pop() : p && p.filename;
   const whiteboard = state.whiteboardPhotoPath ? nameOf(state.whiteboardPhotoPath) : null;
   const heroImage = state.heroImage || null;
+  // Joined by filename, as generateOutline does since brief 1.6 (the old index
+  // join read the wrong analysis for every photo after the filtered hero).
+  const analysisByName = new Map(((state.photoAnalyses && state.photoAnalyses.analyses) || [])
+    .filter((a) => a && a.filename)
+    .map((a) => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a]));
   const availablePhotos = (state.sessionPhotos || [])
     .filter((p) => nameOf(p) !== heroImage && (!whiteboard || nameOf(p) !== whiteboard))
     .map((p, i) => {
-      const a = (state.photoAnalyses && state.photoAnalyses.analyses && state.photoAnalyses.analyses[i]) || {};
+      const a = analysisByName.get(String(nameOf(p) || `photo-${i}.jpg`).toLowerCase()) || {};
       return { filename: nameOf(p) || `photo-${i}.jpg`, fullPath: p,
         characters: (a.characterDescriptions || []).map((c) => typeof c === 'string' ? c : c.description), visualContent: a.visualContent || '' };
     });

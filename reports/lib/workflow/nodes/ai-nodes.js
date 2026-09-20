@@ -872,13 +872,23 @@ async function generateOutline(state, config) {
   // Build available photos list with analyses for outline generation (Commit 8.24)
   // FIX: Filter out hero to prevent duplicate usage (Commit 8.26)
   // FIX: Filter out whiteboard — director-layer evidence, not article content
+  // FIX (brief 1.6): join the analyses by FILENAME, not by array position. The two
+  // filters above remove the hero (always) and the whiteboard (usually), so
+  // analyses[i] read the wrong analysis for every photo after the first removal:
+  // the outline writer was told photo B shows what photo A shows, and placed it on
+  // that. Basename, case-insensitive, the way the console's photoUrl matches.
+  const analysisByFilename = new Map(
+    (state.photoAnalyses?.analyses || [])
+      .filter(a => a?.filename)
+      .map(a => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a])
+  );
   const availablePhotos = (state.sessionPhotos || [])
     .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
     .filter(photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)  // Exclude whiteboard
     .map((photoPath, i) => {
       // Get just the filename from the full path
       const filename = getPhotoFilename(photoPath) || `photo-${i}.jpg`;
-      const analysis = state.photoAnalyses?.analyses?.[i] || {};
+      const analysis = analysisByFilename.get(filename.toLowerCase()) || {};
       return {
         filename,
         fullPath: photoPath,
