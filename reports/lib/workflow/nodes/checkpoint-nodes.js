@@ -607,7 +607,7 @@ async function checkpointOutline(state, config) {
  * The session id comes from the state, never from the bundle: parseRawInput's
  * post-mortem (input-nodes.js) is a model-supplied id that wrote session 071126's
  * inputs to data/0711/. A failed write is logged and swallowed; the file is a side
- * effect of the gate, not its product, and must never cost the director an approval.
+ * effect of the stop, not its product, and must never cost the director an approval.
  *
  * @param {Object} state - Current state with sessionId and contentBundle
  * @param {Object} config - Graph config with optional configurable.dataDir

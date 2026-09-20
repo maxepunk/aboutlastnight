@@ -190,7 +190,7 @@ describe('checkpoint-nodes', () => {
 
     it('does not fail the approval when the write fails', async () => {
       // A full disk or a locked folder must not cost the director the approval:
-      // the file is a side effect of the gate, not its product.
+      // the file is a side effect of the stop, not its product.
       const blocked = path.join(dataDir, 'not-a-directory');
       fs.writeFileSync(blocked, 'this is a file');
 
