@@ -4,7 +4,8 @@
  * Journalist: LEDE, THE STORY, FOLLOW THE MONEY, THE PLAYERS, WHAT'S MISSING, CLOSING
  * Detective: EXECUTIVE SUMMARY, EVIDENCE LOCKER, MEMORY ANALYSIS, SUSPECT NETWORK,
  *            OUTSTANDING QUESTIONS, FINAL ASSESSMENT
- * Supports approve, edit-and-approve, and reject with revision loop.
+ * Supports approve, edit-and-approve, and send back for a rework. One note box is
+ * always on screen and is sent with whichever action the director takes (brief 1.1).
  * Exports to window.Console.checkpoints.Outline
  */
 
@@ -536,7 +537,7 @@ function FinalAssessmentEditor({ section, onSave, onCancel }) {
   );
 }
 
-function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pendingEdits }) {
+function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pendingEdits, pendingNote }) {
   const outline = (data && data.outline) || {};
   // H6: the outline gate rendered no evaluation at all, because
   // `data.evaluationHistory` is an append-only ARRAY mixing all three phases and
@@ -556,9 +557,14 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   const [editedOutline, setEditedOutline] = React.useState(null);
   const [editingBlock, setEditingBlock] = React.useState(null);
   const [hasEdits, setHasEdits] = React.useState(false);
-  const [mode, setMode] = React.useState('view'); // 'view' | 'json' | 'reject'
+  const [mode, setMode] = React.useState('view'); // 'view' | 'json'
   const [jsonText, setJsonText] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
+  // The stop's ONE note box (phase 1, brief 1.1). It is on screen in the view mode
+  // and goes with whatever the director presses: with Approve it becomes a standing
+  // note for every later writer, with Send back it is the rework's HUMAN FEEDBACK
+  // and then stands. The name stays `feedbackText` — it is still what the server
+  // reads as feedback on a send back.
   const [feedbackText, setFeedbackText] = React.useState('');
   const [editError, setEditError] = React.useState('');
 
@@ -582,6 +588,14 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       setHasEdits(true);
     }
   }, [pendingEdits]);
+
+  // Restore the note the same way, from its sibling slot: a processing error that
+  // remounts this screen must not cost the director the sentence they just typed.
+  React.useEffect(function () {
+    if (typeof pendingNote === 'string' && pendingNote && !feedbackText) {
+      setFeedbackText(pendingNote);
+    }
+  }, [pendingNote]);
 
   function getCurrentOutline() { return editedOutline || outline; }
 
@@ -633,9 +647,6 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       setJsonText(safeStringify(getCurrentOutline(), 2));
       setJsonError('');
     }
-    if (newMode === 'reject') {
-      setFeedbackText('');
-    }
   }
 
   /**
@@ -660,12 +671,14 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   }
 
   function handleApprove() {
+    const note = feedbackText.trim();
     if (hasEdits && editedOutline) {
       if (!gateEdits(editedOutline, setEditError)) return;
-      if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
-      onApprove({ outline: true, outlineEdits: editedOutline });
+      if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline, note: note });
+      onApprove(ViewLogic.outlineReviewPayload(editedOutline, note, 'approve'));
     } else {
-      onApprove({ outline: true });
+      if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', note: note });
+      onApprove(ViewLogic.outlineReviewPayload(null, note, 'approve'));
     }
   }
 
@@ -685,12 +698,14 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
       return;
     }
     setJsonError('');
-    if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: parsed });
-    onApprove({ outline: true, outlineEdits: parsed });
+    const note = feedbackText.trim();
+    if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: parsed, note: note });
+    onApprove(ViewLogic.outlineReviewPayload(parsed, note, 'approve'));
   }
 
   function handleReject() {
-    if (!feedbackText.trim()) return;
+    const note = feedbackText.trim();
+    if (!note) return;
     // Spec 2026-09-19 §4.6: hand edits travel with the note. Validated through the
     // SAME gate approve uses; an invalid edit is shown, not sent. The EDITED outline
     // is cached as the revision's previous version so the diff view compares the
@@ -698,16 +713,17 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     if (hasEdits && editedOutline) {
       if (!gateEdits(editedOutline, setEditError, 'send')) return;
       if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline });
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', edits: editedOutline, note: note });
         dispatch({ type: 'CACHE_REVISION', contentType: 'outline', data: editedOutline });
       }
-      onReject({ outline: false, outlineFeedback: feedbackText.trim(), outlineEdits: editedOutline });
+      onReject(ViewLogic.outlineReviewPayload(editedOutline, note, 'send-back'));
       return;
     }
     if (dispatch) {
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline', note: note });
       dispatch({ type: 'CACHE_REVISION', contentType: 'outline', data: outline });
     }
-    onReject({ outline: false, outlineFeedback: feedbackText.trim() });
+    onReject(ViewLogic.outlineReviewPayload(null, note, 'send-back'));
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1243,12 +1259,34 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     // Inline validation error (shown when approve is blocked)
     editError && React.createElement('p', { className: 'validation-error', role: 'alert' }, editError),
 
+    // The stop's ONE note box (phase 1, brief 1.1), always on screen and above the
+    // actions, because it is sent with whichever action the director takes. It used
+    // to live behind the Reject button, which is why a note the director had ready
+    // at an approve could only reach the writer through a paid rework.
+    React.createElement('div', { className: 'form-group mt-md' },
+      React.createElement('label', { className: 'form-group__label', htmlFor: 'outline-note' },
+        'Note to the writer, sent with whichever button you press'),
+      React.createElement('p', { className: 'text-xs text-muted' },
+        'With Approve it stands as guidance for every later writer. With Send back it drives the rework, and then stands. Send back needs one.'),
+      hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
+        'Your hand edits are sent with this note. The writer is told to keep them.'),
+      React.createElement('textarea', {
+        id: 'outline-note',
+        className: 'input feedback-area',
+        value: feedbackText,
+        onChange: function (e) { setFeedbackText(e.target.value); },
+        rows: 4,
+        placeholder: 'What should the writer do differently, or keep?',
+        'aria-label': 'Note to the writer, sent with approve or send back'
+      })
+    ),
+
     // Action mode buttons
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
         className: 'action-modes__btn' + (mode === 'view' ? ' action-modes__btn--active' : '') + ' btn btn-primary',
         onClick: handleApprove,
-        'aria-label': 'Approve outline'
+        'aria-label': 'Approve the outline, sending the note with it'
       }, 'Approve'),
       React.createElement('button', {
         className: 'action-modes__btn' + (mode === 'json' ? ' action-modes__btn--active' : '') + ' btn btn-secondary',
@@ -1256,10 +1294,11 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
         'aria-label': 'Edit outline before approving'
       }, 'Edit & Approve'),
       React.createElement('button', {
-        className: 'action-modes__btn' + (mode === 'reject' ? ' action-modes__btn--active' : '') + ' btn btn-danger',
-        onClick: function () { handleModeChange('reject'); },
-        'aria-label': 'Reject outline with feedback'
-      }, 'Reject')
+        className: 'action-modes__btn btn btn-danger',
+        onClick: handleReject,
+        disabled: !feedbackText.trim(),
+        'aria-label': 'Send the outline back for a rework, with the note'
+      }, 'Send back')
     ),
 
     // JSON edit mode
@@ -1278,27 +1317,6 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
         onClick: handleJsonApprove,
         'aria-label': 'Save edits and approve'
       }, 'Save & Approve')
-    ),
-
-    // Reject mode
-    mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
-      React.createElement('label', { className: 'form-group__label' }, 'Feedback for revision'),
-      hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
-        'Your hand edits will be sent with this note. The reviser is told to keep them.'),
-      React.createElement('textarea', {
-        className: 'input feedback-area',
-        value: feedbackText,
-        onChange: function (e) { setFeedbackText(e.target.value); },
-        rows: 4,
-        placeholder: 'Describe what needs to change...',
-        'aria-label': 'Rejection feedback for outline'
-      }),
-      React.createElement('button', {
-        className: 'btn btn-danger',
-        onClick: handleReject,
-        disabled: !feedbackText.trim(),
-        'aria-label': 'Submit rejection with feedback'
-      }, 'Submit Rejection')
     )
   );
 }

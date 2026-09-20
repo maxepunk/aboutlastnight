@@ -512,3 +512,55 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5)', () => {
     ]);
   });
 });
+
+describe('review payloads for the outline and article stops (phase 1, brief 1.1)', () => {
+  const { outlineReviewPayload, articleReviewPayload, noteSlotKey } = require('../checkpoint-view-logic');
+
+  test('approve with no note sends the bare approval', () => {
+    expect(outlineReviewPayload(null, '', 'approve')).toEqual({ outline: true });
+    expect(outlineReviewPayload(null, '   ', 'approve')).toEqual({ outline: true });
+    expect(articleReviewPayload(null, undefined, 'approve')).toEqual({ article: true });
+  });
+
+  test('approve carries the note trimmed on its own key, beside the edits', () => {
+    expect(outlineReviewPayload(null, '  Lead with the ledger.  ', 'approve'))
+      .toEqual({ outline: true, outlineNote: 'Lead with the ledger.' });
+    const outlineEdits = { lede: { hook: 'x' } };
+    expect(outlineReviewPayload(outlineEdits, 'Keep the thesis.', 'approve'))
+      .toEqual({ outline: true, outlineEdits, outlineNote: 'Keep the thesis.' });
+    const articleEdits = { sections: [] };
+    expect(articleReviewPayload(articleEdits, ' Name the account. ', 'approve'))
+      .toEqual({ article: true, articleEdits, articleNote: 'Name the account.' });
+  });
+
+  test('send back carries the note as the feedback and never as a second note key', () => {
+    const o = outlineReviewPayload(null, ' Merge the arcs. ', 'send-back');
+    expect(o).toEqual({ outline: false, outlineFeedback: 'Merge the arcs.' });
+    expect(o.outlineNote).toBeUndefined();
+    const a = articleReviewPayload(null, 'Cut the lede.', 'send-back');
+    expect(a).toEqual({ article: false, articleFeedback: 'Cut the lede.' });
+    expect(a.articleNote).toBeUndefined();
+  });
+
+  test('send back carries the edits alongside the note', () => {
+    const outlineEdits = { lede: { hook: 'x' } };
+    expect(outlineReviewPayload(outlineEdits, 'Fix the money section.', 'send-back'))
+      .toEqual({ outline: false, outlineFeedback: 'Fix the money section.', outlineEdits });
+    const articleEdits = { sections: [] };
+    expect(articleReviewPayload(articleEdits, 'Fix the quote.', 'send-back'))
+      .toEqual({ article: false, articleFeedback: 'Fix the quote.', articleEdits });
+  });
+
+  test('a non-object edit is not sent', () => {
+    expect(outlineReviewPayload('not an outline', 'note', 'approve'))
+      .toEqual({ outline: true, outlineNote: 'note' });
+    expect(articleReviewPayload(undefined, 'note', 'approve'))
+      .toEqual({ article: true, articleNote: 'note' });
+  });
+
+  test('the note slot sits beside the edits slot, never on top of it', () => {
+    expect(noteSlotKey('outline')).toBe('outline:note');
+    expect(noteSlotKey('article')).toBe('article:note');
+    expect(noteSlotKey('outline')).not.toBe('outline');
+  });
+});

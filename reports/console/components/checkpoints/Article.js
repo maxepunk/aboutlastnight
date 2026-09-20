@@ -659,7 +659,7 @@ function GalleryPhotoEditor({ photo, idx, onSave, onCancel }) {
 
 // ── Main Article Component ──
 
-function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, dispatch, revisionCache, pendingEdits }) {
+function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, dispatch, revisionCache, pendingEdits, pendingNote }) {
   const contentBundle = (data && data.contentBundle) || {};
 
   // Theme detection: prop > metadata > fallback
@@ -701,11 +701,16 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [editedBundle, setEditedBundle] = React.useState(null);
   const [editingBlock, setEditingBlock] = React.useState(null);
   const [hasEdits, setHasEdits] = React.useState(false);
-  const [mode, setMode] = React.useState('view'); // 'view' | 'json' | 'reject'
+  const [mode, setMode] = React.useState('view'); // 'view' | 'json'
   const [jsonText, setJsonText] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
   // B6: inline error for an edited bundle that fails the client shape gate.
   const [editError, setEditError] = React.useState('');
+  // The stop's ONE note box (phase 1, brief 1.1). On screen in the view mode and
+  // sent with whatever the director presses: with Approve it becomes a standing note
+  // for every later writer, with Send back it is the rework's HUMAN FEEDBACK and then
+  // stands. The name stays `feedbackText` — the server still reads it as feedback on
+  // a send back.
   const [feedbackText, setFeedbackText] = React.useState('');
   const [showHtmlPreview, setShowHtmlPreview] = React.useState(false);
   const [expandedPhoto, setExpandedPhoto] = React.useState(null);
@@ -732,6 +737,14 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       setHasEdits(true);
     }
   }, [pendingEdits]);
+
+  // The note is restored the same way, from its sibling slot: a processing error
+  // that remounts this screen must not cost the director what they just typed.
+  React.useEffect(function () {
+    if (typeof pendingNote === 'string' && pendingNote && !feedbackText) {
+      setFeedbackText(pendingNote);
+    }
+  }, [pendingNote]);
 
   // Word count
   const wordCount = React.useMemo(function () {
@@ -874,16 +887,20 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function handleApprove() {
+    const note = feedbackText.trim();
     if (hasEdits && editedBundle) {
       if (!gateEdits(editedBundle, setEditError)) return;
-      // Persist edits in reducer state so they survive unmount during processing
+      // Persist edits and the note in reducer state so they survive unmount during processing
       if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle, note: note });
       }
-      onApprove({ article: true, articleEdits: editedBundle });
+      onApprove(ViewLogic.articleReviewPayload(editedBundle, note, 'approve'));
     } else {
       setEditError('');
-      onApprove({ article: true });
+      if (dispatch) {
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', note: note });
+      }
+      onApprove(ViewLogic.articleReviewPayload(null, note, 'approve'));
     }
   }
 
@@ -896,10 +913,11 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       return;
     }
     if (!gateEdits(parsed, setJsonError)) return;
+    const note = feedbackText.trim();
     if (dispatch) {
-      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: parsed });
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: parsed, note: note });
     }
-    onApprove({ article: true, articleEdits: parsed });
+    onApprove(ViewLogic.articleReviewPayload(parsed, note, 'approve'));
   }
 
   function handleModeChange(newMode) {
@@ -912,13 +930,11 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       setJsonText(safeStringify(getCurrentBundle(), 2));
       setJsonError('');
     }
-    if (newMode === 'reject') {
-      setFeedbackText('');
-    }
   }
 
   function handleReject() {
-    if (!feedbackText.trim()) return;
+    const note = feedbackText.trim();
+    if (!note) return;
     // Spec 2026-09-19 §4.6: hand edits travel with the note, validated through the
     // SAME gate approve uses (review fix 1, finding 1 — two copies of the gate drift,
     // and the one that drifts loose ships an invalid bundle). An invalid edit is
@@ -926,16 +942,17 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     if (hasEdits && editedBundle) {
       if (!gateEdits(editedBundle, setEditError, 'send')) return;
       if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle });
+        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle, note: note });
         dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: editedBundle });
       }
-      onReject({ article: false, articleFeedback: feedbackText.trim(), articleEdits: editedBundle });
+      onReject(ViewLogic.articleReviewPayload(editedBundle, note, 'send-back'));
       return;
     }
     if (dispatch) {
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', note: note });
       dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: contentBundle });
     }
-    onReject({ article: false, articleFeedback: feedbackText.trim() });
+    onReject(ViewLogic.articleReviewPayload(null, note, 'send-back'));
   }
 
   // -- Photo URL --
@@ -1487,6 +1504,28 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     // Inline validation error (B6: shown when Approve is blocked)
     editError && React.createElement('p', { className: 'validation-error', role: 'alert' }, editError),
 
+    // The stop's ONE note box (phase 1, brief 1.1), always on screen and above the
+    // actions, because it is sent with whichever action the director takes. It used
+    // to live behind the Reject button, so a note the director had ready at an
+    // approve could only reach a writer through a paid rework.
+    React.createElement('div', { className: 'form-group mt-md' },
+      React.createElement('label', { className: 'form-group__label', htmlFor: 'article-note' },
+        'Note to the writer, sent with whichever button you press'),
+      React.createElement('p', { className: 'text-xs text-muted' },
+        'With Approve it stands as guidance for every later writer. With Send back it drives the rework, and then stands. Send back needs one.'),
+      hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
+        'Your hand edits are sent with this note. The writer is told to keep them.'),
+      React.createElement('textarea', {
+        id: 'article-note',
+        className: 'input feedback-area',
+        value: feedbackText,
+        onChange: function (e) { setFeedbackText(e.target.value); },
+        rows: 4,
+        placeholder: 'What should the writer do differently, or keep?',
+        'aria-label': 'Note to the writer, sent with approve or send back'
+      })
+    ),
+
     // Action buttons
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
@@ -1504,10 +1543,11 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         'aria-label': 'Open JSON editor'
       }, 'JSON Editor'),
       React.createElement('button', {
-        className: 'action-modes__btn' + (mode === 'reject' ? ' action-modes__btn--active' : '') + ' btn btn-danger',
-        onClick: function () { handleModeChange('reject'); },
-        'aria-label': 'Reject article with feedback'
-      }, 'Reject')
+        className: 'action-modes__btn btn btn-danger',
+        onClick: handleReject,
+        disabled: !feedbackText.trim(),
+        'aria-label': 'Send the article back for a rework, with the note'
+      }, 'Send back')
     ),
 
     // JSON editor mode
@@ -1526,27 +1566,6 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         onClick: handleJsonApprove,
         'aria-label': 'Save JSON and approve'
       }, 'Save & Approve')
-    ),
-
-    // Reject mode
-    mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
-      React.createElement('label', { className: 'form-group__label' }, 'Feedback for revision'),
-      hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
-        'Your hand edits will be sent with this note. The reviser is told to keep them.'),
-      React.createElement('textarea', {
-        className: 'input feedback-area',
-        value: feedbackText,
-        onChange: function (e) { setFeedbackText(e.target.value); },
-        rows: 4,
-        placeholder: 'Describe what needs to change...',
-        'aria-label': 'Rejection feedback for article'
-      }),
-      React.createElement('button', {
-        className: 'btn btn-danger',
-        onClick: handleReject,
-        disabled: !feedbackText.trim(),
-        'aria-label': 'Submit rejection with feedback'
-      }, 'Submit Rejection')
     ),
 
     // Expanded photo overlay

@@ -260,14 +260,19 @@ function reducer(state, action) {
         }
       };
 
-    case ACTIONS.SAVE_PENDING_EDITS:
-      return {
-        ...state,
-        pendingEdits: {
-          ...state.pendingEdits,
-          [action.checkpoint]: action.edits
-        }
-      };
+    case ACTIONS.SAVE_PENDING_EDITS: {
+      // One dispatch carries both what the director changed and what they wrote
+      // (phase 1, brief 1.1). The note lives in a sibling slot so a stop that sends
+      // a note with no edits cannot land a string where the edited object belongs.
+      // Each field is written only when the action carries it: an approve with a
+      // note and no edits must not wipe edits saved a moment earlier.
+      const slots = { ...state.pendingEdits };
+      if (action.edits !== undefined) slots[action.checkpoint] = action.edits;
+      if (action.note !== undefined) {
+        slots[window.Console.checkpointViewLogic.noteSlotKey(action.checkpoint)] = action.note;
+      }
+      return { ...state, pendingEdits: slots };
+    }
 
     case ACTIONS.SET_ERROR:
       // UX-1: also clears `processing` so an early-400 approve can't hang the spinner.

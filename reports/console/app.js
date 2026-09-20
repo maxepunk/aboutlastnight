@@ -17,6 +17,8 @@ const { formatLlmErrorMessage, formatFailureMessage, failureRollbackTarget } = w
 // Attach watchdog decision + report links (pure, node-tested in
 // console/__tests__/session-start-logic.test.js).
 const { decideAttachFallback, shouldApplyAttachPoll, completedResultFrom } = window.Console.sessionStartLogic;
+// Where a stop's note sits in `pendingEdits`, beside that stop's edits (brief 1.1).
+const { noteSlotKey } = window.Console.checkpointViewLogic;
 
 // How long an attached stream may say nothing before the watchdog re-reads
 // /checkpoint, and how often it looks. The server's heartbeat is an SSE COMMENT
@@ -626,7 +628,9 @@ function App() {
               // pendingEdits is keyed by checkpointType (matches CHECKPOINT_COMPONENTS map keys above).
               // New checkpoints adding edit support must dispatch SAVE_PENDING_EDITS with
               // checkpoint: '<exact CHECKPOINT_COMPONENTS key>' (e.g., 'arc-selection', not 'arcs').
-              pendingEdits: state.pendingEdits[state.checkpointType]
+              pendingEdits: state.pendingEdits[state.checkpointType],
+              // The stop's note box, restored beside its edits after a remount.
+              pendingNote: state.pendingEdits[noteSlotKey(state.checkpointType)]
             })
           : React.createElement(React.Fragment, null,
               // Generic checkpoint content (replaced by specific components in later batches)

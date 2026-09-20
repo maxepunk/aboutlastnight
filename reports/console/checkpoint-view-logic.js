@@ -487,6 +487,59 @@
     };
   }
 
+  // ── review payloads (phase 1, brief 1.1) ──────────────────────────────────
+  // One note box at the outline and article stops, sent with whatever the director
+  // presses. Before this the only place to write was behind the Reject button, so a
+  // note the director had ready at an approve had nowhere to go but a paid rework:
+  // last session a structural note existed at 20:35 and reached the writer 52 minutes
+  // later. The key assembly lives here because those keys are the whole contract with
+  // the server's buildResumePayload, and the components have no test harness.
+  //
+  // On a send back the note IS the feedback and is never also sent on the note key:
+  // the server's reject arm already records it as a standing note of kind 'rejection',
+  // so a second key would append the same sentence twice.
+
+  /**
+   * @param {object} keys - the four payload keys for one stop
+   * @param {object|null} edits - the director's edited object, or null
+   * @param {string} note - what the director wrote in the stop's note box
+   * @param {string} action - 'approve' or 'send-back'
+   */
+  function reviewPayload(keys, edits, note, action) {
+    var text = typeof note === 'string' ? note.trim() : '';
+    var payload = {};
+    if (action === 'send-back') {
+      payload[keys.decision] = false;
+      payload[keys.feedback] = text;
+    } else {
+      payload[keys.decision] = true;
+      if (text) payload[keys.note] = text;
+    }
+    if (edits && typeof edits === 'object') payload[keys.edits] = edits;
+    return payload;
+  }
+
+  var OUTLINE_REVIEW_KEYS = { decision: 'outline', feedback: 'outlineFeedback', note: 'outlineNote', edits: 'outlineEdits' };
+  var ARTICLE_REVIEW_KEYS = { decision: 'article', feedback: 'articleFeedback', note: 'articleNote', edits: 'articleEdits' };
+
+  function outlineReviewPayload(edits, note, action) {
+    return reviewPayload(OUTLINE_REVIEW_KEYS, edits, note, action);
+  }
+
+  function articleReviewPayload(edits, note, action) {
+    return reviewPayload(ARTICLE_REVIEW_KEYS, edits, note, action);
+  }
+
+  /**
+   * Where a stop's note lives in `pendingEdits`, beside that stop's edits, so a
+   * remount while the rework runs restores both. A SIBLING key, never the edits slot
+   * itself: app.js hands `pendingEdits[checkpointType]` to the component as the
+   * edited object, and a note stored there would come back as one.
+   */
+  function noteSlotKey(checkpoint) {
+    return checkpoint + ':note';
+  }
+
   var api = {
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
@@ -498,7 +551,10 @@
     factCheckSummary: factCheckSummary,
     approveLabel: approveLabel,
     wordTail: wordTail,
-    steeringView: steeringView
+    steeringView: steeringView,
+    outlineReviewPayload: outlineReviewPayload,
+    articleReviewPayload: articleReviewPayload,
+    noteSlotKey: noteSlotKey
   };
 
   if (typeof window !== 'undefined') {
