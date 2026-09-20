@@ -92,7 +92,7 @@ The photo branch keeps its original phase NUMBERS, so the badge CheckpointShell 
 | `arc-selection` / `outline` / `article` | `lastEvaluation` — the most recent evaluation **for that phase** (`evaluationHistory` is append-only and mixes phases, so its last entry is routinely another phase's verdict). Raw `evaluationHistory` is kept alongside it |
 | `article` | `htmlPreview` (the pending bundle rendered through the publishing `TemplateAssembler`, with `<base href="/">` injected; `null` on any render failure), `sessionPhotos`, `factCheck` (see below) |
 
-**Approval payloads** (`buildResumePayload`): `{inputReview: true}` approves the parse; `{inputReview: false, inputFeedback}` rejects it with prose corrections, which `checkpointInputReview` stores as `_inputCorrections` and `routeAfterInputReview` routes back to `parseRawInput` (appended to the Step-1/Step-2/enrichment prompts, then cleared). `{selectedArcs, outlineGuidance?}` carries the director's emphasis into the outline AND article prompts as their final `<DIRECTOR_GUIDANCE>` section.
+**Approval payloads** (`buildResumePayload`): `{inputReview: true}` approves the parse; `{inputReview: false, inputFeedback}` rejects it with prose corrections, which `checkpointInputReview` stores as `_inputCorrections` and `routeAfterInputReview` routes back to `parseRawInput` (appended to the Step-1/Step-2/enrichment prompts, then cleared). `{selectedArcs, outlineGuidance?}` carries the director's emphasis into the outline AND article prompts as their final `<DIRECTOR_GUIDANCE>` section. A rejection may carry the director's edited object — `{outline:false, outlineFeedback, outlineEdits?}` / `{article:false, articleFeedback, articleEdits?}` (spec `docs/superpowers/specs/2026-09-19-director-steering-design.md`). It is validated exactly like an approval, becomes the version the reviser starts from (`incrementOutlineRevision` copies it into `_previousOutline`), and its diff (`lib/hand-edit-diff.js`) is written to `_outlineHandEdits`/`_articleHandEdits`, which the reviser renders as a `<HAND_EDITS>` block between HUMAN FEEDBACK and the revision instructions. After EVERY reviser pass the report `_outlineHandEditReport`/`_articleHandEditReport` (`{checked, changed}`) is rewritten; `changed` means the rework no longer contains the director's edited value anywhere in the addressed collection (a PRESENCE check, so a relocated block still counts as kept). The revisers never clear the diff (an evaluator-driven second pass must still see it), the checkpoint clears both on approve, and the server resets both on every reject. Every rejection note is appended to `directorGateNotes` (a REPLACE channel the server appends to by writing the full array; `pruneGateNotes` drops the invalidated gates' notes on a rollback to `photos`/`character-ids`/`outline`/`article`, and points at or above `arc-selection` clear it) and rendered as standing notes inside `<DIRECTOR_GUIDANCE>` for every later writer and reviser. Arc-selection GUIDANCE is not a note; it already persists in `_outlineGuidance`.
 
 **Programmatic article fact-check** (`lib/content-bundle-fact-check.js`): `evaluateArticle` runs `factCheckContentBundle` BEFORE the Opus evaluation, mirroring how `validateArcStructure` gates `evaluateArcs`. Pure string checks, no LLM: evidence-card fidelity (every substantial sentence of a card's `content` must appear in its source's `fullContent`/`content`/`description`/`text` — never its `summary`, which is the paraphrase a fabrication imitates), unknown card sources, leaked prompt-example strings, roster coverage, photo references, reporter mode, and NPC pronouns. A structural failure under `REVISION_CAPS.ARTICLE` short-circuits the Opus call and routes straight to `reviseContentBundle` with one actionable line per defect; at the cap Opus runs and escalates to the human with the fact-check attached. The result lives in `_articleFactCheck` and reaches the article checkpoint as `factCheck`. **Every judgement call in the module errs toward NOT flagging** — a false structural failure costs a paid Opus revision. Two consequences of that rule (I2): the **reporter-mode scan reads NARRATOR text only** (`narratorText` — paragraph blocks plus headline/kicker/deck; NOT `visibleText`, whose generosity is for roster coverage), because a correctly attributed player quote saying “I voted” is the article doing its job; and the two uncalibrated checks named in **`FACT_CHECK_ADVISORY_ONLY = ['npcPronouns', 'leakedExample']`** push to `advisoryWarnings` only, never to `structuralIssues`. Card fidelity, unknown sources, roster coverage, photo references and narrator-scoped reporter mode stay structural. To promote an advisory check after a live session supports it, drop its name from that list and push its message to `structuralIssues` at the marked call site — but do NOT reword the message: `console/checkpoint-view-logic.js` groups by message prefix.
 
@@ -199,6 +199,7 @@ const result = await sdkQuery({
   // timeoutMs: omitted — inherits the 15-min IDLE/stall default (re-armed on every streamed
   // message, NOT a total-duration cap). Pass a smaller idle window only with data (see Model Call Limits below).
   onProgress: (msg) => console.log(msg.type, msg.elapsed),  // Optional streaming
+  // every message carries `callId` (one UUID per call)
   tools: ['Read'],  // Optional: RESTRICTS the tool set (omit + no disableTools = full set incl. Bash/Write)
   allowedTools: ['Read'],  // Optional: permission auto-allow only; NOT a restriction
   label: 'Evidence analysis',  // For timeout error messages
@@ -409,8 +410,8 @@ console/
 ├── llm-stream-logic.js            # Dual-export PURE module: llmActivity lifecycle, eventLog append, failure/llm_error message derivation. Must load before state.js and app.js.
 ├── input-review-logic.js          # Dual-export PURE module for the InputReview checkpoint.
 ├── await-roster-logic.js          # Dual-export PURE module: roster entry validation against canonicalCharacters.
-├── checkpoint-view-logic.js       # Dual-export PURE module: the read side of the four intervention gates — lastEvaluationFrom + evaluationView (the Opus verdict), arcCardModel + defaultArcSelection + arcSelectionNote, accusationView, whiteboardView, factCheckSummary, wordTail. Must load before InputReview / AwaitFullContext / ArcSelection / Outline / Article.
-├── outline-edit-logic.js          # Dual-export PURE module: all Outline-editor init/build/merge/validate/reset logic (browser: window.Console.outlineEditLogic; node: module.exports). Unit-tested in node-env. Must load before Outline.js/Article.js.
+├── checkpoint-view-logic.js       # Dual-export PURE module: the read side of the four intervention gates — lastEvaluationFrom + evaluationView (the Opus verdict), arcCardModel + defaultArcSelection + arcSelectionNote, accusationView, whiteboardView, factCheckSummary, wordTail, steeringView. Must load before InputReview / AwaitFullContext / ArcSelection / Outline / Article.
+├── outline-edit-logic.js          # Dual-export PURE module: all Outline-editor init/build/merge/validate/reset logic, incl. initThesis/buildThesisPayload (browser: window.Console.outlineEditLogic; node: module.exports). Unit-tested in node-env. Must load before Outline.js/Article.js.
 ├── app.js                          # Root: auth gate, checkpoint routing, rollback flow, attach-to-in-flight-run
 ├── console.css                     # All styles (~1800 lines, BEM naming, noir theme)
 └── components/
@@ -419,7 +420,7 @@ console/
     ├── ProgressStream.js           # SSE progress + LLM activity display
     ├── PipelineProgress.js         # 10-step checkpoint stepper (pass completedCheckpoints: CHECKPOINT_ORDER to make every step a rollback target)
     ├── CheckpointShell.js          # Shared checkpoint wrapper
-    ├── RevisionDiff.js             # Revision banner + budget + previous feedback (from the server payload) and, when a previous version is cached client-side, the shallow diff. MUST load before ArcSelection/Outline/Article — all three destructure it at load time.
+    ├── RevisionDiff.js             # Revision banner + budget + previous feedback (from the server payload) and, when a previous version is cached client-side, the shallow diff, + hand-edit advisory and standing notes (`steeringView`). MUST load before ArcSelection/Outline/Article — all three destructure it at load time.
     ├── RollbackPanel.js            # Rollback confirmation modal
     ├── CompletionView.js           # Success screen with report link
     ├── FileBrowser.js              # Session file browser
@@ -446,6 +447,8 @@ Each checkpoint component follows the same pattern:
 
 **Conventions:** `const` not `var`, direct destructured imports (no aliasing), `safeStringify` instead of `JSON.stringify`, CSS utility classes over inline styles, aria-labels on interactive elements, functional state updaters for Set manipulation, `useEffect` reset on data change.
 
+Each of `Outline.js` and `Article.js` validates a pending hand edit through ONE local `gateEdits` helper that both the approve and the reject path call (pinned by `__tests__/unit/console-edit-gates.test.js`); a new path that sends edits goes through it too.
+
 **`onRollback` is the only way a checkpoint may open the rollback modal.** It is the same `setRollbackTarget` callback the stepper uses, so Confirm goes through the existing streaming rollback. A component must NOT dispatch its own rollback action — ArcSelection's zero-arc dead end dispatched `SHOW_ROLLBACK`, which no reducer handles, so the only offered recovery logged `[state] Unknown action` and did nothing.
 
 ### Checkpoint payload keys the gates read
@@ -460,6 +463,9 @@ The server sends these on BOTH delivery paths (`GET /checkpoint` and the SSE `co
 | `sessionPhotos` | article, character-ids | `photoUrl(filename)` matches on basename and serves `/api/file?path=<abs>`. `/sessionphotos/<id>/<file>` only exists after `assembleHtml` copies the photos, i.e. after the gate. |
 | `enrichment` | input-review | The enrichment panel: `{quotes, characterMentions, transactionReferences, fallback:{reason}|null, warnings:{droppedQuotes}}`. A `fallback` means the article will have NO quote bank and must be surfaced in red. |
 | `previousFeedback`, `revisionCount`, `humanRevisionCount`, `maxRevisions` | arc-selection, outline, article | `RevisionDiff`, which renders the banner/budget/feedback from these alone; only the diff listing needs the client-side `revisionCache`. |
+| `handEditReport` | outline, article | `{checked, changed}` from `_outlineHandEditReport`/`_articleHandEditReport`: which of the director's hand-edited scopes the rework kept or changed; read through `checkpoint-view-logic.js#steeringView` into `RevisionDiff`; `null` when the reject carried no edits. |
+| `directorGateNotes` | arc-selection, outline, article | Every rejection note so far, `{gate, kind, round, text, at}`; rendered as "Standing notes the writer will see". |
+| `outlineThesis` | article | `{hook, keyTension, primaryArc}` from the approved outline's LEDE (journalist only; `null` for detective) for the read-only echo above the headline. |
 
 `parsedInput` is **gone** — `_parsedInput` was never an Annotation channel, so LangGraph dropped every write. Do not re-add a read of it.
 
@@ -524,7 +530,13 @@ cp .env.example .env
 #   NOTION_TOKEN=ntn_...
 #   ACCESS_PASSWORD=your-password
 #   SESSION_SECRET=<generate with crypto.randomBytes(32).toString('hex')>
+# Optional:
+#   CHECKPOINT_DB_PATH   # default data/checkpoints.sqlite; any live gate runs on a COPY through this
+#   LLM_CALL_LOG_DIR     # default data/; root of the per-session llm-log/ folders
+#   PORT                 # default 3001; throwaway servers use another port
 ```
+
+`PORT` is validated at startup by `resolvePort` in `server.js`: unset or empty → 3001; a positive integer → that port; anything else (`abc`, `0`, `+3011`) throws, so a mistyped value can never fall back onto the director's 3001.
 
 ## Testing
 
@@ -533,6 +545,8 @@ cp .env.example .env
 **Mocks:** anthropic-sdk.mock.js, llm-client.mock.js, checkpoint-helpers.mock.js
 
 See test files for mock usage examples.
+
+Jest's `setupFiles` entry `__tests__/setup/checkpoint-db-path.js` points `CHECKPOINT_DB_PATH` at a temp file for every worker, so no suite ever opens the production `data/checkpoints.sqlite`; a test that needs its own database sets the variable itself before requiring `server.js` (see `__tests__/unit/checkpoint-db-path.test.js`).
 
 **Console has NO DOM/React test harness** (node test env only — no jsdom/testing-library/babel-jest, by design). Test console logic by extracting it into a **dual-export** module (`window.Console.X` for the browser + an `if (typeof module !== 'undefined' && module.exports)` node guard) and unit-testing the pure functions in node-env — see `checkpoint-view-logic.test.js`, `outline-edit-logic.test.js` and `server-build-resume-payload.test.js` (which `require('../../server.js')`; `server.js` is guarded by `require.main === module` so requiring it doesn't start the server). React component **wiring** (which control opens which editor, save routing, error rendering) has no automated test — verify it with a manual browser click-through.
 
@@ -573,6 +587,7 @@ the server pipeline). Output is structurally identical across both paths.
 | `analysis/` | AI-generated intermediate outputs | evidence-bundle.json, arc-analysis.json, article-outline.json |
 | `summaries/` | Checkpoint-friendly summaries | evidence-summary.json, arc-summary.json, outline-summary.json |
 | `output/` | Final deliverables | article.html, article-metadata.json |
+| `llm-log/` | Per-call prompt/response log (`lib/observability/llm-call-log.js`), written on `llm_start` and rewritten on completion; disabled under Jest unless a test opts in | `<yyyymmdd-HHMMSS>-<context>-<callId8>.json` per call, index.jsonl |
 
 For complete directory structure and file descriptions, see `PIPELINE_DEEP_DIVE.md#data-directory-structure`.
 
