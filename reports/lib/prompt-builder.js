@@ -799,9 +799,9 @@ Every section (except LEDE) must have "arcConnections" showing which arcs it adv
 <TEMPORAL_DISCIPLINE>
 CRITICAL: FOUR STAGES. THE PARTY (LAST NIGHT), THE INVESTIGATION (THIS MORNING), THE DELIBERATION (THIS MORNING), THE ARTICLE (NOW).
 - Memory CONTENT describes party events from LAST NIGHT. Nova was NOT at the party.
-- Director observations describe THIS-MORNING events: the investigation and the deliberation. Nova was there.
+- Director observations describe THIS-MORNING events: the investigation and the deliberation; how Nova learned of them is set by the reporting mode in your system prompt.
 - The verdict is the DELIBERATION outcome (this morning). It is the room's conclusion, which may diverge from what the record implies. That gap is the article's spine.
-- "I watched" / "I saw" = this-morning behavior (investigation and deliberation).
+- This-morning behavior (investigation and deliberation) is told in the reporting mode, in the third person; never a first-person presence claim.
 - "The memory shows" / "In the recording" = party events from last night.
 - Burial transactions are INVESTIGATION actions (this morning), NOT party events (last night).
 - NEVER treat a party event and a this-morning event as simultaneous.

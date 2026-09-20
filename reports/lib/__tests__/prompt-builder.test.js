@@ -1338,4 +1338,13 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES });
     expect(userPrompt).not.toContain('suspects');
   });
+
+  it('the temporal-discipline block hands the outline writer no first-person marker (integrator ruling, phase 1)', async () => {
+    const { userPrompt } = await render({ directorNotes: null });
+    const block = userPrompt.slice(userPrompt.indexOf('<TEMPORAL_DISCIPLINE>'), userPrompt.indexOf('</TEMPORAL_DISCIPLINE>'));
+    expect(block.length).toBeGreaterThan(0);
+    expect(block).not.toContain('"I watched"');
+    expect(block).not.toContain('Nova was there');
+    expect(block).toContain('third person');
+  });
 });
