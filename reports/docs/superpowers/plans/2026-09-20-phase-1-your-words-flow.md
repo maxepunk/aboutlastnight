@@ -220,3 +220,9 @@ These amend the briefs above. Wave 2 (briefs 1.4 and 1.2) reads them as part of 
 - **The fact check's advisory warnings ride `validationResults` on a pass as well**, so a later send-back's rework sees them as should-consider (ac0f8c6).
 - **Not verified live, by decision:** the approved-bundle write (brief 1.6a) is covered by its unit test only; the gate copy was never approved at the article stop because the gate server's working directory is the main checkout's (for `.env`), and a session-folder write from the copy could land in the director's real session folder.
 - **Known and deferred to the prompt-spec phase:** first-person markers in the ARTICLE prompt builder (`lib/prompt-builder.js` ~1076-1078, ~1112, the example paragraph ~1183) and in the craft files (`narrative-structure.md:270`, `anti-patterns.md:274-323`), all under the article system prompt's mode block; the arc note is not kept across a page remount; advisories do not survive a rollback (consistent with "a rebuilt article is a fresh Round 1"); the fact check can list the same card defect twice when a token appears inline and in the sidebar; a thread from before this phase shows its old counter as automated passes until its first send-back.
+
+## After the first live session on phase 1 (092026, 2026-09-22)
+
+- The approved bundle was written to `data/092026/output/content-bundle.approved.json` (brief 1.6a, now proved live).
+- The remote reporting-mode block made the writer announce its absence twice ("I was not there"). The wording fix is in the roadmap's phase 2.
+- The article reworker had no document text, so it answered a card-fidelity finding by deleting four correct cards. This is the gap the roadmap's phase 2 closes: a reworker sees what its writer saw. See `docs/superpowers/plans/2026-09-22-roadmap.md`.

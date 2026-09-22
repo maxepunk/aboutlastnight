@@ -80,6 +80,14 @@ _Avoid_: arc cards, arc analysis
 The outline. For each section: what it does for the reader, the material it uses by name, how the thesis appears through that section, and how it hands off to the next. Under the thesis, the headline, the deck and the length.
 _Avoid_: outline structure, allocation, section plan
 
+**Evidence card**:
+A printed card that quotes one document from the record word for word. The writer chooses the document and, for a long document, the passage; the text itself is copied from the record.
+_Avoid_: token card, quote card, sidebar card
+
+**Evidence reference**:
+A one-line mention of a document inside the body text, printed as a caption. It shows none of the document's text.
+_Avoid_: evidence link, inline card
+
 **Citation**:
 The line on an evidence card that names the document being quoted, built from the record, never written by the writer, and never naming who exposed it.
 _Avoid_: source, attribution
