@@ -7,6 +7,7 @@
  * Transient (retry): our idle/stall timeout, rate-limit / overloaded / 5xx upstream
  * (including an overload the CLI could not route to another model, since
  * CLAUDE_CODE_NO_MODEL_FALLBACK), connection resets. Permanent (surface to operator): a declined request (refusal),
+ * a call served by a model other than its pinned one (model substitution),
  * auth/permission/invalid-request, structured-output extraction failures, cost-ceiling
  * overruns.
  *
@@ -20,6 +21,7 @@
 const { isSdkTimeoutError } = require('./client');
 const { StructuredOutputExtractionError } = require('./structured-output-extractor');
 const { isRefusalError } = require('./refusal');
+const { isModelSubstitutionError } = require('./model-substitution');
 
 const TRANSIENT_STATUS = new Set([429, 500, 503, 529]);
 
@@ -49,6 +51,11 @@ function isTransientError(err) {
   // FIRST, through `.cause` and the refusal marker in a re-wrapped message, so neither a
   // status field nor a transient-looking word in the model's explanation can retry it.
   if (isRefusalError(err)) return false;
+
+  // A model other than the pinned one served the call (lib/llm/model-substitution.js).
+  // A retry runs the same options through the same CLI; the operator has to see it.
+  // Read through `.cause` and the message marker, as the refusal is.
+  if (isModelSubstitutionError(err)) return false;
 
   // Permanent by identity — never retry these regardless of any status field.
   if (err instanceof StructuredOutputExtractionError) return false;

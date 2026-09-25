@@ -142,9 +142,23 @@ describe('client llm_complete — the served model (brief 2.0)', () => {
     expect(event.servedModels).toEqual(['claude-opus-5-5']);
   });
 
-  it('falls back to the modelUsage key and lists every model that answered', async () => {
-    const event = await complete({ modelUsage: { 'claude-opus-5-5': { outputTokens: 3 }, 'claude-opus-4-8': { outputTokens: 900 } } });
-    expect(event.servedModels).toEqual(['claude-opus-5-5', 'claude-opus-4-8']);
+  it('falls back to the modelUsage key when there is no canonicalModel', async () => {
+    const event = await complete({ modelUsage: { 'claude-opus-5-5': { outputTokens: 3 } } });
+    expect(event.servedModels).toEqual(['claude-opus-5-5']);
+  });
+
+  // Round 3: another model among the served fails the call (SdkModelSubstitutionError),
+  // so the list of every model that answered rides on the llm_error.
+  it('lists every model that answered on the llm_error when one is not the pinned model', async () => {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([{
+      type: 'result', subtype: 'success', result: 'ok',
+      modelUsage: { 'claude-opus-5-5': { outputTokens: 3 }, 'claude-opus-4-8': { outputTokens: 900 } }
+    }]));
+    await expect(sdkQueryImpl({ prompt: 'x', model: 'opus', onProgress: (e) => events.push(e) }))
+      .rejects.toThrow(/SDK model substitution/);
+    expect(events.find(e => e.type === 'llm_complete')).toBeUndefined();
+    expect(events.find(e => e.type === 'llm_error').servedModels).toEqual(['claude-opus-5-5', 'claude-opus-4-8']);
   });
 
   it('is null when the result has no modelUsage', async () => {

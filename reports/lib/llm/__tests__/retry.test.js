@@ -191,4 +191,34 @@ describe('isTransientError', () => {
       expect(isTransientError(unauthorized)).toBe(false);
     });
   });
+
+  // Round 3 ruling: a call served by a model other than its pinned one fails, and is not
+  // retried, through every shape a node hands the classifier.
+  describe('a model substitution is permanent', () => {
+    const { SdkModelSubstitutionError } = require('../model-substitution');
+    const substitution = (label = 'Core arc generation (Call 1)') => new SdkModelSubstitutionError({
+      requestedModel: 'claude-opus-5-5', servedModels: ['claude-opus-4-8'], label
+    });
+
+    test('the wrapper\'s own SdkModelSubstitutionError', () => {
+      expect(isTransientError(substitution())).toBe(false);
+    });
+
+    test('checked before any status field or status digits in the label', () => {
+      const withStatus = substitution(); withStatus.apiErrorStatus = 529;
+      expect(isTransientError(withStatus)).toBe(false);
+      expect(isTransientError(substitution('Photo 503 of 529'))).toBe(false);
+    });
+
+    test('re-wrapped into a plain Error with the original as cause', () => {
+      const wrapped = new Error(`Arc analysis failed: ${substitution().message}`, { cause: substitution() });
+      expect(isTransientError(wrapped)).toBe(false);
+    });
+
+    test('re-wrapped with only the text kept', () => {
+      const textOnly = new Error(`Photo analysis failed: all 2 photos errored (e.g. "${substitution().message}").`);
+      textOnly.apiErrorStatus = 503;
+      expect(isTransientError(textOnly)).toBe(false);
+    });
+  });
 });

@@ -727,11 +727,13 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
       }
     });
 
-    test('with no refusal signal, another served model is recorded and the result returns', async () => {
-      const { thrown, value, events } = await run([cleanFinish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
-      expect(thrown).toBeUndefined();
-      expect(value).toEqual({ ok: true });
-      expect(events.find((e) => e.type === 'llm_complete').servedModels).toEqual(['claude-opus-4-8']);
+    // Without a refusal signal the same result is a model substitution, not a declined
+    // request: 'sdkQueryImpl model substitution (round 3 ruling)' below.
+    test('with no refusal signal, another served model is a model substitution, not a refusal', async () => {
+      const { thrown, value } = await run([cleanFinish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
+      expect(value).toBeUndefined();
+      expect(thrown).not.toBeInstanceOf(SdkRefusalError);
+      expect(thrown.name).toBe('SdkModelSubstitutionError');
     });
   });
 
@@ -821,6 +823,20 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
       expect(events.find((e) => e.type === 'llm_complete').refusalFallback)
         .toEqual({ originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber', scope: 'local' });
     });
+
+    // Round 3: a local fallback is not only recorded. When its model served part of the
+    // call, the result's modelUsage names it and the call fails as a model substitution.
+    test('a local fallback whose model shows in modelUsage fails the call as a model substitution', async () => {
+      const { thrown, value, events } = await runStream(() => makeAsyncIterable([
+        notice({ scope: 'local', api_refusal_category: 'cyber', fallback_model: 'claude-opus-4-8' }),
+        { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: 'ok', modelUsage: { 'claude-opus-5-5': {}, 'claude-opus-4-8': {} } }
+      ]));
+      expect(value).toBeUndefined();
+      expect(thrown.name).toBe('SdkModelSubstitutionError');
+      expect(thrown.substituteModels).toEqual(['claude-opus-4-8']);
+      const err = events.find((e) => e.type === 'llm_error');
+      expect(err.refusalFallback).toEqual({ originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber', scope: 'local' });
+    });
   });
 
   test('an ordinary call carries refusalFallback and refusalSignal as null on llm_complete', async () => {
@@ -902,6 +918,108 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
     const { thrown, events } = await run([refusedResult()]);
     expect(refusalOf(thrown)).toEqual({ category: null, explanation: null });
     expect(events.filter((e) => e.type === 'llm_error')).toHaveLength(1);
+  });
+});
+
+// Round 3 ruling (integrator, 2026-09-25, adopted after the full gate served all 19 calls
+// on their pinned models): any served model that is not the one the call resolved to
+// fails the call, refusal signal or not. Before, a substitute with no refusal signal was
+// only recorded in servedModels.
+describe('sdkQueryImpl model substitution (round 3 ruling)', () => {
+  const { isTransientError } = require('../retry');
+  const { SdkModelSubstitutionError } = require('../model-substitution');
+  const { SdkRefusalError } = require('../refusal');
+  afterEach(() => clearMockQuery());
+
+  const finish = (modelUsage, extra = {}) => ({
+    type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn',
+    result: '{"ok":true}', structured_output: { ok: true }, duration_api_ms: 1200, ...(modelUsage && { modelUsage }), ...extra
+  });
+
+  async function run(messages, opts = {}) {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable(messages));
+    let thrown;
+    let value;
+    try {
+      value = await sdkQueryImpl({ prompt: 'test', model: 'opus', label: 'substitution-test', onProgress: (m) => events.push(m), ...opts });
+    } catch (e) { thrown = e; }
+    return { events, thrown, value };
+  }
+
+  test('a schema-valid finish served by another model throws, naming the requested and the served model', async () => {
+    const { thrown, value, events } = await run([finish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
+
+    expect(value).toBeUndefined();
+    expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
+    expect(thrown).not.toBeInstanceOf(SdkRefusalError);
+    expect(thrown.message).toBe('SDK model substitution: requested claude-opus-5-5, served by claude-opus-4-8 - substitution-test; the result is not used');
+    expect(thrown.requestedModel).toBe('claude-opus-5-5');
+    expect(thrown.servedModels).toEqual(['claude-opus-4-8']);
+    expect(thrown.substituteModels).toEqual(['claude-opus-4-8']);
+    expect(thrown.sdkSubtype).toBe('model_substitution');
+    expect(thrown.cause).toBeUndefined();
+    expect(isTransientError(thrown)).toBe(false);
+
+    const errEvents = events.filter((e) => e.type === 'llm_error');
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].errorName).toBe('SdkModelSubstitutionError');
+    expect(errEvents[0].error).toBe(thrown.message);
+    expect(errEvents[0].servedModels).toEqual(['claude-opus-4-8']);
+    expect(errEvents[0].durationApiMs).toBe(1200);   // the result's envelope rides along
+    expect(errEvents[0].schemaErrors).toBeNull();
+    expect(errEvents[0].refusal).toBeUndefined();
+    expect(events.filter((e) => e.type === 'llm_complete')).toHaveLength(0);
+  });
+
+  test('a text call served by another model throws too', async () => {
+    const { thrown, value } = await run([finish({ 'claude-sonnet-5': {} }, { structured_output: undefined, result: 'plain text' })], { model: 'haiku' });
+    expect(value).toBeUndefined();
+    expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
+    expect(thrown.message).toMatch(/requested claude-haiku-4-5, served by claude-sonnet-5/);
+  });
+
+  test('the pinned model beside another model: every served model is named, the substitute singled out', async () => {
+    const { thrown, events } = await run([finish({ 'claude-opus-5-5[1m]': { canonicalModel: 'claude-opus-5-5' }, 'claude-haiku-4-5': {} })], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
+    expect(thrown.message).toMatch(/requested claude-opus-5-5, served by claude-opus-5-5, claude-haiku-4-5/);
+    expect(thrown.substituteModels).toEqual(['claude-haiku-4-5']);
+    expect(events.find((e) => e.type === 'llm_error').servedModels).toEqual(['claude-opus-5-5', 'claude-haiku-4-5']);
+  });
+
+  test('a schema failure served by another model is the substitution, with the schema failure as its cause', async () => {
+    const { thrown, events } = await run([finish({ 'claude-opus-4-8': {} }, { structured_output: undefined, result: '{"ok":"yes"}' })], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
+    expect(thrown.cause).toBeInstanceOf(StructuredOutputExtractionError);
+    const errEvents = events.filter((e) => e.type === 'llm_error');
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].schemaErrors).toEqual(thrown.cause.schemaErrors);
+  });
+
+  test('the pinned model under a [1m] or dated suffix is the same model, so the result returns', async () => {
+    for (const usage of [
+      { 'claude-opus-5-5': {} },
+      { 'claude-opus-5-5[1m]': {} },
+      { 'claude-opus-5-5-20260901': {} },
+      { 'claude-opus-5-5[1m]': { canonicalModel: 'claude-opus-5-5' } }
+    ]) {
+      const { thrown, value } = await run([finish(usage)], { jsonSchema: SIMPLE_SCHEMA });
+      expect(thrown).toBeUndefined();
+      expect(value).toEqual({ ok: true });
+    }
+  });
+
+  test('a result with no modelUsage names no model, so it returns (round 2 ruling)', async () => {
+    const { thrown, value, events } = await run([finish(undefined)], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeUndefined();
+    expect(value).toEqual({ ok: true });
+    expect(events.find((e) => e.type === 'llm_complete').servedModels).toBeNull();
+  });
+
+  test('without onProgress the call still throws the substitution', async () => {
+    setMockQuery(() => makeAsyncIterable([finish({ 'claude-opus-4-8': {} })]));
+    await expect(sdkQueryImpl({ prompt: 'test', model: 'opus', jsonSchema: SIMPLE_SCHEMA }))
+      .rejects.toBeInstanceOf(SdkModelSubstitutionError);
   });
 });
 

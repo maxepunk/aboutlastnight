@@ -38,14 +38,18 @@
  *     names the category and the fallback model, and the wrapper throws at once. A
  *     main-thread frame carrying `supersedes` is the same fallback leg and is declined
  *     the same way. A 'local' fallback (a subagent or side question; pipeline calls run
- *     none) is only recorded, as `refusalFallback` on llm_complete.
+ *     none) does not decline the call and is carried as `refusalFallback`. It is not
+ *     only recorded: if the fallback model shows in the result's modelUsage, the call
+ *     fails as a model substitution (lib/llm/model-substitution.js), as any call served
+ *     by a model other than its pinned one does.
  *
  * A refusal signal that is not terminal, followed by a clean finish on another stop
  * reason, returns the result. The wrapper records the signal as `refusalSignal` on
  * llm_complete, so the call log shows it. The exception: when the result's modelUsage
  * names a model other than the one the call resolved to (`servedModelMatches`,
  * lib/llm/sdk-fields.js), another model finished the declined request, and the wrapper
- * throws `SdkRefusalError` naming it.
+ * throws `SdkRefusalError` naming it. Without a refusal signal, the same modelUsage
+ * throws `SdkModelSubstitutionError` instead.
  *
  * @module llm/refusal
  */

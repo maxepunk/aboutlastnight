@@ -18,7 +18,8 @@ const crypto = require('crypto');
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('./structured-output-extractor');
 const { SdkRefusalError, createRefusalTracker, isRefusalError } = require('./refusal');
-const { servedModelsOf, servedModelMatches } = require('./sdk-fields');
+const { servedModelsOf } = require('./sdk-fields');
+const { SdkModelSubstitutionError, substituteModelsOf } = require('./model-substitution');
 
 // Increase max listeners to support 8 concurrent SDK calls
 // Each SDK call adds exit listeners for subprocess cleanup
@@ -522,7 +523,10 @@ async function sdkQueryImpl({
 
       // Only a 'local' fallback gets here (a main-thread one threw above): a subagent or
       // side question was retried on another model and the main turn goes on. Pipeline
-      // calls run neither, so say so; llm_complete records it as refusalFallback.
+      // calls run neither, so say so; the call's llm_complete or llm_error carries it as
+      // refusalFallback. It is not only recorded: if the fallback model shows in the
+      // result's modelUsage, the served-model check at the result fails the call
+      // (SdkModelSubstitutionError).
       if (msg.type === 'system' && msg.subtype === 'model_refusal_fallback') {
         console.warn(
           `[${progressLabel}] a subagent's declined turn (category: ${msg.api_refusal_category || 'none given'}) ` +
@@ -717,24 +721,52 @@ async function sdkQueryImpl({
           finalResult = msg.result;
         }
 
+        // Every served model (result modelUsage) that is not the one the call resolved to
+        // under servedModelMatches. Any one of them fails the call (integrator ruling,
+        // 2026-09-25; lib/llm/model-substitution.js). A result with no modelUsage names no
+        // model, so it has none and is returned.
+        const substitutes = substituteModelsOf(sdkDiagnostics.servedModels, resolvedModel);
+
         // A refusal signal earlier in the stream, then a clean finish on another stop
         // reason. If the schema then fails, the refusal is the better name for it, and the
-        // schema failure rides along as its cause. If a model other than the one the call
-        // resolved to served any of it (result modelUsage), another model finished the
-        // declined request: a fallback the CLI never announced, which the ruling forbids
-        // (a declined request is never answered by another model), so it is declined too,
-        // naming that model. With no modelUsage there is no other model to name. Otherwise
-        // the result is returned and llm_complete records the signal as refusalSignal.
+        // schema failure rides along as its cause. If a substitute served any of it,
+        // another model finished the declined request: a fallback the CLI never announced,
+        // which the ruling forbids (a declined request is never answered by another model),
+        // so it is declined too, naming that model. Otherwise the result is returned and
+        // llm_complete records the signal as refusalSignal.
         const pendingRefusal = refusals.pending();
-        const otherModels = pendingRefusal
-          ? (sdkDiagnostics.servedModels || []).filter((m) => !servedModelMatches(m, resolvedModel))
-          : [];
-        if (pendingRefusal && (extractionError || otherModels.length > 0)) {
-          const declined = otherModels.length > 0
-            ? { ...pendingRefusal, fallbackModel: otherModels.join(', ') }
+        if (pendingRefusal && (extractionError || substitutes.length > 0)) {
+          const declined = substitutes.length > 0
+            ? { ...pendingRefusal, fallbackModel: substitutes.join(', ') }
             : pendingRefusal;
           throw declinedError(declined, { resultMsg: msg, ...(extractionError && { cause: extractionError }) });
         }
+
+        // No refusal signal, and a substitute served the call: a model substitution. The
+        // result is not used. A schema failure the result also has rides along as the
+        // cause, and its schemaErrors on the llm_error, as on a declined request.
+        if (substitutes.length > 0) {
+          const substitutionErr = new SdkModelSubstitutionError(
+            { requestedModel: resolvedModel, servedModels: sdkDiagnostics.servedModels, label: progressLabel },
+            extractionError ? { cause: extractionError } : undefined
+          );
+          console.error(`[${progressLabel}] ${substitutionErr.message}`);
+          if (onProgress) {
+            errorEmitted = true;
+            emit({
+              type: 'llm_error',
+              elapsed: (Date.now() - startTime) / 1000,
+              error: substitutionErr.message,
+              errorName: substitutionErr.name,
+              schemaErrors: extractionError?.schemaErrors ?? null,
+              jsonSchema,
+              ...sdkDiagnostics,
+              refusalFallback: refusals.fallback()
+            });
+          }
+          throw substitutionErr;
+        }
+
         if (pendingRefusal) {
           console.warn(
             `[${progressLabel}] a refusal signal (category: ${pendingRefusal.category || 'none given'}) ` +
