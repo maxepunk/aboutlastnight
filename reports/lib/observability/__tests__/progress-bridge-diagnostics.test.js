@@ -71,3 +71,14 @@ test('a completed call: the SSE llm_complete keeps its channel and carries refus
   expect(sse.diagnostics.refusalFallback).toEqual(fallback);
   expect(readRecord('S2').diagnostics.refusalFallback).toEqual(fallback);
 });
+
+test('the served model reaches the SSE envelope, the record and the index line', () => {
+  const logger = createProgressFromTrace('generateContent', 'S3');
+  logger({ type: 'llm_start', callId: CALL, model: 'opus', prompt: 'P' });
+  logger({ type: 'llm_complete', callId: CALL, elapsed: 370.5, result: { a: 1 }, channel: 'structured_output', servedModels: ['claude-opus-5-5'] });
+
+  expect(emitted.find((e) => e.type === 'llm_complete').diagnostics.servedModels).toEqual(['claude-opus-5-5']);
+  expect(readRecord('S3').diagnostics.servedModels).toEqual(['claude-opus-5-5']);
+  const index = fs.readFileSync(path.join(root, 'S3', 'llm-log', 'index.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  expect(index[0]).toMatchObject({ model: 'opus', servedModels: ['claude-opus-5-5'], elapsed: 370.5 });
+});

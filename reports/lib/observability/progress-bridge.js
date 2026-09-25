@@ -12,6 +12,7 @@ const { progressEmitter } = require('./progress-emitter');
 const { isProgressEnabled } = require('./config');
 const { SSE_EVENT_TYPES, STRUCTURED_OUTPUT_CHANNELS } = require('./constants');
 const { recordLlmEvent, diagnosticsOf } = require('./llm-call-log');
+const { hasMemoryPaths } = require('../llm/sdk-fields');
 
 /** The llm_error SSE envelope has never carried `channel`: nothing was extracted. */
 function withoutChannel(diagnostics) {
@@ -182,6 +183,8 @@ function formatProgressEvent(msg) {
       if (msg.channel === STRUCTURED_OUTPUT_CHANNELS.TEXT_FALLBACK) parts.push('channel=text-fallback');
       if (msg.stopReason && msg.stopReason !== 'end_turn') parts.push(`stop=${msg.stopReason}`);
       if (msg.usage?.output_tokens != null) parts.push(`out=${msg.usage.output_tokens}`);
+      if (Array.isArray(msg.servedModels) && msg.servedModels.length) parts.push(`served=${msg.servedModels.join('+')}`);
+      if (msg.refusalFallback) parts.push(`refusal-fallback=${msg.refusalFallback.fallbackModel}`);
       return {
         icon: PROGRESS_ICONS.llm_complete,
         shortText: `Completed ${msg.label || 'LLM call'}`,
@@ -275,6 +278,13 @@ function formatProgressEvent(msg) {
           if (Array.isArray(i.betas) && i.betas.length) segs.push(`betas=[${i.betas.join(',')}]`);
           if (i.toolCount != null) segs.push(`${i.toolCount} tools`);
           if (i.permissionMode) segs.push(i.permissionMode);
+          if (i.effort) segs.push(`effort=${i.effort}`);
+          // Any memory path means the operator's auto-memory reached the call: an isolation
+          // failure (client.js Control 3b), so it renders as an error line.
+          if (hasMemoryPaths(i.memoryPaths)) {
+            segs.push(`MEMORY LOADED ${JSON.stringify(i.memoryPaths)}`);
+            return { icon: PROGRESS_ICONS.error, shortText: segs.join(' · '), detailText: '' };
+          }
           return { icon: PROGRESS_ICONS.system, shortText: segs.join(' · '), detailText: '' };
         }
         case 'status':

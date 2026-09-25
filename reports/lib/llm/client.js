@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('./structured-output-extractor');
 const { SdkRefusalError, createRefusalTracker } = require('./refusal');
+const { servedModelsOf } = require('./sdk-fields');
 
 // Increase max listeners to support 8 concurrent SDK calls
 // Each SDK call adds exit listeners for subprocess cleanup
@@ -159,7 +160,8 @@ function resultDiagnostics(msg) {
     apiErrorStatus: msg.api_error_status ?? null,
     terminalReason: msg.terminal_reason ?? null,
     structuredOutputPresent: msg.structured_output !== undefined && msg.structured_output !== null,
-    resultTextLength: typeof msg.result === 'string' ? msg.result.length : 0
+    resultTextLength: typeof msg.result === 'string' ? msg.result.length : 0,
+    servedModels: servedModelsOf(msg.modelUsage)
   };
 }
 
@@ -543,12 +545,19 @@ async function sdkQueryImpl({
           }),
           // init confirms which model/betas/tools/permission actually engaged — invaluable
           // for "is the 1M-context beta really on?" debugging. (SDKSystemMessage subtype:'init'.)
+          // memoryPaths: the CLI's auto-memory directories; any value means the operator's
+          // memory loaded into the call (the 2026-09-19 leak showed `memory_paths.auto`).
+          // Not in the 0.3.282 public types, so it is forwarded raw and absent is normal.
+          // effort: the applied effort (0.3.234); the types document it for Remote Control
+          // init frames only, so it may be absent on query() calls.
           ...(msg.subtype === 'init' && {
             init: {
               model: msg.model,
               betas: msg.betas,
               toolCount: Array.isArray(msg.tools) ? msg.tools.length : undefined,
-              permissionMode: msg.permissionMode
+              permissionMode: msg.permissionMode,
+              effort: msg.effort,
+              memoryPaths: msg.memory_paths
             }
           }),
           // status enum: 'compacting' | 'requesting' | null. (SDKStatusMessage subtype:'status'.)

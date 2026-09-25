@@ -99,6 +99,8 @@ function diagnosticsOf(msg) {
     terminalReason: msg.terminalReason ?? null,
     structuredOutputPresent: msg.structuredOutputPresent ?? null,
     resultTextLength: msg.resultTextLength ?? null,
+    // The models that answered (result modelUsage), next to the alias the call asked for.
+    servedModels: msg.servedModels ?? null,
     // A declined request: {category, explanation} (lib/llm/refusal.js).
     refusal: msg.refusal ?? null,
     // The CLI retried a declined turn on another model: {originalModel, fallbackModel, category}.
@@ -151,8 +153,9 @@ function recordLlmEvent(sessionId, context, msg) {
     try {
       writeJson(entry.file, record);
       fs.appendFileSync(path.join(dir, 'index.jsonl'), JSON.stringify({
-        ts: completedAt, callId, context, model: record.model, elapsed: record.elapsed,
-        channel: diagnostics.channel, usage: diagnostics.usage, file: path.basename(entry.file), outcome: record.outcome
+        ts: completedAt, callId, context, model: record.model, servedModels: diagnostics.servedModels,
+        elapsed: record.elapsed, channel: diagnostics.channel, usage: diagnostics.usage,
+        file: path.basename(entry.file), outcome: record.outcome
       }) + '\n');
     } finally {
       inFlight.delete(callId);

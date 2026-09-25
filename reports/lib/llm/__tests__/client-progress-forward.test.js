@@ -39,6 +39,29 @@ describe('client onProgress forward — init & status', () => {
     expect(init.init).toEqual({ model: 'claude-opus-4-8', betas: ['context-1m-2025-08-07'], toolCount: 3, permissionMode: 'bypassPermissions' });
   });
 
+  // Brief 2.0: the gate reads memory paths and the applied effort off init. Neither is
+  // in the 0.3.282 public SDKSystemMessage for query() calls (memory_paths not at all,
+  // effort only on Remote Control frames), so both are forwarded raw when present.
+  it('forwards init effort and memory paths', async () => {
+    const events = await captureForward([
+      { type: 'system', subtype: 'init', model: 'claude-opus-5-5', tools: [], permissionMode: 'bypassPermissions', effort: 'xhigh', memory_paths: { auto: 'C:/Users/x/.claude/projects/p/memory' } }
+    ]);
+    const init = events.find(e => e.subtype === 'init').init;
+    expect(init.effort).toBe('xhigh');
+    expect(init.memoryPaths).toEqual({ auto: 'C:/Users/x/.claude/projects/p/memory' });
+    expect(init.toolCount).toBe(0);
+  });
+
+  it('leaves effort and memoryPaths undefined when init omits them', async () => {
+    const events = await captureForward([
+      { type: 'system', subtype: 'init', model: 'claude-haiku-4-5', tools: ['Read'], permissionMode: 'bypassPermissions' }
+    ]);
+    const init = events.find(e => e.subtype === 'init').init;
+    expect(init.effort).toBeUndefined();
+    expect(init.memoryPaths).toBeUndefined();
+    expect(init.toolCount).toBe(1);
+  });
+
   it('forwards the status enum as sdkStatus', async () => {
     const events = await captureForward([
       { type: 'system', subtype: 'status', status: 'requesting' }
@@ -85,5 +108,31 @@ describe('client onProgress forward — is_error result', () => {
     expect(resultEvent).toBeDefined();
     expect(resultEvent.resultIsError).toBe(true);
     expect(resultEvent.apiErrorStatus).toBe(401);
+  });
+});
+
+describe('client llm_complete — the served model (brief 2.0)', () => {
+  afterEach(() => clearMockQuery());
+
+  async function complete(result) {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([{ type: 'result', subtype: 'success', result: 'ok', ...result }]));
+    await sdkQueryImpl({ prompt: 'x', model: 'opus', onProgress: (e) => events.push(e) });
+    return events.find(e => e.type === 'llm_complete');
+  }
+
+  it('reads the served model from the result modelUsage, preferring canonicalModel', async () => {
+    const event = await complete({ modelUsage: { 'claude-opus-5-5[1m]': { outputTokens: 10, canonicalModel: 'claude-opus-5-5' } } });
+    expect(event.servedModels).toEqual(['claude-opus-5-5']);
+  });
+
+  it('falls back to the modelUsage key and lists every model that answered', async () => {
+    const event = await complete({ modelUsage: { 'claude-opus-5-5': { outputTokens: 3 }, 'claude-opus-4-8': { outputTokens: 900 } } });
+    expect(event.servedModels).toEqual(['claude-opus-5-5', 'claude-opus-4-8']);
+  });
+
+  it('is null when the result has no modelUsage', async () => {
+    const event = await complete({});
+    expect(event.servedModels).toBeNull();
   });
 });

@@ -45,6 +45,19 @@ describe('formatProgressEvent — system subtypes: init & status', () => {
     });
     expect(out.shortText).toBe('init · model=claude-opus-4-8 · betas=[context-1m-2025-08-07] · 14 tools · bypassPermissions');
   });
+  // Brief 2.0: the gate reads effort and memory paths off init.
+  it('renders the applied effort, and loaded memory as an error line', () => {
+    const plain = formatProgressEvent({ type: 'system', subtype: 'init', init: { model: 'claude-opus-5-5', toolCount: 0, effort: 'xhigh' } });
+    expect(plain.shortText).toBe('init · model=claude-opus-5-5 · 0 tools · effort=xhigh');
+    expect(plain.icon).toBe(PROGRESS_ICONS.system);
+
+    const leaked = formatProgressEvent({ type: 'system', subtype: 'init', init: { toolCount: 0, memoryPaths: { auto: '/home/x/memory' } } });
+    expect(leaked.icon).toBe(PROGRESS_ICONS.error);
+    expect(leaked.shortText).toMatch(/MEMORY LOADED/);
+
+    const empty = formatProgressEvent({ type: 'system', subtype: 'init', init: { toolCount: 0, memoryPaths: { auto: null } } });
+    expect(empty.icon).toBe(PROGRESS_ICONS.system);
+  });
   it('renders init minimally when fields are absent', () => {
     expect(formatProgressEvent({ type: 'system', subtype: 'init', init: {} }).shortText).toBe('init');
   });
@@ -138,5 +151,20 @@ describe('formatProgressEvent — failures stop hiding', () => {
     const out = formatProgressEvent({ type: 'keep_alive' });
     expect(out.icon).toBe(PROGRESS_ICONS.system);
     expect(out.shortText).toBe('keep_alive');
+  });
+});
+
+describe('formatProgressEvent — llm_complete names the served model (brief 2.0)', () => {
+  it('appends served= and a refusal fallback when present', () => {
+    const out = formatProgressEvent({
+      type: 'llm_complete', elapsed: 12.3, servedModels: ['claude-opus-5-5'],
+      refusalFallback: null
+    });
+    expect(out.detailText).toBe('12.3s served=claude-opus-5-5');
+    const fell = formatProgressEvent({
+      type: 'llm_complete', elapsed: 1, servedModels: ['claude-opus-5-5', 'claude-opus-4-8'],
+      refusalFallback: { originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber' }
+    });
+    expect(fell.detailText).toBe('1.0s served=claude-opus-5-5+claude-opus-4-8 refusal-fallback=claude-opus-4-8');
   });
 });
