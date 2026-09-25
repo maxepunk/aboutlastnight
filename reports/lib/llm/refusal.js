@@ -13,8 +13,10 @@
  * requested model and independent of the `fallbackModel` option: for `claude-opus-5-5`
  * it retries `bio` and `frontier_llm` on `claude-opus-5` and `cyber` on
  * `claude-opus-4-8`. The wrapper turns them off with
- * `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1` in the subprocess env (client.js), and this
- * tracker treats any main-thread fallback that still happens as a declined request.
+ * `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1` and `CLAUDE_CODE_NO_MODEL_FALLBACK=1` (the
+ * CLI's no-fallback guarantee, which also gates this lane) in the subprocess env
+ * (client.js), and this tracker treats any main-thread fallback that still happens as a
+ * declined request.
  *
  * Where a refusal can show up, from the 0.3.282 types (`sdk.d.ts` and
  * `@anthropic-ai/sdk` 0.128.0 `BetaMessage` / `BetaRawMessageDeltaEvent`). No live

@@ -53,6 +53,45 @@ describe('isTransientError', () => {
     });
   });
 
+  // Ruling (integrator, 2026-09-25): calls are served by their pinned model, never a
+  // substitute (CLAUDE_CODE_NO_MODEL_FALLBACK). The CLI then has no model to route an
+  // overload to, and the call ends as an is_error result whose assistant error is
+  // `server_error`. That must stay transient, so the node retry policy retries it on the
+  // same model. Message text as the bundled CLI 2.1.282 writes it; the wrapper's
+  // error as client.js builds it (sdkSubtype = the assistant error).
+  describe('an overload the CLI could not route to another model is transient', () => {
+    const REPEATED_529 = 'API Error: Repeated 529 Overloaded errors. The API is at capacity — this is usually temporary. Try again in a moment.';
+    const wrapperError = (reason, status, text) => {
+      const err = new Error(`SDK result error (${reason}${status != null ? `, HTTP ${status}` : ''}) - Core arc generation: ${text}`);
+      err.sdkSubtype = reason;
+      if (status != null) err.apiErrorStatus = status;
+      return err;
+    };
+
+    test('the repeated-529 result with its status', () => {
+      expect(isTransientError(wrapperError('server_error', 529, REPEATED_529))).toBe(true);
+    });
+
+    test('the repeated-529 result without a status: the assistant error decides, not the digits', () => {
+      expect(isTransientError(wrapperError('server_error', null, REPEATED_529))).toBe(true);
+      expect(isTransientError(wrapperError('server_error', null, 'API Error: Connection lost before a response was produced. Try again.'))).toBe(true);
+    });
+
+    test('the `overloaded` assistant error (0.3.282 SDKAssistantMessageError) is transient too', () => {
+      expect(isTransientError(wrapperError('overloaded', null, 'API Error: Overloaded'))).toBe(true);
+    });
+
+    test('an explicit permanent status still wins over the assistant error', () => {
+      expect(isTransientError(wrapperError('server_error', 400, 'API Error: bad request'))).toBe(false);
+    });
+
+    test('other assistant errors, and the words in free text, stay permanent', () => {
+      expect(isTransientError(wrapperError('invalid_request', null, 'API Error: prompt is too long'))).toBe(false);
+      expect(isTransientError(wrapperError('model_not_found', null, 'API Error: model not found'))).toBe(false);
+      expect(isTransientError(new Error('the CLI reported server_error and was overloaded'))).toBe(false);
+    });
+  });
+
   describe('returns false (permanent — do not retry)', () => {
     test.each([400, 401, 403])('apiErrorStatus %i', (status) => {
       const err = new Error('bad'); err.apiErrorStatus = status;

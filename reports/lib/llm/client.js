@@ -316,10 +316,21 @@ async function sdkQueryImpl({
   // claude-opus-5 and `cyber` to claude-opus-4-8. Ruling (integrator, 2026-09-25): a
   // declined request is never answered by another model, so the routes are off here, and
   // lib/llm/refusal.js treats a main-thread fallback that still happens as declined.
+  //
+  // Control 3d: no model fallback of any kind. Ruling (integrator, 2026-09-25): the
+  // pipeline's calls are always served by their pinned model, never a substitute.
+  // CLAUDE_CODE_NO_MODEL_FALLBACK is the CLI's "no-fallback guarantee" (2.1.282): it
+  // turns the refusal fallback off as well (the lane's gate reads both switches), builds
+  // the availability fallback chain as the primary model alone, blocks model
+  // substitution, and makes a compaction that needs another model an error. An overload
+  // then ends the call as an is_error result (`server_error`, "Repeated 529 Overloaded
+  // errors"), which lib/llm/retry.js classifies as transient, so the node retry policy
+  // retries it on the same model. The refusal switch stays: it names the intent.
   options.env = {
     ...process.env,
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
-    CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1'
+    CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+    CLAUDE_CODE_NO_MODEL_FALLBACK: '1'
   };
 
   if (model !== 'haiku') {

@@ -450,6 +450,33 @@ describe('sdkQueryImpl is_error result handling (terminal API failure wrapped as
     expect(thrown.message).not.toMatch(/claude \/login/);   // hint is auth-specific
     expect(isTransientError(thrown)).toBe(true);
   });
+
+  // CLAUDE_CODE_NO_MODEL_FALLBACK leaves the CLI no other model for an overload: after
+  // its own retries it ends the turn with the assistant error `server_error` and the
+  // text below (bundled CLI 2.1.282). The status rides on the result when the CLI can
+  // read it from the underlying error; both shapes must reach the node retry policy as
+  // transient, so the call is retried on the same model.
+  const REPEATED_529 = 'API Error: Repeated 529 Overloaded errors. The API is at capacity — this is usually temporary. Try again in a moment.';
+  test.each([
+    ['with the status', { api_error_status: 529 }],
+    ['without a status', {}]
+  ])('an overload the CLI could not route elsewhere is thrown transient (%s)', async (_name, status) => {
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'assistant', error: 'server_error', message: { content: [{ type: 'text', text: REPEATED_529 }] } },
+      { type: 'result', subtype: 'success', is_error: true, result: REPEATED_529, stop_reason: 'stop_sequence', ...status }
+    ]));
+
+    let thrown;
+    try {
+      await sdkQueryImpl({ prompt: 'test', jsonSchema: SIMPLE_SCHEMA, model: 'opus', label: 'no-fallback-overload' });
+    } catch (e) { thrown = e; }
+
+    expect(thrown).toBeDefined();
+    expect(thrown).not.toBeInstanceOf(StructuredOutputExtractionError);
+    expect(thrown.sdkSubtype).toBe('server_error');
+    expect(thrown.message).toMatch(/Repeated 529 Overloaded errors/);
+    expect(isTransientError(thrown)).toBe(true);
+  });
 });
 
 describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {

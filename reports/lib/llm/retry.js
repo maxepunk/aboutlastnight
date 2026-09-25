@@ -4,8 +4,9 @@
  * Single source of truth consumed by:
  *   - LangGraph node retryPolicy.retryOn (graph.js) — auto-retry transient LLM failures
  *
- * Transient (retry): our idle/stall timeout, rate-limit / overloaded / 5xx upstream,
- * connection resets. Permanent (surface to operator): a declined request (refusal),
+ * Transient (retry): our idle/stall timeout, rate-limit / overloaded / 5xx upstream
+ * (including an overload the CLI could not route to another model, since
+ * CLAUDE_CODE_NO_MODEL_FALLBACK), connection resets. Permanent (surface to operator): a declined request (refusal),
  * auth/permission/invalid-request, structured-output extraction failures, cost-ceiling
  * overruns.
  *
@@ -21,6 +22,15 @@ const { StructuredOutputExtractionError } = require('./structured-output-extract
 const { isRefusalError } = require('./refusal');
 
 const TRANSIENT_STATUS = new Set([429, 500, 503, 529]);
+
+// The assistant error that names an is_error result (client.js sets it as sdkSubtype).
+// The bundled CLI 2.1.282 marks exactly these two transient (`isTransient`:
+// `error === "overloaded" || error === "server_error"`). `server_error` is what an
+// overload becomes once CLAUDE_CODE_NO_MODEL_FALLBACK leaves the CLI no other model:
+// "API Error: Repeated 529 Overloaded errors. The API is at capacity...". It also covers
+// 5xx responses and a connection lost mid-request. Matched on sdkSubtype only, never in
+// free text.
+const TRANSIENT_ASSISTANT_ERRORS = new Set(['overloaded', 'server_error']);
 const TRANSIENT_TYPES = new Set([
   // Anthropic API error type strings (matched against err.error.type)
   'rate_limit_error', 'overloaded_error', 'api_error',
@@ -67,6 +77,7 @@ function isTransientError(err) {
   // (cost ceiling, max-turns) are permanent and MUST be tested first.
   const hay = `${err.sdkSubtype || ''} ${(err.sdkErrors || []).join(' ')} ${err.message || ''}`;
   if (/error_max_budget_usd|error_max_turns|error_max_structured_output_retries/.test(hay)) return false;
+  if (TRANSIENT_ASSISTANT_ERRORS.has(err.sdkSubtype)) return true;
   // Named API/socket error strings don't collide with natural language — match unrestricted.
   if (/overloaded_error|rate_limit_error|\bapi_error\b|ECONNRESET|ETIMEDOUT/.test(hay)) return true;
   // Raw HTTP status digits only count when this came from the SDK wrapper (sdkSubtype set),

@@ -8,8 +8,8 @@
  * LIVE: one short call per MODEL_IDS entry. Each call goes through the wrapper
  * (sdkQueryImpl), so it carries exactly the options every pipeline call does:
  * the isolation options (mcpServers {}, strictMcpConfig, settingSources [], the env
- * with CLAUDE_CODE_DISABLE_AUTO_MEMORY and CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK), no
- * tools, the betas, thinking and effort.
+ * with CLAUDE_CODE_DISABLE_AUTO_MEMORY, CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK and
+ * CLAUDE_CODE_NO_MODEL_FALLBACK), no tools, the betas, thinking and effort.
  * Before phase 2 it called the SDK directly without the isolation options.
  *
  * For each alias it reports the model init names and the model(s) the result's

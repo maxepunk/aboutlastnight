@@ -109,6 +109,7 @@ describe('scripts/probe-sdk-isolation.js through the wrapper', () => {
     expect(options().settingSources).toEqual([]);
     expect(options().env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe('1');
     expect(options().env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK).toBe('1');
+    expect(options().env.CLAUDE_CODE_NO_MODEL_FALLBACK).toBe('1');
     expect(options().thinking).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 
@@ -163,6 +164,7 @@ describe('scripts/check-model-freshness.js through the wrapper', () => {
     expect(options().settingSources).toEqual([]);
     expect(options().env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe('1');
     expect(options().env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK).toBe('1');
+    expect(options().env.CLAUDE_CODE_NO_MODEL_FALLBACK).toBe('1');
     expect(options().tools).toEqual([]);
   });
 

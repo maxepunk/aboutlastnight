@@ -16,6 +16,13 @@
  * model and independent of `fallbackModel` (for claude-opus-5-5: bio and frontier_llm
  * to claude-opus-5, cyber to claude-opus-4-8). CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK
  * turns them off; the binary gates the fallback lane on that variable.
+ *
+ * And a third (integrator ruling, 2026-09-25): the pipeline's calls are always served
+ * by their pinned model, never a substitute. CLAUDE_CODE_NO_MODEL_FALLBACK is the
+ * CLI's "no-fallback guarantee": it also disables the refusal fallback (the lane's gate
+ * is `!CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK && !<no-model-fallback>`), collapses the
+ * availability fallback chain to the primary model, blocks model substitution, and
+ * turns a compaction that needs another model into an error.
  */
 
 let capturedOptions = null;
@@ -51,12 +58,20 @@ describe('SDK auto-memory isolation', () => {
     }
   });
 
-  test('the env is the process environment plus exactly the two switches', async () => {
+  test('sets the CLI no-fallback guarantee through its environment, on every model', async () => {
+    for (const model of ['opus', 'sonnet', 'haiku']) {
+      await sdkQuery({ prompt: 'test', model, disableTools: true });
+      expect(capturedOptions.env.CLAUDE_CODE_NO_MODEL_FALLBACK).toBe('1');
+    }
+  });
+
+  test('the env is the process environment plus exactly the three switches', async () => {
     await sdkQuery({ prompt: 'test', model: 'opus', disableTools: true });
     expect(capturedOptions.env).toEqual({
       ...process.env,
       CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
-      CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1'
+      CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+      CLAUDE_CODE_NO_MODEL_FALLBACK: '1'
     });
   });
 });
