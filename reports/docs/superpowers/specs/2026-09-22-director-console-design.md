@@ -116,10 +116,15 @@ The trace tells the director what the machine did to the output before the direc
 | 2026-09-22 | Card text comes from the record, filled by the server, with the citation in the same step. | After 092026 |
 | 2026-09-22 | Structural trouble is typical: the story map stays next after the fix for reworks. | After 092026 |
 | 2026-09-22 | A reworker sees what its writer saw. A minimal trace ships with that fix. | After 092026 |
+| 2026-09-24 | The pipeline's Opus calls move from Opus 4.8 to Opus 5.5 in the first slice of phase 2. The installed Agent SDK is too old for Opus 5.5, so the slice upgrades it to 0.3.280 or later. | Probe on 2026-09-24 |
+| 2026-09-25 | One record view: every call that decides, writes, reworks or judges the story sees every usable document in full, with the same label (id, kind, name, owner, layer); buried memories as transactions only. | Information architecture, Q1 |
+| 2026-09-25 | The director's raw text stays part of the record beside its parse, never replaced by it: the full accusation, photo descriptions word for word, corrections applied to what writers read, the session report's "Exposed By" column. Standing notes reach the arc prompts; an arc rework keeps the interweaving plan. | Information architecture, Q2 |
+| 2026-09-25 | The reporting-mode lines are fixed now. The writing rules become one set with a reason for each, after the director rules on the conflicts in a grill session. | Information architecture, Q3 |
+| 2026-09-25 | The judges get the record view, the roster, the director's notes and the fact check's result now; their scores show as uncalibrated at the stops until calibrated against the director's verdicts. | Information architecture, Q4 |
 
 ## Known gaps
 
-These are recorded so no one mistakes them for intended behaviour. Each has a home in the roadmap.
+These are recorded so no one mistakes them for intended behaviour. Each has a home in the roadmap. The full map of what every call sees, the objectives it serves, the comparison with published practice and six root causes are in `docs/superpowers/specs/2026-09-24-information-architecture.md`.
 
 - The article, outline and arc reworkers do not see what their writers saw. The article reworker has no document text, and the outline reworker gets arc ids and evidence counts only.
 - The article evaluation sees no record.
