@@ -9,6 +9,13 @@
  * with settingSources []), so the switch is the CLI's CLAUDE_CODE_DISABLE_AUTO_MEMORY
  * env var, passed through `options.env`. With it the same probe reported no
  * memory_paths and the model answered "none".
+ *
+ * The same env carries one more switch (integrator ruling, 2026-09-25): a declined
+ * request is never answered by another model. The bundled CLI 2.1.282 retries a
+ * declined turn through refusal fallback routes of its own, keyed on the requested
+ * model and independent of `fallbackModel` (for claude-opus-5-5: bio and frontier_llm
+ * to claude-opus-5, cyber to claude-opus-4-8). CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK
+ * turns them off; the binary gates the fallback lane on that variable.
  */
 
 let capturedOptions = null;
@@ -35,5 +42,21 @@ describe('SDK auto-memory isolation', () => {
     await sdkQuery({ prompt: 'test', model: 'haiku', disableTools: true });
     const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === 'path');
     expect(capturedOptions.env[pathKey]).toBe(process.env[pathKey]);
+  });
+
+  test('disables the CLI refusal fallback through its environment, on every model', async () => {
+    for (const model of ['opus', 'sonnet', 'haiku']) {
+      await sdkQuery({ prompt: 'test', model, disableTools: true });
+      expect(capturedOptions.env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK).toBe('1');
+    }
+  });
+
+  test('the env is the process environment plus exactly the two switches', async () => {
+    await sdkQuery({ prompt: 'test', model: 'opus', disableTools: true });
+    expect(capturedOptions.env).toEqual({
+      ...process.env,
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
+      CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1'
+    });
   });
 });

@@ -121,5 +121,24 @@ describe('isTransientError', () => {
       const outer = new Error('Photo analysis failed: x', { cause: new Error('mid', { cause: inner }) });
       expect(isTransientError(outer)).toBe(false);
     });
+
+    // Only the marker ("SDK refusal (category: ...)") or a refusal error in the chain
+    // counts. A message that merely mentions a refusal keeps its old classification.
+    test('a non-refusal error whose message mentions "refusal" keeps its old classification', () => {
+      const overloaded = new Error('SDK error_during_execution: overloaded_error after a refusal retry');
+      overloaded.sdkSubtype = 'error_during_execution';
+      overloaded.sdkErrors = ['overloaded_error'];
+      expect(isTransientError(overloaded)).toBe(true);
+
+      const stalled = new Error('SDK timeout after 905.0s idle 900.0s with no streamed activity (idle limit: 900s) - refusal review');
+      expect(isTransientError(stalled)).toBe(true);
+
+      const withStatus = new Error('upstream refusal of the connection'); withStatus.apiErrorStatus = 529;
+      expect(isTransientError(withStatus)).toBe(true);
+
+      expect(isTransientError(new Error('the model_refusal_fallback notice was malformed'))).toBe(false);
+      const unauthorized = new Error('SDK refusal handler: HTTP 401'); unauthorized.apiErrorStatus = 401;
+      expect(isTransientError(unauthorized)).toBe(false);
+    });
   });
 });

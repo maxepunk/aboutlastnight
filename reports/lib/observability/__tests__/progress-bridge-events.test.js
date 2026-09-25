@@ -167,4 +167,14 @@ describe('formatProgressEvent — llm_complete names the served model (brief 2.0
     });
     expect(fell.detailText).toBe('1.0s served=claude-opus-5-5+claude-opus-4-8 refusal-fallback=claude-opus-4-8');
   });
+
+  it('appends a refusal signal that a returned finish followed', () => {
+    const signalled = formatProgressEvent({
+      type: 'llm_complete', elapsed: 3, servedModels: ['claude-opus-5-5'],
+      refusalSignal: { category: 'bio', explanation: null }, refusalFallback: null
+    });
+    expect(signalled.detailText).toBe('3.0s served=claude-opus-5-5 refusal-signal=bio');
+    const noCategory = formatProgressEvent({ type: 'llm_complete', elapsed: 3, refusalSignal: { category: null, explanation: null } });
+    expect(noCategory.detailText).toBe('3.0s refusal-signal=none-given');
+  });
 });

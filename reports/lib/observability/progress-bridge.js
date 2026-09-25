@@ -184,6 +184,7 @@ function formatProgressEvent(msg) {
       if (msg.stopReason && msg.stopReason !== 'end_turn') parts.push(`stop=${msg.stopReason}`);
       if (msg.usage?.output_tokens != null) parts.push(`out=${msg.usage.output_tokens}`);
       if (Array.isArray(msg.servedModels) && msg.servedModels.length) parts.push(`served=${msg.servedModels.join('+')}`);
+      if (msg.refusalSignal) parts.push(`refusal-signal=${msg.refusalSignal.category || 'none-given'}`);
       if (msg.refusalFallback) parts.push(`refusal-fallback=${msg.refusalFallback.fallbackModel}`);
       return {
         icon: PROGRESS_ICONS.llm_complete,

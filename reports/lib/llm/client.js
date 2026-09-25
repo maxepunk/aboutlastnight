@@ -17,7 +17,7 @@
 const crypto = require('crypto');
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('./structured-output-extractor');
-const { SdkRefusalError, createRefusalTracker } = require('./refusal');
+const { SdkRefusalError, createRefusalTracker, isRefusalError } = require('./refusal');
 const { servedModelsOf } = require('./sdk-fields');
 
 // Increase max listeners to support 8 concurrent SDK calls
@@ -309,7 +309,18 @@ async function sdkQueryImpl({
   // memory_paths.auto and the model listed every memory file — editorial notes about
   // ALN reports included — as visible context (2026-09-19). autoMemoryEnabled is a
   // settings.json key, unread here, so the switch is the CLI's env var.
-  options.env = { ...process.env, CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
+  //
+  // Control 3c: no refusal fallback. The bundled CLI retries a declined turn on another
+  // model through built-in routes keyed on the requested model, whether or not
+  // `fallbackModel` is set: for claude-opus-5-5, `bio` and `frontier_llm` go to
+  // claude-opus-5 and `cyber` to claude-opus-4-8. Ruling (integrator, 2026-09-25): a
+  // declined request is never answered by another model, so the routes are off here, and
+  // lib/llm/refusal.js treats a main-thread fallback that still happens as declined.
+  options.env = {
+    ...process.env,
+    CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
+    CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1'
+  };
 
   if (model !== 'haiku') {
     options.betas = ['context-1m-2025-08-07'];
@@ -368,19 +379,36 @@ async function sdkQueryImpl({
     options.outputFormat = { type: 'json_schema', schema: sdkSchema };
   }
 
+  // Declared outside the try so the catch can name a failure that follows a refusal
+  // signal. See lib/llm/refusal.js for every source the tracker reads.
+  const refusals = createRefusalTracker({ model: resolvedModel });
+
+  // A declined request, as a permanent, named error. `cause` is the failure the refusal
+  // names (a schema mismatch, a stall, an iterator throw). `sdkSubtype: 'refusal'` keeps
+  // the catch below from turning it into a timeout if the idle abort races it.
+  const refusalError = (refusal, cause) => {
+    const err = new SdkRefusalError(
+      { ...refusal, model: resolvedModel, label: progressLabel },
+      cause === undefined ? undefined : { cause }
+    );
+    console.error(`[${progressLabel}] ${err.message}`);
+    return err;
+  };
+  const refusalFields = (err) => ({
+    refusal: { category: err.refusalCategory, explanation: err.refusalExplanation },
+    refusalFallback: refusals.fallback()
+  });
+
   try {
     let messageCount = 0;
     let deltaCharCount = 0;   // running streamed-char total for the token-count cue
     let ttftMs = null;        // time-to-first-token (first non-empty delta)
     let lastAssistantError = null;  // e.g. 'authentication_failed' — names the reason on an is_error result
-    const refusals = createRefusalTracker();  // see lib/llm/refusal.js for every source it reads
 
-    // A declined request: one llm_error with the result's envelope plus the refusal, then
-    // a permanent, named error. `sdkSubtype: 'refusal'` also keeps the catch below from
-    // turning it into a timeout if the idle abort races it.
-    const declinedError = (resultMsg, refusal) => {
-      const err = new SdkRefusalError({ ...refusal, model: resolvedModel, label: progressLabel });
-      console.error(`[${progressLabel}] ${err.message}`);
+    // A declined request inside the stream: one llm_error (with the result's envelope
+    // when there is a result) plus the refusal, then the error to throw.
+    const declinedError = (refusal, { resultMsg = null, cause } = {}) => {
+      const err = refusalError(refusal, cause);
       if (onProgress) {
         errorEmitted = true;
         emit({
@@ -389,9 +417,8 @@ async function sdkQueryImpl({
           error: err.message,
           errorName: err.name,
           jsonSchema,
-          ...resultDiagnostics(resultMsg),
-          refusal: { category: err.refusalCategory, explanation: err.refusalExplanation },
-          refusalFallback: refusals.fallback()
+          ...(resultMsg && resultDiagnostics(resultMsg)),
+          ...refusalFields(err)
         });
       }
       return err;
@@ -415,6 +442,15 @@ async function sdkQueryImpl({
       messageCount++;
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       refusals.observe(msg);  // before the stream_event `continue` below: a refusal can arrive on a message_delta
+
+      // The CLI retried a declined turn on another model (its notice, or a frame that
+      // supersedes the refused ones). A declined request is never answered by another
+      // model, so the call ends here, before any more of the fallback's output is read.
+      const fellBack = refusals.declinedFallback();
+      if (fellBack) {
+        clearTimeout(timeoutId);
+        throw declinedError(fellBack);
+      }
 
       // Token-level partial streaming (includePartialMessages). Feed the idle timer
       // (resetIdle already ran above) and forward a coalesce-able llm_delta to the
@@ -465,12 +501,13 @@ async function sdkQueryImpl({
         }
       }
 
-      // The CLI retried a declined turn on another model. The call goes on (see
-      // refusal.js), so say so here; llm_complete records it as refusalFallback.
+      // Only a 'local' fallback gets here (a main-thread one threw above): a subagent or
+      // side question was retried on another model and the main turn goes on. Pipeline
+      // calls run neither, so say so; llm_complete records it as refusalFallback.
       if (msg.type === 'system' && msg.subtype === 'model_refusal_fallback') {
         console.warn(
-          `[${progressLabel}] ${msg.original_model || resolvedModel} declined the request ` +
-          `(category: ${msg.api_refusal_category || 'none given'}); the CLI retried it on ${msg.fallback_model || 'a fallback model'}`
+          `[${progressLabel}] a subagent's declined turn (category: ${msg.api_refusal_category || 'none given'}) ` +
+          `was retried on ${msg.fallback_model || 'a fallback model'} (scope: ${msg.scope}); the call's own turn is unaffected`
         );
       }
 
@@ -589,7 +626,7 @@ async function sdkQueryImpl({
         const declined = refusals.terminalRefusal(msg);
         if (declined) {
           clearTimeout(timeoutId);
-          throw declinedError(msg, declined);
+          throw declinedError(declined, { resultMsg: msg });
         }
       }
 
@@ -659,9 +696,13 @@ async function sdkQueryImpl({
         }
 
         // A refusal signal earlier in the stream, then a clean finish on another stop
-        // reason. If the schema then fails, the refusal is the better name for it.
+        // reason. If the schema then fails, the refusal is the better name for it, and the
+        // schema failure rides along as its cause. If the result is good, it is returned
+        // and llm_complete records the signal as refusalSignal for the call log.
         const pendingRefusal = refusals.pending();
-        if (pendingRefusal && extractionError) throw declinedError(msg, pendingRefusal);
+        if (pendingRefusal && extractionError) {
+          throw declinedError(pendingRefusal, { resultMsg: msg, cause: extractionError });
+        }
         if (pendingRefusal) {
           console.warn(
             `[${progressLabel}] a refusal signal (category: ${pendingRefusal.category || 'none given'}) ` +
@@ -691,6 +732,7 @@ async function sdkQueryImpl({
               jsonSchema,
               channel: outputChannel,
               ...sdkDiagnostics,
+              refusalSignal: pendingRefusal,
               refusalFallback: refusals.fallback()
             });
           }
@@ -768,10 +810,18 @@ async function sdkQueryImpl({
       finalError = error;
     }
 
-    // Close the per-call record on EVERY failure path. Only two sites inside the loop
-    // emit llm_error (an is_error success result, an extraction failure); an idle
-    // abort, error_max_budget_usd, a generic error result, "no result received" and
-    // any iterator throw all land here. Without this emission the per-call log
+    // A refusal signal earlier in the stream names whatever failure followed it: an
+    // iterator throw, "no result received", or an idle abort, which would otherwise
+    // read as a transient `SDK timeout` and be retried. The failure is kept as the cause.
+    const pendingRefusal = refusals.pending();
+    if (pendingRefusal && !isRefusalError(finalError)) {
+      finalError = refusalError(pendingRefusal, finalError);
+    }
+
+    // Close the per-call record on EVERY failure path. Only three sites inside the loop
+    // emit llm_error (a declined request, an is_error success result, an extraction
+    // failure); an idle abort, error_max_budget_usd, a generic error result, "no result
+    // received" and any iterator throw all land here. Without this emission the per-call log
     // (lib/observability/llm-call-log.js) keeps a prompt-only file with no outcome,
     // no index.jsonl line, and a retained in-flight entry holding the full prompt
     // (~250KB for the article call) — once per node-level retry, since each retry
@@ -785,7 +835,8 @@ async function sdkQueryImpl({
           elapsed: (Date.now() - startTime) / 1000,
           error: finalError && finalError.message,
           errorName: finalError && finalError.name,
-          jsonSchema
+          jsonSchema,
+          ...(finalError instanceof SdkRefusalError && refusalFields(finalError))
         });
       } catch { /* the pipeline error below is the one that matters */ }
     }

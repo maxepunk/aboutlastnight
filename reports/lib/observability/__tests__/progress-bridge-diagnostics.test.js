@@ -62,7 +62,8 @@ test('a declined call: the SSE llm_error and the record carry the refusal; the S
 
 test('a completed call: the SSE llm_complete keeps its channel and carries refusalFallback', () => {
   const logger = createProgressFromTrace('generateOutline', 'S2');
-  const fallback = { originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber' };
+  // Only a 'local' fallback (a subagent's) can reach a completed call; a main-thread one declines it.
+  const fallback = { originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber', scope: 'local' };
   logger({ type: 'llm_start', callId: CALL, model: 'opus', prompt: 'P' });
   logger({ type: 'llm_complete', callId: CALL, elapsed: 2, result: { a: 1 }, channel: 'structured_output', refusalFallback: fallback });
 
@@ -70,6 +71,27 @@ test('a completed call: the SSE llm_complete keeps its channel and carries refus
   expect(sse.diagnostics.channel).toBe('structured_output');
   expect(sse.diagnostics.refusalFallback).toEqual(fallback);
   expect(readRecord('S2').diagnostics.refusalFallback).toEqual(fallback);
+});
+
+test('a completed call that a refusal signal preceded: refusalSignal reaches the SSE envelope and the record', () => {
+  const logger = createProgressFromTrace('generateOutline', 'S4');
+  const signal = { category: 'bio', explanation: 'May relate to biological harm.' };
+  logger({ type: 'llm_start', callId: CALL, model: 'opus', prompt: 'P' });
+  logger({ type: 'llm_complete', callId: CALL, elapsed: 2, result: { a: 1 }, channel: 'structured_output', refusalSignal: signal, refusalFallback: null });
+
+  expect(emitted.find((e) => e.type === 'llm_complete').diagnostics.refusalSignal).toEqual(signal);
+  const record = readRecord('S4');
+  expect(record.outcome).toBe('complete');
+  expect(record.diagnostics.refusalSignal).toEqual(signal);
+  expect(record.diagnostics.refusal).toBeNull();
+});
+
+test('a declined call: the SSE llm_error and the record carry refusalSignal as null', () => {
+  const logger = createProgressFromTrace('generateCoreArcs', 'S5');
+  logger({ type: 'llm_start', callId: CALL, model: 'opus', prompt: 'P' });
+  logger({ type: 'llm_error', callId: CALL, elapsed: 1, error: 'SDK refusal (category: bio): x declined the request', errorName: 'SdkRefusalError', refusal: { category: 'bio', explanation: null } });
+  expect(emitted.find((e) => e.type === 'llm_error').diagnostics.refusalSignal).toBeNull();
+  expect(readRecord('S5').diagnostics.refusalSignal).toBeNull();
 });
 
 test('the served model reaches the SSE envelope, the record and the index line', () => {

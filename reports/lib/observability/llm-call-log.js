@@ -103,7 +103,12 @@ function diagnosticsOf(msg) {
     servedModels: msg.servedModels ?? null,
     // A declined request: {category, explanation} (lib/llm/refusal.js).
     refusal: msg.refusal ?? null,
-    // The CLI retried a declined turn on another model: {originalModel, fallbackModel, category}.
+    // A refusal signal that a clean, returned finish followed (llm_complete only):
+    // {category, explanation}. The call succeeded, but the model declined something on the way.
+    refusalSignal: msg.refusalSignal ?? null,
+    // The CLI retried a declined turn on another model: {originalModel, fallbackModel,
+    // category, scope}. On an llm_error it is the fallback that declined the call; on an
+    // llm_complete only a 'local' one (a subagent's) can appear.
     refusalFallback: msg.refusalFallback ?? null
   };
 }
