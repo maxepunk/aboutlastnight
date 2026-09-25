@@ -31,12 +31,28 @@ describe('client onProgress forward — api_retry', () => {
 describe('client onProgress forward — init & status', () => {
   afterEach(() => clearMockQuery());
 
-  it('forwards init model/betas/toolCount/permissionMode', async () => {
+  it('forwards init model/betas/toolCount/toolNames/permissionMode', async () => {
     const events = await captureForward([
       { type: 'system', subtype: 'init', model: 'claude-opus-4-8', betas: ['context-1m-2025-08-07'], tools: ['Read', 'Write', 'Bash'], permissionMode: 'bypassPermissions' }
     ]);
     const init = events.find(e => e.subtype === 'init');
-    expect(init.init).toEqual({ model: 'claude-opus-4-8', betas: ['context-1m-2025-08-07'], toolCount: 3, permissionMode: 'bypassPermissions' });
+    expect(init.init).toEqual({
+      model: 'claude-opus-4-8', betas: ['context-1m-2025-08-07'],
+      toolCount: 3, toolNames: ['Read', 'Write', 'Bash'], permissionMode: 'bypassPermissions'
+    });
+  });
+
+  // A leaked tool set should say which tools leaked (an MCP server shows by its prefix).
+  it('forwards the tool names beside the count, and leaves both undefined when init lists no tools', async () => {
+    const leaked = await captureForward([
+      { type: 'system', subtype: 'init', model: 'claude-opus-5-5', tools: ['Read', 'mcp__gmail__send'], permissionMode: 'bypassPermissions' }
+    ]);
+    expect(leaked.find(e => e.subtype === 'init').init.toolNames).toEqual(['Read', 'mcp__gmail__send']);
+
+    const none = await captureForward([{ type: 'system', subtype: 'init', model: 'claude-opus-5-5' }]);
+    const init = none.find(e => e.subtype === 'init').init;
+    expect(init.toolNames).toBeUndefined();
+    expect(init.toolCount).toBeUndefined();
   });
 
   // Brief 2.0: the gate reads memory paths and the applied effort off init. Neither is

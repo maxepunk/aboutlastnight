@@ -57,6 +57,20 @@ describe('isolationVerdict', () => {
     const verdict = isolationVerdict({ ...good, inits: [{ toolCount: 5 }, { toolCount: 5 }] });
     expect(verdict.failures.filter((f) => /5 tools/.test(f))).toHaveLength(1);
   });
+
+  test('a failure on the tool count names the tools, capped for a large leak', () => {
+    const three = isolationVerdict({ ...good, inits: [{ toolCount: 3, toolNames: ['Read', 'Bash', 'mcp__gmail__send'] }] });
+    expect(three.failures).toContain('init reported 3 tools (a pipeline call has 0 or 1): Read, Bash, mcp__gmail__send');
+
+    const names = Array.from({ length: 103 }, (_, i) => `mcp__srv__tool${i}`);
+    const big = isolationVerdict({ ...good, inits: [{ toolCount: 103, toolNames: names }] });
+    const line = big.failures.find((f) => /103 tools/.test(f));
+    expect(line).toMatch(/: mcp__srv__tool0, .*mcp__srv__tool24 and 78 more$/);
+    expect(line).not.toMatch(/tool25\b/);
+
+    // One allowed tool is not a failure, so its name is not printed.
+    expect(isolationVerdict({ ...good, inits: [{ toolCount: 1, toolNames: ['Read'] }] }).ok).toBe(true);
+  });
 });
 
 describe('channelVerdict', () => {
@@ -94,6 +108,7 @@ describe('scripts/probe-sdk-isolation.js through the wrapper', () => {
     expect(options().strictMcpConfig).toBe(true);
     expect(options().settingSources).toEqual([]);
     expect(options().env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe('1');
+    expect(options().env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK).toBe('1');
     expect(options().thinking).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 
@@ -110,7 +125,7 @@ describe('scripts/probe-sdk-isolation.js through the wrapper', () => {
     const { verdict } = await probeOne('opus', { sdkQuery: sdkQueryImpl, modelIds: MODEL_IDS });
     const text = verdict.failures.join('\n');
     expect(verdict.ok).toBe(false);
-    expect(text).toMatch(/3 tools/);
+    expect(text).toMatch(/3 tools \(a pipeline call has 0 or 1\): Read, Bash, mcp__gmail__send/);
     expect(text).toMatch(/memory loaded/);
     expect(text).toMatch(/no readable thinking/);
     expect(text).toMatch(/served by claude-opus-4-8, not claude-opus-5-5/);
@@ -147,6 +162,7 @@ describe('scripts/check-model-freshness.js through the wrapper', () => {
     expect(options().strictMcpConfig).toBe(true);
     expect(options().settingSources).toEqual([]);
     expect(options().env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe('1');
+    expect(options().env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK).toBe('1');
     expect(options().tools).toEqual([]);
   });
 
@@ -154,6 +170,18 @@ describe('scripts/check-model-freshness.js through the wrapper', () => {
     stream('claude-opus-4-8', { 'claude-opus-4-8': {} });
     expect((await checkModel('opus', 'claude-opus-5-5', { sdkQuery: sdkQueryImpl })).ok).toBe(false);
     stream('claude-opus-5-5', { 'claude-opus-4-8': {} });
+    expect((await checkModel('opus', 'claude-opus-5-5', { sdkQuery: sdkQueryImpl })).ok).toBe(false);
+    stream('claude-opus-4-8', { 'claude-opus-5-5': {} });
+    expect((await checkModel('opus', 'claude-opus-5-5', { sdkQuery: sdkQueryImpl })).ok).toBe(false);
+  });
+
+  // The init model goes through servedModelMatches, as the served model does.
+  test('tolerates a [1m] or dated suffix on the init model, as on the served model', async () => {
+    stream('claude-opus-5-5[1m]', { 'claude-opus-5-5[1m]': {} });
+    expect((await checkModel('opus', 'claude-opus-5-5', { sdkQuery: sdkQueryImpl })).ok).toBe(true);
+    stream('claude-haiku-4-5-20251001', { 'claude-haiku-4-5-20251001': {} });
+    expect((await checkModel('haiku', 'claude-haiku-4-5', { sdkQuery: sdkQueryImpl })).ok).toBe(true);
+    stream('claude-opus-5-5-lite', { 'claude-opus-5-5': {} });
     expect((await checkModel('opus', 'claude-opus-5-5', { sdkQuery: sdkQueryImpl })).ok).toBe(false);
   });
 });

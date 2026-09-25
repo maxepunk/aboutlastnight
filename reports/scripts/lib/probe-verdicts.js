@@ -28,13 +28,27 @@ function servedModelMatches(served, pinned) {
   return base === pinned || (base.startsWith(`${pinned}-`) && /^\d{8}$/.test(base.slice(pinned.length + 1)));
 }
 
+// A leaked tool set can run to a hundred MCP tools; the first names say which servers leaked.
+const MAX_TOOL_NAMES = 25;
+
+/**
+ * @param {string[]|undefined} names - init.toolNames as forwarded
+ * @returns {string} ': a, b, c' (capped), or '' when the init named none
+ */
+function toolNameList(names) {
+  if (!Array.isArray(names) || names.length === 0) return '';
+  const shown = names.slice(0, MAX_TOOL_NAMES).join(', ');
+  const more = names.length > MAX_TOOL_NAMES ? ` and ${names.length - MAX_TOOL_NAMES} more` : '';
+  return `: ${shown}${more}`;
+}
+
 /**
  * The isolation probe's verdict for one pipeline-shaped call.
  *
  * Fails when: the call failed; no init frame arrived (nothing verified); an init reports
- * more than one tool, or does not report its tools; any memory path loaded; no readable
- * thinking text streamed on Opus or Sonnet; the result named no served model; or any
- * served model is not the pinned id.
+ * more than one tool (the failure names them), or does not report its tools; any memory
+ * path loaded; no readable thinking text streamed on Opus or Sonnet; the result named no
+ * served model; or any served model is not the pinned id.
  *
  * @param {Object} obs
  * @param {string} obs.alias - 'opus' | 'sonnet' | 'haiku'
@@ -51,7 +65,9 @@ function isolationVerdict({ alias, pinnedId, inits = [], thinkingChars = 0, serv
   if (inits.length === 0) failures.add('no init frame arrived, so the tool count and memory paths are unverified');
   for (const init of inits) {
     if (typeof init.toolCount !== 'number') failures.add('an init frame did not report its tools');
-    else if (init.toolCount > 1) failures.add(`init reported ${init.toolCount} tools (a pipeline call has 0 or 1)`);
+    else if (init.toolCount > 1) {
+      failures.add(`init reported ${init.toolCount} tools (a pipeline call has 0 or 1)${toolNameList(init.toolNames)}`);
+    }
     if (hasMemoryPaths(init.memoryPaths)) failures.add(`memory loaded into the call: ${JSON.stringify(init.memoryPaths)}`);
   }
   if (THINKING_ALIASES.has(alias) && !(thinkingChars > 0)) {

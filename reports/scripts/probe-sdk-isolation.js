@@ -4,11 +4,11 @@
  * LIVE: makes one pipeline-shaped model call per alias through the wrapper
  * (lib/llm/client.js sdkQueryImpl), so every option the pipeline sends is the one under
  * test: isolation (mcpServers {}, strictMcpConfig, settingSources [], the env with
- * CLAUDE_CODE_DISABLE_AUTO_MEMORY), tools, effort, thinking display, betas and the
- * pinned model id.
+ * CLAUDE_CODE_DISABLE_AUTO_MEMORY and CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK), tools,
+ * effort, thinking display, betas and the pinned model id.
  *
  * Exits non-zero when any call (see scripts/lib/probe-verdicts.js isolationVerdict):
- *   - reports more than one tool at init (or no init at all);
+ *   - reports more than one tool at init (or no init at all), printing the tool names;
  *   - loads any memory path;
  *   - streams no readable thinking text (Opus and Sonnet);
  *   - is served by anything other than the pinned id (result modelUsage);

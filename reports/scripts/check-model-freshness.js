@@ -8,7 +8,8 @@
  * LIVE: one short call per MODEL_IDS entry. Each call goes through the wrapper
  * (sdkQueryImpl), so it carries exactly the options every pipeline call does:
  * the isolation options (mcpServers {}, strictMcpConfig, settingSources [], the env
- * with CLAUDE_CODE_DISABLE_AUTO_MEMORY), no tools, the betas, thinking and effort.
+ * with CLAUDE_CODE_DISABLE_AUTO_MEMORY and CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK), no
+ * tools, the betas, thinking and effort.
  * Before phase 2 it called the SDK directly without the isolation options.
  *
  * For each alias it reports the model init names and the model(s) the result's
@@ -46,8 +47,10 @@ async function checkModel(alias, expectedId, { sdkQuery }) {
   } catch (err) {
     out.error = err && err.message ? err.message : String(err);
   }
+  // The init model and the served models go through the same comparison, so a
+  // `[1m]` context suffix or a dated snapshot suffix passes on either.
   out.ok = !out.error &&
-    out.initModel === expectedId &&
+    servedModelMatches(out.initModel, expectedId) &&
     Array.isArray(out.servedModels) && out.servedModels.length > 0 &&
     out.servedModels.every((m) => servedModelMatches(m, expectedId));
   return out;

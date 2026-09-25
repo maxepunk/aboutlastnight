@@ -587,11 +587,14 @@ async function sdkQueryImpl({
           // Not in the 0.3.282 public types, so it is forwarded raw and absent is normal.
           // effort: the applied effort (0.3.234); the types document it for Remote Control
           // init frames only, so it may be absent on query() calls.
+          // toolNames: the names behind toolCount (`tools: string[]`), so a leaked tool set
+          // says which tools leaked, not only how many.
           ...(msg.subtype === 'init' && {
             init: {
               model: msg.model,
               betas: msg.betas,
               toolCount: Array.isArray(msg.tools) ? msg.tools.length : undefined,
+              toolNames: Array.isArray(msg.tools) ? msg.tools.map(String) : undefined,
               permissionMode: msg.permissionMode,
               effort: msg.effort,
               memoryPaths: msg.memory_paths
