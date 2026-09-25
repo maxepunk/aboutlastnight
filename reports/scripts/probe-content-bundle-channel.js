@@ -11,6 +11,11 @@
  * the real content-bundle schema. Bypasses the LangGraph runtime so we
  * don't need to re-run upstream nodes.
  *
+ * Evidence: the session's memory tokens AND paper documents (fetched/tokens.json
+ * `{ tokens }`, fetched/paper-evidence.json `{ evidence }`), packaged by the pipeline's
+ * own buildArcEvidencePackages, so the prompt carries what the real article writer gets.
+ * Until 2026-09-25 the probe misread the paper file's shape and sent no paper documents.
+ *
  * Output: the full diagnostic envelope, regardless of success or failure.
  *
  * Exit code (phase 2 brief 2.0 gate): 0 only when the structured output arrived
@@ -39,44 +44,131 @@ const REQUIRED_FILES = [
   'fetched/paper-evidence.json'
 ];
 
-function loadJson(file) {
-  return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
+function loadJson(dataDir, file) {
+  return JSON.parse(fs.readFileSync(path.join(dataDir, file), 'utf8'));
 }
 
-async function main() {
-  // Loaded here, not at the top: requiring the probe must not load the SDK.
-  const { sdkQuery } = require('../lib/llm');
+/**
+ * The token list in fetched/tokens.json. fetchMemoryTokens writes
+ * `{ tokens, fetchedAt, totalCount }`; a bare array is an older shape.
+ *
+ * @param {Object|Array} file - the parsed file
+ * @returns {Object[]}
+ * @throws when the file holds no token list (a silent empty list hid the paper bug)
+ */
+function tokensOf(file) {
+  if (Array.isArray(file)) return file;
+  if (file && Array.isArray(file.tokens)) return file.tokens;
+  throw new Error('fetched/tokens.json holds no token list (expected { tokens: [...] } or an array)');
+}
+
+/**
+ * The paper documents in fetched/paper-evidence.json. fetchPaperEvidence writes
+ * `{ evidence, fetchedAt, totalCount }` (092026 has 42 under `evidence`); a bare array,
+ * `items` and `paperEvidence` are older shapes. Before this reader the probe looked only
+ * at the older shapes and loaded 0 paper documents from every current session.
+ *
+ * @param {Object|Array} file - the parsed file
+ * @returns {Object[]}
+ * @throws when the file holds no evidence list
+ */
+function paperEvidenceOf(file) {
+  if (Array.isArray(file)) return file;
+  for (const key of ['evidence', 'items', 'paperEvidence']) {
+    if (file && Array.isArray(file[key])) return file[key];
+  }
+  throw new Error('fetched/paper-evidence.json holds no evidence list (expected { evidence: [...] } or an array)');
+}
+
+/**
+ * A session's saved inputs, read-only.
+ *
+ * @param {string} dataDir - data/<sessionId>
+ * @returns {{sessionConfig: Object, directorNotes: Object, tokens: Object[], paperEvidence: Object[]}}
+ */
+function loadSession(dataDir) {
+  return {
+    sessionConfig: loadJson(dataDir, 'inputs/session-config.json'),
+    directorNotes: loadJson(dataDir, 'inputs/director-notes.json'),
+    tokens: tokensOf(loadJson(dataDir, 'fetched/tokens.json')),
+    paperEvidence: paperEvidenceOf(loadJson(dataDir, 'fetched/paper-evidence.json'))
+  };
+}
+
+// Five synthetic arcs with the evidence counts of the 050926 call this probe was built
+// to reproduce, so the prompt size is in the same range.
+const ARC_NAMES = [
+  "The Marcus Problem: Vic and Morgan's Convergent Interests",
+  "Sarah's Coronation: The Quietest Person in the Room",
+  "Marcus's Stolen Empire: Convergent Victims",
+  "The Black Market Confessional: Named Accounts, Performed Innocence",
+  "Remi's Engineered Exposure: The Cleanest Operator in the Room"
+];
+const ITEMS_PER_ARC = [13, 11, 21, 16, 12];
+
+/**
+ * The probe's arc evidence packages, shaped by the pipeline's own packaging node
+ * (buildArcEvidencePackages), so every item is what the real article writer gets: a
+ * memory token as `memory`, a paper document as `paper`, each with its owner, its full
+ * text and its quotable excerpts. The evidence is drawn from one pool that alternates
+ * paper documents and tokens (the 092026 article prompt carried 24 paper documents and 15
+ * tokens), skipping items with no text, and wraps when an arc asks for more than the
+ * pool holds.
+ *
+ * @param {{tokens: Object[], paperEvidence: Object[], roster: string[]}} session
+ * @returns {Promise<Object[]>} arcEvidencePackages
+ */
+async function buildProbePackages({ tokens, paperEvidence, roster }) {
+  // Loaded here, not at the top: requiring the probe must not load the pipeline.
+  const { buildArcEvidencePackages } = require('../lib/workflow/nodes/ai-nodes');
+  const { extractFullContent } = require('../lib/workflow/nodes/node-helpers');
+
+  // The id the packaging node looks each item up by (ai-nodes.js buildArcEvidencePackages).
+  const withText = (items, idOf) => items
+    .filter((item) => extractFullContent(item).length > 0)
+    .map((item) => idOf(item))
+    .filter(Boolean);
+  const paperIds = withText(paperEvidence, (p) => p.notionId || p.id || p.pageId || p.name);
+  const tokenIds = withText(tokens, (t) => t.tokenId || t.id);
+  const pool = [];
+  for (let i = 0; i < Math.max(paperIds.length, tokenIds.length); i++) {
+    if (i < paperIds.length) pool.push(paperIds[i]);
+    if (i < tokenIds.length) pool.push(tokenIds[i]);
+  }
+  if (pool.length === 0) throw new Error('the session has no memory token or paper document with any text');
+
+  let next = 0;
+  const narrativeArcs = ARC_NAMES.map((title, arcIdx) => ({
+    id: `arc-${arcIdx}`,
+    title,
+    characterPlacements: {},
+    keyEvidence: Array.from({ length: ITEMS_PER_ARC[arcIdx] }, () => pool[next++ % pool.length])
+  }));
+
+  const { arcEvidencePackages } = await buildArcEvidencePackages({
+    selectedArcs: narrativeArcs.map((arc) => arc.id),
+    narrativeArcs,
+    evidenceBundle: { exposed: { tokens, paperEvidence } },
+    photoAnalyses: { analyses: [] }
+  }, {});
+
+  return arcEvidencePackages.map((pkg, arcIdx) => ({
+    ...pkg,
+    photos: [
+      { filename: `aln0509 (${arcIdx + 1} of 10).jpg`, characters: roster.slice(0, 3) }
+    ]
+  }));
+}
+
+/**
+ * The article-generation prompt the probe sends, built the way generateContentBundle
+ * builds it, from a session's saved inputs, synthetic arcs and a synthetic outline.
+ *
+ * @param {{sessionId: string, sessionConfig: Object, directorNotes: Object, tokens: Object[], paperEvidence: Object[]}} session
+ * @returns {Promise<{systemPrompt: string, userPrompt: string, arcEvidencePackages: Object[]}>}
+ */
+async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, tokens, paperEvidence }) {
   const { createPromptBuilder } = require('../lib/prompt-builder');
-  const contentBundleSchema = require('../lib/schemas/content-bundle.schema.json');
-
-  // Verify session data exists before doing any work. The probe needs a real
-  // session's inputs to build a representative prompt; failing fast with a
-  // useful message beats crashing inside loadJson with ENOENT.
-  if (!fs.existsSync(DATA_DIR)) {
-    console.error(`Session data not found at ${DATA_DIR}`);
-    console.error(`Set PROBE_SESSION_ID=<session> to use a different session, or`);
-    console.error(`run a session to completion first to populate inputs/ and fetched/.`);
-    process.exit(1);
-  }
-  const missing = REQUIRED_FILES.filter(f => !fs.existsSync(path.join(DATA_DIR, f)));
-  if (missing.length > 0) {
-    console.error(`Session ${SESSION_ID} is missing required files:`);
-    missing.forEach(f => console.error(`  - ${f}`));
-    console.error(`The probe needs a session that has at least reached the curation phase.`);
-    process.exit(1);
-  }
-
-  console.log(`Probing generateContentBundle channel choice with session ${SESSION_ID} inputs...\n`);
-
-  // Load saved session inputs
-  const sessionConfig = loadJson('inputs/session-config.json');
-  const directorNotes = loadJson('inputs/director-notes.json');
-  const tokensFile = loadJson('fetched/tokens.json');
-  const paperFile = loadJson('fetched/paper-evidence.json');
-  const tokens = Array.isArray(tokensFile) ? tokensFile : (tokensFile.tokens || []);
-  const paperEvidence = Array.isArray(paperFile) ? paperFile : (paperFile.items || paperFile.paperEvidence || []);
-
-  console.log(`Loaded: ${tokens.length} tokens, ${paperEvidence.length} paper items, roster=${sessionConfig.roster.length}`);
 
   // Build canonicalCharacters map (name → name for roster members)
   const canonicalCharacters = {};
@@ -84,46 +176,13 @@ async function main() {
     canonicalCharacters[name] = name;
   }
 
-  // Build representative arcEvidencePackages — 5 arcs, each with 8-15 evidence items
-  // drawn from real tokens so prompt size is in the same range as the failed call.
-  // Each item carries fullContent so the prompt's "QUOTABLE EXCERPTS" + "FULL EVIDENCE" sections fill out.
-  const arcNames = [
-    "The Marcus Problem: Vic and Morgan's Convergent Interests",
-    "Sarah's Coronation: The Quietest Person in the Room",
-    "Marcus's Stolen Empire: Convergent Victims",
-    "The Black Market Confessional: Named Accounts, Performed Innocence",
-    "Remi's Engineered Exposure: The Cleanest Operator in the Room"
-  ];
-
-  const itemsPerArc = [13, 11, 21, 16, 12]; // matches the real failed call
-  let tokenIdx = 0;
-  const arcEvidencePackages = arcNames.map((arcTitle, arcIdx) => {
-    const count = itemsPerArc[arcIdx];
-    const items = [];
-    for (let i = 0; i < count && tokenIdx < tokens.length; i++, tokenIdx = (tokenIdx + 1) % tokens.length) {
-      const t = tokens[tokenIdx];
-      items.push({
-        id: t.id || t.tokenId,
-        type: 'memory-token',
-        fullContent: t.fullDescription || t.description || t.summary || '',
-        summary: t.summary || '',
-        quotableExcerpts: []
-      });
-    }
-    return {
-      arcId: `arc-${arcIdx}`,
-      arcTitle,
-      evidenceItems: items,
-      photos: [
-        { filename: `aln0509 (${arcIdx + 1} of 10).jpg`, characters: sessionConfig.roster.slice(0, 3) }
-      ]
-    };
-  });
+  const arcEvidencePackages = await buildProbePackages({ tokens, paperEvidence, roster: sessionConfig.roster });
+  const arcNames = ARC_NAMES;
 
   // Synthetic outline matching the real one's shape (the user's edited version was ~17KB).
   // We need similar prompt size and structure to trigger the same conditions.
   const outline = {
-    metadata: { sessionId: SESSION_ID, theme: 'journalist' },
+    metadata: { sessionId, theme: 'journalist' },
     lede: {
       hook: 'Eight people walked into that warehouse last night with a name on their lips. Marcus Blackwood.',
       keyTension: 'The accusation that started the investigation landed on Vic. The verdict landed somewhere else entirely.',
@@ -216,6 +275,42 @@ async function main() {
     null
   );
 
+  return { systemPrompt, userPrompt, arcEvidencePackages };
+}
+
+async function main() {
+  // Loaded here, not at the top: requiring the probe must not load the SDK.
+  const { sdkQuery } = require('../lib/llm');
+  const contentBundleSchema = require('../lib/schemas/content-bundle.schema.json');
+
+  // Verify session data exists before doing any work. The probe needs a real
+  // session's inputs to build a representative prompt; failing fast with a
+  // useful message beats crashing inside loadJson with ENOENT.
+  if (!fs.existsSync(DATA_DIR)) {
+    console.error(`Session data not found at ${DATA_DIR}`);
+    console.error(`Set PROBE_SESSION_ID=<session> to use a different session, or`);
+    console.error(`run a session to completion first to populate inputs/ and fetched/.`);
+    process.exit(1);
+  }
+  const missing = REQUIRED_FILES.filter(f => !fs.existsSync(path.join(DATA_DIR, f)));
+  if (missing.length > 0) {
+    console.error(`Session ${SESSION_ID} is missing required files:`);
+    missing.forEach(f => console.error(`  - ${f}`));
+    console.error(`The probe needs a session that has at least reached the curation phase.`);
+    process.exit(1);
+  }
+
+  console.log(`Probing generateContentBundle channel choice with session ${SESSION_ID} inputs...\n`);
+
+  // Load saved session inputs
+  const session = loadSession(DATA_DIR);
+  console.log(`Loaded: ${session.tokens.length} tokens, ${session.paperEvidence.length} paper items, roster=${session.sessionConfig.roster.length}`);
+
+  const { systemPrompt, userPrompt, arcEvidencePackages } = await buildProbePrompt({ sessionId: SESSION_ID, ...session });
+  const packaged = arcEvidencePackages.flatMap((pkg) => pkg.evidenceItems || []);
+  console.log(`Packaged: ${packaged.filter((i) => i.type === 'paper').length} paper documents and ` +
+    `${packaged.filter((i) => i.type === 'memory').length} memory tokens across ${arcEvidencePackages.length} arcs`);
+
   console.log(`\nBuilt prompt: system=${systemPrompt.length} chars, user=${userPrompt.length} chars\n`);
 
   // Make the call with new instrumentation watching
@@ -284,4 +379,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = { main, tokensOf, paperEvidenceOf, loadSession, buildProbePackages, buildProbePrompt, ARC_NAMES, ITEMS_PER_ARC };
