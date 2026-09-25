@@ -592,6 +592,30 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
     expect(errEvents[0].errorName).toBe('SdkRefusalError');
   });
 
+  // Round 2 item 4: the declined llm_error keeps the extraction failure's schemaErrors,
+  // as the plain extraction-failure llm_error does.
+  test('a refusal that names an extraction failure carries its schemaErrors on the llm_error', async () => {
+    const { thrown, events } = await run([
+      refusedFrame('bio'),
+      { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: '{"ok":"yes"}' }
+    ], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+    expect(thrown.cause).toBeInstanceOf(StructuredOutputExtractionError);
+    expect(thrown.cause.schemaErrors.length).toBeGreaterThan(0);
+
+    const errEvents = events.filter((e) => e.type === 'llm_error');
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].schemaErrors).toEqual(thrown.cause.schemaErrors);
+    expect(errEvents[0].schemaErrors.some((e) => e.instancePath === '/ok')).toBe(true);
+  });
+
+  test('a refusal with no extraction failure carries schemaErrors as null', async () => {
+    const { events } = await run([refusedFrame('bio'), refusedResult()], { jsonSchema: SIMPLE_SCHEMA });
+    const errEvents = events.filter((e) => e.type === 'llm_error');
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].schemaErrors).toBeNull();
+  });
+
   test('a refusal signal followed by a clean, schema-valid finish returns the result and records refusalSignal', async () => {
     const { thrown, value, events } = await run([
       refusedFrame('bio'),

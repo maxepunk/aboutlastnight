@@ -417,7 +417,10 @@ async function sdkQueryImpl({
     let lastAssistantError = null;  // e.g. 'authentication_failed' — names the reason on an is_error result
 
     // A declined request inside the stream: one llm_error (with the result's envelope
-    // when there is a result) plus the refusal, then the error to throw.
+    // when there is a result) plus the refusal, then the error to throw. When the refusal
+    // names an extraction failure, the llm_error keeps that failure's schemaErrors, as the
+    // plain extraction-failure llm_error does, so the call log still shows what the
+    // output got wrong.
     const declinedError = (refusal, { resultMsg = null, cause } = {}) => {
       const err = refusalError(refusal, cause);
       if (onProgress) {
@@ -427,6 +430,7 @@ async function sdkQueryImpl({
           elapsed: (Date.now() - startTime) / 1000,
           error: err.message,
           errorName: err.name,
+          schemaErrors: cause?.schemaErrors ?? null,
           jsonSchema,
           ...(resultMsg && resultDiagnostics(resultMsg)),
           ...refusalFields(err)
