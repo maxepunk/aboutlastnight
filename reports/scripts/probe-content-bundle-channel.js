@@ -11,20 +11,26 @@
  * the real content-bundle schema. Bypasses the LangGraph runtime so we
  * don't need to re-run upstream nodes.
  *
- * Output: a single line with the full diagnostic envelope, regardless of
- * success or failure.
+ * Output: the full diagnostic envelope, regardless of success or failure.
+ *
+ * Exit code (phase 2 brief 2.0 gate): 0 only when the structured output arrived
+ * through the SDK channel; 1 on the text fallback, on a failed call, and on missing
+ * session data (scripts/lib/probe-verdicts.js channelVerdict).
  *
  * Usage: node scripts/probe-content-bundle-channel.js
+ *   PROBE_SESSION_ID=092026   the session whose saved inputs build the prompt (default 050926)
+ *   PROBE_DATA_ROOT=<dir>     where session folders live (default reports/data); lets a
+ *                             worktree without data/ read the main checkout's, read-only
+ *
+ * Requiring this file makes no call (require.main guard).
  */
 
 const fs = require('fs');
 const path = require('path');
-const { sdkQuery } = require('../lib/llm');
-const { createPromptBuilder } = require('../lib/prompt-builder');
-const contentBundleSchema = require('../lib/schemas/content-bundle.schema.json');
+const { channelVerdict } = require('./lib/probe-verdicts');
 
 const SESSION_ID = process.env.PROBE_SESSION_ID || '050926';
-const DATA_DIR = path.join(__dirname, '..', 'data', SESSION_ID);
+const DATA_DIR = path.join(process.env.PROBE_DATA_ROOT || path.join(__dirname, '..', 'data'), SESSION_ID);
 
 const REQUIRED_FILES = [
   'inputs/session-config.json',
@@ -37,7 +43,12 @@ function loadJson(file) {
   return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
 }
 
-(async function main() {
+async function main() {
+  // Loaded here, not at the top: requiring the probe must not load the SDK.
+  const { sdkQuery } = require('../lib/llm');
+  const { createPromptBuilder } = require('../lib/prompt-builder');
+  const contentBundleSchema = require('../lib/schemas/content-bundle.schema.json');
+
   // Verify session data exists before doing any work. The probe needs a real
   // session's inputs to build a representative prompt; failing fast with a
   // useful message beats crashing inside loadJson with ENOENT.
@@ -209,6 +220,7 @@ function loadJson(file) {
 
   // Make the call with new instrumentation watching
   let captured = null;
+  let probeError = null;
   try {
     const result = await sdkQuery({
       prompt: userPrompt,
@@ -232,8 +244,10 @@ function loadJson(file) {
     console.log(`structuredOutputPresent: ${captured?.structuredOutputPresent}`);
     console.log(`resultTextLength: ${captured?.resultTextLength}`);
     console.log(`terminalReason: ${captured?.terminalReason}`);
+    console.log(`servedModels: ${JSON.stringify(captured?.servedModels ?? null)}`);
     console.log(`output keys: ${Object.keys(result).join(', ')}`);
   } catch (err) {
+    probeError = err.message || String(err);
     console.log('\n=== EXTRACTION FAILURE (Phase 3 target case) ===');
     console.log(`error: ${err.message?.slice(0, 200)}`);
     console.log(`errorName: ${err.name}`);
@@ -257,7 +271,17 @@ function loadJson(file) {
       console.log(`\nFirst 500 chars of model output:\n${err.lastText.slice(0, 500)}`);
     }
   }
-})().catch(err => {
-  console.error('Probe crashed:', err);
-  process.exit(1);
-});
+
+  const verdict = channelVerdict({ channel: captured?.channel ?? null, error: probeError });
+  console.log(`\n${verdict.ok ? 'PASS' : 'FAIL'}: ${verdict.ok ? 'structured output arrived through the SDK channel' : verdict.failures.join('; ')}`);
+  process.exitCode = verdict.ok ? 0 : 1;
+}
+
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Probe crashed:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { main };
