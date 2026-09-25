@@ -447,7 +447,7 @@ function createConsoleAndSseLogger(context, sessionId) {
       const textLen = `resultTextLength=${msg.resultTextLength}`;
       const tokens = msg.usage?.output_tokens != null ? `out=${msg.usage.output_tokens}` : '';
       const summary = [apiSec, stop, sop, textLen, tokens].filter(Boolean).join(' ');
-      const what = msg.refusal ? 'Declined' : 'Extraction failed';
+      const what = msg.refusal ? 'Declined' : msg.errorName === 'StructuredOutputExtractionError' ? 'Extraction failed' : 'Model call failed';
       console.log(`[${context}] [${msg.elapsed?.toFixed(1) || '?'}s ${summary}] ${PROGRESS_ICONS.error} ${what}: ${msg.error}`);
 
       if (sessionId) {
