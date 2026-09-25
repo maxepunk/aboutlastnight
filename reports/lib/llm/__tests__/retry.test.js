@@ -9,12 +9,13 @@ describe('isTransientError', () => {
       expect(isTransientError(new Error('SDK timeout after 905.0s (limit: 900s) - analyzeArcs'))).toBe(true);
     });
 
-    test.each([429, 500, 503, 529])('apiErrorStatus %i', (status) => {
+    // Round 3: every 5xx, not only the four listed before; 502 and 504 were permanent.
+    test.each([429, 500, 502, 503, 504, 529])('apiErrorStatus %i', (status) => {
       const err = new Error('upstream'); err.apiErrorStatus = status;
       expect(isTransientError(err)).toBe(true);
     });
 
-    test.each([429, 500, 503, 529])('status %i', (status) => {
+    test.each([429, 500, 502, 503, 504, 529])('status %i', (status) => {
       const err = new Error('upstream'); err.status = status;
       expect(isTransientError(err)).toBe(true);
     });
@@ -81,8 +82,18 @@ describe('isTransientError', () => {
       expect(isTransientError(wrapperError('overloaded', null, 'API Error: Overloaded'))).toBe(true);
     });
 
+    // Round 3: the numeric-status check returns before the assistant-error check, so a
+    // gateway 5xx the CLI reported with its status was permanent.
+    test.each([502, 504])('a server_error result with HTTP %i is transient', (status) => {
+      expect(isTransientError(wrapperError('server_error', status, `API Error: ${status} Bad Gateway`))).toBe(true);
+    });
+
     test('an explicit permanent status still wins over the assistant error', () => {
       expect(isTransientError(wrapperError('server_error', 400, 'API Error: bad request'))).toBe(false);
+    });
+
+    test.each([401, 403, 404, 413, 422])('an explicit %i wins over the assistant error too', (status) => {
+      expect(isTransientError(wrapperError('server_error', status, 'API Error'))).toBe(false);
     });
 
     test('other assistant errors, and the words in free text, stay permanent', () => {
@@ -93,7 +104,7 @@ describe('isTransientError', () => {
   });
 
   describe('returns false (permanent — do not retry)', () => {
-    test.each([400, 401, 403])('apiErrorStatus %i', (status) => {
+    test.each([400, 401, 403, 404, 413, 422])('apiErrorStatus %i', (status) => {
       const err = new Error('bad'); err.apiErrorStatus = status;
       expect(isTransientError(err)).toBe(false);
     });

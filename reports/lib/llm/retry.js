@@ -59,8 +59,12 @@ function isTransientError(err) {
   // HTTP-ish status carried by the SDK or an underlying fetch error.
   const status = err.apiErrorStatus ?? err.status;
   if (typeof status === 'number') {
-    if (TRANSIENT_STATUS.has(status)) return true;
-    // 400/401/403 and any other explicit status → permanent.
+    // Every 5xx is the upstream failing, not the request (a gateway's 502 or 504 too), so
+    // it retries. This check returns before the assistant-error check below, so a 5xx left
+    // out here would stay permanent even with sdkSubtype `server_error`. 429 is the one
+    // transient 4xx.
+    if (status >= 500 || TRANSIENT_STATUS.has(status)) return true;
+    // 400/401/403 and every other explicit 4xx → permanent.
     return false;
   }
 
