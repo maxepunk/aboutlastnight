@@ -5,8 +5,9 @@
  *   - LangGraph node retryPolicy.retryOn (graph.js) — auto-retry transient LLM failures
  *
  * Transient (retry): our idle/stall timeout, rate-limit / overloaded / 5xx upstream,
- * connection resets. Permanent (surface to operator): auth/permission/invalid-request,
- * structured-output extraction failures, cost-ceiling overruns.
+ * connection resets. Permanent (surface to operator): a declined request (refusal),
+ * auth/permission/invalid-request, structured-output extraction failures, cost-ceiling
+ * overruns.
  *
  * Error-type strings verified against the claude-api skill shared/error-codes.md:
  *   400 invalid_request_error · 401 authentication_error · 403 permission_error  → NO retry
@@ -17,6 +18,7 @@
 
 const { isSdkTimeoutError } = require('./client');
 const { StructuredOutputExtractionError } = require('./structured-output-extractor');
+const { isRefusalError } = require('./refusal');
 
 const TRANSIENT_STATUS = new Set([429, 500, 503, 529]);
 const TRANSIENT_TYPES = new Set([
@@ -32,6 +34,11 @@ const TRANSIENT_TYPES = new Set([
  */
 function isTransientError(err) {
   if (!err || typeof err !== 'object') return false;
+
+  // A declined request is deterministic: the same prompt is declined again. Checked
+  // FIRST, through `.cause` and the refusal marker in a re-wrapped message, so neither a
+  // status field nor a transient-looking word in the model's explanation can retry it.
+  if (isRefusalError(err)) return false;
 
   // Permanent by identity — never retry these regardless of any status field.
   if (err instanceof StructuredOutputExtractionError) return false;

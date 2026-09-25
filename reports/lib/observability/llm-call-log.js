@@ -83,6 +83,11 @@ function writeJson(file, obj) {
   fs.writeFileSync(file, JSON.stringify(obj, null, 2));
 }
 
+/**
+ * The diagnostics a client llm_complete / llm_error event carries, with nulls for what
+ * it lacks. The one builder for the per-call record here and for both SSE envelopes in
+ * progress-bridge.js, so a new field reaches all three.
+ */
 function diagnosticsOf(msg) {
   return {
     channel: msg.channel ?? null,
@@ -93,7 +98,11 @@ function diagnosticsOf(msg) {
     apiErrorStatus: msg.apiErrorStatus ?? null,
     terminalReason: msg.terminalReason ?? null,
     structuredOutputPresent: msg.structuredOutputPresent ?? null,
-    resultTextLength: msg.resultTextLength ?? null
+    resultTextLength: msg.resultTextLength ?? null,
+    // A declined request: {category, explanation} (lib/llm/refusal.js).
+    refusal: msg.refusal ?? null,
+    // The CLI retried a declined turn on another model: {originalModel, fallbackModel, category}.
+    refusalFallback: msg.refusalFallback ?? null
   };
 }
 
@@ -155,6 +164,7 @@ function recordLlmEvent(sessionId, context, msg) {
 
 module.exports = {
   recordLlmEvent,
+  diagnosticsOf,
   setLogRoot,
   resolveLogDir,
   isEnabled,

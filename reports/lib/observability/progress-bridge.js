@@ -11,7 +11,13 @@
 const { progressEmitter } = require('./progress-emitter');
 const { isProgressEnabled } = require('./config');
 const { SSE_EVENT_TYPES, STRUCTURED_OUTPUT_CHANNELS } = require('./constants');
-const { recordLlmEvent } = require('./llm-call-log');
+const { recordLlmEvent, diagnosticsOf } = require('./llm-call-log');
+
+/** The llm_error SSE envelope has never carried `channel`: nothing was extracted. */
+function withoutChannel(diagnostics) {
+  const { channel, ...rest } = diagnostics;
+  return rest;
+}
 
 // ── llm_delta coalescing (P5) ─────────────────────────────────────────────
 // The SDK fires a stream_event per token; forwarding each as its own SSE frame
@@ -414,17 +420,7 @@ function createConsoleAndSseLogger(context, sessionId) {
           // SDK-supplied diagnostics — same fields client.js placed on the event.
           // Frontends that don't consume these can ignore them; preserved on SSE
           // so future debugging can reconstruct any call without server-side state.
-          diagnostics: {
-            channel: msg.channel ?? null,
-            stopReason: msg.stopReason ?? null,
-            durationApiMs: msg.durationApiMs ?? null,
-            numTurns: msg.numTurns ?? null,
-            usage: msg.usage ?? null,
-            apiErrorStatus: msg.apiErrorStatus ?? null,
-            terminalReason: msg.terminalReason ?? null,
-            structuredOutputPresent: msg.structuredOutputPresent ?? null,
-            resultTextLength: msg.resultTextLength ?? null
-          }
+          diagnostics: diagnosticsOf(msg)
         });
       }
       return;
@@ -440,7 +436,8 @@ function createConsoleAndSseLogger(context, sessionId) {
       const textLen = `resultTextLength=${msg.resultTextLength}`;
       const tokens = msg.usage?.output_tokens != null ? `out=${msg.usage.output_tokens}` : '';
       const summary = [apiSec, stop, sop, textLen, tokens].filter(Boolean).join(' ');
-      console.log(`[${context}] [${msg.elapsed?.toFixed(1) || '?'}s ${summary}] ${PROGRESS_ICONS.error} Extraction failed: ${msg.error}`);
+      const what = msg.refusal ? 'Declined' : 'Extraction failed';
+      console.log(`[${context}] [${msg.elapsed?.toFixed(1) || '?'}s ${summary}] ${PROGRESS_ICONS.error} ${what}: ${msg.error}`);
 
       if (sessionId) {
         progressEmitter.emitProgress(sessionId, {
@@ -451,16 +448,8 @@ function createConsoleAndSseLogger(context, sessionId) {
           error: msg.error,
           errorName: msg.errorName,
           schemaErrors: msg.schemaErrors,
-          diagnostics: {
-            stopReason: msg.stopReason ?? null,
-            durationApiMs: msg.durationApiMs ?? null,
-            numTurns: msg.numTurns ?? null,
-            usage: msg.usage ?? null,
-            apiErrorStatus: msg.apiErrorStatus ?? null,
-            terminalReason: msg.terminalReason ?? null,
-            structuredOutputPresent: msg.structuredOutputPresent ?? null,
-            resultTextLength: msg.resultTextLength ?? null
-          }
+          // No `channel` on an error: nothing was extracted (llm-stream-logic relies on it).
+          diagnostics: withoutChannel(diagnosticsOf(msg))
         });
       }
       return;

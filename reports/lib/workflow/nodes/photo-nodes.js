@@ -503,7 +503,7 @@ async function analyzePhotos(state, config) {
     // flows onward and yields mis-attributed captions. Throw so retryPolicy + the
     // pre-node snapshot handle it (covers a hard reject like an auth error).
     console.error('[analyzePhotos] Error:', error.message);
-    throw new Error(`Photo analysis failed: ${error.message}`);
+    throw new Error(`Photo analysis failed: ${error.message}`, { cause: error });
   }
 }
 

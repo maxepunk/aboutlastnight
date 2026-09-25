@@ -29,6 +29,8 @@
 
 const { PHASES } = require('../state');
 const { isSdkTimeoutError } = require('../../llm');
+// The pure module, not lib/llm's index: several node tests mock lib/llm with a factory.
+const { isRefusalError } = require('../../llm/refusal');
 const {
   buildValidEvidenceIds,
   validateRosterName,
@@ -602,10 +604,11 @@ async function generateCoreArcs(state, config) {
  * @param {Array} roster - Character roster for identifying shared characters
  * @param {Object} config - Graph config with SDK client
  * @param {Object} [sessionConfig] - state.sessionConfig, for the reporting-mode block
- * @returns {Promise<Object|null>} Interweaving result on success containing:
+ * @returns {Promise<Object>} Interweaving result on success containing:
  *   - arcInterweaving: Array of { arcId, interweaving } objects
  *   - interweavingPlan: { suggestedOrder, convergencePoint, keyCallbacks }
- *   Returns null on failure (graceful degradation - caller should use defaults)
+ *   On failure (graceful degradation - the caller uses defaults): { _failed: true, _error }
+ *   where _error is the thrown message, so a declined request stays named in state.
  */
 async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig) {
   console.log('[enrichWithInterweaving] Starting Call 2: Interweaving enrichment');
@@ -631,9 +634,10 @@ async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig) {
 
     return result;
   } catch (error) {
-    // Graceful degradation - log but don't throw
+    // Graceful degradation - log but don't throw. The message travels on so the arc
+    // cache records WHY the defaults were used (a declined request names its category).
     console.error('[enrichWithInterweaving] Error (graceful degradation):', error.message);
-    return null;
+    return { _failed: true, _error: error.message };
   }
 }
 
@@ -646,7 +650,7 @@ async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig) {
  * @param {Object} coreResult - Result from generateCoreArcs containing:
  *   - narrativeArcs: Array of arc objects with id, title, summary, etc.
  *   - synthesisNotes: String describing synthesis approach
- * @param {Object|null} interweavingResult - Result from enrichWithInterweaving (null on failure)
+ * @param {Object|null} interweavingResult - Result from enrichWithInterweaving ({_failed, _error} or null on failure)
  * @returns {Object} Merged result with all arc fields including interweaving metadata
  * @throws {Error} If coreResult is invalid or narrativeArcs is not an array
  */
@@ -666,7 +670,7 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
   }
 
   // If interweaving failed, use defaults
-  if (!interweavingResult) {
+  if (!interweavingResult || interweavingResult._failed) {
     console.log('[mergeArcsWithInterweaving] Using default interweaving (Call 2 failed)');
     return {
       narrativeArcs: narrativeArcs.map(arc => ({
@@ -675,7 +679,8 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
       })),
       synthesisNotes,
       interweavingPlan: createDefaultInterweavingPlan(),
-      _interweavingFailed: true
+      _interweavingFailed: true,
+      _interweavingError: interweavingResult?._error || null
     };
   }
 
@@ -855,7 +860,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig);
     const call2Duration = ((Date.now() - call2Start) / 1000).toFixed(1);
 
-    if (interweavingResult) {
+    if (interweavingResult && !interweavingResult._failed) {
       console.log(`[analyzeArcsPlayerFocusGuided] Call 2 complete: interweaving added in ${call2Duration}s`);
     } else {
       console.log(`[analyzeArcsPlayerFocusGuided] Call 2 failed: using default interweaving (${call2Duration}s)`);
@@ -894,6 +899,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         arcCount: narrativeArcs?.length || 0,
         architecture: 'split-call',
         interweavingFailed: mergedResult._interweavingFailed || false,
+        interweavingError: mergedResult._interweavingError || null,
         timing: {
           call1: `${call1Duration}s`,
           call2: `${call2Duration}s`,
@@ -911,7 +917,9 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // one surfaces against the clean pre-node snapshot for operator /resume.
     const isTimeout = isSdkTimeoutError(error);
     console.error(`[analyzeArcsPlayerFocusGuided] ${isTimeout ? 'Timeout' : 'Error'}:`, error.message);
-    throw new Error(`Arc analysis failed${isTimeout ? ' (timeout)' : ''}: ${error.message}`);
+    // The original stays the cause, so a declined request is still named and still
+    // permanent after the re-wrap (retry.js reads the cause chain).
+    throw new Error(`Arc analysis failed${isTimeout ? ' (timeout)' : ''}: ${error.message}`, { cause: error });
   }
 }
 
@@ -1022,7 +1030,10 @@ async function reviseArcs(state, config) {
     };
 
   } catch (error) {
-    const isTimeout = error.message?.includes('timeout') && error.message?.includes('limit');
+    // A declined request is never the free timeout retry below, whatever words its
+    // explanation carries: it would be declined again.
+    const isTimeout = !isRefusalError(error) &&
+      error.message?.includes('timeout') && error.message?.includes('limit');
 
     // Graceful timeout recovery: preserve previous arcs, don't consume revision slot
     // Cap consecutive timeouts to prevent infinite retry loops with degraded SDK

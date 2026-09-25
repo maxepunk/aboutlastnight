@@ -126,7 +126,7 @@ Only include data explicitly stated or strongly implied by the evidence. Do not 
     // N6 fail-loud: empty character data silences the "don't infer group composition"
     // guard, drifting affiliations. Throw so retryPolicy + the pre-node snapshot handle it.
     console.error('[extractCharacterData] Error:', error.message);
-    throw new Error(`Failed to extract character data: ${error.message}`);
+    throw new Error(`Failed to extract character data: ${error.message}`, { cause: error });
   }
 }
 

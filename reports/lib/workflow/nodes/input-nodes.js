@@ -677,7 +677,7 @@ Return structured JSON matching the schema.${correctionsBlock}`;
     } catch (error) {
       // N4 fail-loud: re-throw with phase context; do NOT continue with empty player-focus.
       console.error('[parseRawInput] Error analyzing whiteboard:', error.message);
-      throw new Error(`Failed to analyze whiteboard: ${error.message}`);
+      throw new Error(`Failed to analyze whiteboard: ${error.message}`, { cause: error });
     }
   }
 

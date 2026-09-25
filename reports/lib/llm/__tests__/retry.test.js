@@ -85,4 +85,41 @@ describe('isTransientError', () => {
       expect(isTransientError(undefined)).toBe(false);
     });
   });
+
+  // Brief 2.0: a declined request is deterministic, so it is never retried, through
+  // every shape a node hands the classifier.
+  describe('a declined request (refusal) is permanent', () => {
+    const { SdkRefusalError } = require('../refusal');
+    const refusal = () => new SdkRefusalError({ category: 'bio', model: 'claude-opus-5-5', label: 'Core arc generation (Call 1)' });
+
+    test('the wrapper\'s own SdkRefusalError', () => {
+      expect(isTransientError(refusal())).toBe(false);
+    });
+
+    test('checked before any status field: a transient status does not retry it', () => {
+      const err = refusal(); err.apiErrorStatus = 529;
+      expect(isTransientError(err)).toBe(false);
+    });
+
+    test('checked before the named-string scan: a transient word in the explanation does not retry it', () => {
+      const err = new SdkRefusalError({ category: 'cyber', explanation: 'overloaded_error ECONNRESET api_error', label: 'x' });
+      expect(isTransientError(err)).toBe(false);
+    });
+
+    test('re-wrapped into a plain Error with the original as cause (the four re-wrapping nodes)', () => {
+      const wrapped = new Error(`Arc analysis failed: ${refusal().message}`, { cause: refusal() });
+      expect(isTransientError(wrapped)).toBe(false);
+    });
+
+    test('re-wrapped with only the text kept (per-photo placeholder, then the all-failed throw)', () => {
+      const textOnly = new Error(`Photo analysis failed: all 2 photos errored (e.g. "${refusal().message}").`);
+      expect(isTransientError(textOnly)).toBe(false);
+    });
+
+    test('a cause chain whose inner link carries an otherwise-transient status still stops at the refusal', () => {
+      const inner = refusal(); inner.sdkErrors = ['overloaded_error'];
+      const outer = new Error('Photo analysis failed: x', { cause: new Error('mid', { cause: inner }) });
+      expect(isTransientError(outer)).toBe(false);
+    });
+  });
 });

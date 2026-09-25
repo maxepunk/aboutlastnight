@@ -452,6 +452,149 @@ describe('sdkQueryImpl is_error result handling (terminal API failure wrapped as
   });
 });
 
+describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
+  const { isTransientError } = require('../retry');
+  const { SdkRefusalError, refusalOf } = require('../refusal');
+  afterEach(() => clearMockQuery());
+
+  // Shapes from the 0.3.282 types (no live refusal captured yet): the assistant frame
+  // carries message.stop_reason 'refusal' + message.stop_details; the turn's stop
+  // reason arrives on the result.
+  const refusedFrame = (category = 'bio', explanation = 'This request may relate to biological harm.') => ({
+    type: 'assistant',
+    parent_tool_use_id: null,
+    message: { content: [], stop_reason: 'refusal', stop_details: { type: 'refusal', category, explanation } }
+  });
+  const refusedResult = (extra = {}) => ({
+    type: 'result', subtype: 'success', is_error: false, stop_reason: 'refusal',
+    result: 'I cannot help with that.', duration_api_ms: 900, usage: { output_tokens: 12 }, ...extra
+  });
+
+  async function run(messages, opts = {}) {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable(messages));
+    let thrown;
+    let value;
+    try {
+      value = await sdkQueryImpl({ prompt: 'test', model: 'opus', label: 'refusal-test', onProgress: (m) => events.push(m), ...opts });
+    } catch (e) { thrown = e; }
+    return { events, thrown, value };
+  }
+
+  test('schema call: throws a named refusal with its category, not a schema mismatch', async () => {
+    const { thrown, events } = await run([refusedFrame('bio'), refusedResult()], { jsonSchema: SIMPLE_SCHEMA });
+
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+    expect(thrown).not.toBeInstanceOf(StructuredOutputExtractionError);
+    expect(thrown.message).toMatch(/declined the request/);
+    expect(thrown.message).toMatch(/category: bio/);
+    expect(thrown.message).toMatch(/claude-opus-5-5/);
+    expect(thrown.message).toMatch(/refusal-test/);
+    expect(thrown.refusalCategory).toBe('bio');
+    expect(thrown.sdkSubtype).toBe('refusal');
+    expect(isTransientError(thrown)).toBe(false);
+
+    const errEvents = events.filter((e) => e.type === 'llm_error');
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0].errorName).toBe('SdkRefusalError');
+    expect(errEvents[0].refusal).toEqual({ category: 'bio', explanation: 'This request may relate to biological harm.' });
+    expect(errEvents[0].stopReason).toBe('refusal');   // the result's envelope rides along
+    expect(events.filter((e) => e.type === 'llm_complete')).toHaveLength(0);
+  });
+
+  test('text call: throws instead of returning the refusal text as content', async () => {
+    const { thrown, value } = await run([refusedFrame('cyber'), refusedResult()]);
+    expect(value).toBeUndefined();
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+    expect(thrown.message).toMatch(/category: cyber/);
+  });
+
+  test('the result stop_reason alone is enough (no assistant frame)', async () => {
+    const { thrown } = await run([refusedResult()]);
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+    expect(thrown.message).toMatch(/category: none given/);
+    expect(thrown.refusalCategory).toBeNull();
+  });
+
+  test('a message_delta refusal is read without onProgress (stream events are not skipped)', async () => {
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'stream_event', parent_tool_use_id: null, event: { type: 'message_delta', delta: { stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'reasoning_extraction', explanation: null } } } },
+      { type: 'result', subtype: 'success', is_error: false, stop_reason: null, result: '' }
+    ]));
+    await expect(sdkQueryImpl({ prompt: 'test', model: 'opus', jsonSchema: SIMPLE_SCHEMA }))
+      .rejects.toThrow(/category: reasoning_extraction/);
+  });
+
+  test('the CLI no-fallback notice names the category even when the result does not', async () => {
+    const { thrown } = await run([
+      { type: 'system', subtype: 'model_refusal_no_fallback', original_model: 'claude-opus-5-5', api_refusal_category: 'cyber', api_refusal_explanation: 'Declined.', content: 'declined' },
+      { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: 'Claude Code is unable to respond to this request.' }
+    ]);
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+    expect(thrown.message).toMatch(/category: cyber/);
+  });
+
+  test('a refusal wrapped as an is_error result is named as the refusal', async () => {
+    const { thrown } = await run([
+      { ...refusedFrame('bio'), error: 'unknown' },
+      { type: 'result', subtype: 'success', is_error: true, api_error_status: 400, stop_reason: null, result: 'API Error' }
+    ]);
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+    expect(thrown.message).not.toMatch(/SDK result error/);
+    expect(isTransientError(thrown)).toBe(false);
+  });
+
+  test('a refusal followed by an error-subtype result is named as the refusal', async () => {
+    const { thrown } = await run([
+      refusedFrame('bio'),
+      { type: 'result', subtype: 'error_max_structured_output_retries', errors: ['StructuredOutput was not called'] }
+    ], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+    expect(thrown.message).toMatch(/category: bio/);
+  });
+
+  test('an unsuperseded refusal signal names a schema failure on a clean finish', async () => {
+    const { thrown } = await run([
+      refusedFrame('bio'),
+      { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: 'no json here' }
+    ], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeInstanceOf(SdkRefusalError);
+  });
+
+  test('a refusal signal followed by a clean, schema-valid finish returns the result', async () => {
+    const { thrown, value } = await run([
+      refusedFrame('bio'),
+      { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: '{"ok":true}', structured_output: { ok: true } }
+    ], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeUndefined();
+    expect(value).toEqual({ ok: true });
+  });
+
+  test('a CLI fallback retry is not a failure: the call returns and llm_complete records the fallback', async () => {
+    const { thrown, value, events } = await run([
+      refusedFrame('cyber'),
+      { type: 'assistant', parent_tool_use_id: null, supersedes: ['u-refused'], message: { content: [{ type: 'text', text: 'ok' }], stop_reason: null } },
+      { type: 'system', subtype: 'model_refusal_fallback', trigger: 'refusal', direction: 'retry', scope: 'session', original_model: 'claude-opus-5-5', fallback_model: 'claude-opus-4-8', api_refusal_category: 'cyber', content: 'retried' },
+      { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: 'ok' }
+    ]);
+    expect(thrown).toBeUndefined();
+    expect(value).toBe('ok');
+    const complete = events.find((e) => e.type === 'llm_complete');
+    expect(complete.refusalFallback).toEqual({ originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber' });
+  });
+
+  test('an ordinary call carries refusalFallback: null on llm_complete', async () => {
+    const { events } = await run([{ type: 'result', subtype: 'success', stop_reason: 'end_turn', result: 'ok' }]);
+    expect(events.find((e) => e.type === 'llm_complete').refusalFallback).toBeNull();
+  });
+
+  test('the catch keeps the refusal (sdkSubtype preserved) and does not emit a second llm_error', async () => {
+    const { thrown, events } = await run([refusedResult()]);
+    expect(refusalOf(thrown)).toEqual({ category: null, explanation: null });
+    expect(events.filter((e) => e.type === 'llm_error')).toHaveLength(1);
+  });
+});
+
 describe('sanitizeSchemaForSdk (#277 channel-skip guardrail)', () => {
   const { sanitizeSchemaForSdk } = require('../client');
 

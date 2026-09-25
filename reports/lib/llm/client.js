@@ -17,6 +17,7 @@
 const crypto = require('crypto');
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('./structured-output-extractor');
+const { SdkRefusalError, createRefusalTracker } = require('./refusal');
 
 // Increase max listeners to support 8 concurrent SDK calls
 // Each SDK call adds exit listeners for subprocess cleanup
@@ -138,6 +139,28 @@ function sanitizeSchemaForSdk(schema) {
 
   _sanitizedSchemaCache.set(schema, sanitized);
   return sanitized;
+}
+
+/**
+ * The diagnostics envelope read off an SDK result message. Built BEFORE extraction so a
+ * failure carries the same envelope as a success: an extraction throw would otherwise
+ * bury the most useful signals (stop_reason, usage, terminal_reason) exactly when they
+ * are needed. One builder for every llm_complete / llm_error that has a result.
+ *
+ * @param {Object} msg - SDK result message
+ * @returns {Object}
+ */
+function resultDiagnostics(msg) {
+  return {
+    stopReason: msg.stop_reason ?? null,
+    durationApiMs: msg.duration_api_ms ?? null,
+    numTurns: msg.num_turns ?? null,
+    usage: msg.usage ?? null,
+    apiErrorStatus: msg.api_error_status ?? null,
+    terminalReason: msg.terminal_reason ?? null,
+    structuredOutputPresent: msg.structured_output !== undefined && msg.structured_output !== null,
+    resultTextLength: typeof msg.result === 'string' ? msg.result.length : 0
+  };
 }
 
 /**
@@ -348,6 +371,29 @@ async function sdkQueryImpl({
     let deltaCharCount = 0;   // running streamed-char total for the token-count cue
     let ttftMs = null;        // time-to-first-token (first non-empty delta)
     let lastAssistantError = null;  // e.g. 'authentication_failed' — names the reason on an is_error result
+    const refusals = createRefusalTracker();  // see lib/llm/refusal.js for every source it reads
+
+    // A declined request: one llm_error with the result's envelope plus the refusal, then
+    // a permanent, named error. `sdkSubtype: 'refusal'` also keeps the catch below from
+    // turning it into a timeout if the idle abort races it.
+    const declinedError = (resultMsg, refusal) => {
+      const err = new SdkRefusalError({ ...refusal, model: resolvedModel, label: progressLabel });
+      console.error(`[${progressLabel}] ${err.message}`);
+      if (onProgress) {
+        errorEmitted = true;
+        emit({
+          type: 'llm_error',
+          elapsed: (Date.now() - startTime) / 1000,
+          error: err.message,
+          errorName: err.name,
+          jsonSchema,
+          ...resultDiagnostics(resultMsg),
+          refusal: { category: err.refusalCategory, explanation: err.refusalExplanation },
+          refusalFallback: refusals.fallback()
+        });
+      }
+      return err;
+    };
 
     // Emit llm_start event with FULL prompt (no truncation)
     if (onProgress) {
@@ -366,6 +412,7 @@ async function sdkQueryImpl({
       resetIdle();  // any message = activity → re-arm the stall timer
       messageCount++;
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      refusals.observe(msg);  // before the stream_event `continue` below: a refusal can arrive on a message_delta
 
       // Token-level partial streaming (includePartialMessages). Feed the idle timer
       // (resetIdle already ran above) and forward a coalesce-able llm_delta to the
@@ -414,6 +461,15 @@ async function sdkQueryImpl({
         if (ctxWindow) {
           console.log(`[${progressLabel}] Context window: ${(ctxWindow / 1000).toFixed(0)}K tokens (model: ${model})`);
         }
+      }
+
+      // The CLI retried a declined turn on another model. The call goes on (see
+      // refusal.js), so say so here; llm_complete records it as refusalFallback.
+      if (msg.type === 'system' && msg.subtype === 'model_refusal_fallback') {
+        console.warn(
+          `[${progressLabel}] ${msg.original_model || resolvedModel} declined the request ` +
+          `(category: ${msg.api_refusal_category || 'none given'}); the CLI retried it on ${msg.fallback_model || 'a fallback model'}`
+        );
       }
 
       // Stream progress for intermediate messages
@@ -517,24 +573,22 @@ async function sdkQueryImpl({
         console.error(`[${progressLabel}] SDK error (${errorType}): ${errorMsg}`);
       }
 
+      // A declined request, whatever the result's subtype: the model's refusal is the
+      // reason, not the schema mismatch, the is_error wrapper or the error subtype that
+      // follows it. Permanent (retry.js); the message names the category.
+      if (msg.type === 'result') {
+        const declined = refusals.terminalRefusal(msg);
+        if (declined) {
+          clearTimeout(timeoutId);
+          throw declinedError(msg, declined);
+        }
+      }
+
       // Handle successful result
       if (msg.type === 'result' && msg.subtype === 'success') {
         clearTimeout(timeoutId);
 
-        // Capture SDK diagnostics BEFORE attempting extraction so failures get
-        // the same envelope as successes. Otherwise extraction throws bury the
-        // single most useful signal (stop_reason, usage, terminal_reason, etc.)
-        // exactly when we need them.
-        const sdkDiagnostics = {
-          stopReason: msg.stop_reason ?? null,
-          durationApiMs: msg.duration_api_ms ?? null,
-          numTurns: msg.num_turns ?? null,
-          usage: msg.usage ?? null,
-          apiErrorStatus: msg.api_error_status ?? null,
-          terminalReason: msg.terminal_reason ?? null,
-          structuredOutputPresent: msg.structured_output !== undefined && msg.structured_output !== null,
-          resultTextLength: typeof msg.result === 'string' ? msg.result.length : 0
-        };
+        const sdkDiagnostics = resultDiagnostics(msg);
 
         // A "success" result flagged is_error is a terminal API failure the CLI wrapped
         // after exhausting its internal api_retry attempts (live-verified 2026-07-22:
@@ -595,6 +649,17 @@ async function sdkQueryImpl({
           finalResult = msg.result;
         }
 
+        // A refusal signal earlier in the stream, then a clean finish on another stop
+        // reason. If the schema then fails, the refusal is the better name for it.
+        const pendingRefusal = refusals.pending();
+        if (pendingRefusal && extractionError) throw declinedError(msg, pendingRefusal);
+        if (pendingRefusal) {
+          console.warn(
+            `[${progressLabel}] a refusal signal (category: ${pendingRefusal.category || 'none given'}) ` +
+            `preceded a clean ${msg.stop_reason} finish; returning the result`
+          );
+        }
+
         // Emit diagnostics for BOTH success and extraction-failure paths.
         // llm_complete on success; llm_error on extraction failure. Same envelope.
         if (onProgress) {
@@ -616,7 +681,8 @@ async function sdkQueryImpl({
               result: finalResult,
               jsonSchema,
               channel: outputChannel,
-              ...sdkDiagnostics
+              ...sdkDiagnostics,
+              refusalFallback: refusals.fallback()
             });
           }
         }
