@@ -70,7 +70,7 @@ const MODEL_BUDGETS = {
  * guarantees we run on the intended model version.
  */
 const MODEL_IDS = {
-  opus: 'claude-opus-4-8',
+  opus: 'claude-opus-5-5',
   sonnet: 'claude-sonnet-5',
   haiku: 'claude-haiku-4-5'
 };
@@ -78,13 +78,15 @@ const MODEL_IDS = {
 /**
  * Per-model effort defaults. Passed explicitly per query so the SDK
  * doesn't fall through the legacy server-pushed taskIntensityOverride
- * resolution chain (which returns null client_data for accounts on
+ * resolution chain (which returned null client_data for accounts on
  * Opus 4.8's adaptive-thinking + new effort semantics).
  *
  * Per Anthropic's effort docs (https://platform.claude.com/docs/en/build-with-claude/effort):
  *   - Haiku 4.5: effort not supported (omit)
  *   - Sonnet 5: 'xhigh' — the best setting for the hard coding/agentic content-generation work this pipeline runs (Sonnet 5 added 'xhigh'; 'high' is the SDK default)
- *   - Opus 4.8: 'xhigh' is the recommended starting point for coding/agentic work
+ *   - Opus 5.5: 'xhigh' kept from the Opus 4.8 runs. Opus 5.5 defaults to 'medium' when no
+ *     effort is sent, so sending it explicitly matters more than it did on 4.8. The phase 2
+ *     gate records every call's duration against session 092026's before any level moves.
  */
 const EFFORT_LEVELS = {
   opus: 'xhigh',
@@ -225,10 +227,10 @@ async function sdkQueryImpl({
     systemPrompt,
     allowedTools,
     permissionMode: 'bypassPermissions',
-    allowDangerouslySkipPermissions: true,  // Required pair for bypassPermissions in SDK 0.2.x
+    allowDangerouslySkipPermissions: true,  // Required pair for bypassPermissions (SDK 0.3.282 sdk.d.ts: "requires allowDangerouslySkipPermissions")
     abortController,
     // Stream token-level deltas so the operator sees thinking/writing live and the
-    // idle timer is fed by real activity (SDK 0.2.119: SDKPartialAssistantMessage).
+    // idle timer is fed by real activity (SDK 0.3.282: SDKPartialAssistantMessage).
     includePartialMessages: true
   };
 
@@ -288,7 +290,7 @@ async function sdkQueryImpl({
     options.betas = ['context-1m-2025-08-07'];
   }
 
-  // Control 4: visible thinking. On Opus 4.8 / Sonnet 5 the SDK's thinking display
+  // Control 4: visible thinking. On Opus 4.8 / Opus 5.5 / Sonnet 5 the thinking display
   // defaults to "omitted", so thinking streams as EMPTY blocks and a long think at
   // effort xhigh is a silent stream. On 2026-09-19 the live Opus enrichment call
   // cycled "empty thinking delta → status: requesting" every ~340s for 20 minutes
@@ -296,14 +298,17 @@ async function sdkQueryImpl({
   // re-armed our idle timer. "summarized" streams readable thinking text as it
   // happens (1.3K chars in the first 20s on the same prompt), which keeps the
   // stream alive and gives the console's THINKING stage real content. Haiku 4.5
-  // has no adaptive thinking, so it gets no thinking option.
+  // has no adaptive thinking, so it gets no thinking option. Opus 5.5 cannot run with
+  // thinking off (`disabled` and `budget_tokens` are both a 400), so on Opus this
+  // streamed text is what keeps the idle timer fed during a long think.
   if (model !== 'haiku') {
     options.thinking = { type: 'adaptive', display: 'summarized' };
   }
 
   // Pass effort explicitly so the SDK doesn't traverse the legacy
-  // server-pushed taskIntensityOverride chain (which returns null
-  // client_data for accounts using Opus 4.8's adaptive-thinking semantics).
+  // server-pushed taskIntensityOverride chain (which returned null
+  // client_data for accounts using Opus 4.8's adaptive-thinking semantics),
+  // and so Opus 5.5 does not fall back to its own 'medium' default.
   const effectiveEffort = effort || EFFORT_LEVELS[model];
   if (effectiveEffort) {
     options.effort = effectiveEffort;
@@ -789,7 +794,11 @@ async function isClaudeAvailable(sdkQuery) {
     await sdkQuery({
       prompt: 'Respond with exactly: ok',
       model: 'haiku',
-      systemPrompt: 'You are a health check. Respond with exactly one word: ok'
+      systemPrompt: 'You are a health check. Respond with exactly one word: ok',
+      // H21 applies here too: an ungated call runs with the SDK's full default tool set,
+      // which changed across the 0.3 line (Task tools, embedded find/grep). A one-word
+      // health check needs none.
+      disableTools: true
     });
     return true;
   } catch (error) {

@@ -29,13 +29,13 @@ describe('1M context window beta', () => {
     capturedOptions = null;
   });
 
-  test('opus resolves to claude-opus-4-8 with 1M beta', async () => {
+  test('opus resolves to claude-opus-5-5 with 1M beta', async () => {
     await sdkQuery({
       prompt: 'test',
       model: 'opus',
       disableTools: true
     });
-    expect(capturedOptions.model).toBe('claude-opus-4-8');
+    expect(capturedOptions.model).toBe('claude-opus-5-5');
     expect(capturedOptions.betas).toEqual(['context-1m-2025-08-07']);
   });
 

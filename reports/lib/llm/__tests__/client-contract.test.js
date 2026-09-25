@@ -176,6 +176,16 @@ describe('sdkQueryImpl contract', () => {
       expect(captured.options.allowedTools).toEqual(['Read']);
       expect(captured.options.tools).toEqual(['Read']);
     });
+
+    // Brief 2.0: the server-start health call was the one ungated call left, and the
+    // SDK's default tool set changed across the 0.3 line.
+    test('the server-start health call runs with no tools', async () => {
+      const { isClaudeAvailable } = require('../client');
+      const captured = captureOptions();
+      await expect(isClaudeAvailable(sdkQueryImpl)).resolves.toBe(true);
+      expect(captured.options.tools).toEqual([]);
+      expect(captured.options.model).toBe('claude-haiku-4-5');
+    });
   });
 
   test('idle timer resets on each streamed message (long-but-active call does not abort)', async () => {
