@@ -477,6 +477,39 @@ describe('sdkQueryImpl is_error result handling (terminal API failure wrapped as
     expect(thrown.message).toMatch(/Repeated 529 Overloaded errors/);
     expect(isTransientError(thrown)).toBe(true);
   });
+
+  // Round 3: the assistant error is read from the latest assistant frame only. An earlier
+  // frame's `server_error` must not name (and make transient) an is_error result whose
+  // own frame carried no error.
+  test('an earlier frame\'s assistant error does not name a later is_error result', async () => {
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'assistant', error: 'server_error', message: { content: [{ type: 'text', text: REPEATED_529 }] } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Resuming.' }] } },
+      { type: 'result', subtype: 'success', is_error: true, result: 'API Error: something else', stop_reason: 'stop_sequence' }
+    ]));
+
+    let thrown;
+    try {
+      await sdkQueryImpl({ prompt: 'test', model: 'opus', label: 'stale-assistant-error' });
+    } catch (e) { thrown = e; }
+
+    expect(thrown).toBeDefined();
+    expect(thrown.sdkSubtype).toBe('api_error_result');
+    expect(thrown.message).toMatch(/SDK result error \(api_error_result\)/);
+    expect(thrown.message).not.toMatch(/server_error/);
+    expect(isTransientError(thrown)).toBe(false);
+  });
+
+  test('the error on the frame right before the is_error result still names it', async () => {
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Working.' }] } },
+      { type: 'assistant', error: 'authentication_failed', message: { content: [{ type: 'text', text: 'Failed to authenticate.' }] } },
+      { type: 'result', subtype: 'success', is_error: true, result: 'Failed to authenticate.', stop_reason: 'stop_sequence' }
+    ]));
+
+    await expect(sdkQueryImpl({ prompt: 'test', model: 'haiku', label: 'latest-assistant-error' }))
+      .rejects.toMatchObject({ sdkSubtype: 'authentication_failed' });
+  });
 });
 
 describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {

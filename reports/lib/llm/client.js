@@ -414,7 +414,7 @@ async function sdkQueryImpl({
     let messageCount = 0;
     let deltaCharCount = 0;   // running streamed-char total for the token-count cue
     let ttftMs = null;        // time-to-first-token (first non-empty delta)
-    let lastAssistantError = null;  // e.g. 'authentication_failed' — names the reason on an is_error result
+    let lastAssistantError = null;  // the latest assistant frame's error, e.g. 'authentication_failed' — names the reason on an is_error result
 
     // A declined request inside the stream: one llm_error (with the result's envelope
     // when there is a result) plus the refusal, then the error to throw. When the refusal
@@ -502,10 +502,14 @@ async function sdkQueryImpl({
         continue;  // partials are not assistant/result messages; skip the rest of the loop body
       }
 
-      // Track the most recent assistant-level error (e.g. 'authentication_failed') so a
-      // subsequent is_error result can name the real reason, not just an HTTP status.
-      if (msg.type === 'assistant' && msg.error) {
-        lastAssistantError = typeof msg.error === 'string' ? msg.error : (msg.error?.type || String(msg.error));
+      // The latest assistant frame's error (e.g. 'authentication_failed'), so an is_error
+      // result can name the real reason, not just an HTTP status. Set from EVERY assistant
+      // frame, null when the frame has none: an earlier frame's `server_error` must not
+      // name a later is_error result whose own frame carried no error (and so make it
+      // transient in retry.js).
+      if (msg.type === 'assistant') {
+        lastAssistantError = !msg.error ? null
+          : typeof msg.error === 'string' ? msg.error : (msg.error?.type || String(msg.error));
       }
 
       // Log context window on session init (verify 1M beta is active)
