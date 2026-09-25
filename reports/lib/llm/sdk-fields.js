@@ -27,6 +27,23 @@ function servedModelsOf(modelUsage) {
 }
 
 /**
+ * Does a served model id (from result modelUsage, or init's `model`) name the pinned id?
+ * Tolerates a bracketed context suffix ('claude-opus-5-5[1m]') and a dated snapshot
+ * suffix ('claude-haiku-4-5-20251001'); anything else is a different model. The wrapper
+ * uses it to tell a clean finish after a refusal signal from another model's answer, and
+ * the probe scripts use it to judge the served model.
+ *
+ * @param {string} served
+ * @param {string} pinned - MODEL_IDS[alias], or the id the call resolved to
+ * @returns {boolean}
+ */
+function servedModelMatches(served, pinned) {
+  if (typeof served !== 'string' || typeof pinned !== 'string' || !pinned) return false;
+  const base = served.replace(/\[[^\]]*\]$/, '');
+  return base === pinned || (base.startsWith(`${pinned}-`) && /^\d{8}$/.test(base.slice(pinned.length + 1)));
+}
+
+/**
  * Whether an init frame's `memory_paths` names any memory that loaded. The 2026-09-19
  * leak showed `memory_paths.auto` set to the operator's memory directory; with
  * CLAUDE_CODE_DISABLE_AUTO_MEMORY the field was absent. The field is not in the 0.3.282
@@ -43,4 +60,4 @@ function hasMemoryPaths(memoryPaths) {
   return false;
 }
 
-module.exports = { servedModelsOf, hasMemoryPaths };
+module.exports = { servedModelsOf, servedModelMatches, hasMemoryPaths };

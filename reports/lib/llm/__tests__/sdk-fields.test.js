@@ -1,5 +1,20 @@
 // lib/llm/__tests__/sdk-fields.test.js — readers the 2.0 gate depends on.
-const { servedModelsOf, hasMemoryPaths } = require('../sdk-fields');
+const { servedModelsOf, servedModelMatches, hasMemoryPaths } = require('../sdk-fields');
+
+// Moved here from scripts/lib/probe-verdicts.js: the wrapper uses it too.
+describe('servedModelMatches', () => {
+  test.each([
+    ['claude-opus-5-5', 'claude-opus-5-5', true],
+    ['claude-opus-5-5[1m]', 'claude-opus-5-5', true],
+    ['claude-haiku-4-5-20251001', 'claude-haiku-4-5', true],
+    ['claude-opus-4-8', 'claude-opus-5-5', false],
+    ['claude-opus-5-5-lite', 'claude-opus-5-5', false],
+    ['claude-opus-5', 'claude-opus-5-5', false],
+    [null, 'claude-opus-5-5', false]
+  ])('%s vs %s -> %s', (served, pinned, expected) => {
+    expect(servedModelMatches(served, pinned)).toBe(expected);
+  });
+});
 
 describe('servedModelsOf', () => {
   test('prefers canonicalModel, falls back to the key, de-duplicates', () => {

@@ -5,23 +5,12 @@
  */
 const { setMockQuery, clearMockQuery } = require('@anthropic-ai/claude-agent-sdk');
 const { sdkQueryImpl, MODEL_IDS } = require('../../../lib/llm/client');
-const { servedModelMatches, isolationVerdict, channelVerdict } = require('../../../scripts/lib/probe-verdicts');
+const { isolationVerdict, channelVerdict } = require('../../../scripts/lib/probe-verdicts');
 
 afterEach(() => clearMockQuery());
 
-describe('servedModelMatches', () => {
-  test.each([
-    ['claude-opus-5-5', 'claude-opus-5-5', true],
-    ['claude-opus-5-5[1m]', 'claude-opus-5-5', true],
-    ['claude-haiku-4-5-20251001', 'claude-haiku-4-5', true],
-    ['claude-opus-4-8', 'claude-opus-5-5', false],
-    ['claude-opus-5-5-lite', 'claude-opus-5-5', false],
-    ['claude-opus-5', 'claude-opus-5-5', false],
-    [null, 'claude-opus-5-5', false]
-  ])('%s vs %s -> %s', (served, pinned, expected) => {
-    expect(servedModelMatches(served, pinned)).toBe(expected);
-  });
-});
+// servedModelMatches moved to lib/llm/sdk-fields.js (the wrapper uses it); its cases
+// are in lib/llm/__tests__/sdk-fields.test.js.
 
 describe('isolationVerdict', () => {
   const good = {

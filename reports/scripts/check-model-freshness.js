@@ -20,7 +20,7 @@
  * When this script reports a mismatch, update MODEL_IDS in lib/llm/client.js.
  */
 
-const { servedModelMatches } = require('./lib/probe-verdicts');
+const { servedModelMatches } = require('../lib/llm/sdk-fields');
 
 /**
  * @param {string} alias

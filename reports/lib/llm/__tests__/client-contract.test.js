@@ -605,6 +605,79 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
     expect(events.filter((e) => e.type === 'llm_error')).toHaveLength(0);
   });
 
+  // Round 2: a clean finish after a refusal signal is returned only when the model the
+  // call resolved to served it. Another model in the result's modelUsage finished the
+  // declined request (a fallback the CLI never announced), so the call is declined.
+  describe('another model finishing after a refusal signal is a declined request', () => {
+    const cleanFinish = (modelUsage, extra = {}) => ({
+      type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn',
+      result: '{"ok":true}', structured_output: { ok: true }, modelUsage, ...extra
+    });
+
+    test('a schema-valid finish served by another model throws, naming that model', async () => {
+      const { thrown, value, events } = await run([
+        refusedFrame('bio'),
+        cleanFinish({ 'claude-opus-5-5': { canonicalModel: 'claude-opus-5-5' }, 'claude-opus-5': { canonicalModel: 'claude-opus-5' } })
+      ], { jsonSchema: SIMPLE_SCHEMA });
+
+      expect(value).toBeUndefined();
+      expect(thrown).toBeInstanceOf(SdkRefusalError);
+      expect(thrown.message).toMatch(/category: bio/);
+      expect(thrown.message).toMatch(/claude-opus-5-5 declined the request/);
+      expect(thrown.message).toMatch(/retried it on claude-opus-5;/);
+      expect(thrown.refusalFallbackModel).toBe('claude-opus-5');
+      expect(thrown.cause).toBeUndefined();
+      expect(isTransientError(thrown)).toBe(false);
+
+      const errEvents = events.filter((e) => e.type === 'llm_error');
+      expect(errEvents).toHaveLength(1);
+      expect(errEvents[0].errorName).toBe('SdkRefusalError');
+      expect(errEvents[0].servedModels).toEqual(['claude-opus-5-5', 'claude-opus-5']);
+      expect(errEvents[0].refusal).toEqual({ category: 'bio', explanation: 'This request may relate to biological harm.' });
+      expect(events.filter((e) => e.type === 'llm_complete')).toHaveLength(0);
+    });
+
+    test('a text call finished by another model throws too', async () => {
+      const { thrown, value } = await run([
+        refusedFrame('cyber'),
+        cleanFinish({ 'claude-opus-4-8': {} }, { structured_output: undefined, result: 'here is the answer' })
+      ]);
+      expect(value).toBeUndefined();
+      expect(thrown).toBeInstanceOf(SdkRefusalError);
+      expect(thrown.refusalFallbackModel).toBe('claude-opus-4-8');
+    });
+
+    test('a schema failure served by another model keeps the schema failure as the cause and names the model', async () => {
+      const { thrown } = await run([
+        refusedFrame('bio'),
+        cleanFinish({ 'claude-opus-5': {} }, { structured_output: undefined, result: 'no json here' })
+      ], { jsonSchema: SIMPLE_SCHEMA });
+      expect(thrown).toBeInstanceOf(SdkRefusalError);
+      expect(thrown.cause).toBeInstanceOf(StructuredOutputExtractionError);
+      expect(thrown.refusalFallbackModel).toBe('claude-opus-5');
+    });
+
+    test('the pinned model under a [1m] or dated suffix is the same model, so the result returns', async () => {
+      for (const usage of [
+        { 'claude-opus-5-5[1m]': {} },
+        { 'claude-opus-5-5-20260901': {} },
+        { 'claude-opus-5-5[1m]': { canonicalModel: 'claude-opus-5-5' } }
+      ]) {
+        const { thrown, value, events } = await run([refusedFrame('bio'), cleanFinish(usage)], { jsonSchema: SIMPLE_SCHEMA });
+        expect(thrown).toBeUndefined();
+        expect(value).toEqual({ ok: true });
+        expect(events.find((e) => e.type === 'llm_complete').refusalSignal).toEqual({ category: 'bio', explanation: 'This request may relate to biological harm.' });
+      }
+    });
+
+    test('with no refusal signal, another served model is recorded and the result returns', async () => {
+      const { thrown, value, events } = await run([cleanFinish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
+      expect(thrown).toBeUndefined();
+      expect(value).toEqual({ ok: true });
+      expect(events.find((e) => e.type === 'llm_complete').servedModels).toEqual(['claude-opus-4-8']);
+    });
+  });
+
   // Integrator ruling 2026-09-25: a declined request is never answered by another model.
   // The CLI's own fallback routes are off (CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK); one that
   // runs anyway on the main thread is a declined request.

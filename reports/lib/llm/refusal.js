@@ -42,7 +42,10 @@
  *
  * A refusal signal that is not terminal, followed by a clean finish on another stop
  * reason, returns the result. The wrapper records the signal as `refusalSignal` on
- * llm_complete, so the call log shows it.
+ * llm_complete, so the call log shows it. The exception: when the result's modelUsage
+ * names a model other than the one the call resolved to (`servedModelMatches`,
+ * lib/llm/sdk-fields.js), another model finished the declined request, and the wrapper
+ * throws `SdkRefusalError` naming it.
  *
  * @module llm/refusal
  */

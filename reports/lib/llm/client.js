@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const { query } = require('@anthropic-ai/claude-agent-sdk');
 const { extractStructuredOutput, StructuredOutputExtractionError } = require('./structured-output-extractor');
 const { SdkRefusalError, createRefusalTracker, isRefusalError } = require('./refusal');
-const { servedModelsOf } = require('./sdk-fields');
+const { servedModelsOf, servedModelMatches } = require('./sdk-fields');
 
 // Increase max listeners to support 8 concurrent SDK calls
 // Each SDK call adds exit listeners for subprocess cleanup
@@ -711,11 +711,21 @@ async function sdkQueryImpl({
 
         // A refusal signal earlier in the stream, then a clean finish on another stop
         // reason. If the schema then fails, the refusal is the better name for it, and the
-        // schema failure rides along as its cause. If the result is good, it is returned
-        // and llm_complete records the signal as refusalSignal for the call log.
+        // schema failure rides along as its cause. If a model other than the one the call
+        // resolved to served any of it (result modelUsage), another model finished the
+        // declined request: a fallback the CLI never announced, which the ruling forbids
+        // (a declined request is never answered by another model), so it is declined too,
+        // naming that model. With no modelUsage there is no other model to name. Otherwise
+        // the result is returned and llm_complete records the signal as refusalSignal.
         const pendingRefusal = refusals.pending();
-        if (pendingRefusal && extractionError) {
-          throw declinedError(pendingRefusal, { resultMsg: msg, cause: extractionError });
+        const otherModels = pendingRefusal
+          ? (sdkDiagnostics.servedModels || []).filter((m) => !servedModelMatches(m, resolvedModel))
+          : [];
+        if (pendingRefusal && (extractionError || otherModels.length > 0)) {
+          const declined = otherModels.length > 0
+            ? { ...pendingRefusal, fallbackModel: otherModels.join(', ') }
+            : pendingRefusal;
+          throw declinedError(declined, { resultMsg: msg, ...(extractionError && { cause: extractionError }) });
         }
         if (pendingRefusal) {
           console.warn(

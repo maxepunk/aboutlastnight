@@ -4,29 +4,16 @@
  *
  *   scripts/probe-sdk-isolation.js         -> isolationVerdict
  *   scripts/probe-content-bundle-channel.js -> channelVerdict
- *   scripts/check-model-freshness.js       -> servedModelMatches
+ *
+ * servedModelMatches lives in lib/llm/sdk-fields.js, because the wrapper uses it too;
+ * scripts/check-model-freshness.js imports it from there.
  */
 'use strict';
 
-const { hasMemoryPaths } = require('../../lib/llm/sdk-fields');
+const { hasMemoryPaths, servedModelMatches } = require('../../lib/llm/sdk-fields');
 
 // Aliases the wrapper sends adaptive thinking with display 'summarized' (client.js).
 const THINKING_ALIASES = new Set(['opus', 'sonnet']);
-
-/**
- * Does a served model id (from result modelUsage) name the pinned id? Tolerates a
- * bracketed context suffix ('claude-opus-5-5[1m]') and a dated snapshot suffix
- * ('claude-haiku-4-5-20251001'); anything else is a different model.
- *
- * @param {string} served
- * @param {string} pinned - MODEL_IDS[alias]
- * @returns {boolean}
- */
-function servedModelMatches(served, pinned) {
-  if (typeof served !== 'string' || typeof pinned !== 'string' || !pinned) return false;
-  const base = served.replace(/\[[^\]]*\]$/, '');
-  return base === pinned || (base.startsWith(`${pinned}-`) && /^\d{8}$/.test(base.slice(pinned.length + 1)));
-}
 
 // A leaked tool set can run to a hundred MCP tools; the first names say which servers leaked.
 const MAX_TOOL_NAMES = 25;
@@ -98,4 +85,4 @@ function channelVerdict({ channel = null, error = null } = {}) {
   return { ok: false, failures: [`no structured-output channel reported (channel=${channel})`] };
 }
 
-module.exports = { servedModelMatches, isolationVerdict, channelVerdict, THINKING_ALIASES };
+module.exports = { isolationVerdict, channelVerdict, THINKING_ALIASES };
