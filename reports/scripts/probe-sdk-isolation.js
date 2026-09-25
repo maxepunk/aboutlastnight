@@ -9,11 +9,14 @@
  * model id.
  *
  * Exits non-zero when any call (see scripts/lib/probe-verdicts.js isolationVerdict):
- *   - reports more than one tool at init (or no init at all), printing the tool names;
+ *   - reports tool names at init that are not exactly the tools the call declared, plus
+ *     StructuredOutput when it has a schema (CLI 2.1.282 counts its own structured-output
+ *     tool), or sends no init at all; every undeclared and every missing tool is named;
  *   - loads any memory path;
  *   - streams no readable thinking text (Opus and Sonnet);
  *   - is served by anything other than the pinned id (result modelUsage);
  *   - fails.
+ * Every init line prints the tool names, pass or fail.
  *
  * Usage:
  *   node scripts/probe-sdk-isolation.js                  # opus, sonnet, haiku
@@ -23,7 +26,7 @@
  */
 'use strict';
 
-const { isolationVerdict } = require('./lib/probe-verdicts');
+const { isolationVerdict, declaredToolsOf, expectedInitTools, formatToolNames } = require('./lib/probe-verdicts');
 
 // The call shapes the pipeline uses (pinned at the call sites by lib/__tests__/sdk-tool-gating.test.js):
 // every Opus call and the Sonnet text calls run with no tools; the image calls (Haiku photo
@@ -73,9 +76,20 @@ const USER_PROMPT = [
  * @returns {Promise<{obs: Object, verdict: {ok: boolean, failures: string[]}}>}
  */
 async function probeOne(alias, { sdkQuery, modelIds }) {
+  const call = {
+    ...PROBE_CALLS[alias],
+    prompt: USER_PROMPT,
+    systemPrompt: SYSTEM_PROMPT,
+    jsonSchema: PROBE_SCHEMA,
+    label: `isolation probe (${alias})`
+  };
   const obs = {
     alias,
     pinnedId: modelIds[alias],
+    // What the init frame is judged against: the tools this call declares, and whether it
+    // carries a schema (the CLI then adds its own StructuredOutput tool).
+    declaredTools: declaredToolsOf(call),
+    hasSchema: Boolean(call.jsonSchema),
     inits: [],
     thinkingChars: 0,
     servedModels: null,
@@ -87,11 +101,7 @@ async function probeOne(alias, { sdkQuery, modelIds }) {
   };
   try {
     obs.answer = await sdkQuery({
-      ...PROBE_CALLS[alias],
-      prompt: USER_PROMPT,
-      systemPrompt: SYSTEM_PROMPT,
-      jsonSchema: PROBE_SCHEMA,
-      label: `isolation probe (${alias})`,
+      ...call,
       onProgress: (e) => {
         if (e.type === 'system' && e.subtype === 'init' && e.init) obs.inits.push(e.init);
         if (e.type === 'llm_delta' && e.phase === 'thinking') obs.thinkingChars += (e.deltaText || '').length;
@@ -128,8 +138,13 @@ function parseModels(argv) {
 function report({ obs, verdict }) {
   const lines = [`[${obs.alias}] ${obs.pinnedId}  ${verdict.ok ? 'PASS' : 'FAIL'}` +
     `  (elapsed ${obs.elapsed ?? '?'}s, api ${obs.durationApiMs != null ? (obs.durationApiMs / 1000).toFixed(1) : '?'}s)`];
+  if (Array.isArray(obs.declaredTools)) {
+    lines.push(`  expected tools: [${formatToolNames(expectedInitTools(obs.declaredTools, obs.hasSchema))}]` +
+      ` (declared [${formatToolNames(obs.declaredTools)}]${obs.hasSchema ? ', plus StructuredOutput for the schema' : ''})`);
+  }
   obs.inits.forEach((init, n) => {
-    lines.push(`  init ${n + 1}: model=${init.model} tools=${init.toolCount} permissionMode=${init.permissionMode}` +
+    const names = Array.isArray(init.toolNames) ? `[${formatToolNames(init.toolNames)}]` : '[not reported]';
+    lines.push(`  init ${n + 1}: model=${init.model} tools=${init.toolCount ?? '?'} ${names} permissionMode=${init.permissionMode}` +
       ` effort=${init.effort ?? 'absent'} betas=${JSON.stringify(init.betas ?? null)}` +
       ` memory_paths=${init.memoryPaths === undefined ? 'absent' : JSON.stringify(init.memoryPaths)}`);
   });

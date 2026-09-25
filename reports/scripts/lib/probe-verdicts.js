@@ -15,45 +15,89 @@ const { hasMemoryPaths, servedModelMatches } = require('../../lib/llm/sdk-fields
 // Aliases the wrapper sends adaptive thinking with display 'summarized' (client.js).
 const THINKING_ALIASES = new Set(['opus', 'sonnet']);
 
+// The CLI's own structured-output tool. CLI 2.1.282 lists it at init whenever the call
+// has a schema: at the live gate on 2026-09-25 an Opus call with disableTools and a
+// schema reported exactly this one tool, and a Haiku image call (tools ['Read'] and a
+// schema) reported Read and this. The 2026-09-19 probes on the old CLI did not count it.
+const STRUCTURED_OUTPUT_TOOL = 'StructuredOutput';
+
 // A leaked tool set can run to a hundred MCP tools; the first names say which servers leaked.
 const MAX_TOOL_NAMES = 25;
 
 /**
- * @param {string[]|undefined} names - init.toolNames as forwarded
- * @returns {string} ': a, b, c' (capped), or '' when the init named none
+ * @param {string[]} names
+ * @returns {string} 'a, b, c' (capped at MAX_TOOL_NAMES), or 'none'
  */
-function toolNameList(names) {
-  if (!Array.isArray(names) || names.length === 0) return '';
+function formatToolNames(names) {
+  if (!Array.isArray(names) || names.length === 0) return 'none';
   const shown = names.slice(0, MAX_TOOL_NAMES).join(', ');
   const more = names.length > MAX_TOOL_NAMES ? ` and ${names.length - MAX_TOOL_NAMES} more` : '';
-  return `: ${shown}${more}`;
+  return `${shown}${more}`;
+}
+
+/**
+ * The tool set a wrapper call declares (lib/llm/client.js): `disableTools` wins and means
+ * none; otherwise `tools`. null when the call declares neither, which runs it with the
+ * SDK's full default set.
+ *
+ * @param {{disableTools?: boolean, tools?: string[]}} call - sdkQueryImpl options
+ * @returns {string[]|null}
+ */
+function declaredToolsOf(call) {
+  if (call && call.disableTools) return [];
+  return call && Array.isArray(call.tools) ? call.tools.map(String) : null;
+}
+
+/**
+ * The tool names an init frame must report for a call: exactly the declared tools, plus
+ * the CLI's StructuredOutput when the call has a schema.
+ *
+ * @param {string[]} declaredTools
+ * @param {boolean} hasSchema
+ * @returns {string[]}
+ */
+function expectedInitTools(declaredTools, hasSchema) {
+  const expected = [...new Set(declaredTools)];
+  if (hasSchema && !expected.includes(STRUCTURED_OUTPUT_TOOL)) expected.push(STRUCTURED_OUTPUT_TOOL);
+  return expected;
 }
 
 /**
  * The isolation probe's verdict for one pipeline-shaped call.
  *
- * Fails when: the call failed; no init frame arrived (nothing verified); an init reports
- * more than one tool (the failure names them), or does not report its tools; any memory
- * path loaded; no readable thinking text streamed on Opus or Sonnet; the result named no
- * served model; or any served model is not the pinned id.
+ * Fails when: the call failed; the call declared no tool set; no init frame arrived
+ * (nothing verified); an init's tool names are not exactly the declared tools plus
+ * StructuredOutput when the call has a schema (every undeclared and every missing tool is
+ * named), or the init does not report its tools; any memory path loaded; no readable
+ * thinking text streamed on Opus or Sonnet; the result named no served model; or any
+ * served model is not the pinned id.
  *
  * @param {Object} obs
  * @param {string} obs.alias - 'opus' | 'sonnet' | 'haiku'
  * @param {string} obs.pinnedId - MODEL_IDS[alias]
+ * @param {string[]|null} obs.declaredTools - declaredToolsOf(the call's options)
+ * @param {boolean} [obs.hasSchema] - the call passed a jsonSchema
  * @param {Object[]} [obs.inits] - every forwarded `init` (per-turn frames can repeat)
  * @param {number} [obs.thinkingChars] - total deltaText of llm_delta phase 'thinking'
  * @param {string[]|null} [obs.servedModels] - from llm_complete / llm_error
  * @param {string|null} [obs.error] - the thrown message, if the call failed
  * @returns {{ok: boolean, failures: string[]}}
  */
-function isolationVerdict({ alias, pinnedId, inits = [], thinkingChars = 0, servedModels = null, error = null }) {
+function isolationVerdict({ alias, pinnedId, declaredTools = null, hasSchema = false, inits = [], thinkingChars = 0, servedModels = null, error = null }) {
   const failures = new Set();
   if (error) failures.add(`call failed: ${error}`);
-  if (inits.length === 0) failures.add('no init frame arrived, so the tool count and memory paths are unverified');
+  const expected = Array.isArray(declaredTools) ? expectedInitTools(declaredTools, hasSchema) : null;
+  if (!expected) failures.add('the call declared no tool set (neither tools nor disableTools), so it runs with the full default set');
+  if (inits.length === 0) failures.add('no init frame arrived, so the tool names and memory paths are unverified');
   for (const init of inits) {
-    if (typeof init.toolCount !== 'number') failures.add('an init frame did not report its tools');
-    else if (init.toolCount > 1) {
-      failures.add(`init reported ${init.toolCount} tools (a pipeline call has 0 or 1)${toolNameList(init.toolNames)}`);
+    if (!Array.isArray(init.toolNames)) failures.add('an init frame did not report its tools');
+    else if (expected) {
+      const reported = [...new Set(init.toolNames.map(String))];
+      const undeclared = reported.filter((name) => !expected.includes(name));
+      const missing = expected.filter((name) => !reported.includes(name));
+      const want = `expected exactly: ${formatToolNames(expected)}`;
+      if (undeclared.length > 0) failures.add(`init reported undeclared tools: ${formatToolNames(undeclared)} (${want})`);
+      if (missing.length > 0) failures.add(`init is missing expected tools: ${formatToolNames(missing)} (${want})`);
     }
     if (hasMemoryPaths(init.memoryPaths)) failures.add(`memory loaded into the call: ${JSON.stringify(init.memoryPaths)}`);
   }
@@ -85,4 +129,12 @@ function channelVerdict({ channel = null, error = null } = {}) {
   return { ok: false, failures: [`no structured-output channel reported (channel=${channel})`] };
 }
 
-module.exports = { isolationVerdict, channelVerdict, THINKING_ALIASES };
+module.exports = {
+  isolationVerdict,
+  channelVerdict,
+  declaredToolsOf,
+  expectedInitTools,
+  formatToolNames,
+  THINKING_ALIASES,
+  STRUCTURED_OUTPUT_TOOL
+};
