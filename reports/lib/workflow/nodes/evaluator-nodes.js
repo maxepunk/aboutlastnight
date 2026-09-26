@@ -40,7 +40,7 @@ const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 // Phase 2, brief 2.4: the judges read the record and the director's words through
 // the same renderers and builders the writers use, so a judge sees what it judges.
-const { renderRecordView } = require('../../prompt-renderers/record-view');
+const { renderRecordView, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
 const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
@@ -861,8 +861,10 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // function, so each names a document the record view below shows by that id.
       const allEvidenceIds = extractEvidenceSummary(state.evidenceBundle || {}).allEvidenceIds;
 
-      // Flatten buried items - INCLUDE IDs and amounts for financial verification
-      const buriedTx = Array.isArray(buriedData.transactions) ? buriedData.transactions : [];
+      // Flatten buried items - INCLUDE IDs and amounts for financial verification.
+      // Only rows that are transactions, by the record view's rule, as the arc writer
+      // lists them (phase 2 final fix wave): an unsold memory used to show as "Unknown".
+      const buriedTx = Array.isArray(buriedData.transactions) ? buriedData.transactions.filter(isBuriedTransactionRow) : [];
       const buriedRel = Array.isArray(buriedData.relationships) ? buriedData.relationships : [];
       const buriedEvidence = [...buriedTx, ...buriedRel]
         .map((e, index) => ({

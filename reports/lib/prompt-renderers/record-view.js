@@ -169,13 +169,28 @@ function buriedTransactionFields({ account, amount, time } = {}) {
 }
 
 /**
- * The buried-transactions part of the view: one line per transaction, with only
- * the account, the amount and the time. Nothing else on a buried item is read, so
- * no id, owner or text can reach a prompt through it.
+ * Whether a buried row is a transaction: it has an account, an amount or a time.
  *
  * A buried item with none of the three is not a transaction: it is a memory no one
  * scanned (fetch-nodes tagTokensWithDisposition marks every token in neither list
- * buried, with no transaction data). It is left out rather than printed as a sale.
+ * buried, with no transaction data). Every list of buried transactions a prompt
+ * carries applies this one rule (the view below, the arc writer's and its
+ * reworker's list through extractEvidenceSummary, and the arc judge's), so each
+ * prompt counts the same sales (phase 2 final fix wave).
+ *
+ * @param {*} row - a bundle's buried.transactions entry
+ * @returns {boolean}
+ */
+function isBuriedTransactionRow(row) {
+  if (!row || typeof row !== 'object') return false;
+  return hasValue(row.shellAccount) || hasValue(row.amount) || hasValue(row.time);
+}
+
+/**
+ * The buried-transactions part of the view: one line per transaction, with only
+ * the account, the amount and the time. Nothing else on a buried item is read, so
+ * no id, owner or text can reach a prompt through it. A row that is not a
+ * transaction (isBuriedTransactionRow) is left out rather than printed as a sale.
  *
  * @param {Object|null} evidenceBundle - the curated bundle ({buried: {transactions}})
  * @returns {string} the <buried-transactions> block
@@ -183,8 +198,7 @@ function buriedTransactionFields({ account, amount, time } = {}) {
 function renderBuriedTransactions(evidenceBundle) {
   const buried = (evidenceBundle && evidenceBundle.buried) || {};
   const lines = asArray(buried.transactions)
-    .filter(t => t && typeof t === 'object')
-    .filter(t => hasValue(t.shellAccount) || hasValue(t.amount) || hasValue(t.time))
+    .filter(isBuriedTransactionRow)
     .map(t => `- ${buriedTransactionFields({ account: t.shellAccount, amount: t.amount, time: t.time })}`);
   return `<buried-transactions>\n${lines.length > 0 ? lines.join('\n') : '(none)'}\n</buried-transactions>`;
 }
@@ -217,6 +231,7 @@ module.exports = {
   renderRecordDocuments,
   renderBuriedTransactions,
   buriedTransactionFields,
+  isBuriedTransactionRow,
   recordIdOf,
   DOCUMENT_POINTER
 };

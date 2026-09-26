@@ -62,7 +62,7 @@ const {
 } = require('../../sdk-client/subagents');
 
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
-const { renderRecordView, recordIdOf } = require('../../prompt-renderers/record-view');
+const { renderRecordView, recordIdOf, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { isNoCulpritVerdict, directorAccusationText } = require('../../accusation-verdict');
@@ -1356,8 +1356,11 @@ function extractEvidenceSummary(evidenceBundle) {
     timeline: p.temporalContext || 'BACKGROUND'
   }));
 
-  // Get ALL buried transactions with IDs
-  const buriedTransactions = (buried.transactions || []).map(t => ({
+  // Every buried transaction, by the record view's rule (isBuriedTransactionRow): a
+  // memory no one sold has no account, amount or time and is not a transaction. The
+  // arc writer, its reworker and the arc judge list the same sales the view does
+  // (phase 2 final fix wave; on 092026 20 of the writer's 50 rows were all-null).
+  const buriedTransactions = (buried.transactions || []).filter(isBuriedTransactionRow).map(t => ({
     // id intentionally omitted — prevents identity inference from token IDs
     shellAccount: t.shellAccount,
     amount: t.amount,
