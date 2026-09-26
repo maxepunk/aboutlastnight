@@ -27,14 +27,20 @@ const { renderWriters } = require('./fixtures/render-writers');
 
 const REPO = path.join(__dirname, '..', '..');
 
-/** sha256 and length of each render at df51bc0. */
+/**
+ * sha256 and length of each render at df51bc0, then each deliberate change since:
+ *
+ * - Final fix wave item 1: <QUOTE_BANK> opens with the machine-made label
+ *   (DERIVED_LABELS.directorNotesIndex). One added line in every writer that carries
+ *   the director's notes; the detective outline and article writers carry none.
+ */
 const PINNED = {
-  'outline-journalist': ['676ca98350dd84dd65dd2eb1454bf840e5d655d541c3d7f57bf00ea39085ed57', 14459],
-  'article-journalist': ['8f4decd875b896d5abe1465bdcf71a57bab9e318d8af6f454c03d4e30359e637', 43048],
-  'arcs-journalist': ['6d96968ee3cb2bfcddb127b77ffe092885720e0d84ef321e0a04645622aa8dec', 14132],
+  'outline-journalist': ['297f99ce92b11185dee3021c5761111fc01d92ab0cc915eeb824c110316704bd', 14628],
+  'article-journalist': ['34e04ccfffcd44b3162fd64b8103cfb8115ec6d9d104a7868632d12e81ece645', 43217],
+  'arcs-journalist': ['33a281d15bc0a5bdc9189a5328fc0360aaccc533f66d5e95b83f776cda4716a0', 14301],
   'outline-detective': ['20a166c6d64dd82a4d76da9d278a258ecac12b9e785402cece3dca1431cbcef6', 8226],
   'article-detective': ['30dec185c3fecf7b839d81acdc9b980b1edea7720da098917d5e3e7e50ac1d17', 29004],
-  'arcs-detective': ['598ab31ff8d12994b9371bacc9201af48aa09425aa4926f41f7913b8a15153ef', 14078]
+  'arcs-detective': ['604b12053d9604c7baea83fdc2c6d289274b63e01532497cc3781745d007fe21', 14247]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

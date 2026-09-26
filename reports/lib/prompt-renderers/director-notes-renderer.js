@@ -9,6 +9,26 @@
  */
 
 const { renderDirectorCorrectionsBlock } = require('./director-words-renderer');
+const { buriedTransactionFields } = require('./record-view');
+const { DERIVED_LABELS } = require('./derived-labels');
+
+/**
+ * One linked transaction, as account, amount and time only: the fields a
+ * <buried-transactions> line carries, through the same formatter.
+ *
+ * The transactions the enricher links are buried memories. A thread enriched before
+ * the phase 2 final fix wave stored each with its memory id and owner (`tokenId`,
+ * `tokenOwner`), and this line printed the id, whose prefix names the owner, to every
+ * writer, reworker and judge. Only the three transaction fields are read here, so
+ * neither can reach a prompt whatever a stored link carries.
+ *
+ * @param {Object} tx - a linked transaction ({timestamp, amount, sellingTeam})
+ * @returns {string}
+ */
+function linkedTransactionLine(tx) {
+  const link = tx && typeof tx === 'object' ? tx : {};
+  return buriedTransactionFields({ account: link.sellingTeam, amount: link.amount, time: link.timestamp });
+}
 
 /**
  * Render the enriched director-notes block as XML tags.
@@ -17,6 +37,7 @@ const { renderDirectorCorrectionsBlock } = require('./director-words-renderer');
  * @param {string} [ctx.rawProse] - Verbatim director prose
  * @param {Array} [ctx.quotes] - Extracted quotes
  * @param {Array} [ctx.transactionReferences] - Observation → transaction links
+ *   (each transaction printed as account, amount and time only)
  * @param {Array} [ctx.postInvestigationDevelopments] - Post-investigation news items
  * @param {string[]|string|null} [ctx.corrections] - the director's input-review
  *   corrections, in order (phase 2, brief 2.2). They follow the notes, which are
@@ -44,6 +65,7 @@ ${rawProse || '(no director notes provided)'}
       `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`
     ).join('\n');
     blocks.push(`<QUOTE_BANK>
+${DERIVED_LABELS.directorNotesIndex}
 Verbatim quotes extracted from the director's prose — prefer these when citing what someone said:
 ${lines}
 </QUOTE_BANK>`);
@@ -51,15 +73,12 @@ ${lines}
 
   if (transactionReferences.length > 0) {
     const lines = transactionReferences.map(t => {
-      // A linked transaction is a buried memory: the writer may see its time, amount and
-      // account, never its memory id, whose prefix names the owner (three-layer model).
-      const txs = (t.linkedTransactions || [])
-        .map(tx => `${tx.timestamp} ${tx.amount} → ${tx.sellingTeam}`)
-        .join('; ');
+      const txs = (t.linkedTransactions || []).map(linkedTransactionLine).join('; ');
       return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
     }).join('\n');
     blocks.push(`<TRANSACTION_LINKS>
-Behavioral observations pre-linked to specific burial transactions:
+${DERIVED_LABELS.directorNotesIndex}
+Behavioral observations pre-linked to specific burial transactions, each shown as account, amount and time:
 ${lines}
 </TRANSACTION_LINKS>`);
   }

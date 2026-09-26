@@ -40,22 +40,60 @@ describe('renderDirectorEnrichmentBlock', () => {
     expect(out).toContain('- Remi (to Mel): "do you want to trade a little" — after unlocking a box [high]');
   });
 
-  it('emits <TRANSACTION_LINKS> when references present, formatting each linked transaction', () => {
+  it('emits <TRANSACTION_LINKS> when references present, each linked transaction as account, amount and time', () => {
     const out = renderDirectorEnrichmentBlock({
       rawProse: 'p',
       quotes: [],
       transactionReferences: [{
         excerpt: 'Kai paid Blake',
-        linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000', sellingTeam: 'Cass' }],
+        linkedTransactions: [{ timestamp: '09:40 PM', amount: '$450,000', sellingTeam: 'Cass' }],
         confidence: 'high'
       }],
       postInvestigationDevelopments: []
     });
     expect(out).toContain('<TRANSACTION_LINKS>');
-    expect(out).toContain('"Kai paid Blake"');
-    expect(out).toContain('09:40 PM $450,000 → Cass');
-    expect(out).not.toContain('tay004');
-    expect(out).toContain('(high)');
+    expect(out).toContain('- "Kai paid Blake" → [account: Cass | amount: $450,000 | time: 09:40 PM] (high)');
+  });
+
+  it("prints a linked transaction with the <buried-transactions> line's own formatter", () => {
+    const { buriedTransactionFields } = require('../prompt-renderers/record-view');
+    const tx = { timestamp: '09:40 PM', amount: '$450,000', sellingTeam: 'Cass' };
+    const out = renderDirectorEnrichmentBlock({ rawProse: 'p', transactionReferences: [{ excerpt: 'x', linkedTransactions: [tx], confidence: 'high' }] });
+    expect(out).toContain(buriedTransactionFields({ account: 'Cass', amount: '$450,000', time: '09:40 PM' }));
+  });
+
+  it("never prints a buried memory's id or owner, though a thread enriched before the fix stored both (092026)", () => {
+    const out = renderDirectorEnrichmentBlock({
+      rawProse: 'p',
+      transactionReferences: [{
+        excerpt: 'Kai paid Blake',
+        linkedTransactions: [
+          { timestamp: '09:40 PM', tokenId: 'tay004', tokenOwner: 'Taylor Chase', amount: '$450,000', sellingTeam: 'Cass' },
+          { timestamp: '09:52 PM', tokenId: 'sar004', tokenOwner: 'Sarah Blackwood', amount: '$75,000', sellingTeam: 'Elephant' }
+        ],
+        confidence: 'high'
+      }]
+    });
+    expect(out).toContain('[account: Cass | amount: $450,000 | time: 09:40 PM; account: Elephant | amount: $75,000 | time: 09:52 PM]');
+    ['tay004', 'sar004', 'Taylor', 'Sarah'].forEach((leak) => expect(out).not.toContain(leak));
+  });
+
+  it('labels <QUOTE_BANK> and <TRANSACTION_LINKS> as machine-made (integrator ruling)', () => {
+    const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
+    const out = renderDirectorEnrichmentBlock({
+      rawProse: 'p',
+      quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
+      transactionReferences: [{ excerpt: 'x', linkedTransactions: [], confidence: 'low' }]
+    });
+    expect(out).toContain(`<QUOTE_BANK>
+${DERIVED_LABELS.directorNotesIndex}
+`);
+    expect(out).toContain(`<TRANSACTION_LINKS>
+${DERIVED_LABELS.directorNotesIndex}
+`);
+    expect(DERIVED_LABELS.directorNotesIndex).toMatch(/^A model \(Opus\) built this .* the record decides\.$/);
+    // The director's own words carry no label.
+    expect(out.slice(0, out.indexOf('<QUOTE_BANK>'))).not.toContain(DERIVED_LABELS.directorNotesIndex);
   });
 
   it('emits "no link" marker when linkedTransactions is empty', () => {

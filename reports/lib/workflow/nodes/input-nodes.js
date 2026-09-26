@@ -333,11 +333,15 @@ function deriveSessionId(dateStr, sessionNumber = 1) {
  * orchestratorParsed has no `scoringTimeline` field; the Scoring Timeline data
  * the enricher needs for cross-referencing director observations to transactions
  * lives in `buriedTokens` (one row per burial sale). This helper reshapes those
- * rows into the `{ time, type, detail, team, amount }` shape consumed by
- * `lib/director-enricher.js`.
+ * rows into the `{ time, type, team, amount }` shape consumed by
+ * `lib/director-enricher.js`, which keys each row for the model.
+ *
+ * A row is a buried memory's sale, so it carries no memory id (phase 2 final fix
+ * wave): the id's prefix names the owner, and the enricher's links used to carry the
+ * id from here into every writer, reworker and judge.
  *
  * @param {Array<{tokenId: string, shellAccount: string, amount: number, time?: string}>} buriedTokens
- * @returns {Array<{time: string, type: string, detail: string, team: string, amount: string}>}
+ * @returns {Array<{time: string, type: string, team: string, amount: string}>}
  */
 function projectBuriedTokensToScoringTimeline(buriedTokens) {
   if (!Array.isArray(buriedTokens) || buriedTokens.length === 0) {
@@ -348,7 +352,6 @@ function projectBuriedTokensToScoringTimeline(buriedTokens) {
     return {
       time: entry.sessionTransactionTime || entry.time || '',
       type: 'Sale',
-      detail: entry.tokenId || '',
       team: entry.shellAccount || '',
       amount: `+$${rawAmount.toLocaleString('en-US')}`
     };

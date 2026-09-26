@@ -265,8 +265,9 @@ describe('evidence-preprocessor', () => {
 
       const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
+      // An exposed memory: a buried one never reaches the model (final fix wave).
       await preprocessor.process({
-        memoryTokens: [{ id: 't1', type: 'Video' }],
+        memoryTokens: [{ id: 't1', type: 'Video', disposition: 'exposed' }],
         paperEvidence: [],
         sessionId: 'test'
       });
@@ -284,11 +285,12 @@ describe('evidence-preprocessor', () => {
       const preprocessor = createEvidencePreprocessor({ sdkClient: mockSdk });
 
       const result = await preprocessor.process({
-        memoryTokens: [{ id: 't1', name: 'Test Token' }],
+        memoryTokens: [{ id: 't1', name: 'Test Token', disposition: 'exposed' }],
         paperEvidence: [],
         sessionId: 'test'
       });
 
+      expect(mockSdk).toHaveBeenCalled();
       // Should have fallback item with basic normalization
       expect(result.items.length).toBe(1);
       expect(result.items[0].id).toBe('t1');

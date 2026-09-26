@@ -150,6 +150,25 @@ function formatAmount(amount) {
 }
 
 /**
+ * One buried transaction as a prompt prints it: the account, the amount and the
+ * time, and nothing else. Every prompt line that shows a buried transaction is built
+ * here (the <buried-transactions> block, and the <TRANSACTION_LINKS> the director's
+ * notes are linked to), so no id, owner or text can reach a prompt through either.
+ *
+ * @param {Object} fields
+ * @param {*} [fields.account]
+ * @param {*} [fields.amount] - a number, or a string already formatted
+ * @param {*} [fields.time]
+ * @returns {string} "account: … | amount: … | time: …"
+ */
+function buriedTransactionFields({ account, amount, time } = {}) {
+  const accountText = hasValue(account) ? String(account).trim() : NOT_RECORDED;
+  const amountText = hasValue(amount) ? formatAmount(amount) : NOT_RECORDED;
+  const timeText = hasValue(time) ? String(time).trim() : NOT_RECORDED;
+  return `account: ${accountText} | amount: ${amountText} | time: ${timeText}`;
+}
+
+/**
  * The buried-transactions part of the view: one line per transaction, with only
  * the account, the amount and the time. Nothing else on a buried item is read, so
  * no id, owner or text can reach a prompt through it.
@@ -166,12 +185,7 @@ function renderBuriedTransactions(evidenceBundle) {
   const lines = asArray(buried.transactions)
     .filter(t => t && typeof t === 'object')
     .filter(t => hasValue(t.shellAccount) || hasValue(t.amount) || hasValue(t.time))
-    .map(t => {
-      const account = hasValue(t.shellAccount) ? String(t.shellAccount).trim() : NOT_RECORDED;
-      const amount = hasValue(t.amount) ? formatAmount(t.amount) : NOT_RECORDED;
-      const time = hasValue(t.time) ? String(t.time).trim() : NOT_RECORDED;
-      return `- account: ${account} | amount: ${amount} | time: ${time}`;
-    });
+    .map(t => `- ${buriedTransactionFields({ account: t.shellAccount, amount: t.amount, time: t.time })}`);
   return `<buried-transactions>\n${lines.length > 0 ? lines.join('\n') : '(none)'}\n</buried-transactions>`;
 }
 
@@ -202,6 +216,7 @@ module.exports = {
   renderRecordView,
   renderRecordDocuments,
   renderBuriedTransactions,
+  buriedTransactionFields,
   recordIdOf,
   DOCUMENT_POINTER
 };

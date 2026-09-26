@@ -182,6 +182,59 @@ function exposedContentFields(rawData, disposition) {
 }
 
 /**
+ * Whether a normalized item is a buried memory: a memory token not tagged exposed
+ * (an untagged one counts as buried, as it does everywhere else). Paper evidence is
+ * always exposed.
+ *
+ * @param {Object} item - a normalized batch item ({sourceType, disposition})
+ * @returns {boolean}
+ */
+function isBuriedMemory(item) {
+  return item.sourceType === 'memory-token' && item.disposition !== 'exposed';
+}
+
+/**
+ * The preprocessed item of a buried memory, made in code from its sale (phase 2
+ * final fix wave). It keeps the input's id, so the pipeline can still route the
+ * memory, but it carries no text, owner or name, and it never goes to the model:
+ * a buried memory's id and name name its owner. Its summary is the sale, the one
+ * thing the record lets anyone say about it.
+ *
+ * @param {Object} item - a normalized batch item for a buried memory
+ * @returns {Object} the preprocessed item
+ */
+function buriedMemoryItem(item) {
+  const raw = item.rawData || {};
+  const shellAccount = raw.shellAccount || null;
+  const transactionAmount = raw.transactionAmount || null;
+  const sessionTransactionTime = raw.sessionTransactionTime || null;
+  const sold = shellAccount || transactionAmount || sessionTransactionTime;
+  const amountText = typeof transactionAmount === 'number'
+    ? `$${transactionAmount.toLocaleString('en-US')}`
+    : transactionAmount;
+  const summary = sold
+    ? `Buried memory: sold to ${shellAccount || 'an unrecorded account'} for ${amountText || 'an unrecorded amount'} at ${sessionTransactionTime || 'an unrecorded time'}`
+    : 'Buried memory: no sale recorded';
+  return {
+    id: item.id,
+    sourceType: 'memory-token',
+    originalType: item.originalType,
+    disposition: 'buried',
+    summary: summary.substring(0, 150),
+    characterRefs: [],
+    ownerLogline: null,
+    narrativeTimelineRef: null,
+    narrativeTimelineContext: null,
+    shellAccount,
+    transactionAmount,
+    sessionTransactionTime,
+    tags: [],
+    groupCluster: null,
+    sfFields: {}
+  };
+}
+
+/**
  * Create an evidence preprocessor instance
  *
  * @param {Object} options - Configuration options
@@ -250,10 +303,18 @@ function createEvidencePreprocessor(options = {}) {
       return createEmptyResult(sessionId, startTime);
     }
 
-    // Split into batches
-    const batches = createBatches(allItems, BATCH_SIZE);
+    // A buried memory never reaches the model (phase 2 final fix wave). Its batch
+    // entry carried its id and its name, and a memory's id and name name its owner.
+    // All Haiku could say of it is the sale, which the code already holds, so its
+    // item is made here, from the transaction alone. An untagged memory counts as
+    // buried, as it does everywhere else.
+    const buriedItems = allItems.filter(isBuriedMemory).map(buriedMemoryItem);
+    const modelItems = allItems.filter(item => !isBuriedMemory(item));
 
-    console.log(`[EvidencePreprocessor] Processing ${allItems.length} items in ${batches.length} batches (${BATCH_SIZE} per batch, ${CONCURRENCY} concurrent)`);
+    // Split into batches
+    const batches = createBatches(modelItems, BATCH_SIZE);
+
+    console.log(`[EvidencePreprocessor] Processing ${modelItems.length} items in ${batches.length} batches (${BATCH_SIZE} per batch, ${CONCURRENCY} concurrent); ${buriedItems.length} buried memories normalized without the model`);
 
     // Process batches with controlled concurrency
     const results = await processWithConcurrency(batches, CONCURRENCY, async (batch, batchIndex) => {
@@ -262,7 +323,7 @@ function createEvidencePreprocessor(options = {}) {
     });
 
     // Flatten results and handle errors
-    const processedItems = [];
+    const processedItems = [...buriedItems];
     let successCount = 0;
     let errorCount = 0;
 
@@ -598,6 +659,7 @@ module.exports = {
     processWithConcurrency,
     processBatch,
     createEmptyResult,
+    buriedMemoryItem,
     BATCH_RESPONSE_SCHEMA
   }
 };

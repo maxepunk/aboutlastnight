@@ -30,10 +30,16 @@ describe('projectBuriedTokensToScoringTimeline', () => {
     expect(result[0]).toEqual({
       time: '09:40 PM',
       type: 'Sale',
-      detail: 'tay004',
       team: 'Cass',
       amount: '+$450,000'
     });
+  });
+
+  it("carries no memory id: a row is a buried memory's sale, and the id names its owner (final fix wave)", () => {
+    const result = projectBuriedTokensToScoringTimeline([
+      { tokenId: 'tay004', shellAccount: 'Cass', amount: 450000, time: '09:40 PM' }
+    ]);
+    expect(JSON.stringify(result)).not.toContain('tay004');
   });
 
   it('prefers sessionTransactionTime over time when both are present', () => {
@@ -69,7 +75,6 @@ describe('projectBuriedTokensToScoringTimeline', () => {
     const result = projectBuriedTokensToScoringTimeline(input);
 
     expect(result).toHaveLength(3);
-    expect(result.map(r => r.detail)).toEqual(['sar004', 'qui001', 'zia001']);
     expect(result.map(r => r.team)).toEqual(['Elephant', 'Party Guy', 'Sarah']);
     expect(result.map(r => r.time)).toEqual(['09:26 PM', '08:43 PM', '07:45 PM']);
     result.forEach(row => expect(row.type).toBe('Sale'));

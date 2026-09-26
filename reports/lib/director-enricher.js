@@ -69,16 +69,18 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
         properties: {
           excerpt: { type: 'string', description: 'Observation text that references a transaction' },
           proseOffset: { type: 'integer', minimum: 0 },
+          // Phase 2 final fix wave: a link names its <SCORING_TIMELINE> row by the row's
+          // opaque key, and the code maps the key back to the row. The rows are buried
+          // memories' sales; they carry no memory id or owner, so the model never sees
+          // one and cannot echo one.
           linkedTransactions: {
             type: 'array',
             items: {
               type: 'object',
+              required: ['key'],
+              additionalProperties: false,
               properties: {
-                timestamp: { type: 'string', description: 'e.g., "09:40 PM"' },
-                tokenId: { type: 'string' },
-                tokenOwner: { type: 'string' },
-                sellingTeam: { type: 'string' },
-                amount: { type: 'string', description: 'Formatted string, e.g., "$450,000"' }
+                key: { type: 'string', description: 'The key of the matching <SCORING_TIMELINE> row, exactly as given (e.g., "tx-3")' }
               }
             }
           },
@@ -130,12 +132,71 @@ const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounde
 Hard rules:
 1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
 2. Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes (npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).
-3. transactionReferences: link an observation to a scoring-timeline row ONLY when timestamp, actor, and amount converge. If no row matches cleanly, emit linkedTransactions: [] with confidence: "low" and a linkReasoning explaining the ambiguity. Do NOT fabricate.
+3. transactionReferences: link an observation to a scoring-timeline row ONLY when timestamp, actor, and amount converge, naming each linked row by its key. If no row matches cleanly, emit linkedTransactions: [] with confidence: "low" and a linkReasoning explaining the ambiguity. Do NOT fabricate.
 4. quotes: only extract phrases that appear in quotation marks in the prose, or unambiguous direct speech. Preserve wording exactly. Confidence bands: "high" = the speaker is named in the SAME SENTENCE as the quote; "medium" = the speaker is not named beside the quote but is unambiguous from the SURROUNDING PARAGRAPH; "low" = anything else. Never guess a speaker to reach a higher band.
 5. postInvestigationDevelopments: only passages with explicit post-investigation temporal markers ("just been announced", "currently whereabouts unknown", "is on his way to", "following the investigation", "at the time of this article's writing").
 6. Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.
 
 You are an INDEXER, not a SUMMARIZER.`;
+
+/**
+ * The scoring timeline as the enricher's prompt prints it: each row keyed `tx-1`,
+ * `tx-2`, … in order, with its time, type, account (`team`) and amount, and nothing
+ * else.
+ *
+ * The rows are buried memories' sales. Only these fields are read, so a row that
+ * still carries its memory id (the projection used to put it in `detail`) cannot
+ * print it. The key is the join: the model names a row by it, and
+ * resolveTransactionLinks maps it back to the row.
+ *
+ * @param {Array} scoringTimeline - rows ({time, type, team, amount})
+ * @returns {Array<{key: string, time: string, type: string, team: string, amount: string}>}
+ */
+function keyedScoringTimeline(scoringTimeline) {
+  const text = (value) => (value === null || value === undefined ? '' : String(value));
+  return (Array.isArray(scoringTimeline) ? scoringTimeline : [])
+    .map((row, i) => {
+      const r = row && typeof row === 'object' ? row : {};
+      return { key: `tx-${i + 1}`, time: text(r.time), type: text(r.type), team: text(r.team), amount: text(r.amount) };
+    });
+}
+
+/**
+ * Map the model's links back to the timeline rows they name, by key. A link whose
+ * key names no row is dropped and counted. Each resolved link carries the row's
+ * time, amount and account only (the fields a <buried-transactions> line carries),
+ * so the stored enrichment holds no memory id or owner either.
+ *
+ * @param {Array} references - the model's transactionReferences
+ * @param {Array} scoringTimeline - the rows the prompt was built from
+ * @returns {{transactionReferences: Array, droppedLinks: number}}
+ */
+function resolveTransactionLinks(references, scoringTimeline) {
+  const rowsByKey = new Map(keyedScoringTimeline(scoringTimeline).map(row => [row.key, row]));
+  let droppedLinks = 0;
+  const transactionReferences = (Array.isArray(references) ? references : [])
+    .filter(ref => ref && typeof ref === 'object')
+    .map(ref => {
+      const linkedTransactions = [];
+      for (const link of (Array.isArray(ref.linkedTransactions) ? ref.linkedTransactions : [])) {
+        const key = link && typeof link.key === 'string' ? link.key.trim() : '';
+        const row = rowsByKey.get(key);
+        if (!row) {
+          droppedLinks += 1;
+          continue;
+        }
+        linkedTransactions.push({ timestamp: row.time, amount: row.amount.replace(/^\+/, ''), sellingTeam: row.team });
+      }
+      return {
+        excerpt: ref.excerpt,
+        ...(Number.isInteger(ref.proseOffset) && { proseOffset: ref.proseOffset }),
+        linkedTransactions,
+        confidence: ref.confidence,
+        ...(typeof ref.linkReasoning === 'string' && { linkReasoning: ref.linkReasoning })
+      };
+    });
+  return { transactionReferences, droppedLinks };
+}
 
 function buildEnrichmentPrompt({
   rawProse,
@@ -152,7 +213,7 @@ function buildEnrichmentPrompt({
   const npcsArr = Array.isArray(npcs) ? npcs : [];
   const shellAccountsArr = Array.isArray(shellAccounts) ? shellAccounts : [];
   const evidenceLogArr = Array.isArray(detectiveEvidenceLog) ? detectiveEvidenceLog : [];
-  const timelineArr = Array.isArray(scoringTimeline) ? scoringTimeline : [];
+  const timelineArr = keyedScoringTimeline(scoringTimeline);
 
   const rosterBlock = rosterArr.length > 0 ? rosterArr.join(', ') : '(none provided)';
 
@@ -217,7 +278,7 @@ ${rawProse}
 <ENRICHMENT_RULES>
 1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
 2. Use ONLY roster names from the roster section as keys in characterMentions.
-3. Link transactionReferences only when timestamp, actor, and amount converge with the scoring timeline. Otherwise confidence: "low" and empty linkedTransactions.
+3. Link transactionReferences only when timestamp, actor, and amount converge with the scoring timeline, naming each linked row by its key. Otherwise confidence: "low" and empty linkedTransactions.
 4. Extract quotes verbatim. Confidence: "high" = speaker named in the same sentence; "medium" = speaker inferable from the surrounding paragraph; "low" = otherwise.
 5. postInvestigationDevelopments only for passages with explicit post-investigation markers.
 6. Empty arrays are valid. Never fabricate.
@@ -323,15 +384,27 @@ async function enrichDirectorNotes(context, sdk) {
       console.warn(`[enrichDirectorNotes] dropped ${droppedQuotes} quote(s) not found verbatim in prose`);
     }
 
+    // The model names each linked row by its key; the row itself comes from the
+    // timeline this call was given (phase 2 final fix wave).
+    const { transactionReferences, droppedLinks } =
+      resolveTransactionLinks(result.transactionReferences, context.scoringTimeline);
+    if (droppedLinks > 0) {
+      console.warn(`[enrichDirectorNotes] dropped ${droppedLinks} transaction link(s) whose key names no scoring-timeline row`);
+    }
+    const warnings = {
+      ...(droppedQuotes > 0 && { droppedQuotes }),
+      ...(droppedLinks > 0 && { droppedLinks })
+    };
+
     // Normalize optional fields so downstream consumers always see the expected shape
     return {
       rawProse,
       characterMentions: result.characterMentions || {},
       entityNotes: result.entityNotes || { npcsReferenced: [], shellAccountsReferenced: [] },
       quotes,
-      transactionReferences: result.transactionReferences || [],
+      transactionReferences,
       postInvestigationDevelopments: result.postInvestigationDevelopments || [],
-      ...(droppedQuotes > 0 && { _enrichmentWarnings: { droppedQuotes } }),
+      ...(Object.keys(warnings).length > 0 && { _enrichmentWarnings: warnings }),
       ...(indexedNothing && substantialProse && {
         _enrichmentFallback: { reason: 'model returned no indexes' }
       })
@@ -346,5 +419,7 @@ module.exports = {
   DIRECTOR_NOTES_ENRICHED_SCHEMA,
   buildEnrichmentPrompt,
   enrichDirectorNotes,
-  createFallback
+  createFallback,
+  keyedScoringTimeline,
+  resolveTransactionLinks
 };

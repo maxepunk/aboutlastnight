@@ -25,7 +25,17 @@ const DERIVED_LABELS = {
   /** photoAnalyses, from analyzePhotos and finalizePhotoAnalyses (Haiku). */
   photoDescriptions:
     'A model (Haiku) wrote them from the photos. They are derived, not the record: ' +
-    'where they differ from the record, the record decides.'
+    'where they differ from the record, the record decides.',
+
+  /**
+   * The director-notes indexes, from enrichDirectorNotes (Opus): <QUOTE_BANK> and
+   * <TRANSACTION_LINKS> (integrator ruling, phase 2 final fix wave: they are
+   * machine-made). The notes themselves, and the corrections after them, are the
+   * director's words and carry no label.
+   */
+  directorNotesIndex:
+    'A model (Opus) built this from the director\'s notes above. It is derived, not the record: ' +
+    'where it differs from the notes or the rest of the record, the record decides.'
 };
 
 module.exports = { DERIVED_LABELS };

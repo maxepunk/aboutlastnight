@@ -151,18 +151,49 @@ describe('EvidencePreprocessor batch input: what Haiku reads', () => {
     expect(byId.ale003.description).toBe(EXPOSED_TEXT);
   });
 
-  test('a buried memory sends nothing more than before: no text, only its name and transaction', async () => {
+  test('a buried memory is not sent at all: not its id, its name, its owner or its text (final fix wave)', async () => {
+    // Its id and name name its owner; all Haiku could say of it is the sale.
     const { prompt, byId } = await batchInput();
-    expect(byId.ril001.description).toBeUndefined();
-    expect(byId.ril001.name).toBe('RIL001 - Riley knows');
-    expect(byId.ril001.shellAccount).toBe('Melanie');
-    expect(prompt).not.toContain(BURIED_TEXT);
-    expect(byId.unk001.description).toBeUndefined();
-    expect(prompt).not.toContain('Untagged memory text.');
+    expect(byId.ril001).toBeUndefined();
+    expect(byId.unk001).toBeUndefined();
+    ['ril001', 'RIL001', 'Riley', BURIED_TEXT, 'unk001', 'UNK001', 'Untagged memory text.'].forEach((leak) =>
+      expect(prompt).not.toContain(leak));
   });
 
   test('a paper document still sends its description', async () => {
     const { byId } = await batchInput();
     expect(byId.p1.description).toBe(PAPER_TEXT);
+  });
+});
+
+/**
+ * Final fix wave: a buried memory's item is made in code from its sale. It keeps the
+ * input's id (the pipeline still routes it) and carries no text, owner or name.
+ */
+describe('EvidencePreprocessor: a buried memory is normalized without the model', () => {
+  test('its item keeps the id, the disposition and the sale; the summary is the sale', async () => {
+    const sdkClient = jest.fn();
+    const result = await createEvidencePreprocessor({ sdkClient }).process({
+      memoryTokens: [
+        { tokenId: 'ril001', name: 'RIL001 - Riley knows', disposition: 'buried', fullDescription: 'Riley reads the test.',
+          owners: ['Riley Chen'], owner: { logline: 'Riley, the accountant' },
+          shellAccount: 'Melanie', transactionAmount: 75000, sessionTransactionTime: '07:50 PM' },
+        { tokenId: 'unk001', name: 'UNK001 - untagged', fullDescription: 'Untagged memory text.' }
+      ],
+      paperEvidence: [],
+      sessionId: 'test'
+    });
+    expect(sdkClient).not.toHaveBeenCalled();
+    const [ril, unk] = result.items;
+    expect(ril).toMatchObject({
+      id: 'ril001', sourceType: 'memory-token', disposition: 'buried',
+      summary: 'Buried memory: sold to Melanie for $75,000 at 07:50 PM',
+      shellAccount: 'Melanie', transactionAmount: 75000, sessionTransactionTime: '07:50 PM',
+      ownerLogline: null, characterRefs: []
+    });
+    expect(unk).toMatchObject({ id: 'unk001', disposition: 'buried', summary: 'Buried memory: no sale recorded', shellAccount: null });
+    const { id: _ril, ...rilRest } = ril;
+    const { id: _unk, ...unkRest } = unk;
+    expect(JSON.stringify([rilRest, unkRest])).not.toMatch(/ril001|RIL001|Riley|unk001|UNK001|Untagged/);
   });
 });

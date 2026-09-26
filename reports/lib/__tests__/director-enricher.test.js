@@ -33,12 +33,12 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
     const item = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.transactionReferences.items;
     expect(item.properties.excerpt.type).toBe('string');
     expect(item.properties.linkedTransactions.type).toBe('array');
+    // Final fix wave: a link names its timeline row by key, and nothing else. The
+    // model never sees a memory id, so the schema has no field to echo one into.
     const tx = item.properties.linkedTransactions.items;
-    expect(tx.properties.timestamp.type).toBe('string');
-    expect(tx.properties.tokenId.type).toBe('string');
-    expect(tx.properties.tokenOwner.type).toBe('string');
-    expect(tx.properties.sellingTeam.type).toBe('string');
-    expect(tx.properties.amount.type).toBe('string');
+    expect(Object.keys(tx.properties)).toEqual(['key']);
+    expect(tx.required).toEqual(['key']);
+    expect(tx.additionalProperties).toBe(false);
     expect(item.properties.confidence.enum).toEqual(['high', 'medium', 'low']);
     expect(item.properties.linkReasoning.type).toBe('string');
   });
@@ -613,5 +613,56 @@ describe('the corrections block (phase 2, brief 2.2)', () => {
     const sdk = jest.fn().mockResolvedValue({ characterMentions: {}, quotes: [], transactionReferences: [] });
     const result = await enrichDirectorNotes({ rawProse: 'Vic to Ashe: "very interesting."', corrections: ['It was Blake.'] }, sdk);
     expect(result.rawProse).toBe('Vic to Ashe: "very interesting."');
+  });
+});
+
+describe('the enricher never carries a buried memory id (phase 2 final fix wave)', () => {
+  const { keyedScoringTimeline, resolveTransactionLinks } = require('../director-enricher');
+  const TIMELINE = [
+    { time: '09:26 PM', type: 'Sale', team: 'Elephant', amount: '+$450,000' },
+    // A row from an older projection that still carried the id in `detail`.
+    { time: '09:40 PM', type: 'Sale', detail: 'tay004/Taylor Chase', team: 'Cass', amount: '+$75,000' }
+  ];
+
+  it('keys each timeline row tx-1, tx-2, ... and prints only its time, type, account and amount', () => {
+    expect(keyedScoringTimeline(TIMELINE)).toEqual([
+      { key: 'tx-1', time: '09:26 PM', type: 'Sale', team: 'Elephant', amount: '+$450,000' },
+      { key: 'tx-2', time: '09:40 PM', type: 'Sale', team: 'Cass', amount: '+$75,000' }
+    ]);
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', scoringTimeline: TIMELINE });
+    expect(userPrompt).toContain('"key": "tx-2"');
+    expect(`${systemPrompt}\n${userPrompt}`).not.toMatch(/tay004|Taylor/);
+  });
+
+  it('asks the model to name each linked row by its key, in the system rule and the user rule', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
+    expect(systemPrompt).toContain('naming each linked row by its key');
+    expect(userPrompt).toContain('naming each linked row by its key');
+  });
+
+  it('maps each key back to its row as time, amount and account; an unknown key is dropped and counted', () => {
+    const { transactionReferences, droppedLinks } = resolveTransactionLinks([
+      { excerpt: 'Kai paid Blake', linkedTransactions: [{ key: 'tx-2' }, { key: 'tx-9' }], confidence: 'high', linkReasoning: 'time and amount', tokenId: 'tay004' }
+    ], TIMELINE);
+    expect(transactionReferences).toEqual([{
+      excerpt: 'Kai paid Blake',
+      linkedTransactions: [{ timestamp: '09:40 PM', amount: '$75,000', sellingTeam: 'Cass' }],
+      confidence: 'high',
+      linkReasoning: 'time and amount'
+    }]);
+    expect(droppedLinks).toBe(1);
+  });
+
+  it('enrichDirectorNotes resolves the links against the timeline it was given, and warns of a dropped one', async () => {
+    const sdk = jest.fn().mockResolvedValue({
+      characterMentions: {}, quotes: [], postInvestigationDevelopments: [],
+      transactionReferences: [{ excerpt: 'Vic was working the room.', linkedTransactions: [{ key: 'tx-1' }, { key: 'sar004' }], confidence: 'medium' }]
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await enrichDirectorNotes({ rawProse: 'Vic was working the room.', scoringTimeline: TIMELINE }, sdk);
+    warn.mockRestore();
+    expect(result.transactionReferences[0].linkedTransactions).toEqual([{ timestamp: '09:26 PM', amount: '$450,000', sellingTeam: 'Elephant' }]);
+    expect(result._enrichmentWarnings).toEqual({ droppedLinks: 1 });
+    expect(JSON.stringify(result)).not.toMatch(/sar004|tay004/);
   });
 });

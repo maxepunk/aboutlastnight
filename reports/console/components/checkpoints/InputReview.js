@@ -368,7 +368,9 @@ function InputReview({ data, onApprove, onReject, theme }) {
                     : t.linkedTransactions.map((tx, j) =>
                         React.createElement('div', { key: j, className: 'tx-ref-row__tx text-sm' },
                           React.createElement('span', { className: 'text-muted' }, tx.timestamp + ' \u00B7 '),
-                          React.createElement('span', null, tx.tokenId + ' (' + tx.tokenOwner + ') '),
+                          // Links carry no memory id since the phase 2 final fix wave;
+                          // a thread enriched before it still shows the id it stored.
+                          tx.tokenId && React.createElement('span', null, tx.tokenId + (tx.tokenOwner ? ' (' + tx.tokenOwner + ')' : '') + ' '),
                           React.createElement('span', { className: 'text-secondary' }, tx.amount + ' \u2192 ' + tx.sellingTeam)
                         )
                       ),
