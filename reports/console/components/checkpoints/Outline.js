@@ -12,7 +12,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, safeStringify, editBtn, EvalBar } = window.Console.utils;
+const { Badge, safeStringify, editBtn, EvalBar, TracePanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const EditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
@@ -545,6 +545,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   // off it. Task 3 sends `lastEvaluation` pre-selected for 'outline';
   // lastEvaluationFrom keeps the array fallback for an older payload.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'outline'));
+  // Brief 2.7: what the automatic passes of this round did before the director arrived.
+  const trace = ViewLogic.traceView(data && data.trace);
   const previousOutline = (revisionCache && revisionCache.outline) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -1279,6 +1281,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
     // Evaluation bar (what Opus said about THIS outline)
     React.createElement(EvalBar, { view: evaluation }),
+
+    // The trace (brief 2.7): the automatic reworks of this round, before the director
+    React.createElement(TracePanel, { view: trace }),
 
     // Outline sections (theme-aware)
     ...renderOutlineSections(),

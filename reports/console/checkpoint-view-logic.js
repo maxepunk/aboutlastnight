@@ -886,6 +886,113 @@
     return typeof pendingNote === 'string' && pendingNote ? pendingNote : asString(prefill);
   }
 
+  // ── The trace (phase 2, brief 2.7) ────────────────────────────────────────
+  // What the automatic reworks did before the director arrived at the outline or
+  // article stop. Nothing from before an automatic pass used to reach a stop: the
+  // version it started from was cleared by the reworker, and the evaluation's reasons
+  // were overwritten by the next evaluation. The server now sends each pass of the
+  // current round under `trace` (server.js#traceForStop): its number, trigger,
+  // findings, time, and the scopes it changed (`changedScopes`, from the diff of the
+  // version it started from against the one it produced). Read-only.
+
+  var TRACE_TRIGGER_LABELS = {
+    check: 'Why it ran: the check failed.',
+    evaluation: 'Why it ran: the evaluation failed.'
+  };
+
+  /** HH:MM in the viewer's own clock, or '' for a missing or unreadable time. */
+  function traceTime(at) {
+    var ms = typeof at === 'string' ? Date.parse(at) : NaN;
+    if (Number.isNaN(ms)) return '';
+    var d = new Date(ms);
+    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  /**
+   * One line per criterion the evaluation scored, in its own order. Accepts the
+   * current `{score, type, notes, fix}` object and a bare number, as
+   * buildRevisionContext does.
+   */
+  function traceCriteria(scores) {
+    if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return [];
+    return Object.keys(scores).map(function (name) {
+      var value = scores[name];
+      var detail = value && typeof value === 'object' ? value : {};
+      var score = typeof value === 'number' ? value
+        : (typeof detail.score === 'number' ? detail.score : null);
+      var text = name + ': ' + (score === null ? 'unscored' : score.toFixed(2));
+      if (asString(detail.type)) text += ' (' + detail.type + ')';
+      if (asString(detail.notes).trim()) text += '. ' + detail.notes.trim();
+      if (asString(detail.fix).trim()) text += ' Fix: ' + detail.fix.trim();
+      return { key: name, text: text };
+    });
+  }
+
+  function traceFindingList(label, items) {
+    return { label: label + ' (' + items.length + ')', items: items };
+  }
+
+  /**
+   * What the pass changed, by scope. `changedScopes` is null when the server could
+   * not diff (a rework that errored leaves no version), and [] when the rework
+   * returned the text it was given: both are said in words rather than left blank.
+   */
+  function traceChanged(changedScopes) {
+    if (!Array.isArray(changedScopes)) {
+      return { labels: [], text: 'What changed: not recorded, because one of the two versions is missing.' };
+    }
+    var labels = changedScopes
+      .filter(function (key) { return typeof key === 'string' && key.length > 0; })
+      .map(scopeLabel);
+    if (labels.length === 0) {
+      return { labels: [], text: 'What changed: nothing. The rework returned the same text.' };
+    }
+    return { labels: labels, text: 'What changed: ' + labels.join(', ') };
+  }
+
+  /**
+   * The trace panel's model for one stop.
+   *
+   * @param {Array|null} trace - data.trace at the outline or article stop
+   * @returns {{any: boolean, title: string, passes: Array<{key: string, heading: string,
+   *            triggerLabel: string, mustFix: {label: string, items: string[]},
+   *            shouldConsider: {label: string, items: string[]}, noFindings: boolean,
+   *            changed: {labels: string[], text: string}, guidance: string,
+   *            criteria: Array<{key: string, text: string}>, criteriaLabel: string}>}}
+   */
+  function traceView(trace) {
+    var passes = asArray(trace)
+      .filter(function (p) { return p && typeof p === 'object'; })
+      .map(function (p, index) {
+        var findings = p.findings && typeof p.findings === 'object' ? p.findings : {};
+        var number = typeof p.pass === 'number' && p.pass > 0 ? p.pass : index + 1;
+        var time = traceTime(p.at);
+        var mustFix = stringList(findings.structuralIssues);
+        var shouldConsider = stringList(findings.advisoryWarnings);
+        var guidance = asString(findings.revisionGuidance).trim();
+        var criteria = traceCriteria(findings.criteriaScores);
+        return {
+          key: 'pass-' + number + '-' + index,
+          heading: 'Automatic pass ' + number + (time ? ', at ' + time : ''),
+          triggerLabel: TRACE_TRIGGER_LABELS[p.trigger] || 'Why it ran: not recorded.',
+          mustFix: traceFindingList('Must fix', mustFix),
+          shouldConsider: traceFindingList('Should consider', shouldConsider),
+          noFindings: mustFix.length === 0 && shouldConsider.length === 0 && !guidance && criteria.length === 0,
+          changed: traceChanged(p.changedScopes),
+          guidance: guidance ? 'Guidance to the writer: ' + guidance : '',
+          criteria: criteria,
+          criteriaLabel: 'Scores (' + criteria.length + ')'
+        };
+      });
+    var n = passes.length;
+    return {
+      any: n > 0,
+      title: 'Trace: ' + n + ' automatic rework' + (n === 1 ? '' : 's') + ' ran this round before you arrived',
+      passes: passes
+    };
+  }
+
   var api = {
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
@@ -899,6 +1006,7 @@
     approveLabel: approveLabel,
     wordTail: wordTail,
     steeringView: steeringView,
+    traceView: traceView,
     roundsBanner: roundsBanner,
     outlineReviewPayload: outlineReviewPayload,
     articleReviewPayload: articleReviewPayload,

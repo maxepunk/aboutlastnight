@@ -1988,6 +1988,82 @@ textarea.input {
   color: var(--accent-amber);
 }
 
+/* ── The Trace (phase 2, brief 2.7) ──
+   The automatic reworks that ran this round before the director reached the stop.
+   History, not a defect list, so the frame is amber; the findings inside keep the
+   structural-red / advisory-amber convention of the evaluation bar and fact-check. */
+.trace {
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid rgba(212, 168, 83, 0.35);
+  border-radius: var(--radius-md);
+}
+
+.trace__title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--accent-amber);
+  margin: 0 0 var(--space-sm);
+}
+
+.trace__pass {
+  padding-top: var(--space-sm);
+  border-top: 1px solid rgba(212, 168, 83, 0.1);
+  margin-bottom: var(--space-sm);
+}
+
+.trace__pass:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.trace__heading {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.trace__trigger,
+.trace__changed {
+  font-size: 0.85rem;
+  margin: var(--space-xs) 0 0;
+}
+
+.trace__label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: var(--space-xs) 0 0;
+}
+
+.trace__label--structural {
+  color: var(--accent-red);
+}
+
+.trace__label--advisory {
+  color: var(--accent-amber);
+}
+
+.trace__list {
+  list-style: disc;
+  padding-left: 1.2rem;
+  margin: var(--space-xs) 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.trace__list--structural {
+  color: var(--accent-red);
+}
+
+.trace__list--advisory {
+  color: var(--accent-amber);
+}
+
 /* ── Word Count ── */
 .word-count {
   display: flex;

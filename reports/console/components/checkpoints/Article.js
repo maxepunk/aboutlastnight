@@ -10,7 +10,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar, TracePanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ArticleEditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
@@ -681,6 +681,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // the old renderEvalBar read `.overallScore` (and `advisoryNotes`, not a field)
   // off it and rendered null in every session.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
+  // Brief 2.7: what the automatic passes of this round did before the director arrived.
+  const trace = ViewLogic.traceView(data && data.trace);
   // Absolute paths of this session's photos, for photoUrl (H13/F9).
   const sessionPhotos = (data && data.sessionPhotos) || [];
   // Task 3.6's programmatic fact-check of THIS bundle (baseline §5).
@@ -1414,6 +1416,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
     // Evaluation bar
     React.createElement(EvalBar, { view: evaluation }),
+
+    // The trace (brief 2.7): the automatic reworks of this round, before the director
+    React.createElement(TracePanel, { view: trace }),
 
     // Fact-check defect list, above the article body
     React.createElement(FactCheckPanel, { summary: factCheck, cardHeadlines: cardHeadlines }),

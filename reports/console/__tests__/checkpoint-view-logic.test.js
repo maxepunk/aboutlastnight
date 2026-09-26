@@ -786,3 +786,115 @@ describe('fact-check card list and counts (slice 2.5)', () => {
     expect(cardLocationText([null, 'x'])).toBe('');
   });
 });
+
+// Brief 2.7: the trace panel at the outline and article stops. Each automatic pass of
+// the round, in order: why it ran in words, the must-fix findings, then the
+// should-consider ones, then what it changed by scope (through scopeLabel).
+describe('traceView (phase 2, brief 2.7)', () => {
+  const { traceView } = require('../checkpoint-view-logic');
+  const AT = '2026-09-26T17:05:00.000Z';
+  const hhmm = (iso) => {
+    const d = new Date(iso);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  const checkPass = {
+    pass: 1,
+    round: 1,
+    trigger: 'check',
+    findings: {
+      structuralIssues: ['Roster coverage gap: Zia is never named.'],
+      advisoryWarnings: ['NPC pronoun: Marcus is they/them.'],
+      criteriaScores: null,
+      revisionGuidance: null
+    },
+    at: AT,
+    diff: { kind: 'bundle', scopes: [] },
+    changedScopes: ['section:intro', 'evidenceCards']
+  };
+  const evaluationPass = {
+    pass: 2,
+    round: 1,
+    trigger: 'evaluation',
+    findings: {
+      structuralIssues: [],
+      advisoryWarnings: [],
+      criteriaScores: {
+        rosterCoverage: { score: 0.4, type: 'structural', notes: 'Zia is missing.', fix: 'Name Zia.' },
+        voice: 0.9
+      },
+      revisionGuidance: 'Put Zia in the opening.'
+    },
+    at: AT,
+    changedScopes: ['headline']
+  };
+
+  test('no trace, or an empty one, shows nothing', () => {
+    expect(traceView(null)).toEqual({ any: false, title: expect.any(String), passes: [] });
+    expect(traceView([]).any).toBe(false);
+    expect(traceView([null, 'x']).any).toBe(false);
+  });
+
+  test('names the trigger in words and lists must-fix before should-consider', () => {
+    const view = traceView([checkPass]);
+    expect(view.any).toBe(true);
+    expect(view.title).toBe('Trace: 1 automatic rework ran this round before you arrived');
+    const [pass] = view.passes;
+    expect(pass.heading).toBe('Automatic pass 1, at ' + hhmm(AT));
+    expect(pass.triggerLabel).toBe('Why it ran: the check failed.');
+    expect(pass.mustFix).toEqual({ label: 'Must fix (1)', items: ['Roster coverage gap: Zia is never named.'] });
+    expect(pass.shouldConsider).toEqual({ label: 'Should consider (1)', items: ['NPC pronoun: Marcus is they/them.'] });
+    expect(pass.noFindings).toBe(false);
+  });
+
+  test('lists what changed by scope, through scopeLabel', () => {
+    const [check, evaluation] = traceView([checkPass, evaluationPass]).passes;
+    expect(check.changed).toEqual({
+      labels: ['Section "intro"', 'Evidence cards'],
+      text: 'What changed: Section "intro", Evidence cards'
+    });
+    expect(evaluation.changed.labels).toEqual(['Headline']);
+    const outline = traceView([{ pass: 1, trigger: 'evaluation', changedScopes: ['lede', 'closing'] }]).passes[0];
+    expect(outline.changed.text).toBe('What changed: LEDE, CLOSING');
+  });
+
+  test('says so when the rework changed nothing, and when no diff could be made', () => {
+    const same = traceView([{ pass: 1, trigger: 'check', changedScopes: [] }]).passes[0];
+    expect(same.changed).toEqual({ labels: [], text: 'What changed: nothing. The rework returned the same text.' });
+    const missing = traceView([{ pass: 1, trigger: 'check', changedScopes: null }]).passes[0];
+    expect(missing.changed.text).toBe('What changed: not recorded, because one of the two versions is missing.');
+  });
+
+  test('an evaluation pass carries its guidance and one line per scored criterion', () => {
+    const view = traceView([checkPass, evaluationPass]);
+    expect(view.title).toBe('Trace: 2 automatic reworks ran this round before you arrived');
+    const pass = view.passes[1];
+    expect(pass.triggerLabel).toBe('Why it ran: the evaluation failed.');
+    expect(pass.guidance).toBe('Guidance to the writer: Put Zia in the opening.');
+    expect(pass.criteriaLabel).toBe('Scores (2)');
+    expect(pass.criteria).toEqual([
+      { key: 'rosterCoverage', text: 'rosterCoverage: 0.40 (structural). Zia is missing. Fix: Name Zia.' },
+      { key: 'voice', text: 'voice: 0.90' }
+    ]);
+    expect(pass.mustFix.items).toEqual([]);
+    expect(pass.noFindings).toBe(false);
+  });
+
+  test('a pass with no recorded findings says so rather than rendering empty lists', () => {
+    const pass = traceView([{ pass: 1, trigger: 'evaluation', findings: null, changedScopes: [] }]).passes[0];
+    expect(pass.noFindings).toBe(true);
+    expect(pass.guidance).toBe('');
+    expect(pass.criteria).toEqual([]);
+  });
+
+  test('an unknown trigger, a missing number and an unreadable time degrade to words, not blanks', () => {
+    const pass = traceView([{ trigger: 'mystery', at: 'not a time', changedScopes: [] }]).passes[0];
+    expect(pass.triggerLabel).toBe('Why it ran: not recorded.');
+    expect(pass.heading).toBe('Automatic pass 1');
+  });
+
+  test('keeps the order the server sent and gives each pass a distinct key', () => {
+    const view = traceView([checkPass, evaluationPass]);
+    expect(view.passes.map((p) => p.heading.split(',')[0])).toEqual(['Automatic pass 1', 'Automatic pass 2']);
+    expect(new Set(view.passes.map((p) => p.key)).size).toBe(2);
+  });
+});

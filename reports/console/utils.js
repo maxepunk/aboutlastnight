@@ -162,6 +162,49 @@ function EvalBar({ view }) {
 }
 
 /**
+ * The trace (phase 2, brief 2.7): the automatic reworks that ran this round before
+ * the director reached the outline or article stop. Each pass: why it ran, what it
+ * had to fix, what it was told to consider, and what it changed. Read-only.
+ *
+ * Takes an already-computed view, like EvalBar: callers pass
+ * `checkpointViewLogic.traceView(data.trace)`.
+ *
+ * @param {{view: object|null}} props
+ */
+function TracePanel({ view }) {
+  if (!view || !view.any) return null;
+
+  const findingList = (group, severity, key) => group.items.length > 0 && React.createElement('div', { key },
+    React.createElement('p', { className: 'trace__label trace__label--' + severity }, group.label),
+    React.createElement('ul', { className: 'trace__list trace__list--' + severity },
+      group.items.map((item, i) => React.createElement('li', { key: key + '-' + i }, item))
+    )
+  );
+
+  return React.createElement('section', { className: 'trace mb-md', 'aria-label': 'Trace of the automatic reworks' },
+    React.createElement('h4', { className: 'trace__title' }, view.title),
+    view.passes.map((pass) =>
+      React.createElement('div', { key: pass.key, className: 'trace__pass' },
+        React.createElement('p', { className: 'trace__heading' }, pass.heading),
+        React.createElement('p', { className: 'trace__trigger' }, pass.triggerLabel),
+        findingList(pass.mustFix, 'structural', pass.key + '-must'),
+        findingList(pass.shouldConsider, 'advisory', pass.key + '-should'),
+        pass.noFindings && React.createElement('p', { className: 'text-xs text-muted' },
+          'No findings were recorded for this pass.'
+        ),
+        React.createElement('p', { className: 'trace__changed' }, pass.changed.text),
+        pass.guidance && React.createElement('p', { className: 'text-xs text-muted' }, pass.guidance),
+        pass.criteria.length > 0 && React.createElement(CollapsibleSection, { title: pass.criteriaLabel },
+          React.createElement('ul', { className: 'trace__list' },
+            pass.criteria.map((c) => React.createElement('li', { key: c.key }, c.text))
+          )
+        )
+      )
+    )
+  );
+}
+
+/**
  * Edit button (pencil icon)
  * @param {function} onClick
  * @returns {React.ReactElement}
@@ -203,6 +246,7 @@ window.Console.utils = {
   JsonViewer,
   formatElapsed,
   EvalBar,
+  TracePanel,
   editBtn,
   CHECKPOINT_ORDER,
   CHECKPOINT_LABELS

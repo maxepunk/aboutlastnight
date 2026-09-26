@@ -34,6 +34,9 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const { resolveCompletePayload } = require('./lib/sse-complete');
+// The console's pure read side (dual-export), so the harness reads the stop payloads
+// the way the console does: the phase's last evaluation and the trace (brief 2.7).
+const ViewLogic = require('../console/checkpoint-view-logic');
 
 // Configuration
 const API_BASE = process.env.API_BASE || 'http://localhost:3001';
@@ -1136,14 +1139,17 @@ function sectionDivider(title, borderColor = 'yellow') {
 function displayEvaluationStatus(evaluation, isEscalated = false) {
   if (!evaluation || Object.keys(evaluation).length === 0) return;
 
-  const scoreColor = evaluation.overallScore >= 80 ? 'green' :
-                     evaluation.overallScore >= 60 ? 'yellow' : 'red';
+  // Brief 2.7: the callers used to pass the whole evaluationHistory ARRAY, so this
+  // never had a score to show. With the phase's real entry, the score is 0-1
+  // (evaluator-nodes.js), not a percentage.
+  const score = typeof evaluation.overallScore === 'number' ? evaluation.overallScore : null;
+  const scoreColor = score === null ? 'yellow' : score >= 0.8 ? 'green' : score >= 0.6 ? 'yellow' : 'red';
   const readyText = evaluation.ready ? color('[READY]', 'green') : color('[NEEDS WORK]', 'yellow');
 
-  sectionBox(`EVALUATION: Score ${evaluation.overallScore || 'N/A'}% ${readyText}`, scoreColor);
+  sectionBox(`EVALUATION: Score ${score === null ? 'N/A' : score.toFixed(2)} ${readyText}`, scoreColor);
 
   if (evaluation.revisionNumber > 0) {
-    console.log(color(`  Revision #${evaluation.revisionNumber} of max 3`, 'dim'));
+    console.log(color(`  After automatic pass ${evaluation.revisionNumber} of this round`, 'dim'));
   }
 
   if (isEscalated) {
@@ -1164,6 +1170,34 @@ function displayEvaluationStatus(evaluation, isEscalated = false) {
     }
   }
   sectionEnd(scoreColor);
+}
+
+/**
+ * The trace (phase 2, brief 2.7): the automatic reworks that ran this round before
+ * the stop, from the SAME view model as the console's panel
+ * (console/checkpoint-view-logic.js#traceView). Nothing is shown when none ran.
+ * The findings print in full: each is the self-contained sentence the rework was given.
+ *
+ * @param {Array|null} trace - checkpoint.trace at the outline or article stop
+ */
+function displayTrace(trace) {
+  const view = ViewLogic.traceView(trace);
+  if (!view.any) return;
+  sectionBox(view.title, 'magenta');
+  view.passes.forEach((pass, i) => {
+    if (i > 0) console.log('');
+    console.log(color(`  ${pass.heading}`, 'bright'));
+    console.log(`  ${pass.triggerLabel}`);
+    [[pass.mustFix, 'red'], [pass.shouldConsider, 'yellow']].forEach(([group, groupColor]) => {
+      if (group.items.length === 0) return;
+      console.log(color(`  ${group.label}:`, groupColor));
+      group.items.forEach(item => console.log(`    ${color('•', groupColor)} ${item}`));
+    });
+    if (pass.noFindings) console.log(color('  No findings were recorded for this pass.', 'dim'));
+    console.log(`  ${pass.changed.text}`);
+    if (pass.guidance) console.log(color(`  ${pass.guidance}`, 'dim'));
+  });
+  sectionEnd('magenta');
 }
 
 /**
@@ -2631,11 +2665,16 @@ async function handleOutline(checkpoint, currentPhase) {
   checkpointHeader('OUTLINE', currentPhase);
 
   const outline = checkpoint.outline || {};
-  const evaluation = checkpoint.evaluationHistory || {};
-  const isEscalated = checkpoint.escalated === true;
+  // Brief 2.7: evaluationHistory is an ARRAY mixing all three phases, and the server
+  // never sends `escalated`. The phase's last evaluation carries escalatedToHuman.
+  const evaluation = ViewLogic.lastEvaluationFrom(checkpoint, 'outline') || {};
+  const isEscalated = evaluation.escalatedToHuman === true;
 
   // Display evaluation status (using DRY helper)
   displayEvaluationStatus(evaluation, isEscalated);
+
+  // The automatic reworks of this round, before this stop (brief 2.7)
+  displayTrace(checkpoint.trace);
 
   // Display revision diff if this is a revision (Phase 6.5)
   displayRevisionDiff(revisionCache.outline, outline, evaluation, CONTENT_TYPES.OUTLINE, REVISION_CAPS.OUTLINE);
@@ -2830,12 +2869,17 @@ async function handleArticle(checkpoint, currentPhase) {
 
   const contentBundle = checkpoint.contentBundle || {};
   const html = checkpoint.articleHtml || null;
-  const evaluation = checkpoint.evaluationHistory || {};
-  const isEscalated = checkpoint.escalated === true;
+  // Brief 2.7: the phase's last evaluation, not the whole history array; `escalated`
+  // was never sent.
+  const evaluation = ViewLogic.lastEvaluationFrom(checkpoint, 'article') || {};
+  const isEscalated = evaluation.escalatedToHuman === true;
   const metadata = contentBundle.metadata || {};
 
   // Display evaluation status (using DRY helper)
   displayEvaluationStatus(evaluation, isEscalated);
+
+  // The automatic reworks of this round, before this stop (brief 2.7)
+  displayTrace(checkpoint.trace);
 
   // Display revision diff if this is a revision (Phase 6.5)
   displayRevisionDiff(revisionCache.article, contentBundle, evaluation, CONTENT_TYPES.ARTICLE, REVISION_CAPS.ARTICLE);
