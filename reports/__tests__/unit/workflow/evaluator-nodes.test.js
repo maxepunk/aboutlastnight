@@ -1304,7 +1304,13 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
   const { renderDirectorEnrichmentBlock } = require('../../../lib/prompt-renderers/director-notes-renderer');
   const { createPromptBuilder } = require('../../../lib/prompt-builder');
   const { _testing: { extractEvidenceSummary } } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
-  const { _testing: { buildSessionFacts, buildAvailablePhotos } } = require('../../../lib/workflow/nodes/ai-nodes');
+  const { _testing: { buildSessionFacts, buildAvailablePhotos, outlineWriterInputs, selectHeroImage } } = require('../../../lib/workflow/nodes/ai-nodes');
+
+  /** The filenames the outline judge's PHOTOS section lists, in order. */
+  function judgePhotoSet(prompt) {
+    const photosSection = prompt.slice(prompt.indexOf('PHOTOS (all'), prompt.indexOf('SESSION ROSTER ('));
+    return [...photosSection.matchAll(/^\d+\. (?:\[hero image\] )?(.+?): .*$/gm)].map(m => m[1]);
+  }
 
   const LONG_PAPER_TEXT = 'Patchwork LLP, engagement letter. The firm will represent Sarah Blackwood in the dissolution ' +
     'of her marriage to Marcus Blackwood, retained at 2:14 AM on February 21, with the retainer paid in full.';
@@ -1588,15 +1594,28 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
 
       const whiteboardFilename = state.whiteboardPhotoPath.split(/[/\\]/).pop();
       const writerSet = [state.heroImage, ...buildAvailablePhotos(state, state.heroImage, whiteboardFilename).map(p => p.filename)];
-      const photosSection = prompt.slice(prompt.indexOf('PHOTOS (all'), prompt.indexOf('SESSION ROSTER ('));
-      const judgeSet = [...photosSection.matchAll(/^\d+\. (?:\[hero image\] )?(.+?): .*$/gm)].map(m => m[1]);
+      // The same set the outline writer and its reworker build their prompts from.
+      const [, , writerHero, writerPhotos] = outlineWriterInputs(state, state.heroImage);
+      const judgeSet = judgePhotoSet(prompt);
 
       expect(judgeSet).toEqual(writerSet);
+      expect(judgeSet).toEqual([writerHero, ...writerPhotos.map(p => p.filename)]);
       expect(judgeSet).toHaveLength(10);
       expect(prompt).not.toContain('dropped from the session.jpg');
       expect(prompt).not.toContain('DROPPED');
       expect(prompt).toContain('10. late arrival.jpg: Unknown\n   The director\'s description: none given\n   Photo analysis: none recorded for this photo');
       expect(prompt).toContain('PHOTOS (all 10 photos the outline could place');
+    });
+
+    it('with no stored hero, uses the hero the writer and its reworker would select', () => {
+      const state = realisticState({ heroImage: null });
+      const prompt = buildEvaluationUserPrompt('outline', state);
+      const hero = selectHeroImage(state);
+      const [, , , writerPhotos] = outlineWriterInputs(state, hero);
+
+      expect(judgePhotoSet(prompt)).toEqual([hero, ...writerPhotos.map(p => p.filename)]);
+      expect(prompt).toContain(`1. [hero image] ${hero}:`);
+      expect(prompt.split(`${hero}:`)).toHaveLength(2);
     });
 
     it('pairs each photo with its analysis by the renderer\'s join key, whatever the case of either filename', () => {

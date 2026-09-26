@@ -45,10 +45,10 @@ const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/direct
 const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
 // The writers' own builders: the arc writer's valid-id list, the writers'
-// SESSION_FACTS, the outline writer's photo list, and the PromptBuilder (whose
-// roster method gives the roster section).
+// SESSION_FACTS, the outline writer's inputs (its photo list among them) with the
+// hero it used, and the PromptBuilder (whose roster method gives the roster section).
 const { _testing: { extractEvidenceSummary } } = require('./arc-specialist-nodes');
-const { _testing: { buildSessionFacts, buildAvailablePhotos, getPromptBuilder } } = require('./ai-nodes');
+const { _testing: { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } } = require('./ai-nodes');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -696,10 +696,11 @@ function interweavingPlanOf(state) {
 /**
  * The outline judge's photos: exactly the set the outline writer could place, not
  * the first five analyses. That is the hero in its own slot, then the writer's own
- * list (`ai-nodes.js buildAvailablePhotos`: the session photos minus the hero and
- * the whiteboard), built by the writer's function with the arguments
- * generateOutline passes it, so any exclusion the writer's list gains reaches the
- * judge too.
+ * list, both taken from the outline writer's inputs (`ai-nodes.js
+ * outlineWriterInputs`, which the writer and its reworker build their prompts
+ * from) with the hero they used (`reworkHeroImage`: the stored hero, else the one
+ * generateOutline would select). Any exclusion the writer's list gains therefore
+ * reaches the judge too.
  *
  * Each photo is the entry the outline writer gets (`renderPhotoEntry`: the
  * filename, the names identified in it, and the director's description from the
@@ -710,12 +711,12 @@ function interweavingPlanOf(state) {
  * @returns {string}
  */
 function renderJudgePhotos(state) {
-  const heroImage = state.heroImage || null;
-  // The whiteboard's filename exactly as generateOutline derives it for buildAvailablePhotos.
-  const whiteboardPath = state.whiteboardPhotoPath;
-  const whiteboardFilename = whiteboardPath
-    ? (typeof whiteboardPath === 'string' ? whiteboardPath.split(/[/\\]/).pop() : whiteboardPath.filename)
-    : null;
+  // outlineWriterInputs returns buildOutlinePrompt's arguments, in order: the hero
+  // image is the third, the available photos the fourth, the options the last.
+  const writerInputs = outlineWriterInputs(state, reworkHeroImage(state));
+  const heroImage = writerInputs[2] || null;
+  const availablePhotos = writerInputs[3] || [];
+  const { photoDescriptions } = writerInputs[writerInputs.length - 1] || {};
   const analysisByKey = new Map(
     (state.photoAnalyses?.analyses || [])
       .filter(analysis => analysis && analysis.filename)
@@ -725,14 +726,14 @@ function renderJudgePhotos(state) {
   const heroNames = Array.isArray(heroAnalysis?.identifiedCharacters) ? heroAnalysis.identifiedCharacters : [];
   const photos = [
     ...(heroImage ? [{ filename: heroImage, identifiedCharacters: heroNames, hero: true }] : []),
-    ...buildAvailablePhotos(state, heroImage, whiteboardFilename)
+    ...availablePhotos
   ];
   if (photos.length === 0) return 'PHOTOS:\nNo session photos available';
 
   const entries = photos.map((photo, i) => {
     const entry = renderPhotoEntry(
       { filename: photo.filename, names: photo.identifiedCharacters },
-      state.photoDescriptions || null,
+      photoDescriptions || null,
       '   '
     );
     const analysis = analysisByKey.get(photoKey(photo.filename));
