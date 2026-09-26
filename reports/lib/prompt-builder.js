@@ -1286,7 +1286,7 @@ STRUCTURE:
 
    EVIDENCE CARD DUAL FIELDS:
    - "content" = VERBATIM document text, on the BODY inline "evidence-card" block only (never on a sidebar entry)
-     * COPY EXACTLY from the document with that id in <RECORD>
+     * COPY EXACTLY from ${DOCUMENT_POINTER}
      * Include tokenId prefix and timestamp (e.g., "[Token ID] - [timestamp] - ...")
      * Do NOT paraphrase or summarize
 

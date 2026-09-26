@@ -11,6 +11,7 @@
  */
 
 const { PromptBuilder } = require('../prompt-builder');
+const { DOCUMENT_POINTER } = require('../prompt-renderers/record-view');
 const { SchemaValidator } = require('../schema-validator');
 const schema = require('../schemas/content-bundle.schema.json');
 
@@ -54,7 +55,7 @@ describe('article prompt: sidebar entries carry no document text (slice 2.5)', (
     const fields = evidenceCardsFieldList(await journalistArticlePrompt());
     const dual = fields.slice(fields.indexOf('EVIDENCE CARD DUAL FIELDS:'));
     expect(dual).toContain('on the BODY inline "evidence-card" block only (never on a sidebar entry)');
-    expect(dual).toContain('COPY EXACTLY from the document with that id in <RECORD>');
+    expect(dual).toContain(`COPY EXACTLY from ${DOCUMENT_POINTER}`);
     expect(dual).not.toContain('arcEvidencePackages evidenceItems[].fullContent');
     expect(dual).toContain('for the SIDEBAR entry, which is a headline and a summary');
   });
