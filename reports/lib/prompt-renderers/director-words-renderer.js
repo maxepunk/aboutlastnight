@@ -254,20 +254,28 @@ function photoDescriptionFor(photoDescriptions, filename) {
  * One photo for a writer: filename, the identified names, and the director's
  * description word for word.
  *
+ * With no description map at all (a thread from before the character-IDs stop
+ * collected descriptions, or one whose descriptions were not re-entered), the
+ * description line is left out: "none given" would say the director gave nothing,
+ * which is not known. "none given" is printed only when a map exists and lacks this
+ * photo (phase 2 final fix wave).
+ *
  * @param {Object} photo
  * @param {string} photo.filename
  * @param {string[]} [photo.names] - identified characters
- * @param {Object|null} photoDescriptions - {filename: text}
+ * @param {Object|null} photoDescriptions - {filename: text}, or null when none was collected
  * @param {string} [indent='  '] - indent of the description line
  * @returns {string}
  */
 function renderPhotoEntry({ filename, names = [] }, photoDescriptions, indent = '  ') {
   const nameList = (Array.isArray(names) ? names : []).filter(n => typeof n === 'string' && n.trim());
+  const entry = `${filename}: ${nameList.join(', ') || 'Unknown'}`;
+  if (!photoDescriptions || typeof photoDescriptions !== 'object') return entry;
   const description = photoDescriptionFor(photoDescriptions, filename);
   const descriptionLine = description
     ? `The director's description, word for word: ${description}`
     : "The director's description: none given";
-  return `${filename}: ${nameList.join(', ') || 'Unknown'}\n${indent}${descriptionLine}`;
+  return `${entry}\n${indent}${descriptionLine}`;
 }
 
 module.exports = {
