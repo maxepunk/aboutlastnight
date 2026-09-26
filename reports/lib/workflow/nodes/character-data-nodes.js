@@ -2,7 +2,8 @@
  * Character Data Extraction Node
  *
  * Extracts structured character data (groups, relationships, roles) from
- * ALL paper evidence + exposed memory tokens. Runs before curation so that
+ * the paper documents the director selected + every exposed memory token, each in
+ * full, through the record view (brief 2.1). Runs before curation so that
  * character sheet data is captured regardless of curation scoring.
  *
  * Uses Haiku for fast extraction — this is a factual parsing task, not creative.
@@ -10,6 +11,7 @@
 
 const { getSdkClient } = require('./node-helpers');
 const { traceNode } = require('../../observability');
+const { renderRecordView } = require('../../prompt-renderers/record-view');
 
 const CHARACTER_EXTRACTION_SCHEMA = {
   type: 'object',
@@ -50,7 +52,10 @@ async function extractCharacterData(state, config) {
   }
 
   const roster = state.sessionConfig?.roster || [];
-  const paperEvidence = state.paperEvidence || [];
+  // The director's selection at the paper-evidence stop, as the preprocessor reads it
+  // (brief 2.1). Every fetched item used to go in, including the ones the players never
+  // unlocked, so a relationship stated only there could reach the arc and article writers.
+  const paperEvidence = state.selectedPaperEvidence || state.paperEvidence || [];
   const tokens = (state.memoryTokens || []).filter(t => t.disposition === 'exposed');
 
   if (paperEvidence.length === 0 && tokens.length === 0) {
@@ -60,19 +65,13 @@ async function extractCharacterData(state, config) {
 
   const sdk = getSdkClient(config, 'extractCharacterData');
 
-  // Build context from ALL paper evidence (not just curated)
-  // Generous limit — character sheets and emails contain relationship data
-  // that's the whole reason this node exists. Haiku handles the volume easily.
-  const paperContext = paperEvidence
-    .filter(p => p.description && p.description.length > 20)
-    .map(p => `[${p.name}] ${p.description.substring(0, 1500)}`)
-    .join('\n\n');
-
-  // Build context from exposed tokens (first 200 chars each)
-  const tokenContext = tokens
-    .slice(0, 30) // Cap to prevent prompt overflow
-    .map(t => `[${t.tokenId}] ${(t.fullDescription || t.summary || '').substring(0, 200)}`)
-    .join('\n\n');
+  // Every selected paper document and every exposed memory, in full, labelled as the
+  // writers see them. The old 30-memory and 200-character caps dropped memories and
+  // cut the rest mid-sentence; the whole record fits easily.
+  const record = renderRecordView(
+    { exposed: { tokens, paperEvidence } },
+    { buried: false }
+  );
 
   const prompt = `Extract character relationship data from these documents and memories.
 
@@ -84,11 +83,8 @@ NPCs (not on roster, do NOT create top-level entries for these):
 - Nova: the journalist narrator
 NPCs may appear as relationship targets (e.g., "Marcus": "old friend") but should not have their own character entries.
 
-PAPER EVIDENCE:
-${paperContext}
-
-EXPOSED MEMORY CONTENT:
-${tokenContext}
+THE PAPER DOCUMENTS AND EXPOSED MEMORIES:
+${record}
 
 For each ROSTER character mentioned in the evidence, extract:
 1. Named groups they belong to (e.g., "Stanford Four" — include ALL members of the group)
@@ -132,7 +128,7 @@ Only include data explicitly stated or strongly implied by the evidence. Do not 
 
 module.exports = {
   extractCharacterData: traceNode(extractCharacterData, 'extractCharacterData', {
-    stateFields: ['paperEvidence', 'memoryTokens']
+    stateFields: ['paperEvidence', 'selectedPaperEvidence', 'memoryTokens']
   }),
   _testing: { extractCharacterData }
 };

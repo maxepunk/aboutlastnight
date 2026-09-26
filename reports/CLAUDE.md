@@ -150,6 +150,8 @@ lib/template-assembler.js           # Handlebars template compilation
 lib/template-helpers.js             # Handlebars helper registration
 lib/theme-config.js                 # Theme settings, NPC definitions, validation rules
 lib/prompt-builder.js               # Prompt assembly for each phase
+lib/prompt-renderers/record-view.js # The record view: <RECORD>, every exposed document in full + buried transactions
+lib/prompt-renderers/derived-labels.js # Labels for machine-made material: who made it, and that the record decides
 lib/workflow/
 ├── graph.js                        # LangGraph StateGraph (45 nodes, edges)
 ├── state.js                        # State annotations, phases, reducers
@@ -364,6 +366,8 @@ State → Node extracts context → PromptBuilder assembles prompt
 - Fallback chain: `fullDescription` → `content` → `description` → `summary`
 - `extractFullContent()` helper ensures full quotable content (not summaries)
 - Fixed in 3 locations: preprocessor, token routing, arc evidence packages
+
+**The record view (phase 2 slice 2.1):** `lib/prompt-renderers/record-view.js` renders the evidence bundle as one `<RECORD>` section. Each exposed document is `<document id kind name owner layer="exposed">` with its full text as the body; the buried memories follow in `<buried-transactions>`, one line each with the account, amount and time and nothing else (a memory no one sold has no line). The id is `id`, else `tokenId`, else `notionId`, the order the fact check's source map keys on, so a rescued item (no `id`) is named by its Notion id, and `buildValidEvidenceIds` accepts a paper `notionId` for that reason. The owner is the record's own `owners[]`, never the bundle's `owner` (the preprocessor's guess); the text is the record's `fullDescription` or `description`, never a summary; an attribute with no value is left out. The arc writer's SECTION 3 takes the documents alone (`renderRecordView(bundle, {buried:false})`) because its Buried Transactions list stays; the interweaving call, the outline writer and the article writer (both themes) take the whole view once, in the data part, before the rules. `buildOutlinePrompt` and `buildArticlePrompt` read it from `options.evidenceBundle` (`scripts/render-prompts.js` and the content-bundle probe pass it too). The outline's `<arc-evidence>`/`<evidence-context>` and the article's ARC EVIDENCE PACKAGES list each arc's documents by id and keep the quotable excerpts, with no five-per-arc cap. An instruction that sends a writer to a document's text uses `DOCUMENT_POINTER` ("the document with that id in <RECORD>"). Upstream, the preprocessor sends an exposed memory's `fullDescription` to Haiku (a buried item sends what it always did), and `extractCharacterData` reads `selectedPaperEvidence` and every exposed memory, in full, through the view. Machine-made material carries a label from `lib/prompt-renderers/derived-labels.js` saying who made it and that the record decides where they differ: the character context (arc writer, article roster section), the narrative tensions (arc writer, article), and the Haiku photo descriptions at the outline judge.
 
 ### LangSmith Tracing
 

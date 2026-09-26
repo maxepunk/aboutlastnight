@@ -302,6 +302,29 @@ function createEvidencePreprocessor(options = {}) {
 }
 
 /**
+ * The text Haiku summarises for one item (brief 2.1).
+ *
+ * A memory token has no `description` or `text`: its text is `fullDescription`. So
+ * Haiku was summarising exposed memories from their NAME alone. An exposed memory
+ * now sends its full text. A buried one sends exactly what it sent before (its
+ * `description || text`, which a token does not have), so nothing more of a
+ * buried memory reaches the model. Paper evidence is unchanged.
+ *
+ * The summaries this produces feed the pre-curation stop and curation's scoring
+ * context only; no writer reads them in place of a document.
+ *
+ * @param {Object} item - a normalized batch item ({disposition, rawData})
+ * @returns {string|undefined}
+ */
+function batchDescriptionOf(item) {
+  const raw = item.rawData || {};
+  // Only an item tagged exposed gets more; a missing tag counts as buried, as it
+  // does in the batch input's own disposition field.
+  if (item.disposition !== 'exposed') return raw.description || raw.text;
+  return raw.description || raw.text || raw.fullDescription;
+}
+
+/**
  * Process a single batch of evidence items
  *
  * NOTE: This is pure normalization - no judgment calls about significance.
@@ -329,7 +352,7 @@ async function processBatch(batch, sdkClient, batchIndex) {
       sessionTransactionTime: item.rawData.sessionTransactionTime || null,
       // Include key raw data fields
       name: item.rawData.name || item.rawData.title,
-      description: item.rawData.description || item.rawData.text,
+      description: batchDescriptionOf(item),
       content: item.rawData.content,
       tags: item.rawData.tags || []
     }));
