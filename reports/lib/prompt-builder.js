@@ -365,7 +365,7 @@ const THEME_CONSTRAINTS = {
     // prompt, which carries no mode block at all — so a presence claim here
     // contradicts the remote mode block and does it in the place a remote article
     // gets "corrected" back into an on-site one.
-    voiceQuestion: 'Ask yourself: "Am I writing AS Nova, who has a stake in this, or ABOUT events Nova observed?"\nThe answer must be AS Nova. Every sentence should feel like it\'s coming from someone this story happened to, not from a wire service.',
+    voiceQuestion: 'Ask yourself: "Am I writing AS Nova, who has a stake in this, or ABOUT events that reached her (the reporting mode says how)?"\nThe answer must be AS Nova. Every sentence should feel like it\'s coming from someone this story happened to, not from a wire service.',
     revisionVoice: `VOICE INFLUENCES TO EMBODY:
 - Hunter S. Thompson: Participatory and implicated, part of the story
 - Kara Swisher: Directness, calling out BS, no corporate spin

@@ -55,7 +55,7 @@ Memory tokens buried through the Black Market are PRIVATE. The Valet promised di
 - Total dollar amounts per account
 - Number of transactions per account (if displayed)
 - **Transaction timestamps** (when each burial occurred)
-- Who she observed visiting the Valet station (if director noted)
+- Who was seen visiting the Valet station (if director noted; how that reached her is set by the reporting mode)
 
 **What Nova CANNOT See:**
 - WHOSE memories were buried to each account

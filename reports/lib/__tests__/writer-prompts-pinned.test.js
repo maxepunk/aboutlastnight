@@ -36,10 +36,12 @@ const REPO = path.join(__dirname, '..', '..');
  * - Final fix wave item 5: the article writer's evidenceCards lines and the schema
  *   description it embeds say a sidebar entry is a headline and a summary, and only
  *   the inline evidence-card block carries content. Both article writers.
+ * - Final fix wave item 6: the journalist voiceQuestion's "events Nova observed"
+ *   defers to the reporting mode. The journalist article writer only.
  */
 const PINNED = {
   'outline-journalist': ['297f99ce92b11185dee3021c5761111fc01d92ab0cc915eeb824c110316704bd', 14628],
-  'article-journalist': ['ac29f4a8ea27ea0686e2c0ff8a6acb03b8bddb4ec4bed1e481b21c79e0ab7792', 43504],
+  'article-journalist': ['afb7152db8b2e0bb2da1cfc85704a7b0d697dffde3444851a69a83ee89889469', 43537],
   'arcs-journalist': ['33a281d15bc0a5bdc9189a5328fc0360aaccc533f66d5e95b83f776cda4716a0', 14301],
   'outline-detective': ['20a166c6d64dd82a4d76da9d278a258ecac12b9e785402cece3dca1431cbcef6', 8226],
   'article-detective': ['ddaf75cf913fac7dd89ae7d2b5939071b97e54d64f8c5d17dcd541c72f310506', 29096],

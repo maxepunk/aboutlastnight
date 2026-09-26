@@ -95,7 +95,14 @@ const ON_SITE_PERSONA = [
   'She experienced it.',
   'we saw Taylor at Valet',
   'saw Taylor at Valet at 8:15',
-  'reasons for being there'
+  'reasons for being there',
+  // Final fix wave item 6 (ruling PR2): the last presence lines. The preprocessor's
+  // and the deep-dive doc's are checked where they live, below.
+  'Who she observed visiting the Valet station',
+  'what she actually observed and documented',
+  'or ABOUT events Nova observed?',
+  'saw Taylor at Valet at 8:15 PM',
+  "Director Notes = Nova's Observations"
 ];
 
 /**
@@ -395,5 +402,33 @@ describe('presence lines outside the article prompt', () => {
     expect(enrichment.length).toBeGreaterThan(0);
     expect(enrichment).not.toContain('I noticed these two');
     expect(enrichment).not.toContain('I saw this partnership');
+  });
+});
+
+/**
+ * Final fix wave item 6: the two presence lines that live outside the writers'
+ * prompts. The Haiku preprocessor's example said "saw Taylor at Valet", and the
+ * pipeline deep dive titled the director's notes "Nova's Observations".
+ */
+describe("presence lines outside the writers' prompts", () => {
+  it("the preprocessor's system prompt carries none of them", async () => {
+    const { createEvidencePreprocessor } = require('../evidence-preprocessor');
+    const sdkClient = jest.fn().mockResolvedValue({ items: [] });
+    await createEvidencePreprocessor({ sdkClient }).process({
+      memoryTokens: [{ tokenId: 'ale003', name: 'ALE003', disposition: 'exposed', fullDescription: 'x' }],
+      paperEvidence: [],
+      sessionId: 'test'
+    });
+    const { systemPrompt } = sdkClient.mock.calls[0][0];
+    expect(systemPrompt).toContain('Taylor was seen at Valet at 8:15 PM');
+    [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
+      expect(`${phrase}: ${systemPrompt.includes(phrase)}`).toBe(`${phrase}: false`);
+    });
+  });
+
+  it("the deep dive names the director's notes the director's observations", () => {
+    const doc = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'docs', 'PIPELINE_DEEP_DIVE.md'), 'utf8');
+    expect(doc).not.toContain("Director Notes = Nova's Observations");
+    expect(doc).toContain("### Layer 3: CONTEXT (Director Notes = the Director's Observations)");
   });
 });

@@ -90,7 +90,7 @@ Their choices are their choices. Their memories are their memories. The article 
 
 Every character who was in the session should appear somewhere in the article. Whether the session had 5 players or 20, each person wants to see their character acknowledged.
 
-**Only use documented information.** Do not fabricate in-room moments, reactions, or behaviors unless they appear in director notes. The reporter can only report what she actually observed and documented.
+**Only use documented information.** Do not fabricate in-room moments, reactions, or behaviors unless they appear in director notes. The reporter can only report what is documented: the evidence, and the director's notes, which reached her the way the reporting mode says.
 
 **Never fabricate quoted dialogue.** All direct quotes must come from evidence content (memory text, paper evidence text) or director notes. If no verbatim quote exists, paraphrase or describe the action instead. Attributed quotes that don't exist in the evidence are the highest-risk fabrication — they put specific false words in a character's mouth.
 

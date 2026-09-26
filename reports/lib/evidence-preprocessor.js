@@ -56,7 +56,7 @@ FOR BURIED TOKENS (disposition: 'buried'):
 - You CANNOT reference the NARRATIVE TIMELINE (when events in memory occurred)
 - You CAN note: SESSION TRANSACTION timing (when sold), shell account, amount
 - The OPERATOR can potentially be INFERRED by cross-referencing session timing
-  with director observations (e.g., "saw Taylor at Valet at 8:15 PM,
+  with director observations (e.g., "Taylor was seen at Valet at 8:15 PM,
   transaction hit ChaseT at 8:16 PM")
 - These are PRIVATE (sold to Black Market with promise of discretion)
 

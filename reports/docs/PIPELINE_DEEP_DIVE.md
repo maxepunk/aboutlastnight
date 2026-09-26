@@ -157,7 +157,7 @@ Nova's article is NOT just a factual record. It reflects:
 **Example**:
 > "Someone fed $450,000 worth of memories to the Gorlan account. Whatever those memories contained, someone thought they were worth hiding."
 
-### Layer 3: CONTEXT (Director Notes = Nova's Observations)
+### Layer 3: CONTEXT (Director Notes = the Director's Observations)
 
 **Game Reality**: Director watched everything - player dynamics, conversations. Where Nova was is set by the session's reporting mode block (`REPORTING_MODE_BLOCKS` in `lib/prompt-builder.js`): on site she watched the investigation from the room; remote it reached her as tips she attributes. Either way she doesn't have the extracted memories.
 
