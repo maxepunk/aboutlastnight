@@ -38,6 +38,15 @@ const { traceNode } = require('../../observability');
 const { getThemeNPCs, getThemeNPCPronouns } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
+// Phase 2, brief 2.4: the judges read the record and the director's words through
+// the same renderers and builders the writers use, so a judge sees what it judges.
+const { renderRecordView } = require('../../prompt-renderers/record-view');
+const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
+const { renderSessionFactsVerdict, renderPhotoEntry } = require('../../prompt-renderers/director-words-renderer');
+// The writers' own builders: the arc writer's valid-id list, the article writer's
+// SESSION_FACTS and its PromptBuilder (whose roster method gives the roster section).
+const { _testing: { extractEvidenceSummary } } = require('./arc-specialist-nodes');
+const { _testing: { buildSessionFacts, getPromptBuilder } } = require('./ai-nodes');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -647,32 +656,155 @@ STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
   throw new Error(`Unknown evaluation phase: ${phase}`);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WHAT EACH JUDGE SEES (phase 2, brief 2.4)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The judges used to score what they could not see: the outline and article
+// judges had no documents, the article judge was asked whether every roster
+// member is named with no roster in its prompt, and the outline judge saw 5 of 9
+// photos and a null interweaving plan. Each judge now reads the record view and
+// the inputs its writer read, through the writers' own renderers and builders.
+
+/** A photo's join key: the basename, lower-cased (director-words-renderer.js photoKey). */
+function photoBasenameKey(filename) {
+  return String(filename || '').split(/[/\\]/).pop().toLowerCase();
+}
+
+/**
+ * The interweaving plan the arc analysis produced.
+ *
+ * It lives in `_arcAnalysisCache.interweavingPlan` (arc-specialist-nodes.js), which
+ * brief 2.2 keeps through an arc rework. The outline judge used to read
+ * `state.narrativeArcsInterweavingPlan || state.interweavingPlan`, neither of which
+ * is a state channel, so every outline evaluation was shown `null`.
+ *
+ * @param {Object} state
+ * @returns {Object|null} the plan, or null when there is none or every field is empty
+ */
+function interweavingPlanOf(state) {
+  const plan = state._arcAnalysisCache?.interweavingPlan;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null;
+  const hasContent = Object.values(plan).some(value => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim() !== '';
+    return value !== null && value !== undefined;
+  });
+  return hasContent ? plan : null;
+}
+
+/**
+ * The outline judge's photos: every session photo in `photoAnalyses`, not the
+ * first five. Each is the entry the outline writer gets (`renderPhotoEntry`: the
+ * filename, the names identified in it, and the director's description from the
+ * character-IDs stop, joined by filename), then that photo's analysis. The hero
+ * is marked; the whiteboard is left out, as it is from the writer's list.
+ *
+ * @param {Object} state
+ * @returns {string}
+ */
+function renderJudgePhotos(state) {
+  const whiteboardKey = state.whiteboardPhotoPath ? photoBasenameKey(state.whiteboardPhotoPath) : null;
+  const heroKey = state.heroImage ? photoBasenameKey(state.heroImage) : null;
+  const analyses = (state.photoAnalyses?.analyses || [])
+    .filter(analysis => analysis && analysis.filename)
+    .filter(analysis => !whiteboardKey || photoBasenameKey(analysis.filename) !== whiteboardKey);
+  if (analyses.length === 0) return 'PHOTOS:\nNo session photos available';
+
+  const entries = analyses.map((analysis, i) => {
+    const hero = heroKey && photoBasenameKey(analysis.filename) === heroKey ? '[hero image] ' : '';
+    const entry = renderPhotoEntry(
+      { filename: analysis.filename, names: analysis.identifiedCharacters },
+      state.photoDescriptions || null,
+      '   '
+    );
+    const analysisText = JSON.stringify(analysis, null, 2).split('\n').join('\n   ');
+    return `${i + 1}. ${hero}${entry}\n   Photo analysis: ${analysisText}`;
+  });
+  return `PHOTOS (all ${analyses.length} session photos; each gives the names identified in it, the director's description joined by filename, and its photo analysis):
+
+${entries.join('\n\n')}`;
+}
+
+/**
+ * The session roster for the article judge: the players present, by the full
+ * names the article writer's SESSION_FACTS lists (ai-nodes.js buildSessionFacts).
+ *
+ * @param {Object|null} sessionFacts
+ * @returns {string}
+ */
+function renderJudgeSessionRoster(sessionFacts) {
+  if (!sessionFacts) return 'SESSION ROSTER: none recorded for this session.';
+  return `SESSION ROSTER (${sessionFacts.playerCount} players who were present at this session's investigation):
+${sessionFacts.roster.join('\n')}`;
+}
+
+/**
+ * The director's notes and input-review corrections for the article judge, through
+ * the renderer every writer uses (director-notes-renderer.js). The corrections follow
+ * the notes, which are never rewritten.
+ *
+ * @param {Object} state
+ * @returns {string}
+ */
+function renderJudgeDirectorNotes(state) {
+  const notes = state.directorNotes || {};
+  const listOf = (value) => (Array.isArray(value) ? value : []);
+  return `THE DIRECTOR'S NOTES (the director's own account of the investigation, with any input-review corrections after it):
+${renderDirectorEnrichmentBlock({
+  rawProse: notes.rawProse || '',
+  quotes: listOf(notes.quotes),
+  transactionReferences: listOf(notes.transactionReferences),
+  postInvestigationDevelopments: listOf(notes.postInvestigationDevelopments),
+  corrections: state.inputReviewCorrections || []
+})}`;
+}
+
+/**
+ * The fact check's result for the bundle under review (wave-2 ruling W2): its
+ * structural issues and its advisories, as two lists under a plain label. Nothing
+ * else of the result object is shown.
+ *
+ * @param {Object|null} factCheck - factCheckContentBundle's result for this bundle
+ * @returns {string}
+ */
+function renderJudgeFactCheck(factCheck) {
+  const heading = 'THE FACT CHECK ON THIS BUNDLE (the pipeline\'s programmatic check of the content bundle above; it ran before this evaluation):';
+  if (!factCheck) return `${heading}\nIt did not run: there was no content bundle to check.`;
+  const list = (items) => {
+    const lines = (Array.isArray(items) ? items : []).filter(item => typeof item === 'string' && item.trim());
+    return { count: lines.length, text: lines.length > 0 ? lines.map(line => `- ${line}`).join('\n') : '- none' };
+  };
+  const structural = list(factCheck.structuralIssues);
+  const advisory = list(factCheck.advisoryWarnings);
+  return `${heading}
+Structural issues (${structural.count}):
+${structural.text}
+Advisories (${advisory.count}):
+${advisory.text}`;
+}
+
 /**
  * Build user prompt with content to evaluate
  * @param {string} phase - Phase name
  * @param {Object} state - Current state with content
+ * @param {Object} [options]
+ * @param {Object|null} [options.factCheck] - article only: the fact check's result
+ *   for the bundle under review, as createEvaluator computed it this pass. The
+ *   state's `_articleFactCheck` is not read: before this evaluation writes it, it
+ *   belongs to the previous bundle.
  * @returns {string} User prompt
  */
-function buildEvaluationUserPrompt(phase, state) {
+function buildEvaluationUserPrompt(phase, state, options = {}) {
   switch (phase) {
     case 'arcs':
       // Provide roster for rosterCoverage evaluation
       const roster = state.sessionConfig?.roster || [];
-      // Provide evidence with IDs for evidenceGrounding verification
       // evidenceBundle has nested structure: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } }
-      const exposedData = state.evidenceBundle?.exposed || {};
       const buriedData = state.evidenceBundle?.buried || {};
-      // Flatten exposed items (tokens + paperEvidence) - INCLUDE IDs for verification
-      const exposedTokens = Array.isArray(exposedData.tokens) ? exposedData.tokens : [];
-      const exposedPaper = Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence : [];
-      const exposedEvidence = [...exposedTokens, ...exposedPaper]
-        .map(e => ({
-          id: e.id || e.tokenId || e.pageId || e.name,  // Include ID for keyEvidence verification
-          title: e.title || e.name || e.tokenId,
-          summary: e.summary || e.description?.substring?.(0, 100)
-        }));
-      // Extract ALL evidence IDs for verification (no truncation)
-      const allEvidenceIds = exposedEvidence.map(e => e.id).filter(Boolean);
+      // Brief 2.4: the valid ids are the arc writer's list, built by the writer's own
+      // function, so each names a document the record view below shows by that id.
+      const allEvidenceIds = extractEvidenceSummary(state.evidenceBundle || {}).allEvidenceIds;
 
       // Flatten buried items - INCLUDE IDs and amounts for financial verification
       const buriedTx = Array.isArray(buriedData.transactions) ? buriedData.transactions : [];
@@ -713,8 +845,7 @@ ${JSON.stringify(playerFocusForEval, null, 2)}
 ALL VALID EVIDENCE IDS (${allEvidenceIds.length} total - use to verify keyEvidence references):
 ${JSON.stringify(allEvidenceIds, null, 2)}
 
-EXPOSED EVIDENCE DETAILS (${exposedEvidence.length} items):
-${JSON.stringify(exposedEvidence, null, 2)}
+${renderRecordView(state.evidenceBundle, { buried: false })}
 
 BURIED TRANSACTIONS (${buriedEvidence.length} - for amount/account verification):
 ${JSON.stringify(buriedEvidence, null, 2)}
@@ -756,8 +887,15 @@ Are these arcs ready for human review?`;
         title: arc.title,
         interweaving: arc.interweaving || {}
       }));
-      // Get interweaving plan if available from arc analysis
-      const interweavingPlan = state.narrativeArcsInterweavingPlan || state.interweavingPlan || null;
+      // Brief 2.4: the plan the arc analysis produced. The section is left out when
+      // there is none, as the arc reworker's is (wave-2 ruling W2).
+      const interweavingPlan = interweavingPlanOf(state);
+      const interweavingSection = interweavingPlan
+        ? `INTERWEAVING PLAN (from arc analysis):
+${JSON.stringify(interweavingPlan, null, 2)}
+
+`
+        : '';
 
       return `Evaluate this article outline:
 
@@ -767,11 +905,9 @@ ${JSON.stringify(state.outline || {}, null, 2)}
 SELECTED ARCS (with interweaving metadata):
 ${JSON.stringify(selectedArcsWithInterweaving, null, 2)}
 
-INTERWEAVING PLAN (from arc analysis):
-${JSON.stringify(interweavingPlan, null, 2)}
+${interweavingSection}${renderJudgePhotos(state)}
 
-PHOTO ANALYSES:
-${JSON.stringify((state.photoAnalyses?.analyses || []).slice(0, 5), null, 2)}
+${renderRecordView(state.evidenceBundle)}
 
 ═══════════════════════════════════════════════════════════════════════════
 MOMENTUM EVALUATION (Commit 8.24 - Compulsive Readability)
@@ -806,17 +942,35 @@ Is this outline ready for human review?`;
         ? 'The reporter was NOT in the room. Every exposure, observation and the verdict reached them as tips from people who were there, and must be written and attributed that way. A first-person claim to have been present is a STRUCTURAL failure. The attribution shows the absence, so the article states it at most once: stating it more than once ("I was not there.", "I was not in that room.") is a reporterMode defect, not a sign of voice.'
         : 'The reporter watched the investigation from inside the room and spoke to people there, but was NOT at the party; the party reaches them only through exposed memories.';
 
+      // Brief 2.4: the roster, the verdict, the notes and the record, each built by the
+      // function the article writer's prompt uses, and the fact check's result for
+      // this bundle. The roster section with pronouns is the writer's own
+      // (PromptBuilder#_rosterSection, reached through the writer's builder factory).
+      const sessionFacts = buildSessionFacts(state);
+      const rosterSection = getPromptBuilder(null, state)._rosterSection();
+      const verdictSection = sessionFacts ? `\n\n${renderSessionFactsVerdict(sessionFacts)}` : '';
+
       return `Evaluate this article content:
 
 REPORTING MODE FOR THIS SESSION: ${reportingMode}
 ${modeRule}
 In BOTH modes the reporter never votes and owns no exposed memory. "I voted", "my vote" and "one of them was mine" are STRUCTURAL failures either way.
 
+${renderJudgeSessionRoster(sessionFacts)}
+
+${rosterSection}${verdictSection}
+
+${renderJudgeDirectorNotes(state)}
+
+${renderRecordView(state.evidenceBundle)}
+
 CONTENT BUNDLE:
 ${JSON.stringify(state.contentBundle || {}, null, 2)}
 
 OUTLINE:
 ${JSON.stringify(state.outline || {}, null, 2)}
+
+${renderJudgeFactCheck(options.factCheck || null)}
 
 Is this article ready for human review?`;
     }
@@ -1065,7 +1219,9 @@ function createEvaluator(phase, options = {}) {
 
     const sdk = getSdkClient(config, `evaluate-${phase}`);
     const systemPrompt = buildEvaluationSystemPrompt(phase, criteria, theme);
-    const prompt = buildEvaluationUserPrompt(phase, state);
+    // Brief 2.4: the article judge reads the fact check's result for THIS bundle
+    // (computed above), never the state's _articleFactCheck from the previous one.
+    const prompt = buildEvaluationUserPrompt(phase, state, { factCheck });
 
     try {
       const jsonSchema = EVALUATION_JSON_SCHEMA;

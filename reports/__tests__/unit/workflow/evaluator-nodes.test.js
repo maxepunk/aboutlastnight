@@ -299,8 +299,10 @@ describe('evaluator-nodes', () => {
         };
         const prompt = buildEvaluationUserPrompt('arcs', state);
 
-        // Updated to match new format with IDs and details sections
-        expect(prompt).toContain('EXPOSED EVIDENCE DETAILS');
+        // Brief 2.4: the record view replaced EXPOSED EVIDENCE DETAILS (name
+        // summaries and 100-character excerpts).
+        expect(prompt).toContain('<RECORD>');
+        expect(prompt).not.toContain('EXPOSED EVIDENCE DETAILS');
         expect(prompt).toContain('BURIED TRANSACTIONS');
         expect(prompt).toContain('ALL VALID EVIDENCE IDS');
       });
@@ -325,7 +327,7 @@ describe('evaluator-nodes', () => {
         expect(prompt).toContain('Selected Arc');
       });
 
-      it('includes photo analyses (limited to 5)', () => {
+      it('includes every photo analysis, not the first five (brief 2.4)', () => {
         const analyses = Array.from({ length: 10 }, (_, i) => ({
           filename: `photo${i}.jpg`
         }));
@@ -336,7 +338,10 @@ describe('evaluator-nodes', () => {
 
         expect(prompt).toContain('photo0.jpg');
         expect(prompt).toContain('photo4.jpg');
-        // Should only include first 5
+        // The outline judge of 092026 was shown five of nine and scored the
+        // other four as photos "with NO analyses".
+        expect(prompt).toContain('photo9.jpg');
+        expect(prompt).toContain('PHOTOS (all 10 session photos');
       });
     });
 
@@ -1283,5 +1288,383 @@ describe('evaluateArticle — the card check reads what the page prints (slice 2
     expect(mockClient).toHaveBeenCalled();
     expect(result._articleFactCheck.structuralIssues).toEqual([]);
     expect(result.evaluationHistory.ready).toBe(true);
+  });
+});
+
+describe('what each judge sees (phase 2, brief 2.4)', () => {
+  // The judges scored what they could not see: the outline and article judges had
+  // no documents, the article judge was asked whether every roster member is
+  // named with no roster in its prompt, and the outline judge saw 5 of 9 photos
+  // and a null interweaving plan. Each judge now reads the record view and its
+  // writer's inputs, built by the writer's own renderers and builders.
+  const { renderRecordView } = require('../../../lib/prompt-renderers/record-view');
+  const { renderSessionFactsVerdict } = require('../../../lib/prompt-renderers/director-words-renderer');
+  const { createPromptBuilder } = require('../../../lib/prompt-builder');
+  const { _testing: { extractEvidenceSummary } } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
+  const { _testing: { buildSessionFacts } } = require('../../../lib/workflow/nodes/ai-nodes');
+
+  const LONG_PAPER_TEXT = 'Patchwork LLP, engagement letter. The firm will represent Sarah Blackwood in the dissolution ' +
+    'of her marriage to Marcus Blackwood, retained at 2:14 AM on February 21, with the retainer paid in full.';
+  const PHOTOS = Array.from({ length: 9 }, (_, i) => `aln (${i + 1} of 9).jpg`);
+  const WHITEBOARD = 'whiteboard.jpg';
+  const PLAN = {
+    suggestedOrder: ['arc-jess', 'arc-verdict'],
+    convergencePoint: 'The six-vote overdose verdict, as reported by people in the room.',
+    keyCallbacks: [{ plantIn: 'arc-jess', payoffIn: 'arc-verdict', detail: 'Plant: the paternity test. Payoff: the vote.' }]
+  };
+  const CORRECTION = 'The "Almost" line was Sam\'s, not Sarah\'s.';
+  const ACCUSATION_RAW = 'Six votes for an accidental overdose, in a final round that had already deadlocked 4 to 4 between Alex and Vic.';
+
+  function evidenceBundle() {
+    return {
+      exposed: {
+        tokens: [
+          {
+            id: 'ale001',
+            summary: 'HAIKU SUMMARY OF ALE001',
+            owner: 'Alex',
+            rawData: { name: 'ALE001 - Alex finds the code', fullDescription: 'ALEX.1 - 11:02PM - You open the repository and every commit is his.', owners: ['Alex Reeves'] }
+          },
+          {
+            id: 'sam003',
+            summary: 'HAIKU SUMMARY OF SAM003',
+            rawData: { name: 'SAM003 - The compound', fullDescription: 'SAM.3 - 1:40AM - The vial is lighter than it was an hour ago.', owners: ['Sam Thorne'] }
+          }
+        ],
+        paperEvidence: [
+          { id: 'paper-1', name: 'Patchwork engagement letter', basicType: 'Document', description: LONG_PAPER_TEXT, owners: ['Sarah Blackwood'] },
+          // A rescued item has no `id`; the record view names it by its Notion id.
+          { notionId: 'rescued-notion-id', name: 'Paternity test', basicType: 'Document', description: 'Probability of paternity: 99.9%.' }
+        ]
+      },
+      buried: {
+        transactions: [
+          { tokenId: 'jes002', shellAccount: 'Cayman', amount: 450000, time: '10:41 AM' },
+          { tokenId: 'vic004', shellAccount: 'Offshore', amount: 1200000, time: '10:55 AM' }
+        ],
+        relationships: []
+      }
+    };
+  }
+
+  function realisticState(extra = {}) {
+    const analyses = [...PHOTOS, WHITEBOARD].map((filename, i) => ({
+      filename,
+      identifiedCharacters: i % 2 === 0 ? ['Alex', 'Sam'] : ['Sam'],
+      visualContent: `VISUAL CONTENT ${i + 1}`
+    }));
+    return {
+      theme: 'journalist',
+      sessionConfig: {
+        roster: ['Alex', 'Sam'],
+        rosterPronouns: { Alex: 'she/her', Sam: 'he/him' },
+        reportingMode: 'remote',
+        accusation: { accused: [], charge: 'accidental overdose', verdictKind: 'overdose' },
+        accusationRaw: ACCUSATION_RAW
+      },
+      canonicalCharacters: { Alex: 'Alex Reeves', Sam: 'Sam Thorne', Marcus: 'Marcus Blackwood' },
+      characterData: { characters: { Alex: { role: 'Software Engineer' } } },
+      evidenceBundle: evidenceBundle(),
+      narrativeArcs: [
+        { id: 'arc-jess', title: 'Two cards', interweaving: { callbacks: ['the test'] } },
+        { id: 'arc-verdict', title: 'The verdict' }
+      ],
+      selectedArcs: ['arc-jess', 'arc-verdict'],
+      _arcAnalysisCache: { synthesisNotes: 'notes', interweavingPlan: PLAN },
+      // The field the old judge read. It is not a state channel.
+      interweavingPlan: { convergencePoint: 'DEAD FIELD' },
+      sessionPhotos: [...PHOTOS, WHITEBOARD].map(f => `/sessions/092026/photos/${f}`),
+      photoAnalyses: { analyses },
+      heroImage: PHOTOS[0],
+      whiteboardPhotoPath: `/sessions/092026/photos/${WHITEBOARD}`,
+      photoDescriptions: {
+        [PHOTOS[0]]: 'gathered by the public evidence screen',
+        // Joined by basename, case-insensitively.
+        'ALN (6 OF 9).JPG': 'in the midst of an investigation',
+        [PHOTOS[7]]: 'reviewing the contents of a memory on one of Marcus\' scanners'
+      },
+      directorNotes: {
+        rawProse: 'Early on, Sam and Sarah were in conversation. Overheard: "Sarah, you know almost everything about me. Almost."',
+        quotes: [{ speaker: 'Sam', text: 'Almost.', confidence: 'high' }],
+        transactionReferences: [],
+        postInvestigationDevelopments: []
+      },
+      inputReviewCorrections: [CORRECTION],
+      outline: { lede: { hook: 'Marcus Blackwood is dead.' } },
+      contentBundle: {
+        headline: { main: 'Nine people, one verdict' },
+        sections: [{ id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: 'Alex Reeves and Sam Thorne argued.' }] }]
+      },
+      ...extra
+    };
+  }
+
+  function validIdsIn(prompt) {
+    const start = prompt.indexOf('[', prompt.indexOf('ALL VALID EVIDENCE IDS'));
+    return JSON.parse(prompt.slice(start, prompt.indexOf('<RECORD>')).trim());
+  }
+
+  describe('arc judge', () => {
+    it('reads the record view in place of the name summaries and 100-character excerpts', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('arcs', state);
+
+      // The documents part, as the arc writer's SECTION 3 takes it: the judge keeps
+      // its own BURIED TRANSACTIONS list, so the buried lines appear once (R2).
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { buried: false }));
+      expect(prompt).not.toContain('<buried-transactions>');
+      expect(prompt.match(/BURIED TRANSACTIONS \(/g)).toHaveLength(1);
+      expect(prompt).toContain('ALEX.1 - 11:02PM - You open the repository and every commit is his.');
+      // The whole paper document, not its first 100 characters.
+      expect(prompt).toContain(LONG_PAPER_TEXT);
+      expect(prompt).not.toContain('HAIKU SUMMARY OF ALE001');
+      expect(prompt).not.toContain('EXPOSED EVIDENCE DETAILS');
+    });
+
+    it('checks keyEvidence against the arc writer\'s own valid-id list, so every id names a document it can see', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('arcs', state);
+      const ids = validIdsIn(prompt);
+
+      expect(ids).toEqual(extractEvidenceSummary(state.evidenceBundle).allEvidenceIds);
+      // The rescued document is named by its Notion id in the view; the old rule
+      // (id || tokenId || pageId || name) listed it by name, so an arc citing the
+      // id it was shown would have been judged invalid.
+      expect(ids).toContain('rescued-notion-id');
+      expect(prompt).toContain('<document id="rescued-notion-id"');
+      const documentIds = [...prompt.matchAll(/<document id="([^"]+)"/g)].map(m => m[1]);
+      expect([...documentIds].sort()).toEqual([...ids].sort());
+    });
+  });
+
+  describe('outline judge', () => {
+    it('reads the whole record view', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('outline', state);
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle));
+      expect(prompt).toContain('- account: Cayman | amount: $450,000 | time: 10:41 AM');
+    });
+
+    it('sees every photo, each with the director\'s description joined by filename, and never the whiteboard', () => {
+      const prompt = buildEvaluationUserPrompt('outline', realisticState());
+
+      expect(prompt).toContain('PHOTOS (all 9 session photos');
+      PHOTOS.forEach((filename, i) => {
+        expect(prompt).toContain(`${i + 1}. ${i === 0 ? '[hero image] ' : ''}${filename}:`);
+        expect(prompt).toContain(`VISUAL CONTENT ${i + 1}"`);
+      });
+      expect(prompt).toContain('1. [hero image] aln (1 of 9).jpg: Alex, Sam\n   The director\'s description, word for word: gathered by the public evidence screen');
+      expect(prompt).toContain('aln (6 of 9).jpg: Sam\n   The director\'s description, word for word: in the midst of an investigation');
+      expect(prompt).toContain('aln (8 of 9).jpg: Sam\n   The director\'s description, word for word: reviewing the contents of a memory on one of Marcus\' scanners');
+      expect(prompt).toContain('aln (9 of 9).jpg: Alex, Sam\n   The director\'s description: none given');
+      // Director-layer evidence, never an article photo (the writer's list drops it too).
+      expect(prompt).not.toContain(WHITEBOARD);
+      expect(prompt).not.toContain('PHOTO ANALYSES');
+    });
+
+    it('reads the real interweaving plan from _arcAnalysisCache', () => {
+      const prompt = buildEvaluationUserPrompt('outline', realisticState());
+      expect(prompt).toContain(`INTERWEAVING PLAN (from arc analysis):\n${JSON.stringify(PLAN, null, 2)}`);
+      expect(prompt).not.toContain('DEAD FIELD');
+    });
+
+    it('leaves the plan section out when the arc analysis has none, instead of printing null', () => {
+      for (const cache of [null, {}, { interweavingPlan: null }, { interweavingPlan: {} },
+        { interweavingPlan: { suggestedOrder: [], convergencePoint: '', keyCallbacks: [] } }]) {
+        const prompt = buildEvaluationUserPrompt('outline', realisticState({ _arcAnalysisCache: cache }));
+        expect(prompt).not.toContain('INTERWEAVING PLAN');
+        expect(prompt).not.toMatch(/\nnull\n/);
+      }
+    });
+  });
+
+  describe('article judge', () => {
+    it('reads the roster with pronouns, the section the article writer gets, beside the session roster', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null });
+      const writerRoster = createPromptBuilder({
+        theme: 'journalist',
+        sessionConfig: state.sessionConfig,
+        canonicalCharacters: state.canonicalCharacters,
+        characterData: state.characterData.characters
+      })._rosterSection();
+
+      expect(prompt).toContain(writerRoster);
+      expect(prompt).toContain('- Alex → Alex Reeves (she/her)');
+      expect(prompt).toContain('- Sam → Sam Thorne (he/him)');
+      // characterPlacement asks whether every roster member is named: the judge is
+      // told which characters were this session's players.
+      expect(prompt).toContain('SESSION ROSTER (2 players who were present at this session\'s investigation):\nAlex Reeves\nSam Thorne');
+    });
+
+    it('the detective judge reads the detective writer\'s roster section, without pronouns', () => {
+      const prompt = buildEvaluationUserPrompt('article', realisticState({ theme: 'detective' }), { factCheck: null });
+      expect(prompt).toContain('- Alex → Alex Reeves\n');
+      expect(prompt).not.toContain('- Alex → Alex Reeves (she/her)');
+    });
+
+    it('reads the full accusation: the parsed verdict and the director\'s account word for word', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null });
+
+      expect(prompt).toContain(renderSessionFactsVerdict(buildSessionFacts(state)));
+      expect(prompt).toContain('ACCUSATION: none (the room\'s verdict names no culprit: an overdose)');
+      expect(prompt).toContain('CHARGE: accidental overdose');
+      expect(prompt).toContain('<DIRECTOR_ACCUSATION>');
+      expect(prompt).toContain(ACCUSATION_RAW);
+    });
+
+    it('reads the director\'s notes, with the input-review corrections after them', () => {
+      const prompt = buildEvaluationUserPrompt('article', realisticState(), { factCheck: null });
+      const notesEnd = prompt.indexOf('</DIRECTOR_NOTES>');
+
+      expect(prompt).toContain('<DIRECTOR_NOTES>\nEarly on, Sam and Sarah were in conversation.');
+      expect(notesEnd).toBeGreaterThan(-1);
+      expect(prompt.indexOf('<DIRECTOR_CORRECTIONS>')).toBeGreaterThan(notesEnd);
+      expect(prompt).toContain(CORRECTION);
+      expect(prompt).toContain('<QUOTE_BANK>');
+    });
+
+    it('reads the whole record view', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null });
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle));
+    });
+
+    it('reads the fact check\'s result as two labelled lists, not the result object', () => {
+      const factCheck = {
+        structuralIssues: ['Evidence card "ale001" (in section "the-story") is not verbatim: copy its sentences from the document with that id in <RECORD>.'],
+        advisoryWarnings: ['Absence stated 2 times (remote): "I was not there."'],
+        cardFidelity: [{ tokenId: 'ale001', ok: false, reason: 'CARD FIDELITY INTERNALS', locations: [] }],
+        rosterCoverage: { missing: [] },
+        photoReferences: { invalid: [] },
+        reporterMode: { violations: [] }
+      };
+      const prompt = buildEvaluationUserPrompt('article', realisticState(), { factCheck });
+
+      expect(prompt).toContain('THE FACT CHECK ON THIS BUNDLE');
+      expect(prompt).toContain(`Structural issues (1):\n- ${factCheck.structuralIssues[0]}`);
+      expect(prompt).toContain(`Advisories (1):\n- ${factCheck.advisoryWarnings[0]}`);
+      expect(prompt).not.toContain('CARD FIDELITY INTERNALS');
+      expect(prompt).not.toContain('cardFidelity');
+      // Beside the bundle it describes, right before the question.
+      expect(prompt.indexOf('THE FACT CHECK ON THIS BUNDLE')).toBeGreaterThan(prompt.indexOf('CONTENT BUNDLE:'));
+      expect(prompt.trim().endsWith('Is this article ready for human review?')).toBe(true);
+    });
+
+    it('says so when the check found nothing, and when it did not run', () => {
+      const clean = buildEvaluationUserPrompt('article', realisticState(), { factCheck: { structuralIssues: [], advisoryWarnings: [] } });
+      expect(clean).toContain('Structural issues (0):\n- none\nAdvisories (0):\n- none');
+
+      const none = buildEvaluationUserPrompt('article', realisticState());
+      expect(none).toContain('THE FACT CHECK ON THIS BUNDLE');
+      expect(none).toContain('It did not run: there was no content bundle to check.');
+    });
+
+    it('never reads the state\'s _articleFactCheck, which belongs to the previous bundle until this evaluation writes it', () => {
+      const state = realisticState({ _articleFactCheck: { structuralIssues: ['STALE ISSUE FROM THE LAST BUNDLE'], advisoryWarnings: [] } });
+      const fresh = buildEvaluationUserPrompt('article', state, { factCheck: { structuralIssues: [], advisoryWarnings: [] } });
+      const unset = buildEvaluationUserPrompt('article', state);
+      expect(fresh).not.toContain('STALE ISSUE');
+      expect(unset).not.toContain('STALE ISSUE');
+    });
+  });
+
+  describe('the evaluator hands each judge its inputs', () => {
+    const SOURCE = 'You are standing by the bar when Vic leans in and hands you the number twice over.';
+
+    function articleState(cardContent, extra = {}) {
+      return {
+        theme: 'journalist',
+        contentBundle: {
+          sections: [{
+            id: 'the-story',
+            type: 'narrative',
+            content: [
+              { type: 'paragraph', text: 'Vic and Mel argued.' },
+              { type: 'evidence-card', tokenId: 'vic001', headline: 'The Offer', content: cardContent }
+            ]
+          }]
+        },
+        arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+        sessionConfig: { roster: ['Vic', 'Mel'], reportingMode: 'on-site' },
+        outline: {},
+        // A previous bundle's result: this evaluation must not show it.
+        _articleFactCheck: { structuralIssues: ['STALE ISSUE FROM THE LAST BUNDLE'], advisoryWarnings: [] },
+        ...extra
+      };
+    }
+
+    it('at the cap the article judge reads the structural issues the check proved', async () => {
+      const mockClient = jest.fn().mockResolvedValue({ ready: false, structuralPassed: false, overallScore: 0.6 });
+      const result = await evaluateArticle(
+        articleState('Vic told me the job was already handed out to somebody else.', { articleRevisionCount: REVISION_CAPS.ARTICLE }),
+        { configurable: { sdkClient: mockClient } }
+      );
+
+      const { prompt } = mockClient.mock.calls[0][0];
+      const issues = result._articleFactCheck.structuralIssues;
+      expect(issues.length).toBeGreaterThan(0);
+      expect(prompt).toContain(`Structural issues (${issues.length}):`);
+      issues.forEach(issue => expect(prompt).toContain(`- ${issue}`));
+      expect(prompt).not.toContain('STALE ISSUE');
+    });
+
+    it('under the cap a clean bundle reaches the article judge with a clean check', async () => {
+      const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.93 });
+      await evaluateArticle(articleState(SOURCE), { configurable: { sdkClient: mockClient } });
+
+      const { prompt } = mockClient.mock.calls[0][0];
+      expect(prompt).toContain('Structural issues (0):\n- none');
+      expect(prompt).not.toContain('STALE ISSUE');
+    });
+
+    it('the outline judge reads every photo, the plan and the record', async () => {
+      const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.9 });
+      await evaluateOutline(realisticState(), { configurable: { sdkClient: mockClient } });
+
+      const { prompt } = mockClient.mock.calls[0][0];
+      expect(prompt).toContain('9. aln (9 of 9).jpg');
+      expect(prompt).toContain(PLAN.convergencePoint);
+      expect(prompt).toContain('<RECORD>');
+    });
+  });
+
+  describe('what does not change', () => {
+    const split = (criteria) => ({
+      structural: Object.keys(criteria).filter(k => criteria[k].type === 'structural'),
+      advisory: Object.keys(criteria).filter(k => criteria[k].type === 'advisory')
+    });
+
+    it('the criteria and their structural or advisory status', () => {
+      expect(split(QUALITY_CRITERIA.arcs)).toEqual({
+        structural: ['rosterCoverage', 'evidenceIdValidity', 'accusationArcPresent'],
+        advisory: ['coherence', 'evidenceConfidenceBalance']
+      });
+      expect(split(getOutlineCriteria('journalist'))).toEqual({
+        structural: ['arcCoverage', 'requiredSections', 'arcSectionFlow', 'visualDistributionPlan'],
+        advisory: ['sectionBalance', 'flowLogic', 'photoPlacement', 'wordBudget', 'loopArchitecture', 'arcInterweaving', 'visualMomentum', 'convergence']
+      });
+      expect(split(getArticleCriteria('journalist'))).toEqual({
+        structural: ['voiceConsistency', 'antiPatterns', 'reporterMode', 'arcThreading'],
+        advisory: ['visualDistribution', 'evidenceIntegration', 'characterPlacement', 'emotionalResonance']
+      });
+    });
+
+    it('the fact check still runs first and short-circuits the judge under the automated budget', async () => {
+      const mockClient = jest.fn();
+      const result = await evaluateArticle(
+        {
+          theme: 'journalist',
+          contentBundle: { sections: [{ id: 's', type: 'narrative', content: [{ type: 'evidence-card', tokenId: 'vic001', headline: 'h', content: 'Invented text that is in no document at all.' }] }] },
+          arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: 'The real memory text, which says something else entirely.' }] }],
+          sessionConfig: { roster: [], reportingMode: 'on-site' },
+          outline: {}
+        },
+        { configurable: { sdkClient: mockClient } }
+      );
+      expect(mockClient).not.toHaveBeenCalled();
+      expect(result.evaluationHistory.source).toBe('fact-check');
+    });
   });
 });
