@@ -34,6 +34,7 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const { resolveCompletePayload } = require('./lib/sse-complete');
+const { loadPhotoDescriptionsFile, withPhotoDescriptions } = require('./lib/photo-descriptions');
 // The console's pure read side (dual-export), so the harness reads the stop payloads
 // the way the console does: the phase's last evaluation and the trace (brief 2.7).
 const ViewLogic = require('../console/checkpoint-view-logic');
@@ -88,6 +89,11 @@ const APPROVE_TYPE = getArgValue('--approve');  // Approve specific checkpoint t
 const APPROVE_FILE = getArgValue('--approve-file');  // Custom approval payload JSON file
 const PROFILE_NAME = getArgValue('--profile');  // Auto-approval profile name
 const THEME = getArgValue('--theme') || DEFAULT_THEME;  // Report theme (journalist|detective)
+// The director's {filename: description} map, sent with every character-IDs approval
+// (phase 2 final fix wave). Read once, up front, so a bad file stops the run before
+// any stop is approved.
+const PHOTO_DESCRIPTIONS_FILE = getArgValue('--photo-descriptions');
+const PHOTO_DESCRIPTIONS = PHOTO_DESCRIPTIONS_FILE ? loadPhotoDescriptionsFile(PHOTO_DESCRIPTIONS_FILE) : null;
 
 // Colors for terminal output
 const colors = {
@@ -515,6 +521,11 @@ ${color('OPTIONS:', 'cyan')}
   --step             Run one checkpoint, display data, exit (non-interactive)
   --approve <type>   Approve the current checkpoint and advance to next
   --approve-file <f> Use custom JSON payload for approval (with --approve)
+  --photo-descriptions <f>
+                     JSON file of {"photo filename": "the director's description"},
+                     sent with every character-IDs approval (interactive, --auto
+                     and --approve) as photoDescriptions; an --approve-file that
+                     carries its own photoDescriptions keeps them
   --theme <theme>    Report theme: journalist (default) or detective
   --verbose, -v      Show full request/response JSON
   --help, -h         Show this help message
@@ -3605,6 +3616,7 @@ async function runWalkthrough() {
             // DRY: Use single source of truth for default approvals
             approvals = getDefaultApprovalForProfile(checkpointType, checkpoint);
           }
+          approvals = withPhotoDescriptions(checkpointType, approvals, PHOTO_DESCRIPTIONS);
           console.log(color(`\n─── Approving ${checkpointType}... ───`, 'dim'));
 
           const { status, data, error, durationMs } = await apiCall(
@@ -3654,10 +3666,10 @@ async function runWalkthrough() {
       if (handler) {
         try {
           // DRY: Use withRetry for error recovery (retry/skip/quit)
-          const approvals = await withRetry(
+          const approvals = withPhotoDescriptions(checkpointType, await withRetry(
             () => handler(checkpoint, currentData.currentPhase),
             { checkpointType, checkpoint }
-          );
+          ), PHOTO_DESCRIPTIONS);
 
           // Use /approve endpoint for cleaner flow
           console.log(color(`\n─── Approving... ───`, 'dim'));

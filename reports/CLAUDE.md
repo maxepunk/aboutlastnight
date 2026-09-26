@@ -46,6 +46,7 @@ node scripts/e2e-walkthrough.js --help                   # Full CLI options
 # Step-by-step mode (non-interactive, for collaborative debugging)
 node scripts/e2e-walkthrough.js --session 1225 --step    # View current checkpoint
 node scripts/e2e-walkthrough.js --session 1225 --approve input-review --step
+node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --photo-descriptions descriptions.json --step   # {"photo.jpg": "the director's description"}, sent as photoDescriptions with every character-IDs approval
 
 # Remote access
 start-everything.bat   # Windows: Start server + Cloudflare tunnel
