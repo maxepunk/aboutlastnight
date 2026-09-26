@@ -435,15 +435,17 @@ describe('ThemeLoader', () => {
       expect(PHASE_REQUIREMENTS.validation).toBeDefined();
     });
 
-    it('defines a revision phase carrying the craft rules (PROMPT-REVIEW)', () => {
-      // The revision prompts used to carry NO craft rules at all: the reviser was
-      // handed the previous output plus feedback and asked to fix it with none of
-      // the voice, evidence-boundary or anti-pattern rules the GENERATOR had.
-      expect(PHASE_REQUIREMENTS.revision).toEqual([
+    it('defines no revision phase: each reworker carries its writer\'s rules (brief 2.3)', () => {
+      // PROMPT-REVIEW gave the reworkers a three-file 'revision' set because they
+      // had no craft rules at all. Since phase 2 (2.3) each reworker is built from
+      // its writer's prompt, so it carries the writer's whole rule set instead.
+      expect(PHASE_REQUIREMENTS.revision).toBeUndefined();
+      expect(PHASE_REQUIREMENTS.outlineGeneration).toContain('section-rules');
+      expect(PHASE_REQUIREMENTS.articleGeneration).toEqual(expect.arrayContaining([
         'character-voice',
         'evidence-boundaries',
         'anti-patterns'
-      ]);
+      ]));
     });
 
     it('should export ALL_PROMPTS', () => {

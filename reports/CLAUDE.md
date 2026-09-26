@@ -121,6 +121,14 @@ The photo branch keeps its original phase NUMBERS, so the badge CheckpointShell 
 
 **Revision Loops:** the automated budget is 2 reworks for arcs, and 2 each for the outline and the article PER ROUND of the director's — a send back opens a new round (`humanOutlineRevisionCount` / `humanArticleRevisionCount`) and starts the budget over. The director's rounds are never capped, and the arc stop never forces an empty selection forward. See `PIPELINE_DEEP_DIVE.md#evaluation--revision-architecture` for structural vs advisory criteria.
 
+**Reworkers see what their writers saw** (phase 2, brief 2.3). Each reworker (`reviseArcs`, `reviseOutline`, `reviseContentBundle`) is built from its writer's own builders and inputs, never from copies: the writer's sections, then the revision block (`buildRevisionContext`'s context with HUMAN FEEDBACK and `<HAND_EDITS>`, the previous version, `## YOUR TASK`), then `<DIRECTOR_GUIDANCE>` last, so a later change to a writer reaches its reworker. On 092026 the article reworker had no document text and deleted four correct cards; it now carries the approved outline, one `<RECORD>`, the packages, the money figures, the director's notes and corrections, and the writer's rules and `<SCHEMA>`.
+- **The writers' sections.** `buildCoreArcSections(state)` (arc; `buildCoreArcPrompt` = it + the writer's revision hook + the standing notes), `PromptBuilder.buildOutlineUserSections` / `buildArticleUserSections` (the user prompt without `<SHOULD_CONSIDER>`/`<DIRECTOR_GUIDANCE>`). The nodes' inputs come from `outlineWriterInputs(state, heroImage)` and `articleWriterInputs(state)` in `ai-nodes.js`, which recompute the two inputs the writers never store (`buildAvailablePhotos`, `buildSessionFacts`); the outline reworker reads `state.heroImage` (`selectHeroImage` only if it is missing). A reworker does not carry its writer's `<SHOULD_CONSIDER>` (the previous stage's advisories, overwritten by the current stage's evaluation by then): the revision context carries the current evaluation's own. The arc reworker does not carry the writer's revision hook (`buildArcRevisionContext`). The writers' prompts did not change by a byte: `lib/__tests__/writer-prompts-pinned.test.js` pins each writer node's render by hash (taken at `df51bc0`), and `reworker-writer-parity.test.js` checks each reworker opens with its writer's sections, marker by marker.
+- **System prompts.** Each is its writer's system prompt, then the rework rules: `getArcRevisionSystemPrompt(hasHumanFeedback, sessionConfig)` = `coreArcSystemPrompt` + `ARC_REVISION_RULES.human|evaluator`; `getOutlineRevisionSystemPrompt(writerSystemPrompt)` + `OUTLINE_REVISION_RULES`; `getArticleRevisionSystemPrompt(writerSystemPrompt, theme)` + `articleRevisionRules(theme)` (the revision framing, `revisionVoice`, the rework rules). The two composers take the writer's system prompt, not a theme, and throw on a theme name; `build{Outline,Article}RevisionSystemPrompt(promptBuilder)` build it. The mode block therefore appears once, where the writer's does. The rework rules' "preserve, do not regenerate" lines are unchanged until phase 3 rules on them (X28).
+- **What went.** The reworkers' own partial copies (the arc reworker's SESSION CONTEXT accusation, roster, notes, categories and `describeValidEvidence` list; the outline reworker's selected-arc ids and evidence counts; the article reworker's OUTPUT SCHEMA), and the `revision` craft phase. The arc reworker's valid ids are the writer's (the record view's id rule). Its `### PREVIOUS INTERWEAVING PLAN` is left out when there is no plan (`hasInterweavingPlan`: `{}` or the empty default), and so is the task's line about keeping it.
+- **The banner.** A send back's rework reads `REVISION CONTEXT: OUTLINE (round 2: the director's send back)`: the reworker passes `round` = `human<Stop>RevisionCount + 1`, the round the stop will show. An automated pass still reads `(automated pass N)`.
+- **Fail loud.** `buildOutlineRevisionPrompt` / `buildArticleRevisionPrompt` first call `promptBuilder.requirePhasePrompts('outlineGeneration'|'articleGeneration')`, which throws naming the missing craft files (ThemeLoader returns `''` for an unreadable file); the nodes build inside their `try`, so that becomes the node's error contract.
+- `scripts/render-prompts.js` also renders `arc-generation.txt` and `arc-revision.txt` (a send back), for the plain prompt diff; `--compare` still reads the four outline and article files.
+
 ### Key Files
 
 ```
@@ -337,14 +345,14 @@ The pipeline supports multiple report themes via `state.theme`. Each theme produ
 - `labelPromptSection()` wraps content in `<tag>content</tag>` format
 - Token savings: ~560 tokens per article generation
 - Cross-references: "See `<arc-flow>` Section 3" format
-- Methods: `buildOutlinePrompt()`, `buildArticlePrompt()`, `buildValidationPrompt()` (arc generation lives in `arc-specialist-nodes.js`, not in PromptBuilder)
+- Methods: `buildOutlinePrompt()`, `buildArticlePrompt()`, `buildValidationPrompt()` (arc generation lives in `arc-specialist-nodes.js`, not in PromptBuilder). Since phase 2 (2.3) each writer is `build{Outline,Article}SystemPrompt()` + `build{Outline,Article}UserSections(...)` + its `<SHOULD_CONSIDER>`/`<DIRECTOR_GUIDANCE>` tail; the reworkers call the first two
 
 For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 
 | Phase | Required Prompts |
 |-------|-----------------|
 | arcAnalysis | character-voice, evidence-boundaries, narrative-structure, anti-patterns |
-| revision | character-voice, evidence-boundaries, anti-patterns (appended LAST as `<RULES>` to all three revision prompts — they previously carried no craft rules at all) |
+| revision | none of its own since phase 2 (2.3): each reworker carries its writer's whole prompt, craft files included, and checks its writer's phase (`requirePhasePrompts`). The three-file `<RULES>` set (character-voice, evidence-boundaries, anti-patterns) the outline and article reworkers used to carry instead is gone; see **Reworkers see what their writers saw** |
 | outlineGeneration | section-rules, editorial-design, narrative-structure, formatting |
 | articleGeneration | All prompts (8 files) |
 

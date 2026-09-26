@@ -827,6 +827,8 @@ function resolveArcs(arcs, availableArcs) {
  * @param {Object|Array} options.previousOutput - The full previous output to improve
  * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
  * @param {Object|null} [options.handEdits] - Hand-edit diff from lib/hand-edit-diff.js (rendered as <HAND_EDITS>)
+ * @param {number} [options.round] - the director's round a send back opens (the stop's
+ *   "Round N"); named in the banner of a send-back rework (brief 2.3)
  * @returns {Object} { contextSection, previousOutputSection }
  *
  * @example
@@ -838,7 +840,7 @@ function resolveArcs(arcs, availableArcs) {
  * });
  */
 function buildRevisionContext(options) {
-  const { phase, revisionCount, validationResults, previousOutput, humanFeedback, handEdits } = options;
+  const { phase, revisionCount, validationResults, previousOutput, humanFeedback, handEdits, round } = options;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Build context section (feedback, issues, criteria)
@@ -998,6 +1000,14 @@ ${formatHandEditsBlock(handEdits)}
 `
     : '';
 
+  // Brief 2.3: which pass this is. A send back is the director's round, not an
+  // automated pass: the send back resets the automated counter, so its banner used
+  // to read "automated pass 0" above the director's own note. The discriminator is
+  // the one the increment nodes use, the feedback slot.
+  const passLabel = humanFeedback
+    ? (Number.isInteger(round) && round > 0 ? `round ${round}: the director's send back` : "the director's send back")
+    : `automated pass ${revisionCount}`;
+
   // Brief 1.3: the instruction "if a criterion is scoring well (>=80%), do NOT
   // change anything related to it" used to sit at item 3. On session 091826 every
   // criterion scored above 0.8, so it told the writer to change nothing, and the
@@ -1005,7 +1015,7 @@ ${formatHandEditsBlock(handEdits)}
   // what to preserve from the scope of the send-back instead of from the scores.
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
-REVISION CONTEXT: ${phase.toUpperCase()} (automated pass ${revisionCount})
+REVISION CONTEXT: ${phase.toUpperCase()} (${passLabel})
 ═══════════════════════════════════════════════════════════════════════════════
 
 ${evaluationBlock}

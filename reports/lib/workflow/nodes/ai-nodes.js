@@ -29,8 +29,7 @@ const {
   buildDirectorGuidanceSection,
   filterGateNotes,
   THEME_SYSTEM_PROMPTS,
-  THEME_CONSTRAINTS,
-  withReportingModeBlock
+  THEME_CONSTRAINTS
 } = require('../../prompt-builder');
 const { scopeKeys, changedScopes } = require('../../hand-edit-diff');
 const outlineSchema = require('../../schemas/outline.schema.json');
@@ -904,44 +903,35 @@ function buildAvailablePhotos(state, heroImage, whiteboardFilename) {
     });
 }
 
+/** A photo's filename, from a path string or a photo object. */
+function photoFilenameOf(photo) {
+  return typeof photo === 'string' ? photo.split(/[/\\]/).pop() : photo?.filename;
+}
+
 /**
- * Generate article outline from selected arcs
+ * The whiteboard photo's filename, or null. The whiteboard is Layer 3 (director)
+ * data and is excluded from the article photos entirely.
  *
- * Uses Claude to create structured outline with section placement,
- * evidence cards, photo suggestions, and pull quotes.
- *
- * @param {Object} state - Current state with selectedArcs, evidenceBundle, narrativeArcs
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with outline, currentPhase, approval flags
+ * @param {Object} state
+ * @returns {string|null}
  */
-async function generateOutline(state, config) {
-  // Skip if already outlined (resume case)
-  if (state.outline) {
-    return {
-      currentPhase: PHASES.GENERATE_OUTLINE
-    };
-  }
+function whiteboardFilenameOf(state) {
+  return state.whiteboardPhotoPath ? photoFilenameOf(state.whiteboardPhotoPath) : null;
+}
 
-  const sdk = getSdkClient(config, 'generateOutline');
-  const promptBuilder = getPromptBuilder(config, state);
-
-  // Arc metadata for the outline prompt. The cache carries the ANALYSIS
-  // (synthesisNotes, interweavingPlan); the arcs live in their own channel and
-  // were never in the cache, so the old `state._arcAnalysisCache || {...}`
-  // fallback never fired and <arc-metadata> rendered [] in every real session.
-  // `timing` and `architecture` are our own bookkeeping and are not the model's
-  // business (<arc-analysis> dumped them verbatim).
-  const { timing, architecture, ...cache } = state._arcAnalysisCache || {};
-  const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
-
-  // Helper to extract filename from photo (handles string path or object)
-  const getPhotoFilename = (photo) =>
-    typeof photo === 'string' ? photo.split(/[/\\]/).pop() : photo?.filename;
-
-  // Whiteboard is Layer 3 (director) data — exclude from article photos entirely
-  const whiteboardFilename = state.whiteboardPhotoPath
-    ? getPhotoFilename(state.whiteboardPhotoPath)
-    : null;
+/**
+ * The hero image the outline writer is given: the photo with the most identified
+ * characters, else the first non-whiteboard photo.
+ *
+ * generateOutline selects it and stores it in state.heroImage. The outline reworker
+ * reads that (phase 2, 2.3) and selects again only when it is missing.
+ *
+ * @param {Object} state
+ * @returns {string} filename
+ */
+function selectHeroImage(state) {
+  const getPhotoFilename = photoFilenameOf;
+  const whiteboardFilename = whiteboardFilenameOf(state);
 
   // Select hero image: prefer largest group photo, fallback to first non-whiteboard photo
   // Group photos better represent the ensemble cast as hero images
@@ -971,28 +961,48 @@ async function generateOutline(state, config) {
     heroImage = getPhotoFilename(nonWhiteboardPhotos[0]) || 'evidence-board.png';
     console.log(`[generateOutline] Hero image fallback: ${heroImage} (no photo analyses available)`);
   }
+  return heroImage;
+}
+
+/**
+ * The outline writer's inputs, read from state: buildOutlinePrompt's arguments, in
+ * order (phase 2, brief 2.3).
+ *
+ * One function for the writer and its reworker, so the reworker's prompt is built
+ * from exactly what the writer's was. Two of these are computed and never stored,
+ * the available photos and the session facts; both are recomputed here from the
+ * same state by the writer's own builders (buildAvailablePhotos, buildSessionFacts).
+ *
+ * @param {Object} state
+ * @param {string} heroImage - the writer's hero image
+ * @returns {Array} [arcAnalysis, selectedArcs, heroImage, availablePhotos,
+ *   arcEvidencePackages, shellAccounts, sessionFacts, options]
+ */
+function outlineWriterInputs(state, heroImage) {
+  // Arc metadata for the outline prompt. The cache carries the ANALYSIS
+  // (synthesisNotes, interweavingPlan); the arcs live in their own channel and
+  // were never in the cache, so the old `state._arcAnalysisCache || {...}`
+  // fallback never fired and <arc-metadata> rendered [] in every real session.
+  // `timing` and `architecture` are our own bookkeeping and are not the model's
+  // business (<arc-analysis> dumped them verbatim).
+  const { timing, architecture, ...cache } = state._arcAnalysisCache || {};
+  const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
 
   // Build available photos list for outline generation (Commit 8.24)
   // FIX: Filter out hero to prevent duplicate usage (Commit 8.26)
   // FIX: Filter out whiteboard — director-layer evidence, not article content
   // Brief 2.2: filename + identified names; the prompt adds the director's description.
-  const availablePhotos = buildAvailablePhotos(state, heroImage, whiteboardFilename);
+  const availablePhotos = buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state));
 
-  // PHASE 1 FIX: Pass arcEvidencePackages with full content and enriched photos
-  const arcEvidencePackages = state.arcEvidencePackages || [];
-  const shellAccounts = state.shellAccounts || [];
-
-  // Session facts: one builder for the outline and the article (RC3 guardrail, brief 2.2)
-  const sessionFacts = buildSessionFacts(state);
-
-  const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(
+  return [
     arcAnalysis,
     state.selectedArcs || [],
     heroImage,
     availablePhotos,  // Available photos
-    arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
-    shellAccounts,  // Deterministic shell account data for financial summary
-    sessionFacts,  // Session facts for player count and roster guardrail
+    state.arcEvidencePackages || [],  // per-arc document ids, quotable excerpts and photos
+    state.shellAccounts || [],  // Deterministic shell account data for financial summary
+    // Session facts: one builder for the outline and the article (RC3 guardrail, brief 2.2)
+    buildSessionFacts(state),
     // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
     // brief 1.5: the director's raw notes, which only the article writer used to see;
     // brief 1.3: the arc evaluation's advisory findings; brief 2.2: the director's
@@ -1006,7 +1016,33 @@ async function generateOutline(state, config) {
       directorCorrections: state.inputReviewCorrections || [],
       photoDescriptions: state.photoDescriptions || null
     }
-  );
+  ];
+}
+
+/**
+ * Generate article outline from selected arcs
+ *
+ * Uses Claude to create structured outline with section placement,
+ * evidence cards, photo suggestions, and pull quotes.
+ *
+ * @param {Object} state - Current state with selectedArcs, evidenceBundle, narrativeArcs
+ * @param {Object} config - Graph config
+ * @returns {Object} Partial state update with outline, currentPhase, approval flags
+ */
+async function generateOutline(state, config) {
+  // Skip if already outlined (resume case)
+  if (state.outline) {
+    return {
+      currentPhase: PHASES.GENERATE_OUTLINE
+    };
+  }
+
+  const sdk = getSdkClient(config, 'generateOutline');
+  const promptBuilder = getPromptBuilder(config, state);
+
+  const heroImage = selectHeroImage(state);
+
+  const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(...outlineWriterInputs(state, heroImage));
 
   const theme = config?.configurable?.theme || 'journalist';
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
@@ -1087,6 +1123,8 @@ async function reviseOutline(state, config) {
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
     phase: 'outline',
     revisionCount,
+    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
+    round: (state.humanOutlineRevisionCount || 0) + 1,
     validationResults: state.validationResults,
     previousOutput: previousOutline,
     humanFeedback: state._outlineFeedback || null,
@@ -1107,15 +1145,16 @@ async function reviseOutline(state, config) {
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
 
   try {
-    // INSIDE the try: buildOutlineRevisionPrompt loads the revision craft rules and
+    // INSIDE the try: buildOutlineRevisionPrompt loads the writer's craft files and
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousOutline / _outlineFeedback and leaves the run resumable.
     const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
+    const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder);
 
     const result = await sdk({
       prompt: revisionPrompt,
-      systemPrompt: getOutlineRevisionSystemPrompt(theme, state.sessionConfig),
+      systemPrompt,
       model: 'opus',  // Same as generateOutline
       jsonSchema: activeOutlineSchema,
       disableTools: true,
@@ -1163,21 +1202,28 @@ async function reviseOutline(state, config) {
 }
 
 /**
- * Get system prompt for outline revision
- * Focuses on TARGETED FIXES, not regeneration
+ * A reworker's system prompt starts with its writer's (phase 2, 2.3). The two
+ * rework composers below used to take a theme name, so an old call would now
+ * compose a prompt that opens with the word "journalist": fail loud instead.
  *
- * Brief 1.5: a rework is where a remote outline gets "corrected" back into an
- * on-site one, so it carries the same reporting-mode block as the generation
- * prompt, in the same position.
- *
- * @param {string} theme - report theme
- * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
+ * @param {*} writerSystemPrompt
+ * @param {string} caller - the composing function, for the message
+ * @param {string} builder - the PromptBuilder method that builds the writer's
  */
-function getOutlineRevisionSystemPrompt(theme = 'journalist', sessionConfig = {}) {
-  const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
-  return withReportingModeBlock(`${framing.outlineGeneration}
+function assertWriterSystemPrompt(writerSystemPrompt, caller, builder) {
+  if (typeof writerSystemPrompt !== 'string' || !writerSystemPrompt.includes('\n')) {
+    throw new Error(
+      `${caller} takes the writer's system prompt (PromptBuilder.${builder}()), ` +
+      'not a theme name: a reworker is its writer\'s prompt plus the rework rules (brief 2.3)'
+    );
+  }
+}
 
-You are REVISING that outline, not writing it from scratch.
+/**
+ * The rules the outline reworker's system prompt adds after its writer's. Fixed
+ * text: the "preserve, do not regenerate" wording waits for phase 3's ruling (X28).
+ */
+const OUTLINE_REVISION_RULES = `You are REVISING that outline, not writing it from scratch.
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING an existing outline, not generating from scratch
@@ -1199,40 +1245,79 @@ DO:
 - Identify exactly what needs to change
 - Make minimal, surgical fixes
 - Verify your changes address the feedback
-- Return the complete updated outline`, sessionConfig);
+- Return the complete updated outline`;
+
+/**
+ * Get system prompt for outline revision: the outline writer's system prompt, then
+ * the rework rules (phase 2, 2.3).
+ *
+ * The writer's system prompt brings the identity line, the reporting-mode block in
+ * its place right after it (brief 1.5: a rework is where a remote outline gets
+ * "corrected" back into an on-site one), and the section rules and editorial
+ * design the reworker used to go without.
+ *
+ * @param {string} writerSystemPrompt - PromptBuilder.buildOutlineSystemPrompt()
+ * @returns {string}
+ */
+function getOutlineRevisionSystemPrompt(writerSystemPrompt) {
+  assertWriterSystemPrompt(writerSystemPrompt, 'getOutlineRevisionSystemPrompt', 'buildOutlineSystemPrompt');
+  return `${writerSystemPrompt}\n\n${OUTLINE_REVISION_RULES}`;
+}
+
+/**
+ * The outline reworker's system prompt, built from its writer's builder.
+ *
+ * @param {Object} promptBuilder - the PromptBuilder the writer used
+ * @returns {Promise<string>}
+ */
+async function buildOutlineRevisionSystemPrompt(promptBuilder) {
+  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt());
+}
+
+/**
+ * The hero image a rework was written against: the one generateOutline stored,
+ * else the one it would select.
+ */
+function reworkHeroImage(state) {
+  return state.heroImage || selectHeroImage(state);
 }
 
 /**
  * Build revision prompt with previous outline and feedback
  *
+ * Phase 2 (2.3): the outline writer's user prompt (every section but its
+ * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>), built by the writer's own builder from
+ * the writer's own inputs, then the revision block, then <DIRECTOR_GUIDANCE> last.
+ * The reworker used to see the selected arc ids and three evidence counts; it now
+ * sees the record, the arcs, the photos, the director's notes and the writer's
+ * rules, and a later change to the writer reaches it without a second copy.
+ *
+ * The writer's <SHOULD_CONSIDER> is the arc evaluation's advisories, which the
+ * outline evaluation has overwritten by the time a rework runs; the revision
+ * context carries the outline evaluation's own.
+ *
  * @param {Object} state - Current workflow state
  * @param {string} contextSection - Formatted revision context from helper
  * @param {string} previousOutputSection - Formatted previous output from helper
- * @param {Object} promptBuilder - PromptBuilder instance (loads the revision craft rules)
+ * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
- * @returns {string} Complete revision prompt
+ * @returns {Promise<string>} Complete revision prompt
+ * @throws {Error} when one of the writer's craft files did not load
  */
 async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
-  // PROMPT-REVIEW: the craft rules the GENERATOR wrote under, appended LAST.
-  const rulesSection = await promptBuilder.buildRevisionRulesSection();
+  await promptBuilder.requirePhasePrompts('outlineGeneration');
+  const writerSections = await promptBuilder.buildOutlineUserSections(
+    ...outlineWriterInputs(state, reworkHeroImage(state))
+  );
   const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
-  const selectedArcs = state.selectedArcs || [];
-  const evidenceBundle = state.evidenceBundle || {};
-  const arcEvidencePackages = state.arcEvidencePackages || [];
 
-  return `# Outline Revision Request
+  return `${writerSections}
+
+---
+
+# Outline Revision Request
 
 ${contextSection}
-
-## SESSION CONTEXT (Reference Only - Do NOT regenerate)
-
-### Selected Arcs
-${JSON.stringify(selectedArcs, null, 2)}
-
-### Evidence Summary
-- Exposed tokens: ${evidenceBundle.exposed?.tokens?.length || 0}
-- Paper evidence: ${evidenceBundle.exposed?.paperEvidence?.length || 0}
-- Arc packages: ${arcEvidencePackages.length}
 
 ---
 
@@ -1248,12 +1333,41 @@ ${previousOutputSection}
 4. PRESERVE everything that's working well
 5. Return the complete updated outline in the same JSON format
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
+}
 
----
-
-${rulesSection}
-${guidanceSection}`;
+/**
+ * The article writer's inputs, read from state: buildArticlePrompt's arguments, in
+ * order (phase 2, brief 2.3). One function for the writer and its reworker. The
+ * session facts are computed and never stored; they are recomputed here by the
+ * writer's own builder.
+ *
+ * @param {Object} state
+ * @returns {Array} [outline, arcEvidencePackages, heroImage, shellAccounts,
+ *   sessionFacts, directorNotes, narrativeTensions, options]
+ */
+function articleWriterInputs(state) {
+  return [
+    state.outline || {},
+    state.arcEvidencePackages || [],  // per-arc document ids, quotable excerpts and photos
+    state.heroImage,  // Hero image filename (prevents duplicate in photos array)
+    state.shellAccounts || [],  // Deterministic shell account data for financial summary
+    // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
+    buildSessionFacts(state),
+    state.directorNotes || null,  // RC5: director observations for article grounding
+    state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
+    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
+    // brief 1.3: the outline evaluation's advisory findings; brief 2.2: the director's
+    // input-review corrections and photo descriptions.
+    {
+      directorGuidance: state._outlineGuidance || null,
+      gateNotes: state.directorGateNotes || [],
+      shouldConsider: advisoriesFromPreviousStage(state, 'outline'),
+      evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
+      directorCorrections: state.inputReviewCorrections || [],
+      photoDescriptions: state.photoDescriptions || null
+    }
+  ];
 }
 
 /**
@@ -1291,31 +1405,7 @@ async function generateContentBundle(state, config) {
     }
   });
 
-  const shellAccounts = state.shellAccounts || [];
-
-  // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
-  const sessionFacts = buildSessionFacts(state);
-
-  const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
-    state.outline || {},
-    arcEvidencePackages,  // NEW: per-arc curated evidence with fullContent and photos
-    state.heroImage,  // Hero image filename (prevents duplicate in photos array)
-    shellAccounts,  // Deterministic shell account data for financial summary
-    sessionFacts,  // RC3: non-roster character guardrail
-    state.directorNotes || null,  // RC5: director observations for article grounding
-    state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
-    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
-    // brief 1.3: the outline evaluation's advisory findings; brief 2.2: the director's
-    // input-review corrections and photo descriptions.
-    {
-      directorGuidance: state._outlineGuidance || null,
-      gateNotes: state.directorGateNotes || [],
-      shouldConsider: advisoriesFromPreviousStage(state, 'outline'),
-      evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
-      directorCorrections: state.inputReviewCorrections || [],
-      photoDescriptions: state.photoDescriptions || null
-    }
-  );
+  const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(...articleWriterInputs(state));
 
   // Get JSON schema for structured output
   const contentBundleSchema = config?.configurable?.contentBundleSchema ||
@@ -1542,6 +1632,8 @@ async function reviseContentBundle(state, config) {
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
     phase: 'article',
     revisionCount,
+    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
+    round: (state.humanArticleRevisionCount || 0) + 1,
     validationResults: state.validationResults,
     previousOutput: previousContentBundle,
     humanFeedback: state._articleFeedback || null,
@@ -1558,15 +1650,18 @@ async function reviseContentBundle(state, config) {
   const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback, 'article');
 
   try {
-    // INSIDE the try: buildArticleRevisionPrompt loads the revision craft rules and
+    // INSIDE the try: buildArticleRevisionPrompt loads the writer's craft files and
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousContentBundle / _articleFeedback and leaves the run resumable.
     const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
+    const systemPrompt = await buildArticleRevisionSystemPrompt(
+      promptBuilder, config?.configurable?.theme || state?.theme || 'journalist'
+    );
 
     const revised = await sdk({
       prompt: revisionPrompt,
-      systemPrompt: getArticleRevisionSystemPrompt(config?.configurable?.theme || state?.theme || 'journalist', state?.sessionConfig || {}),
+      systemPrompt,
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
       jsonSchema: contentBundleSchema,  // Use full schema (Fix 3)
@@ -1623,16 +1718,17 @@ async function reviseContentBundle(state, config) {
 }
 
 /**
- * Get system prompt for article revision
- * Focuses on TARGETED FIXES, not regeneration
+ * The rules the article reworker's system prompt adds after its writer's: the
+ * theme's revision framing, its revision voice, and the rework rules. Fixed text:
+ * the "preserve, do not regenerate" wording waits for phase 3's ruling (X28).
+ *
+ * @param {string} [theme]
+ * @returns {string}
  */
-function getArticleRevisionSystemPrompt(theme = 'journalist', sessionConfig = {}) {
+function articleRevisionRules(theme = 'journalist') {
   const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
   const constraints = THEME_CONSTRAINTS[theme] || THEME_CONSTRAINTS.journalist;
-  // Phase 1 (integrator ruling at the live gate): the rework system prompt carries the
-  // reporting mode like the outline and arc reworks do; a remote session's rework must
-  // not be the one writer left able to put the reporter back in the room.
-  return withReportingModeBlock(`${framing.revision || framing.articleGeneration}
+  return `${framing.revision || framing.articleGeneration}
 
 ${constraints.revisionVoice}
 
@@ -1653,23 +1749,72 @@ WHAT TO FIX:
 - Low-scoring criteria in the evaluation
 - Any anti-patterns flagged by the evaluator
 
-Return the complete revised article in the same JSON format.`, sessionConfig);
+Return the complete revised article in the same JSON format.`;
+}
+
+/**
+ * Get system prompt for article revision: the article writer's system prompt, then
+ * the rework rules (phase 2, 2.3).
+ *
+ * The writer's system prompt brings the identity, the reporting-mode block in its
+ * place (phase 1: a remote session's rework must not be the one writer left able
+ * to put the reporter back in the room), the roster with pronouns, the hard
+ * constraints and the evidence boundaries, none of which the reworker had.
+ *
+ * @param {string} writerSystemPrompt - PromptBuilder.buildArticleSystemPrompt()
+ * @param {string} [theme] - selects the revision framing and voice
+ * @returns {string}
+ */
+function getArticleRevisionSystemPrompt(writerSystemPrompt, theme = 'journalist') {
+  assertWriterSystemPrompt(writerSystemPrompt, 'getArticleRevisionSystemPrompt', 'buildArticleSystemPrompt');
+  return `${writerSystemPrompt}
+
+${articleRevisionRules(theme)}`;
+}
+
+/**
+ * The article reworker's system prompt, built from its writer's builder.
+ *
+ * @param {Object} promptBuilder - the PromptBuilder the writer used
+ * @param {string} [theme]
+ * @returns {Promise<string>}
+ */
+async function buildArticleRevisionSystemPrompt(promptBuilder, theme = 'journalist') {
+  return getArticleRevisionSystemPrompt(await promptBuilder.buildArticleSystemPrompt(), theme);
 }
 
 /**
  * Build revision prompt for article with full context
+ *
+ * Phase 2 (2.3): the article writer's user prompt (every section but its
+ * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>), built by the writer's own builder from
+ * the writer's own inputs, then the revision block, then <DIRECTOR_GUIDANCE> last.
+ * On 092026 the reworker saw no document text and deleted four correct evidence
+ * cards; it now has the approved outline, the record, the packages, the money
+ * figures, the director's notes and the writer's whole rule set (which replaces the
+ * three-file <RULES> it used to carry, and whose <SCHEMA> replaces its own copy).
+ *
+ * The writer's <SHOULD_CONSIDER> is the outline evaluation's advisories, which the
+ * article evaluation has overwritten by the time a rework runs; the revision
+ * context carries the article evaluation's own.
+ *
  * @param {Object} state - Current state
  * @param {string} contextSection - Formatted revision context
  * @param {string} previousOutputSection - Formatted previous output
- * @param {Object} promptBuilder - PromptBuilder instance
+ * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
- * @returns {string} Complete revision prompt
+ * @returns {Promise<string>} Complete revision prompt
+ * @throws {Error} when one of the writer's craft files did not load
  */
 async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
-  // PROMPT-REVIEW: the craft rules the GENERATOR wrote under, appended LAST.
-  const rulesSection = await promptBuilder.buildRevisionRulesSection();
+  await promptBuilder.requirePhasePrompts('articleGeneration');
+  const writerSections = await promptBuilder.buildArticleUserSections(...articleWriterInputs(state));
   const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
-  return `## REVISION CONTEXT
+  return `${writerSections}
+
+---
+
+## REVISION CONTEXT
 
 ${contextSection}
 
@@ -1689,22 +1834,9 @@ ${previousOutputSection}
 4. PRESERVE everything that's working well
 5. Return the complete updated article in the same JSON format
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${guidanceSection ? `
 
----
-
-## OUTPUT SCHEMA (authoritative)
-
-The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277). When that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
-
-\`\`\`json
-${JSON.stringify(contentBundleSchema, null, 2)}
-\`\`\`
-
----
-
-${rulesSection}
-${guidanceSection}`;
+${guidanceSection}` : ''}`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1741,12 +1873,24 @@ function createMockPromptBuilder() {
   return {
     theme: mockTheme,
 
-    async buildRevisionRulesSection() {
-      const prompts = await mockTheme.loadPhasePrompts('revision');
-      const body = ['character-voice', 'evidence-boundaries', 'anti-patterns']
-        .map(name => `<${name}>\n${prompts[name]}\n</${name}>`)
-        .join('\n');
-      return `<RULES>\n${body}\n</RULES>`;
+    // Brief 2.3: the reworkers check their writer's craft files and build from the
+    // writer's section builders. The mock's files always load.
+    async requirePhasePrompts() {},
+
+    async buildOutlineSystemPrompt() {
+      return 'Mock system prompt for outline generation\n\nMock outline craft rules';
+    },
+
+    async buildOutlineUserSections(arcAnalysis, selectedArcs) {
+      return `Generate outline for arcs: ${selectedArcs?.join(', ') || 'none selected'}`;
+    },
+
+    async buildArticleSystemPrompt() {
+      return 'Mock system prompt for article generation\n\nMock article craft rules';
+    },
+
+    async buildArticleUserSections(outline) {
+      return `Generate article from outline with ${Object.keys(outline || {}).length} sections`;
     },
 
     async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts, sessionFacts) {
@@ -1814,6 +1958,15 @@ module.exports = {
     getArticleRevisionSystemPrompt,
     buildOutlineRevisionPrompt,
     buildArticleRevisionPrompt,
+    // Brief 2.3: each reworker is built from its writer's builders and inputs.
+    // scripts/render-prompts.js renders the rework system prompts through these.
+    buildOutlineRevisionSystemPrompt,
+    buildArticleRevisionSystemPrompt,
+    OUTLINE_REVISION_RULES,
+    articleRevisionRules,
+    outlineWriterInputs,
+    articleWriterInputs,
+    selectHeroImage,
     scorePaperEvidence,  // Batched Sonnet scoring (Commit 8.11)
     getSchemaValidator,
     // Brief 2.2: the writers' SESSION_FACTS and available photos, one builder each.

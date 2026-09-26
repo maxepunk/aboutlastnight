@@ -248,6 +248,53 @@ describe('buildRevisionContext — the evaluation state it reports (brief 1.3)',
   });
 });
 
+/**
+ * Brief 2.3 — the banner names whose pass this is.
+ *
+ * A send back resets the automated counter before the reworker reads it, so the
+ * director's own rework was bannered "automated pass 0" right above their note.
+ * The send back is the director's round; the discriminator is the feedback slot, as
+ * in the increment nodes. (The three reworker nodes pass the round their send back
+ * opens; reworker-writer-parity.test.js checks each one's banner end to end.)
+ */
+describe('buildRevisionContext — the banner (brief 2.3)', () => {
+  const banner = (overrides) => buildRevisionContext({
+    phase: 'article',
+    revisionCount: 0,
+    validationResults: null,
+    previousOutput: {},
+    ...overrides
+  }).contextSection.split('\n').find(line => line.startsWith('REVISION CONTEXT:'));
+
+  it("reads as the director's round on a send back, with the round it opens", () => {
+    expect(banner({ humanFeedback: 'Rethink the closing.', round: 2 }))
+      .toBe("REVISION CONTEXT: ARTICLE (round 2: the director's send back)");
+  });
+
+  it('never says "automated pass" for a send back', () => {
+    expect(banner({ humanFeedback: 'Rethink the closing.', round: 3 })).not.toContain('automated pass');
+  });
+
+  it('names the send back without a number when the caller has no round', () => {
+    expect(banner({ humanFeedback: 'Rethink the closing.' }))
+      .toBe("REVISION CONTEXT: ARTICLE (the director's send back)");
+    expect(banner({ humanFeedback: 'Rethink the closing.', round: 0 }))
+      .toBe("REVISION CONTEXT: ARTICLE (the director's send back)");
+  });
+
+  it('is unchanged for an automated pass, whatever round it runs in', () => {
+    expect(banner({ revisionCount: 1, round: 2 })).toBe('REVISION CONTEXT: ARTICLE (automated pass 1)');
+    expect(banner({ phase: 'arcs', revisionCount: 2 })).toBe('REVISION CONTEXT: ARCS (automated pass 2)');
+  });
+
+  it('changes nothing else in the context', () => {
+    const base = { revisionCount: 0, validationResults: { phase: 'article', passed: true }, humanFeedback: 'x' };
+    const withRound = buildRevisionContext({ phase: 'article', previousOutput: {}, ...base, round: 2 }).contextSection;
+    const without = buildRevisionContext({ phase: 'article', previousOutput: {}, ...base }).contextSection;
+    expect(withRound.replace('round 2: ', '')).toBe(without);
+  });
+});
+
 describe('evaluator → reviser wiring (the write side)', () => {
   const { _testing } = require('../workflow/nodes/evaluator-nodes');
 

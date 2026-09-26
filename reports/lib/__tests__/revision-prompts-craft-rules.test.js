@@ -7,65 +7,92 @@
  * evidence-boundary or anti-pattern rules the GENERATOR was given, and with a
  * hardcoded journalist-ish system prompt for both themes. So a revision could
  * quietly undo the generator's compliance while "fixing" one criterion.
+ *
+ * Phase 2 (2.3): the fix that followed gave the outline and article reworkers a
+ * three-file <RULES> set of their own. Each reworker is now its writer's prompt,
+ * built by the writer's own builders, plus the revision block, so it carries the
+ * writer's rules themselves. reworker-writer-parity.test.js pins that against the
+ * real builders; this file covers the rework rules, the order of the parts, and the
+ * fail-loud check on the writer's craft files.
  */
 
 const {
   _testing: {
     getOutlineRevisionSystemPrompt,
     getArticleRevisionSystemPrompt,
+    buildOutlineRevisionSystemPrompt,
+    buildArticleRevisionSystemPrompt,
     buildOutlineRevisionPrompt,
-    buildArticleRevisionPrompt
+    buildArticleRevisionPrompt,
+    OUTLINE_REVISION_RULES,
+    articleRevisionRules
   },
   createMockPromptBuilder
 } = require('../workflow/nodes/ai-nodes');
 
 const {
-  _testing: { buildArcRevisionPrompt, getArcRevisionSystemPrompt }
+  _testing: { buildArcRevisionPrompt, getArcRevisionSystemPrompt, ARC_REVISION_RULES }
 } = require('../workflow/nodes/arc-specialist-nodes');
 
+const { createPromptBuilder } = require('../prompt-builder');
+
 describe('revision system prompts are theme-aware', () => {
-  it('journalist keeps Nova as the reviser', () => {
-    expect(getArticleRevisionSystemPrompt('journalist')).toContain('Nova');
-    expect(getOutlineRevisionSystemPrompt('journalist')).toContain('NovaNews');
+  it('journalist keeps Nova as the reviser', async () => {
+    expect(articleRevisionRules('journalist')).toContain('Nova');
+    const outline = await buildOutlineRevisionSystemPrompt(createPromptBuilder({ theme: 'journalist' }));
+    expect(outline).toContain('NovaNews');
   });
 
-  it('detective gets the detective voice, not Nova', () => {
-    const system = getArticleRevisionSystemPrompt('detective');
+  it('detective gets the detective voice, not Nova', async () => {
+    const rules = articleRevisionRules('detective');
+    expect(rules).toContain('third-person');
+    expect(rules).not.toContain('Nova');
+    const system = await buildArticleRevisionSystemPrompt(createPromptBuilder({ theme: 'detective' }), 'detective');
     expect(system).toContain('third-person');
     expect(system).not.toContain('Nova');
   });
 
-  it('detective outline revision gets the case-report framing', () => {
-    const system = getOutlineRevisionSystemPrompt('detective');
+  it('detective outline revision gets the case-report framing', async () => {
+    const system = await buildOutlineRevisionSystemPrompt(createPromptBuilder({ theme: 'detective' }));
     expect(system).toContain('case report');
     expect(system).not.toContain('NovaNews');
   });
 
   it('defaults to journalist when no theme is given', () => {
-    expect(getArticleRevisionSystemPrompt()).toContain('Nova');
+    expect(articleRevisionRules()).toContain('Nova');
+  });
+
+  it("the rework composers take the writer's system prompt and fail loud on a theme name", () => {
+    // They used to take a theme; an old call would now open the prompt with the
+    // word "journalist". A reworker is its writer's prompt plus the rework rules.
+    expect(() => getOutlineRevisionSystemPrompt('journalist')).toThrow(/writer's system prompt/);
+    expect(() => getArticleRevisionSystemPrompt('detective')).toThrow(/writer's system prompt/);
+    expect(getOutlineRevisionSystemPrompt('W1\nW2')).toBe(`W1\nW2\n\n${OUTLINE_REVISION_RULES}`);
+    expect(getArticleRevisionSystemPrompt('W1\nW2', 'detective')).toBe(`W1\nW2\n\n${articleRevisionRules('detective')}`);
   });
 });
 
 describe('no rework system prompt tells the writer to preserve a high-scoring criterion', () => {
   // Brief 1.3: the >=80% preserve instruction is gone from the rework USER
   // prompt; it survived in the system prompts, so a rework whose criteria all
-  // scored above 0.8 was still told to change nothing.
-  it('the outline rework system prompt carries no 80% rule, either theme', () => {
-    for (const theme of ['journalist', 'detective']) {
-      expect(getOutlineRevisionSystemPrompt(theme)).not.toContain('80%');
-    }
+  // scored above 0.8 was still told to change nothing. Since 2.3 each rework
+  // system prompt opens with its writer's, whose craft files use "80%" for evidence
+  // weighting (not this rule), so these read the rework rules added after it.
+  it('the outline rework rules carry no 80% rule', () => {
+    expect(OUTLINE_REVISION_RULES).not.toContain('80%');
   });
 
   it('the evaluator-driven arc rework system prompt carries no 80% rule', () => {
+    expect(ARC_REVISION_RULES.evaluator).not.toContain('80%');
     expect(getArcRevisionSystemPrompt(false)).not.toContain('80%');
   });
 
-  it('the article rework system prompt carries the rule in no wording, either theme', () => {
+  it('the article rework rules carry the rule in no wording, either theme', () => {
     // Integrator ruling after wave 1: the same rule lived here as "High-scoring
     // criteria (0.8+) should be left unchanged", on the reworker that turned the
     // director's rethink into a relabel on 091826.
     for (const theme of ['journalist', 'detective']) {
-      const text = getArticleRevisionSystemPrompt(theme);
+      const text = articleRevisionRules(theme);
       expect(text).not.toContain('80%');
       expect(text).not.toContain('0.8+');
       expect(text).not.toContain('score well');
@@ -79,44 +106,50 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
       .filter(Boolean)
       .map((match) => Number(match[1]));
 
-    expect(numbered(getOutlineRevisionSystemPrompt('journalist'))).toEqual([1, 2, 3, 4, 5]);
-    expect(numbered(getArcRevisionSystemPrompt(false))).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(OUTLINE_REVISION_RULES)).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(ARC_REVISION_RULES.evaluator)).toEqual([1, 2, 3, 4, 5]);
   });
 });
 
-describe('revision user prompts end with a <RULES> block', () => {
+/**
+ * Phase 2 (2.3): the order of the parts, with the mock builder. The writer's
+ * sections come first, then the revision block, then <DIRECTOR_GUIDANCE> last. The
+ * three-file <RULES> set and the reworker's own copy of the schema are gone: the
+ * writer's rules and the writer's <SCHEMA> are in its sections.
+ */
+describe("revision user prompts: the writer's sections, then the revision block", () => {
   const promptBuilder = createMockPromptBuilder();
 
-  it('article revision appends the loaded revision prompts LAST', async () => {
+  it("article revision opens with the writer's sections and keeps the context before the previous output", async () => {
     const prompt = await buildArticleRevisionPrompt(
-      {}, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
+      { outline: { lede: {} } }, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
     );
-    expect(prompt).toContain('<RULES>');
-    expect(prompt).toContain('Test character voice prompt');
-    expect(prompt).toContain('Test evidence boundaries prompt');
-    expect(prompt).toContain('Test anti-patterns prompt');
-    // LAST: the rules must sit after the context and the previous output.
-    expect(prompt.indexOf('<RULES>')).toBeGreaterThan(prompt.indexOf('PREVIOUS-HERE'));
+    expect(prompt.startsWith('Generate article from outline with 1 sections')).toBe(true);
+    expect(prompt.indexOf('CONTEXT-HERE')).toBeGreaterThan(0);
+    expect(prompt.indexOf('PREVIOUS-HERE')).toBeGreaterThan(prompt.indexOf('CONTEXT-HERE'));
+    expect(prompt).not.toContain('<RULES>');
+    expect(prompt).not.toContain('## OUTPUT SCHEMA');
   });
 
-  it('outline revision appends the loaded revision prompts LAST', async () => {
+  it("outline revision opens with the writer's sections and keeps the context before the previous output", async () => {
     const prompt = await buildOutlineRevisionPrompt(
-      {}, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
+      { selectedArcs: ['arc-a'] }, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
     );
-    expect(prompt).toContain('<RULES>');
-    expect(prompt).toContain('Test character voice prompt');
-    expect(prompt.indexOf('<RULES>')).toBeGreaterThan(prompt.indexOf('PREVIOUS-HERE'));
+    expect(prompt.startsWith('Generate outline for arcs: arc-a')).toBe(true);
+    expect(prompt.indexOf('PREVIOUS-HERE')).toBeGreaterThan(prompt.indexOf('CONTEXT-HERE'));
+    expect(prompt).not.toContain('<RULES>');
+    expect(prompt).not.toContain('SESSION CONTEXT');
   });
 
-  it('article revision carries <DIRECTOR_GUIDANCE> when the director set it', async () => {
+  it('article revision carries <DIRECTOR_GUIDANCE> when the director set it, last', async () => {
     const prompt = await buildArticleRevisionPrompt(
       { _outlineGuidance: 'Lead with the money, not the vote.' },
       'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
     );
     expect(prompt).toContain('<DIRECTOR_GUIDANCE>');
     expect(prompt).toContain('Lead with the money, not the vote.');
-    // Outranks the craft rules, so it comes after them.
-    expect(prompt.indexOf('<DIRECTOR_GUIDANCE>')).toBeGreaterThan(prompt.indexOf('<RULES>'));
+    expect(prompt.indexOf('<DIRECTOR_GUIDANCE>')).toBeGreaterThan(prompt.indexOf('PREVIOUS-HERE'));
+    expect(prompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 
   it('omits <DIRECTOR_GUIDANCE> when there is none', async () => {
@@ -124,16 +157,18 @@ describe('revision user prompts end with a <RULES> block', () => {
     expect(prompt).not.toContain('DIRECTOR_GUIDANCE');
   });
 
-  it('keeps the human feedback that lives in the context section', async () => {
+  it("keeps the human feedback that lives in the context section, after the writer's sections", async () => {
     const prompt = await buildArticleRevisionPrompt(
       {}, 'HUMAN FEEDBACK (HIGHEST PRIORITY):\ntighten the lede', 'p', promptBuilder
     );
     expect(prompt).toContain('tighten the lede');
-    expect(prompt.indexOf('<RULES>')).toBeGreaterThan(prompt.indexOf('tighten the lede'));
+    expect(prompt.indexOf('tighten the lede')).toBeGreaterThan(prompt.indexOf('Generate article from outline'));
   });
 });
 
-describe('arc revision prompt gives the model usable evidence (PROMPT-REVIEW)', () => {
+describe('arc revision prompt gives the model the record (PROMPT-REVIEW; brief 2.3)', () => {
+  const MEMORY_TEXT = 'VIC.1 - 10:02PM - A ledger page in the study, every figure initialled.';
+  const PAPER_TEXT = 'Cease and desist. Marcus Blackwood is ordered to stop using the BizAI name.';
   const STATE = {
     theme: 'journalist',
     canonicalCharacters: { Vic: 'Vic Kingsley', Mel: 'Mel Torres', Quinn: 'Quinn Ash' },
@@ -142,22 +177,27 @@ describe('arc revision prompt gives the model usable evidence (PROMPT-REVIEW)', 
     directorNotes: { rawProse: 'They circled each other.' },
     evidenceBundle: {
       exposed: {
-        tokens: [{ id: 'vic001', owner: 'Vic Kingsley', summary: 'A ledger page in the study' }],
-        paperEvidence: [{ id: 'paper-1', name: 'Cease and desist', summary: 'Legal threat to Marcus' }]
+        tokens: [{
+          id: 'vic001', owner: 'Vic Kingsley', summary: 'A summary of the name only',
+          rawData: { tokenId: 'vic001', name: 'VIC001 - The ledger', fullDescription: MEMORY_TEXT, owners: ['Vic Kingsley'] }
+        }],
+        paperEvidence: [{ id: 'paper-1', name: 'Cease and desist', basicType: 'Document', description: PAPER_TEXT }]
       },
       buried: { transactions: [] }
     }
   };
 
-  it('describes each exposed item as id, owner and summary, not a bare ID', () => {
+  it("carries each exposed document in full, labelled, and the writer's list of valid ids", () => {
     const prompt = buildArcRevisionPrompt(STATE, 'ctx', 'prev');
-    // The reviser was previously shown ONLY `["vic001","paper-1"]` and told to fix
-    // its keyEvidence — with no way to know what any ID referred to.
-    expect(prompt).toContain('vic001');
-    expect(prompt).toContain('Vic Kingsley');
-    expect(prompt).toContain('A ledger page in the study');
-    expect(prompt).toContain('paper-1');
-    expect(prompt).toContain('Cease and desist');
+    // The reviser was once shown ONLY `["vic001","paper-1"]` and told to fix its
+    // keyEvidence; then an id, an owner and a summary of the name. It now reads the
+    // documents themselves, as the writer does, and the ids follow the writer's rule.
+    expect(prompt).toContain('<document id="vic001" kind="memory" name="VIC001 - The ledger" owner="Vic Kingsley" layer="exposed">');
+    expect(prompt).toContain(MEMORY_TEXT);
+    expect(prompt).toContain('<document id="paper-1" kind="Document" name="Cease and desist" layer="exposed">');
+    expect(prompt).toContain(PAPER_TEXT);
+    expect(prompt).toContain('### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)\n["vic001","paper-1"]');
+    expect(prompt).not.toContain('A summary of the name only');
   });
 
   it('re-includes the three-category character block the generation prompt has', () => {
@@ -173,68 +213,48 @@ describe('arc revision prompt gives the model usable evidence (PROMPT-REVIEW)', 
   });
 });
 
-describe('buildRevisionRulesSection — the REAL PromptBuilder over the REAL ThemeLoader', () => {
-  // The suite above composes prompts with createMockPromptBuilder(), whose
-  // buildRevisionRulesSection is a SECOND implementation that hardcodes the three
-  // filenames. That left the production method — the one the pipeline actually
-  // calls — with no test at all.
-  const { PromptBuilder, createPromptBuilder } = require('../prompt-builder');
+describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoader', () => {
+  // ThemeLoader.loadPrompt warns and returns '' for a missing file. A reworker built
+  // on that would run without the craft rules its writer had, invisibly. The
+  // reworkers check their writer's phase before building (brief 2.3); until then
+  // they checked a smaller 'revision' set, which no longer exists.
+  const { PromptBuilder } = require('../prompt-builder');
   const { createThemeLoader, PHASE_REQUIREMENTS } = require('../theme-loader');
 
   ['journalist', 'detective'].forEach((theme) => {
-    it(`${theme}: wraps the real content of all three revision prompts in <RULES>`, async () => {
+    it(`${theme}: both writers' craft files load`, async () => {
       const builder = createPromptBuilder({ theme });
-      const section = await builder.buildRevisionRulesSection();
-
-      expect(section.startsWith('<RULES>')).toBe(true);
-      expect(section.trim().endsWith('</RULES>')).toBe(true);
-
-      const loader = createThemeLoader({ theme });
-      for (const name of PHASE_REQUIREMENTS.revision) {
-        const content = await loader.loadPrompt(name);
-        expect(content.length).toBeGreaterThan(50);      // the file really exists
-        expect(section).toContain(`<${name}>`);
-        // The whole file's text, with {{VARIABLES}} resolved the way the
-        // production method resolves them.
-        expect(section).toContain(builder.resolvePromptVariables(content).trim());
-      }
+      await expect(builder.requirePhasePrompts('outlineGeneration')).resolves.toBeUndefined();
+      await expect(builder.requirePhasePrompts('articleGeneration')).resolves.toBeUndefined();
     });
   });
 
-  it('resolves {{JOURNALIST_FIRST_NAME}} from the session config', async () => {
-    const builder = createPromptBuilder({
-      theme: 'journalist',
-      sessionConfig: { journalistFirstName: 'Wilhelmina' }
-    });
-    const section = await builder.buildRevisionRulesSection();
-    expect(section).not.toContain('{{JOURNALIST_FIRST_NAME}}');
-    expect(section).toContain('Wilhelmina');
+  it('has no revision phase to check any more', () => {
+    expect(PHASE_REQUIREMENTS.revision).toBeUndefined();
   });
 
-  it('FAILS LOUD when a revision prompt file is missing', async () => {
-    // ThemeLoader.loadPrompt warns and returns '' for a missing file, so without
-    // this guard the reviser would silently run with no craft rules at all —
-    // exactly the unguarded regeneration this phase is meant to prevent.
+  it('FAILS LOUD, naming the phase and the files, when a craft file is missing', async () => {
     const builder = new PromptBuilder(
       createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
       'journalist'
     );
-    await expect(builder.buildRevisionRulesSection()).rejects.toThrow(/revision prompt/i);
+    await expect(builder.requirePhasePrompts('outlineGeneration'))
+      .rejects.toThrow(/Missing outlineGeneration prompts for theme "journalist": section-rules, editorial-design/);
+    await expect(builder.requirePhasePrompts('articleGeneration'))
+      .rejects.toThrow(/Missing articleGeneration prompts/);
   });
 });
 
-describe('a missing revision prompt becomes the node error contract, not a graph rejection', () => {
-  // buildRevisionRulesSection throws on a missing prompt file (round 1). Both
-  // node call sites awaited the prompt builder ABOVE their try, so the throw
-  // escaped as a graph-level rejection: the node's
-  // { errors: [...], currentPhase: PHASES.ERROR } return is what clears the
-  // _previous* scratch and leaves the run resumable.
+describe('a missing craft file becomes the node error contract, not a graph rejection', () => {
+  // The reworkers' craft-file check throws. Both node call sites build the prompt
+  // INSIDE their try: the node's { errors: [...], currentPhase: PHASES.ERROR }
+  // return is what clears the _previous* scratch and leaves the run resumable.
   const { reviseOutline, reviseContentBundle } = require('../workflow/nodes/ai-nodes');
   const { PHASES } = require('../workflow/state');
   const { createThemeLoader } = require('../theme-loader');
   const { PromptBuilder } = require('../prompt-builder');
 
-  /** A PromptBuilder whose revision prompts cannot be read. */
+  /** A PromptBuilder whose craft files cannot be read. */
   const brokenBuilder = () => new PromptBuilder(
     createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
     'journalist'
@@ -260,7 +280,7 @@ describe('a missing revision prompt becomes the node error contract, not a graph
     expect(result._previousOutline).toBeNull();
     expect(result._outlineFeedback).toBeNull();
     expect(result.errors[0].type).toBe('outline-revision-failed');
-    expect(result.errors[0].message).toMatch(/revision prompt/i);
+    expect(result.errors[0].message).toMatch(/Missing outlineGeneration prompts/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
   });
 
@@ -276,7 +296,7 @@ describe('a missing revision prompt becomes the node error contract, not a graph
     expect(result._previousContentBundle).toBeNull();
     expect(result._articleFeedback).toBeNull();
     expect(result.errors[0].type).toBe('article-revision-failed');
-    expect(result.errors[0].message).toMatch(/revision prompt/i);
+    expect(result.errors[0].message).toMatch(/Missing articleGeneration prompts/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
   });
 });

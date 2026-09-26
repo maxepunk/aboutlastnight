@@ -15,6 +15,10 @@
  * outline/bundle, feedback is a fixed string, revisionCount is 1, a fixed hand-edit
  * (one edited field) and two fixed gate notes are supplied. On a tree without
  * lib/hand-edit-diff.js (main) the hand-edit diff is simply absent.
+ *
+ * Phase 2 (2.3): the arc writer and the arc reworker (a send back) are rendered too,
+ * as arc-generation.txt and arc-revision.txt, for the plain prompt diff; --compare
+ * reads only the four files above.
  */
 'use strict';
 const path = require('path');
@@ -35,7 +39,11 @@ const args = parseArgs(process.argv.slice(2));
 const PRODUCTION_DB = path.resolve(path.join(__dirname, '..', 'data', 'checkpoints.sqlite'));
 
 const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-generation.txt', 'article-revision.txt'];
+/** Rendered as well, but not compared (phase 2, 2.3): the arc writer and its reworker. */
+const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt'];
 const FIXED_FEEDBACK = 'RENDER-DIFF FIXED FEEDBACK: tighten the second section.';
+/** The round a fixed send back opens, for the rework banner (2.3; an older tree ignores it). */
+const FIXED_ROUND = 2;
 const FIXED_NOTES = [
   { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'RENDER-DIFF NOTE A', at: '2026-09-19T00:00:00.000Z' },
   { gate: 'outline', kind: 'rejection', round: 1, text: 'RENDER-DIFF NOTE B', at: '2026-09-19T00:00:01.000Z' }
@@ -81,7 +89,9 @@ async function render() {
   const { createPromptBuilder } = req('lib/prompt-builder.js');
   const { buildRevisionContext } = req('lib/workflow/nodes/node-helpers.js');
   const { _testing: { buildOutlineRevisionPrompt, buildArticleRevisionPrompt, getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt,
+    buildOutlineRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
     buildSessionFacts, buildAvailablePhotos } } = req('lib/workflow/nodes/ai-nodes.js');
+  const { _testing: arcNodes } = req('lib/workflow/nodes/arc-specialist-nodes.js');
   let diffMod = null;
   // Only a MISSING module is expected (main has no hand-edit module). Anything else -
   // a syntax error, a throwing dependency - would make the guard pass vacuously (M4).
@@ -146,10 +156,15 @@ async function render() {
   const editedOutline = JSON.parse(JSON.stringify(outline));
   if (editedOutline.lede) editedOutline.lede.hook = String(editedOutline.lede.hook || '') + ' [RENDER-DIFF EDIT]';
   const outlineDiff = diffMod ? diffMod.diffOutline(outline, editedOutline) : null;
-  const orc = buildRevisionContext({ phase: 'outline', revisionCount: 1, validationResults: state.validationResults || null,
+  const orc = buildRevisionContext({ phase: 'outline', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
     previousOutput: editedOutline, humanFeedback: FIXED_FEEDBACK, handEdits: outlineDiff });
   const orPrompt = await buildOutlineRevisionPrompt({ ...state, _outlineGuidance: guidance }, orc.contextSection, orc.previousOutputSection, promptBuilder, FIXED_NOTES);
-  write(FILES[1], getOutlineRevisionSystemPrompt(theme, state.sessionConfig || {}), orPrompt);
+  // Brief 2.3: a tree whose reworker is built from its writer composes the rework
+  // system prompt from the writer's; an older tree took the theme.
+  const orSystem = buildOutlineRevisionSystemPrompt
+    ? await buildOutlineRevisionSystemPrompt(promptBuilder)
+    : getOutlineRevisionSystemPrompt(theme, state.sessionConfig || {});
+  write(FILES[1], orSystem, orPrompt);
 
   // 3. article generation
   const ag = await promptBuilder.buildArticlePrompt(outline, state.arcEvidencePackages || [], heroImage, state.shellAccounts || [],
@@ -163,12 +178,30 @@ async function render() {
   const editedBundle = JSON.parse(JSON.stringify(bundle));
   if (editedBundle.headline) editedBundle.headline.main = String(editedBundle.headline.main || '') + ' [RENDER-DIFF EDIT]';
   const bundleDiff = diffMod ? diffMod.diffBundle(bundle, editedBundle) : null;
-  const arc = buildRevisionContext({ phase: 'article', revisionCount: 1, validationResults: state.validationResults || null,
+  const arc = buildRevisionContext({ phase: 'article', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
     previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: bundleDiff });
   const arPrompt = await buildArticleRevisionPrompt({ ...state, _outlineGuidance: guidance }, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES);
-  write(FILES[3], getArticleRevisionSystemPrompt(theme, state.sessionConfig || {}), arPrompt);
+  const arSystem = buildArticleRevisionSystemPrompt
+    ? await buildArticleRevisionSystemPrompt(promptBuilder, theme)
+    : getArticleRevisionSystemPrompt(theme, state.sessionConfig || {});
+  write(FILES[3], arSystem, arPrompt);
 
-  for (const f of FILES) console.log(`${f}: ${fs.statSync(path.join(outDir, f)).size.toLocaleString()} bytes`);
+  // 5. arc generation (call 1) and 6. arc revision (a send back), when the tree
+  // exports them. Rendered for the plain prompt diff only; --compare reads FILES.
+  // The fixed notes stand in for the director's, the fixed feedback for the note the
+  // send back acts on, and the persisted arcs for the previous version.
+  const rendered = [...FILES];
+  if (arcNodes && arcNodes.buildCoreArcPrompt && arcNodes.buildArcRevisionPrompt) {
+    const arcState = { ...state, directorGateNotes: FIXED_NOTES };
+    write(ARC_FILES[0], arcNodes.coreArcSystemPrompt(state.sessionConfig || {}), arcNodes.buildCoreArcPrompt(arcState));
+    const crc = buildRevisionContext({ phase: 'arcs', revisionCount: 0, round: FIXED_ROUND, validationResults: state.validationResults || null,
+      previousOutput: state.narrativeArcs || [], humanFeedback: FIXED_FEEDBACK });
+    write(ARC_FILES[1], arcNodes.getArcRevisionSystemPrompt(true, state.sessionConfig || {}),
+      arcNodes.buildArcRevisionPrompt({ ...arcState, _arcFeedback: FIXED_FEEDBACK }, crc.contextSection, crc.previousOutputSection));
+    rendered.push(...ARC_FILES);
+  }
+
+  for (const f of rendered) console.log(`${f}: ${fs.statSync(path.join(outDir, f)).size.toLocaleString()} bytes`);
 }
 
 /**

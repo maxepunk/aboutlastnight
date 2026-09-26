@@ -24,7 +24,7 @@
  */
 
 const { createPromptBuilder } = require('../prompt-builder');
-const { _testing: { getArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
+const { _testing: { buildArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
 
 /**
  * Director notes with prose, so the <INVESTIGATION_OBSERVATIONS> header renders:
@@ -178,10 +178,18 @@ describe('REPORTING_MODE substitution', () => {
 });
 
 describe('article REVISION system prompt', () => {
-  // This prompt has no mode block (it is built from the theme alone), so it must
-  // not name a place the reporter was. A revision is where a remote article would
-  // be "corrected" back into an on-site one.
-  const revisionPrompt = getArticleRevisionSystemPrompt('journalist');
+  // A revision is where a remote article would be "corrected" back into an on-site
+  // one, so the prompt must not name a place the reporter was. Since phase 2 (2.3)
+  // it is the article writer's system prompt (which carries the mode block) followed
+  // by the rework rules; these read the whole of it, for a remote session.
+  let revisionPrompt;
+  beforeAll(async () => {
+    const builder = createPromptBuilder({
+      theme: 'journalist',
+      sessionConfig: { reportingMode: 'remote', journalistFirstName: 'Cass', roster: ['Vic'] }
+    });
+    revisionPrompt = await buildArticleRevisionSystemPrompt(builder, 'journalist');
+  });
 
   it('does not list a presence claim as the voice to embody', () => {
     expect(revisionPrompt).not.toContain('"I was there"');
@@ -212,10 +220,15 @@ describe('article REVISION system prompt', () => {
  */
 describe('the mode block reaches the arc and outline writers', () => {
   const { REPORTING_MODE_BLOCKS, createPromptBuilder: makeBuilder } = require('../prompt-builder');
-  const { _testing: { getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
+  const { _testing: { buildOutlineRevisionSystemPrompt, buildArticleRevisionSystemPrompt: articleReworkSystem } } = require('../workflow/nodes/ai-nodes');
   const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
 
-  /** Every system prompt that must carry the block, for one reporting mode. */
+  /**
+   * Every system prompt that must carry the block, for one reporting mode, except
+   * the two article prompts (below): the article writer's identity is three lines.
+   * Since 2.3 each rework system prompt opens with its writer's, so it carries the
+   * block once, in the writer's position.
+   */
   async function systemPrompts(mode) {
     const sessionConfig = { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] };
     const builder = makeBuilder({ theme: 'journalist', sessionConfig });
@@ -224,8 +237,7 @@ describe('the mode block reaches the arc and outline writers', () => {
     );
     return {
       'outline generation': outline,
-      'outline revision': getOutlineRevisionSystemPrompt('journalist', sessionConfig),
-      'article revision': getArticleRevisionSystemPrompt('journalist', sessionConfig),
+      'outline revision': await buildOutlineRevisionSystemPrompt(builder),
       'core arc generation': arcTesting.coreArcSystemPrompt(sessionConfig),
       'interweaving enrichment': arcTesting.interweavingSystemPrompt(sessionConfig),
       // Both rework branches: a mode-blind rework puts the presence claims back
@@ -243,15 +255,15 @@ describe('the mode block reaches the arc and outline writers', () => {
       it.each([
         'outline generation',
         'outline revision',
-        'article revision',
         'core arc generation',
         'interweaving enrichment',
         'arc rework (director-driven)',
         'arc rework (evaluation-driven)'
       ])(
-        'the %s system prompt states the mode, word for word',
+        'the %s system prompt states the mode, word for word, once',
         (name) => {
           expect(prompts[name]).toContain(REPORTING_MODE_BLOCKS[mode]);
+          expect(prompts[name].split(REPORTING_MODE_BLOCKS[mode]).length - 1).toBe(1);
           expect(prompts[name]).not.toContain(REPORTING_MODE_BLOCKS[mode === 'remote' ? 'on-site' : 'remote']);
         }
       );
@@ -262,6 +274,23 @@ describe('the mode block reaches the arc and outline writers', () => {
           const at = lines.findIndex((l) => l.includes(REPORTING_MODE_BLOCKS[mode]));
           expect(`${name}:${at}`).toBe(`${name}:2`);
         });
+      });
+
+      it("the article rework states it once, where the article writer's system prompt does", async () => {
+        // The article writer's identity runs to three lines, so its block sits after
+        // them. The rework system prompt opens with the writer's whole system prompt.
+        const builder = makeBuilder({
+          theme: 'journalist',
+          sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
+        });
+        const writer = await builder.buildArticleSystemPrompt();
+        const rework = await articleReworkSystem(builder, 'journalist');
+        expect(rework.startsWith(`${writer}\n\n`)).toBe(true);
+        expect(rework.split(REPORTING_MODE_BLOCKS[mode]).length - 1).toBe(1);
+        expect(rework).not.toContain(REPORTING_MODE_BLOCKS[mode === 'remote' ? 'on-site' : 'remote']);
+        const identityLines = writer.slice(0, writer.indexOf(REPORTING_MODE_BLOCKS[mode])).trimEnd().split('\n');
+        expect(identityLines[0]).toMatch(/^You are Nova, writing/);
+        expect(identityLines).toHaveLength(3);
       });
     });
   });
@@ -329,19 +358,26 @@ describe('presence lines outside the article prompt', () => {
     });
   });
 
-  // The article rework loads character-voice, evidence-boundaries and
-  // anti-patterns as its <RULES>, so the craft-file lines reach the reworker too.
-  it.each(['remote', 'on-site'])('the %s article rework rules carry none of them', async (mode) => {
+  // Since 2.3 the article rework carries the article writer's whole prompt, craft
+  // files included, plus its rework rules, so every line reaches the reworker too.
+  it.each(['remote', 'on-site'])('the %s article rework prompt carries none of them', async (mode) => {
+    const { _testing: { buildArticleRevisionPrompt } } = require('../workflow/nodes/ai-nodes');
     const builder = createPromptBuilder({
       theme: 'journalist',
       sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
     });
-    const rules = await builder.buildRevisionRulesSection();
-    expect(rules).toContain('<character-voice>');
-    expect(rules).toContain('<evidence-boundaries>');
-    expect(rules).toContain('<anti-patterns>');
+    const system = await buildArticleRevisionSystemPrompt(builder, 'journalist');
+    const user = await buildArticleRevisionPrompt(
+      { outline: { sections: [] }, directorNotes: DIRECTOR_NOTES, sessionConfig: { roster: ['Vic'] } },
+      'CONTEXT', 'PREVIOUS', builder
+    );
+    const all = system + '\n' + user;
+    expect(all).toContain('<character-voice>');
+    expect(all).toContain('<evidence-boundaries>');
+    expect(all).toContain('<anti-patterns>');
+    expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');
     [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
-      expect(`${mode}: ${phrase}: ${rules.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);
+      expect(`${mode}: ${phrase}: ${all.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);
     });
   });
 

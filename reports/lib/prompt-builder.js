@@ -264,8 +264,10 @@ const REPORTING_MODE_BLOCKS = {
  * The single source of the wording for all eight system prompts that carry it:
  * the article's (PromptBuilder._buildReportingModeBlock) and the article rework's,
  * the outline's and the outline rework's, the two arc calls' and the two arc rework
- * branches' (built outside PromptBuilder, in ai-nodes.js and arc-specialist-nodes.js,
- * which reach this through withReportingModeBlock).
+ * branches'. The two arc calls are built outside PromptBuilder, in
+ * arc-specialist-nodes.js, and reach this through withReportingModeBlock. Since
+ * phase 2 (2.3) every rework system prompt opens with its writer's, so each rework
+ * carries the block its writer does, once, in the writer's position.
  *
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
  * @returns {string}
@@ -507,8 +509,28 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
   }
 
   /**
+   * A phase's craft files, with their template variables (e.g.
+   * {{JOURNALIST_FIRST_NAME}}) resolved.
+   *
+   * @param {string} phase - a PHASE_REQUIREMENTS key
+   * @returns {Promise<Object>} prompt name -> resolved text
+   */
+  async _loadResolvedPhasePrompts(phase) {
+    const rawPrompts = await this.theme.loadPhasePrompts(phase);
+    return Object.fromEntries(
+      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
+    );
+  }
+
+  /**
    * Build outline generation prompt
    * Phase 3: Generate article outline from selected arcs
+   *
+   * Phase 2 (2.3): the writer's prompt is its system prompt
+   * (buildOutlineSystemPrompt), its user sections (buildOutlineUserSections), then
+   * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>. The outline reworker is built from the
+   * same two builders (ai-nodes.js buildOutlineRevisionPrompt), so whatever this
+   * writer is given reaches its reworker without a second copy.
    *
    * @param {Object} arcAnalysis - Arc analysis results
    * @param {string[]} selectedArcs - User-selected arc names
@@ -522,21 +544,52 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
-    const rawPrompts = await this.theme.loadPhasePrompts('outlineGeneration');
-    // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
-    const prompts = Object.fromEntries(
-      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
+    const systemPrompt = await this.buildOutlineSystemPrompt();
+    let userPrompt = await this.buildOutlineUserSections(
+      arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts, sessionFacts, options
     );
+
+    // Brief 1.3: the previous stage's advisory findings, second to last.
+    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
+
+    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
+    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
+    // (every rejection note still in state), as a second paragraph inside the same tag.
+    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
+
+    return { systemPrompt, userPrompt };
+  }
+
+  /**
+   * The outline writer's system prompt, shared with the outline reworker (2.3).
+   *
+   * @returns {Promise<string>}
+   */
+  async buildOutlineSystemPrompt() {
+    const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
 
     // The mode block sits where the article's does: right after the identity line,
     // ahead of every craft rule (brief 1.5). The outline planner used to be told
     // nothing about where the reporter was, and planned presence beats for a
     // reporter who was never in the room.
-    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
+    return `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
 
 ${this._buildReportingModeBlock()}
 ${labelPromptSection('section-rules', prompts['section-rules'])}
 ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
+  }
+
+  /**
+   * The outline writer's user prompt up to, not including, <SHOULD_CONSIDER> and
+   * <DIRECTOR_GUIDANCE>: the data, the rules and the JSON structure. Shared with the
+   * outline reworker (2.3), which follows it with its revision block and then its own
+   * <DIRECTOR_GUIDANCE>. Takes buildOutlinePrompt's arguments; the tail's options
+   * (shouldConsider, directorGuidance, gateNotes) are not read here.
+   *
+   * @returns {Promise<string>}
+   */
+  async buildOutlineUserSections(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
+    const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
 
     // <arc-metadata> below renders every arc, trimmed to the fields the outline
     // needs. <arc-analysis> then dumped the SAME arcs again, untrimmed, so every
@@ -893,15 +946,7 @@ Return JSON with the following structure:
 }`;
     }
 
-    // Brief 1.3: the previous stage's advisory findings, second to last.
-    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
-
-    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
-    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
-    // (every rejection note still in state), as a second paragraph inside the same tag.
-    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
-
-    return { systemPrompt, userPrompt };
+    return userPrompt;
   }
 
   /**
@@ -914,6 +959,11 @@ Return JSON with the following structure:
    * - Voice checkpoint: model internalizes voice before generating
    * - Voice self-check: model assesses own output
    *
+   * Phase 2 (2.3): the writer's prompt is its system prompt
+   * (buildArticleSystemPrompt), its user sections (buildArticleUserSections), then
+   * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>. The article reworker is built from the
+   * same two builders (ai-nodes.js buildArticleRevisionPrompt).
+   *
    * @param {Object} outline - Approved article outline
    * @param {Array} arcEvidencePackages - Per-arc evidence: document ids, quotable excerpts, photos
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
@@ -925,16 +975,36 @@ Return JSON with the following structure:
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildArticlePrompt(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
-    const rawPrompts = await this.theme.loadPhasePrompts('articleGeneration');
-    // Resolve template variables (e.g., {{JOURNALIST_FIRST_NAME}}) in loaded prompts
-    const prompts = Object.fromEntries(
-      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
+    const systemPrompt = await this.buildArticleSystemPrompt();
+    let userPrompt = await this.buildArticleUserSections(
+      outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options
     );
+
+    // Brief 1.3: the previous stage's advisory findings, second to last.
+    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
+
+    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
+    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
+    // (every rejection note still in state), as a second paragraph inside the same tag.
+    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
+
+    return { systemPrompt, userPrompt };
+  }
+
+  /**
+   * The article writer's system prompt, shared with the article reworker (2.3): the
+   * identity, the mode block, the roster with pronouns, the hard constraints and the
+   * evidence boundaries.
+   *
+   * @returns {Promise<string>}
+   */
+  async buildArticleSystemPrompt() {
+    const prompts = await this._loadResolvedPhasePrompts('articleGeneration');
 
     // System prompt: Identity and hard constraints (kept short for salience)
     // Roster in system prompt for higher salience (prevents name hallucination)
     const constraints = THEME_CONSTRAINTS[this.themeName];
-    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
+    return `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
 
 ${this._buildReportingModeBlock()}
 
@@ -942,6 +1012,20 @@ ${this._rosterSection()}
 
 ${constraints.hardConstraints}
 ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
+  }
+
+  /**
+   * The article writer's user prompt up to, not including, <SHOULD_CONSIDER> and
+   * <DIRECTOR_GUIDANCE>: the data (outline, record, packages, money, observations),
+   * the rules and the generation instruction with its schema. Shared with the article
+   * reworker (2.3). Takes buildArticlePrompt's arguments; the tail's options
+   * (shouldConsider, directorGuidance, gateNotes) are not read here.
+   *
+   * @returns {Promise<string>}
+   */
+  async buildArticleUserSections(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+    const prompts = await this._loadResolvedPhasePrompts('articleGeneration');
+    const constraints = THEME_CONSTRAINTS[this.themeName];
 
     // Format arc evidence packages for verbatim quoting
     const arcEvidenceSection = arcEvidencePackages.length > 0 ? `
@@ -1382,15 +1466,7 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
 </GENERATION_INSTRUCTION>`;
     }
 
-    // Brief 1.3: the previous stage's advisory findings, second to last.
-    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
-
-    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
-    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
-    // (every rejection note still in state), as a second paragraph inside the same tag.
-    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
-
-    return { systemPrompt, userPrompt };
+    return userPrompt;
   }
 
   /**
@@ -1564,40 +1640,30 @@ ${validationReturnFormat}`;
   }
 
   /**
-   * Load the revision-phase craft rules and return them as ONE <RULES> section.
+   * Fail loud when a writer's craft files did not load.
    *
-   * PROMPT-REVIEW: the revision prompts carried no craft rules at all. Appended
-   * LAST to the revision user prompts (recency bias), after the human feedback,
-   * so the reviser edits under the same voice/boundary/anti-pattern contract the
-   * generator wrote under.
+   * ThemeLoader.loadPrompt WARNS and returns '' for a file it cannot read. A
+   * reworker built on that would run without the craft rules its writer had, and
+   * nothing in the output would show it. Phase 2 (2.3): each reworker is its
+   * writer's prompt plus a revision block, so the reworkers check their writer's
+   * phase. (Until 2.3 they checked a smaller 'revision' set of three files, which
+   * they carried as their <RULES> instead of the writer's rules.)
    *
-   * Fails loud: ThemeLoader.loadPrompt WARNS and returns '' for a file it cannot
-   * read, so without this check a missing or renamed prompt would leave the
-   * reviser running with no craft rules at all — the unguarded regeneration this
-   * whole phase exists to prevent, and invisible in the output.
-   *
-   * @returns {Promise<string>} labelled <RULES> section
-   * @throws {Error} if any required revision prompt is empty or missing
+   * @param {string} phase - the writer's PHASE_REQUIREMENTS key
+   * @throws {Error} if any of the phase's prompt files is empty or missing
    */
-  async buildRevisionRulesSection() {
-    const rawPrompts = await this.theme.loadPhasePrompts('revision');
-
-    const empty = PHASE_REQUIREMENTS.revision.filter(
+  async requirePhasePrompts(phase) {
+    const rawPrompts = await this.theme.loadPhasePrompts(phase);
+    const empty = PHASE_REQUIREMENTS[phase].filter(
       name => !rawPrompts[name] || !String(rawPrompts[name]).trim()
     );
     if (empty.length > 0) {
       throw new Error(
-        `[PromptBuilder] Missing revision prompt${empty.length > 1 ? 's' : ''} for theme ` +
+        `[PromptBuilder] Missing ${phase} prompt${empty.length > 1 ? 's' : ''} for theme ` +
         `"${this.themeName}": ${empty.join(', ')}. ThemeLoader returns '' for an unreadable ` +
-        `file, so revising now would silently drop the craft rules.`
+        `file, so reworking now would silently drop the craft rules the writer had.`
       );
     }
-
-    const body = PHASE_REQUIREMENTS.revision
-      .map(name => labelPromptSection(name, this.resolvePromptVariables(rawPrompts[name])))
-      .filter(Boolean)
-      .join('\n');
-    return labelPromptSection('RULES', body);
   }
 
   /**
@@ -1660,9 +1726,10 @@ module.exports = {
   REPORTING_MODE_BLOCKS,
   buildReportingModeBlock,
   // Consumed by the system prompts assembled outside PromptBuilder (the two arc
-  // calls and the outline rework), so the block's wording has one home.
+  // calls, and through the arc writer's the two arc rework branches), so the
+  // block's wording has one home.
   withReportingModeBlock,
-  // Theme framing, consumed by the revision system prompts in ai-nodes.js
+  // Theme framing, consumed by the article rework rules in ai-nodes.js
   THEME_SYSTEM_PROMPTS,
   THEME_CONSTRAINTS
 };

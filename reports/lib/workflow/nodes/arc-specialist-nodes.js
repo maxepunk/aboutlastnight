@@ -231,36 +231,34 @@ ${nonRosterPCs.length > 0 ? `- These are valid game characters not playing this 
 }
 
 /**
- * Describe each exposed evidence item as `id - owner - one-line summary`.
- *
- * The revision prompt used to show a bare JSON array of IDs while telling the
- * model to fix its keyEvidence references. An ID with no content attached is not
- * something a model can reason about: it can only shuffle the strings. The
- * generation prompt always had the summaries; the reviser now does too.
- *
- * @param {Object} evidenceSummary - result of extractEvidenceSummary()
- * @returns {string}
- */
-function describeValidEvidence(evidenceSummary) {
-  const lines = [
-    ...(evidenceSummary.exposedTokens || []).map(t =>
-      `- ${t.id} - ${t.owner || 'owner unknown'} - ${t.summary || '(no summary)'}`),
-    ...(evidenceSummary.exposedPaper || []).map(pp =>
-      `- ${pp.id} - ${pp.name || 'paper evidence'} - ${pp.summary || '(no summary)'}`)
-  ];
-  return lines.length > 0 ? lines.join('\n') : '(no exposed evidence available)';
-}
-
-/**
  * Build prompt for core arc generation (Call 1)
  *
  * Commit 8.28: OUTPUT FORMAT at TOP for recency bias
  * Excludes interweaving rules to reduce complexity
  *
+ * Phase 2 (2.3): the writer's sections (buildCoreArcSections), then its revision
+ * hook and its standing notes. The arc reworker is built from the same sections, so
+ * whatever this writer is given reaches its reworker without a second copy.
+ *
  * @param {Object} state - Current workflow state
  * @returns {string} Prompt for core arc generation
  */
 function buildCoreArcPrompt(state) {
+  return `${buildCoreArcSections(state)}${buildArcRevisionContext(state)}${buildArcStandingNotes(state)}`;
+}
+
+/**
+ * The arc writer's user prompt up to, not including, its revision hook and its
+ * <DIRECTOR_GUIDANCE>: the output format, what the players concluded (accusation,
+ * whiteboard, the director's observations and corrections, the investigation focus,
+ * the roster, the character categories and context), the generation rules, the
+ * record and the valid ids, the evidence boundaries, temporal awareness, the
+ * tensions and the three-lens requirement. Shared with the arc reworker (2.3).
+ *
+ * @param {Object} state - Current workflow state
+ * @returns {string}
+ */
+function buildCoreArcSections(state) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
 
@@ -461,7 +459,7 @@ For each arc, analyze through all three lenses and document in analysisNotes:
 ### Victimization Lens
 - Targeting patterns that support this arc
 - Victim/operator relationships
-${buildArcRevisionContext(state)}${buildArcStandingNotes(state)}`;
+`;
 }
 
 /**
@@ -1006,6 +1004,8 @@ async function reviseArcs(state, config) {
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
     phase: 'arcs',
     revisionCount,
+    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
+    round: (state.humanArcRevisionCount || 0) + 1,
     validationResults: state.validationResults,
     previousOutput: previousArcs,
     humanFeedback: state._arcFeedback || null
@@ -1122,23 +1122,15 @@ async function reviseArcs(state, config) {
 }
 
 /**
- * Get system prompt for arc revision
- * Human feedback: allows conceptual arc replacement
- * Evaluator feedback: targeted fixes only
+ * The rules the arc reworker's system prompt adds after its writer's, one set per
+ * kind of rework. Fixed text: the "preserve, do not regenerate" wording waits for
+ * phase 3's ruling (X28).
  *
- * Brief 1.5: both branches carry the session's reporting-mode block, from the
- * same single source as the two arc generation prompts and the two outline
- * prompts, in the same position — right after the identity line. A rework left
- * mode-blind would reintroduce the presence claims into a remote session's arcs,
- * which is exactly the failure the generation prompts were just taught to avoid.
- *
- * @param {boolean} hasHumanFeedback - Whether revision is driven by human rejection
- * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
- * @returns {string} System prompt
+ * Human feedback: allows conceptual arc replacement.
+ * Evaluator feedback: targeted fixes only.
  */
-function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined) {
-  if (hasHumanFeedback) {
-    return withReportingModeBlock(`You are revising narrative arcs based on human reviewer feedback for "About Last Night."
+const ARC_REVISION_RULES = {
+  human: `You are revising narrative arcs based on human reviewer feedback for "About Last Night."
 
 The human reviewer has domain expertise about the game mechanics. Their feedback takes ABSOLUTE PRIORITY.
 
@@ -1149,11 +1141,10 @@ RULES:
 4. PRESERVE arcs and arc content the feedback does not mention
 5. If the feedback corrects a game mechanic (e.g., burial attribution, evidence boundaries), apply the correction ACROSS ALL arcs, not just the one mentioned
 6. Output complete arcs with all required fields - do not return partial arcs
-7. Maintain the same JSON schema structure as the input arcs`, sessionConfig);
-  }
+7. Maintain the same JSON schema structure as the input arcs`,
 
   // Evaluator-driven revision: targeted fixes only
-  return withReportingModeBlock(`You are revising narrative arcs for an investigative article about "About Last Night".
+  evaluator: `You are revising narrative arcs for an investigative article about "About Last Night".
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING existing arcs, not generating from scratch
@@ -1175,11 +1166,55 @@ DO:
 - Identify exactly what needs to change
 - Make minimal, surgical fixes
 - Verify your changes address the feedback
-- Return the complete updated arc set`, sessionConfig);
+- Return the complete updated arc set`
+};
+
+/**
+ * Get system prompt for arc revision: the arc writer's system prompt, then the
+ * rework rules for this kind of rework (phase 2, 2.3).
+ *
+ * The writer's system prompt brings the game context, the six principles (three
+ * lenses, evidence boundaries, temporal awareness among them) and the output
+ * requirements, none of which the reworker had. It also brings the session's
+ * reporting-mode block, right after the identity line (brief 1.5: a rework left
+ * mode-blind would put the presence claims back into a remote session's arcs).
+ *
+ * @param {boolean} hasHumanFeedback - Whether revision is driven by human rejection
+ * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
+ * @returns {string} System prompt
+ */
+function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined) {
+  const rules = hasHumanFeedback ? ARC_REVISION_RULES.human : ARC_REVISION_RULES.evaluator;
+  return `${coreArcSystemPrompt(sessionConfig)}\n\n${rules}`;
+}
+
+/**
+ * Whether an interweaving plan says anything. The degradation default
+ * (createDefaultInterweavingPlan) and `{}` do not.
+ *
+ * @param {Object|null|undefined} plan
+ * @returns {boolean}
+ */
+function hasInterweavingPlan(plan) {
+  if (!plan || typeof plan !== 'object') return false;
+  return (Array.isArray(plan.suggestedOrder) && plan.suggestedOrder.length > 0) ||
+    (typeof plan.convergencePoint === 'string' && plan.convergencePoint.trim() !== '') ||
+    (Array.isArray(plan.keyCallbacks) && plan.keyCallbacks.length > 0);
 }
 
 /**
  * Build revision prompt with previous arcs and feedback
+ *
+ * Phase 2 (2.3): the arc writer's sections (buildCoreArcSections), then the revision
+ * block, then the standing notes (<DIRECTOR_GUIDANCE>) last. The reworker used to
+ * carry its own shorter copies of the accusation, the roster, the director's notes
+ * and the valid ids; it now carries the writer's sections themselves, so it also has
+ * the whiteboard, the investigation focus, the character context, the generation
+ * rules, the record, the boundaries, temporal awareness, the tensions and the
+ * three-lens requirement, and the valid ids follow the writer's rule.
+ *
+ * The writer's revision hook (buildArcRevisionContext) is not carried: the revision
+ * context from buildRevisionContext is this prompt's.
  *
  * @param {Object} state - Current workflow state
  * @param {string} contextSection - Formatted revision context from helper
@@ -1187,57 +1222,27 @@ DO:
  * @returns {string} Complete revision prompt
  */
 function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
-  const playerFocus = state.playerFocus || {};
-  const sessionConfig = state.sessionConfig || {};
-  const evidenceBundle = state.evidenceBundle || {};
-  const directorNotes = state.directorNotes || {};
+  // Carry-over from 2.2 (wave-2 ruling W2): with no plan, the section is left out
+  // rather than printed as `{}`, and the task does not ask to keep it.
+  const previousPlan = state._arcAnalysisCache?.interweavingPlan;
+  const hasPlan = hasInterweavingPlan(previousPlan);
+  const planSection = hasPlan
+    ? `\n\n### PREVIOUS INTERWEAVING PLAN\n${JSON.stringify(previousPlan, null, 2)}`
+    : '';
+  const keepPlan = hasPlan
+    ? ' Keep the PREVIOUS INTERWEAVING PLAN where the arcs it names still stand, and change it only where the revision changed those arcs.'
+    : '';
 
-  // Extract evidence summary for reference
-  const evidenceSummary = extractEvidenceSummary(evidenceBundle);
+  return `${buildCoreArcSections(state)}
+---
 
-  const accusation = playerFocus.accusation || {};
-  const roster = sessionConfig.roster || [];
-  const theme = state.theme || 'journalist';
-  const allCharacters = Object.keys(state.canonicalCharacters || {});
-  // Enriched director-notes shape (2026-04)
-  const directorProse = directorNotes.rawProse || '';
-  const directorQuotes = directorNotes.quotes || [];
-  const directorTxRefs = directorNotes.transactionReferences || [];
-  const directorPostInv = directorNotes.postInvestigationDevelopments || [];
-
-  return `# Arc Revision Request
+# Arc Revision Request
 
 ${contextSection}
 
-## SESSION CONTEXT (Reference Only - Do NOT regenerate)
-
-### Accusation
-${renderArcAccusation(accusation, directorAccusationText(state), 'Reasoning')}
-
-### Roster
-${JSON.stringify(roster)}
-
-### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
-The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
-
-${renderDirectorEnrichmentBlock({
-  rawProse: directorProse,
-  quotes: directorQuotes,
-  transactionReferences: directorTxRefs,
-  postInvestigationDevelopments: directorPostInv,
-  corrections: state.inputReviewCorrections || []
-})}
-
-${buildCharacterCategoriesBlock(roster, theme, allCharacters)}
-### Valid Evidence (the ONLY ids keyEvidence may cite)
-${describeValidEvidence(evidenceSummary)}
-
 ---
 
-${previousOutputSection}
-
-### PREVIOUS INTERWEAVING PLAN
-${JSON.stringify(state._arcAnalysisCache?.interweavingPlan || {}, null, 2)}
+${previousOutputSection}${planSection}
 
 ---
 
@@ -1248,7 +1253,7 @@ ${JSON.stringify(state._arcAnalysisCache?.interweavingPlan || {}, null, 2)}
 3. Make TARGETED FIXES to address those specific issues
 4. PRESERVE everything that's working well
 5. Return the complete updated arc set in the same JSON format
-6. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving. Keep the PREVIOUS INTERWEAVING PLAN where the arcs it names still stand, and change it only where the revision changed those arcs.
+6. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.${keepPlan}
 
 Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${buildArcStandingNotes(state)}`;
 }
@@ -1882,9 +1887,12 @@ module.exports = {
     buildArcRevisionPrompt,
     getArcRevisionSystemPrompt,
     buildCharacterCategoriesBlock,
-    describeValidEvidence,
     // Brief 2.2: standing notes at the arc stop
-    buildArcStandingNotes
+    buildArcStandingNotes,
+    // Brief 2.3: the arc reworker is built from the writer's sections
+    buildCoreArcSections,
+    ARC_REVISION_RULES,
+    hasInterweavingPlan
   }
 };
 
