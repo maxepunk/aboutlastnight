@@ -1093,12 +1093,22 @@ describe('evaluateArticle — programmatic fact-check pre-check (BASELINE class 
 
   const SOURCE = 'You are standing by the bar when Vic leans in and hands you the number twice over.';
 
+  // The card under test is an INLINE evidence card, which prints its content;
+  // a sidebar entry prints only its headline and summary, so the card check reads
+  // no sidebar text (slice 2.5).
   function stateWith(cardContent, extra = {}) {
     return {
       theme: 'journalist',
       contentBundle: {
-        sections: [{ id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: 'Vic and Mel argued.' }] }],
-        evidenceCards: [{ tokenId: 'vic001', headline: 'The Offer', content: cardContent }]
+        sections: [{
+          id: 'the-story',
+          type: 'narrative',
+          content: [
+            { type: 'paragraph', text: 'Vic and Mel argued.' },
+            { type: 'evidence-card', tokenId: 'vic001', headline: 'The Offer', content: cardContent }
+          ]
+        }],
+        evidenceCards: [{ tokenId: 'vic001', headline: 'The Offer', summary: 'Vic makes the offer' }]
       },
       arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
       sessionConfig: { roster: ['Vic', 'Mel'], reportingMode: 'on-site' },
@@ -1231,5 +1241,47 @@ describe('reporterMode: a remote article states its absence at most once (phase 
     });
     expect(prompt).not.toContain('at most once');
     expect(prompt).toContain('The reporter watched the investigation from inside the room');
+  });
+});
+
+describe('evaluateArticle — the card check reads what the page prints (slice 2.5)', () => {
+  const SOURCE = 'You are standing by the bar when Vic leans in and hands you the number twice over.';
+
+  function stateFor(theme, contentBundle) {
+    return {
+      theme,
+      contentBundle,
+      arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+      sessionConfig: { roster: ['Mel'], reportingMode: 'on-site' },
+      outline: {}
+    };
+  }
+
+  it('passes the theme through: a name only in the headline is covered on the journalist page, not the detective page', async () => {
+    const bundle = {
+      headline: { main: 'Mel and the ledger' },
+      sections: [{ id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: 'The ledger never balanced.' }] }]
+    };
+    const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.9 });
+
+    const journalist = await evaluateArticle(stateFor('journalist', bundle), { configurable: { sdkClient: mockClient } });
+    expect(journalist._articleFactCheck.rosterCoverage.missing).toEqual([]);
+
+    const detective = await evaluateArticle(stateFor('detective', bundle), { configurable: { sdkClient: mockClient } });
+    expect(detective._articleFactCheck.rosterCoverage.missing).toEqual(['Mel']);
+  });
+
+  it('does not send a rework for a sidebar entry whose content does not print', async () => {
+    const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.93, confidence: 'high' });
+    const state = stateFor('journalist', {
+      sections: [{ id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: 'Mel watched the bar.' }] }],
+      evidenceCards: [{ tokenId: 'vic001', headline: 'The Offer', summary: 'Vic makes the offer', content: 'A paraphrase, not the memory.' }]
+    });
+
+    const result = await evaluateArticle(state, { configurable: { sdkClient: mockClient } });
+
+    expect(mockClient).toHaveBeenCalled();
+    expect(result._articleFactCheck.structuralIssues).toEqual([]);
+    expect(result.evaluationHistory.ready).toBe(true);
   });
 });

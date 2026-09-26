@@ -47,12 +47,28 @@ const card = (over = {}) => ({
   owner: 'Vic Kingsley', significance: 'critical', placement: 'sidebar', ...over
 });
 
+// An inline evidence card: the block that prints its content, and so the one the
+// fidelity check reads. A sidebar entry (`card()` above) prints only its headline
+// and summary (slice 2.5).
+const inlineCard = (over = {}) => ({
+  type: 'evidence-card', tokenId: 'vic001', headline: 'The Offer', content: TOKEN_TEXT,
+  owner: 'Vic Kingsley', significance: 'critical', ...over
+});
+
+/** A bundle whose one section, "the-story", holds these blocks. */
+const storyWith = (...blocks) => ({
+  sections: [{ id: 'the-story', type: 'narrative', content: blocks }],
+  evidenceCards: []
+});
+
+const IN_STORY = [{ placement: 'inline', section: 'the-story' }];
+
 describe('card fidelity (class 1)', () => {
   it('(a) accepts a card whose content is the source text', () => {
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: { sections: [], evidenceCards: [card()] }
+      contentBundle: storyWith(inlineCard())
     }));
-    expect(result.cardFidelity).toEqual([{ tokenId: 'vic001', ok: true, reason: null }]);
+    expect(result.cardFidelity).toEqual([{ tokenId: 'vic001', ok: true, reason: null, locations: IN_STORY }]);
     expect(result.structuralIssues).toEqual([]);
   });
 
@@ -62,45 +78,39 @@ describe('card fidelity (class 1)', () => {
       .replace(/\. /g, '.\n   ')
       .toUpperCase();
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: { sections: [], evidenceCards: [card({ content: retyped })] }
+      contentBundle: storyWith(inlineCard({ content: retyped }))
     }));
     expect(result.cardFidelity[0].ok).toBe(true);
   });
 
   it('(a) tolerates the prompt-mandated "id - timestamp -" prefix', () => {
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: { sections: [], evidenceCards: [card({ content: `vic001 - 21:40 - ${TOKEN_TEXT}` })] }
+      contentBundle: storyWith(inlineCard({ content: `vic001 - 21:40 - ${TOKEN_TEXT}` }))
     }));
     expect(result.cardFidelity[0].ok).toBe(true);
   });
 
   it('(a) tolerates quoting two non-adjacent sentences', () => {
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: {
-        sections: [],
-        evidenceCards: [card({
-          content: 'You are standing by the bar when Vic leans in. You write the number down twice because your hand shakes.'
-        })]
-      }
+      contentBundle: storyWith(inlineCard({
+        content: 'You are standing by the bar when Vic leans in. You write the number down twice because your hand shakes.'
+      }))
     }));
     expect(result.cardFidelity[0].ok).toBe(true);
   });
 
   it('(b) rejects a paraphrase and names the tokenId', () => {
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: {
-        sections: [],
-        evidenceCards: [card({
-          content: 'Vic told me the job had already been handed out, with the serial numbers filed off.'
-        })]
-      }
+      contentBundle: storyWith(inlineCard({
+        content: 'Vic told me the job had already been handed out, with the serial numbers filed off.'
+      }))
     }));
-    expect(result.cardFidelity[0]).toEqual({ tokenId: 'vic001', ok: false, reason: 'not verbatim' });
+    expect(result.cardFidelity[0]).toEqual({ tokenId: 'vic001', ok: false, reason: 'not verbatim', locations: IN_STORY });
     expect(result.structuralIssues.join(' ')).toContain('vic001');
     expect(result.structuralIssues.join(' ')).toMatch(/not verbatim/i);
   });
 
-  it('(c) checks an inline evidence-card block the same way', () => {
+  it('(c) checks an inline evidence-card block beside the prose', () => {
     const result = factCheckContentBundle(baseArgs({
       contentBundle: {
         sections: [{
@@ -113,27 +123,27 @@ describe('card fidelity (class 1)', () => {
         evidenceCards: []
       }
     }));
-    expect(result.cardFidelity).toEqual([{ tokenId: 'vic001', ok: false, reason: 'not verbatim' }]);
+    expect(result.cardFidelity).toEqual([{ tokenId: 'vic001', ok: false, reason: 'not verbatim', locations: IN_STORY }]);
     expect(result.structuralIssues.length).toBe(1);
   });
 
   it('(d) flags a tokenId that matches no token or paper item', () => {
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'nope999', content: 'anything at all here' })] }
+      contentBundle: storyWith(inlineCard({ tokenId: 'nope999', content: 'anything at all here' }))
     }));
-    expect(result.cardFidelity[0]).toEqual({ tokenId: 'nope999', ok: false, reason: 'unknown source' });
+    expect(result.cardFidelity[0]).toEqual({ tokenId: 'nope999', ok: false, reason: 'unknown source', locations: IN_STORY });
     expect(result.structuralIssues.join(' ')).toMatch(/unknown source/i);
     expect(result.structuralIssues.join(' ')).toContain('nope999');
   });
 
   it('(e) checks a paper-evidence card against the paper item text', () => {
     const ok = factCheckContentBundle(baseArgs({
-      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'paper-1', content: PAPER_TEXT })] }
+      contentBundle: storyWith(inlineCard({ tokenId: 'paper-1', content: PAPER_TEXT }))
     }));
     expect(ok.cardFidelity[0].ok).toBe(true);
 
     const bad = factCheckContentBundle(baseArgs({
-      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'paper-1', content: 'A legal letter demanding they stop the drug work.' })] }
+      contentBundle: storyWith(inlineCard({ tokenId: 'paper-1', content: 'A legal letter demanding they stop the drug work.' }))
     }));
     expect(bad.cardFidelity[0].ok).toBe(false);
   });
@@ -147,7 +157,7 @@ describe('card fidelity (class 1)', () => {
           paperEvidence: [{ id: 'paper-2', description: PAPER_TEXT }]
         }
       },
-      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'paper-2', content: PAPER_TEXT })] }
+      contentBundle: storyWith(inlineCard({ tokenId: 'paper-2', content: PAPER_TEXT }))
     }));
     expect(result.cardFidelity[0].ok).toBe(true);
   });
@@ -158,7 +168,7 @@ describe('card fidelity (class 1)', () => {
       evidenceBundle: {
         exposed: { tokens: [{ id: 'vic002', summary: 'Vic offers the job before the body is cold.' }], paperEvidence: [] }
       },
-      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'vic002', content: 'Vic offers the job before the body is cold.' })] }
+      contentBundle: storyWith(inlineCard({ tokenId: 'vic002', content: 'Vic offers the job before the body is cold.' }))
     }));
     expect(result.cardFidelity[0].ok).toBe(false);
   });
@@ -189,13 +199,22 @@ describe('roster coverage (class 2)', () => {
   });
 
   it('counts a mention in a headline, a card or a caption', () => {
+    // The caption is a photo BLOCK's, which prints. A top-level `photos` caption
+    // never prints and no longer counts (slice 2.5; see "printed text only" below).
     const result = factCheckContentBundle(baseArgs({
-      roster: ['Vic', 'Mel', 'Ashe'],
+      roster: ['Vic', 'Mel', 'Ashe', 'Kai'],
       contentBundle: {
         headline: { main: 'Mel Nilsson and the ledger' },
-        sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text: 'Vic never looked up.' }] }],
-        evidenceCards: [],
-        photos: [{ filename: 'a.jpg', caption: 'Ashe waits by the door.' }]
+        sections: [{
+          id: 'lede',
+          type: 'narrative',
+          content: [
+            { type: 'paragraph', text: 'Vic never looked up.' },
+            { type: 'photo', filename: 'a.jpg', caption: 'Ashe waits by the door.' },
+            inlineCard({ headline: 'What Kai kept' })
+          ]
+        }],
+        evidenceCards: []
       }
     }));
     expect(result.rosterCoverage.missing).toEqual([]);
@@ -320,12 +339,10 @@ describe('leaked prompt examples (§6(b))', () => {
   // than a reason to rewrite an article. See FACT_CHECK_ADVISORY_ONLY.
   it('(i) reports the illustrative formatting.md card strings as an advisory', () => {
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: {
-        sections: [], evidenceCards: [card({
-          tokenId: 'vic001',
-          content: "The job is yours. The CEO isn't even cold yet."
-        })]
-      }
+      contentBundle: storyWith(inlineCard({
+        tokenId: 'vic001',
+        content: "The job is yours. The CEO isn't even cold yet."
+      }))
     }));
     expect(result.advisoryWarnings.join(' ')).toMatch(/prompt example leaked/i);
     expect(result.advisoryWarnings.join(' ')).toContain('vic001');
@@ -393,13 +410,13 @@ describe('advisory-only checks (I2b)', () => {
           type: 'narrative',
           content: [
             { type: 'paragraph', text: 'I was in the room when the vote turned.' },
-            { type: 'photo', filename: 'not-ours.jpg', caption: 'x' }
+            { type: 'photo', filename: 'not-ours.jpg', caption: 'x' },
+            inlineCard({ tokenId: 'vic001', content: 'A sentence that appears nowhere in the source text at all.' }),
+            { type: 'paragraph', text: 'Nobody asked where the second card came from.' },
+            inlineCard({ tokenId: 'nope999', content: 'Whatever this is, no session item carries that id.' })
           ]
         }],
-        evidenceCards: [
-          card({ tokenId: 'vic001', content: 'A sentence that appears nowhere in the source text at all.' }),
-          card({ tokenId: 'nope999', content: 'Whatever this is, no session item carries that id.' })
-        ]
+        evidenceCards: []
       }
     }));
     const joined = result.structuralIssues.join(' ');
@@ -502,10 +519,7 @@ describe('reporter mode reads NARRATOR text only (I2a)', () => {
 
   it('does NOT flag evidence-card content that quotes a memory in first person', () => {
     const result = factCheckContentBundle(baseArgs({
-      contentBundle: {
-        sections: [],
-        evidenceCards: [card({ content: 'My vote was already promised before I walked in.' })]
-      }
+      contentBundle: storyWith(inlineCard({ content: 'My vote was already promised before I walked in.' }))
     }));
     expect(result.reporterMode.violations).toEqual([]);
   });
@@ -558,7 +572,7 @@ describe('ellipsis normalisation', () => {
 
   const verdictFor = (cardContent) => factCheckContentBundle(baseArgs({
     arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
-    contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'vic001', content: cardContent })] }
+    contentBundle: storyWith(inlineCard({ tokenId: 'vic001', content: cardContent }))
   })).cardFidelity[0];
 
   it('gives the same verdict whether the card elides with … or with ...', () => {
@@ -572,7 +586,7 @@ describe('ellipsis normalisation', () => {
     const unicodeSource = 'You are standing by the bar when Vic leans in and says the job is already decided…';
     const result = factCheckContentBundle(baseArgs({
       arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: unicodeSource }] }],
-      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'vic001', content: SOURCE })] }
+      contentBundle: storyWith(inlineCard({ tokenId: 'vic001', content: SOURCE }))
     }));
     expect(result.cardFidelity[0].ok).toBe(true);
   });
@@ -702,5 +716,294 @@ describe('repeated absence statements, remote only (phase 2, 2.6)', () => {
     expect(summary.groups.map(g => g.key)).toEqual(['advisory']);
     expect(summary.groups[0].items[0].text).toMatch(/^Absence stated 2 times \(remote\):/);
     expect(approveLabel(summary, false).label).toBe('Approve (1 advisory)');
+  });
+});
+
+// ── Slice 2.5: checks and cards ──────────────────────────────────────────────
+//
+// On 092026 the check sent 8 messages for 7 documents. Six of the seven were
+// sidebar entries, whose `content` never prints; two of those were correct
+// excerpts failed by a quote-mark fault; one document was reported twice; and the
+// fix line offered "or drop the card", which a reworker that could not see the
+// documents took. These blocks pin the fix.
+
+describe('the card check reads only printed text (slice 2.5)', () => {
+  it('never checks a sidebar entry\'s content, which does not print', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [],
+        evidenceCards: [card({ content: 'A paraphrase of the offer that appears nowhere in the memory at all.' })]
+      }
+    }));
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.cardFidelity).toEqual([
+      { tokenId: 'vic001', ok: true, reason: null, locations: [{ placement: 'sidebar', section: null }] }
+    ]);
+  });
+
+  it('still flags a sidebar entry whose id names no document: it prints a headline about nothing', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'nope999', content: undefined, summary: 'x' })] }
+    }));
+    expect(result.cardFidelity).toEqual([
+      { tokenId: 'nope999', ok: false, reason: 'unknown source', locations: [{ placement: 'sidebar', section: null }] }
+    ]);
+    expect(result.structuralIssues).toHaveLength(1);
+    expect(result.structuralIssues[0]).toMatch(/^Evidence card "nope999" \(in the sidebar\) has an unknown source/);
+  });
+
+  it('does not scan a sidebar entry\'s content for leaked prompt examples, only an inline card\'s', () => {
+    const sidebarOnly = factCheckContentBundle(baseArgs({
+      contentBundle: { sections: [], evidenceCards: [card({ content: 'The job is yours.' })] }
+    }));
+    expect(sidebarOnly.advisoryWarnings).toEqual([]);
+
+    const inline = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(inlineCard({ content: 'The job is yours.' }))
+    }));
+    expect(inline.advisoryWarnings.join(' ')).toMatch(/^Prompt example leaked into evidence card "vic001"/);
+  });
+});
+
+describe('quote-mark faults (slice 2.5, 092026 regression cases)', () => {
+  const { _testing: { isVerbatim, normalize } } = require('../content-bundle-fact-check');
+
+  // Each card is the 092026 writer's own card text, and each source the text the
+  // writer was shown. Each is a correct excerpt, and each failed before this slice.
+  const CASES = {
+    // The split cut at `made!”`, leaving `”` at the head of the next fragment;
+    // the card dropped the source's next sentence, so `” Your fist…` matched nothing.
+    ale003: {
+      card: 'ALEX.3 - 11:32PM - MARCUS brags about the BizAI sale. Again. “Best deal I ever made!” ' +
+        'Your fist moves before your brain. His jaw. Your knuckles. Years of stolen work in every punch. ' +
+        'SARAH pulls you off. Worth it. Finally worth it.',
+      source: 'ALEX.3 - 11:32PM - MARCUS brags about the BizAI sale. Again. “Best deal I ever made!” ' +
+        'Waits for a response from you. Your fist moves before your brain. His jaw. Your knuckles. ' +
+        'Years of stolen work in every punch. SARAH pulls you off. Worth it. Finally worth it.'
+    },
+    // The same mechanism at `Walsh.”`.
+    mor003: {
+      card: 'MORGAN.3 - 11:22PM - You’re both on the hammock. You show him proof: bribes, fraudulent reports, ' +
+        'shell company records, stolen IP. You say: “Go public about the insider trading and take full ' +
+        'responsibility or I give all of this damning evidence to Senator Walsh.” Instead of answering, ' +
+        'he reaches into his bag and hands you a generous bribe. MARCUS: “Take care of it, will you? ' +
+        'Just like you always do.”',
+      source: 'MORGAN.3 - 11:22PM - You’re both on the hammock. You show him proof: bribes, fraudulent reports, ' +
+        'shell company records, stolen IP... You say: “Go public about the insider trading and take full ' +
+        'responsibility or I give all of this damning evidence to Senator Walsh.” His face says he’s ' +
+        'considering it—but there’s something else there. Instead of answering, he reaches into his bag ' +
+        'and hands you a generous bribe. MARCUS: “Take care of it, will you? Just like you always do,” ' +
+        'then leaves without giving you a chance to respond.'
+    },
+    // The card put the document's double-quoted lines in single quotes.
+    '95e749b7-a55b-444f-818b-a325e2783cac': {
+      card: 'Front cover: A rose with \'I fucked up. I\'m sorry.\' above. Inside: J, I\'m sorry. I love you. ' +
+        'I\'m going to leave her soon. She means nothing to me. Please don\'t leave me. M. Back: \'Look under dog.\'',
+      source: 'Front cover:\nA rose with "I fucked up. I\'m sorry." above\nInside:\nJ,\nI\'m sorry. I love you. ' +
+        'I\'m going to leave her soon. She means nothing to me. Please don\'t leave me.\nM.\nBack:\n"Look under dog."'
+    }
+  };
+
+  Object.entries(CASES).forEach(([tokenId, { card: content, source }]) => {
+    it(`passes ${tokenId}, a correct excerpt, as an inline card`, () => {
+      const result = factCheckContentBundle(baseArgs({
+        arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: tokenId, fullContent: source }] }],
+        contentBundle: storyWith(inlineCard({ tokenId, content }))
+      }));
+      expect(result.cardFidelity).toEqual([{ tokenId, ok: true, reason: null, locations: IN_STORY }]);
+      expect(result.structuralIssues).toEqual([]);
+    });
+  });
+
+  it('folds single and double quotation marks, curly or straight, together', () => {
+    expect(normalize('“one” "two" ‘three’ \'four\'')).toBe("'one' 'two' 'three' 'four'");
+  });
+
+  it('drops a fragment\'s own leading and trailing quotation marks before matching', () => {
+    const source = 'He said “Best deal I ever made!” and waited. The room went quiet around the two of them.';
+    // The card drops "and waited", so the fragment after `made!` starts with `”`.
+    expect(isVerbatim('“Best deal I ever made!” The room went quiet around the two of them.', source)).toBe(true);
+  });
+
+  it('still rejects a changed word inside a quotation', () => {
+    const source = 'He said “Best deal I ever made!” and waited. The room went quiet around the two of them.';
+    expect(isVerbatim('“Best deal I ever lost, obviously!” The room went quiet around the two of them.', source)).toBe(false);
+  });
+
+  it('still rejects retyped punctuation that changes the text (the 092026 paternity-test card)', () => {
+    const source = 'Result: DDC — DNA Certainty™ confirms the match at ninety-nine point nine percent.';
+    expect(isVerbatim('Result: DDC, DNA Certainty confirms the match at ninety-nine point nine percent.', source)).toBe(false);
+  });
+});
+
+describe('one report per defect (slice 2.5)', () => {
+  const FABRICATED = 'Vic told me the job had already been handed out, with the serial numbers filed off.';
+
+  it('reports a document that fails twice inline once, naming both places', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [
+          { id: 'lede', type: 'narrative', content: [inlineCard({ content: FABRICATED })] },
+          { id: 'the-story', type: 'narrative', content: [inlineCard({ content: FABRICATED })] }
+        ],
+        evidenceCards: [card()]
+      }
+    }));
+    expect(result.structuralIssues).toHaveLength(1);
+    expect(result.structuralIssues[0]).toMatch(/^Evidence card "vic001" \(in sections "lede" and "the-story"\) is not verbatim/);
+    expect(result.cardFidelity.filter(c => !c.ok)).toEqual([{
+      tokenId: 'vic001', ok: false, reason: 'not verbatim',
+      locations: [{ placement: 'inline', section: 'lede' }, { placement: 'inline', section: 'the-story' }]
+    }]);
+    // The sidebar entry for the same document names a real document, so it passes.
+    expect(result.cardFidelity.filter(c => c.ok)).toEqual([
+      { tokenId: 'vic001', ok: true, reason: null, locations: [{ placement: 'sidebar', section: null }] }
+    ]);
+  });
+
+  it('reports an unknown id used inline and in the sidebar once', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [{ id: 'the-story', type: 'narrative', content: [inlineCard({ tokenId: 'nope999' }), inlineCard({ tokenId: 'nope999' })] }],
+        evidenceCards: [card({ tokenId: 'nope999' })]
+      }
+    }));
+    expect(result.structuralIssues).toHaveLength(1);
+    expect(result.structuralIssues[0]).toMatch(/^Evidence card "nope999" \(in section "the-story" twice, and in the sidebar\) has an unknown source/);
+    expect(result.cardFidelity).toHaveLength(1);
+    expect(result.cardFidelity[0].locations).toEqual([
+      { placement: 'inline', section: 'the-story' },
+      { placement: 'inline', section: 'the-story' },
+      { placement: 'sidebar', section: null }
+    ]);
+  });
+
+  it('keeps a document\'s passing card apart from its failing one', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [{ id: 'the-story', type: 'narrative', content: [inlineCard(), inlineCard({ content: FABRICATED })] }],
+        evidenceCards: []
+      }
+    }));
+    expect(result.structuralIssues).toHaveLength(1);
+    expect(result.cardFidelity).toEqual([
+      { tokenId: 'vic001', ok: true, reason: null, locations: IN_STORY },
+      { tokenId: 'vic001', ok: false, reason: 'not verbatim', locations: IN_STORY }
+    ]);
+  });
+
+  it('reports a leaked prompt example once per card id', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(inlineCard({ content: 'The job is yours.' }), inlineCard({ content: 'The job is yours.' }))
+    }));
+    expect(result.advisoryWarnings.filter(w => /^Prompt example leaked into evidence card/.test(w))).toHaveLength(1);
+  });
+
+  it('keeps as many structural card messages as failing cardFidelity items', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [
+          { id: 'lede', type: 'narrative', content: [inlineCard({ content: FABRICATED }), inlineCard({ tokenId: 'ghost1' })] },
+          { id: 'the-story', type: 'narrative', content: [inlineCard({ content: FABRICATED })] }
+        ],
+        evidenceCards: [card(), card({ tokenId: 'ghost1' }), card({ tokenId: 'ghost2' })]
+      }
+    }));
+    const cardMessages = result.structuralIssues.filter(s => s.indexOf('Evidence card "') === 0);
+    expect(cardMessages).toHaveLength(3);
+    expect(result.cardFidelity.filter(c => !c.ok)).toHaveLength(3);
+  });
+
+  it('names a section with no id as such', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [{ type: 'narrative', content: [inlineCard({ content: FABRICATED })] }],
+        evidenceCards: []
+      }
+    }));
+    expect(result.structuralIssues[0]).toMatch(/^Evidence card "vic001" \(in a section with no id\) is not verbatim/);
+    expect(result.cardFidelity[0].locations).toEqual([{ placement: 'inline', section: null }]);
+  });
+});
+
+describe('fix lines (slice 2.5)', () => {
+  // The one pointer wording every prompt uses (R1), from the record view itself.
+  const { DOCUMENT_POINTER } = require('../prompt-renderers/record-view');
+
+  it('the not-verbatim line points at the document in <RECORD> and never offers dropping the card', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(inlineCard({ content: 'Vic told me the job had already been handed out, with the serial numbers filed off.' }))
+    }));
+    const [message] = result.structuralIssues;
+    expect(message.indexOf('Evidence card "vic001"')).toBe(0);
+    expect(message).toContain(DOCUMENT_POINTER);
+    expect(message).toMatch(/keep the card/i);
+    expect(message).not.toMatch(/drop|remove|delete|cut the card/i);
+  });
+
+  it('the unknown-source line may still offer removal: the card has no real document', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(inlineCard({ tokenId: 'nope999' }))
+    }));
+    const [message] = result.structuralIssues;
+    expect(message.indexOf('Evidence card "nope999"')).toBe(0);
+    expect(message).toContain('<RECORD>');
+    expect(message).toMatch(/drop the card/);
+  });
+
+  it('the leaked-example line keeps its prefix and points at the document in <RECORD>', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(inlineCard({ content: 'The job is yours.' }))
+    }));
+    expect(result.advisoryWarnings[0]).toMatch(/^Prompt example leaked into evidence card "vic001"/);
+    expect(result.advisoryWarnings[0]).toContain(DOCUMENT_POINTER);
+  });
+});
+
+describe('roster coverage counts printed text only (slice 2.5)', () => {
+  const { _testing: { visibleText } } = require('../content-bundle-fact-check');
+
+  const coverage = (contentBundle, theme) => factCheckContentBundle(baseArgs({
+    roster: ['Mel'],
+    contentBundle: { sections: [], evidenceCards: [], ...contentBundle },
+    ...(theme ? { theme } : {})
+  })).rosterCoverage.missing;
+
+  it('does not count a name only in a sidebar entry\'s content or owner', () => {
+    expect(coverage({ evidenceCards: [card({ content: 'Mel kept the second ledger.', summary: 'The ledger' })] })).toEqual(['Mel']);
+    expect(coverage({ evidenceCards: [card({ owner: 'Mel', summary: 'The ledger' })] })).toEqual(['Mel']);
+  });
+
+  it('does not count a name only in the top-level photos, a pull quote, or the hero\'s characters', () => {
+    expect(coverage({ photos: [{ filename: 'a.jpg', caption: 'Mel at the bar', characters: ['Mel'] }] })).toEqual(['Mel']);
+    expect(coverage({ pullQuotes: [{ type: 'verbatim', text: 'Mel knew', attribution: 'Mel' }] })).toEqual(['Mel']);
+    expect(coverage({ heroImage: { filename: 'a.jpg', caption: 'The bar', characters: ['Mel'] } })).toEqual(['Mel']);
+  });
+
+  it('counts a sidebar entry\'s headline and summary, and the hero caption, on the journalist page', () => {
+    expect(coverage({ evidenceCards: [card({ headline: 'What Mel kept' })] })).toEqual([]);
+    expect(coverage({ evidenceCards: [card({ summary: 'Mel kept the second ledger' })] })).toEqual([]);
+    expect(coverage({ heroImage: { filename: 'a.jpg', caption: 'Mel at the bar' } })).toEqual([]);
+  });
+
+  it('counts a section heading, a quote attribution and an inline card owner', () => {
+    expect(coverage({ sections: [{ id: 's', type: 'narrative', heading: 'Mel\'s ledger', content: [] }] })).toEqual([]);
+    expect(coverage({ sections: [{ id: 's', type: 'narrative', content: [{ type: 'quote', text: 'I kept it.', attribution: 'Mel' }] }] })).toEqual([]);
+    expect(coverage({ sections: [{ id: 's', type: 'narrative', content: [inlineCard({ owner: 'Mel' })] }] })).toEqual([]);
+  });
+
+  it('on the detective page, the headline, the hero, the sidebar and a card owner never print', () => {
+    expect(coverage({ headline: { main: 'Mel and the ledger' } }, 'detective')).toEqual(['Mel']);
+    expect(coverage({ heroImage: { filename: 'a.jpg', caption: 'Mel at the bar' } }, 'detective')).toEqual(['Mel']);
+    expect(coverage({ evidenceCards: [card({ headline: 'What Mel kept', summary: 'Mel' })] }, 'detective')).toEqual(['Mel']);
+    expect(coverage({ sections: [{ id: 's', type: 'narrative', content: [inlineCard({ owner: 'Mel' })] }] }, 'detective')).toEqual(['Mel']);
+    // What does print there still counts.
+    expect(coverage({ sections: [{ id: 's', type: 'narrative', heading: 'Mel', content: [] }] }, 'detective')).toEqual([]);
+    expect(coverage({ sections: [{ id: 's', type: 'narrative', content: [inlineCard({ headline: 'What Mel kept' })] }] }, 'detective')).toEqual([]);
+  });
+
+  it('reads the journalist page when no theme is given', () => {
+    expect(coverage({ headline: { main: 'Mel and the ledger' } })).toEqual([]);
+    expect(visibleText({ headline: { main: 'Mel' } })).toBe(visibleText({ headline: { main: 'Mel' } }, 'journalist'));
   });
 });

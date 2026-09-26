@@ -24,20 +24,27 @@
  * @module content-bundle-fact-check
  */
 
+// The one wording that points a writer at a document's text (R1); the fix lines
+// below use it so they name the document the way every prompt does.
+const { DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
+
 /**
- * Normalise for substring comparison: curly quotes to straight, dashes to a
- * plain hyphen, whitespace runs to one space, case-folded.
+ * Normalise for substring comparison: every single and double quotation mark,
+ * curly or straight, folds to one straight apostrophe; dashes to a plain hyphen;
+ * whitespace runs to one space; case-folded.
  *
- * A card the model retyped with a different apostrophe or line wrap is still
- * the same sentence; only a DIFFERENT sentence is a fabrication.
+ * A card the model retyped with a different apostrophe, a different quotation
+ * mark or a different line wrap is still the same sentence; only a DIFFERENT
+ * sentence is a fabrication. The single/double fold is measured: on 092026 the
+ * `95e749b7` card put the document's double-quoted lines in single quotes and
+ * failed a correct excerpt.
  *
  * @param {*} value
  * @returns {string}
  */
 function normalize(value) {
   return String(value == null ? '' : value)
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
+    .replace(/[‘’‚‛“”„‟"]/g, "'")
     .replace(/[–—]/g, '-')
     .replace(/…/g, '...')
     .replace(/\s+/g, ' ')
@@ -82,12 +89,25 @@ function stripCardPrefix(text) {
 const MIN_CHECKED_SENTENCE = 20;
 
 /**
+ * A fragment's own leading and trailing quotation marks (every quotation mark is
+ * a straight apostrophe after `normalize`), with the whitespace around them.
+ */
+const EDGE_QUOTES = /^[\s']+|[\s']+$/g;
+
+/**
  * Is every substantial sentence of `cardContent` present in `sourceText`?
  *
  * Sentence-wise rather than whole-string so a card may legitimately quote two
  * NON-ADJACENT sentences from the same memory. Sentences under
  * MIN_CHECKED_SENTENCE characters are skipped: they are connective fragments
  * whose presence or absence proves nothing either way.
+ *
+ * Each fragment loses its leading and trailing quotation marks before matching.
+ * The split cuts at terminal punctuation INSIDE a quotation (`made!”`), which
+ * leaves the closing mark at the head of the NEXT fragment; that fragment then
+ * matched only when the card also kept the sentence the source has after the
+ * quotation. On 092026 `ale003` and `mor003` were correct non-adjacent excerpts
+ * that failed that way.
  *
  * @param {string} cardContent
  * @param {string} sourceText
@@ -99,7 +119,7 @@ function isVerbatim(cardContent, sourceText) {
 
   const sentences = stripCardPrefix(cardContent)
     .split(/[.?!]+/)
-    .map(normalize)
+    .map(fragment => normalize(fragment).replace(EDGE_QUOTES, ''))
     .filter(s => s.length >= MIN_CHECKED_SENTENCE);
 
   // Nothing substantial to check (a one-line card): accept. Being lenient here
@@ -346,36 +366,75 @@ function contentBlocks(contentBundle) {
 }
 
 /**
- * Reader-visible prose: what a roster mention has to appear in to count.
+ * The printed text of one content block, per the block partials of each theme's
+ * templates. A photo's `characters` never prints; an evidence card's `owner`
+ * prints on the journalist page only. The dispatcher renders an unknown block
+ * type through the paragraph partial, which prints `text`.
  *
- * Deliberately generous (headline, captions, card text all count) — a roster
- * member named anywhere the reader can see them is covered, and a false
- * "missing" claim would send a good article back for a paid revision.
+ * @param {Object} block
+ * @param {boolean} journalist
+ * @returns {Array<*>}
  */
-function visibleText(contentBundle) {
+function printedBlockText(block, journalist) {
+  switch (block.type) {
+    case 'quote': return [block.text, block.attribution];
+    case 'evidence-reference': return [block.caption];
+    case 'list': return asArray(block.items);
+    case 'photo': return [block.caption];
+    case 'evidence-card':
+      return journalist ? [block.headline, block.content, block.owner] : [block.headline, block.content];
+    default: return [block.text];
+  }
+}
+
+/**
+ * Printed text: what a roster mention has to appear in to count. Only text the
+ * published page prints counts, per theme (the templates under `templates/`):
+ *
+ *   both themes  section headings; paragraph text; quote text and attribution;
+ *                evidence-reference captions; list items; photo-block captions;
+ *                evidence-card headline and content
+ *   journalist   also the headline, kicker and deck; the hero caption; the
+ *                evidence-card owner; each sidebar entry's headline and summary
+ *
+ * Never counted, because it never prints: a sidebar entry's `content` and
+ * `owner`, the top-level `photos`, pull quotes, the characters on a photo or the
+ * hero, and on the detective page the headline, the hero and the sidebar. The
+ * byline and the financial tracker print but are left out: the byline names the
+ * reporter, and an account can carry anyone's name, so neither is a roster
+ * member appearing in the story.
+ *
+ * Within that, it is generous (headings, captions and card text all count): a
+ * roster member named anywhere the reader can see them is covered, and a false
+ * "missing" claim would send a good article back for a paid revision.
+ *
+ * @param {Object} contentBundle
+ * @param {string} [theme] - 'journalist' (default) | 'detective'
+ * @returns {string}
+ */
+function visibleText(contentBundle, theme) {
   const bundle = contentBundle || {};
+  const journalist = theme !== 'detective';
   const parts = [];
 
-  const headline = bundle.headline || {};
-  parts.push(headline.main, headline.kicker, headline.deck);
-
-  for (const block of contentBlocks(bundle)) {
-    parts.push(block.text, block.caption, block.headline, block.content);
-    asArray(block.items).forEach(i => parts.push(i));
+  if (journalist) {
+    const headline = bundle.headline || {};
+    parts.push(headline.main, headline.kicker, headline.deck);
+    if (bundle.heroImage && typeof bundle.heroImage === 'object') parts.push(bundle.heroImage.caption);
   }
 
-  for (const c of asArray(bundle.evidenceCards)) {
-    if (c && typeof c === 'object') parts.push(c.headline, c.content, c.summary, c.owner);
+  for (const section of asArray(bundle.sections)) {
+    if (!section || typeof section !== 'object') continue;
+    parts.push(section.heading);
+    for (const block of asArray(section.content)) {
+      if (block && typeof block === 'object') parts.push(...printedBlockText(block, journalist));
+    }
   }
-  for (const p of asArray(bundle.photos)) {
-    if (p && typeof p === 'object') parts.push(p.caption, ...asArray(p.characters));
-  }
-  if (bundle.heroImage && typeof bundle.heroImage === 'object') {
-    parts.push(bundle.heroImage.caption, ...asArray(bundle.heroImage.characters));
-  }
-  for (const q of asArray(bundle.pullQuotes)) {
-    if (q && typeof q === 'object') parts.push(q.text, q.attribution);
-    else parts.push(q);
+
+  if (journalist) {
+    for (const entry of asArray(bundle.evidenceCards)) {
+      if (entry && typeof entry === 'object') parts.push(entry.headline, entry.summary);
+    }
   }
 
   return parts.filter(v => typeof v === 'string').join('\n');
@@ -386,8 +445,8 @@ function visibleText(contentBundle) {
  * (main, kicker, deck). Nothing else (I2a).
  *
  * The reporter-mode scan used to read `visibleText`, which is generous ON PURPOSE
- * — it answers "can the reader see this roster name anywhere", so captions, card
- * text and pull quotes all count. Run over first-person reporter-mode phrases,
+ * — it answers "can the reader see this roster name anywhere", so headings,
+ * captions and card text all count. Run over first-person reporter-mode phrases,
  * that same generosity turns a correctly attributed player quote into a structural
  * failure: "I voted for Vic" is what a player SAYS, and quoting them is the
  * article doing its job. Same for an evidence card, which is a verbatim extract of
@@ -436,6 +495,71 @@ function findAbsenceStatements(text) {
 }
 
 /**
+ * Every card in the bundle with where it sits: each inline `evidence-card` block
+ * (in section order), then each sidebar entry of `evidenceCards[]`.
+ *
+ * An inline evidence card prints its content. A sidebar entry prints its
+ * headline and summary only; its `content` never prints (the sidebar partial has
+ * no `content` field), so the card check never reads it.
+ *
+ * @param {Object} bundle
+ * @returns {Array<{card: Object, location: {placement: 'inline'|'sidebar', section: string|null}}>}
+ */
+function cardOccurrences(bundle) {
+  const out = [];
+  for (const section of asArray(bundle.sections)) {
+    if (!section || typeof section !== 'object') continue;
+    const sectionId = typeof section.id === 'string' && section.id.trim() ? section.id.trim() : null;
+    for (const block of asArray(section.content)) {
+      if (block && typeof block === 'object' && block.type === 'evidence-card') {
+        out.push({ card: block, location: { placement: 'inline', section: sectionId } });
+      }
+    }
+  }
+  for (const entry of asArray(bundle.evidenceCards)) {
+    if (entry && typeof entry === 'object') {
+      out.push({ card: entry, location: { placement: 'sidebar', section: null } });
+    }
+  }
+  return out;
+}
+
+/**
+ * Where a card defect sits, for its message: `in section "the-story"`,
+ * `in section "the-story" twice`, `in sections "lede" and "the-story"`,
+ * `in the sidebar`, `in section "lede", and in the sidebar`.
+ *
+ * @param {Array<{placement: string, section: string|null}>} locations
+ * @returns {string}
+ */
+function describeLocations(locations) {
+  const counts = new Map();
+  let sidebar = false;
+  for (const loc of asArray(locations)) {
+    if (loc.placement === 'sidebar') { sidebar = true; continue; }
+    const key = loc.section || '';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const times = n => (n === 2 ? ' twice' : n > 2 ? ` ${n} times` : '');
+  const named = [];
+  let unnamed = 0;
+  for (const [section, n] of counts) {
+    if (section) named.push(`"${section}"${times(n)}`);
+    else unnamed += n;
+  }
+
+  const parts = [];
+  if (named.length === 1) parts.push(`section ${named[0]}`);
+  if (named.length > 1) parts.push(`sections ${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`);
+  if (unnamed > 0) parts.push(`a section with no id${times(unnamed)}`);
+  if (sidebar) parts.push('the sidebar');
+
+  if (parts.length === 0) return 'in the bundle';
+  return parts.map(p => `in ${p}`).join(', and ');
+}
+
+/**
  * Fact-check a generated ContentBundle against the session's own record.
  *
  * @param {Object}   args
@@ -446,9 +570,12 @@ function findAbsenceStatements(text) {
  * @param {Array}    args.sessionPhotos        - photo paths available to this session
  * @param {string}   args.reportingMode        - 'on-site' | 'remote' (default 'on-site')
  * @param {Object}   [args.npcPronouns]        - name -> 'he/him' for NPCs (victim pronoun scan)
+ * @param {string}   [args.theme]              - 'journalist' (default) | 'detective': which
+ *                                               page's printed text roster coverage reads
  * @see BASELINE.md §4 for the measured failure classes each check addresses
  * @returns {{structuralIssues: string[], advisoryWarnings: string[],
- *            cardFidelity: Array<{tokenId: string, ok: boolean, reason: string|null}>,
+ *            cardFidelity: Array<{tokenId: string, ok: boolean, reason: string|null,
+ *                                 locations: Array<{placement: 'inline'|'sidebar', section: string|null}>}>,
  *            rosterCoverage: {missing: string[]},
  *            photoReferences: {invalid: string[]},
  *            reporterMode: {violations: string[]}}}
@@ -460,7 +587,8 @@ function factCheckContentBundle({
   roster,
   sessionPhotos,
   reportingMode,
-  npcPronouns
+  npcPronouns,
+  theme
 } = {}) {
   const structuralIssues = [];
   const advisoryWarnings = [];
@@ -470,43 +598,70 @@ function factCheckContentBundle({
   const sources = buildSourceMap(arcEvidencePackages, evidenceBundle);
 
   // ── 1. Card fidelity (BASELINE class 1) ───────────────────────────────────
-  const cards = [
-    ...asArray(bundle.evidenceCards).filter(c => c && typeof c === 'object'),
-    ...contentBlocks(bundle).filter(b => b.type === 'evidence-card')
-  ];
+  // Only printed text is checked. An inline evidence card prints its content, so
+  // that content must be copied from its document. A sidebar entry prints a
+  // headline and a summary about its document, so it is checked for a known
+  // document id and nothing else: a made-up id prints a headline and summary
+  // about nothing.
+  //
+  // One report per defect: a document that fails in several places (inline and
+  // in the sidebar, or twice inline) is ONE `cardFidelity` item carrying every
+  // location, and one message. The console counts the messages and lists the
+  // items, so the two numbers agree.
+  const verdicts = new Map();   // tokenId + outcome -> its cardFidelity item
+  const leaks = new Set();      // tokenId + leaked string, reported once
+  const note = (tokenId, reason, location) => {
+    const key = `${tokenId}\u0000${reason || ''}`;
+    let item = verdicts.get(key);
+    if (!item) {
+      item = { tokenId, ok: reason === null, reason, locations: [] };
+      verdicts.set(key, item);
+      cardFidelity.push(item);
+    }
+    item.locations.push(location);
+  };
 
-  for (const c of cards) {
-    const tokenId = String(c.tokenId == null ? '' : c.tokenId);
-    const content = String(c.content == null ? '' : c.content);
-    const normContent = normalize(content);
+  for (const { card, location } of cardOccurrences(bundle)) {
+    const tokenId = String(card.tokenId == null ? '' : card.tokenId);
+    const inline = location.placement === 'inline';
+    const content = inline ? String(card.content == null ? '' : card.content) : '';
 
     // 'leakedExample' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): a two-word substring
-    // match, on strings the prompt files no longer ship.
-    const leaked = LEAKED_PROMPT_EXAMPLES.find(ex => normContent.includes(ex));
-    if (leaked) {
+    // match, on strings the prompt files no longer ship. Printed content only.
+    const leaked = inline && LEAKED_PROMPT_EXAMPLES.find(ex => normalize(content).includes(ex));
+    if (leaked && !leaks.has(`${tokenId}\u0000${leaked}`)) {
+      leaks.add(`${tokenId}\u0000${leaked}`);
       advisoryWarnings.push(
         `Prompt example leaked into evidence card "${tokenId}": "${leaked}" is an illustrative ` +
-        `string from the prompt files, not session evidence. Quote the real source verbatim or drop the card.`
+        `string from the prompt files, not session evidence. Quote ${DOCUMENT_POINTER} word for word, ` +
+        `or drop the card.`
       );
     }
 
     const source = sources.get(tokenId);
-    if (!source) {
-      cardFidelity.push({ tokenId, ok: false, reason: 'unknown source' });
-      structuralIssues.push(
-        `Evidence card "${tokenId}" has an unknown source: no memory token or paper evidence ` +
-        `item in this session carries that id. Use an id from the arc evidence packages, or drop the card.`
-      );
-      continue;
-    }
+    if (!source) note(tokenId, 'unknown source', location);
+    else if (!inline || isVerbatim(content, source)) note(tokenId, null, location);
+    else note(tokenId, 'not verbatim', location);
+  }
 
-    if (isVerbatim(content, source)) {
-      cardFidelity.push({ tokenId, ok: true, reason: null });
-    } else {
-      cardFidelity.push({ tokenId, ok: false, reason: 'not verbatim' });
+  for (const item of cardFidelity) {
+    if (item.ok) continue;
+    const where = describeLocations(item.locations);
+    if (item.reason === 'unknown source') {
+      // A card with no real document behind it: removal stays on offer.
       structuralIssues.push(
-        `Evidence card "${tokenId}" is not verbatim: its content does not appear in the source ` +
-        `text. Replace the card content with sentences copied exactly from that source, or drop the card.`
+        `Evidence card "${item.tokenId}" (${where}) has an unknown source: no memory or paper ` +
+        `document in this session's record carries that id. Use the id of a document in <RECORD>, ` +
+        `or drop the card.`
+      );
+    } else {
+      // The document is real and the choice of it stands; only the text is wrong.
+      // Never offer removal here: on 092026 a reworker that could not see the
+      // documents took "or drop the card" and stripped correct cards.
+      structuralIssues.push(
+        `Evidence card "${item.tokenId}" (${where}) is not verbatim: its content does not appear ` +
+        `in that document's text. Keep the card, and replace its content with sentences copied ` +
+        `exactly from ${DOCUMENT_POINTER}.`
       );
     }
   }
@@ -527,7 +682,7 @@ function factCheckContentBundle({
 
   // ── 2. Roster coverage (BASELINE class 2) ─────────────────────────────────
   const names = rosterNames(roster);
-  const prose = visibleText(bundle);
+  const prose = visibleText(bundle, theme);
   const missing = names.filter(name => !new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(prose));
   if (missing.length > 0) {
     structuralIssues.push(
@@ -648,6 +803,8 @@ module.exports = {
     visibleText,
     narratorText,
     findAbsenceStatements,
+    cardOccurrences,
+    describeLocations,
     LEAKED_PROMPT_EXAMPLES,
     NEVER_VOTES,
     PRESENCE_CLAIMS,

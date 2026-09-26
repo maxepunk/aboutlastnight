@@ -1022,7 +1022,8 @@ function createEvaluator(phase, options = {}) {
         roster: state.sessionConfig?.roster,
         sessionPhotos: state.sessionPhotos,
         reportingMode: state.sessionConfig?.reportingMode,
-        npcPronouns: getThemeNPCPronouns(theme)
+        npcPronouns: getThemeNPCPronouns(theme),
+        theme
       });
 
       if (factCheck.structuralIssues.length > 0) {
