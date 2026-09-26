@@ -159,7 +159,7 @@ Nova's article is NOT just a factual record. It reflects:
 
 ### Layer 3: CONTEXT (Director Notes = Nova's Observations)
 
-**Game Reality**: Director watched everything - player dynamics, conversations. Nova was "there" - she observed but doesn't have the extracted memories.
+**Game Reality**: Director watched everything - player dynamics, conversations. Where Nova was is set by the session's reporting mode block (`REPORTING_MODE_BLOCKS` in `lib/prompt-builder.js`): on site she watched the investigation from the room; remote it reached her as tips she attributes. Either way she doesn't have the extracted memories.
 
 **Director Provides**:
 - `playerFocus`: What players actually investigated
@@ -443,8 +443,8 @@ SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
 **Node**: `generateContentBundle` (in `lib/workflow/nodes/ai-nodes.js`)
 
 **Nova's Voice** (first-person participatory journalism):
-- "I was there when..." not "The investigation revealed..."
-- "What I saw that night..." not "Sources indicate..."
+- First person placed the way the session's reporting mode block allows (on site: what she watched; remote: tips she attributes, with the absence stated at most once), not "The investigation revealed..."
+- A named, specific source, not "Sources indicate..."
 - Hunter S. Thompson meets Kara Swisher - gonzo tech journalism
 
 **Influences**:

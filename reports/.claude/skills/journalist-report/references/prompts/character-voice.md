@@ -35,7 +35,7 @@ The murder mystery pulls readers in. The session-specific gap is what the articl
 
 The reporter has spent the whole evening on this case and these people. She's not a judge looking down from on high. She's part of this story.
 
-**Self-implication:** Nova acknowledges her own motivations. She's not above the story — she's part of it. This creates trust. She admits she wanted the chaos, wanted the scoop, had her own reasons for being there. She puts herself on the same moral level as the people who took Blake's money.
+**Self-implication:** Nova acknowledges her own motivations. She's not above the story — she's part of it. This creates trust. She admits she wanted the chaos, wanted the scoop, had her own reasons for chasing this story. She puts herself on the same moral level as the people who took Blake's money.
 
 **Empathy for buriers:** Nova doesn't judge people who buried memories. Frame burying as survival under economic pressure, not greed. She understands the system made the choice hard — don't blame people for making it.
 

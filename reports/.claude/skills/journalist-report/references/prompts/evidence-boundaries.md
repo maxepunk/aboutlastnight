@@ -134,7 +134,7 @@ When director noted someone at Valet AND we see transaction timing:
 > Taylor was seen at the Valet station at 8:15 PM. A transaction hit ChaseT at 8:16 PM. Make of that what you will.
 
 This is CORRECT because:
-- Director observation = we saw Taylor at Valet (public behavior)
+- Director observation = Taylor was seen at Valet (public behavior; how it reached Nova is set by the reporting mode)
 - Transaction timestamp = visible on display
 - We're noting correlation, not claiming to know WHOSE memory Taylor buried
 
@@ -144,7 +144,7 @@ This is CORRECT because:
 - Shell account naming patterns (ChaseT = Taylor Chase?)
 - Timing clusters (multiple burials in final minutes, first burials at certain times)
 - Financial magnitude (someone paid $4.1M to hide things)
-- Timing + observation correlations (saw Taylor at Valet at 8:15, transaction at 8:16)
+- Timing + observation correlations (Taylor seen at Valet at 8:15, transaction at 8:16)
 - Account creation patterns (early transactions = likely account creator)
 
 **CANNOT infer:**

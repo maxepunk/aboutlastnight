@@ -87,7 +87,15 @@ const ON_SITE_PERSONA = [
   '"I noticed," "What I saw was"',
   'the whole evening on this room',
   'Does every "I watched" / "I saw"',
-  "Nova's witness line"
+  "Nova's witness line",
+  // Fix round 1 (ruling PR2: every presence or absence line defers to the block)
+  'things Nova witnessed this morning',
+  'I also watched',
+  'Opinionated, present, participating',
+  'She experienced it.',
+  'we saw Taylor at Valet',
+  'saw Taylor at Valet at 8:15',
+  'reasons for being there'
 ];
 
 /**
@@ -317,7 +325,23 @@ describe('presence lines outside the article prompt', () => {
     const all = systemPrompt + '\n' + userPrompt;
     expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');
     [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
-      expect(`${mode}: ${all.includes(phrase)}`).toBe(`${mode}: false`);
+      expect(`${mode}: ${phrase}: ${all.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);
+    });
+  });
+
+  // The article rework loads character-voice, evidence-boundaries and
+  // anti-patterns as its <RULES>, so the craft-file lines reach the reworker too.
+  it.each(['remote', 'on-site'])('the %s article rework rules carry none of them', async (mode) => {
+    const builder = createPromptBuilder({
+      theme: 'journalist',
+      sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
+    });
+    const rules = await builder.buildRevisionRulesSection();
+    expect(rules).toContain('<character-voice>');
+    expect(rules).toContain('<evidence-boundaries>');
+    expect(rules).toContain('<anti-patterns>');
+    [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
+      expect(`${mode}: ${phrase}: ${rules.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);
     });
   });
 

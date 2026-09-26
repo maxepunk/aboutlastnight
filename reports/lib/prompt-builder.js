@@ -429,7 +429,7 @@ class PromptBuilder {
     return `<INVESTIGATION_OBSERVATIONS>
 What happened during the investigation this morning. How it reached you is set by the reporting mode in your system prompt.
 These ground your behavioral claims — who talked to whom, notable moments, recurring patterns.
-For the POST_INVESTIGATION_NEWS sub-block below (if present), write with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…" — do NOT conflate these with things Nova witnessed this morning.
+For the POST_INVESTIGATION_NEWS sub-block below (if present), write with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…" — do NOT conflate these with this morning's investigation.
 
 ${renderDirectorEnrichmentBlock({
   rawProse: directorNotes.rawProse,

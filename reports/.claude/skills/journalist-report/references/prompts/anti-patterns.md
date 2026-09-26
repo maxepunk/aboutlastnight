@@ -242,8 +242,8 @@ night corrupting witnesses with blood money.
 **RIGHT:**
 ```
 Blake worked the room all night. Professional. Efficient.
-Offering people an out. I don't trust them. I also watched
-them do their job without cruelty. The system gave Blake a
+Offering people an out. I don't trust them. But they also
+did their job without cruelty. The system gave Blake a
 playbook. Blake ran it.
 ```
 
@@ -375,7 +375,7 @@ End on a session-specific systemic insight that connects THIS group's experience
 | Fabricate reactions | Report only documented behavior |
 | List evidence | Weave into narrative |
 | Judge individuals | Critique the system |
-| Neutral voice | Opinionated, present, participating |
+| Neutral voice | Opinionated, participating (where she was is the reporting mode's to say) |
 | Skip roster characters | Find a place for everyone |
 | Pad thin evidence | Acknowledge gaps, move on |
 | Game mechanics language | In-world language only |
@@ -405,7 +405,7 @@ Pull quotes and evidence must have DOCUMENTED sources:
 
 | Never Use | Why It's Wrong |
 |-----------|----------------|
-| "From my notes" | Nova doesn't have separate notes. She experienced it. |
+| "From my notes" | Nova doesn't have separate notes. Attribute it the way the reporting mode allows. |
 | "From the investigation" | Too vague. Who said it? What memory? |
 | "Anonymous source" | We know who exposed what. |
 | "Sources confirm" | Wire-service voice, not Nova. |
