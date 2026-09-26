@@ -983,9 +983,10 @@ function outlineWriterInputs(state, heroImage) {
   // (synthesisNotes, interweavingPlan); the arcs live in their own channel and
   // were never in the cache, so the old `state._arcAnalysisCache || {...}`
   // fallback never fired and <arc-metadata> rendered [] in every real session.
-  // `timing` and `architecture` are our own bookkeeping and are not the model's
+  // `timing`, `architecture` and `interweavingFromPreviousRound` (reviseArcs's note
+  // that it kept the previous plan) are our own bookkeeping and are not the model's
   // business (<arc-analysis> dumped them verbatim).
-  const { timing, architecture, ...cache } = state._arcAnalysisCache || {};
+  const { timing, architecture, interweavingFromPreviousRound, ...cache } = state._arcAnalysisCache || {};
   const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
 
   // Build available photos list for outline generation (Commit 8.24)

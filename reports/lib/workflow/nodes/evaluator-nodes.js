@@ -47,7 +47,7 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // The writers' own builders: the arc writer's valid-id list, the writers'
 // SESSION_FACTS, the outline writer's inputs (its photo list among them) with the
 // hero it used, and the PromptBuilder (whose roster method gives the roster section).
-const { _testing: { extractEvidenceSummary } } = require('./arc-specialist-nodes');
+const { hasInterweavingPlan, _testing: { extractEvidenceSummary } } = require('./arc-specialist-nodes');
 const { _testing: { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } } = require('./ai-nodes');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -684,13 +684,8 @@ STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
  */
 function interweavingPlanOf(state) {
   const plan = state._arcAnalysisCache?.interweavingPlan;
-  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null;
-  const hasContent = Object.values(plan).some(value => {
-    if (Array.isArray(value)) return value.length > 0;
-    if (typeof value === 'string') return value.trim() !== '';
-    return value !== null && value !== undefined;
-  });
-  return hasContent ? plan : null;
+  // The arc reworker's rule, one function (final fix wave).
+  return hasInterweavingPlan(plan) ? plan : null;
 }
 
 /**

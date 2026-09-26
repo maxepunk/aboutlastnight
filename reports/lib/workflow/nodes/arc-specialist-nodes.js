@@ -1042,10 +1042,14 @@ async function reviseArcs(state, config) {
     // schema always allowed it); the cache this return replaces used to drop it, so
     // the outline writer's <arc-analysis> lost the plan after any arc rework. A rework
     // that returns none keeps the previous plan and says so.
+    // "Has a plan" is hasInterweavingPlan, the rule the arc reworker's prompt and the
+    // outline judge use (final fix wave): an empty returned plan no longer replaces a
+    // real previous one, and an empty previous plan is not claimed as kept.
     const previousPlan = state._arcAnalysisCache?.interweavingPlan || null;
-    const planReturned = !!(revisedPlan && typeof revisedPlan === 'object' && Object.keys(revisedPlan).length > 0);
+    const planReturned = hasInterweavingPlan(revisedPlan);
+    const keptPrevious = !planReturned && hasInterweavingPlan(previousPlan);
     if (!planReturned) {
-      console.warn(`[reviseArcs] Rework returned no interweaving plan; ${previousPlan ? 'keeping the previous plan' : 'no previous plan to keep'}`);
+      console.warn(`[reviseArcs] Rework returned no interweaving plan; ${keptPrevious ? 'keeping the previous plan' : 'no previous plan to keep'}`);
     }
 
     return {
@@ -1055,8 +1059,8 @@ async function reviseArcs(state, config) {
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
-        interweavingPlan: planReturned ? revisedPlan : (previousPlan || createDefaultInterweavingPlan()),
-        ...(!planReturned && previousPlan && { interweavingFromPreviousRound: true }),
+        interweavingPlan: planReturned ? revisedPlan : (keptPrevious ? previousPlan : createDefaultInterweavingPlan()),
+        ...(keptPrevious && { interweavingFromPreviousRound: true }),
         arcCount: narrativeArcs?.length || 0,
         architecture: 'player-focus-guided-revision',
         revisionNumber: revisionCount,
@@ -1189,8 +1193,14 @@ function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = un
 }
 
 /**
- * Whether an interweaving plan says anything. The degradation default
- * (createDefaultInterweavingPlan) and `{}` do not.
+ * Whether an interweaving plan says anything: an order, a convergence point or a
+ * callback, the fields the schema defines. The degradation default
+ * (createDefaultInterweavingPlan), `{}` and an array do not.
+ *
+ * The one rule for "has a plan" (phase 2 final fix wave): reviseArcs (whether the
+ * rework returned one, and whether a previous one is kept), the arc reworker's
+ * PREVIOUS INTERWEAVING PLAN section and the outline judge's INTERWEAVING PLAN
+ * section all call it.
  *
  * @param {Object|null|undefined} plan
  * @returns {boolean}
@@ -1925,6 +1935,10 @@ module.exports = {
 
   // Mock factory (Commit 8.8)
   createMockOrchestrator,
+
+  // The one rule for "has an interweaving plan" (final fix wave): the outline judge
+  // imports it by name.
+  hasInterweavingPlan,
 
   // Export for testing
   _testing: {
