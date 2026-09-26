@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (67 total - includes revision context + human feedback):
+ * State Fields (80 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections,
@@ -28,6 +28,7 @@
  *   - Revision Counters (8.6, brief 1.4): arcRevisionCount, humanArcRevisionCount,
  *     outlineRevisionCount, humanOutlineRevisionCount, articleRevisionCount,
  *     humanArticleRevisionCount
+ *   - Trace (phase 2, brief 2.7): _outlineTrace, _articleTrace
  */
 
 const { Annotation } = require('@langchain/langgraph');
@@ -849,6 +850,33 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * The trace (phase 2, brief 2.7): the automatic passes of the CURRENT ROUND at the
+   * outline stop and at the article stop, in order. One channel per stop, so a
+   * rollback to the article stop keeps the outline's trace, as it keeps the outline's
+   * hand edits.
+   *
+   * Entry: { pass, round, trigger: 'check'|'evaluation', findings: {structuralIssues,
+   * advisoryWarnings, criteriaScores, revisionGuidance}, before, at }. `before` is the
+   * whole outline or bundle the rework started from; `findings` is copied from
+   * validationResults, which the next evaluation overwrites.
+   *
+   * Written by incrementOutlineRevision / incrementArticleRevision on an automatic pass
+   * only (a send-back rework is not one), as the FULL array: REPLACE reducer. Reset to
+   * null by the server on every send back (buildResumePayload's reject arms) and by
+   * every rollback point that clears the same side's `_xFeedback`. Surfaced at the stop
+   * as `trace` by getCheckpointData, which adds each pass's diff. At most two entries,
+   * the automated budget of one round.
+   */
+  _outlineTrace: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+  _articleTrace: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
    * Arc validation results from validateArcStructure (Commit 8.xx)
    * Set by: validateArcStructure in arc-specialist-nodes.js
    * Consumed by: routeArcValidation in graph.js for routing decision
@@ -861,7 +889,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (78 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions)
+ * Get default state with all fields initialized (80 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -972,7 +1000,10 @@ function getDefaultState() {
     _articleHandEdits: null,
     _outlineHandEditReport: null,
     _articleHandEditReport: null,
-    directorGateNotes: []
+    directorGateNotes: [],
+    // The trace (phase 2, brief 2.7): the current round's automatic passes per stop
+    _outlineTrace: null,
+    _articleTrace: null
   };
 }
 
@@ -1166,8 +1197,8 @@ const ROLLBACK_CLEARS = {
     // instead — see pruneGateNotes in lib/api-helpers.js.
     'directorGateNotes',
     // Generation
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     // Evaluation history
     'evaluationHistory'
   ],
@@ -1199,8 +1230,8 @@ const ROLLBACK_CLEARS = {
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1221,8 +1252,8 @@ const ROLLBACK_CLEARS = {
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1252,8 +1283,8 @@ const ROLLBACK_CLEARS = {
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1265,8 +1296,8 @@ const ROLLBACK_CLEARS = {
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1280,8 +1311,8 @@ const ROLLBACK_CLEARS = {
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1298,8 +1329,8 @@ const ROLLBACK_CLEARS = {
     // NOT — rolling back there keeps the arcs, so it keeps the emphasis chosen for them.
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport',
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
@@ -1320,8 +1351,8 @@ const ROLLBACK_CLEARS = {
     'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses',
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions',
     'heroImage', 'arcEvidencePackages',
-    'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport',
+    'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ],
 
@@ -1342,21 +1373,21 @@ const ROLLBACK_CLEARS = {
   'character-ids': [
     'characterIdMappings', 'photoDescriptions',
     'heroImage', 'arcEvidencePackages',
-    'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport',
+    'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ],
 
   // Phase 3.2: Outline
   'outline': [
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
     // Note: evaluationHistory preserved - may contain useful arc evals
   ],
 
   // Phase 4.2: Article
   'article': [
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ]
 };
 
@@ -1447,7 +1478,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 78
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 80
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

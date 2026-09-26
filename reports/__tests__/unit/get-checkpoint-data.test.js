@@ -290,3 +290,88 @@ describe('arc stop evidenceIndex (phase 1, brief 1.2)', () => {
     });
   });
 });
+
+// Brief 2.7: each stop sends its automatic passes under `trace`, a key no interrupt
+// payload uses (the interrupt wins a collision in buildCompleteCheckpointData). Each
+// pass carries the diff of the version it started from against the version it
+// produced: the next pass's starting version, or, for the last pass, the stop's own.
+describe('trace (phase 2, brief 2.7)', () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const FINDINGS = { structuralIssues: ['x'], advisoryWarnings: ['y'], criteriaScores: null, revisionGuidance: 'z' };
+  const pass = (n, round, before, trigger = 'evaluation') => ({
+    pass: n, round, trigger, findings: FINDINGS, before, at: `2026-09-26T10:0${n}:00.000Z`
+  });
+
+  it('the outline stop diffs each pass against the next version and sends no whole versions', async () => {
+    const v1 = { lede: { hook: 'one', keyTension: 'same' }, closing: { line: 'a' } };
+    const v2 = { lede: { hook: 'two', keyTension: 'same' }, closing: { line: 'a' } };
+    const v3 = { lede: { hook: 'two', keyTension: 'same' }, closing: { line: 'b' } };
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
+      evaluationHistory: [], outline: v3, humanOutlineRevisionCount: 0,
+      _outlineTrace: [pass(1, 1, v1), pass(2, 1, v2)]
+    });
+    expect(data.trace).toHaveLength(2);
+    expect(data.trace[0]).toEqual({
+      pass: 1, round: 1, trigger: 'evaluation', findings: FINDINGS, at: '2026-09-26T10:01:00.000Z',
+      diff: { kind: 'outline', sections: [{ key: 'lede', changes: [{ path: 'lede.hook', before: 'one', after: 'two' }] }] },
+      changedScopes: ['lede']
+    });
+    expect(data.trace[1].diff).toEqual({ kind: 'outline', sections: [{ key: 'closing', changes: [{ path: 'closing.line', before: 'a', after: 'b' }] }] });
+    expect(data.trace[1].changedScopes).toEqual(['closing']);
+    data.trace.forEach((p) => expect(p).not.toHaveProperty('before'));
+  });
+
+  it('the article stop diffs with the bundle diff, by scope', async () => {
+    const before = VALID_BUNDLE();
+    const after = VALID_BUNDLE();
+    after.headline.main = 'A sharper headline';
+    after.sections[0].content[1].text = 'A rewritten second paragraph that names the roster.';
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: after, humanArticleRevisionCount: 1,
+      _articleTrace: [pass(1, 2, before, 'check')]
+    });
+    expect(data.trace).toHaveLength(1);
+    expect(data.trace[0].trigger).toBe('check');
+    expect(data.trace[0].diff.kind).toBe('bundle');
+    expect(data.trace[0].changedScopes).toEqual(['headline', 'section:intro']);
+  });
+
+  it('a rework that changed nothing reports no scope, not a missing diff', async () => {
+    const same = VALID_BUNDLE();
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: VALID_BUNDLE(), _articleTrace: [pass(1, 1, same)]
+    });
+    expect(data.trace[0].changedScopes).toEqual([]);
+    expect(data.trace[0].diff).toEqual({ kind: 'bundle', scopes: [] });
+  });
+
+  it('the diff is null when a version is missing (a rework that errored leaves none)', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: null, _articleTrace: [pass(1, 1, VALID_BUNDLE())]
+    });
+    expect(data.trace[0].diff).toBeNull();
+    expect(data.trace[0].changedScopes).toBeNull();
+  });
+
+  it('sends only the current round', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
+      evaluationHistory: [], outline: { lede: {} }, humanOutlineRevisionCount: 1,
+      _outlineTrace: [pass(1, 1, { lede: {} }), pass(1, 2, { lede: {} })]
+    });
+    expect(data.trace.map((p) => p.round)).toEqual([2]);
+  });
+
+  it('is an empty list at both stops when no automatic pass ran', async () => {
+    const outline = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [] });
+    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null });
+    expect(outline.trace).toEqual([]);
+    expect(article.trace).toEqual([]);
+  });
+
+  it('survives the merge with the interrupt payload on both delivery paths', async () => {
+    const state = { evaluationHistory: [], outline: { lede: { hook: 'b' } }, _outlineTrace: [pass(1, 1, { lede: { hook: 'a' } })] };
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline, evaluationHistory: [] }, state);
+    expect(merged.trace).toHaveLength(1);
+    expect(merged.trace[0].changedScopes).toEqual(['lede']);
+  });
+});

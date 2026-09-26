@@ -30,7 +30,7 @@ const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
-const { diffOutline, diffBundle, isEmpty: isEmptyDiff } = require('./lib/hand-edit-diff');
+const { diffOutline, diffBundle, isEmpty: isEmptyDiff, scopeKeys } = require('./lib/hand-edit-diff');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
@@ -246,6 +246,43 @@ function outlineThesisOf(state) {
     return { hook: lede.hook || '', keyTension: lede.keyTension || '', primaryArc: lede.primaryArc || '' };
 }
 
+/**
+ * The trace a stop shows (phase 2, brief 2.7): each automatic pass of the current
+ * round, with what it changed.
+ *
+ * The channel keeps each pass's `before` (the version the rework started from); the
+ * version the pass produced is the next pass's `before`, or, for the last pass, the
+ * object the stop is showing. The diff is computed here, with the hand-edit helpers,
+ * so the payload carries what changed and none of the whole versions. `diff` is null
+ * when either side is not an object (a rework that errored leaves no version).
+ *
+ * Only the current round is sent. The increments and the send-back reset already keep
+ * the channel to one round; this is the last guard before the screen.
+ *
+ * @param {Array|null} entries - state._outlineTrace or state._articleTrace
+ * @param {Object|null} current - the outline or bundle at the stop
+ * @param {Function} diffFn - diffOutline or diffBundle
+ * @param {number} round - the current round, 1-based (human counter + 1)
+ * @returns {Array<{pass, round, trigger, findings, at, diff, changedScopes}>}
+ */
+function traceForStop(entries, current, diffFn, round) {
+    const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+    const passes = (Array.isArray(entries) ? entries : []).filter(e => isObject(e) && e.round === round);
+    return passes.map((entry, i) => {
+        const after = i + 1 < passes.length ? passes[i + 1].before : current;
+        const diff = isObject(entry.before) && isObject(after) ? diffFn(entry.before, after) : null;
+        return {
+            pass: entry.pass,
+            round: entry.round,
+            trigger: entry.trigger,
+            findings: entry.findings || null,
+            at: entry.at || null,
+            diff,
+            changedScopes: diff ? scopeKeys(diff) : null
+        };
+    });
+}
+
 /** How much of a document's first line the arc card shows. */
 const EVIDENCE_FIRST_LINE_MAX = 160;
 
@@ -372,7 +409,9 @@ async function getCheckpointData(checkpointType, state) {
                 maxRevisions: REVISION_CAPS.OUTLINE,
                 previousFeedback: state._outlineFeedback || null,
                 handEditReport: state._outlineHandEditReport || null,
-                directorGateNotes: state.directorGateNotes || []
+                directorGateNotes: state.directorGateNotes || [],
+                // Brief 2.7: the automatic passes of this round, with what each changed.
+                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1)
             };
         case CHECKPOINT_TYPES.ARTICLE:
             return {
@@ -390,7 +429,9 @@ async function getCheckpointData(checkpointType, state) {
                 previousFeedback: state._articleFeedback || null,
                 handEditReport: state._articleHandEditReport || null,
                 directorGateNotes: state.directorGateNotes || [],
-                outlineThesis: outlineThesisOf(state)
+                outlineThesis: outlineThesisOf(state),
+                // Brief 2.7: the automatic passes of this round, with what each changed.
+                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1)
             };
         case CHECKPOINT_TYPES.PRE_CURATION:
             return {
@@ -641,6 +682,9 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         // rework must not carry the previous round's diff or report.
         stateUpdates._outlineHandEdits = null;
         stateUpdates._outlineHandEditReport = null;
+        // Brief 2.7: a send back opens a new round, and the trace shows only the
+        // current round's automatic passes.
+        stateUpdates._outlineTrace = null;
         if (hasEdits) {
             stateUpdates.outline = approvals.outlineEdits;   // incrementOutlineRevision hands it to the reviser
             const diff = diffOutline(currentState.outline, approvals.outlineEdits);
@@ -680,6 +724,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         appendGateNote(stateUpdates, currentState, 'article', resume.feedback, 'rejection');
         stateUpdates._articleHandEdits = null;
         stateUpdates._articleHandEditReport = null;
+        stateUpdates._articleTrace = null;   // brief 2.7: a new round starts an empty trace
         if (hasEdits) {
             stateUpdates.contentBundle = approvals.articleEdits;   // incrementArticleRevision hands it to the reviser
             const diff = diffBundle(currentState.contentBundle, approvals.articleEdits);

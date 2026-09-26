@@ -353,6 +353,54 @@ function automatedRevisionSource(state, phase) {
 }
 
 /**
+ * The stop's trace after one more automatic pass (phase 2, brief 2.7).
+ *
+ * Only an increment sees both what the pass starts from and why it runs: the
+ * reworker clears `_previousOutline`/`_previousContentBundle` on every exit, and the
+ * next evaluation overwrites `validationResults`, so the "why" is copied here before
+ * either happens. The findings are read the way buildRevisionContext reads them: a
+ * `validationResults` stamped for another phase is not this pass's reason.
+ *
+ * Entries from another round are dropped as the new one is added. The server already
+ * resets the channel on a send back, so this only matters if that reset were ever
+ * missed; it keeps the channel at the current round's passes, at most the automated
+ * budget of them.
+ *
+ * @param {Object} state - Current graph state
+ * @param {string} phase - 'outline' or 'article'
+ * @param {Array|null} trace - the stop's trace channel as it stands
+ * @param {Object|null} before - the outline or bundle the rework starts from
+ * @param {number} pass - the automated pass number in this round (1-based)
+ * @param {number} round - the round number (1-based, as the stop's banner shows it)
+ * @param {string} source - automatedRevisionSource's answer
+ * @returns {Array} the full trace, for the REPLACE channel
+ */
+function traceWithPass(state, phase, trace, before, pass, round, source) {
+  const vr = state.validationResults;
+  const own = vr && typeof vr === 'object' && (!vr.phase || vr.phase === phase) ? vr : null;
+  const list = (value) => (Array.isArray(value) ? value.filter(v => typeof v === 'string') : []);
+  const entry = {
+    pass,
+    round,
+    trigger: source === 'fact-check' ? 'check' : 'evaluation',
+    findings: {
+      structuralIssues: list(own?.structuralIssues),
+      advisoryWarnings: list(own?.advisoryWarnings),
+      criteriaScores: own?.criteriaScores && typeof own.criteriaScores === 'object'
+        ? { ...own.criteriaScores }
+        : null,
+      revisionGuidance: typeof own?.revisionGuidance === 'string' && own.revisionGuidance.trim()
+        ? own.revisionGuidance
+        : null
+    },
+    before: before === undefined ? null : before,
+    at: new Date().toISOString()
+  };
+  const thisRound = (Array.isArray(trace) ? trace : []).filter(e => e && e.round === round);
+  return [...thisRound, entry];
+}
+
+/**
  * Increment outline revision count and preserve/clear outline for regeneration
  * Preserves current outline in _previousOutline for revision context
  * Clears outline so generateOutline skip logic doesn't trigger
@@ -362,6 +410,9 @@ function automatedRevisionSource(state, phase) {
  * or a failed evaluation spends one automated pass inside the current round. The
  * discriminator is the feedback slot, which the server writes on a send back and the
  * reviser clears as it consumes it, so it is present here on the human pass only.
+ *
+ * Brief 2.7: an automatic pass also adds its entry to `_outlineTrace`. A send-back
+ * rework is not an automatic pass and writes nothing there.
  */
 async function incrementOutlineRevision(state) {
   const isHumanDriven = !!state._outlineFeedback;
@@ -378,6 +429,9 @@ async function incrementOutlineRevision(state) {
     humanOutlineRevisionCount: newHumanCount,
     _previousOutline: state.outline,
     outline: null,
+    ...(!isHumanDriven && {
+      _outlineTrace: traceWithPass(state, 'outline', state._outlineTrace, state.outline, newCount, newHumanCount + 1, source)
+    }),
     evaluationHistory: {
       phase: 'outline',
       ready: false,
@@ -393,7 +447,8 @@ async function incrementOutlineRevision(state) {
  * Preserves current contentBundle in _previousContentBundle for revision context
  * Clears contentBundle and assembledHtml so generateContentBundle skip logic doesn't trigger
  *
- * Two counters, as incrementOutlineRevision above (brief 1.4).
+ * Two counters, as incrementOutlineRevision above (brief 1.4), and the same trace
+ * entry on an automatic pass only (brief 2.7), in `_articleTrace`.
  */
 async function incrementArticleRevision(state) {
   const isHumanDriven = !!state._articleFeedback;
@@ -411,6 +466,9 @@ async function incrementArticleRevision(state) {
     _previousContentBundle: state.contentBundle,
     contentBundle: null,
     assembledHtml: null,
+    ...(!isHumanDriven && {
+      _articleTrace: traceWithPass(state, 'article', state._articleTrace, state.contentBundle, newCount, newHumanCount + 1, source)
+    }),
     evaluationHistory: {
       phase: 'article',
       ready: false,

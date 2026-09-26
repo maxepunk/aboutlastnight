@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 78 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 80 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -304,7 +304,10 @@ describe('ReportStateAnnotation', () => {
         '_articleHandEdits',
         '_outlineHandEditReport',
         '_articleHandEditReport',
-        'directorGateNotes'
+        'directorGateNotes',
+        // The trace (phase 2, brief 2.7): the current round's automatic passes per stop
+        '_outlineTrace',
+        '_articleTrace'
       ];
 
       expect(Object.keys(defaultState).sort()).toEqual(expectedFields.sort());
@@ -462,7 +465,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(78);
+      expect(Object.keys(getDefaultState()).length).toBe(80);
     });
 
     it('declares the channels for the director\'s own words (phase 2, brief 2.2)', () => {
@@ -503,6 +506,24 @@ describe('ReportStateAnnotation', () => {
       expect(channels).toContain('_previousPhotosPath');
       expect(getDefaultState()).toHaveProperty('photosPath', null);
       expect(getDefaultState()).toHaveProperty('_previousPhotosPath', null);
+    });
+
+    // Brief 2.7: one trace channel per stop, so a rollback to the article stop keeps the
+    // outline's trace. REPLACE, because the increment writes the whole round's list and
+    // a send back resets it to null.
+    it('declares the two trace channels as nullable REPLACE channels', () => {
+      const channels = Object.keys(ReportStateAnnotation.spec);
+      expect(channels).toContain('_outlineTrace');
+      expect(channels).toContain('_articleTrace');
+      expect(getDefaultState()).toHaveProperty('_outlineTrace', null);
+      expect(getDefaultState()).toHaveProperty('_articleTrace', null);
+      const prev = [{ pass: 1 }];
+      const next = [{ pass: 1 }, { pass: 2 }];
+      ['_outlineTrace', '_articleTrace'].forEach((c) => {
+        const operator = ReportStateAnnotation.spec[c].operator;
+        expect(operator(prev, next)).toEqual(next);
+        expect(operator(next, null)).toBeNull();
+      });
     });
   });
 

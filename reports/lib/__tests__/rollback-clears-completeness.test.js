@@ -280,4 +280,31 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
       expect(ROLLBACK_CLEARS['input-review']).not.toContain('sessionConfig');
     });
   });
+
+  // Brief 2.7: each stop's trace holds the automatic passes of the round that its
+  // feedback slot belongs to, so a point clears a trace exactly where it clears that
+  // side's feedback. A rollback to `article` regenerates only the article, so it keeps
+  // the outline's trace, as it keeps the outline's hand edits.
+  describe('trace channels (phase 2, brief 2.7)', () => {
+    const points = Object.keys(ROLLBACK_CLEARS);
+
+    test.each(points)('%s clears each trace exactly where it clears that side\'s feedback slot', (point) => {
+      const list = ROLLBACK_CLEARS[point];
+      expect(list.includes('_outlineTrace')).toBe(list.includes('_outlineFeedback'));
+      expect(list.includes('_articleTrace')).toBe(list.includes('_articleFeedback'));
+    });
+
+    test('the outline trace is cleared at every point but `article`; the article trace at all eleven', () => {
+      const clearingOutline = points.filter((p) => ROLLBACK_CLEARS[p].includes('_outlineTrace'));
+      const clearingArticle = points.filter((p) => ROLLBACK_CLEARS[p].includes('_articleTrace'));
+      expect(points).toHaveLength(11);
+      expect(clearingOutline.sort()).toEqual(points.filter((p) => p !== 'article').sort());
+      expect(clearingArticle.sort()).toEqual(points.slice().sort());
+    });
+
+    test('neither trace is exempt', () => {
+      expect(ROLLBACK_CLEARS_EXEMPT.has('_outlineTrace')).toBe(false);
+      expect(ROLLBACK_CLEARS_EXEMPT.has('_articleTrace')).toBe(false);
+    });
+  });
 });

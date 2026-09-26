@@ -754,3 +754,62 @@ describe('buildResumePayload — the per-photo description map (brief 2.2)', () 
     expect(stateUpdates.photoDescriptions).toEqual({ 'a.jpg': 'Kai at the bar.' });
   });
 });
+
+// Brief 2.7: the trace shows the current round's automatic passes only. A send back
+// opens a new round, so the reject arms reset that stop's trace where they reset the
+// hand-edit fields; the send-back rework itself writes no entry (graph.js increments).
+describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
+  const bundleFixture = () => JSON.parse(JSON.stringify(require('../fixtures/content-bundles/valid-journalist.json')));
+  const PASS = { pass: 1, round: 1, trigger: 'evaluation', findings: {}, before: {}, at: '2026-09-26T10:00:00.000Z' };
+
+  test('an outline send back resets the outline trace and leaves the article trace alone', () => {
+    const { stateUpdates, error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Rework the closing' },
+      { outline: validJournalistOutline(), _outlineTrace: [PASS], _articleTrace: [PASS] }
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates).toHaveProperty('_outlineTrace', null);
+    expect(stateUpdates).not.toHaveProperty('_articleTrace');
+  });
+
+  test('an outline send back WITH edits resets it too', () => {
+    const edits = validJournalistOutline();
+    edits.lede.hook = 'A sharper hook.';
+    const { stateUpdates, error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Tighten the lede', outlineEdits: edits },
+      { outline: validJournalistOutline(), _outlineTrace: [PASS] }
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates).toHaveProperty('_outlineTrace', null);
+  });
+
+  test('an article send back, with or without edits, resets the article trace and leaves the outline trace alone', () => {
+    const plain = buildResumePayload({ article: false, articleFeedback: 'Rework it' }, { contentBundle: bundleFixture(), _articleTrace: [PASS], _outlineTrace: [PASS] });
+    expect(plain.stateUpdates).toHaveProperty('_articleTrace', null);
+    expect(plain.stateUpdates).not.toHaveProperty('_outlineTrace');
+
+    const edits = bundleFixture();
+    edits.headline.main = 'A different headline';
+    const edited = buildResumePayload({ article: false, articleFeedback: 'Cut it', articleEdits: edits }, { contentBundle: bundleFixture(), _articleTrace: [PASS] });
+    expect(edited.error).toBeNull();
+    expect(edited.stateUpdates).toHaveProperty('_articleTrace', null);
+  });
+
+  test('an approve leaves both traces alone', () => {
+    const outline = buildResumePayload({ outline: true, outlineNote: 'Keep it.' }, { outline: validJournalistOutline(), _outlineTrace: [PASS] });
+    const article = buildResumePayload({ article: true }, { contentBundle: bundleFixture(), _articleTrace: [PASS] });
+    expect(outline.stateUpdates).not.toHaveProperty('_outlineTrace');
+    expect(article.stateUpdates).not.toHaveProperty('_articleTrace');
+  });
+
+  test('an invalid edit sent back writes nothing, the trace reset included', () => {
+    const edits = validJournalistOutline();
+    edits.lede = {};
+    const { stateUpdates, error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'x', outlineEdits: edits },
+      { outline: validJournalistOutline(), _outlineTrace: [PASS] }
+    );
+    expect(error).toMatch(/Edited outline failed schema validation/);
+    expect(stateUpdates).not.toHaveProperty('_outlineTrace');
+  });
+});

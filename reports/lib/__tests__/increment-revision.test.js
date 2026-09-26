@@ -129,6 +129,126 @@ describe('incrementArticleRevision', () => {
   });
 });
 
+// Brief 2.7: the increments are the only nodes that see both the version a pass
+// starts from and why the pass runs, so they write the trace entry. Only on an
+// automatic pass: a send-back rework is the director's, not the machine's.
+describe('the trace entry (phase 2, brief 2.7)', () => {
+  const OUTLINE_VERDICT = {
+    phase: 'outline',
+    passed: false,
+    structuralIssues: ['The LEDE names no roster member.'],
+    advisoryWarnings: ['The closing repeats the hook.'],
+    issues: ['The LEDE names no roster member.'],
+    criteriaScores: { rosterCoverage: { score: 0.4, type: 'structural', notes: 'Zia is missing.', fix: 'Name Zia in the LEDE.' } },
+    confidence: 'high',
+    revisionGuidance: 'Put Zia in the LEDE.',
+    feedback: 'Put Zia in the LEDE.'
+  };
+
+  test('an outline pass the evaluation triggered records its number, round, findings and the version before it', async () => {
+    const outline = { lede: { hook: 'Before the pass' } };
+    const state = { outline, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, validationResults: OUTLINE_VERDICT, evaluationHistory: [{ phase: 'outline', ready: false }] };
+    const result = await incrementOutlineRevision(state);
+    expect(result._outlineTrace).toHaveLength(1);
+    const [entry] = result._outlineTrace;
+    expect(entry).toEqual({
+      pass: 1,
+      round: 1,
+      trigger: 'evaluation',
+      findings: {
+        structuralIssues: ['The LEDE names no roster member.'],
+        advisoryWarnings: ['The closing repeats the hook.'],
+        criteriaScores: OUTLINE_VERDICT.criteriaScores,
+        revisionGuidance: 'Put Zia in the LEDE.'
+      },
+      before: outline,
+      at: expect.any(String)
+    });
+    expect(Number.isNaN(Date.parse(entry.at))).toBe(false);
+  });
+
+  test('the findings are copies, so the next evaluation overwriting validationResults cannot change them', async () => {
+    const verdict = JSON.parse(JSON.stringify(OUTLINE_VERDICT));
+    const result = await incrementOutlineRevision({ outline: {}, outlineRevisionCount: 0, validationResults: verdict });
+    verdict.structuralIssues.push('added later');
+    verdict.criteriaScores.extra = { score: 1 };
+    const { findings } = result._outlineTrace[0];
+    expect(findings.structuralIssues).toEqual(['The LEDE names no roster member.']);
+    expect(findings.criteriaScores).not.toHaveProperty('extra');
+  });
+
+  test('an article pass the check triggered is stamped `check`, with the check\'s findings and no scores', async () => {
+    const bundle = { headline: { main: 'Before' } };
+    const state = {
+      contentBundle: bundle,
+      articleRevisionCount: 0,
+      humanArticleRevisionCount: 2,
+      evaluationHistory: [{ phase: 'article', ready: false, source: 'fact-check' }],
+      validationResults: {
+        phase: 'article',
+        passed: false,
+        structuralIssues: ['Roster coverage gap: Zia is never named.'],
+        advisoryWarnings: [],
+        feedback: 'Roster coverage gap: Zia is never named.'
+      }
+    };
+    const result = await incrementArticleRevision(state);
+    expect(result._articleTrace).toEqual([{
+      pass: 1,
+      round: 3,
+      trigger: 'check',
+      findings: {
+        structuralIssues: ['Roster coverage gap: Zia is never named.'],
+        advisoryWarnings: [],
+        criteriaScores: null,
+        revisionGuidance: null
+      },
+      before: bundle,
+      at: expect.any(String)
+    }]);
+  });
+
+  test('a second pass in the same round is appended after the first', async () => {
+    const first = { pass: 1, round: 1, trigger: 'check', findings: {}, before: { headline: { main: 'v1' } }, at: '2026-09-26T10:00:00.000Z' };
+    const state = { contentBundle: { headline: { main: 'v2' } }, articleRevisionCount: 1, _articleTrace: [first] };
+    const result = await incrementArticleRevision(state);
+    expect(result._articleTrace).toHaveLength(2);
+    expect(result._articleTrace[0]).toBe(first);
+    expect(result._articleTrace[1]).toEqual(expect.objectContaining({ pass: 2, round: 1, before: { headline: { main: 'v2' } } }));
+  });
+
+  test('a send-back rework writes no entry, at either stop', async () => {
+    const outline = await incrementOutlineRevision({ outline: {}, outlineRevisionCount: 2, _outlineFeedback: 'Rethink the closing.', _outlineTrace: null });
+    const article = await incrementArticleRevision({ contentBundle: {}, articleRevisionCount: 1, _articleFeedback: 'Name the shell company.' });
+    expect(outline).not.toHaveProperty('_outlineTrace');
+    expect(article).not.toHaveProperty('_articleTrace');
+  });
+
+  test('a verdict stamped for another phase is not this pass\'s reason', async () => {
+    const result = await incrementOutlineRevision({
+      outline: {},
+      outlineRevisionCount: 0,
+      validationResults: { phase: 'arcs', structuralIssues: ['Missing roster arc.'], revisionGuidance: 'Add an arc.' }
+    });
+    expect(result._outlineTrace[0].findings).toEqual({
+      structuralIssues: [], advisoryWarnings: [], criteriaScores: null, revisionGuidance: null
+    });
+  });
+
+  test('entries from an earlier round are dropped as the new pass is added', async () => {
+    const stale = { pass: 1, round: 1, trigger: 'evaluation', findings: {}, before: {}, at: 't' };
+    const result = await incrementOutlineRevision({ outline: {}, outlineRevisionCount: 0, humanOutlineRevisionCount: 1, _outlineTrace: [stale] });
+    expect(result._outlineTrace).toEqual([expect.objectContaining({ pass: 1, round: 2 })]);
+  });
+
+  test('nothing about the counters or the history stub changes', async () => {
+    const result = await incrementOutlineRevision({ outline: {}, outlineRevisionCount: 1, humanOutlineRevisionCount: 2, validationResults: OUTLINE_VERDICT });
+    expect(result.outlineRevisionCount).toBe(2);
+    expect(result.humanOutlineRevisionCount).toBe(2);
+    expect(result.evaluationHistory).toEqual(expect.objectContaining({ phase: 'outline', reason: 'revision-invalidated', source: 'evaluator' }));
+  });
+});
+
 describe('routeAfterArcCheckpoint', () => {
   test('returns forward when selectedArcs populated', () => {
     expect(routeAfterArcCheckpoint({ selectedArcs: ['a1', 'a2'] })).toBe('forward');
