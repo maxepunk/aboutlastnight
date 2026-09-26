@@ -1273,7 +1273,7 @@ STRUCTURE:
 2. "evidenceCards" - Array of sidebar/inline evidence card content:
    - "tokenId": ID matching evidence-reference blocks
    - "headline": Card headline (compelling, not just descriptive)
-   - "content": VERBATIM full text - COPY EXACTLY from arcEvidencePackages fullContent, include tokenId/timestamp prefix
+   - No "content": a sidebar entry prints its headline and summary only, never document text
    - "summary": Brief 100-char summary for sidebar display
    - "owner": Character canonical full name
    - "significance": EXACT one of "critical" | "supporting" | "contextual"
@@ -1285,12 +1285,12 @@ STRUCTURE:
    - Distribute across sections per the outline - NOT all in THE STORY
 
    EVIDENCE CARD DUAL FIELDS:
-   - "content" = VERBATIM memory text for BODY inline cards
-     * COPY EXACTLY from arcEvidencePackages evidenceItems[].fullContent
+   - "content" = VERBATIM document text, on the BODY inline "evidence-card" block only (never on a sidebar entry)
+     * COPY EXACTLY from the document with that id in <RECORD>
      * Include tokenId prefix and timestamp (e.g., "[Token ID] - [timestamp] - ...")
      * Do NOT paraphrase or summarize
 
-   - "summary" = Brief 100-char summary for SIDEBAR mini-cards
+   - "summary" = Brief 100-char summary for the SIDEBAR entry, which is a headline and a summary
      * Write your own concise summary
      * Keep under 100 characters
 

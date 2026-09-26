@@ -234,7 +234,7 @@
         "properties": {
           "tokenId": { "type": "string", "description": "Unique evidence identifier" },
           "headline": { "type": "string", "description": "Compelling headline for the evidence card" },
-          "content": { "type": "string", "description": "Full quotable text from the evidence (fullDescription)" },
+          "content": { "type": "string", "description": "Not printed: a sidebar entry prints only its headline and summary. Leave it out; document text belongs on the inline evidence-card block." },
           "summary": { "type": "string", "description": "Brief summary for sidebar display" },
           "owner": { "type": "string", "description": "Character who owns this evidence (e.g., 'Riley Torres')" },
           "significance": {
