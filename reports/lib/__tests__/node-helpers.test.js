@@ -118,7 +118,7 @@ describe('F1 pronoun key chain (X-1 + X-7): normalize then render', () => {
     // Director typed the full name with a pronoun; X-1 re-keys to "Victoria".
     const typed = { 'Victoria Kingsley': 'she/her' };
     const normalized = normalizeRosterPronounsToCanonical(typed, canonicalCharacters);
-    const section = generateRosterSection('journalist', canonicalCharacters, null, normalized);
+    const section = generateRosterSection('journalist', canonicalCharacters, null, normalized, ['Victoria', 'Sam']);
     expect(section).toContain('Victoria → Victoria Kingsley (she/her)');
     // Sam unset -> still they/them; proves we did not over-apply.
     expect(section).toContain('Sam → Sam Rivera (they/them)');

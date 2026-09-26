@@ -18,43 +18,74 @@ const { getThemeNPCEntries } = require('./theme-config');
  * Generate canonical character roster section
  * Uses Notion-derived canonical characters map directly (sole source of truth).
  *
+ * Each character gets at most one pronoun, and none is guessed (phase 2 final fix
+ * wave; the director's ruling): an NPC is listed once, in the NPC block, with its
+ * canon pronoun or none; a canonical character not on this session's roster prints
+ * no pronoun; a roster character with no captured pronoun keeps they/them.
+ * Pronouns show for the journalist theme only.
+ *
  * @param {string} theme - Theme name (e.g., 'journalist') — kept for signature compatibility
  * @param {Object|null} canonicalCharacters - Notion-derived map of firstName -> fullName
  * @param {Object|null} characterData - Optional character metadata (groups, roles, relationships) from extractCharacterData node
+ * @param {Object|null} rosterPronouns - first name -> pronouns captured for this session's roster
+ * @param {Array<string|{name: string}>|null} roster - this session's roster (sessionConfig.roster)
  * @returns {string} Formatted roster section for prompts
  */
-function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null, rosterPronouns = null) {
+function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null, rosterPronouns = null, roster = null) {
   const characters = canonicalCharacters || {};
   const pronounMap = rosterPronouns || {};
+  const lower = (name) => String(name).trim().toLowerCase();
 
-  // Case-insensitive pronoun lookup by first name; default they/them.
-  const resolvePronouns = (first) => {
+  // Case-insensitive pronoun lookup by first name.
+  const capturedPronouns = (first) => {
     if (pronounMap[first]) return pronounMap[first];
-    const key = Object.keys(pronounMap).find(k => k.toLowerCase() === String(first).toLowerCase());
-    return key ? pronounMap[key] : 'they/them';
+    const key = Object.keys(pronounMap).find(k => lower(k) === lower(first));
+    return key ? pronounMap[key] : null;
   };
+
+  // On this session's roster: listed in it, or given a pronoun at the roster stop
+  // (pronouns are captured for roster characters only).
+  const rosterNames = new Set((Array.isArray(roster) ? roster : [])
+    .map(p => (p && typeof p === 'object' ? p.name : p))
+    .filter(name => typeof name === 'string' && name.trim())
+    .map(lower));
+  const onRoster = (first) => rosterNames.has(lower(first)) || !!capturedPronouns(first);
+
+  // An NPC is listed once, in the NPC block below, with its canon pronoun or none. In
+  // the canonical list it took the they/them default, and the NPC block then gave
+  // Marcus he/him and called it authoritative (report-quality baseline defect #3).
+  const npcEntries = getThemeNPCEntries(theme).filter(e => e && typeof e === 'object' && !e.aliasOf);
+  const npcNames = new Set(npcEntries.map(e => lower(e.name)));
 
   // Pronoun annotation is journalist-only (first-person, captured pronouns).
   // Detective is third-person — the annotation is meaningless there, so omit the
   // suffix even when rosterPronouns is populated (it's captured theme-agnostically) (X-6).
   const showPronouns = theme === 'journalist';
-  const lines = Object.entries(characters)
-    .map(([first, full]) => showPronouns
-      ? `- ${first} → ${full} (${resolvePronouns(first)})`
-      : `- ${first} → ${full}`)
+  const pronounOf = (first) => {
+    if (!showPronouns || !onRoster(first)) return null;
+    return capturedPronouns(first) || 'they/them';
+  };
+  const entries = Object.entries(characters).filter(([first]) => !npcNames.has(lower(first)));
+  const lines = entries
+    .map(([first, full]) => {
+      const pronouns = pronounOf(first);
+      return pronouns ? `- ${first} → ${full} (${pronouns})` : `- ${first} → ${full}`;
+    })
     .join('\n');
+  const unrecorded = showPronouns && entries.some(([first]) => !pronounOf(first))
+    ? '\nA name with no pronoun is not on this session\'s roster, so its pronoun is not recorded: never guess one.'
+    : '';
 
   let result = `CANONICAL CHARACTER ROSTER:
 Use ONLY these full names in ALL article text. NEVER invent different last names:
-${lines}`;
+${lines}${unrecorded}`;
 
   // BASELINE §4 class 3: the NPCs are fixed canon and are NOT on the session
   // roster, so the victim had no pronoun anywhere in the prompt and the model
   // guessed (Marcus written they/them on 4 of 5 sessions). Aliases and NPCs whose
   // pronouns the canon never states are listed without a pronoun rather than
   // given an invented one.
-  const npcLines = getThemeNPCEntries(theme)
-    .filter(e => e && typeof e === 'object' && !e.aliasOf)
+  const npcLines = npcEntries
     .map(e => {
       const display = e.fullName || e.name;
       const pronouns = showPronouns && e.pronouns ? ` (${e.pronouns})` : '';
@@ -398,7 +429,8 @@ class PromptBuilder {
    * @returns {string}
    */
   _rosterSection() {
-    return generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData, this.sessionConfig?.rosterPronouns);
+    return generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData,
+      this.sessionConfig?.rosterPronouns, this.sessionConfig?.roster);
   }
 
   /**

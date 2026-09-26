@@ -1149,20 +1149,26 @@ describe('PromptBuilder', () => {
       expect(result).toContain('Alex Reeves: Role: CEO | Member of: Board');
     });
 
-    it('appends pronouns from rosterPronouns, defaulting to they/them', () => {
+    it('appends pronouns from rosterPronouns, defaulting a roster member to they/them', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const canonical = { Vic: 'Vic Kingsley', Sam: 'Sam Rivera' };
       const pronouns = { Vic: 'she/her' };
-      const result = generateRosterSection('journalist', canonical, null, pronouns);
+      const result = generateRosterSection('journalist', canonical, null, pronouns, ['Vic', 'Sam']);
       expect(result).toContain('Vic Kingsley (she/her)');
       expect(result).toContain('Sam Rivera (they/them)');
     });
 
-    it('defaults all to they/them when no pronoun map is given', () => {
+    it('defaults every roster member to they/them when no pronoun map is given', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const canonical = { Vic: 'Vic Kingsley' };
-      const result = generateRosterSection('journalist', canonical);
+      const result = generateRosterSection('journalist', canonical, null, null, ['Vic']);
       expect(result).toContain('Vic Kingsley (they/them)');
+    });
+
+    it('guesses no pronoun for a character off the roster (final fix wave)', () => {
+      const { generateRosterSection } = require('../prompt-builder');
+      const result = generateRosterSection('journalist', { Vic: 'Vic Kingsley' });
+      expect(result).toMatch(/- Vic → Vic Kingsley$/m);
     });
 
     it('detective theme omits the pronoun annotation entirely (X-6)', () => {

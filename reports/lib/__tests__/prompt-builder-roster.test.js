@@ -25,7 +25,7 @@ describe('generateRosterSection — NPC pronoun line', () => {
   });
 
   it('still defaults an un-entered roster member to they/them', () => {
-    const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' });
+    const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' }, ['Vic', 'Mel']);
     expect(section).toContain('Vic → Vic Kingsley (he/him)');
     expect(section).toContain('Mel → Mel Nilsson (they/them)');
   });
