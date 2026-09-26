@@ -1,13 +1,16 @@
 /**
  * Every preprocessed item is keyed to its input item, never to the id the model
- * echoed (phase 2 final fix wave, item 8).
+ * echoed (phase 2 final fix wave, item 8). This is hardening.
  *
  * On 092026 a rescued paper document (Notion id 18c2f33d-583f-809b-a3d8-cb7843f0b423,
  * "Remi <> Vic Funding Email") reached every <RECORD> as id="18c2f33d-809b-a3d8-
- * cb7843f0b423" with "(The record holds no text for this document.)". Haiku dropped
- * "583f-" from the id, `batch.find(b => b.id === item.id)` failed, and the merge
- * kept Haiku's bare item, which has no rawData. The same fallback would drop a
- * memory's authoritative disposition.
+ * cb7843f0b423" with "(The record holds no text for this document.)". That was
+ * curation, not this preprocessor: Sonnet's paper scoring dropped "583f-" from the
+ * id, and scorePaperEvidence's find-by-echoed-id merge kept the model's id and no
+ * record (paper-scoring-keying.test.js replays it). The preprocessor's own merge,
+ * `batch.find(b => b.id === item.id)`, had the same weakness: a mangled echo would
+ * have kept the model's bare item, with no rawData, and dropped a memory's
+ * authoritative disposition. Both merges now share pairRepliesWithBatch.
  *
  * Now: match by the input's id; if the model's id is not in the batch, recover by an
  * unambiguous rule (the model kept the batch's order, or one input and one reply are
@@ -45,7 +48,7 @@ async function run(input, reply) {
 }
 
 describe('a reply with a mangled id', () => {
-  it('keeps the input\'s id, text and disposition (the 092026 funding email)', async () => {
+  it('keeps the input\'s id, text and disposition (the 092026 email\'s mangled id, as a preprocessor echo)', async () => {
     const items = await run(
       { paperEvidence: [paper(REAL_ID, 'Remi <> Vic Funding Email', EMAIL)] },
       () => [summaryOf(MANGLED_ID, 'paper-evidence', 'Remi pushes Vic on the bridge round')]
