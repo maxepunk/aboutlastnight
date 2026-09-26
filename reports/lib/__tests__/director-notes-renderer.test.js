@@ -53,7 +53,8 @@ describe('renderDirectorEnrichmentBlock', () => {
     });
     expect(out).toContain('<TRANSACTION_LINKS>');
     expect(out).toContain('"Kai paid Blake"');
-    expect(out).toContain('09:40 PM tay004 $450,000 → Cass');
+    expect(out).toContain('09:40 PM $450,000 → Cass');
+    expect(out).not.toContain('tay004');
     expect(out).toContain('(high)');
   });
 

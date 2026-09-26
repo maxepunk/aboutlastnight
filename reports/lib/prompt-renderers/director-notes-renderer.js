@@ -42,8 +42,10 @@ ${lines}
 
   if (transactionReferences.length > 0) {
     const lines = transactionReferences.map(t => {
+      // A linked transaction is a buried memory: the writer may see its time, amount and
+      // account, never its memory id, whose prefix names the owner (three-layer model).
       const txs = (t.linkedTransactions || [])
-        .map(tx => `${tx.timestamp} ${tx.tokenId} ${tx.amount} → ${tx.sellingTeam}`)
+        .map(tx => `${tx.timestamp} ${tx.amount} → ${tx.sellingTeam}`)
         .join('; ');
       return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
     }).join('\n');

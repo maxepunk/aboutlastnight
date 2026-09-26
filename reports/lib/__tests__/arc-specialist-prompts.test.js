@@ -44,7 +44,8 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
   it('buildCoreArcPrompt surfaces quotes, transactionReferences, postInvestigationDevelopments', () => {
     const prompt = arcModule._testing.buildCoreArcPrompt(state);
     expect(prompt).toContain('we had to act');
-    expect(prompt).toContain('tay004');
+    expect(prompt).toContain('09:40 PM $450,000');
+    expect(prompt).not.toContain('tay004'); // a buried memory's id never reaches a writer
     expect(prompt).toContain('Alex detained');
   });
 

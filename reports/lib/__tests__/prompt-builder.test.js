@@ -1230,7 +1230,8 @@ describe('PromptBuilder', () => {
       };
       const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).toContain('<TRANSACTION_LINKS>');
-      expect(userPrompt).toContain('tay004');
+      expect(userPrompt).toContain('09:40 PM $450,000');
+      expect(userPrompt).not.toContain('tay004'); // a buried memory's id never reaches a writer
     });
 
     it('emits <POST_INVESTIGATION_NEWS> when developments present', async () => {
@@ -1312,7 +1313,8 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
     expect(userPrompt).toContain('Blake solicited Vic three times');
     expect(userPrompt).toContain('we had to act');
-    expect(userPrompt).toContain('tay004');
+    expect(userPrompt).toContain('09:40 PM $450,000');
+    expect(userPrompt).not.toContain('tay004'); // a buried memory's id never reaches a writer
     expect(userPrompt).toContain('Sarah named interim CEO');
   });
 
