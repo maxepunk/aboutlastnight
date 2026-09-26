@@ -120,7 +120,7 @@ The article can always say whose memory it is: its owner. Who carried it to the 
 **Consequence.**
 - Craft: J/formatting.md:33 relaxes to the rule. Examples are rewritten to describe content and owner: J/anti-patterns.md:151, :194, :211-214, :303, :326, :410, :414; J/section-rules.md:345, :386-387, :407-413; J/narrative-structure.md:124; J/writing-principles.md:25-29.
 - Builders: AS:381, :410, :417; PB:1336.
-- Plumbing: phase 2.2 already sends the "Exposed By" column to the writers (RM:86). This rule travels beside it.
+- Plumbing: phase 2.2 keeps the "Exposed By" column in state, on disk and at the input review, and holds it out of the writers' prompts (RM:86). Phase 3 sends it to the writers together with this rule.
 - Judges: nothing checks it today (JC Step 1, "Writer rules" table; RO:404). The claim check (phase 7) is its natural home.
 - Docs: DD:136.
 
@@ -379,7 +379,7 @@ Reason: the reporter never votes and owns no exposed memory (objective V3).
 
 **Covers:** X6, K2. **Status: Decided for phase 2.**
 
-Decided on 2026-09-25 (IA §6, Q3; RM 2.5): every presence or absence line defers to the mode block. Nothing is left to rule here.
+Decided on 2026-09-25 (IA §6, Q3; RM 2.6): every presence or absence line defers to the mode block. Nothing is left to rule here.
 
 What phase 2 changes:
 - Builders: PB:418-419, :1074, :1077-1078, :1112, :1183; AS:191.
@@ -404,7 +404,7 @@ What phase 2 changes: the remote block (PB:248); the reporterMode criterion (EV:
 - Third person in both modes, at the arcs and the outline: PB:804 "never a first-person presence claim"; AS:406; SA:188; AS:257.
 - Presence lines under them (changed in phase 2): PB:418-419; J/evidence-boundaries.md:134; J/narrative-structure.md:270.
 
-Decided: presence lines defer to the mode block (RM 2.5).
+Decided: presence lines defer to the mode block (RM 2.6).
 
 **To confirm.** The arcs and the outline stay in the third person in both modes. They are plans, not the article, and your design already has arcs as third-person claims (DS:36, :38). First person on site belongs to the article only.
 
@@ -762,7 +762,7 @@ Reason: the template prints whatever is given, and a quote's speaker is a fact (
 
 **Covers:** X19, K1, C10. **Status: Decided for phase 2, one point left.**
 
-Decided: a sidebar entry holds a headline and a summary. The writer writes no document text there, and the fact check reads only printed text (DS:94; RM:98-99).
+Decided: a sidebar entry holds a headline and a summary. The writer writes no document text there, and the fact check reads only printed text (DS:94; RM:101-106).
 
 Left to rule:
 - How many: PB:1279 "Sidebar: 5-8 cards", against J/formatting.md:65, :96 and J/editorial-design.md:81 "~10".
@@ -851,7 +851,7 @@ Decided: your description reaches the outline and article writers and the outlin
 
 **Consequence.**
 - Builders: PB:27-32, :44-46; AI:932-935; the roster stop (`console/await-roster-logic.js`).
-- Judges: the NPC pronoun scan is advisory (FC:559-569), and nothing checks roster pronouns (JC J4). The outline and arc prompts carry no pronouns (OB P4). The judges get them in phase 2.3.
+- Judges: the NPC pronoun scan is advisory (FC:559-569), and nothing checks roster pronouns (JC J4). The outline and arc prompts carry no pronouns (OB P4). The judges get them in phase 2.4.
 
 **Your ruling:** Accepted 2026-09-25. Pronouns come from the roster the director enters at intake, not from character sheets. Marcus is he/him, Nova she/her, and Blake gets none invented. A missing roster pronoun is flagged to the director at input review, never guessed.
 
@@ -871,7 +871,7 @@ Decided: your description reaches the outline and article writers and the outlin
 
 **Consequence.**
 - Craft: J/anti-patterns.md:250-262; J/writing-principles.md:89-103; J/section-rules.md:416-421.
-- Judges: the fact check tests names only (FC:483-493). The article evaluation's characterPlacement has no roster (EV:275-279) until phase 2.3.
+- Judges: the fact check tests names only (FC:483-493). The article evaluation's characterPlacement has no roster (EV:275-279) until phase 2.4.
 
 **Your ruling:** Accepted 2026-09-25 (replaces the pre-filled answer). Every player character appears with context for how they fit the story, even a player who was quiet in the roleplay. Each is connected to at least one arc the article covers, and the writer draws their background from the record: their exposed memories, documents that involve them, the director's observations. Nothing is invented. There is no "plain mention" fallback; the record should hold something about every player, and a writer who finds nothing flags it at the stop as an input gap.
 
@@ -1019,7 +1019,7 @@ Each fix follows from a rule nobody disputes, or from what a call actually recei
 | M1 | C8 | PB:1172 and J/formatting.md:107 (an evidence reference "linking to sidebar") against PB:1277 ("References to inline body cards"). The template links to neither, and prints the raw id when a reference has no caption (JC Step 3) | Describe it as CTX:88 does, a one-line caption naming a document, no link; make the caption required |
 | M2 | C13 | J/section-rules.md:286, :292-296, :298-305; J/formatting.md:68; J/editorial-design.md:84. The tracker prints from the ledger in the sidebar and after the last section, and only when the writer's entries are non-empty (JC Step 3) | Tell the writer the tracker prints itself; drop the placement markers; print it whenever the ledger has a positive total. Where the mobile copy sits is a template choice |
 | M3 | C18 | J/anti-patterns.md:183, an em-dash in a RIGHT example; also J/character-voice.md:38, :42 | Rewrite without em-dashes |
-| M4 | C22 | J/photo-enrichment.md:40, :80-86 against the enrichment schema (`lib/workflow/nodes/photo-nodes.js`:515-537) | Align the file to the schema, or retire the call in phase 9 as planned. Its first-person examples change in phase 2.5 |
+| M4 | C22 | J/photo-enrichment.md:40, :80-86 against the enrichment schema (`lib/workflow/nodes/photo-nodes.js`:515-537) | Align the file to the schema, or retire the call in phase 9 as planned. Its first-person examples change in phase 2.6 |
 | M5 | C23 | `lib/director-enricher.js`:132 ("same sentence") against its schema :99 ("adjacent") | One wording in both places |
 | M6 | X23 | Invented example names, including the names half of C21 (DT3 rules the rest of it): D/evidence-boundaries.md:12, :37-38; D/formatting.md:13-14, :18, :25; D/section-rules.md:27; D/narrative-structure.md:31; D/photo-enrichment.md:50; D/whiteboard-analysis.md:59. J/anti-patterns.md:95 lists one of these names as a hallucination; Blake has no surname in canon (`lib/theme-config.js`:33) | Canonical names only |
 | M7 | X34 | SA:148 describes burial as a drug effect, against DD:95 (a memory sold to Blake for pay) | State the mechanic as canon has it: any player may sell any memory they hold to Blake, for pay into a named account |
@@ -1029,7 +1029,7 @@ Each fix follows from a rule nobody disputes, or from what a call actually recei
 | M11 | D1 | `temporalContext` named at PB:1073, J/narrative-structure.md:33 and J/writing-principles.md:5; items render as id, type and text only (PB:938-940; AI:728-735) | The record view (phase 2.1) carries each document's stage, or the three lines go |
 | M12 | D2 | A value rating named at J/editorial-design.md:27-29; no writer prompt carries one | Drop the rating table, or carry a rating in the record view |
 | M13 | D3 | D/evidence-boundaries.md:31 (an "EVIDENCE:" field), :53-57 (`SF_GROUP`); D/section-rules.md:110-111 (case number and date "from metadata") | Render the fields, or drop the lines |
-| M14 | D4 | The article evaluation's characterPlacement without a roster (EV:275-279); the outline evaluation's photos cut to 5 (EV:769-770) and an interweaving plan read from channels that do not exist (EV:756) | Phase 2.3 gives the judges the roster, every photo and the real plan |
+| M14 | D4 | The article evaluation's characterPlacement without a roster (EV:275-279); the outline evaluation's photos cut to 5 (EV:769-770) and an interweaving plan read from channels that do not exist (EV:756) | Phase 2.4 gives the judges the roster, every photo and the real plan |
 | M15 | D5 | `lib/prompt-renderers/director-notes-renderer.js`:46 would print a buried memory's id into writer prompts | Print account, amount and time only (AS:367) |
 | M16 | S1 | J/anti-patterns.md:115, :145 name `<SESSION_FACTS>`, which the reworks lack | Give the reworks the session facts (phase 2: a reworker sees what its writer saw) |
 | M17 | S2, S5, S7 | "The system prompt" is said to hold the four-stage framework: J/anti-patterns.md:270, J/section-rules.md:135, J/narrative-structure.md:33. In the article and outline writers it is the user prompt's `<TEMPORAL_DISCIPLINE>` (PB:1102-1117, :799-809); the reworks have none | Point to `<TEMPORAL_DISCIPLINE>` by name, and give it to the reworks |
