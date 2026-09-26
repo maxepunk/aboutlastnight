@@ -47,8 +47,8 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // The writers' own builders: the arc writer's valid-id list, the writers'
 // SESSION_FACTS, the outline writer's inputs (its photo list among them) with the
 // hero it used, and the PromptBuilder (whose roster method gives the roster section).
-const { hasInterweavingPlan, _testing: { extractEvidenceSummary } } = require('./arc-specialist-nodes');
-const { _testing: { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } } = require('./ai-nodes');
+const { hasInterweavingPlan, extractEvidenceSummary } = require('./arc-specialist-nodes');
+const { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } = require('./ai-nodes');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS

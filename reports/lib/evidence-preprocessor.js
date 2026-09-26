@@ -736,6 +736,9 @@ module.exports = {
   createBatches,
   processWithConcurrency,
 
+  // The empty result preprocess-nodes returns for a session with no evidence
+  createEmptyResult,
+
   // Export internal functions for testing (preserved for backwards compatibility)
   _testing: {
     createBatches,

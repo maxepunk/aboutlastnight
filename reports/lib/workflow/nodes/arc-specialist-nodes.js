@@ -1936,9 +1936,11 @@ module.exports = {
   // Mock factory (Commit 8.8)
   createMockOrchestrator,
 
-  // The one rule for "has an interweaving plan" (final fix wave): the outline judge
-  // imports it by name.
+  // The writers' builders the judges share, by name (final fix wave): the one rule
+  // for "has an interweaving plan", and the arc writer's evidence summary (its
+  // valid-id list and buried transactions).
   hasInterweavingPlan,
+  extractEvidenceSummary,
 
   // Export for testing
   _testing: {

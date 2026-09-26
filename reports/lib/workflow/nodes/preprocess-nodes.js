@@ -24,7 +24,7 @@ const { PHASES } = require('../state');
 const {
   createEvidencePreprocessor,
   createMockPreprocessor,
-  _testing: { createEmptyResult }
+  createEmptyResult
 } = require('../../evidence-preprocessor');
 const { sdkQuery } = require('../../llm');
 const { traceNode } = require('../../observability');

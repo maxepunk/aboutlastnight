@@ -1950,6 +1950,16 @@ module.exports = {
   // Testing utilities
   createMockPromptBuilder,
 
+  // The writers' builders the judges share, by name (final fix wave): the
+  // PromptBuilder factory (its roster section), the writers' SESSION_FACTS, the
+  // outline writer's inputs and photo list, and the hero the writer and its
+  // reworker used.
+  getPromptBuilder,
+  buildSessionFacts,
+  buildAvailablePhotos,
+  outlineWriterInputs,
+  reworkHeroImage,
+
   // Internal functions for testing
   _testing: {
     safeParseJson,
@@ -1968,9 +1978,6 @@ module.exports = {
     outlineWriterInputs,
     articleWriterInputs,
     selectHeroImage,
-    // Brief 2.4: the outline judge reads the photos through outlineWriterInputs with
-    // the hero the writer and its reworker used.
-    reworkHeroImage,
     scorePaperEvidence,  // Batched Sonnet scoring (Commit 8.11)
     getSchemaValidator,
     // Brief 2.2: the writers' SESSION_FACTS and available photos, one builder each.
