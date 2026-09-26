@@ -118,6 +118,10 @@ function formatElapsed(ms) {
  * issues" without the sentences would repeat the original failure, since each
  * string is the self-contained instruction the reviser would have been given.
  *
+ * Under the score line sits the view's `calibration` phrase (phase 2, brief 2.4):
+ * the score is the model's own, not yet checked against the director's
+ * decisions. The wording comes from checkpoint-view-logic.js, not from here.
+ *
  * @param {{view: object|null}} props
  */
 function EvalBar({ view }) {
@@ -137,6 +141,8 @@ function EvalBar({ view }) {
     React.createElement('span', {
       className: view.passed ? 'eval-bar__score' : 'eval-bar__issues'
     }, parts.join(' · ')),
+
+    view.calibration && React.createElement('p', { className: 'text-xs text-muted' }, view.calibration),
 
     view.escalationReason && React.createElement('p', {
       className: 'eval-bar__escalation validation-error',

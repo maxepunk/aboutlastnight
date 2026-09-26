@@ -1148,6 +1148,10 @@ function displayEvaluationStatus(evaluation, isEscalated = false) {
 
   sectionBox(`EVALUATION: Score ${score === null ? 'N/A' : score.toFixed(2)} ${readyText}`, scoreColor);
 
+  // Brief 2.4: the console's phrase for a model's score, from the same pure module
+  const view = ViewLogic.evaluationView(evaluation);
+  if (view && view.calibration) console.log(color(`  ${view.calibration}`, 'dim'));
+
   if (evaluation.revisionNumber > 0) {
     console.log(color(`  After automatic pass ${evaluation.revisionNumber} of this round`, 'dim'));
   }

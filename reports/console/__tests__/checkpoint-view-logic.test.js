@@ -117,6 +117,52 @@ describe('evaluationView', () => {
   });
 });
 
+describe('the uncalibrated label (phase 2, brief 2.4)', () => {
+  // No judge has been checked against the director's decisions yet (phase 7), and
+  // all eight evaluations of 091826 and 092026 passed. The score is labelled so,
+  // in one phrase from this module, at all three stops.
+  const { UNCALIBRATED_SCORE_LABEL } = require('../checkpoint-view-logic');
+
+  it('is one plain phrase that says the score is uncalibrated', () => {
+    expect(UNCALIBRATED_SCORE_LABEL).toBe(
+      'Uncalibrated: the model\'s own score, not yet checked against your approvals and send-backs.'
+    );
+  });
+
+  it('labels a model evaluation\'s score at every stop', () => {
+    const data = {
+      evaluationHistory: [
+        { phase: 'arcs', overallScore: 0.98, ready: true },
+        { phase: 'outline', overallScore: 0.92, ready: true },
+        { phase: 'article', overallScore: 0.6, ready: false, escalatedToHuman: true }
+      ]
+    };
+    ['arcs', 'outline', 'article'].forEach((phase) => {
+      expect(evaluationView(lastEvaluationFrom(data, phase)).calibration).toBe(UNCALIBRATED_SCORE_LABEL);
+    });
+  });
+
+  it('leaves an entry with no score unlabelled', () => {
+    expect(evaluationView({ ready: false, _error: 'boom' }).calibration).toBe('');
+    expect(evaluationView({ phase: 'article', ready: false, reason: 'rollback-invalidated', source: 'rollback' }).calibration).toBe('');
+  });
+
+  it('leaves the fact check\'s entry unlabelled: its 0 is not a model\'s score, and a check is definite', () => {
+    const view = evaluationView({ overallScore: 0, structuralPassed: false, source: 'fact-check' });
+    expect(view.score).toBe('0.00');
+    expect(view.calibration).toBe('');
+  });
+
+  it('the evaluation bar renders the phrase from the view and carries no wording of its own', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'utils.js'), 'utf8');
+    const evalBar = src.slice(src.indexOf('function EvalBar'), src.indexOf('function TracePanel'));
+    expect(evalBar).toContain('view.calibration');
+    expect(evalBar).not.toMatch(/uncalibrated/i);
+  });
+});
+
 describe('arcCardModel', () => {
   it('maps the current arc schema field names', () => {
     const arc = {

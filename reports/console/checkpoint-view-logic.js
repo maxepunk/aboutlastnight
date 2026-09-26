@@ -87,6 +87,19 @@
   }
 
   /**
+   * The one phrase a model evaluation's score carries, at all three stops (phase 2,
+   * brief 2.4).
+   *
+   * No judge has yet been checked against the director's own approvals and send
+   * backs; that calibration is phase 7. All eight evaluations of 091826 and 092026
+   * passed with no structural issue, and one of them cited "I was not in that
+   * room" as good voice. A score says what the model thought, not how likely the
+   * director is to accept the output.
+   */
+  var UNCALIBRATED_SCORE_LABEL =
+    'Uncalibrated: the model\'s own score, not yet checked against your approvals and send-backs.';
+
+  /**
    * Display shape for the evaluation bar, shared by all three gates.
    *
    * Two field-name hazards handled here rather than in three components:
@@ -94,11 +107,18 @@
    *   - `structuralPassed` is only on the fact-check-sourced entry; the Opus
    *     history entry (evaluator-nodes.js historyEntry) carries `ready` instead.
    *
+   * `calibration` is UNCALIBRATED_SCORE_LABEL whenever the entry carries a model's
+   * score. It is '' for an entry with no score, and for the fact check's entry
+   * (`source: 'fact-check'`), whose 0 is a placeholder the evaluator writes when
+   * the check stops a bundle before the model sees it: a check's answer is
+   * definite and has nothing to calibrate.
+   *
    * @param {object|null} evaluation
-   * @returns {{score: string|null, passed: boolean, structuralIssues: string[],
-   *            advisoryWarnings: string[], revisionGuidance: string,
-   *            confidence: string, revisionNumber: number|null,
-   *            escalated: boolean, escalationReason: string, source: string}|null}
+   * @returns {{score: string|null, calibration: string, passed: boolean,
+   *            structuralIssues: string[], advisoryWarnings: string[],
+   *            revisionGuidance: string, confidence: string,
+   *            revisionNumber: number|null, escalated: boolean,
+   *            escalationReason: string, source: string}|null}
    */
   function evaluationView(evaluation) {
     if (!evaluation || typeof evaluation !== 'object') return null;
@@ -108,8 +128,10 @@
     var passed = evaluation.structuralPassed !== undefined
       ? evaluation.structuralPassed === true
       : evaluation.ready === true;
+    var source = asString(evaluation.source);
     return {
       score: score,
+      calibration: score !== null && source !== 'fact-check' ? UNCALIBRATED_SCORE_LABEL : '',
       passed: passed,
       structuralIssues: stringList(evaluation.structuralIssues),
       advisoryWarnings: stringList(evaluation.advisoryWarnings),
@@ -118,7 +140,7 @@
       revisionNumber: typeof evaluation.revisionNumber === 'number' ? evaluation.revisionNumber : null,
       escalated: evaluation.escalatedToHuman === true,
       escalationReason: asString(evaluation.escalationReason),
-      source: asString(evaluation.source)
+      source: source
     };
   }
 
@@ -996,6 +1018,8 @@
   var api = {
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
+    // Phase 2, brief 2.4: the score's label at all three stops
+    UNCALIBRATED_SCORE_LABEL: UNCALIBRATED_SCORE_LABEL,
     arcCardModel: arcCardModel,
     defaultArcSelection: defaultArcSelection,
     arcSelectionNote: arcSelectionNote,
