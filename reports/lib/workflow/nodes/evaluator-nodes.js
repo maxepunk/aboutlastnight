@@ -892,6 +892,8 @@ CRITICAL ROSTER vs EVIDENCE DISTINCTION:
 - Do NOT infer roster members from evidence ID prefixes (e.g., "ezr011" does NOT mean "Ezra" is on roster)
 - ONLY check coverage for the ${roster.length} names listed in SESSION ROSTER above
 
+The canonical roster below gives ${(state.theme || 'journalist') === 'journalist' ? 'names and pronouns' : 'names'} only. Check coverage against the SESSION ROSTER above, not against this list.
+
 ${renderJudgeRosterSection(state)}
 
 THE ACCUSATION (the parsed verdict, then the director's account word for word):
