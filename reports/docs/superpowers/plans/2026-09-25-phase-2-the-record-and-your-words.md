@@ -47,11 +47,33 @@ The pipeline's Opus calls run on Opus 5.5. Every call that decides, writes, rewo
 **The 2.0 gate** (the integrator runs it before 2.0 merges):
 1. The full suite, broad sweep, exit 0.
 2. The probe scripts from brief 2.0, run live on the new SDK:
-   - every pipeline-shaped call reports 0 or 1 tools at `init`;
+   - every pipeline-shaped call reports at `init` exactly the tools it declared, plus `StructuredOutput` when it has a schema. CLI 2.1.282 counts its own structured-output tool, which CLI 2.1.119 did not, so the 2026-09-19 rule "0 or 1 tools" no longer holds;
    - no memory paths load;
    - thinking streams readable text;
    - the content-bundle call's structured output arrives through the SDK channel and not the text fallback. The probe fails on the fallback.
 3. A live run on a copy of the 092026 thread, rolled back to input review and auto-approved through to the article on today's prompts. It makes every kind of call: Haiku, Sonnet and Opus; text, structured and image. For every call, read the served model from the result's `modelUsage` and record the call's duration next to its 092026 duration (`sdk-and-model.md` Step 4). An Opus call served by any model other than `claude-opus-5-5` fails the gate.
+
+**The 2.0 result** (gate 2026-09-25; merged to `main` at `9f16e72` on 2026-09-26, 152 suites and 2592 tests). All 19 calls of the live run were served by their pinned model, none failed, and every structured call used the SDK channel. The probes passed, and the content-bundle probe returned through the channel on `claude-opus-5-5`. Opus durations, 092026 on Opus 4.8 against the gate on Opus 5.5 at `xhigh`, in seconds:
+
+| Call | 092026 | Gate |
+|---|---|---|
+| Arcs | 314 | 346 |
+| Interweaving | 146 | 232 |
+| Arc judge | 85 | 155 |
+| Outline | 350 | 400 |
+| Outline judge | 118 | 124 |
+| Article | 371 | 521 |
+| Article judge | 127 | 127 |
+| Enricher (`medium`) | 134 to 171 | 53 |
+
+The director kept `xhigh` (roadmap open decision 3). Three calls did not run on SDK 0.3.282 at the gate: the Sonnet whiteboard read, the Sonnet character-ID parse and the Haiku photo finalizer. The first live session on the new `main` covers them; its log is read for `SDK model substitution` and for any failure in those three calls.
+
+**Running a gate from a worktree** (learned at the 2.0 gate, 2026-09-25):
+- The nodes resolve `data/` from their own file location, so a gate server started from a worktree reads and writes the worktree's `data/<id>/`, which starts empty. That keeps the gate's writes away from the director's session files.
+- Before the run, seed the worktree's `data/<id>/` with the session's `inputs/` and `photos/` from the main checkout. On 2026-09-25 a missing `inputs/orchestrator-parsed.json` tagged all 81 memories as buried.
+- Start the server with the main checkout as its working directory, so dotenv finds `.env`.
+- Run the harness with `--resume`; without it, the harness force-starts the thread fresh after the rollback.
+- A rollback to input review does not re-parse: the parse skips while its results are still in state. Only a send-back at input review with a correction re-runs the three parse calls.
 
 **The phase gate** (after wave 2, once):
 1. The full suite, broad sweep, exit 0.
@@ -100,7 +122,7 @@ In `client.js`, the comments at 228 and 231 that name 0.2.x.
 **Invariants.**
 - The npm change needs the director's go-ahead before it runs.
 - The worktree gets its own `node_modules`, installed there, not a junction to the main checkout: the director's server on port 3001 runs from the main checkout's packages.
-- The main checkout's packages change only at merge. The director stops the 3001 server first, the integrator runs `npm ci` in the main checkout, and the director restarts the server.
+- The main checkout's packages change only at merge. The director stops the 3001 server first, the integrator runs `npm ci --os=win32 --cpu=x64` in the main checkout, and the director restarts the server. The platform flags are required: the director's user npm config (`~/.npmrc`) sets `os=linux`, which on 2026-09-25 made a plain install fetch Linux builds with no `sharp` binary and no CLI binary. Leave that config alone; override it per command.
 - The isolation options stay exactly as they are (`mcpServers: {}`, `strictMcpConfig: true`, `settingSources: []`, the env with `CLAUDE_CODE_DISABLE_AUTO_MEMORY`), pinned by `sdk-mcp-isolation.test.js` and `sdk-memory-isolation.test.js`.
 - Every call keeps adaptive thinking with `display: 'summarized'`. Opus 5.5 cannot run without thinking, and the idle timer depends on streamed thinking text.
 

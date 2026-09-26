@@ -32,6 +32,22 @@ _Avoid_: validation, fact check (one particular check)
 The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the director's own notes and accusation text, the roster and pronouns, the whiteboard, the director's photo descriptions and the director's edits.
 _Avoid_: session data, ground truth, context
 
+**Owner**:
+The character whose memory it is: the point of view the memory records. The article can always name the owner.
+_Avoid_: author, source
+
+**Exposer**:
+The player who turned a memory in to Nova. Anonymous unless they put their name on it at turn-in. Never assumed to be the owner.
+_Avoid_: source, submitter
+
+**Ledger**:
+Nova's record of every transaction in the morning's market: each sale into an account, the first-burial bonus and each transfer, with its time and amount. It never shows which memory was sold. The live display in the room shows only running balances.
+_Avoid_: scoreboard, Blake's display
+
+**Account**:
+Where a sale's money goes. A player can give it any name, including another character's, so a name identifies no one.
+_Avoid_: shell account or personal account as proof of who holds it
+
 **Intake**:
 The start-of-session collection of everything only the director holds.
 _Avoid_: session start, input collection, full context
@@ -81,7 +97,7 @@ The outline. For each section: what it does for the reader, the material it uses
 _Avoid_: outline structure, allocation, section plan
 
 **Evidence card**:
-A printed card that quotes one document from the record word for word. The writer chooses the document and, for a long document, the passage; the text itself is copied from the record.
+A printed card that quotes one memory, or one passage of a document, from the record word for word. Memories are the main cited evidence: a memory card prints the whole memory, and a document card prints only the passage that matters. The writer chooses the memory or the document and passage; the text itself is copied from the record.
 _Avoid_: token card, quote card, sidebar card
 
 **Evidence reference**:

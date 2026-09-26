@@ -1,6 +1,6 @@
 # Rulings sheet: the writing rules
 
-Written 2026-09-25 at `main` `b3d1a1a`, for phase 3, "One rule set" (`docs/superpowers/plans/2026-09-22-roadmap.md`:15, :127). Nothing else in the repository was changed.
+Written 2026-09-25 at `main` `b3d1a1a` and ruled by the director the same day (every entry now carries a ruling), for phase 3, "One rule set" (`docs/superpowers/plans/2026-09-22-roadmap.md`:15, :127). Nothing else in the repository was changed.
 
 The writers' instructions conflict in 62 places: 37 between documents and 25 inside single calls (information-architecture spec, §2.4). This sheet turns them into 43 questions. For each one you confirm a pre-filled answer, pick a side, or note that phase 2 already settled it. Defects that need no ruling are listed after the entries, under "Mechanical fixes".
 
@@ -42,6 +42,18 @@ Two phase-2 entries still carry one small point to rule: PR4 (confirm) and CA5 (
 - **DT3.** Detective voice: mode block and first-person samples. Recommended: third person, no mode block.
 - **DT4.** May the case report name a perpetrator as fact? Recommended: the group's finding, attributed, never a hidden truth.
 - **HY1.** Fields the writer is asked for that never print. Recommended: stop asking, unless you want them printed.
+
+## Game facts confirmed by the director (2026-09-25)
+
+These ground the rulings on exposure, burial and account names. Source: the public how-to-play page and the director's answers.
+- Memories are physical tokens behind locks and puzzles. Whoever unlocks one scans it and reads it, then chooses: **trade** (give, swap, leverage, or return it to its owner), **expose** (turn it in: the full memory goes to Nova, its summary goes up on the public Evidence Board), or **bury** (sell it to be erased; the payment goes to an account the seller chooses).
+- Keeping one's own memories off the board by holding, buying back or bargaining for them is a real strategy that needs no sale. Many memories are simply never found.
+- At turn-in the player chooses whether to put a name on the memory; the evidence log reads "NovaNews (Anonymous)" or a name.
+- Anyone can open an account in any character's name. The live ledger shows running balances in real time and does not mark personal accounts apart from shell accounts.
+- Nova's ledger lists every transaction with its time and amount (sales, the first-burial bonus, transfers), but not which memory was sold.
+- The Valet (Blake) moves about the room and pulls players into quiet corners to trade; some sales happen openly, and the director's notes record them.
+- The players are told about the first-burial bonus at the start, as an incentive to sell.
+- The director's initial inputs (observations, the accusation, overheard lines) are Nova's observations in the fiction.
 
 ## How to read an entry
 
@@ -112,7 +124,7 @@ The article can always say whose memory it is: its owner. Who carried it to the 
 - Judges: nothing checks it today (JC Step 1, "Writer rules" table; RO:404). The claim check (phase 7) is its natural home.
 - Docs: DD:136.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. At turn-in the player chooses whether to put a name on the memory: the evidence log reads "NovaNews (Anonymous)" or a name. Anonymous means a confidential source, protected even from an on-site Nova who watched them walk up; a name means they went on the record, and Nova may credit them for that memory. The owner is always nameable ("Alex's memory shows"); "Alex turned in her own memory" appears only when the log names Alex or the director notes it. The choice to expose is celebrated in aggregate ("twenty-nine memories reached me anonymously; two came with a name attached"). The arcs follow the same rule.
 
 ---
 
@@ -133,7 +145,7 @@ A possible middle: the article may state, as a fact about the board, that none o
 - Judges: none.
 - A note that asks for the other side still outranks the rule for its session (PB:215).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Absence alone is a fact about the board ("Not one of Vic's memories reached the board"); many memories are simply never found (20 on 092026 were never scanned). Because players can trade (give, swap, leverage, return a memory to its owner), keeping one's memories off the board is a real strategy that needs no sale. When something else in the record shows the character acting on it (the director saw them searching, pocketing or bargaining; an overheard line; a document), Nova may say what they did, in the reporting mode's voice (remote: "by several accounts, Vic spent the morning making sure of it"). Without that, she does not make the leap.
 
 ### BU2. May the article count memories, and call them buried?
 
@@ -157,7 +169,7 @@ A possible middle: the article may state, as a fact about the board, that none o
 - Craft: examples that tie a count to an owner change under BU3 (J/anti-patterns.md:194; J/character-voice.md:151; J/section-rules.md:411). The other counting examples stay.
 - Judges: the article evaluation's antiPatterns "game mechanics" (EV:233-239) must not treat "buried" as a mechanic. No check.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 (rebuilt on the game's rules). The money story comes from Nova's ledger, which lists every transaction with its time and amount (sales into accounts, the first-burial bonus, transfers between accounts) but not which memory was sold. The article may report each account's total, every sale's time and size, how many sales each account took, bursts and lulls ("The Ember account took four sales between 10:02 and 10:14, $2 million in all"). It may count exposed memories overall and per owner ("three were Alex's"). "Bury", "sold" and "memories" are the fiction's own words.
 
 ### BU3. May the article say whose memories were buried, or what they were about?
 
@@ -180,7 +192,7 @@ A possible middle: the article may state, as a fact about the board, that none o
 - Schema and builder: `thePlayers.buried` and `whatsMissing.buriedItems` go or change meaning (outline.schema.json:196, :236; PB:858).
 - Judges: none. The claim check (phase 7).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Whose memory was sold, and what it said, never appears: Nova's ledger does not show it and the game erased it. The only exception is someone's attributed claim ("As the window closed, Sam was overheard: 'I just sold the one that would have finished me.'"). A sale's size speaks to its stakes, because the board pays most for what it most needs gone: Nova may say a sale was big and what that implies, never what the memory said.
 
 ### BU4. How much may the article say about what the reporter cannot see?
 
@@ -199,7 +211,7 @@ A possible middle: the article may state, as a fact about the board, that none o
 - Craft: the lines above.
 - Judges: none. Both sessions' fixes were by hand (RO:402, :411; DIFF26 whats-missing#3). A should-consider criterion fits phase 7.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. At most one line about what Nova cannot see, then the story.
 
 ### BU5. The burial bonus, seeds and manual adjustments
 
@@ -221,7 +233,7 @@ A possible middle: the article may state, as a fact about the board, that none o
 - Builders: FINANCIAL_SUMMARY (PB:476-494) can apply the transfer rule only if its data shows adjustments.
 - Judges: the generic "game mechanics" criterion (EV:233-239).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 (changes the pre-filled answer on the bonus). The players are told about the first-burial bonus at the start, as NeurAI's incentive to sell, and it is in Nova's ledger: Nova may report it when it matters ("The first sale came at 9:14, and the board's $50,000 bonus with it"), never as a rules explanation. Transfers between accounts are reportable money movements and can be the story ("At 10:30, $375,000 left the Vic account for one called L, which never sold a thing"). The ledger's totals are the figures; the writer never computes them. An entry that looks like a mistake comes to the director before it is printed. The ledger covers only this morning's sales and proves nothing about other money in the fiction (Marcus's fortune, an inheritance, investments).
 
 ---
 
@@ -241,7 +253,7 @@ A possible middle: an aggregate inference, framed as the reporter's own reading 
 - Your own edits are record and never flagged (CTX:96), so this governs the writer only.
 - Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25, the middle: Nova may draw a count-level inference as her own reading, naming no one (as in the 092026 money section). Any inference that points at a person needs behaviour the director observed.
 
 ### AC2. Does an account's name say who buried?
 
@@ -268,7 +280,7 @@ A possible middle: an aggregate inference, framed as the reporter's own reading 
 - Craft: J/writing-principles.md:102; J/evidence-boundaries.md:249; J/character-voice.md:160; J/section-rules.md:222.
 - Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Anyone can open an account in any character's name, and the live ledger does not mark personal accounts apart from shell accounts. So a name proves nothing: "An account in Vic's name took in $400,000", never "Vic took $400,000", unless the director saw Vic sell into it or Vic claimed it. When it serves the story, Nova may raise the frame ("Was Vic cashing in, or was someone making it look that way?"). Who sold comes from the director's notes: the Valet (Blake) moves about the room pulling players into quiet corners, and some sales happen openly. Nova may line an observation up against her ledger's timestamps and pose the link as a question unless it is confirmed ("Blake had Sam in a corner at 10:12. At 10:13 the Ember account took $500,000."). A sale made openly in front of the room is a fact.
 
 ### AC3. May an account's name be decoded into a person by its spelling?
 
@@ -287,7 +299,7 @@ A possible middle: an aggregate inference, framed as the reporter's own reading 
 - Builders: AS:436 becomes account activity that lines up with observed behaviour.
 - Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. A name's spelling ("ChaseT") identifies no one by itself; with behaviour or timing behind it, it may prompt Nova's question.
 
 ---
 
@@ -316,7 +328,7 @@ A possible middle: an aggregate inference, framed as the reporter's own reading 
 - Judges: none. The fact check reads no time words (JC J4).
 - The "whole evening" lines are also presence lines (PR2).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Four stages, each with its own voice: the party (last night) exists only as memories ("Alex's memory from 11:32 last night shows her swinging at Marcus"), never told as witnessed; the investigation (this morning) is what people did in the room ("I watched" on site, "by several accounts" remote); the deliberation (the end of the morning) is its own movement, the room writing its statement and voting; the aftermath is Nova's own reporting through the day ("I called NeurAI this afternoon"). The ledger's and the evidence log's timestamps come from the real evening clock, so the article shifts them into the fiction's morning or gives them relative ("ten minutes before the window closed"). Party memories keep their own night-time times.
 
 ### TL2. When is the article written?
 
@@ -335,7 +347,7 @@ A possible middle: an aggregate inference, framed as the reporter's own reading 
 - Builders: PB:808, :1108, :1116. The post-investigation news wording (PB:418-420) already agrees.
 - Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Nova writes the same evening. "This afternoon" and "tonight" belong to her follow-up ("As of tonight, NeurAI has named no new CEO"), never to the party or the morning.
 
 ---
 
@@ -361,7 +373,7 @@ Reason: the reporter never votes and owns no exposed memory (objective V3).
 - Craft: J/writing-principles.md:134; J/anti-patterns.md:410.
 - Judges: EV:229, :608.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. On site, "we" may take in the room for the experience of being there, never for an act Nova did not do (exposing, accusing, voting) and never the party. Remote, "we" never includes the room. In both modes "we" may be NovaNews, Nova and her reader, or Nova and a guest reporter sharing the byline. The judge stops treating "we" as a voice marker.
 
 ### PR2. Presence and absence lines outside the mode block
 
@@ -398,7 +410,7 @@ Decided: presence lines defer to the mode block (RM 2.5).
 
 **Consequence.** None beyond phase 2, if confirmed.
 
-**Your ruling:**
+**Your ruling:** Point confirmed 2026-09-25: the arcs and the outline stay in the third person in both modes; only the article uses Nova's first person.
 
 ---
 
@@ -423,7 +435,7 @@ Reason: who did what is named, and named right (objective P8); the accusation is
 - Craft: the lines that use it stay.
 - Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended: name who acted wherever the record names them; "the group" or "the room" stays for what the room did together, the vote and the verdict.
 
 ### VO2. How far does the systemic critique run?
 
@@ -445,7 +457,7 @@ Reason: who did what is named, and named right (objective P8); the accusation is
 - Craft: J/section-rules.md:512 becomes optional; J/character-voice.md:111.
 - Judges: emotionalResonance is generic (EV:280-284). No check.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Criticism of the system appears where this session's evidence leads there, in this session's names ("The board spent $7.5 million this morning making things disappear. Who signed off on that?"), never as generic commentary. The closing ends on an open question, not an op-ed.
 
 ### VO3. Naming individuals in the critique
 
@@ -461,7 +473,7 @@ Reason: who did what is named, and named right (objective P8); the accusation is
 
 **Consequence.** J/section-rules.md:511 adds "as facts". Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. The closing names people and what they did as plain facts. Judgement aims at NeurAI, its board and the business of buying memories, not at the players' characters: the players read about their own characters, the report is a gift, and the critique lands on the system.
 
 ### VO4. Grace against the thesis, and celebrating the players
 
@@ -482,7 +494,7 @@ Reason: who did what is named, and named right (objective P8); the accusation is
 - Craft: no prompt states it. It joins J/character-voice.md near :40 ("Empathy for buriers").
 - Judges: EV:583 keeps "celebrates", with no exemption. No check.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. A genuine act of grace is honoured as grace (for example, returning a memory to its owner instead of selling it), and the article still follows the money wherever it leads, for every character, not only the likeable ones. The players are celebrated by showing each one's specific choices, never by softening the thesis.
 
 ### VO5. "memory token"
 
@@ -504,7 +516,7 @@ Reason: who did what is named, and named right (objective P8); the accusation is
 - Builders: PB:314 stays aimed at bare "tokens". PB:488's "(N tokens)" changes under BU2.
 - Judges: EV:235-236, :607, :609 already agree.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. "Memory token" may appear in print; writers prefer "extracted memory". The bare word "token" never appears as system talk.
 
 ---
 
@@ -528,7 +540,7 @@ A possible middle:
 - Craft: J/evidence-boundaries.md:226-233.
 - The claim check's scope (phase 7).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. (1) What happened in the session (the director's observations, the accusation, overheard lines, the vote: all the initial inputs) is record, and is Nova's own observation in the fiction: on site she saw and heard it; remote, it reached her from people in the room. (2) Backstory the director knows but nothing in the session shows reaches print only as Nova's question, grounded in what the record does show, unless the director writes it in at the article stop. (3) The whiteboard in the photo is the record; its parse is a hint.
 
 ### TH2. What orders the arcs, and what weights the evidence?
 
@@ -550,7 +562,7 @@ Reason: the thesis is the gap between the verdict and the record (objectives T1,
 - Builders: the arc priorities (AS:334-352) checked against it.
 - Judges: the arc evaluation's coherence criterion is generic.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended: arcs are ordered by how they bear on the room's verdict; the fixed 80% goes.
 
 ### TH3. How long is the article?
 
@@ -571,7 +583,7 @@ Reason: every writer already carries this range, and a must-fix ceiling needs on
 - Craft and builders: J/formatting.md:192; PB:1232; the theme-config budgets.
 - Judges: the outline's word budget is advisory (EV:171-190), and nothing checks the article's length. A free word-count check fits the fact check.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended: 1,000 to 1,500 words of prose by default; from phase 4 the director can set a session's length at the outline stop.
 
 ### TH4. A fixed section list, or a thesis-driven one?
 
@@ -597,7 +609,7 @@ Reason: every writer already carries this range, and a must-fix ceiling needs on
 - Craft and builders: J/section-rules.md:431; PB:1236.
 - The detective's five required sections (EV:113-114) are untouched unless you extend this ruling.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. The thesis decides which sections exist, their order and their headings: open with the verdict when the verdict is the story, drop a section whose job is done elsewhere, leave the closing untitled. The six keys stay as slots for tooling.
 
 ### TH5. Is there a right answer to grade the verdict against?
 
@@ -617,7 +629,7 @@ Reason: every writer already carries this range, and a must-fix ceiling needs on
 - Builders: AS:350; PB:685.
 - Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. There is no right answer. The article never says the room got it wrong or names "the real killer"; the story is the gap between what the room decided and what the record in front of it points to ("The room called it an overdose. Four memories on the board point to a fight at 11:32.").
 
 ### TH6. What does the headline carry, and what does the deck carry?
 
@@ -637,7 +649,7 @@ Reason: every writer already carries this range, and a must-fix ceiling needs on
 - Builders: the outline has no headline field and does not load formatting.md (PB:822-874; `lib/theme-loader.js`:23). The story map (phase 4) puts headline and deck on top.
 - Judges: none. A should-consider criterion (DS:86).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. The headline is short, with a name and an action ("NeurAI Pays to Forget"), and does not give away the article's strongest move. The deck carries who, what, the stakes and the turn ("Nine people spent the morning uncovering how Marcus Blackwood died. Then they voted to call it an overdose.").
 
 ### TH7. Fixed "preserve" text in reworks
 
@@ -657,7 +669,7 @@ Reason: every writer already carries this range, and a must-fix ceiling needs on
 
 **Consequence.** The fixed-text lines above; PB:295. Judges: none.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. The director's send-back note governs a rework: "rethink it from scratch" gets a rethink, and no fixed "preserve everything" instruction overrides it. A rework's first line names the task its revision context gives it.
 
 ---
 
@@ -676,7 +688,7 @@ Reason: every writer already carries this range, and a must-fix ceiling needs on
 - Builders: PB:1160-1166 already draws from any document in the evidence packages. In phase 5 the citation line names the kind.
 - Judges: the fact check already reads paper sources (FC:291-315).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Memories are the primary cited evidence: each exposed memory is a recording of the night that a player chose to bring to Nova instead of selling, so printing them reports on the players' choices. A document (email, form, text thread) may be a card, quoting only the passage that matters, never the whole. Every card is cited clearly: a memory by whose it is and when; a document by its kind and which one.
 
 ### CA2. What is a pull quote, and how many?
 
@@ -700,7 +712,7 @@ Reason: every quotation is verbatim and in the mouth the record names (objective
 - Builders: PB:712-714, :1140, :1189-1192; the schema description `content-bundle.schema.json`:130; the console's "Nova's Insight" label (`lib/theme-config.js`:69).
 - Judges: nothing checks quote blocks (objective A4).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. A quote block quotes the record word for word and names its speaker; Nova's own lines stay in prose. Quote blocks are optional and each must serve the flow of the article: generally two or three per article at most, none in the lede, at most one in the closing.
 
 ### CA3. Must every quote carry an attribution, and may it be "Nova"?
 
@@ -724,7 +736,7 @@ Reason: the template prints whatever is given, and a quote's speaker is a fact (
 - Craft: J/anti-patterns.md:416.
 - The schema description stays theme-neutral (M/feedback_aln_schema_descriptions_model_facing.md:14).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended: every quote names its speaker's canonical name; "Nova" is never an attribution.
 
 ### CA4. Does an inline card quote the whole document, or a passage?
 
@@ -744,7 +756,7 @@ Reason: the template prints whatever is given, and a quote's speaker is a fact (
 - Craft: J/formatting.md:90, :102, :138.
 - Judges: the fact check already accepts a passage. It tests each sentence against the source (FC:427-467).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 (with CA1). A memory card prints the whole memory, since memories are short, with a citation line ("Alex Reeves's memory, 11:32 PM last night"). A document card prints the passage that matters, cited by kind and name. No ids or timestamps appear inside the card text.
 
 ### CA5. Sidebar entries
 
@@ -764,7 +776,7 @@ Reason: the sidebar is a short catalogue (craft objective OB-C10), and a reader 
 - Builders: PB:1250, :1262 (phase 2), :1275-1280; `content-bundle.schema.json`:237.
 - Craft: J/formatting.md:65, :94-100, :153; J/editorial-design.md:81, :90-91.
 
-**Your ruling:**
+**Your ruling:** Point confirmed 2026-09-25: the sidebar holds about five to eight entries, headline and one-line summary each, including every document printed as an inline card.
 
 ---
 
@@ -784,7 +796,7 @@ A reconciliation for you to accept: every photo you have not excluded appears, a
 - Builders: the outline's photo list (PB:744-746). Plumbing: the exclude filter (phase 9).
 - Judges: the outline's photoPlacement (advisory) could count use. The fact check checks filenames only.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25: every photo the director has not excluded appears; an excluded photo never does.
 
 ### PH2. What decides where a photo goes?
 
@@ -804,7 +816,7 @@ A reconciliation for you to accept: every photo you have not excluded appears, a
 - Builders: PB:716-718. Your description reaches the writers in phase 2.2.
 - Judges: the outline's photoPlacement (advisory) scores by pacing today.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. A photo goes where the article reaches the moment the director's description names; its caption says what the photo shows and may add context from the article, never a different subject or action. When the description is thin, the writer places the photo where it fits the flow. Photos spread through the article.
 
 ### PH3. Whose photo description is the authority?
 
@@ -841,7 +853,7 @@ Decided: your description reaches the outline and article writers and the outlin
 - Builders: PB:27-32, :44-46; AI:932-935; the roster stop (`console/await-roster-logic.js`).
 - Judges: the NPC pronoun scan is advisory (FC:559-569), and nothing checks roster pronouns (JC J4). The outline and arc prompts carry no pronouns (OB P4). The judges get them in phase 2.3.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. Pronouns come from the roster the director enters at intake, not from character sheets. Marcus is he/him, Nova she/her, and Blake gets none invented. A missing roster pronoun is flagged to the director at input review, never guessed.
 
 ### PE2. "Find a place for everyone"
 
@@ -861,7 +873,7 @@ Decided: your description reaches the outline and article writers and the outlin
 - Craft: J/anti-patterns.md:250-262; J/writing-principles.md:89-103; J/section-rules.md:416-421.
 - Judges: the fact check tests names only (FC:483-493). The article evaluation's characterPlacement has no roster (EV:275-279) until phase 2.3.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 (replaces the pre-filled answer). Every player character appears with context for how they fit the story, even a player who was quiet in the roleplay. Each is connected to at least one arc the article covers, and the writer draws their background from the record: their exposed memories, documents that involve them, the director's observations. Nothing is invented. There is no "plain mention" fallback; the record should hold something about every player, and a writer who finds nothing flags it at the stop as an input gap.
 
 ---
 
@@ -884,7 +896,7 @@ Reason: your note names ALN reports, and phase 3 states each rule once for every
 - Judges: EV:234-235, :606.
 - Craft: the D/ lines above. Builders: the detective hard constraints (PB:341-365).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended (yes, both themes). The detective file cleanup is parked until the director plans to run a detective session; it leaves phase 3.
 
 ### DT2. HTML or JSON, and may detective text carry tags?
 
@@ -906,7 +918,7 @@ Reason: the detective's formatting rule (objective V13), and one output contract
 - Craft: D/formatting.md:29-36; D/section-rules.md:17, :26-29, :102-113.
 - Schema: `content-bundle.schema.json`:5.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended (JSON only; inline name and artifact tags only). Cleanup parked with DT1.
 
 ### DT3. The detective's voice: mode block and first-person samples
 
@@ -926,7 +938,7 @@ Reason: the detective voice is third person (objective V13), and the evaluator's
 - Builders: PB:254-258 (which prompts get the block); PB:300-303.
 - Craft: D/character-voice.md:8-39, :42.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended (third person, no reporting-mode block). Cleanup parked with DT1.
 
 ### DT4. May the case report name a perpetrator as fact?
 
@@ -946,7 +958,7 @@ Reason: there is no canon truth (objective T2), and the report gives this group 
 - Craft: D/section-rules.md:6, :74-77; D/formatting.md:13; D/narrative-structure.md:3-6.
 - Judges: the detective's section criteria (EV:113-122).
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25 as recommended (the group's finding, attributed, never a hidden truth). Cleanup parked with DT1.
 
 ---
 
@@ -977,7 +989,7 @@ Reason: writers and checks deal only in text that prints (objective H10).
 - Checks: the fact check's `visibleText` (FC:331-358).
 - Templates, wherever printing is chosen instead.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25: stop asking the writer for any field that does not print, and no check reads one.
 
 ### HY2. What measures the pipeline?
 
@@ -994,7 +1006,7 @@ Reason: writers and checks deal only in text that prints (objective H10).
 
 **Consequence.** No prompt or judge changes. The two memory notes are out of date.
 
-**Your ruling:**
+**Your ruling:** Accepted 2026-09-25. The pipeline is judged by what each stop lets the director see and do, and by whether the director's words and the session's facts reach the writer, not by how much the director changes the draft.
 
 ---
 
