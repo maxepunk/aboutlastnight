@@ -37,6 +37,7 @@ const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = req
 const { traceNode } = require('../../observability');
 const { getThemeNPCs, getThemeNPCPronouns } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
+const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -511,7 +512,7 @@ IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)
 ═══════════════════════════════════════════════════════════════════════════
 The following inputs were approved in earlier phases and CANNOT be modified:
 - selectedArcs: The arcs chosen for this ${outlineType} are final
-${isDetectiveOutline ? '' : '- photoAnalyses: The photo descriptions are ground truth\n'}- evidenceBundle: The evidence is curated and locked
+${isDetectiveOutline ? '' : `- photoAnalyses: The photo descriptions are fixed upstream. ${DERIVED_LABELS.photoDescriptions}\n`}- evidenceBundle: The evidence is curated and locked
 
 Your feedback should focus on how the OUTLINE USES these inputs, not changing the inputs.
 

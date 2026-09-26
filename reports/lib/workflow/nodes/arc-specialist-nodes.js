@@ -62,6 +62,8 @@ const {
 } = require('../../sdk-client/subagents');
 
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
+const { renderRecordView, recordIdOf } = require('../../prompt-renderers/record-view');
+const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { withReportingModeBlock } = require('../../prompt-builder');
 
 /**
@@ -316,7 +318,7 @@ ${JSON.stringify(context.roster)}
 ${buildCharacterCategoriesBlock(context.roster, theme, allCharacters)}
 
 ${state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
-### Character Context (extracted from paper evidence — use for accuracy)
+### Character Context (${DERIVED_LABELS.characterContext})
 ${Object.entries(state.characterData.characters).map(([name, data]) => {
   const parts = [];
   if (data.groups?.length) parts.push(`Member of: ${data.groups.join(', ')}`);
@@ -328,7 +330,7 @@ ${Object.entries(state.characterData.characters).map(([name, data]) => {
   return parts.length > 0 ? `- ${name}: ${parts.join(' | ')}` : null;
 }).filter(Boolean).join('\n')}
 
-IMPORTANT: Use these group memberships as ground truth. Do NOT infer different group compositions from memory content.
+IMPORTANT: Take group memberships from the paper documents in <RECORD>, not from memory content. Where this list differs from those documents, the documents decide.
 ` : ''}
 
 ---
@@ -357,12 +359,9 @@ Generate 3-5 narrative arcs following this priority:
 
 ## SECTION 3: EVIDENCE BUNDLE
 
-### Exposed Tokens (${evidenceSummary.exposedTokens.length} items - Layer 1, PARTY MEMORIES)
-These memories describe events from THE PARTY NIGHT. Content is party-era; exposure is investigation-era.
-${JSON.stringify(evidenceSummary.exposedTokens, null, 2)}
-
-### Paper Evidence (${evidenceSummary.exposedPaper.length} items - Layer 1, PARTY CONTEXT)
-${JSON.stringify(evidenceSummary.exposedPaper, null, 2)}
+### Exposed Documents (${evidenceSummary.exposedTokens.length} memories - Layer 1, PARTY MEMORIES; ${evidenceSummary.exposedPaper.length} paper documents - Layer 1, PARTY CONTEXT)
+The memories describe events from THE PARTY NIGHT. Content is party-era; exposure is investigation-era.
+${renderRecordView(state.evidenceBundle, { buried: false })}
 
 ### Buried Transactions (${evidenceSummary.buriedTransactions.length} items - Layer 2, INVESTIGATION ACTIONS)
 These transactions occurred DURING THE INVESTIGATION when players chose to bury memories.
@@ -420,10 +419,10 @@ THE PARTY and THE INVESTIGATION are TWO DIFFERENT TIMELINES. Your arc summaries 
 
 ---
 ${state.narrativeTensions?.tensions?.length > 0 ? `
-## SECTION 4.6: NARRATIVE TENSIONS (programmatic cross-references — evidence-boundary compliant)
+## SECTION 4.6: NARRATIVE TENSIONS (programmatic cross-references)
 
-These contradictions were identified by comparing public behavior with Black Market activity.
-They are strong narrative opportunities. Each has been verified to respect evidence boundaries.
+These possible contradictions were identified by comparing public behavior with Black Market activity.
+The ones the record supports are strong narrative opportunities. ${DERIVED_LABELS.narrativeTensions}
 
 ${state.narrativeTensions.tensions.map(t => `- [${t.type}] ${t.narrativeNote}`).join('\n')}
 
@@ -450,15 +449,19 @@ ${buildArcRevisionContext(state)}`;
 /**
  * Build prompt for interweaving enrichment (Call 2)
  *
- * Commit 8.28: Compact prompt with just arcs + roster
- * No evidence needed - interweaving is about arc relationships
+ * Commit 8.28: Compact prompt with arcs + roster.
+ * Brief 2.1: plus the whole record view (documents and buried transactions). The
+ * callbacks and bridges this call plans are details from the documents, and it used
+ * to see only the arc summaries. It has no other listing of either part, so the
+ * whole view appears here once (R2).
  *
  * @param {Array} coreArcs - Generated arcs from Call 1 (required, non-empty)
  * @param {Array} roster - Character roster (defaults to empty array if invalid)
+ * @param {Object|null} [evidenceBundle] - the curated bundle the record view renders
  * @returns {string} Prompt for interweaving enrichment
  * @throws {Error} If coreArcs is not a non-empty array
  */
-function buildInterweavingPrompt(coreArcs, roster) {
+function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null) {
   // M2: Input validation
   if (!Array.isArray(coreArcs) || coreArcs.length === 0) {
     throw new Error('buildInterweavingPrompt: coreArcs must be a non-empty array');
@@ -488,6 +491,10 @@ ${JSON.stringify(compactArcs, null, 2)}
 ## ROSTER (for identifying shared characters)
 
 ${JSON.stringify(roster)}
+
+## THE RECORD (the documents the arcs rest on)
+
+${renderRecordView(evidenceBundle)}
 
 ## YOUR TASK
 
@@ -604,18 +611,19 @@ async function generateCoreArcs(state, config) {
  * @param {Array} roster - Character roster for identifying shared characters
  * @param {Object} config - Graph config with SDK client
  * @param {Object} [sessionConfig] - state.sessionConfig, for the reporting-mode block
+ * @param {Object|null} [evidenceBundle] - state.evidenceBundle, for the record view (brief 2.1)
  * @returns {Promise<Object>} Interweaving result on success containing:
  *   - arcInterweaving: Array of { arcId, interweaving } objects
  *   - interweavingPlan: { suggestedOrder, convergencePoint, keyCallbacks }
  *   On failure (graceful degradation - the caller uses defaults): { _failed: true, _error }
  *   where _error is the thrown message, so a declined request stays named in state.
  */
-async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig) {
+async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, evidenceBundle = null) {
   console.log('[enrichWithInterweaving] Starting Call 2: Interweaving enrichment');
   const startTime = Date.now();
 
   const sdkClient = getSdkClient(config, 'enrichWithInterweaving');
-  const prompt = buildInterweavingPrompt(coreArcs, roster);
+  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle);
 
   console.log(`[enrichWithInterweaving] Prompt built: ${prompt.length} characters`);
 
@@ -857,7 +865,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // ═══════════════════════════════════════════════════════════════════════
     const call2Start = Date.now();
     const roster = state.sessionConfig?.roster || [];
-    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig);
+    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig, state.evidenceBundle);
     const call2Duration = ((Date.now() - call2Start) / 1000).toFixed(1);
 
     if (interweavingResult && !interweavingResult._failed) {
@@ -1225,9 +1233,10 @@ function extractEvidenceSummary(evidenceBundle) {
   const exposed = evidenceBundle?.exposed || {};
   const buried = evidenceBundle?.buried || {};
 
-  // Get ALL exposed tokens with IDs
+  // Get ALL exposed tokens with IDs. Ids follow the record view's rule (brief 2.1),
+  // so the valid-id list names each document by the id its <document> tag carries.
   const exposedTokens = (exposed.tokens || []).map(t => ({
-    id: t.id || t.tokenId,
+    id: recordIdOf(t),
     owner: t.owner || t.ownerLogline,
     summary: t.summary,
     characterRefs: t.characterRefs || [],
@@ -1235,8 +1244,9 @@ function extractEvidenceSummary(evidenceBundle) {
   }));
 
   // Get ALL exposed paper evidence with IDs
+  // A rescued item has no `id`: it is named by its Notion id, as in the view.
   const exposedPaper = (exposed.paperEvidence || []).map(p => ({
-    id: p.id || p.name,
+    id: recordIdOf(p) || p.name,
     name: p.name,
     summary: p.summary || p.description?.substring(0, 200),
     characterRefs: p.characterRefs || [],

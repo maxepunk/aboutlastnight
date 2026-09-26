@@ -7,6 +7,8 @@
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
 const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
+const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
+const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 const { getThemeNPCEntries } = require('./theme-config');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -67,7 +69,7 @@ ${npcLines.join('\n')}`;
   }
 
   if (characterData && Object.keys(characterData).length > 0) {
-    result += '\n\nCHARACTER CONTEXT (extracted from evidence — use for factual accuracy):';
+    result += `\n\nCHARACTER CONTEXT (${DERIVED_LABELS.characterContext}):`;
     for (const [name, data] of Object.entries(characterData)) {
       const parts = [];
       if (data.role) parts.push(`Role: ${data.role}`);
@@ -501,10 +503,10 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
    * @param {string[]} selectedArcs - User-selected arc names
    * @param {string} heroImage - Confirmed hero image filename
    * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
-   * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent for outline generation
+   * @param {Array} arcEvidencePackages - Per-arc evidence: the arc's document ids and quotable excerpts
    * @param {Array} shellAccounts - Deterministic shell account data
    * @param {Object|null} sessionFacts - Roster and accusation guardrail
-   * @param {Object} options - { directorGuidance, gateNotes, directorNotes }
+   * @param {Object} options - { directorGuidance, gateNotes, directorNotes, evidenceBundle }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
@@ -544,6 +546,11 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
 
     const observationsSection = this._buildInvestigationObservations(options.directorNotes);
 
+    // Brief 2.1: every usable document in full, once, ahead of the per-arc lists that
+    // name them by id. The planner used to read the text of at most five documents
+    // per arc, and on 092026 never saw 12 of the 37 the article writer later used.
+    const recordSection = renderRecordView(options.evidenceBundle);
+
     let userPrompt;
 
     if (this.themeName === 'detective') {
@@ -576,14 +583,15 @@ USING THREAD METADATA IN THE OUTLINE:
    - These represent genuine investigative gaps
 </arc-metadata>
 
+${recordSection}
+
 <evidence-context>
 
 ${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
 ### ${pkg.arcId} - ${pkg.arcTitle}
 
-**Evidence Items (${pkg.evidenceItems?.length || 0} items):**
-${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type}
-  Content: "${item.fullContent || item.summary || ''}"`).join('\n')}
+**Evidence Items (${pkg.evidenceItems?.length || 0} items; each one's full text is ${DOCUMENT_POINTER}):**
+${(pkg.evidenceItems || []).map(item => `- ${item.id}: ${item.type}`).join('\n')}
 `).join('\n') : 'No arc evidence packages available - using evidence bundle directly'}
 </evidence-context>
 
@@ -754,14 +762,15 @@ Do NOT use paths like "character-photos/vic.png" - these files do not exist.
 - OPENER: raises new question while answering old
 </available-photos>
 
+${recordSection}
+
 <arc-evidence>
 
 ${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
 ### ${pkg.arcId} - ${pkg.arcTitle}
 
-**Evidence Items (${pkg.evidenceItems?.length || 0} items):**
-${(pkg.evidenceItems || []).slice(0, 5).map(item => `- ${item.id}: ${item.type}
-  Full Content: "${item.fullContent || item.summary || ''}"
+**Evidence Items (${pkg.evidenceItems?.length || 0} items; each one's full text is ${DOCUMENT_POINTER}):**
+${(pkg.evidenceItems || []).map(item => `- ${item.id}: ${item.type}
   Quotable: ${(item.quotableExcerpts || []).slice(0, 2).map(q => `"${q}"`).join(' | ') || 'None extracted'}`).join('\n')}
 
 **Arc-Relevant Photos (${pkg.photos?.length || 0} photos):**
@@ -770,7 +779,7 @@ ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'U
 
 **Using Arc Evidence Packages:**
 1. For pull quotes, use **quotableExcerpts** - these are pre-extracted verbatim text
-2. For evidence cards, use **evidenceItems** with their **fullContent**
+2. For evidence cards, use **evidenceItems**: each item's full text is ${DOCUMENT_POINTER}
 3. For photo placement, use **arc-relevant photos** that feature arc characters
 </arc-evidence>
 
@@ -896,12 +905,13 @@ Return JSON with the following structure:
    * - Voice self-check: model assesses own output
    *
    * @param {Object} outline - Approved article outline
-   * @param {Array} arcEvidencePackages - Per-arc evidence with fullContent (Phase 1 Fix)
+   * @param {Array} arcEvidencePackages - Per-arc evidence: document ids, quotable excerpts, photos
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @param {Array} shellAccounts - Shell account data for financial summary
    * @param {Object|null} sessionFacts - Session facts for non-roster character guardrail
    * @param {Object|null} directorNotes - Director observations for article grounding
    * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
+   * @param {Object} options - { directorGuidance, gateNotes, shouldConsider, evidenceBundle }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildArticlePrompt(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
@@ -932,17 +942,21 @@ ${arcEvidencePackages.map(pkg => `
 QUOTABLE EXCERPTS (use these VERBATIM for pull quotes and article text):
 ${(pkg.evidenceItems || []).flatMap(item =>
   (item.quotableExcerpts || []).map(q => `- "${q}" (from ${item.id})`)
-).join('\n') || 'No extracted quotes - use fullContent directly'}
+).join('\n') || 'No extracted quotes - quote the arc\'s documents in <RECORD> directly'}
 
-FULL EVIDENCE (for context and additional quoting):
+EVIDENCE (for context and additional quoting; each one's full text is ${DOCUMENT_POINTER}):
 ${(pkg.evidenceItems || []).map(item =>
-  `${item.id} (${item.type}): "${item.fullContent || item.summary || ''}"`
+  `${item.id} (${item.type})`
 ).join('\n')}
 
 ARC PHOTOS:
 ${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown'}`).join('\n') || 'None'}
 `).join('\n---\n')}
 ` : '';
+
+    // Brief 2.1: the record, once, in the data part. The packages above name each
+    // arc's documents by id instead of repeating their text.
+    const recordSection = renderRecordView(options.evidenceBundle);
 
     // User prompt: Data first, then template, then RULES LAST (recency bias)
     // Branch by theme — detective gets simplified case report prompt, journalist gets full article prompt
@@ -959,6 +973,7 @@ Filename: ${heroImage || 'Use first available photo from outline'}
 - Do NOT emit "heroImage" as a bare filename string — the schema requires an object.
 - Do NOT include this filename in the "photos" array
 
+${recordSection}
 ${arcEvidenceSection}
 </DATA_CONTEXT>
 
@@ -1079,14 +1094,15 @@ TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 - "BACKGROUND" = Document or evidence that predates the party.
   USE: "Records show..." / "Documents reveal..."
 
+${recordSection}
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
 ${this._buildInvestigationObservations(directorNotes)}
 ${(narrativeTensions?.tensions?.length > 0) ? `
 <NARRATIVE_TENSIONS>
-These contradictions between public behavior and Black Market activity are verified
-to respect evidence boundaries. They are strong narrative opportunities — weave them
-into the narrative where appropriate:
+These possible contradictions between public behavior and Black Market activity are
+strong narrative opportunities — weave the ones the record supports into the narrative
+where appropriate. ${DERIVED_LABELS.narrativeTensions}
 ${narrativeTensions.tensions.map(t => `- [${t.type}] ${t.narrativeNote}`).join('\n')}
 </NARRATIVE_TENSIONS>` : ''}
 </DATA_CONTEXT>
@@ -1160,7 +1176,7 @@ CRITICAL: Understand the difference between evidence-card and evidence-reference
 EVIDENCE-CARD (inline, full display — use sparingly, 3-5 per article):
 - Goes in sections[].content[] array
 - type: "evidence-card"
-- REQUIRES: tokenId, headline, content (VERBATIM from arcEvidencePackages.evidenceItems[].fullContent), owner, significance
+- REQUIRES: tokenId, headline, content (VERBATIM from ${DOCUMENT_POINTER}), owner, significance
 - SHOWS: Full evidence as styled card in article body
 - USE FOR: Narrative climax moments, proving claims, CLOSING or OPENING a loop
 - The surrounding prose should set up WHY this evidence matters, then the card delivers the proof.
@@ -1181,7 +1197,7 @@ EVIDENCE-CARD INLINE EXAMPLE:
   "type": "narrative",
   "content": [
     {"type": "paragraph", "text": "I watched them circle each other, [Character A]'s composure finally cracking..."},
-    {"type": "evidence-card", "tokenId": "tok001", "headline": "The Moment of Truth", "content": "[Token ID] - [timestamp] - [Full verbatim text from arcEvidencePackages.evidenceItems[].fullContent - do NOT truncate or summarize]", "owner": "[Character A]", "significance": "critical"},
+    {"type": "evidence-card", "tokenId": "tok001", "headline": "The Moment of Truth", "content": "[Token ID] - [timestamp] - [Full verbatim text of ${DOCUMENT_POINTER} - do NOT truncate or summarize]", "owner": "[Character A]", "significance": "critical"},
     {"type": "paragraph", "text": "After that, nothing was the same between them..."}
   ]
 }

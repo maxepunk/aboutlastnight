@@ -646,10 +646,13 @@ function buildValidEvidenceIds(evidenceBundle) {
     if (t.tokenId) ids.add(t.tokenId);
   }
 
-  // Exposed paper evidence - use id, name, and pageId as valid references
+  // Exposed paper evidence - use id, notionId, name, and pageId as valid references.
+  // notionId (brief 2.1): a rescued item has no `id`, and the record view names it
+  // by its Notion id, so an arc citing the id it was shown must pass this check.
   const exposedPaper = evidenceBundle.exposed?.paperEvidence || [];
   for (const p of exposedPaper) {
     if (p.id) ids.add(p.id);
+    if (p.notionId) ids.add(p.notionId);
     if (p.name) ids.add(p.name);  // Some arcs reference by name
     if (p.pageId) ids.add(p.pageId);  // Notion page ID
   }

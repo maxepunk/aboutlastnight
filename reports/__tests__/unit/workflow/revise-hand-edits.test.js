@@ -121,12 +121,14 @@ describe('generators pass options.gateNotes', () => {
     builder.buildOutlinePrompt = jest.fn(builder.buildOutlinePrompt);
     const sdk = sdkReturning(OUTLINE);
     const directorNotes = { rawProse: 'Blake worked the room all morning.' };
-    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [], directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.', directorNotes }, cfg(sdk, builder));
+    const evidenceBundle = { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } };
+    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [], directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.', directorNotes, evidenceBundle }, cfg(sdk, builder));
     const options = builder.buildOutlinePrompt.mock.calls[0][7];
     // brief 1.5 added directorNotes: the outline writer reads the director's own
     // account of the morning, which until now only the article writer saw;
-    // brief 1.3 added shouldConsider: the arc evaluation's advisories.
-    expect(options).toEqual({ directorGuidance: 'Lead with the money.', gateNotes: NOTES, directorNotes, shouldConsider: [] });
+    // brief 1.3 added shouldConsider: the arc evaluation's advisories;
+    // brief 2.1 added evidenceBundle: the record view renders from it.
+    expect(options).toEqual({ directorGuidance: 'Lead with the money.', gateNotes: NOTES, directorNotes, shouldConsider: [], evidenceBundle });
   });
 
   it('generateContentBundle passes every note as options.gateNotes', async () => {
@@ -135,14 +137,14 @@ describe('generators pass options.gateNotes', () => {
     const sdk = sdkReturning({ headline: { main: 'x' }, sections: [] });
     await generateContentBundle({ outline: OUTLINE, arcEvidencePackages: [], directorGateNotes: NOTES }, cfg(sdk, builder));
     const options = builder.buildArticlePrompt.mock.calls[0][7];
-    expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, shouldConsider: [] });
+    expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, shouldConsider: [], evidenceBundle: null });
   });
 
   it('with no notes the generators pass an empty list (prompt unchanged)', async () => {
     const builder = createMockPromptBuilder();
     builder.buildOutlinePrompt = jest.fn(builder.buildOutlinePrompt);
     await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [] }, cfg(sdkReturning(OUTLINE), builder));
-    expect(builder.buildOutlinePrompt.mock.calls[0][7]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null, shouldConsider: [] });
+    expect(builder.buildOutlinePrompt.mock.calls[0][7]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null, shouldConsider: [], evidenceBundle: null });
   });
 });
 

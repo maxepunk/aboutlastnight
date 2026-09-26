@@ -957,7 +957,8 @@ async function generateOutline(state, config) {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
       directorNotes: state.directorNotes || null,
-      shouldConsider: advisoriesFromPreviousStage(state, 'arcs')
+      shouldConsider: advisoriesFromPreviousStage(state, 'arcs'),
+      evidenceBundle: state.evidenceBundle || null  // brief 2.1: the record view
     }
   );
 
@@ -1279,7 +1280,8 @@ async function generateContentBundle(state, config) {
     {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
-      shouldConsider: advisoriesFromPreviousStage(state, 'outline')
+      shouldConsider: advisoriesFromPreviousStage(state, 'outline'),
+      evidenceBundle: state.evidenceBundle || null  // brief 2.1: the record view
     }
   );
 

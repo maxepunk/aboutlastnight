@@ -533,17 +533,24 @@ describe('PromptBuilder', () => {
       });
 
       it('detective user prompt includes arc evidence when provided', async () => {
+        // Brief 2.1: the package names the document by id; its text is in <RECORD>, once.
         const arcEvidence = [{
           arcId: 'financial-trail',
           arcTitle: 'Financial Trail',
           evidenceItems: [{ id: 'tok1', type: 'memory', fullContent: 'Money moved...', quotableExcerpts: ['follow the money'] }],
           photos: []
         }];
+        const evidenceBundle = {
+          exposed: { tokens: [{ id: 'tok1', fullContent: 'Money moved...', rawData: { tokenId: 'tok1', name: 'TOK1', fullDescription: 'Money moved...', owners: ['Alex Reeves'] } }], paperEvidence: [] },
+          buried: { transactions: [] }
+        };
         const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, arcEvidence, null
+          mockOutline, arcEvidence, null, [], null, null, null, { evidenceBundle }
         );
         expect(userPrompt).toContain('financial-trail');
-        expect(userPrompt).toContain('Money moved');
+        expect(userPrompt).toContain('tok1 (memory)');
+        expect(userPrompt).toContain('<document id="tok1" kind="memory" name="TOK1" owner="Alex Reeves" layer="exposed">');
+        expect(userPrompt.split('Money moved').length - 1).toBe(1);
       });
     });
   });
@@ -1348,5 +1355,162 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     expect(block).not.toContain('"I watched"');
     expect(block).not.toContain('Nova was there');
     expect(block).toContain('third person');
+  });
+});
+
+/**
+ * Brief 2.1 — one record view in the outline and article writers.
+ *
+ * Each prompt carries <RECORD> once, in its data part: every exposed document in
+ * full, labelled, and the buried memories as transactions only. The per-arc
+ * sections name each arc's documents by id and keep the quotable excerpts, but no
+ * longer repeat the text, and the outline's five-per-arc cap is gone (on 092026 the
+ * outline writer never saw 12 of the 37 documents the article writer used).
+ */
+describe('the record view in the outline and article prompts (brief 2.1)', () => {
+  const { PromptBuilder, generateRosterSection } = require('../prompt-builder');
+  const { DOCUMENT_POINTER } = require('../prompt-renderers/record-view');
+  const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
+
+  const textOf = (id) => `${id.toUpperCase()} - 11:0${id.length}PM - the full memory of ${id}, "never" said aloud.`;
+  const token = (id, owner) => ({
+    id, sourceType: 'memory-token', owner: 'Derived Guess', summary: `summary of ${id}`,
+    fullContent: textOf(id), content: textOf(id), temporalContext: 'PARTY',
+    rawData: { tokenId: id, name: `${id.toUpperCase()} - name`, fullDescription: textOf(id), owners: [owner] }
+  });
+  const ARC_TOKENS = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7'];
+  const PAPER_TEXT = 'Board minutes: the vote to sell BizAI passed four to one.';
+  const evidenceBundle = {
+    exposed: {
+      tokens: [...ARC_TOKENS.map(id => token(id, 'Alex Reeves')), token('mar004', 'Marcus Blackwood')],
+      paperEvidence: [{
+        notionId: 'p1', name: 'Board minutes', basicType: 'Document', description: PAPER_TEXT,
+        owners: [], id: 'p1', fullContent: PAPER_TEXT, sourceType: 'paper-evidence'
+      }]
+    },
+    buried: {
+      transactions: [
+        { sourceType: 'memory-token', shellAccount: 'Melanie', amount: 75000, time: '07:50 PM', temporalContext: 'INVESTIGATION' },
+        // A malformed buried item carrying what a buried item must never show.
+        { tokenId: 'zzq001', owner: 'Quill Zebrowski', fullDescription: 'Quill saw the result.', shellAccount: 'Deez', amount: 225000, time: '08:00 PM' }
+      ]
+    }
+  };
+  // mar004 is in no arc (the arc check removed it); the record still holds it.
+  const packages = [
+    {
+      arcId: 'arc-1', arcTitle: 'The Money Trail',
+      evidenceItems: ARC_TOKENS.map(id => ({
+        id, type: 'memory', fullContent: textOf(id), quotableExcerpts: [`quote from ${id}`]
+      })),
+      photos: []
+    },
+    {
+      arcId: 'arc-2', arcTitle: 'The Vote',
+      evidenceItems: [{ id: 'p1', type: 'paper', fullContent: PAPER_TEXT, quotableExcerpts: [] }],
+      photos: []
+    }
+  ];
+  const ALL_TEXTS = [...ARC_TOKENS, 'mar004'].map(textOf).concat(PAPER_TEXT);
+  const count = (haystack, needle) => haystack.split(needle).length - 1;
+
+  function builderFor(theme) {
+    const themeLoader = {
+      loadPhasePrompts: jest.fn().mockResolvedValue({
+        'section-rules': 'SR', 'editorial-design': 'ED', 'narrative-structure': 'NS',
+        'formatting': 'FM', 'evidence-boundaries': 'EB', 'character-voice': 'CV',
+        'writing-principles': 'WP', 'anti-patterns': 'AP'
+      }),
+      validate: jest.fn()
+    };
+    return new PromptBuilder(themeLoader, theme, {});
+  }
+  const options = { evidenceBundle, directorGuidance: 'Lead with the money.' };
+  const shellAccounts = [{ name: 'Melanie', total: 75000, tokenCount: 1 }];
+  const outlineFor = (theme) => builderFor(theme).buildOutlinePrompt(
+    { narrativeArcs: [{ id: 'arc-1', title: 'The Money Trail' }] }, ['arc-1', 'arc-2'], 'hero.png', [],
+    packages, shellAccounts, null, options
+  );
+  const articleFor = (theme) => builderFor(theme).buildArticlePrompt(
+    { lede: {} }, packages, 'hero.png', shellAccounts, null, null, null, options
+  );
+
+  function expectOneRecord(userPrompt) {
+    // The section opens on its own line; the pointer lines mention <RECORD> in prose.
+    expect(userPrompt.match(/^<RECORD>$/gm)).toHaveLength(1);
+    expect(count(userPrompt, '</RECORD>')).toBe(1);
+    // Every usable document in full, each exactly once: the view, never a second copy.
+    for (const text of ALL_TEXTS) expect(count(userPrompt, text)).toBe(1);
+    expect(userPrompt).toContain('<document id="m1" kind="memory" name="M1 - name" owner="Alex Reeves" layer="exposed">');
+    expect(userPrompt).toContain('<document id="mar004" kind="memory" name="MAR004 - name" owner="Marcus Blackwood" layer="exposed">');
+    expect(userPrompt).toContain('<document id="p1" kind="Document" name="Board minutes" layer="exposed">');
+    expect(userPrompt).not.toContain('Derived Guess');
+    // Buried memories: transactions only, once, with no id, owner or text.
+    expect(count(userPrompt, '<buried-transactions>\n')).toBe(1);
+    expect(userPrompt).toContain('- account: Deez | amount: $225,000 | time: 08:00 PM');
+    for (const secret of ['zzq001', 'Quill']) expect(userPrompt).not.toContain(secret);
+    // The director's words keep the last word.
+    expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+  }
+
+  it('the journalist outline holds the view once, before the per-arc lists, with no five-per-arc cap', async () => {
+    const { userPrompt } = await outlineFor('journalist');
+    expectOneRecord(userPrompt);
+    expect(userPrompt.indexOf('<RECORD>')).toBeLessThan(userPrompt.indexOf('<arc-evidence>'));
+    for (const id of ARC_TOKENS) expect(userPrompt).toContain(`- ${id}: memory\n  Quotable: "quote from ${id}"`);
+    expect(userPrompt).toContain(`**Evidence Items (7 items; each one's full text is ${DOCUMENT_POINTER}):**`);
+    expect(userPrompt).not.toContain('Full Content:');
+    expect(userPrompt).toContain(`2. For evidence cards, use **evidenceItems**: each item's full text is ${DOCUMENT_POINTER}`);
+    expect(userPrompt).not.toMatch(/with their \*\*fullContent\*\*/);
+    // FINANCIAL_SUMMARY (account totals) stays beside the view's transactions (R2).
+    expect(userPrompt).toContain('<FINANCIAL_SUMMARY>');
+  });
+
+  it('the detective outline holds the same view, before <evidence-context>, uncapped', async () => {
+    const { userPrompt } = await outlineFor('detective');
+    expectOneRecord(userPrompt);
+    expect(userPrompt.indexOf('<RECORD>')).toBeLessThan(userPrompt.indexOf('<evidence-context>'));
+    for (const id of ARC_TOKENS) expect(userPrompt).toContain(`- ${id}: memory`);
+    expect(userPrompt).not.toMatch(/Content: "/);
+  });
+
+  it('the journalist article holds the view once, inside <DATA_CONTEXT>, and the packages name documents by id', async () => {
+    const { userPrompt } = await articleFor('journalist');
+    expectOneRecord(userPrompt);
+    expect(userPrompt.indexOf('<DATA_CONTEXT>')).toBeLessThan(userPrompt.indexOf('<RECORD>'));
+    expect(userPrompt.indexOf('</RECORD>')).toBeLessThan(userPrompt.indexOf('ARC EVIDENCE PACKAGES'));
+    expect(userPrompt.indexOf('ARC EVIDENCE PACKAGES')).toBeLessThan(userPrompt.indexOf('</DATA_CONTEXT>'));
+    expect(userPrompt).toContain(`EVIDENCE (for context and additional quoting; each one's full text is ${DOCUMENT_POINTER}):\nm1 (memory)\nm2 (memory)`);
+    expect(userPrompt).toContain('- "quote from m1" (from m1)');
+    expect(userPrompt).toContain('No extracted quotes - quote the arc\'s documents in <RECORD> directly');
+    expect(userPrompt).not.toContain('use fullContent directly');
+    // The pointer lines 1163 and 1184 (R3: 1250 and 1261-1269 are brief 2.5's).
+    expect(userPrompt).toContain(`content (VERBATIM from ${DOCUMENT_POINTER})`);
+    expect(userPrompt).toContain(`[Full verbatim text of ${DOCUMENT_POINTER} - do NOT truncate or summarize]`);
+    expect(userPrompt).not.toContain('from arcEvidencePackages.evidenceItems[].fullContent');
+  });
+
+  it('the detective article holds the same view inside <DATA_CONTEXT>', async () => {
+    const { userPrompt } = await articleFor('detective');
+    expectOneRecord(userPrompt);
+    expect(userPrompt.indexOf('<RECORD>')).toBeLessThan(userPrompt.indexOf('</DATA_CONTEXT>'));
+    expect(userPrompt.indexOf('</DATA_CONTEXT>')).toBeLessThan(userPrompt.indexOf('<RULES>'));
+  });
+
+  it('labels the contradiction notes as code-made leads that the record overrules', async () => {
+    const tensions = { tensions: [{ type: 'named-account', narrativeNote: 'Mel used their own name for a burial account.' }] };
+    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
+      {}, [], null, [], null, null, tensions, { evidenceBundle }
+    );
+    const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
+    expect(block).toContain(DERIVED_LABELS.narrativeTensions);
+    expect(block).toContain('- [named-account] Mel used their own name for a burial account.');
+    expect(block).not.toMatch(/verified to respect/);
+  });
+
+  it('labels the character context as a model\'s extraction that the record overrules', () => {
+    const out = generateRosterSection('journalist', { Alex: 'Alex Reeves' }, { 'Alex Reeves': { role: 'CEO' } });
+    expect(out).toContain(`CHARACTER CONTEXT (${DERIVED_LABELS.characterContext}):`);
+    expect(out).not.toContain('use for factual accuracy');
   });
 });

@@ -265,6 +265,17 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
     characterData: {}
   });
 
+  // Brief 2.1: the article writer reads each document once, in full, in <RECORD>, and
+  // the packages name them by id. The probe's record is the documents its arcs cite,
+  // which keeps the prompt near a real session's size.
+  const citedIds = new Set(arcEvidencePackages.flatMap((pkg) => (pkg.evidenceItems || []).map((item) => item.id)));
+  const evidenceBundle = {
+    exposed: {
+      tokens: tokens.filter((t) => citedIds.has(t.tokenId || t.id)),
+      paperEvidence: paperEvidence.filter((p) => citedIds.has(p.notionId || p.id || p.pageId || p.name))
+    }
+  };
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     outline,
     arcEvidencePackages,
@@ -272,7 +283,8 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
     shellAccounts,
     sessionFacts,
     directorNotes,
-    null
+    null,
+    { evidenceBundle }
   );
 
   return { systemPrompt, userPrompt, arcEvidencePackages };
