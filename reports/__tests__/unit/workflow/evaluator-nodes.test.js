@@ -332,6 +332,8 @@ describe('evaluator-nodes', () => {
           filename: `photo${i}.jpg`
         }));
         const state = {
+          // The judge lists the photos the writer could place: the session's photos.
+          sessionPhotos: analyses.map(a => `/photos/${a.filename}`),
           photoAnalyses: { analyses }
         };
         const prompt = buildEvaluationUserPrompt('outline', state);
@@ -341,7 +343,7 @@ describe('evaluator-nodes', () => {
         // The outline judge of 092026 was shown five of nine and scored the
         // other four as photos "with NO analyses".
         expect(prompt).toContain('photo9.jpg');
-        expect(prompt).toContain('PHOTOS (all 10 session photos');
+        expect(prompt).toContain('PHOTOS (all 10 photos the outline could place');
       });
     });
 
@@ -1298,11 +1300,11 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
   // and a null interweaving plan. Each judge now reads the record view and its
   // writer's inputs, built by the writer's own renderers and builders.
   const { renderRecordView } = require('../../../lib/prompt-renderers/record-view');
-  const { renderSessionFactsVerdict, renderArcAccusation } = require('../../../lib/prompt-renderers/director-words-renderer');
+  const { renderSessionFactsVerdict, renderArcAccusation, photoKey } = require('../../../lib/prompt-renderers/director-words-renderer');
   const { renderDirectorEnrichmentBlock } = require('../../../lib/prompt-renderers/director-notes-renderer');
   const { createPromptBuilder } = require('../../../lib/prompt-builder');
   const { _testing: { extractEvidenceSummary } } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
-  const { _testing: { buildSessionFacts } } = require('../../../lib/workflow/nodes/ai-nodes');
+  const { _testing: { buildSessionFacts, buildAvailablePhotos } } = require('../../../lib/workflow/nodes/ai-nodes');
 
   const LONG_PAPER_TEXT = 'Patchwork LLP, engagement letter. The firm will represent Sarah Blackwood in the dissolution ' +
     'of her marriage to Marcus Blackwood, retained at 2:14 AM on February 21, with the retainer paid in full.';
@@ -1558,7 +1560,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     it('sees every photo, each with the director\'s description joined by filename, and never the whiteboard', () => {
       const prompt = buildEvaluationUserPrompt('outline', realisticState());
 
-      expect(prompt).toContain('PHOTOS (all 9 session photos');
+      expect(prompt).toContain('PHOTOS (all 9 photos the outline could place');
       PHOTOS.forEach((filename, i) => {
         expect(prompt).toContain(`${i + 1}. ${i === 0 ? '[hero image] ' : ''}${filename}:`);
         expect(prompt).toContain(`VISUAL CONTENT ${i + 1}"`);
@@ -1570,6 +1572,44 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       // Director-layer evidence, never an article photo (the writer's list drops it too).
       expect(prompt).not.toContain(WHITEBOARD);
       expect(prompt).not.toContain('PHOTO ANALYSES');
+    });
+
+    it('lists exactly the photos the outline writer could place: the hero, then the writer\'s own list', () => {
+      // Two photos the lists would disagree on if the judge re-derived its own:
+      // an analysis for a photo that is no longer a session photo (the writer's
+      // list, built from sessionPhotos, excludes it), and a session photo that has
+      // no analysis (the writer's list keeps it).
+      const state = realisticState();
+      state.photoAnalyses = {
+        analyses: [...state.photoAnalyses.analyses, { filename: 'dropped from the session.jpg', visualContent: 'DROPPED' }]
+      };
+      state.sessionPhotos = [...state.sessionPhotos, '/sessions/092026/photos/late arrival.jpg'];
+      const prompt = buildEvaluationUserPrompt('outline', state);
+
+      const whiteboardFilename = state.whiteboardPhotoPath.split(/[/\\]/).pop();
+      const writerSet = [state.heroImage, ...buildAvailablePhotos(state, state.heroImage, whiteboardFilename).map(p => p.filename)];
+      const photosSection = prompt.slice(prompt.indexOf('PHOTOS (all'), prompt.indexOf('SESSION ROSTER ('));
+      const judgeSet = [...photosSection.matchAll(/^\d+\. (?:\[hero image\] )?(.+?): .*$/gm)].map(m => m[1]);
+
+      expect(judgeSet).toEqual(writerSet);
+      expect(judgeSet).toHaveLength(10);
+      expect(prompt).not.toContain('dropped from the session.jpg');
+      expect(prompt).not.toContain('DROPPED');
+      expect(prompt).toContain('10. late arrival.jpg: Unknown\n   The director\'s description: none given\n   Photo analysis: none recorded for this photo');
+      expect(prompt).toContain('PHOTOS (all 10 photos the outline could place');
+    });
+
+    it('pairs each photo with its analysis by the renderer\'s join key, whatever the case of either filename', () => {
+      const state = realisticState();
+      state.photoAnalyses = {
+        analyses: state.photoAnalyses.analyses.map(a =>
+          (a.filename === PHOTOS[2] ? { ...a, filename: a.filename.toUpperCase() } : a))
+      };
+      const prompt = buildEvaluationUserPrompt('outline', state);
+
+      expect(photoKey(PHOTOS[2].toUpperCase())).toBe(photoKey(PHOTOS[2]));
+      expect(prompt).toContain('VISUAL CONTENT 3"');
+      expect(prompt).not.toContain('Photo analysis: none recorded');
     });
 
     it('reads the real interweaving plan from _arcAnalysisCache', () => {
@@ -1589,7 +1629,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
 
     it('keeps every photo and the plan beside the new inputs, ahead of the record', () => {
       const prompt = buildEvaluationUserPrompt('outline', realisticState());
-      const photos = prompt.indexOf('PHOTOS (all 9 session photos');
+      const photos = prompt.indexOf('PHOTOS (all 9 photos the outline could place');
       const roster = prompt.indexOf('SESSION ROSTER (');
       const notes = prompt.indexOf('<DIRECTOR_NOTES>');
       const record = prompt.indexOf('<RECORD>');

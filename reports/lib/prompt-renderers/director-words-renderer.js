@@ -282,6 +282,7 @@ module.exports = {
   buildParseCorrectionsBlock,
   renderDirectorCorrectionsBlock,
   renderWhiteboardConnections,
+  photoKey,  // the outline judge pairs each photo with its analysis by this key (brief 2.4)
   photoDescriptionFor,
   renderPhotoEntry
 };

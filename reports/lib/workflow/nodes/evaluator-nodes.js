@@ -42,12 +42,13 @@ const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 // the same renderers and builders the writers use, so a judge sees what it judges.
 const { renderRecordView } = require('../../prompt-renderers/record-view');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
-const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry } = require('../../prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
-// The writers' own builders: the arc writer's valid-id list, the article writer's
-// SESSION_FACTS and its PromptBuilder (whose roster method gives the roster section).
+// The writers' own builders: the arc writer's valid-id list, the writers'
+// SESSION_FACTS, the outline writer's photo list, and the PromptBuilder (whose
+// roster method gives the roster section).
 const { _testing: { extractEvidenceSummary } } = require('./arc-specialist-nodes');
-const { _testing: { buildSessionFacts, getPromptBuilder } } = require('./ai-nodes');
+const { _testing: { buildSessionFacts, buildAvailablePhotos, getPromptBuilder } } = require('./ai-nodes');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -670,11 +671,6 @@ STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
 // input-review corrections, and the director's accusation beside its parse
 // (roadmap 2.4, docs/superpowers/plans/2026-09-22-roadmap.md).
 
-/** A photo's join key: the basename, lower-cased (director-words-renderer.js photoKey). */
-function photoBasenameKey(filename) {
-  return String(filename || '').split(/[/\\]/).pop().toLowerCase();
-}
-
 /**
  * The interweaving plan the arc analysis produced.
  *
@@ -698,34 +694,54 @@ function interweavingPlanOf(state) {
 }
 
 /**
- * The outline judge's photos: every session photo in `photoAnalyses`, not the
- * first five. Each is the entry the outline writer gets (`renderPhotoEntry`: the
+ * The outline judge's photos: exactly the set the outline writer could place, not
+ * the first five analyses. That is the hero in its own slot, then the writer's own
+ * list (`ai-nodes.js buildAvailablePhotos`: the session photos minus the hero and
+ * the whiteboard), built by the writer's function with the arguments
+ * generateOutline passes it, so any exclusion the writer's list gains reaches the
+ * judge too.
+ *
+ * Each photo is the entry the outline writer gets (`renderPhotoEntry`: the
  * filename, the names identified in it, and the director's description from the
- * character-IDs stop, joined by filename), then that photo's analysis. The hero
- * is marked; the whiteboard is left out, as it is from the writer's list.
+ * character-IDs stop, joined by filename), then its analysis, paired by the
+ * renderer's one join key (`photoKey`).
  *
  * @param {Object} state
  * @returns {string}
  */
 function renderJudgePhotos(state) {
-  const whiteboardKey = state.whiteboardPhotoPath ? photoBasenameKey(state.whiteboardPhotoPath) : null;
-  const heroKey = state.heroImage ? photoBasenameKey(state.heroImage) : null;
-  const analyses = (state.photoAnalyses?.analyses || [])
-    .filter(analysis => analysis && analysis.filename)
-    .filter(analysis => !whiteboardKey || photoBasenameKey(analysis.filename) !== whiteboardKey);
-  if (analyses.length === 0) return 'PHOTOS:\nNo session photos available';
+  const heroImage = state.heroImage || null;
+  // The whiteboard's filename exactly as generateOutline derives it for buildAvailablePhotos.
+  const whiteboardPath = state.whiteboardPhotoPath;
+  const whiteboardFilename = whiteboardPath
+    ? (typeof whiteboardPath === 'string' ? whiteboardPath.split(/[/\\]/).pop() : whiteboardPath.filename)
+    : null;
+  const analysisByKey = new Map(
+    (state.photoAnalyses?.analyses || [])
+      .filter(analysis => analysis && analysis.filename)
+      .map(analysis => [photoKey(analysis.filename), analysis])
+  );
+  const heroAnalysis = heroImage ? analysisByKey.get(photoKey(heroImage)) : null;
+  const heroNames = Array.isArray(heroAnalysis?.identifiedCharacters) ? heroAnalysis.identifiedCharacters : [];
+  const photos = [
+    ...(heroImage ? [{ filename: heroImage, identifiedCharacters: heroNames, hero: true }] : []),
+    ...buildAvailablePhotos(state, heroImage, whiteboardFilename)
+  ];
+  if (photos.length === 0) return 'PHOTOS:\nNo session photos available';
 
-  const entries = analyses.map((analysis, i) => {
-    const hero = heroKey && photoBasenameKey(analysis.filename) === heroKey ? '[hero image] ' : '';
+  const entries = photos.map((photo, i) => {
     const entry = renderPhotoEntry(
-      { filename: analysis.filename, names: analysis.identifiedCharacters },
+      { filename: photo.filename, names: photo.identifiedCharacters },
       state.photoDescriptions || null,
       '   '
     );
-    const analysisText = JSON.stringify(analysis, null, 2).split('\n').join('\n   ');
-    return `${i + 1}. ${hero}${entry}\n   Photo analysis: ${analysisText}`;
+    const analysis = analysisByKey.get(photoKey(photo.filename));
+    const analysisText = analysis
+      ? JSON.stringify(analysis, null, 2).split('\n').join('\n   ')
+      : 'none recorded for this photo';
+    return `${i + 1}. ${photo.hero ? '[hero image] ' : ''}${entry}\n   Photo analysis: ${analysisText}`;
   });
-  return `PHOTOS (all ${analyses.length} session photos; each gives the names identified in it, the director's description joined by filename, and its photo analysis):
+  return `PHOTOS (all ${photos.length} photos the outline could place: the hero image, then every other session photo except the whiteboard; each gives the names identified in it, the director's description joined by filename, and its photo analysis):
 
 ${entries.join('\n\n')}`;
 }
