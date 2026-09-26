@@ -282,16 +282,20 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
   });
 
   // Brief 2.7: each stop's trace holds the automatic passes of the round that its
-  // feedback slot belongs to, so a point clears a trace exactly where it clears that
-  // side's feedback. A rollback to `article` regenerates only the article, so it keeps
-  // the outline's trace, as it keeps the outline's hand edits.
+  // feedback slot belongs to, and follows that side's hand-edit fields through every
+  // clear: send back (server-build-resume-payload.test.js), approve
+  // (checkpoint-hand-edit-clears.test.js) and, here, the rollback points. A rollback to
+  // `article` regenerates only the article, so it keeps the outline's trace, as it
+  // keeps the outline's hand edits.
   describe('trace channels (phase 2, brief 2.7)', () => {
     const points = Object.keys(ROLLBACK_CLEARS);
 
-    test.each(points)('%s clears each trace exactly where it clears that side\'s feedback slot', (point) => {
+    test.each(points)('%s clears each trace exactly where it clears that side\'s feedback slot and hand-edit fields', (point) => {
       const list = ROLLBACK_CLEARS[point];
       expect(list.includes('_outlineTrace')).toBe(list.includes('_outlineFeedback'));
       expect(list.includes('_articleTrace')).toBe(list.includes('_articleFeedback'));
+      expect(list.includes('_outlineTrace')).toBe(list.includes('_outlineHandEdits'));
+      expect(list.includes('_articleTrace')).toBe(list.includes('_articleHandEdits'));
     });
 
     test('the outline trace is cleared at every point but `article`; the article trace at all eleven', () => {

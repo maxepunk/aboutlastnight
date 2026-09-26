@@ -812,4 +812,33 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
     expect(error).toMatch(/Edited outline failed schema validation/);
     expect(stateUpdates).not.toHaveProperty('_outlineTrace');
   });
+
+  // Parity with the hand-edit fields across every outline/article action the server
+  // takes: the trace is written exactly when that side's hand-edit report is, and
+  // always as null. (Approve clears it in the checkpoint node, as it does the
+  // hand-edit fields: checkpoint-hand-edit-clears.test.js.)
+  const outlineEdits = () => { const e = validJournalistOutline(); e.lede.hook = 'A sharper hook.'; return e; };
+  const articleEdits = () => { const e = bundleFixture(); e.headline.main = 'A different headline'; return e; };
+  const invalidOutline = () => { const e = validJournalistOutline(); e.lede = {}; return e; };
+  const ACTIONS = [
+    ['outline send back', () => ({ outline: false, outlineFeedback: 'Rework it' })],
+    ['outline send back with edits', () => ({ outline: false, outlineFeedback: 'Rework it', outlineEdits: outlineEdits() })],
+    ['outline send back with an invalid edit', () => ({ outline: false, outlineFeedback: 'x', outlineEdits: invalidOutline() })],
+    ['outline approve', () => ({ outline: true })],
+    ['outline approve with edits and a note', () => ({ outline: true, outlineEdits: outlineEdits(), outlineNote: 'Keep it.' })],
+    ['article send back', () => ({ article: false, articleFeedback: 'Rework it' })],
+    ['article send back with edits', () => ({ article: false, articleFeedback: 'Rework it', articleEdits: articleEdits() })],
+    ['article approve', () => ({ article: true })],
+    ['article approve with edits', () => ({ article: true, articleEdits: articleEdits() })]
+  ];
+
+  test.each(ACTIONS)('%s: each trace is written exactly when its side\'s hand-edit report is', (_name, approvals) => {
+    const { stateUpdates } = buildResumePayload(approvals(), {
+      outline: validJournalistOutline(), contentBundle: bundleFixture(), _outlineTrace: [PASS], _articleTrace: [PASS]
+    });
+    ['outline', 'article'].forEach((s) => {
+      expect(`_${s}Trace` in stateUpdates).toBe(`_${s}HandEditReport` in stateUpdates);
+      if (`_${s}Trace` in stateUpdates) expect(stateUpdates[`_${s}Trace`]).toBeNull();
+    });
+  });
 });

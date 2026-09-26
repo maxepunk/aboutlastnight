@@ -625,6 +625,9 @@ async function checkpointOutline(state, config) {
       // is where they end.
       _outlineHandEdits: null,
       _outlineHandEditReport: null,
+      // Brief 2.7 (integrator ruling): the trace describes the current round, and
+      // approval ends it. The llm-log keeps every pass for a later readout.
+      _outlineTrace: null,
       currentPhase: PHASES.OUTLINE_CHECKPOINT
     };
   }
@@ -713,6 +716,8 @@ async function checkpointArticle(state, config) {
       // is where they end.
       _articleHandEdits: null,
       _articleHandEditReport: null,
+      // Brief 2.7 (integrator ruling): approval ends the round the trace describes.
+      _articleTrace: null,
       currentPhase: PHASES.ARTICLE_CHECKPOINT
     };
   }

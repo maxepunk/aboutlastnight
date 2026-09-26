@@ -861,9 +861,11 @@ const ReportStateAnnotation = Annotation.Root({
    * validationResults, which the next evaluation overwrites.
    *
    * Written by incrementOutlineRevision / incrementArticleRevision on an automatic pass
-   * only (a send-back rework is not one), as the FULL array: REPLACE reducer. Reset to
-   * null by the server on every send back (buildResumePayload's reject arms) and by
-   * every rollback point that clears the same side's `_xFeedback`. Surfaced at the stop
+   * only (a send-back rework is not one), as the FULL array: REPLACE reducer. Cleared
+   * exactly where that side's hand-edit fields are: by the server on every send back
+   * (buildResumePayload's reject arms), by checkpointOutline / checkpointArticle on
+   * approve (approval ends the round), and by every rollback point that clears the same
+   * side's `_xFeedback`. Surfaced at the stop
    * as `trace` by getCheckpointData, which adds each pass's diff. At most two entries,
    * the automated budget of one round.
    */
