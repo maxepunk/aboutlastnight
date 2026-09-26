@@ -724,3 +724,65 @@ describe('the arc stop review (phase 1, brief 1.2)', () => {
     expect(arcNotePrefill([{ gate: 'arc-selection', text: 'Older note.' }])).toBe('Older note.');
   });
 });
+
+// ── Slice 2.5: the card list and the counts agree ────────────────────────────
+//
+// The count on the panel and the Approve button comes from the check's message
+// strings; the card list comes from `cardFidelity`. On 092026 one document was
+// reported twice in both. The check now reports each defect once, with every
+// place the document appears, so the two numbers agree. This runs the real check.
+describe('fact-check card list and counts (slice 2.5)', () => {
+  const { factCheckSummary, cardLocationText, approveLabel } = require('../checkpoint-view-logic');
+  const { factCheckContentBundle } = require('../../lib/content-bundle-fact-check');
+
+  const SOURCE = 'You are standing by the bar when Vic leans in and hands you the number twice over.';
+  const FABRICATED = 'Vic told me the job had already been handed out, with the serial numbers filed off.';
+  const inline = (over) => Object.assign({ type: 'evidence-card', tokenId: 'vic001', headline: 'The Offer', content: FABRICATED }, over);
+
+  const factCheck = factCheckContentBundle({
+    contentBundle: {
+      sections: [
+        { id: 'lede', type: 'narrative', content: [inline()] },
+        { id: 'the-story', type: 'narrative', content: [inline(), inline({ tokenId: 'ghost1' })] }
+      ],
+      evidenceCards: [
+        { tokenId: 'vic001', headline: 'The Offer', summary: 'The offer', content: 'Never printed, never checked.' },
+        { tokenId: 'ghost1', headline: 'Nothing', summary: 'About nothing' }
+      ]
+    },
+    arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+    roster: [],
+    sessionPhotos: []
+  });
+
+  it('lists one card per structural card message', () => {
+    const summary = factCheckSummary(factCheck);
+    const cards = summary.groups.find(g => g.key === 'cards');
+    const cardMessages = factCheck.structuralIssues.filter(s => s.indexOf('Evidence card "') === 0);
+
+    expect(cardMessages).toHaveLength(2);
+    expect(cards.items).toHaveLength(cardMessages.length);
+    expect(summary.structural).toBe(2);
+    expect(approveLabel(summary, false).label).toBe('Approve anyway (2 unresolved)');
+  });
+
+  it('names every place each flagged document appears', () => {
+    const cards = factCheckSummary(factCheck).groups.find(g => g.key === 'cards');
+    expect(cards.label).toBe('Evidence cards that failed the check');
+    expect(cards.items).toEqual([
+      { text: 'vic001: not verbatim (inline in lede, inline in the-story)', tokenId: 'vic001' },
+      { text: 'ghost1: unknown source (inline in the-story, sidebar)', tokenId: 'ghost1' }
+    ]);
+  });
+
+  it('cardLocationText counts repeats and tolerates items from before locations existed', () => {
+    expect(cardLocationText([
+      { placement: 'inline', section: 'the-story' },
+      { placement: 'inline', section: 'the-story' },
+      { placement: 'sidebar', section: null }
+    ])).toBe('inline in the-story twice, sidebar');
+    expect(cardLocationText([{ placement: 'inline', section: null }])).toBe('inline');
+    expect(cardLocationText(undefined)).toBe('');
+    expect(cardLocationText([null, 'x'])).toBe('');
+  });
+});

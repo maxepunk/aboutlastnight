@@ -370,11 +370,16 @@ function PullQuoteEditor({ pq, idx, original, onSave, onCancel }) {
   );
 }
 
+/**
+ * A sidebar entry prints its headline and its summary (and significance as the
+ * badge); its `content` never prints, so the editor offers the summary and not
+ * the content. An existing `content` is carried through untouched by the
+ * Object.assign on save.
+ */
 function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
     return {
       headline: card.headline || '',
-      content: card.content || '',
       summary: card.summary || '',
       owner: card.owner || '',
       significance: card.significance || 'supporting',
@@ -391,13 +396,13 @@ function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
         onChange: function (e) { setLocal(Object.assign({}, local, { headline: e.target.value })); },
         'aria-label': 'Card headline'
       }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Content'),
+      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Summary'),
       React.createElement('textarea', {
         className: 'input',
-        value: local.content,
-        onChange: function (e) { setLocal(Object.assign({}, local, { content: e.target.value })); },
-        rows: 4,
-        'aria-label': 'Card content'
+        value: local.summary,
+        onChange: function (e) { setLocal(Object.assign({}, local, { summary: e.target.value })); },
+        rows: 3,
+        'aria-label': 'Sidebar entry summary'
       }),
       React.createElement('label', { className: 'form-group__label mt-sm' }, 'Owner'),
       React.createElement('input', {
@@ -1192,8 +1197,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     },
       editBtn(function () { startSidebarEdit('evidenceCards', idx); }),
       React.createElement('div', { className: 'article-evidence-card__label' }, currentCard.headline || currentCard.tokenId || 'Card ' + (idx + 1)),
-      currentCard.content && React.createElement('div', { className: 'article-evidence-card__content' }, currentCard.content),
-      !currentCard.content && currentCard.summary && React.createElement('div', { className: 'article-evidence-card__content text-xs' }, currentCard.summary),
+      // The summary, which the sidebar prints; never the content, which it does not.
+      currentCard.summary && React.createElement('div', { className: 'article-evidence-card__content' }, currentCard.summary),
       React.createElement('div', { className: 'article-evidence-card__meta' },
         currentCard.owner && React.createElement('span', { className: 'article-evidence-card__owner' }, currentCard.owner),
         React.createElement('div', { className: 'tag-list' },

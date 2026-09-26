@@ -381,6 +381,40 @@
     return { key: key, label: label, severity: severity, items: items };
   }
 
+  // ── Card locations (slice 2.5) ────────────────────────────────────────────
+
+  /**
+   * Where a flagged card sits, from a `cardFidelity` item's `locations`:
+   * `inline in the-story`, `inline in the-story twice, sidebar`.
+   *
+   * The check reports one item per defect however many places the document
+   * appears, so the card list and the structural count agree; this names every
+   * place, so the director can find each copy. An item from before the check
+   * carried locations has none, and gets an empty string.
+   *
+   * @param {Array<{placement: string, section: string|null}>|undefined} locations
+   * @returns {string}
+   */
+  function cardLocationText(locations) {
+    var order = [];
+    var counts = {};
+    asArray(locations).forEach(function (loc) {
+      if (!loc || typeof loc !== 'object') return;
+      var label = loc.placement === 'sidebar'
+        ? 'sidebar'
+        : (asString(loc.section) ? 'inline in ' + loc.section : 'inline');
+      if (!Object.prototype.hasOwnProperty.call(counts, label)) {
+        counts[label] = 0;
+        order.push(label);
+      }
+      counts[label] += 1;
+    });
+    return order.map(function (label) {
+      var n = counts[label];
+      return label + (n === 2 ? ' twice' : n > 2 ? ' ' + n + ' times' : '');
+    }).join(', ');
+  }
+
   /**
    * The article fact-check as a defect list the gate can render.
    *
@@ -400,10 +434,14 @@
       .map(function (c) {
         var tokenId = asString(c.tokenId);
         var reason = asString(c.reason) || 'failed the fidelity check';
-        return { text: (tokenId || '(no tokenId)') + ': ' + reason, tokenId: tokenId };
+        var where = cardLocationText(c.locations);
+        return {
+          text: (tokenId || '(no tokenId)') + ': ' + reason + (where ? ' (' + where + ')' : ''),
+          tokenId: tokenId
+        };
       });
     if (badCards.length > 0) {
-      groups.push(group('cards', 'Evidence cards that are not verbatim', 'structural', badCards));
+      groups.push(group('cards', 'Evidence cards that failed the check', 'structural', badCards));
     }
 
     var missing = stringList(fc.rosterCoverage && fc.rosterCoverage.missing)
@@ -857,6 +895,7 @@
     accusationView: accusationView,
     whiteboardView: whiteboardView,
     factCheckSummary: factCheckSummary,
+    cardLocationText: cardLocationText,
     approveLabel: approveLabel,
     wordTail: wordTail,
     steeringView: steeringView,
