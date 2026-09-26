@@ -367,9 +367,10 @@ function createEvidencePreprocessor(options = {}) {
  *
  * A memory token has no `description` or `text`: its text is `fullDescription`. So
  * Haiku was summarising exposed memories from their NAME alone. An exposed memory
- * now sends its full text. A buried one sends exactly what it sent before (its
- * `description || text`, which a token does not have), so nothing more of a
- * buried memory reaches the model. Paper evidence is unchanged.
+ * now sends its full text. Since the final fix wave a buried memory never reaches a
+ * batch (buriedMemoryItem makes its item in code); the guard below stays, so an item
+ * not tagged exposed still sends no more than `description || text`, which a token
+ * does not have. Paper evidence is unchanged.
  *
  * The summaries this produces feed the pre-curation stop and curation's scoring
  * context only; no writer reads them in place of a document.
@@ -383,6 +384,122 @@ function batchDescriptionOf(item) {
   // does in the batch input's own disposition field.
   if (item.disposition !== 'exposed') return raw.description || raw.text;
   return raw.description || raw.text || raw.fullDescription;
+}
+
+/**
+ * Pair the model's summaries with the batch's inputs (phase 2 final fix wave).
+ *
+ * On 092026 Haiku echoed a rescued document's Notion id with "583f-" missing; the
+ * merge matched by the echoed id, failed, and kept the model's bare item, with no
+ * record text. The same fallback would drop a memory's authoritative disposition.
+ * So a summary is placed by the input's id, and one whose id is in no input is
+ * placed only by an unambiguous rule:
+ *
+ * 1. by id: the summary names an input's id (the first such summary wins);
+ * 2. by position: the model returned one summary per input and every summary
+ *    placed by id sits at its input's index, so it kept the batch's order;
+ * 3. by elimination: exactly one input and one such summary are left.
+ *
+ * A summary is never placed on an input of another source type, and one that names
+ * an input already placed (a duplicate) never stands in for another. Every other
+ * summary is rejected.
+ *
+ * @param {Array} batch - the batch's normalized input items
+ * @param {Array} replies - the model's items
+ * @returns {{replyFor: Array<Object|null>, rejected: Array<Object>}} the summary for
+ *   each input (null when none), in the batch's order, and the summaries not placed
+ */
+function pairRepliesWithBatch(batch, replies) {
+  const list = (Array.isArray(replies) ? replies : []).filter(reply => reply && typeof reply === 'object');
+  const inputIds = new Set(batch.map(input => input.id));
+  const replyFor = batch.map(() => null);
+  const placed = new Set();
+  const place = (i, j) => { replyFor[i] = list[j]; placed.add(j); };
+  const sameSource = (input, reply) => !reply.sourceType || reply.sourceType === input.sourceType;
+  // A summary that names no input of the batch: the only kind a rule may place.
+  const unnamed = (j) => !placed.has(j) && !inputIds.has(list[j].id);
+
+  batch.forEach((input, i) => {
+    const j = list.findIndex((reply, k) => !placed.has(k) && reply.id === input.id);
+    if (j >= 0) place(i, j);
+  });
+
+  const keptOrder = list.length === batch.length &&
+    batch.every((_, i) => replyFor[i] === null || replyFor[i] === list[i]);
+  if (keptOrder) {
+    batch.forEach((input, i) => {
+      if (replyFor[i] === null && unnamed(i) && sameSource(input, list[i])) place(i, i);
+    });
+  }
+
+  const openInputs = batch.map((_, i) => i).filter(i => replyFor[i] === null);
+  const openReplies = list.map((_, j) => j).filter(unnamed);
+  if (openInputs.length === 1 && openReplies.length === 1 && sameSource(batch[openInputs[0]], list[openReplies[0]])) {
+    place(openInputs[0], openReplies[0]);
+  }
+
+  return { replyFor, rejected: list.filter((_, j) => !placed.has(j)) };
+}
+
+/**
+ * The preprocessed item for an input and the summary placed on it. The input's id,
+ * source type, type, disposition and record (rawData, fullContent) always win; the
+ * model's summary, references, tags and timeline reading are kept. Never let the
+ * model override the disposition: it is authoritative from orchestrator-parsed.json.
+ *
+ * @param {Object} input - a normalized batch item
+ * @param {Object} reply - the model's item placed on it
+ * @returns {Object}
+ */
+function mergeReply(input, reply) {
+  const disposition = input.disposition || 'buried';
+  const { rawData: _modelRawData, fullContent: _modelFullContent, ...summary } = reply;
+  return {
+    ...summary,
+    id: input.id,
+    sourceType: input.sourceType,
+    originalType: input.originalType,
+    disposition,
+    ...exposedContentFields(input.rawData, disposition),
+    ownerLogline: summary.ownerLogline || input.ownerLogline,
+    narrativeTimelineContext: summary.narrativeTimelineContext || input.timelineContext,
+    sfFields: summary.sfFields || input.sfFields,
+    // Preserve transaction metadata for buried tokens
+    shellAccount: summary.shellAccount || input.rawData?.shellAccount || null,
+    transactionAmount: summary.transactionAmount || input.rawData?.transactionAmount || null,
+    sessionTransactionTime: summary.sessionTransactionTime || input.rawData?.sessionTransactionTime || null
+  };
+}
+
+/**
+ * The preprocessed item for an input with no summary: after a failed batch, or when
+ * the model returned none for it or its summary could not be placed. Minimal
+ * normalization, no judgment fields; the input's record survives.
+ *
+ * @param {Object} item - a normalized batch item
+ * @returns {Object}
+ */
+function fallbackItemOf(item) {
+  const disposition = item.disposition || 'buried';
+  return {
+    id: item.id,
+    sourceType: item.sourceType,
+    originalType: item.originalType,
+    disposition,
+    summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
+    ...exposedContentFields(item.rawData, disposition),
+    characterRefs: [],
+    ownerLogline: item.ownerLogline,
+    narrativeTimelineRef: null,
+    narrativeTimelineContext: item.timelineContext,
+    // Preserve transaction metadata for buried tokens
+    shellAccount: item.rawData?.shellAccount || null,
+    transactionAmount: item.rawData?.transactionAmount || null,
+    sessionTransactionTime: item.rawData?.sessionTransactionTime || null,
+    tags: [],
+    groupCluster: null,
+    sfFields: item.sfFields
+  };
 }
 
 /**
@@ -430,30 +547,17 @@ async function processBatch(batch, sdkClient, batchIndex) {
       loadProjectSettings: false
     });
 
-    const items = parsed.items || [];
-
-    // Merge with preserved context (disposition, owner logline, timeline context, SF fields, transaction metadata, fullContent)
-    const mergedItems = items.map(item => {
-      const original = batch.find(b => b.id === item.id);
-      if (original) {
-        // CRITICAL: Always use ORIGINAL disposition from fetchMemoryTokens
-        // Never let Claude override - disposition is authoritative from orchestrator-parsed.json
-        const disposition = original.disposition || item.disposition || 'buried';
-        return {
-          ...item,
-          disposition,
-          ...exposedContentFields(original.rawData, disposition),
-          ownerLogline: item.ownerLogline || original.ownerLogline,
-          narrativeTimelineContext: item.narrativeTimelineContext || original.timelineContext,
-          sfFields: item.sfFields || original.sfFields,
-          // Preserve transaction metadata for buried tokens
-          shellAccount: item.shellAccount || original.rawData?.shellAccount || null,
-          transactionAmount: item.transactionAmount || original.rawData?.transactionAmount || null,
-          sessionTransactionTime: item.sessionTransactionTime || original.rawData?.sessionTransactionTime || null
-        };
-      }
-      return item;
-    });
+    // Every output item is keyed to its input item, never to the id the model echoed
+    // (phase 2 final fix wave): one item per input, in the batch's order.
+    const { replyFor, rejected } = pairRepliesWithBatch(batch, parsed.items);
+    if (rejected.length > 0) {
+      console.warn(`[EvidencePreprocessor] Batch ${batchIndex}: rejected ${rejected.length} summary(ies) whose id matched no input unambiguously: ${rejected.map(r => JSON.stringify(r.id)).join(', ')}`);
+    }
+    const missing = replyFor.filter(reply => reply === null).length;
+    if (missing > 0) {
+      console.warn(`[EvidencePreprocessor] Batch ${batchIndex}: ${missing} input(s) got no summary; kept with a fallback summary`);
+    }
+    const mergedItems = batch.map((input, i) => (replyFor[i] ? mergeReply(input, replyFor[i]) : fallbackItemOf(input)));
 
     return {
       success: true,
@@ -464,28 +568,7 @@ async function processBatch(batch, sdkClient, batchIndex) {
     console.error(`[EvidencePreprocessor] Batch ${batchIndex} error: ${error.message}`);
 
     // Create fallback items with minimal normalization (no judgment fields)
-    const fallbackItems = batch.map(item => {
-      const disposition = item.disposition || 'buried';
-      return {
-        id: item.id,
-        sourceType: item.sourceType,
-        originalType: item.originalType,
-        disposition,
-        summary: `${item.sourceType}: ${item.rawData.name || item.rawData.title || 'Unknown'}`.substring(0, 150),
-        ...exposedContentFields(item.rawData, disposition),
-        characterRefs: [],
-        ownerLogline: item.ownerLogline,
-        narrativeTimelineRef: null,
-        narrativeTimelineContext: item.timelineContext,
-        // Preserve transaction metadata for buried tokens
-        shellAccount: item.rawData?.shellAccount || null,
-        transactionAmount: item.rawData?.transactionAmount || null,
-        sessionTransactionTime: item.rawData?.sessionTransactionTime || null,
-        tags: [],
-        groupCluster: null,
-        sfFields: item.sfFields
-      };
-    });
+    const fallbackItems = batch.map(fallbackItemOf);
 
     return {
       success: false,
@@ -659,7 +742,6 @@ module.exports = {
     processWithConcurrency,
     processBatch,
     createEmptyResult,
-    buriedMemoryItem,
     BATCH_RESPONSE_SCHEMA
   }
 };
