@@ -1386,7 +1386,7 @@ STRUCTURE:
      * {"type": "photo", "filename": "...", "caption": "...", "characters": [...]}   ← INLINE photo block; only "filename" is required here
      * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "VERBATIM full text", "owner": "...", "significance": "critical"|"supporting"|"contextual"}
 
-2. "evidenceCards" - Array of sidebar/inline evidence card content:
+2. "evidenceCards" - Array of sidebar entries, each a headline and a summary (the verbatim "content" belongs to the inline "evidence-card" block in sections only):
    - "tokenId": ID matching evidence-reference blocks
    - "headline": Card headline (compelling, not just descriptive)
    - No "content": a sidebar entry prints its headline and summary only, never document text
@@ -1415,7 +1415,7 @@ STRUCTURE:
    - Sidebar cards: sidebar/evidence-card.hbs uses {{summary}}
 
    EVIDENCE PLACEMENT (Commit 8.26):
-   - evidenceCards[] = Both sidebar AND body cards (same array, dual fields)
+   - evidenceCards[] = the sidebar entries: a headline and a summary each, no document text. A body card is an "evidence-card" block in sections, and only it carries "content"
    - evidence-reference in sections = References to inline body cards
    - Body evidence MUST be a SUBSET of evidenceCards (same tokenIds)
    - Sidebar: 5-8 cards as navigation/reference

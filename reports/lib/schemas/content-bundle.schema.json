@@ -227,7 +227,7 @@
     },
     "evidenceCards": {
       "type": "array",
-      "description": "Key evidence items for sidebar and inline display",
+      "description": "The sidebar's evidence entries, each a headline and a summary. Document text belongs on the inline evidence-card block in sections, not here.",
       "items": {
         "type": "object",
         "required": ["tokenId", "headline"],
