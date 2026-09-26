@@ -200,3 +200,27 @@ describe('EvidencePreprocessor: a buried memory is normalized without the model'
     expect(JSON.stringify([rilRest, unkRest])).not.toMatch(/ril001|RIL001|Riley|unk001|UNK001|Untagged/);
   });
 });
+
+/**
+ * Residual item 8 (minor): the items come out in their input order. The wave's first
+ * cut put every buried memory first, so the pre-curation stop's five-item preview
+ * (PreCuration.js) showed only buried rows.
+ */
+describe('EvidencePreprocessor: output order', () => {
+  test('buried memories made in code and summarised items keep the input order', async () => {
+    const sdkClient = jest.fn(async ({ prompt }) => ({
+      items: JSON.parse(prompt.slice(prompt.indexOf('['))).map(i => ({ id: i.id, sourceType: i.sourceType, summary: 's' }))
+    }));
+    const result = await createEvidencePreprocessor({ sdkClient }).process({
+      memoryTokens: [
+        { tokenId: 'exp001', disposition: 'exposed', fullDescription: 'one' },
+        { tokenId: 'bur001', disposition: 'buried', shellAccount: 'Gorlan', transactionAmount: 1, sessionTransactionTime: '8:00 PM' },
+        { tokenId: 'exp002', disposition: 'exposed', fullDescription: 'two' },
+        { tokenId: 'bur002', disposition: 'buried' }
+      ],
+      paperEvidence: [{ notionId: 'p1', name: 'Board minutes', description: 'x' }],
+      sessionId: 'test'
+    });
+    expect(result.items.map(i => i.id)).toEqual(['exp001', 'bur001', 'exp002', 'bur002', 'p1']);
+  });
+});

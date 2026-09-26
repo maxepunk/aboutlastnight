@@ -308,13 +308,13 @@ function createEvidencePreprocessor(options = {}) {
     // All Haiku could say of it is the sale, which the code already holds, so its
     // item is made here, from the transaction alone. An untagged memory counts as
     // buried, as it does everywhere else.
-    const buriedItems = allItems.filter(isBuriedMemory).map(buriedMemoryItem);
+    const buriedCount = allItems.filter(isBuriedMemory).length;
     const modelItems = allItems.filter(item => !isBuriedMemory(item));
 
     // Split into batches
     const batches = createBatches(modelItems, BATCH_SIZE);
 
-    console.log(`[EvidencePreprocessor] Processing ${modelItems.length} items in ${batches.length} batches (${BATCH_SIZE} per batch, ${CONCURRENCY} concurrent); ${buriedItems.length} buried memories normalized without the model`);
+    console.log(`[EvidencePreprocessor] Processing ${modelItems.length} items in ${batches.length} batches (${BATCH_SIZE} per batch, ${CONCURRENCY} concurrent); ${buriedCount} buried memories normalized without the model`);
 
     // Process batches with controlled concurrency
     const results = await processWithConcurrency(batches, CONCURRENCY, async (batch, batchIndex) => {
@@ -322,22 +322,30 @@ function createEvidencePreprocessor(options = {}) {
       return processBatch(batch, sdkClient, batchIndex);
     });
 
-    // Flatten results and handle errors
-    const processedItems = [...buriedItems];
+    // Flatten results and handle errors. Every batch returns one item per input, in
+    // the batch's order (processBatch), so the model's items come back in modelItems'
+    // order.
+    const modelOutputs = [];
     let successCount = 0;
     let errorCount = 0;
 
     for (const result of results) {
       if (result.success) {
-        processedItems.push(...result.items);
+        modelOutputs.push(...result.items);
         successCount++;
       } else {
         errorCount++;
         console.error(`[EvidencePreprocessor] Batch failed: ${result.error}`);
         // Add fallback items with minimal data
-        processedItems.push(...result.fallbackItems || []);
+        modelOutputs.push(...result.fallbackItems || []);
       }
     }
+
+    // The input order, as before the buried memories left the batches: each buried
+    // memory's item in its own place (the pre-curation stop previews the first five).
+    let nextModelOutput = 0;
+    const processedItems = allItems.map(item =>
+      (isBuriedMemory(item) ? buriedMemoryItem(item) : modelOutputs[nextModelOutput++]));
 
     const processingTimeMs = Date.now() - startTime;
 
