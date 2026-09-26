@@ -45,6 +45,7 @@ const {
   buildCurationReport,
   createBatches,
   processWithConcurrency,
+  pairRepliesWithBatch,  // residual item 8: scored items keyed to their inputs
   resolveArc,
   findUncoveredRosterNames,  // F1 invariant guard: roster names with no canonical match
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper
@@ -142,6 +143,63 @@ const PAPER_SCORING_SCHEMA = {
 };
 
 /**
+ * A paper item's name, from the input record: what the scoring prompt shows the model,
+ * what the curation report lists and the rescue cache is keyed on.
+ *
+ * @param {Object} item - a preprocessed paper item
+ * @returns {string}
+ */
+function paperNameOf(item) {
+  return item.name || item.rawData?.name || item.rawData?.title || item.id;
+}
+
+/** The fields a scoring reply may set: the schema's, less the item's own id and name. */
+const PAPER_SCORE_FIELDS = Object.keys(PAPER_SCORING_SCHEMA.properties.items.items.properties)
+  .filter(field => field !== 'id' && field !== 'name');
+
+/**
+ * A scored paper item: the input's id, name, record and text, with only the scoring
+ * fields taken from the model's reply (residual item 8). A reply that echoes another
+ * id, name, record or text changes none of them.
+ *
+ * @param {Object} input - a preprocessed paper item
+ * @param {Object|null} reply - the reply placed on it, or null when none was
+ * @returns {Object}
+ */
+function scoredPaperItem(input, reply) {
+  const base = {
+    id: input.id,
+    name: paperNameOf(input),
+    rawData: input.rawData,
+    // C3: preserve fullContent set by preprocessor for non-buried items.
+    // Without this, evidenceBundle.exposed.paperEvidence ends up with empty
+    // fullContent and arc evidence cards render with no quotable content.
+    fullContent: input.fullContent,
+    narrativeThreads: input.rawData?.narrativeThreads || input.narrativeThreads
+  };
+  if (!reply) {
+    // Not scored: the reply named nothing that could be placed on this item. It is
+    // kept, not included, and offered for rescue under the reason the evidence stop
+    // already shows as "never evaluated — recommend rescue" (EvidenceBundle.js).
+    // Before, it vanished from the bundle and from the rescue list.
+    return {
+      ...base,
+      score: null,
+      include: false,
+      notScored: true,
+      rescuable: true,
+      excludeReason: 'scoringError',
+      excludeNote: 'Not scored: the scoring reply named no item that could be matched to this one.'
+    };
+  }
+  const scoring = {};
+  for (const field of PAPER_SCORE_FIELDS) {
+    if (reply[field] !== undefined) scoring[field] = reply[field];
+  }
+  return { ...base, ...scoring };
+}
+
+/**
  * Score paper evidence items using batched Sonnet calls
  *
  * Part of the hybrid curation approach (Commit 8.11):
@@ -196,7 +254,7 @@ ITEMS TO SCORE (Batch ${batchIdx + 1}/${batches.length})
 
 ${JSON.stringify(batch.map(p => ({
   id: p.id,
-  name: p.name || p.rawData?.name,
+  name: paperNameOf(p),
   description: (p.rawData?.description || p.summary || '').substring(0, 400),
   owners: p.rawData?.owners || [],
   narrativeThreads: p.rawData?.narrativeThreads || []
@@ -224,28 +282,25 @@ Score each item and return the results.`;
     // pre-node snapshot (avoids the in-node × graph attempt multiplication). One
     // attempt; on failure it propagates out of the Promise.all and the node throws.
     const response = await attemptBatch();
-    return response.items || [];
-  });
 
-  // Flatten results and merge with original data
-  const flatResults = results.flat();
-
-  // Map back to original items to preserve rawData
-  const mergedResults = flatResults.map(scored => {
-    const original = paperItems.find(p => p.id === scored.id);
-    if (!original) {
-      console.warn(`[scorePaperEvidence] Scored item ID "${scored.id}" not found in original items - rawData may be missing`);
+    // Residual item 8: each reply is placed on this batch's inputs by the
+    // preprocessor's rule (by id, else by position, else by elimination), never merged
+    // by the id the model echoed. On 092026 Sonnet answered the rescued email's id
+    // with "583f-" missing; the old find-by-echoed-id merge kept the model's id and
+    // dropped rawData and fullContent, so every <RECORD> printed the email with no text.
+    const { replyFor, rejected } = pairRepliesWithBatch(batch, response.items);
+    if (rejected.length > 0) {
+      console.warn(`[scorePaperEvidence] Batch ${batchIdx + 1}: rejected ${rejected.length} score(s) whose id matched no item unambiguously: ${rejected.map(r => JSON.stringify(r.id)).join(', ')}`);
     }
-    return {
-      ...scored,
-      rawData: original?.rawData,
-      // C3: preserve fullContent set by preprocessor for non-buried items.
-      // Without this, evidenceBundle.exposed.paperEvidence ends up with empty
-      // fullContent and arc evidence cards render with no quotable content.
-      fullContent: original?.fullContent,
-      narrativeThreads: original?.rawData?.narrativeThreads || original?.narrativeThreads
-    };
+    const unscored = replyFor.filter(reply => reply === null).length;
+    if (unscored > 0) {
+      console.warn(`[scorePaperEvidence] Batch ${batchIdx + 1}: ${unscored} item(s) got no score; kept as not scored and rescuable`);
+    }
+    return batch.map((input, i) => scoredPaperItem(input, replyFor[i]));
   });
+
+  // One scored item per input, in the input order.
+  const mergedResults = results.flat();
 
   const includedCount = mergedResults.filter(r => r.include).length;
   const excludedCount = mergedResults.filter(r => !r.include).length;
@@ -451,7 +506,10 @@ async function curateEvidenceBundle(state, config) {
   }
 
   // Build cache of excluded items for rescue mechanism
-  // Maps item name → full preprocessed item data so rescue doesn't require lookup
+  // Maps item name → full preprocessed item data so rescue doesn't require lookup.
+  // Keyed on the INPUT item's own name, the one the curation report lists and the
+  // rescue sends back (residual item 8): scoredPaperItem never takes a name the
+  // model echoed.
   const _excludedItemsCache = {};
   for (const item of scoredPaper.filter(p => !p.include)) {
     _excludedItemsCache[item.name] = item.rawData || item;

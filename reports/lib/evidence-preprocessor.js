@@ -387,27 +387,32 @@ function batchDescriptionOf(item) {
 }
 
 /**
- * Pair the model's summaries with the batch's inputs (phase 2 final fix wave).
+ * Pair a model's per-item replies with the batch's inputs (phase 2 final fix wave).
  *
- * On 092026 Haiku echoed a rescued document's Notion id with "583f-" missing; the
- * merge matched by the echoed id, failed, and kept the model's bare item, with no
- * record text. The same fallback would drop a memory's authoritative disposition.
- * So a summary is placed by the input's id, and one whose id is in no input is
- * placed only by an unambiguous rule:
+ * The one pairing rule for a batched model call whose reply echoes each item's id:
+ * the preprocessor's Haiku summaries (processBatch) and curation's Sonnet paper
+ * scoring (ai-nodes.js scorePaperEvidence) both call it.
  *
- * 1. by id: the summary names an input's id (the first such summary wins);
- * 2. by position: the model returned one summary per input and every summary
- *    placed by id sits at its input's index, so it kept the batch's order;
- * 3. by elimination: exactly one input and one such summary are left.
+ * 092026's rescued email lost its text at curation: Sonnet's paper scoring echoed its
+ * Notion id with "583f-" missing, the merge matched by the echoed id, failed, and kept
+ * the model's bare item with no record. The preprocessor's merge had the same weakness
+ * (a fallback that would also drop a memory's authoritative disposition), so it uses
+ * this rule too, as hardening. A reply is placed by the input's id, and one whose id is
+ * in no input is placed only by an unambiguous rule:
  *
- * A summary is never placed on an input of another source type, and one that names
- * an input already placed (a duplicate) never stands in for another. Every other
- * summary is rejected.
+ * 1. by id: the reply names an input's id (the first such reply wins);
+ * 2. by position: the model returned one reply per input and every reply placed by
+ *    id sits at its input's index, so it kept the batch's order;
+ * 3. by elimination: exactly one input and one such reply are left.
  *
- * @param {Array} batch - the batch's normalized input items
- * @param {Array} replies - the model's items
- * @returns {{replyFor: Array<Object|null>, rejected: Array<Object>}} the summary for
- *   each input (null when none), in the batch's order, and the summaries not placed
+ * A reply is never placed on an input of another source type (a reply with no
+ * sourceType, like a paper score, matches any), and one that names an input already
+ * placed (a duplicate) never stands in for another. Every other reply is rejected.
+ *
+ * @param {Array} batch - the batch's input items ({id, sourceType})
+ * @param {Array} replies - the model's items ({id, sourceType?, ...})
+ * @returns {{replyFor: Array<Object|null>, rejected: Array<Object>}} the reply for
+ *   each input (null when none), in the batch's order, and the replies not placed
  */
 function pairRepliesWithBatch(batch, replies) {
   const list = (Array.isArray(replies) ? replies : []).filter(reply => reply && typeof reply === 'object');
@@ -735,6 +740,8 @@ module.exports = {
   // Export batching utilities for reuse (used by ai-nodes.js for paper scoring)
   createBatches,
   processWithConcurrency,
+  // The one rule for pairing a batch's replies with its inputs (paper scoring too)
+  pairRepliesWithBatch,
 
   // The empty result preprocess-nodes returns for a session with no evidence
   createEmptyResult,

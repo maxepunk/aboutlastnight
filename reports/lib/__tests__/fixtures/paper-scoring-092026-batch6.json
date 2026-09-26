@@ -1,0 +1,53 @@
+{
+  "_source": "data/092026/llm-log (gate copy) 20260925-164939-curateEvidence-f7659c9a.json: \"Paper evidence batch 6/6\" (sonnet), 2026-09-25. input = the ITEMS TO SCORE the prompt carried (descriptions cut at 400 characters by the prompt); reply = the model's structured reply, verbatim.",
+  "input": [
+    {
+      "id": "18c2f33d-583f-805d-8b21-dd8980ddf377",
+      "name": "Sarah's Card (unlocked)",
+      "description": "Front cover:\nA rose with \"I fucked up. I'm sorry.\" above\nInside:\nS,\nI'm sorry. I love you. It's not going to happen again. She means nothing to me. Please don't leave me.\nM.\nBack:\n\"Look under panda.\"",
+      "owners": [
+        "Sarah Blackwood"
+      ],
+      "narrativeThreads": [
+        "Marriage Troubles"
+      ]
+    },
+    {
+      "id": "18c2f33d-583f-809b-a3d8-cb7843f0b423",
+      "name": "Remi <> Vic Funding Email (unlocked)",
+      "description": "From: rwhitman@aibiocomp.com\nTo: vic@kingsley.fund\nDate: Jan 29, 2027\nSubject: Funding for AIBioComp\n\nDear Vic,\n\nI hope your week is going well. Here at AIBioComp, we've successfully onboarded our new VP of growth and marketing. We're already seeing great results of Sandy's work, with twenty new clients onboarded, bringing our MRR to $350,000, and have high hopes of what he can do in the next coup",
+      "owners": [
+        "Remi Whitman"
+      ],
+      "narrativeThreads": [
+        "Funding & Espionage"
+      ]
+    }
+  ],
+  "reply": {
+    "items": [
+      {
+        "id": "18c2f33d-583f-805d-8b21-dd8980ddf377",
+        "name": "Sarah's Card (unlocked)",
+        "score": 2,
+        "include": true,
+        "criteriaMatched": [
+          "rosterConnection",
+          "substantiveContent"
+        ],
+        "relevanceNote": "Owned by roster player Sarah, contains quotable apology note text hinting at an affair ('M.') tied to the Marriage Troubles thread."
+      },
+      {
+        "id": "18c2f33d-809b-a3d8-cb7843f0b423",
+        "name": "Remi <> Vic Funding Email (unlocked)",
+        "score": 2,
+        "include": true,
+        "criteriaMatched": [
+          "rosterConnection",
+          "substantiveContent"
+        ],
+        "relevanceNote": "Email exchange between roster players Remi and Vic with actual quoted business/funding text tied to the Funding & Espionage thread."
+      }
+    ]
+  }
+}

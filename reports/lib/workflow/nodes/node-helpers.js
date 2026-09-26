@@ -8,7 +8,7 @@
  */
 
 const { sdkQuery, createProgressLogger } = require('../../llm');
-const { createBatches, processWithConcurrency } = require('../../evidence-preprocessor');
+const { createBatches, processWithConcurrency, pairRepliesWithBatch } = require('../../evidence-preprocessor');
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
 const { isEmpty: isEmptyDiff, formatHandEditsBlock } = require('../../hand-edit-diff');
 const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
@@ -1292,6 +1292,7 @@ module.exports = {
   // Re-export batching utilities from preprocessor for convenience
   createBatches,
   processWithConcurrency,
+  pairRepliesWithBatch,  // the one rule for pairing a batch's replies with its inputs
 
   // F1 (X-1): canonical-key normalization for director-typed pronouns
   normalizeRosterPronounsToCanonical
