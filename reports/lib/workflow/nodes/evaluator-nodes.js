@@ -42,7 +42,8 @@ const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 // the same renderers and builders the writers use, so a judge sees what it judges.
 const { renderRecordView } = require('../../prompt-renderers/record-view');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
-const { renderSessionFactsVerdict, renderPhotoEntry } = require('../../prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry } = require('../../prompt-renderers/director-words-renderer');
+const { directorAccusationText } = require('../../accusation-verdict');
 // The writers' own builders: the arc writer's valid-id list, the article writer's
 // SESSION_FACTS and its PromptBuilder (whose roster method gives the roster section).
 const { _testing: { extractEvidenceSummary } } = require('./arc-specialist-nodes');
@@ -665,6 +666,9 @@ STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
 // member is named with no roster in its prompt, and the outline judge saw 5 of 9
 // photos and a null interweaving plan. Each judge now reads the record view and
 // the inputs its writer read, through the writers' own renderers and builders.
+// All three get the roster with pronouns, the director's notes with the
+// input-review corrections, and the director's accusation beside its parse
+// (roadmap 2.4, docs/superpowers/plans/2026-09-22-roadmap.md).
 
 /** A photo's join key: the basename, lower-cased (director-words-renderer.js photoKey). */
 function photoBasenameKey(filename) {
@@ -727,8 +731,8 @@ ${entries.join('\n\n')}`;
 }
 
 /**
- * The session roster for the article judge: the players present, by the full
- * names the article writer's SESSION_FACTS lists (ai-nodes.js buildSessionFacts).
+ * The session roster for the outline and article judges: the players present, by
+ * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts).
  *
  * @param {Object|null} sessionFacts
  * @returns {string}
@@ -740,9 +744,23 @@ ${sessionFacts.roster.join('\n')}`;
 }
 
 /**
- * The director's notes and input-review corrections for the article judge, through
- * the renderer every writer uses (director-notes-renderer.js). The corrections follow
- * the notes, which are never rewritten.
+ * The roster with pronouns, for every judge: the section the article writer's
+ * system prompt carries, from the PromptBuilder roster method
+ * (PromptBuilder#_rosterSection), reached through the writers' builder factory.
+ * The detective theme's section has no pronouns, as the detective writer's has none.
+ *
+ * @param {Object} state
+ * @returns {string}
+ */
+function renderJudgeRosterSection(state) {
+  return getPromptBuilder(null, state)._rosterSection();
+}
+
+/**
+ * The director's notes and input-review corrections, for every judge, through
+ * the renderer every writer uses (director-notes-renderer.js, which appends
+ * renderDirectorCorrectionsBlock). The corrections follow the notes, which are
+ * never rewritten.
  *
  * @param {Object} state
  * @returns {string}
@@ -758,6 +776,26 @@ ${renderDirectorEnrichmentBlock({
   postInvestigationDevelopments: listOf(notes.postInvestigationDevelopments),
   corrections: state.inputReviewCorrections || []
 })}`;
+}
+
+/**
+ * The director's words and the roster for the outline and article judges, which
+ * read them as their writers do: the session roster, the roster with pronouns,
+ * the verdict as SESSION_FACTS prints it (renderSessionFactsVerdict: the parsed
+ * accusation, then the director's account word for word, then the whiteboard),
+ * and the director's notes with the corrections after them.
+ *
+ * @param {Object} state
+ * @returns {string}
+ */
+function renderJudgeSessionContext(state) {
+  const sessionFacts = buildSessionFacts(state);
+  const verdictSection = sessionFacts ? `\n\n${renderSessionFactsVerdict(sessionFacts)}` : '';
+  return `${renderJudgeSessionRoster(sessionFacts)}
+
+${renderJudgeRosterSection(state)}${verdictSection}
+
+${renderJudgeDirectorNotes(state)}`;
 }
 
 /**
@@ -817,12 +855,13 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
           time: e.time || e.sessionTransactionTime
         }));
 
-      // Extract key playerFocus elements for evaluation
+      // Extract key playerFocus elements for evaluation. The accusation and the
+      // director's observations are no longer in this JSON (brief 2.4, roadmap 2.4):
+      // they are rendered below as the arc writer renders them, beside the director's
+      // own words, so each appears once.
       const playerFocusForEval = {
         primaryInvestigation: state.playerFocus?.primaryInvestigation,
-        primarySuspects: state.playerFocus?.primarySuspects || [],
-        accusation: state.playerFocus?.accusation,
-        directorObservations: state.playerFocus?.directorObservations
+        primarySuspects: state.playerFocus?.primarySuspects || []
       };
 
       return `Evaluate these narrative arcs:
@@ -838,6 +877,13 @@ CRITICAL ROSTER vs EVIDENCE DISTINCTION:
 - Evidence IDs may reference characters NOT on the roster (from the broader game universe)
 - Do NOT infer roster members from evidence ID prefixes (e.g., "ezr011" does NOT mean "Ezra" is on roster)
 - ONLY check coverage for the ${roster.length} names listed in SESSION ROSTER above
+
+${renderJudgeRosterSection(state)}
+
+THE ACCUSATION (the parsed verdict, then the director's account word for word):
+${renderArcAccusation(state.playerFocus?.accusation, directorAccusationText(state), "Players' Reasoning")}
+
+${renderJudgeDirectorNotes(state)}
 
 PLAYER FOCUS (arcs should reflect what players investigated):
 ${JSON.stringify(playerFocusForEval, null, 2)}
@@ -907,6 +953,8 @@ ${JSON.stringify(selectedArcsWithInterweaving, null, 2)}
 
 ${interweavingSection}${renderJudgePhotos(state)}
 
+${renderJudgeSessionContext(state)}
+
 ${renderRecordView(state.evidenceBundle)}
 
 ═══════════════════════════════════════════════════════════════════════════
@@ -943,24 +991,15 @@ Is this outline ready for human review?`;
         : 'The reporter watched the investigation from inside the room and spoke to people there, but was NOT at the party; the party reaches them only through exposed memories.';
 
       // Brief 2.4: the roster, the verdict, the notes and the record, each built by the
-      // function the article writer's prompt uses, and the fact check's result for
-      // this bundle. The roster section with pronouns is the writer's own
-      // (PromptBuilder#_rosterSection, reached through the writer's builder factory).
-      const sessionFacts = buildSessionFacts(state);
-      const rosterSection = getPromptBuilder(null, state)._rosterSection();
-      const verdictSection = sessionFacts ? `\n\n${renderSessionFactsVerdict(sessionFacts)}` : '';
-
+      // function the article writer's prompt uses (renderJudgeSessionContext, shared
+      // with the outline judge), and the fact check's result for this bundle.
       return `Evaluate this article content:
 
 REPORTING MODE FOR THIS SESSION: ${reportingMode}
 ${modeRule}
 In BOTH modes the reporter never votes and owns no exposed memory. "I voted", "my vote" and "one of them was mine" are STRUCTURAL failures either way.
 
-${renderJudgeSessionRoster(sessionFacts)}
-
-${rosterSection}${verdictSection}
-
-${renderJudgeDirectorNotes(state)}
+${renderJudgeSessionContext(state)}
 
 ${renderRecordView(state.evidenceBundle)}
 

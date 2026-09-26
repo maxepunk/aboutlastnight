@@ -1298,7 +1298,8 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
   // and a null interweaving plan. Each judge now reads the record view and its
   // writer's inputs, built by the writer's own renderers and builders.
   const { renderRecordView } = require('../../../lib/prompt-renderers/record-view');
-  const { renderSessionFactsVerdict } = require('../../../lib/prompt-renderers/director-words-renderer');
+  const { renderSessionFactsVerdict, renderArcAccusation } = require('../../../lib/prompt-renderers/director-words-renderer');
+  const { renderDirectorEnrichmentBlock } = require('../../../lib/prompt-renderers/director-notes-renderer');
   const { createPromptBuilder } = require('../../../lib/prompt-builder');
   const { _testing: { extractEvidenceSummary } } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
   const { _testing: { buildSessionFacts } } = require('../../../lib/workflow/nodes/ai-nodes');
@@ -1390,6 +1391,23 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
         postInvestigationDevelopments: []
       },
       inputReviewCorrections: [CORRECTION],
+      // The parse's player focus: the accusation the arc writer renders, and the
+      // director's observations (the same prose as directorNotes.rawProse).
+      playerFocus: {
+        primaryInvestigation: 'Who supplied the compound?',
+        primarySuspects: ['Alex'],
+        accusation: {
+          accused: [],
+          charge: 'accidental overdose',
+          reasoning: 'Ashe proposed an accidental overdose; six votes ended the deadlock.',
+          verdictKind: 'overdose'
+        },
+        directorObservations: {
+          rawProse: 'Early on, Sam and Sarah were in conversation. Overheard: "Sarah, you know almost everything about me. Almost."',
+          quotes: [{ speaker: 'Sam', text: 'Almost.', confidence: 'high' }],
+          postInvestigationDevelopments: []
+        }
+      },
       outline: { lede: { hook: 'Marcus Blackwood is dead.' } },
       contentBundle: {
         headline: { main: 'Nine people, one verdict' },
@@ -1403,6 +1421,72 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     const start = prompt.indexOf('[', prompt.indexOf('ALL VALID EVIDENCE IDS'));
     return JSON.parse(prompt.slice(start, prompt.indexOf('<RECORD>')).trim());
   }
+
+  /** The roster section the article writer's system prompt carries, for this state. */
+  function writerRosterSection(state) {
+    return createPromptBuilder({
+      theme: state.theme,
+      sessionConfig: state.sessionConfig,
+      canonicalCharacters: state.canonicalCharacters,
+      characterData: state.characterData.characters
+    })._rosterSection();
+  }
+
+  /** The director's notes with the corrections after them, as every writer renders them. */
+  function writerNotesBlock(state) {
+    const notes = state.directorNotes;
+    return renderDirectorEnrichmentBlock({
+      rawProse: notes.rawProse,
+      quotes: notes.quotes,
+      transactionReferences: notes.transactionReferences,
+      postInvestigationDevelopments: notes.postInvestigationDevelopments,
+      corrections: state.inputReviewCorrections
+    });
+  }
+
+  const count = (text, part) => text.split(part).length - 1;
+
+  describe('every judge gets the roster with pronouns and the director\'s words (roadmap 2.4)', () => {
+    const PROMPTS = [
+      ['arc', (state) => buildEvaluationUserPrompt('arcs', state)],
+      ['outline', (state) => buildEvaluationUserPrompt('outline', state)],
+      ['article', (state) => buildEvaluationUserPrompt('article', state, { factCheck: null })]
+    ];
+
+    it.each(PROMPTS)('the %s judge reads the writer\'s roster section with pronouns, once', (_, build) => {
+      const state = realisticState();
+      const prompt = build(state);
+      expect(count(prompt, writerRosterSection(state))).toBe(1);
+      expect(prompt).toContain('- Alex → Alex Reeves (she/her)');
+      expect(prompt).toContain('- Sam → Sam Thorne (he/him)');
+    });
+
+    it.each(PROMPTS)('the %s judge reads the director\'s notes with the corrections after them, rendered as the writers render them, once', (_, build) => {
+      const state = realisticState();
+      const prompt = build(state);
+      expect(count(prompt, writerNotesBlock(state))).toBe(1);
+      // The notes' prose is not repeated anywhere else in the prompt.
+      expect(count(prompt, state.directorNotes.rawProse)).toBe(1);
+      expect(prompt.indexOf('<DIRECTOR_CORRECTIONS>')).toBeGreaterThan(prompt.indexOf('</DIRECTOR_NOTES>'));
+      expect(prompt).toContain(CORRECTION);
+    });
+
+    it.each(PROMPTS)('the %s judge reads the director\'s accusation word for word, beside its parse, once', (_, build) => {
+      const prompt = build(realisticState());
+      expect(count(prompt, '<DIRECTOR_ACCUSATION>')).toBe(1);
+      expect(count(prompt, ACCUSATION_RAW)).toBe(1);
+      // The parse above it says the room named no culprit, never the victim.
+      expect(prompt).toContain('none (the room\'s verdict names no culprit: an overdose)');
+    });
+
+    it.each(PROMPTS)('the %s judge on a detective session reads the detective roster section, without pronouns', (_, build) => {
+      const state = realisticState({ theme: 'detective' });
+      const prompt = build(state);
+      expect(prompt).toContain(writerRosterSection(state));
+      expect(prompt).toContain('- Alex → Alex Reeves\n');
+      expect(prompt).not.toContain('- Alex → Alex Reeves (she/her)');
+    });
+  });
 
   describe('arc judge', () => {
     it('reads the record view in place of the name summaries and 100-character excerpts', () => {
@@ -1435,6 +1519,32 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       const documentIds = [...prompt.matchAll(/<document id="([^"]+)"/g)].map(m => m[1]);
       expect([...documentIds].sort()).toEqual([...ids].sort());
     });
+
+    it('reads the accusation as the arc writer renders it, with the director\'s account after the parse', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('arcs', state);
+      const writerAccusation = renderArcAccusation(state.playerFocus.accusation, ACCUSATION_RAW, "Players' Reasoning");
+
+      expect(prompt).toContain(`THE ACCUSATION (the parsed verdict, then the director's account word for word):\n${writerAccusation}`);
+      expect(prompt).toContain('**Charge:** accidental overdose');
+      expect(prompt).toContain('**Players\' Reasoning:** Ashe proposed an accidental overdose; six votes ended the deadlock.');
+      expect(prompt.indexOf('<DIRECTOR_ACCUSATION>')).toBeGreaterThan(prompt.indexOf('**Accused:**'));
+    });
+
+    it('keeps the investigation focus in PLAYER FOCUS, without the accusation and observations it now renders', () => {
+      const prompt = buildEvaluationUserPrompt('arcs', realisticState());
+      const start = prompt.indexOf('{', prompt.indexOf('PLAYER FOCUS ('));
+      const playerFocus = JSON.parse(prompt.slice(start, prompt.indexOf('ALL VALID EVIDENCE IDS')).trim());
+
+      expect(playerFocus).toEqual({ primaryInvestigation: 'Who supplied the compound?', primarySuspects: ['Alex'] });
+    });
+
+    it('puts the roster section after the coverage roster, which still names only the session\'s players', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('arcs', state);
+      expect(prompt).toContain('SESSION ROSTER (2 players who were PRESENT this session):\n[\n  "Alex",\n  "Sam"\n]');
+      expect(prompt.indexOf(writerRosterSection(state))).toBeGreaterThan(prompt.indexOf('ONLY check coverage for the 2 names'));
+    });
   });
 
   describe('outline judge', () => {
@@ -1466,6 +1576,29 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       const prompt = buildEvaluationUserPrompt('outline', realisticState());
       expect(prompt).toContain(`INTERWEAVING PLAN (from arc analysis):\n${JSON.stringify(PLAN, null, 2)}`);
       expect(prompt).not.toContain('DEAD FIELD');
+    });
+
+    it('reads the session roster and the verdict as its writer\'s SESSION_FACTS prints them', () => {
+      const state = realisticState();
+      const prompt = buildEvaluationUserPrompt('outline', state);
+
+      expect(prompt).toContain('SESSION ROSTER (2 players who were present at this session\'s investigation):\nAlex Reeves\nSam Thorne');
+      expect(prompt).toContain(renderSessionFactsVerdict(buildSessionFacts(state)));
+      expect(prompt).toContain('CHARGE: accidental overdose');
+    });
+
+    it('keeps every photo and the plan beside the new inputs, ahead of the record', () => {
+      const prompt = buildEvaluationUserPrompt('outline', realisticState());
+      const photos = prompt.indexOf('PHOTOS (all 9 session photos');
+      const roster = prompt.indexOf('SESSION ROSTER (');
+      const notes = prompt.indexOf('<DIRECTOR_NOTES>');
+      const record = prompt.indexOf('<RECORD>');
+
+      expect(prompt.indexOf('INTERWEAVING PLAN')).toBeLessThan(photos);
+      expect(photos).toBeLessThan(roster);
+      expect(roster).toBeLessThan(notes);
+      expect(notes).toBeLessThan(record);
+      expect(record).toBeLessThan(prompt.indexOf('MOMENTUM EVALUATION'));
     });
 
     it('leaves the plan section out when the arc analysis has none, instead of printing null', () => {
