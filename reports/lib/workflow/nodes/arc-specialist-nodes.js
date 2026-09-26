@@ -1000,24 +1000,24 @@ async function reviseArcs(state, config) {
     };
   }
 
-  // Build revision context using centralized helper (DRY)
-  const { contextSection, previousOutputSection } = buildRevisionContextDRY({
-    phase: 'arcs',
-    revisionCount,
-    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
-    round: (state.humanArcRevisionCount || 0) + 1,
-    validationResults: state.validationResults,
-    previousOutput: previousArcs,
-    humanFeedback: state._arcFeedback || null
-  });
-
   // Get SDK client
   const sdkClient = getSdkClient(config, 'reviseArcs');
 
-  // Build revision prompt with full context
-  const revisionPrompt = buildArcRevisionPrompt(state, contextSection, previousOutputSection);
-
   try {
+    // The prompt is built inside the try (final fix wave): buildArcReworkOutputAddendum
+    // throws on purpose when the schema drifts, and that must reach state as this
+    // node's error contract, not reject the graph.
+    // Build revision context using centralized helper (DRY)
+    const { contextSection, previousOutputSection } = buildRevisionContextDRY({
+      phase: 'arcs',
+      revisionCount,
+      // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
+      round: (state.humanArcRevisionCount || 0) + 1,
+      validationResults: state.validationResults,
+      previousOutput: previousArcs,
+      humanFeedback: state._arcFeedback || null
+    });
+    const revisionPrompt = buildArcRevisionPrompt(state, contextSection, previousOutputSection);
     const result = await sdkClient({
       prompt: revisionPrompt,
       systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback, state.sessionConfig),

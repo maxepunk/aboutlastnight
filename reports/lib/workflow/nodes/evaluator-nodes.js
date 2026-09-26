@@ -1273,12 +1273,16 @@ function createEvaluator(phase, options = {}) {
     }
 
     const sdk = getSdkClient(config, `evaluate-${phase}`);
-    const systemPrompt = buildEvaluationSystemPrompt(phase, criteria, theme);
-    // Brief 2.4: the article judge reads the fact check's result for THIS bundle
-    // (computed above), never the state's _articleFactCheck from the previous one.
-    const prompt = buildEvaluationUserPrompt(phase, state, { factCheck });
 
     try {
+      // The prompt is built inside the try (final fix wave): since 2.4 the build
+      // creates a PromptBuilder and a ThemeLoader and calls outlineWriterInputs /
+      // reworkHeroImage, and a throw there must land in state like an SDK failure,
+      // not reject the graph.
+      const systemPrompt = buildEvaluationSystemPrompt(phase, criteria, theme);
+      // Brief 2.4: the article judge reads the fact check's result for THIS bundle
+      // (computed above), never the state's _articleFactCheck from the previous one.
+      const prompt = buildEvaluationUserPrompt(phase, state, { factCheck });
       const jsonSchema = EVALUATION_JSON_SCHEMA;
 
       // SDK returns parsed object directly when jsonSchema is provided

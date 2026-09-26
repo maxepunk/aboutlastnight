@@ -300,3 +300,60 @@ describe('a missing craft file becomes the node error contract, not a graph reje
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
   });
 });
+
+describe('a prompt build that throws becomes the node error contract, for the judges and the arc reworker (final fix wave)', () => {
+  // The evaluator and reviseArcs built their prompts BEFORE their try. Since 2.4 the
+  // judge's build creates a PromptBuilder and ThemeLoader and calls
+  // outlineWriterInputs / reworkHeroImage, and the arc rework prompt carries a
+  // deliberate throw (buildArcReworkOutputAddendum), so a throw there bypassed the
+  // swallow-into-state contract and rejected the graph.
+  const { evaluateArcs, evaluateOutline, evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
+  const { reviseArcs, _testing: { PLAYER_FOCUS_GUIDED_SCHEMA } } = require('../workflow/nodes/arc-specialist-nodes');
+  const { PHASES, REVISION_CAPS } = require('../workflow/state');
+  const { PromptBuilder } = require('../prompt-builder');
+  const { reworkFixtureState, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
+
+  beforeAll(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => { PromptBuilder.prototype._rosterSection.mockRestore?.(); });
+  afterAll(() => jest.restoreAllMocks());
+
+  it.each([
+    ['arcs', evaluateArcs, (s) => ({ ...s, selectedArcs: [] })],
+    ['outline', evaluateOutline, (s) => ({ ...s, outlineApproved: false })],
+    ['article', evaluateArticle, (s) => ({ ...s, contentBundle: PREVIOUS_BUNDLE, articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE })]
+  ])('the %s judge returns the error contract', async (phase, evaluate, shape) => {
+    jest.spyOn(PromptBuilder.prototype, '_rosterSection').mockImplementation(() => { throw new Error('roster section exploded'); });
+    const sdkClient = jest.fn();
+    const result = await evaluate(shape({ ...reworkFixtureState('journalist'), heroImage: 'hero.jpg', evaluationHistory: [] }), { configurable: { sdkClient } });
+
+    expect(result.currentPhase).toBe(PHASES.ERROR);
+    expect(result.errors[0].type).toBe(`${phase}-evaluation-failed`);
+    expect(result.errors[0].message).toBe('roster section exploded');
+    expect(result.evaluationHistory).toEqual(expect.objectContaining({ phase, ready: false, _error: 'roster section exploded' }));
+    expect(sdkClient).not.toHaveBeenCalled();
+  });
+
+  it('reviseArcs returns the error contract when its prompt throws', async () => {
+    const plan = PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan;
+    delete PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan;
+    try {
+      const state = reworkFixtureState('journalist');
+      const sdkClient = jest.fn();
+      const result = await reviseArcs(
+        { ...state, narrativeArcs: null, _previousArcs: state.narrativeArcs, _arcFeedback: 'Tighten it.', arcRevisionCount: 1 },
+        { configurable: { sdkClient } }
+      );
+      expect(result.currentPhase).toBe(PHASES.ERROR);
+      expect(result.narrativeArcs).toEqual([]);
+      expect(result._previousArcs).toBeNull();
+      expect(result.errors[0].type).toBe('arc-revision-failed');
+      expect(result.errors[0].message).toMatch(/no longer defines interweaving/);
+      expect(sdkClient).not.toHaveBeenCalled();
+    } finally {
+      PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan = plan;
+    }
+  });
+});
