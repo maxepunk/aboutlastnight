@@ -127,7 +127,10 @@ describe('EvidencePreprocessor batch input: what Haiku reads', () => {
   const PAPER_TEXT = 'Board minutes: the vote passed four to one.';
 
   async function batchInput() {
-    const sdkClient = jest.fn().mockResolvedValue({ items: [] });
+    // One summary per input, so no input falls back (and nothing warns).
+    const sdkClient = jest.fn(async ({ prompt }) => ({
+      items: JSON.parse(prompt.slice(prompt.indexOf('['))).map(i => ({ id: i.id, sourceType: i.sourceType, summary: 's' }))
+    }));
     const preprocessor = createEvidencePreprocessor({ sdkClient });
     await preprocessor.process({
       memoryTokens: [

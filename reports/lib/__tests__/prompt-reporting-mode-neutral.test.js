@@ -413,7 +413,7 @@ describe('presence lines outside the article prompt', () => {
 describe("presence lines outside the writers' prompts", () => {
   it("the preprocessor's system prompt carries none of them", async () => {
     const { createEvidencePreprocessor } = require('../evidence-preprocessor');
-    const sdkClient = jest.fn().mockResolvedValue({ items: [] });
+    const sdkClient = jest.fn().mockResolvedValue({ items: [{ id: 'ale003', sourceType: 'memory-token', summary: 's' }] });
     await createEvidencePreprocessor({ sdkClient }).process({
       memoryTokens: [{ tokenId: 'ale003', name: 'ALE003', disposition: 'exposed', fullDescription: 'x' }],
       paperEvidence: [],

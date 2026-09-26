@@ -144,7 +144,7 @@ describe('evidence-preprocessor batch call (H21)', () => {
   const { _testing } = require('../evidence-preprocessor');
 
   it('runs the batch summarization with no tools', async () => {
-    const sdk = makeCapturingSdk(() => ({ items: [] }));
+    const sdk = makeCapturingSdk(() => ({ items: [{ id: 'tok-1', summary: 's' }] }));
     const batch = [{ id: 'tok-1', rawData: { name: 'Token', description: 'A description.', tags: [] } }];
 
     await _testing.processBatch(batch, sdk, 0);

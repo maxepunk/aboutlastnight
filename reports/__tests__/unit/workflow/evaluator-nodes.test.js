@@ -36,6 +36,18 @@ const {
 const { PHASES, REVISION_CAPS } = require('../../../lib/workflow/state');
 const { CHECKPOINT_TYPES } = require('../../../lib/workflow/checkpoint-helpers');
 
+// Phase 2 final fix wave, item 13: this file's output carries no warnings. Its
+// fact-check fixtures used to name roster players with no canonicalCharacters, so
+// buildSessionFacts printed the F1 "roster names with no canonical match" warning
+// eight times. A test that makes the evaluator warn now fails here instead.
+let warnSpy;
+beforeEach(() => { warnSpy = jest.spyOn(console, 'warn'); });
+afterEach(() => {
+  const warnings = warnSpy.mock.calls.map((args) => String(args[0]));
+  warnSpy.mockRestore();
+  expect(warnings).toEqual([]);
+});
+
 describe('evaluator-nodes', () => {
   describe('module exports', () => {
     it('exports evaluateArcs function', () => {
@@ -1119,6 +1131,7 @@ describe('evaluateArticle — programmatic fact-check pre-check (BASELINE class 
       },
       arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
       sessionConfig: { roster: ['Vic', 'Mel'], reportingMode: 'on-site' },
+      canonicalCharacters: { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' },
       outline: {},
       ...extra
     };
@@ -1211,7 +1224,7 @@ describe('evaluateArticle fact-check guard', () => {
   it('does not fact-check a MISSING content bundle (reviseContentBundle error path)', async () => {
     const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.9 });
     const result = await evaluateArticle(
-      { contentBundle: null, sessionConfig: { roster: ['Vic', 'Mel'] }, outline: {} },
+      { contentBundle: null, sessionConfig: { roster: ['Vic', 'Mel'] }, canonicalCharacters: { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' }, outline: {} },
       { configurable: { sdkClient: mockClient } }
     );
     // A missing bundle would otherwise report every roster member as uncovered
@@ -1260,6 +1273,7 @@ describe('evaluateArticle — the card check reads what the page prints (slice 2
       contentBundle,
       arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
       sessionConfig: { roster: ['Mel'], reportingMode: 'on-site' },
+      canonicalCharacters: { Mel: 'Mel Nilsson' },
       outline: {}
     };
   }
@@ -1780,6 +1794,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
         },
         arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
         sessionConfig: { roster: ['Vic', 'Mel'], reportingMode: 'on-site' },
+        canonicalCharacters: { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' },
         outline: {},
         // A previous bundle's result: this evaluation must not show it.
         _articleFactCheck: { structuralIssues: ['STALE ISSUE FROM THE LAST BUNDLE'], advisoryWarnings: [] },
