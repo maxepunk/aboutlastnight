@@ -1203,6 +1203,65 @@ function hasInterweavingPlan(plan) {
 }
 
 /**
+ * One schema field as a prompt line: its name, its shape when it is a list, and the
+ * schema's own description of it.
+ *
+ * @param {string} name
+ * @param {Object} spec - the field's JSON-schema node
+ * @returns {string}
+ */
+function describeSchemaField(name, spec) {
+  let shape = '';
+  if (spec.type === 'array' && spec.items?.type === 'object' && spec.items.properties) {
+    const keys = Object.entries(spec.items.properties).map(([key, sub]) =>
+      Array.isArray(sub.enum) ? `"${key}": ${sub.enum.map(v => `"${v}"`).join(' | ')}` : `"${key}"`);
+    shape = ` (a list of {${keys.join(', ')}})`;
+  } else if (spec.type === 'array') {
+    shape = ' (a list)';
+  }
+  return `- "${name}"${shape}${spec.description ? `: ${spec.description}` : ''}`;
+}
+
+/**
+ * What an arc rework returns beyond the writer's OUTPUT FORMAT (phase 2, 2.3;
+ * integrator ruling on the reworker's output instructions).
+ *
+ * The reworker carries the writer's `## OUTPUT FORMAT` unchanged, and it lists no
+ * interweaving fields: the writer's call returns none, and the interweaving call adds
+ * them afterwards. The reworker has no interweaving call, so its schema,
+ * PLAYER_FOCUS_GUIDED_SCHEMA, asks for them itself, and a model following the format
+ * block alone would drop the plan brief 2.2 requires it to keep. This names the two
+ * fields in the schema's own words: the lines are generated from the schema's
+ * properties and descriptions, so there is one wording.
+ *
+ * @param {boolean} hasPlan - whether the prompt shows a PREVIOUS INTERWEAVING PLAN
+ * @returns {string}
+ * @throws {Error} when the schema no longer defines either field
+ */
+function buildArcReworkOutputAddendum(hasPlan) {
+  const arcFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties?.narrativeArcs?.items?.properties?.interweaving?.properties;
+  const planFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties?.interweavingPlan?.properties;
+  if (!arcFields || !planFields) {
+    throw new Error('buildArcReworkOutputAddendum: PLAYER_FOCUS_GUIDED_SCHEMA no longer defines interweaving / interweavingPlan');
+  }
+  const lines = (fields) => Object.entries(fields).map(([name, spec]) => describeSchemaField(name, spec)).join('\n');
+  const planRule = hasPlan
+    ? 'A PREVIOUS INTERWEAVING PLAN is shown above: keep it, or update it for the revised arcs. Do not drop it.'
+    : 'No previous plan is shown: write one for the revised arcs.';
+  return `## WHAT THIS REWORK RETURNS
+
+The OUTPUT FORMAT at the top is the arc writer's. A rework returns that object with two more fields, as its schema defines them.
+
+Each arc's "interweaving" object:
+${lines(arcFields)}
+
+The top-level "interweavingPlan" object:
+${lines(planFields)}
+
+${planRule}`;
+}
+
+/**
  * Build revision prompt with previous arcs and feedback
  *
  * Phase 2 (2.3): the arc writer's sections (buildCoreArcSections), then the revision
@@ -1243,6 +1302,10 @@ ${contextSection}
 ---
 
 ${previousOutputSection}${planSection}
+
+---
+
+${buildArcReworkOutputAddendum(hasPlan)}
 
 ---
 
@@ -1892,7 +1955,8 @@ module.exports = {
     // Brief 2.3: the arc reworker is built from the writer's sections
     buildCoreArcSections,
     ARC_REVISION_RULES,
-    hasInterweavingPlan
+    hasInterweavingPlan,
+    buildArcReworkOutputAddendum
   }
 };
 

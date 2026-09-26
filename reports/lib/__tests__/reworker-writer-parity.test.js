@@ -24,6 +24,7 @@ const {
   _testing: { generateCoreArcs, ARC_REVISION_RULES }
 } = require('../workflow/nodes/arc-specialist-nodes');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
+const { PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
 const { PromptBuilder } = require('../prompt-builder');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -299,6 +300,39 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     const guidance = rework.user.slice(rework.user.indexOf('<DIRECTOR_GUIDANCE>'));
     expect(guidance).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
     expect(guidance).not.toContain(NOTE);
+  });
+
+  it("names the two fields the writer's OUTPUT FORMAT lacks, in the schema's words; the writer's prompt does not", async () => {
+    // Integrator ruling: the reworker carries the writer's OUTPUT FORMAT unchanged,
+    // which lists no interweaving fields, while its schema asks for both. A model
+    // that followed the format block would drop the plan brief 2.2 must keep.
+    const { writer, rework } = await writerAndRework(SEND_BACK);
+    const addendum = rework.user.slice(rework.user.indexOf('## WHAT THIS REWORK RETURNS'), rework.user.indexOf('## YOUR TASK'));
+    expect(addendum).toContain('Each arc\'s "interweaving" object:');
+    expect(addendum).toContain('The top-level "interweavingPlan" object:');
+    expect(rework.user.indexOf('## WHAT THIS REWORK RETURNS')).toBeGreaterThan(rework.user.indexOf('### PREVIOUS INTERWEAVING PLAN'));
+    expect(addendum).toContain('A PREVIOUS INTERWEAVING PLAN is shown above: keep it, or update it for the revised arcs. Do not drop it.');
+
+    // One wording: every field and every description comes from the schema.
+    const arcFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties.narrativeArcs.items.properties.interweaving.properties;
+    const planFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan.properties;
+    Object.entries({ ...arcFields, ...planFields }).forEach(([name, spec]) => {
+      expect(addendum).toContain(`- "${name}"`);
+      expect(addendum).toContain(spec.description);
+    });
+    expect(addendum).toContain('"bridgeType": "shared_character" | "causal_chain" | "temporal" | "contradiction"');
+
+    // The writer's prompt (and so its OUTPUT FORMAT) is unchanged: it names neither.
+    expect(writer.user).not.toContain('interweavingPlan');
+    expect(writer.user).not.toContain('"interweaving"');
+    expect(writer.user).not.toContain('WHAT THIS REWORK RETURNS');
+  });
+
+  it('with no previous plan, the addendum asks for one instead of asking to keep it', async () => {
+    const { rework } = await writerAndRework({ ...SEND_BACK, _arcAnalysisCache: null });
+    expect(rework.user).toContain('The top-level "interweavingPlan" object:');
+    expect(rework.user).toContain('No previous plan is shown: write one for the revised arcs.');
+    expect(rework.user).not.toContain('Do not drop it.');
   });
 
   it('leaves the previous interweaving plan out when there is none, and does not ask to keep it', async () => {
