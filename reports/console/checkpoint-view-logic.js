@@ -699,6 +699,155 @@
     return checkpoint + ':note';
   }
 
+  // ── The director's words (phase 2, brief 2.2) ─────────────────────────────
+
+  /** How the input review names a verdict kind (lib/accusation-verdict.js VERDICT_KINDS). */
+  var VERDICT_KIND_LABELS = {
+    culprit: 'the room named a culprit',
+    accident: 'an accident',
+    overdose: 'an overdose',
+    'self-harm': 'self-harm',
+    other: 'a verdict that names no one'
+  };
+
+  /**
+   * The verdict kind the parse returned, for the input review.
+   *
+   * A verdict with no culprit leaves `accused` empty on purpose, and the screen
+   * used to read an empty `accused` as "not parsed" and show it in red. `noCulprit`
+   * is what lets it say what the room decided instead.
+   *
+   * @param {object|null} accusation - sessionConfig.accusation
+   * @returns {{verdictKind: string, noCulprit: boolean, label: string}}
+   */
+  function verdictView(accusation) {
+    var kind = asString((accusation || {}).verdictKind);
+    var known = Object.prototype.hasOwnProperty.call(VERDICT_KIND_LABELS, kind);
+    return {
+      verdictKind: known ? kind : '',
+      noCulprit: known && kind !== 'culprit',
+      label: known ? VERDICT_KIND_LABELS[kind] : ''
+    };
+  }
+
+  /**
+   * Each exposed memory's exposer, exposure time and owner, as the parse kept them
+   * from the session report's Detective Evidence Log (sessionConfig.exposures).
+   *
+   * Held: shown to the director here and nowhere in a writer's prompt until
+   * phase 3 rules on naming exposers.
+   *
+   * @param {Array|null} exposures
+   * @returns {{rows: Array<{tokenId: string, exposer: string, time: string, owner: string}>, count: number}}
+   */
+  function exposuresView(exposures) {
+    var rows = asArray(exposures)
+      .filter(function (e) { return e && typeof e === 'object' && asString(e.tokenId).trim(); })
+      .map(function (e) {
+        return {
+          tokenId: asString(e.tokenId).trim(),
+          exposer: asString(e.exposer).trim(),
+          time: asString(e.time).trim(),
+          owner: asString(e.owner).trim()
+        };
+      });
+    return { rows: rows, count: rows.length };
+  }
+
+  /** The basename of a path, for the photo join. */
+  function baseName(value) {
+    return asString(value).split('/').pop().split('\\').pop();
+  }
+
+  /**
+   * One card per photo analysis at the character-IDs stop, paired with its photo
+   * BY FILENAME.
+   *
+   * The screen paired `photoAnalyses[i]` with `sessionPhotos[i]`, and the analyses
+   * are produced eight at a time, so nothing held the two lists in the same order:
+   * a card could show one photo's thumbnail over another photo's analysis, and the
+   * director's description went out under the wrong filename. The analysis carries
+   * its own filename; the thumbnail is the session photo with that basename
+   * (case-insensitive, as the server's joins do).
+   *
+   * @param {Array} photoAnalyses - data.photoAnalyses.analyses
+   * @param {Array} sessionPhotos - data.sessionPhotos (paths)
+   * @returns {Array<{key: string, filename: string, displayName: string, path: string, analysis: object}>}
+   */
+  function characterIdCards(photoAnalyses, sessionPhotos) {
+    var photos = asArray(sessionPhotos).filter(function (p) { return typeof p === 'string' && p; });
+    return asArray(photoAnalyses).map(function (analysis, i) {
+      var a = analysis && typeof analysis === 'object' ? analysis : {};
+      var filename = baseName(a.filename);
+      var wanted = filename.toLowerCase();
+      var path = '';
+      if (wanted) {
+        for (var j = 0; j < photos.length; j += 1) {
+          if (baseName(photos[j]).toLowerCase() === wanted) { path = photos[j]; break; }
+        }
+      }
+      var displayName = filename || baseName(path) || 'Photo ' + (i + 1);
+      return { key: filename || 'photo-' + i, filename: filename, displayName: displayName, path: path, analysis: a };
+    });
+  }
+
+  /**
+   * The character-IDs approval: the raw text the Sonnet parser reads, as before,
+   * plus each description as its own field keyed by filename.
+   *
+   * `characterIdsRaw` keeps its shape (one block per photo: filename, the machine's
+   * description, its character descriptions, the director's input). The director's
+   * text is also sent word for word (trimmed at the ends) in `photoDescriptions`,
+   * so the writers read it as typed and not as the parser rewrote it. A photo the
+   * director left blank has no entry; `photoDescriptions` is omitted when every box
+   * is blank.
+   *
+   * @param {Array} cards - characterIdCards(...)
+   * @param {Object} descriptions - card key -> the director's text
+   * @returns {{characterIdsRaw: string, photoDescriptions?: Object}}
+   */
+  function characterIdsPayload(cards, descriptions) {
+    var typed = descriptions && typeof descriptions === 'object' ? descriptions : {};
+    var blocks = [];
+    var byFilename = {};
+    asArray(cards).forEach(function (card) {
+      var photo = card.analysis || {};
+      var userText = asString(typed[card.key]).trim();
+      var aiVisual = asString(photo.visualContent).trim();
+      var charDescs = asArray(photo.characterDescriptions)
+        .map(function (d) {
+          return '[' + ((d && d.description) || 'unknown') + ', role: ' + ((d && d.role) || 'UNKNOWN') + ']';
+        })
+        .join(', ');
+
+      var lines = ['Photo ' + card.displayName + ':'];
+      if (aiVisual) lines.push('  AI Description: ' + aiVisual);
+      if (charDescs) lines.push('  Character Descriptions: ' + charDescs);
+      if (userText) lines.push('  User Input: ' + userText);
+      blocks.push(lines.join('\n'));
+      if (userText && card.filename) byFilename[card.filename] = userText;
+    });
+    var payload = { characterIdsRaw: blocks.join('\n') };
+    if (Object.keys(byFilename).length > 0) payload.photoDescriptions = byFilename;
+    return payload;
+  }
+
+  /**
+   * What the arc stop's note box holds when it (re)mounts.
+   *
+   * The note the director typed before a remount (kept in the note slot of
+   * `pendingEdits`, as the outline and article stops keep theirs) wins over the
+   * pre-fill from the last send-back note. A new round clears the slot, so the
+   * pre-fill returns then.
+   *
+   * @param {string|undefined} pendingNote
+   * @param {string} prefill - arcNotePrefill(...)
+   * @returns {string}
+   */
+  function arcNoteInitial(pendingNote, prefill) {
+    return typeof pendingNote === 'string' && pendingNote ? pendingNote : asString(prefill);
+  }
+
   var api = {
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
@@ -717,7 +866,13 @@
     sendBackButton: sendBackButton,
     arcReviewPayload: arcReviewPayload,
     arcNotePrefill: arcNotePrefill,
-    noteSlotKey: noteSlotKey
+    noteSlotKey: noteSlotKey,
+    // Phase 2, brief 2.2: the director's words
+    verdictView: verdictView,
+    exposuresView: exposuresView,
+    characterIdCards: characterIdCards,
+    characterIdsPayload: characterIdsPayload,
+    arcNoteInitial: arcNoteInitial
   };
 
   if (typeof window !== 'undefined') {

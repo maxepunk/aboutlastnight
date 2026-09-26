@@ -222,3 +222,49 @@ describe('checkpoint-nodes', () => {
     });
   });
 });
+
+/**
+ * checkpointCharacterIds keeps the director's photo descriptions (phase 2, brief 2.2):
+ * captured from the resume, as the IDs are, and written to the session folder.
+ */
+describe('checkpointCharacterIds: the per-photo descriptions', () => {
+  const PHOTO_7 = "Alex and Sam react to a memory they've just unlocked.";
+  let dataDir;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-photo-desc-'));
+  });
+  afterEach(() => { fs.rmSync(dataDir, { recursive: true, force: true }); });
+
+  const analysedState = {
+    sessionId: '092026',
+    photoAnalyses: { analyses: [{ filename: 'aln092026 (7 of 9).jpg' }] },
+    roster: ['Alex', 'Sam'],
+    narrativeArcs: [{ id: 'arc-1' }],
+    characterIdMappings: null
+  };
+
+  it('captures the map beside the raw text and writes inputs/photo-descriptions.json', async () => {
+    checkpointInterrupt.mockReturnValueOnce({
+      characterIdsRaw: 'Photo aln092026 (7 of 9).jpg:',
+      photoDescriptions: { 'aln092026 (7 of 9).jpg': PHOTO_7 }
+    });
+
+    const out = await checkpointCharacterIds({ ...analysedState }, { configurable: { dataDir } });
+
+    expect(out.characterIdsRaw).toBe('Photo aln092026 (7 of 9).jpg:');
+    expect(out.photoDescriptions).toEqual({ 'aln092026 (7 of 9).jpg': PHOTO_7 });
+    const file = path.join(dataDir, '092026', 'inputs', 'photo-descriptions.json');
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ 'aln092026 (7 of 9).jpg': PHOTO_7 });
+  });
+
+  it('writes nothing and adds no key when the resume carried no descriptions', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ characterIdsRaw: 'Photo a.jpg:' });
+
+    const out = await checkpointCharacterIds({ ...analysedState }, { configurable: { dataDir } });
+
+    expect(out).not.toHaveProperty('photoDescriptions');
+    expect(fs.readdirSync(dataDir)).toEqual([]);
+  });
+});

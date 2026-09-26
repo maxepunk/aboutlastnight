@@ -127,8 +127,9 @@ describe('generators pass options.gateNotes', () => {
     // brief 1.5 added directorNotes: the outline writer reads the director's own
     // account of the morning, which until now only the article writer saw;
     // brief 1.3 added shouldConsider: the arc evaluation's advisories;
-    // brief 2.1 added evidenceBundle: the record view renders from it.
-    expect(options).toEqual({ directorGuidance: 'Lead with the money.', gateNotes: NOTES, directorNotes, shouldConsider: [], evidenceBundle });
+    // brief 2.1 added evidenceBundle: the record view renders from it;
+    // brief 2.2 added the director's input-review corrections and photo descriptions.
+    expect(options).toEqual({ directorGuidance: 'Lead with the money.', gateNotes: NOTES, directorNotes, shouldConsider: [], evidenceBundle, directorCorrections: [], photoDescriptions: null });
   });
 
   it('generateContentBundle passes every note as options.gateNotes', async () => {
@@ -137,14 +138,14 @@ describe('generators pass options.gateNotes', () => {
     const sdk = sdkReturning({ headline: { main: 'x' }, sections: [] });
     await generateContentBundle({ outline: OUTLINE, arcEvidencePackages: [], directorGateNotes: NOTES }, cfg(sdk, builder));
     const options = builder.buildArticlePrompt.mock.calls[0][7];
-    expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, shouldConsider: [], evidenceBundle: null });
+    expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, shouldConsider: [], evidenceBundle: null, directorCorrections: [], photoDescriptions: null });
   });
 
   it('with no notes the generators pass an empty list (prompt unchanged)', async () => {
     const builder = createMockPromptBuilder();
     builder.buildOutlinePrompt = jest.fn(builder.buildOutlinePrompt);
     await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [] }, cfg(sdkReturning(OUTLINE), builder));
-    expect(builder.buildOutlinePrompt.mock.calls[0][7]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null, shouldConsider: [], evidenceBundle: null });
+    expect(builder.buildOutlinePrompt.mock.calls[0][7]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null, shouldConsider: [], evidenceBundle: null, directorCorrections: [], photoDescriptions: null });
   });
 });
 

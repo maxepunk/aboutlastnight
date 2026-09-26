@@ -51,6 +51,7 @@ const {
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper
 } = require('./node-helpers');
 const { traceNode } = require('../../observability');
+const { directorAccusationText } = require('../../accusation-verdict');
 
 /**
  * Get PromptBuilder from config or create default
@@ -823,6 +824,87 @@ function advisoriesFromPreviousStage(state, previousPhase) {
 }
 
 /**
+ * SESSION_FACTS for the outline and article writers (RC3 guardrail; phase 2, brief 2.2).
+ *
+ * One builder for both writers: the two copies this replaced printed only
+ * `ACCUSATION: <accused>`, so an overdose verdict reached the writers as
+ * `ACCUSATION: Marcus`, with no charge. The facts now carry the parsed accusation
+ * whole (accused, charge, verdict kind), the director's accusation word for word,
+ * and the players' whiteboard connections; renderSessionFactsVerdict
+ * (director-words-renderer.js) prints them.
+ *
+ * @param {Object} state
+ * @returns {Object|null} null when there is no roster
+ */
+function buildSessionFacts(state) {
+  const roster = state.sessionConfig?.roster || [];
+  const canonicalChars = state.canonicalCharacters || {};
+  // F1 invariant: every roster PC must resolve to a canonicalCharacters entry, or
+  // generateRosterSection silently drops their pronoun + canonical surname (they/them).
+  // This holds ONLY because fetchMemoryTokens fetches ALL tokens (scannedTokens is never
+  // set). If that ever changes — or a director enters a non-character name — warn loudly.
+  const uncoveredRoster = findUncoveredRosterNames(roster, canonicalChars);
+  if (uncoveredRoster.length > 0) {
+    console.warn(`[F1] roster names with no canonical match (pronoun/surname will default to they/them): ${uncoveredRoster.join(', ')}`);
+  }
+  if (roster.length === 0) return null;
+  const accusation = state.sessionConfig?.accusation || {};
+  return {
+    roster: roster.map(p => {
+      const name = p.name || p;
+      return canonicalChars[name] || name;
+    }),
+    accusation: {
+      accused: ensureArray(accusation.accused),
+      charge: accusation.charge || '',
+      ...(accusation.verdictKind && { verdictKind: accusation.verdictKind })
+    },
+    accusationText: directorAccusationText(state),
+    whiteboard: state.playerFocus?.whiteboardContext || null,
+    playerCount: roster.length
+  };
+}
+
+/**
+ * The photos the outline writer may place, beyond the hero (phase 2, brief 2.2).
+ *
+ * Each carries its filename and the names the director identified in it. The
+ * writer's text about the photo is the director's own description, which the prompt
+ * builder joins by filename (options.photoDescriptions); Haiku's pre-identification
+ * descriptions no longer go to the writer.
+ *
+ * @param {Object} state
+ * @param {string} heroImage - excluded (it has its own slot)
+ * @param {string|null} whiteboardFilename - excluded (director-layer evidence)
+ * @returns {Array<{filename: string, fullPath: string, identifiedCharacters: string[]}>}
+ */
+function buildAvailablePhotos(state, heroImage, whiteboardFilename) {
+  const getPhotoFilename = (photo) =>
+    typeof photo === 'string' ? photo.split(/[/\\]/).pop() : photo?.filename;
+  // FIX (brief 1.6): join the analyses by FILENAME, not by array position. The two
+  // filters below remove the hero (always) and the whiteboard (usually), so
+  // analyses[i] read the wrong analysis for every photo after the first removal.
+  // Basename, case-insensitive, the way the console's photoUrl matches.
+  const analysisByFilename = new Map(
+    (state.photoAnalyses?.analyses || [])
+      .filter(a => a?.filename)
+      .map(a => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a])
+  );
+  return (state.sessionPhotos || [])
+    .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
+    .filter(photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)  // Exclude whiteboard
+    .map((photoPath, i) => {
+      const filename = getPhotoFilename(photoPath) || `photo-${i}.jpg`;
+      const analysis = analysisByFilename.get(filename.toLowerCase()) || {};
+      return {
+        filename,
+        fullPath: photoPath,
+        identifiedCharacters: Array.isArray(analysis.identifiedCharacters) ? analysis.identifiedCharacters : []
+      };
+    });
+}
+
+/**
  * Generate article outline from selected arcs
  *
  * Uses Claude to create structured outline with section placement,
@@ -890,57 +972,18 @@ async function generateOutline(state, config) {
     console.log(`[generateOutline] Hero image fallback: ${heroImage} (no photo analyses available)`);
   }
 
-  // Build available photos list with analyses for outline generation (Commit 8.24)
+  // Build available photos list for outline generation (Commit 8.24)
   // FIX: Filter out hero to prevent duplicate usage (Commit 8.26)
   // FIX: Filter out whiteboard — director-layer evidence, not article content
-  // FIX (brief 1.6): join the analyses by FILENAME, not by array position. The two
-  // filters above remove the hero (always) and the whiteboard (usually), so
-  // analyses[i] read the wrong analysis for every photo after the first removal:
-  // the outline writer was told photo B shows what photo A shows, and placed it on
-  // that. Basename, case-insensitive, the way the console's photoUrl matches.
-  const analysisByFilename = new Map(
-    (state.photoAnalyses?.analyses || [])
-      .filter(a => a?.filename)
-      .map(a => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a])
-  );
-  const availablePhotos = (state.sessionPhotos || [])
-    .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
-    .filter(photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)  // Exclude whiteboard
-    .map((photoPath, i) => {
-      // Get just the filename from the full path
-      const filename = getPhotoFilename(photoPath) || `photo-${i}.jpg`;
-      const analysis = analysisByFilename.get(filename.toLowerCase()) || {};
-      return {
-        filename,
-        fullPath: photoPath,
-        characters: analysis.characterDescriptions?.map(c => typeof c === 'string' ? c : c.description) || [],
-        visualContent: analysis.visualContent || ''
-      };
-    });
+  // Brief 2.2: filename + identified names; the prompt adds the director's description.
+  const availablePhotos = buildAvailablePhotos(state, heroImage, whiteboardFilename);
 
   // PHASE 1 FIX: Pass arcEvidencePackages with full content and enriched photos
   const arcEvidencePackages = state.arcEvidencePackages || [];
   const shellAccounts = state.shellAccounts || [];
 
-  // Build session facts for outline (same as article phase - RC3 guardrail)
-  const roster = state.sessionConfig?.roster || [];
-  const canonicalChars = state.canonicalCharacters || {};
-  // F1 invariant: every roster PC must resolve to a canonicalCharacters entry, or
-  // generateRosterSection silently drops their pronoun + canonical surname (they/them).
-  // This holds ONLY because fetchMemoryTokens fetches ALL tokens (scannedTokens is never
-  // set). If that ever changes — or a director enters a non-character name — warn loudly.
-  const uncoveredRoster = findUncoveredRosterNames(roster, canonicalChars);
-  if (uncoveredRoster.length > 0) {
-    console.warn(`[F1] roster names with no canonical match (pronoun/surname will default to they/them): ${uncoveredRoster.join(', ')}`);
-  }
-  const sessionFacts = roster.length > 0 ? {
-    roster: roster.map(p => {
-      const name = p.name || p;
-      return canonicalChars[name] || name;
-    }),
-    accusation: state.sessionConfig?.accusation?.accused?.join(' and ') || 'Unknown',
-    playerCount: roster.length
-  } : null;
+  // Session facts: one builder for the outline and the article (RC3 guardrail, brief 2.2)
+  const sessionFacts = buildSessionFacts(state);
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(
     arcAnalysis,
@@ -952,13 +995,16 @@ async function generateOutline(state, config) {
     sessionFacts,  // Session facts for player count and roster guardrail
     // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
     // brief 1.5: the director's raw notes, which only the article writer used to see;
-    // brief 1.3: the arc evaluation's advisory findings.
+    // brief 1.3: the arc evaluation's advisory findings; brief 2.2: the director's
+    // input-review corrections and photo descriptions.
     {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
       directorNotes: state.directorNotes || null,
       shouldConsider: advisoriesFromPreviousStage(state, 'arcs'),
-      evidenceBundle: state.evidenceBundle || null  // brief 2.1: the record view
+      evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
+      directorCorrections: state.inputReviewCorrections || [],
+      photoDescriptions: state.photoDescriptions || null
     }
   );
 
@@ -1247,25 +1293,8 @@ async function generateContentBundle(state, config) {
 
   const shellAccounts = state.shellAccounts || [];
 
-  // Build session facts for non-roster character guardrail (RC3)
-  const roster = state.sessionConfig?.roster || [];
-  const canonicalChars = state.canonicalCharacters || {};
-  // F1 invariant: every roster PC must resolve to a canonicalCharacters entry, or
-  // generateRosterSection silently drops their pronoun + canonical surname (they/them).
-  // This holds ONLY because fetchMemoryTokens fetches ALL tokens (scannedTokens is never
-  // set). If that ever changes — or a director enters a non-character name — warn loudly.
-  const uncoveredRoster = findUncoveredRosterNames(roster, canonicalChars);
-  if (uncoveredRoster.length > 0) {
-    console.warn(`[F1] roster names with no canonical match (pronoun/surname will default to they/them): ${uncoveredRoster.join(', ')}`);
-  }
-  const sessionFacts = roster.length > 0 ? {
-    roster: roster.map(p => {
-      const name = p.name || p;
-      return canonicalChars[name] || name;
-    }),
-    accusation: state.sessionConfig?.accusation?.accused?.join(' and ') || 'Unknown',
-    playerCount: roster.length
-  } : null;
+  // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
+  const sessionFacts = buildSessionFacts(state);
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     state.outline || {},
@@ -1276,12 +1305,15 @@ async function generateContentBundle(state, config) {
     state.directorNotes || null,  // RC5: director observations for article grounding
     state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
     // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
-    // brief 1.3: the outline evaluation's advisory findings.
+    // brief 1.3: the outline evaluation's advisory findings; brief 2.2: the director's
+    // input-review corrections and photo descriptions.
     {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
       shouldConsider: advisoriesFromPreviousStage(state, 'outline'),
-      evidenceBundle: state.evidenceBundle || null  // brief 2.1: the record view
+      evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
+      directorCorrections: state.inputReviewCorrections || [],
+      photoDescriptions: state.photoDescriptions || null
     }
   );
 
@@ -1783,6 +1815,10 @@ module.exports = {
     buildOutlineRevisionPrompt,
     buildArticleRevisionPrompt,
     scorePaperEvidence,  // Batched Sonnet scoring (Commit 8.11)
-    getSchemaValidator
+    getSchemaValidator,
+    // Brief 2.2: the writers' SESSION_FACTS and available photos, one builder each.
+    // scripts/render-prompts.js renders through these when the tree has them.
+    buildSessionFacts,
+    buildAvailablePhotos
   }
 };

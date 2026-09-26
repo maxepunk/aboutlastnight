@@ -3,10 +3,12 @@
  *
  * Produces the XML-tagged director-notes block consumed by:
  * - lib/workflow/nodes/arc-specialist-nodes.js (buildCoreArcPrompt, buildArcRevisionPrompt)
- * - lib/prompt-builder.js (buildArticlePrompt)
+ * - lib/prompt-builder.js (buildOutlinePrompt, buildArticlePrompt)
  *
  * Spec: docs/superpowers/specs/2026-04-20-director-notes-enrichment-design.md
  */
+
+const { renderDirectorCorrectionsBlock } = require('./director-words-renderer');
 
 /**
  * Render the enriched director-notes block as XML tags.
@@ -16,19 +18,26 @@
  * @param {Array} [ctx.quotes] - Extracted quotes
  * @param {Array} [ctx.transactionReferences] - Observation → transaction links
  * @param {Array} [ctx.postInvestigationDevelopments] - Post-investigation news items
+ * @param {string[]|string|null} [ctx.corrections] - the director's input-review
+ *   corrections, in order (phase 2, brief 2.2). They follow the notes, which are
+ *   never rewritten: the uncorrected sentence stays, and the correction sits beside it.
  * @returns {string} Multi-block XML-tagged string. Omits optional blocks when their arrays are empty.
  */
 function renderDirectorEnrichmentBlock({
   rawProse = '',
   quotes = [],
   transactionReferences = [],
-  postInvestigationDevelopments = []
+  postInvestigationDevelopments = [],
+  corrections = null
 } = {}) {
   const blocks = [];
 
   blocks.push(`<DIRECTOR_NOTES>
 ${rawProse || '(no director notes provided)'}
 </DIRECTOR_NOTES>`);
+
+  const correctionsBlock = renderDirectorCorrectionsBlock(corrections);
+  if (correctionsBlock) blocks.push(correctionsBlock);
 
   if (quotes.length > 0) {
     const lines = quotes.map(q =>

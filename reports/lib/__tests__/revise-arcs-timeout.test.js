@@ -89,3 +89,69 @@ describe('reviseArcs timeout recovery', () => {
     expect(result.currentPhase).toBe('error');
   });
 });
+
+/**
+ * The arc rework keeps the interweaving plan (phase 2, brief 2.2).
+ *
+ * The success return replaced _arcAnalysisCache with a cache that had no
+ * interweavingPlan, so after any arc rework the outline writer's <arc-analysis>
+ * lost the plan. The rework is asked for one and the plan it returns is stored.
+ */
+describe('reviseArcs keeps the interweaving plan', () => {
+  const PREVIOUS_PLAN = { suggestedOrder: ['arc-1'], convergencePoint: 'the vote', keyCallbacks: [] };
+
+  function makeState(overrides = {}) {
+    return {
+      _previousArcs: [{ id: 'arc-1', title: 'The vote', arcSource: 'accusation' }],
+      arcRevisionCount: 1,
+      humanArcRevisionCount: 1,
+      _arcFeedback: 'Put the vote first.',
+      _arcAnalysisCache: { interweavingPlan: PREVIOUS_PLAN, synthesisNotes: 'old' },
+      validationResults: {},
+      playerFocus: { accusation: { accused: ['Vic'], charge: 'Murder' } },
+      sessionConfig: { roster: ['Alex'] },
+      evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } },
+      theme: 'journalist',
+      ...overrides
+    };
+  }
+
+  test('stores the plan the rework returns', async () => {
+    const revisedPlan = { suggestedOrder: ['arc-2', 'arc-1'], convergencePoint: 'the ledger', keyCallbacks: [{ plantIn: 'arc-2', payoffIn: 'arc-1', detail: 'the 9:40 sale' }] };
+    const mockSdk = jest.fn().mockResolvedValue({
+      narrativeArcs: [{ id: 'arc-1', title: 'The vote', arcSource: 'accusation' }, { id: 'arc-2', title: 'The ledger', arcSource: 'discovered' }],
+      synthesisNotes: 'new',
+      interweavingPlan: revisedPlan
+    });
+
+    const result = await reviseArcs(makeState(), { configurable: { sdkClient: mockSdk } });
+
+    expect(result._arcAnalysisCache.interweavingPlan).toEqual(revisedPlan);
+    expect(result._arcAnalysisCache).not.toHaveProperty('interweavingFromPreviousRound');
+    // It was asked for the plan, with the previous one in front of it.
+    const prompt = mockSdk.mock.calls[0][0].prompt;
+    expect(prompt).toContain('### PREVIOUS INTERWEAVING PLAN');
+    expect(prompt).toContain('"convergencePoint": "the vote"');
+  });
+
+  test('keeps the previous plan, and says so, when the rework returns none', async () => {
+    const mockSdk = jest.fn().mockResolvedValue({
+      narrativeArcs: [{ id: 'arc-1', title: 'The vote', arcSource: 'accusation' }],
+      synthesisNotes: 'new'
+    });
+
+    const result = await reviseArcs(makeState(), { configurable: { sdkClient: mockSdk } });
+
+    expect(result._arcAnalysisCache.interweavingPlan).toEqual(PREVIOUS_PLAN);
+    expect(result._arcAnalysisCache.interweavingFromPreviousRound).toBe(true);
+  });
+
+  test('a free timeout retry keeps the plan with the arcs it keeps', async () => {
+    const mockSdk = jest.fn().mockRejectedValueOnce(new Error('SDK timeout after 300.0s (limit: 300s) - Arc revision 1'));
+
+    const result = await reviseArcs(makeState(), { configurable: { sdkClient: mockSdk } });
+
+    expect(result._arcAnalysisCache._revisionTimedOut).toBe(true);
+    expect(result._arcAnalysisCache.interweavingPlan).toEqual(PREVIOUS_PLAN);
+  });
+});

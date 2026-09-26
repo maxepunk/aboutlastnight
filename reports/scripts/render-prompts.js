@@ -80,7 +80,8 @@ async function render() {
   const req = (p) => require(path.join(repo, p));
   const { createPromptBuilder } = req('lib/prompt-builder.js');
   const { buildRevisionContext } = req('lib/workflow/nodes/node-helpers.js');
-  const { _testing: { buildOutlineRevisionPrompt, buildArticleRevisionPrompt, getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt } } = req('lib/workflow/nodes/ai-nodes.js');
+  const { _testing: { buildOutlineRevisionPrompt, buildArticleRevisionPrompt, getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt,
+    buildSessionFacts, buildAvailablePhotos } } = req('lib/workflow/nodes/ai-nodes.js');
   let diffMod = null;
   // Only a MISSING module is expected (main has no hand-edit module). Anything else -
   // a syntax error, a throwing dependency - would make the guard pass vacuously (M4).
@@ -96,13 +97,16 @@ async function render() {
   });
 
   // Mirror ai-nodes.js generateOutline / generateContentBundle (as data/review-2026-09-18/render-p1.js did).
+  // Brief 2.2: a tree that exports the writers' own builders (buildSessionFacts,
+  // buildAvailablePhotos) renders through them, so this script cannot drift from the
+  // nodes; the inline copies below are for a tree from before they existed (main).
   const roster = (state.sessionConfig && state.sessionConfig.roster) || [];
   const canonical = state.canonicalCharacters || {};
-  const sessionFacts = roster.length > 0 ? {
+  const sessionFacts = buildSessionFacts ? buildSessionFacts(state) : (roster.length > 0 ? {
     roster: roster.map((p) => { const n = p.name || p; return canonical[n] || n; }),
     accusation: (state.sessionConfig && state.sessionConfig.accusation && state.sessionConfig.accusation.accused || []).join(' and ') || 'Unknown',
     playerCount: roster.length
-  } : null;
+  } : null);
   const nameOf = (p) => typeof p === 'string' ? p.split(/[/\\]/).pop() : p && p.filename;
   const whiteboard = state.whiteboardPhotoPath ? nameOf(state.whiteboardPhotoPath) : null;
   const heroImage = state.heroImage || null;
@@ -111,13 +115,18 @@ async function render() {
   const analysisByName = new Map(((state.photoAnalyses && state.photoAnalyses.analyses) || [])
     .filter((a) => a && a.filename)
     .map((a) => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a]));
-  const availablePhotos = (state.sessionPhotos || [])
+  const availablePhotos = buildAvailablePhotos ? buildAvailablePhotos(state, heroImage, whiteboard) : (state.sessionPhotos || [])
     .filter((p) => nameOf(p) !== heroImage && (!whiteboard || nameOf(p) !== whiteboard))
     .map((p, i) => {
       const a = analysisByName.get(String(nameOf(p) || `photo-${i}.jpg`).toLowerCase()) || {};
       return { filename: nameOf(p) || `photo-${i}.jpg`, fullPath: p,
         characters: (a.characterDescriptions || []).map((c) => typeof c === 'string' ? c : c.description), visualContent: a.visualContent || '' };
     });
+  // Brief 2.2: the director's own words the writers now read (ignored by an older tree).
+  const directorWords = {
+    directorCorrections: state.inputReviewCorrections || [],
+    photoDescriptions: state.photoDescriptions || null
+  };
   const { timing, architecture, ...cache } = state._arcAnalysisCache || {};
   const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
   const guidance = state._outlineGuidance || null;
@@ -129,7 +138,7 @@ async function render() {
   const og = await promptBuilder.buildOutlinePrompt(arcAnalysis, state.selectedArcs || [], heroImage, availablePhotos,
     state.arcEvidencePackages || [], state.shellAccounts || [], sessionFacts,
     { directorGuidance: guidance, gateNotes: FIXED_NOTES, directorNotes: state.directorNotes || null, shouldConsider: FIXED_ADVISORIES,
-      evidenceBundle: state.evidenceBundle || null });
+      evidenceBundle: state.evidenceBundle || null, ...directorWords });
   write(FILES[0], og.systemPrompt, og.userPrompt);
 
   // 2. outline revision (fixed hand edit: lede.hook)
@@ -146,7 +155,7 @@ async function render() {
   const ag = await promptBuilder.buildArticlePrompt(outline, state.arcEvidencePackages || [], heroImage, state.shellAccounts || [],
     sessionFacts, state.directorNotes || null, state.narrativeTensions || null,
     { directorGuidance: guidance, gateNotes: FIXED_NOTES, shouldConsider: FIXED_ADVISORIES,
-      evidenceBundle: state.evidenceBundle || null });
+      evidenceBundle: state.evidenceBundle || null, ...directorWords });
   write(FILES[2], ag.systemPrompt, ag.userPrompt);
 
   // 4. article revision (fixed hand edit: headline.main)

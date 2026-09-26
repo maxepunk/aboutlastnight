@@ -15,6 +15,7 @@
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
 // Commit 8.11 fix: Import from shared module to break circular dependency
 const { CHARACTER_IDS_PHOTO_TEMPLATE } = require('./schemas/character-ids');
+const { buildParseCorrectionsBlock } = require('./prompt-renderers/director-words-renderer');
 
 class ImagePromptBuilder {
   /**
@@ -33,6 +34,8 @@ class ImagePromptBuilder {
    * @param {Object} sessionData - Session data
    * @param {string[]} sessionData.roster - Character names for OCR disambiguation
    * @param {string} sessionData.whiteboardPhotoPath - Path to whiteboard image
+   * @param {string[]|string|null} [sessionData.corrections] - the director's input-review
+   *   corrections (phase 2, brief 2.2). This parse was the one that never received them.
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildWhiteboardPrompt(sessionData) {
@@ -59,7 +62,7 @@ Return structured JSON with:
 - groups: Any boxed or circled clusters
 - notes: Text content not part of connections
 - structureType: Overall organization observed
-- ambiguities: Unclear elements that may need verification`;
+- ambiguities: Unclear elements that may need verification${buildParseCorrectionsBlock(sessionData.corrections)}`;
 
     return { systemPrompt, userPrompt };
   }

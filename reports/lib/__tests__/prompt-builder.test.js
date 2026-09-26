@@ -1514,3 +1514,141 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(out).not.toContain('use for factual accuracy');
   });
 });
+
+/**
+ * The director's words beside their parse, in the outline and article writers
+ * (phase 2, brief 2.2): the full accusation with the charge, the input-review
+ * corrections after the notes, each photo description word for word, and the
+ * whiteboard connections under the arc writer's label.
+ */
+describe("buildOutlinePrompt / buildArticlePrompt — the director's words as record", () => {
+  const { PromptBuilder } = require('../prompt-builder');
+
+  const RAW_ACCUSATION = 'Six votes for an accidental overdose, in a final round that had already deadlocked 4 to 4 between Alex and Vic.';
+  const OVERDOSE_FACTS = {
+    roster: ['Alex Reeves', 'Vic Kingsley'],
+    playerCount: 2,
+    accusation: { verdictKind: 'overdose', accused: [], charge: 'Accidental overdose' },
+    accusationText: RAW_ACCUSATION,
+    whiteboard: { suspectsExplored: ['Vic'], connections: ['Vic -> Blake (paid)'], notes: [], namesFound: ['Vic', 'Blake'] }
+  };
+  const DIRECTOR_NOTES = {
+    rawProse: 'Vic to Ashe: "If you ever want to turn, My company is very interesting."',
+    quotes: [], transactionReferences: [], postInvestigationDevelopments: []
+  };
+  const CORRECTION = 'This was actually Blake -> Ashe, and what was said was my company would be very interested.';
+  const PHOTO_7 = "Alex and Sam react to a memory they've just unlocked.";
+  const PHOTO_DESCRIPTIONS = { 'aln092026 (7 of 9).jpg': PHOTO_7 };
+
+  function builder(theme = 'journalist') {
+    const themeLoader = {
+      loadPhasePrompts: jest.fn().mockResolvedValue({
+        'section-rules': 'SR', 'editorial-design': 'ED', 'narrative-structure': 'NS', 'formatting': 'FM',
+        'evidence-boundaries': 'EB', 'character-voice': 'CV', 'anti-patterns': 'AP', 'writing-principles': 'WP'
+      }),
+      validate: jest.fn()
+    };
+    return new PromptBuilder(themeLoader, theme, {});
+  }
+
+  const outline = (facts, options = {}, theme) => builder(theme).buildOutlinePrompt(
+    { narrativeArcs: [] }, ['arc-1'], 'hero.jpg',
+    [{ filename: 'aln092026 (7 of 9).jpg', fullPath: 'p/aln092026 (7 of 9).jpg', identifiedCharacters: ['Alex', 'Sam'] },
+     { filename: 'aln092026 (2 of 9).jpg', fullPath: 'p/aln092026 (2 of 9).jpg', identifiedCharacters: [] }],
+    [], [], facts, options
+  );
+  const article = (facts, options = {}) => builder().buildArticlePrompt(
+    {},
+    [{ arcId: 'arc-1', arcTitle: 'The vote', evidenceItems: [], photos: [{ filename: 'AlN092026 (7 OF 9).JPG', characters: ['Alex', 'Sam'] }] }],
+    'hero.jpg', [], facts, DIRECTOR_NOTES, null, options
+  );
+  const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close));
+
+  describe('the accusation', () => {
+    it("the outline carries the charge, no accused for a no-culprit verdict, and the director's words", async () => {
+      const { userPrompt } = await outline(OVERDOSE_FACTS);
+      const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
+      expect(facts).toContain("ACCUSATION: none (the room's verdict names no culprit: an overdose)");
+      expect(facts).toContain('CHARGE: Accidental overdose');
+      expect(facts).toContain('<DIRECTOR_ACCUSATION>');
+      expect(facts).toContain(RAW_ACCUSATION);
+      expect(facts).not.toMatch(/ACCUSATION: Marcus/);
+    });
+
+    it('the article carries the same, from the same renderer', async () => {
+      const { userPrompt } = await article(OVERDOSE_FACTS);
+      const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
+      expect(facts).toContain("ACCUSATION: none (the room's verdict names no culprit: an overdose)");
+      expect(facts).toContain('CHARGE: Accidental overdose');
+      expect(facts).toContain(RAW_ACCUSATION);
+    });
+
+    it('a culprit verdict names the accused and the charge', async () => {
+      const facts = { ...OVERDOSE_FACTS, accusation: { verdictKind: 'culprit', accused: ['Vic', 'Sam'], charge: 'Murder' }, accusationText: null };
+      const { userPrompt } = await article(facts);
+      expect(userPrompt).toContain('ACCUSATION: Vic and Sam\nCHARGE: Murder');
+      expect(userPrompt).not.toContain('<DIRECTOR_ACCUSATION>');
+    });
+
+    it("the detective outline's SESSION_FACTS uses the same verdict lines", async () => {
+      const { userPrompt } = await outline(OVERDOSE_FACTS, {}, 'detective');
+      expect(userPrompt).toContain('CHARGE: Accidental overdose');
+      expect(userPrompt).toContain(RAW_ACCUSATION);
+    });
+  });
+
+  describe('the input-review corrections', () => {
+    it("follow the notes, labelled as the director's, and the notes are not rewritten", async () => {
+      const renders = [
+        () => outline(null, { directorNotes: DIRECTOR_NOTES, directorCorrections: [CORRECTION] }),
+        () => article(null, { directorCorrections: [CORRECTION] })
+      ];
+      for (const render of renders) {
+        const { userPrompt } = await render();
+        const obs = between(userPrompt, '<INVESTIGATION_OBSERVATIONS>', '</INVESTIGATION_OBSERVATIONS>');
+        expect(obs).toContain(DIRECTOR_NOTES.rawProse);
+        expect(obs).toContain('<DIRECTOR_CORRECTIONS>');
+        expect(obs).toContain(CORRECTION);
+        expect(obs).toMatch(/director's own words and override the notes where the two differ/);
+        expect(obs.indexOf('</DIRECTOR_NOTES>')).toBeLessThan(obs.indexOf('<DIRECTOR_CORRECTIONS>'));
+      }
+    });
+
+    it('add nothing when the director sent none', async () => {
+      const { userPrompt } = await article(null, { directorCorrections: [] });
+      expect(userPrompt).not.toContain('<DIRECTOR_CORRECTIONS>');
+    });
+  });
+
+  describe('the photo descriptions', () => {
+    it("the outline lists each photo by filename, names and the director's description, word for word", async () => {
+      const { userPrompt } = await outline(null, { photoDescriptions: PHOTO_DESCRIPTIONS });
+      const photos = between(userPrompt, '<available-photos>', '</available-photos>');
+      expect(photos).toContain(`1. aln092026 (7 of 9).jpg: Alex, Sam\n   The director's description, word for word: ${PHOTO_7}`);
+      expect(photos).toContain("2. aln092026 (2 of 9).jpg: Unknown\n   The director's description: none given");
+      expect(photos).not.toMatch(/Visual:|Characters:/);
+    });
+
+    it("the article's arc photos carry the description, joined by filename whatever the case", async () => {
+      const { userPrompt } = await article(null, { photoDescriptions: PHOTO_DESCRIPTIONS });
+      expect(userPrompt).toContain(`- AlN092026 (7 OF 9).JPG: Alex, Sam\n  The director's description, word for word: ${PHOTO_7}`);
+    });
+  });
+
+  describe('the whiteboard', () => {
+    it("reaches the outline and article writers under the arc writer's label", async () => {
+      for (const render of [() => outline(OVERDOSE_FACTS), () => article(OVERDOSE_FACTS)]) {
+        const { userPrompt } = await render();
+        expect(userPrompt).toContain('### Whiteboard Connections (Players drew these during investigation)');
+        expect(userPrompt).toContain('**Suspects Explored:** ["Vic"]');
+        expect(userPrompt).toContain('**Names Identified:** ["Vic","Blake"]');
+      }
+    });
+
+    it('is left out when the players drew nothing', async () => {
+      const facts = { ...OVERDOSE_FACTS, whiteboard: { suspectsExplored: [], connections: [], notes: [], namesFound: [] } };
+      const { userPrompt } = await article(facts);
+      expect(userPrompt).not.toContain('Whiteboard Connections');
+    });
+  });
+});

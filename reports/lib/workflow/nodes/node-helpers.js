@@ -369,11 +369,14 @@ function synthesizePlayerFocus(sessionConfig, directorNotes) {
     secondarySuspects,
     allSuspects: [...primarySuspects, ...secondarySuspects],
 
-    // The formal accusation details
+    // The formal accusation details. Brief 2.2: verdictKind travels with them, so a
+    // verdict with no culprit (empty accused) reads as that and not as "not parsed".
+    // Absent on a parse written before verdict kinds existed.
     accusation: {
       accused: sessionConfig?.accusation?.accused || [],
       charge: sessionConfig?.accusation?.charge || '',
-      reasoning: sessionConfig?.accusation?.notes || ''
+      reasoning: sessionConfig?.accusation?.notes || '',
+      ...(sessionConfig?.accusation?.verdictKind && { verdictKind: sessionConfig.accusation.verdictKind })
     },
 
     // Director observations (what ACTUALLY happened - highest weight for narrative)

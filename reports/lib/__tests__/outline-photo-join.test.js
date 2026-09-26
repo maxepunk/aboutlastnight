@@ -10,6 +10,11 @@
  * shifted by one in every session that had a hero.
  *
  * The join is the one the console's photoUrl already uses: basename, case-insensitive.
+ *
+ * Phase 2, brief 2.2: what the join carries changed. Each photo now brings the names
+ * the director identified in it (identifiedCharacters); Haiku's pre-identification
+ * descriptions no longer reach the outline writer, which reads the director's own
+ * description of the photo instead (joined by filename in the prompt builder).
  */
 
 jest.mock('../observability', () => ({
@@ -37,11 +42,12 @@ function makeCapturingConfig() {
   return { captured, config: { configurable: { sdkClient: async () => mockOutline, promptBuilder } } };
 }
 
-/** An analysis whose description names its own photo, so a shift is visible. */
+/** An analysis whose names are its own photo's, so a shift is visible. */
 const analysisFor = (filename, characters) => ({
   filename,
   visualContent: `visual of ${filename}`,
-  characterDescriptions: characters.map((description) => ({ description }))
+  characterDescriptions: characters.map((description) => ({ description })),
+  identifiedCharacters: characters
 });
 
 describe('generateOutline availablePhotos join', () => {
@@ -68,8 +74,8 @@ describe('generateOutline availablePhotos join', () => {
 
     expect(captured.heroImage).toBe('group.jpg');
     expect(captured.availablePhotos).toEqual([
-      { filename: 'bar.jpg', fullPath: 'data/091826/photos/bar.jpg', characters: ['Blake at the bar'], visualContent: 'visual of bar.jpg' },
-      { filename: 'hallway.jpg', fullPath: 'data/091826/photos/hallway.jpg', characters: ['Morgan in the hallway'], visualContent: 'visual of hallway.jpg' }
+      { filename: 'bar.jpg', fullPath: 'data/091826/photos/bar.jpg', identifiedCharacters: ['Blake at the bar'] },
+      { filename: 'hallway.jpg', fullPath: 'data/091826/photos/hallway.jpg', identifiedCharacters: ['Morgan in the hallway'] }
     ]);
   });
 
@@ -93,7 +99,7 @@ describe('generateOutline availablePhotos join', () => {
 
     await generateOutline(state, config);
 
-    const byName = Object.fromEntries(captured.availablePhotos.map((p) => [p.filename, p.characters]));
+    const byName = Object.fromEntries(captured.availablePhotos.map((p) => [p.filename, p.identifiedCharacters]));
     expect(byName).toEqual({ 'kitchen.jpg': ['Kai in the kitchen'] });
     expect(captured.heroImage).toBe('toast.jpg');
   });
@@ -109,7 +115,7 @@ describe('generateOutline availablePhotos join', () => {
 
     expect(captured.heroImage).toBe('Hero.JPG');
     expect(captured.availablePhotos).toHaveLength(1);
-    expect(captured.availablePhotos[0].characters).toEqual(['Blake']);
+    expect(captured.availablePhotos[0].identifiedCharacters).toEqual(['Blake']);
   });
 
   it('leaves a photo with no analysis empty rather than borrowing the next one', async () => {
@@ -121,7 +127,27 @@ describe('generateOutline availablePhotos join', () => {
 
     await generateOutline(state, config);
 
-    const byName = Object.fromEntries(captured.availablePhotos.map((p) => [p.filename, p.characters]));
+    const byName = Object.fromEntries(captured.availablePhotos.map((p) => [p.filename, p.identifiedCharacters]));
     expect(byName['a.jpg']).toEqual([]);
+  });
+
+  it('carries no pre-identification description to the writer (brief 2.2)', async () => {
+    const { captured, config } = makeCapturingConfig();
+    const state = {
+      sessionPhotos: ['data/092026/photos/hero.jpg', 'data/092026/photos/seven.jpg'],
+      photoAnalyses: {
+        analyses: [
+          analysisFor('hero.jpg', ['Vic', 'Alex', 'Sam']),
+          { filename: 'seven.jpg', visualContent: 'two people at a table', characterDescriptions: [{ description: 'person in red' }], identifiedCharacters: ['Alex', 'Sam'] }
+        ]
+      }
+    };
+
+    await generateOutline(state, config);
+
+    expect(captured.availablePhotos).toEqual([
+      { filename: 'seven.jpg', fullPath: 'data/092026/photos/seven.jpg', identifiedCharacters: ['Alex', 'Sam'] }
+    ]);
+    expect(JSON.stringify(captured.availablePhotos)).not.toMatch(/person in red|two people at a table/);
   });
 });

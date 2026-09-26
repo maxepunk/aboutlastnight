@@ -98,3 +98,27 @@ describe('renderDirectorEnrichmentBlock', () => {
     expect(out).not.toContain('<QUOTE_BANK>');
   });
 });
+
+describe('renderDirectorEnrichmentBlock: the input-review corrections (phase 2, brief 2.2)', () => {
+  const PROSE = 'Vic to Ashe: "My company is very interesting."';
+
+  it('puts the corrections right after the notes, which stay as written', () => {
+    const out = renderDirectorEnrichmentBlock({
+      rawProse: PROSE,
+      quotes: [{ speaker: 'Blake', text: 'My company', confidence: 'high' }],
+      corrections: ['This was actually Blake -> Ashe.']
+    });
+    expect(out).toContain(`<DIRECTOR_NOTES>\n${PROSE}\n</DIRECTOR_NOTES>\n\n<DIRECTOR_CORRECTIONS>`);
+    expect(out).toContain("The director's corrections to the notes above, written at the input review, in the order given. They are the director's own words and override the notes where the two differ.\nThis was actually Blake -> Ashe.\n</DIRECTOR_CORRECTIONS>\n\n<QUOTE_BANK>");
+  });
+
+  it('numbers several corrections in the order the director sent them', () => {
+    const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, corrections: ['first', 'second'] });
+    expect(out).toContain('1. first\n\n2. second');
+  });
+
+  it('adds nothing without corrections', () => {
+    expect(renderDirectorEnrichmentBlock({ rawProse: PROSE, corrections: [] })).not.toContain('DIRECTOR_CORRECTIONS');
+    expect(renderDirectorEnrichmentBlock({ rawProse: PROSE })).not.toContain('DIRECTOR_CORRECTIONS');
+  });
+});

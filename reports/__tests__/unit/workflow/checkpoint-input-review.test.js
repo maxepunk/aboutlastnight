@@ -195,3 +195,38 @@ describe('the e2e harness speaks the new gate contract', () => {
     });
   });
 });
+
+/**
+ * The corrections are kept for the session (phase 2, brief 2.2). `_inputCorrections`
+ * is consumed by the re-parse; `inputReviewCorrections` is the director's text, in
+ * order, which every later parse and every writer reads.
+ */
+describe('checkpointInputReview keeps every correction, in order', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('appends this round\'s correction after the earlier ones', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ approved: false, feedback: '  The room accused no one.  ' });
+
+    const result = await checkpointInputReview({
+      ...PARSED_STATE,
+      inputReviewCorrections: ['This was actually Blake -> Ashe.']
+    }, {});
+
+    expect(result._inputCorrections).toBe('The room accused no one.');
+    expect(result.inputReviewCorrections).toEqual(['This was actually Blake -> Ashe.', 'The room accused no one.']);
+  });
+
+  it('starts the list on the first send back, and after a rollback cleared it to null', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ approved: false, feedback: 'Blake said it.' });
+    const result = await checkpointInputReview({ ...PARSED_STATE, inputReviewCorrections: null }, {});
+    expect(result.inputReviewCorrections).toEqual(['Blake said it.']);
+  });
+
+  it('an approve leaves the kept corrections alone', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ approved: true });
+    const result = await checkpointInputReview({ ...PARSED_STATE, inputReviewCorrections: ['kept'] }, {});
+    expect(result).not.toHaveProperty('inputReviewCorrections');
+  });
+});

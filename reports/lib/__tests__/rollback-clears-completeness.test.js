@@ -256,4 +256,28 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
       expect(listClears).toBe(!prunes);
     });
   });
+
+  // Phase 2, brief 2.2: the director's words are cleared with the parse they belong to.
+  describe("the director's-words channels (phase 2, brief 2.2)", () => {
+    const points = Object.keys(ROLLBACK_CLEARS);
+
+    test.each(points)('%s clears photoDescriptions exactly where it clears characterIdMappings', (point) => {
+      const list = ROLLBACK_CLEARS[point];
+      expect(list.includes('photoDescriptions')).toBe(list.includes('characterIdMappings'));
+    });
+
+    // The parse is re-derived wherever its raw inputs are re-collected: the three
+    // points that clear `accusation` (await-full-context also lists the parse outputs;
+    // the two upstream points re-pause it, and its capture nulls them). input-review
+    // keeps the parse (loadDirectorNotes rehydrates it), so it keeps its corrections.
+    test.each(points)('%s clears inputReviewCorrections exactly where it re-collects the parse inputs', (point) => {
+      const list = ROLLBACK_CLEARS[point];
+      expect(list.includes('inputReviewCorrections')).toBe(list.includes('accusation'));
+    });
+
+    test('input-review keeps the corrections to the parse it keeps', () => {
+      expect(ROLLBACK_CLEARS['input-review']).not.toContain('inputReviewCorrections');
+      expect(ROLLBACK_CLEARS['input-review']).not.toContain('sessionConfig');
+    });
+  });
 });

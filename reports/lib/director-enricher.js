@@ -9,6 +9,8 @@
  * Spec: docs/superpowers/specs/2026-04-20-director-notes-enrichment-design.md
  */
 
+const { formatAccused, buildParseCorrectionsBlock } = require('./prompt-renderers/director-words-renderer');
+
 // B3: the model is NOT asked to echo the prose back. The caller already holds it,
 // and requiring a byte-exact round trip made a single stray character discard the
 // entire enrichment (see enrichDirectorNotes).
@@ -154,14 +156,19 @@ function buildEnrichmentPrompt({
 
   const rosterBlock = rosterArr.length > 0 ? rosterArr.join(', ') : '(none provided)';
 
-  // accusation.accused may arrive as string, array, or missing
-  const accusedValue = accusation?.accused;
-  const accusedStr = Array.isArray(accusedValue)
-    ? (accusedValue.join(', ') || 'unspecified')
-    : (typeof accusedValue === 'string' && accusedValue.trim() ? accusedValue : 'unspecified');
-  const accusationBlock = accusation
-    ? `Accused: ${accusedStr}\nCharge: ${accusation.charge || 'unspecified'}`
-    : '(none provided)';
+  // accusation.accused may arrive as string, array, or missing. Brief 2.2: a verdict
+  // with no culprit says so instead of naming anyone (formatAccused, shared with the
+  // writers), and the parse's notes on the accusation are no longer dropped.
+  const accusationLines = accusation
+    ? [
+        `Accused: ${formatAccused(accusation, { joiner: ', ', empty: 'unspecified' })}`,
+        `Charge: ${accusation.charge || 'unspecified'}`,
+        ...(typeof accusation.notes === 'string' && accusation.notes.trim()
+          ? [`Notes: ${accusation.notes.trim()}`]
+          : [])
+      ]
+    : null;
+  const accusationBlock = accusationLines ? accusationLines.join('\n') : '(none provided)';
 
   const npcsBlock = npcsArr.length > 0 ? npcsArr.join(', ') : '(none)';
   const shellAccountsBlock = shellAccountsArr.length > 0
@@ -175,15 +182,9 @@ function buildEnrichmentPrompt({
     : '(none)';
 
   // B2: on a re-parse the director rejected the previous parse and typed what was
-  // wrong. Placed LAST so it carries the most weight.
-  const correctionsBlock = (typeof corrections === 'string' && corrections.trim())
-    ? `
-<DIRECTOR_CORRECTIONS>
-${corrections.trim()}
-</DIRECTOR_CORRECTIONS>
-Apply these corrections; they override anything in the source text.
-`
-    : '';
+  // wrong. Placed LAST so it carries the most weight. The block is the one every
+  // parse prompt shares (brief 2.2); `corrections` is a string or the session's list.
+  const correctionsBlock = buildParseCorrectionsBlock(corrections);
 
   const userPrompt = `<ROSTER>
 ${rosterBlock}
@@ -220,8 +221,8 @@ ${rawProse}
 4. Extract quotes verbatim. Confidence: "high" = speaker named in the same sentence; "medium" = speaker inferable from the surrounding paragraph; "low" = otherwise.
 5. postInvestigationDevelopments only for passages with explicit post-investigation markers.
 6. Empty arrays are valid. Never fabricate.
-</ENRICHMENT_RULES>
-${correctionsBlock}`;
+</ENRICHMENT_RULES>${correctionsBlock}
+`;
 
   return { systemPrompt: ENRICHMENT_SYSTEM_PROMPT, userPrompt };
 }

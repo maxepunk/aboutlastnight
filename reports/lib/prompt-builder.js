@@ -9,6 +9,7 @@ const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
 const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
+const { renderSessionFactsVerdict, renderPhotoEntry } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 const { getThemeNPCEntries } = require('./theme-config');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -412,9 +413,11 @@ class PromptBuilder {
    * article are planned and written against the same observations.
    *
    * @param {Object|null} directorNotes - enriched director notes
+   * @param {string[]|null} [corrections] - the director's input-review corrections, in
+   *   order (brief 2.2): rendered right after the notes, which are never rewritten
    * @returns {string} the XML section, or '' when the director wrote no prose
    */
-  _buildInvestigationObservations(directorNotes) {
+  _buildInvestigationObservations(directorNotes, corrections = null) {
     if (!directorNotes?.rawProse) return '';
     return `<INVESTIGATION_OBSERVATIONS>
 What you observed during the investigation this morning.
@@ -425,7 +428,8 @@ ${renderDirectorEnrichmentBlock({
   rawProse: directorNotes.rawProse,
   quotes: directorNotes.quotes,
   transactionReferences: directorNotes.transactionReferences,
-  postInvestigationDevelopments: directorNotes.postInvestigationDevelopments
+  postInvestigationDevelopments: directorNotes.postInvestigationDevelopments,
+  corrections
 })}
 </INVESTIGATION_OBSERVATIONS>`;
   }
@@ -505,8 +509,9 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
    * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
    * @param {Array} arcEvidencePackages - Per-arc evidence: the arc's document ids and quotable excerpts
    * @param {Array} shellAccounts - Deterministic shell account data
-   * @param {Object|null} sessionFacts - Roster and accusation guardrail
-   * @param {Object} options - { directorGuidance, gateNotes, directorNotes, evidenceBundle }
+   * @param {Object|null} sessionFacts - Roster and verdict (ai-nodes.js buildSessionFacts)
+   * @param {Object} options - { directorGuidance, gateNotes, directorNotes, shouldConsider,
+   *   evidenceBundle, directorCorrections, photoDescriptions }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
@@ -544,7 +549,7 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
       analysisNotes: arc.analysisNotes || {}  // Financial/behavioral/victimization insights
     }));
 
-    const observationsSection = this._buildInvestigationObservations(options.directorNotes);
+    const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections);
 
     // Brief 2.1: every usable document in full, once, ahead of the per-arc lists that
     // name them by id. The planner used to read the text of at most five documents
@@ -622,7 +627,7 @@ ${sessionFacts ? `
 INVESTIGATION ROSTER (${sessionFacts.playerCount} subjects):
 ${sessionFacts.roster.join('\n')}
 
-ACCUSATION: ${sessionFacts.accusation}
+${renderSessionFactsVerdict(sessionFacts)}
 
 ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
 Use exactly ${sessionFacts.playerCount} when referencing how many subjects were involved.
@@ -749,9 +754,7 @@ The goal is a compelling GIFT for players, not quota compliance.
 
 <available-photos>
 
-${availablePhotos.length > 0 ? availablePhotos.map((p, i) => `${i + 1}. ${p.filename}
-   Characters: ${p.characters.slice(0, 3).join('; ') || 'Unknown'}
-   Visual: ${(p.visualContent || '').substring(0, 100)}...`).join('\n\n') : 'No session photos available'}
+${availablePhotos.length > 0 ? availablePhotos.map((p, i) => `${i + 1}. ${renderPhotoEntry({ filename: p.filename, names: p.identifiedCharacters }, options.photoDescriptions, '   ')}`).join('\n\n') : 'No session photos available'}
 
 IMPORTANT: When specifying photoPlacement, use the EXACT filename from above (e.g., "IMG_1234.jpg").
 Do NOT use paths like "character-photos/vic.png" - these files do not exist.
@@ -822,7 +825,7 @@ ${sessionFacts ? `
 INVESTIGATION ROSTER (${sessionFacts.playerCount} players):
 ${sessionFacts.roster.join('\n')}
 
-ACCUSATION: ${sessionFacts.accusation}
+${renderSessionFactsVerdict(sessionFacts)}
 
 CRITICAL - CHARACTER AGENCY RULE:
 ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
@@ -950,7 +953,7 @@ ${(pkg.evidenceItems || []).map(item =>
 ).join('\n')}
 
 ARC PHOTOS:
-${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown'}`).join('\n') || 'None'}
+${(pkg.photos || []).map(p => `- ${renderPhotoEntry({ filename: p.filename, names: p.characters }, options.photoDescriptions)}`).join('\n') || 'None'}
 `).join('\n---\n')}
 ` : '';
 
@@ -1097,7 +1100,7 @@ TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 ${recordSection}
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
-${this._buildInvestigationObservations(directorNotes)}
+${this._buildInvestigationObservations(directorNotes, options.directorCorrections)}
 ${(narrativeTensions?.tensions?.length > 0) ? `
 <NARRATIVE_TENSIONS>
 These possible contradictions between public behavior and Black Market activity are
@@ -1217,7 +1220,7 @@ ${sessionFacts ? `
 INVESTIGATION ROSTER (${sessionFacts.playerCount} players):
 ${sessionFacts.roster.join('\n')}
 
-ACCUSATION: ${sessionFacts.accusation}
+${renderSessionFactsVerdict(sessionFacts)}
 
 CRITICAL - CHARACTER AGENCY RULE:
 ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.

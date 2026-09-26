@@ -64,7 +64,30 @@ const {
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
 const { renderRecordView, recordIdOf } = require('../../prompt-renderers/record-view');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
-const { withReportingModeBlock } = require('../../prompt-builder');
+const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
+const { isNoCulpritVerdict, directorAccusationText } = require('../../accusation-verdict');
+const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
+
+/**
+ * The director's standing notes for the arc writer and the arc reworker (phase 2,
+ * brief 2.2).
+ *
+ * The same section the outline and article prompts carry, built by the same two
+ * functions (prompt-builder.js), with the gate `arc-selection`: the note this rework
+ * is acting on is already its HUMAN FEEDBACK and is filtered out; every earlier note
+ * stands. Before this, a second send back at the arc stop lost the first note.
+ *
+ * In practice only the reworker shows any: a rollback to arc selection or earlier
+ * clears the notes, so the arc writer runs with none (wave-1 ruling R7).
+ *
+ * @param {Object} state
+ * @returns {string} '\n\n<DIRECTOR_GUIDANCE>...' or '' when there are no notes
+ */
+function buildArcStandingNotes(state) {
+  const notes = filterGateNotes(state.directorGateNotes || [], state._arcFeedback || null, 'arc-selection');
+  const section = buildDirectorGuidanceSection(null, notes);
+  return section ? `\n\n${section}` : '';
+}
 
 /**
  * The two arc system prompts, with the session's reporting-mode block.
@@ -287,17 +310,11 @@ ${outputFormat}
 ## SECTION 1: WHAT PLAYERS CONCLUDED (PRIMARY - Your arcs must address this)
 
 ### The Accusation (REQUIRED ARC)
-**Accused:** ${JSON.stringify(context.accusation.accused || [])}
-**Charge:** ${context.accusation.charge || 'Not specified'}
-**Players' Reasoning:** ${context.accusation.reasoning || 'Not documented'}
+${renderArcAccusation(context.accusation, directorAccusationText(state), "Players' Reasoning")}
 
 You MUST generate an arc that addresses this accusation. Even if evidence is weak, include this arc and mark it appropriately with evidenceStrength="speculative" if needed.
 
-### Whiteboard Connections (Players drew these during investigation)
-**Suspects Explored:** ${JSON.stringify(context.whiteboard.suspectsExplored || [])}
-**Connections Found:** ${JSON.stringify(context.whiteboard.connections || [])}
-**Notes Captured:** ${JSON.stringify(context.whiteboard.notes || [])}
-**Names Identified:** ${JSON.stringify(context.whiteboard.namesFound || [])}
+${renderWhiteboardConnections(context.whiteboard)}
 
 ### Director Observations (GROUND TRUTH - Director witnessed these behaviors)
 The director's prose below is the AUTHORITATIVE source. Use it to ground arcs in behavioral reality.
@@ -306,7 +323,8 @@ ${renderDirectorEnrichmentBlock({
   rawProse: context.directorProse,
   quotes: context.directorQuotes,
   transactionReferences: context.directorTransactionLinks,
-  postInvestigationDevelopments: context.directorPostInvestigation
+  postInvestigationDevelopments: context.directorPostInvestigation,
+  corrections: state.inputReviewCorrections || []
 })}
 
 ### Primary Investigation Focus
@@ -443,7 +461,7 @@ For each arc, analyze through all three lenses and document in analysisNotes:
 ### Victimization Lens
 - Targeting patterns that support this arc
 - Victim/operator relationships
-${buildArcRevisionContext(state)}`;
+${buildArcRevisionContext(state)}${buildArcStandingNotes(state)}`;
 }
 
 /**
@@ -1009,7 +1027,7 @@ async function reviseArcs(state, config) {
       label: `Arc revision ${revisionCount}`
     });
 
-    const { narrativeArcs, synthesisNotes } = result || {};
+    const { narrativeArcs, synthesisNotes, interweavingPlan: revisedPlan } = result || {};
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseArcs] Complete: ${narrativeArcs?.length || 0} arcs in ${duration}s`);
@@ -1020,6 +1038,16 @@ async function reviseArcs(state, config) {
       console.log(`[reviseArcs] Accusation arc present: ${hasAccusationArc}`);
     }
 
+    // Brief 2.2: the rework keeps the interweaving plan. It is asked for one (the
+    // schema always allowed it); the cache this return replaces used to drop it, so
+    // the outline writer's <arc-analysis> lost the plan after any arc rework. A rework
+    // that returns none keeps the previous plan and says so.
+    const previousPlan = state._arcAnalysisCache?.interweavingPlan || null;
+    const planReturned = !!(revisedPlan && typeof revisedPlan === 'object' && Object.keys(revisedPlan).length > 0);
+    if (!planReturned) {
+      console.warn(`[reviseArcs] Rework returned no interweaving plan; ${previousPlan ? 'keeping the previous plan' : 'no previous plan to keep'}`);
+    }
+
     return {
       narrativeArcs: narrativeArcs || [],
       _previousArcs: null,  // Clear temporary field after use
@@ -1027,6 +1055,8 @@ async function reviseArcs(state, config) {
       _arcAnalysisCache: {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
+        interweavingPlan: planReturned ? revisedPlan : (previousPlan || createDefaultInterweavingPlan()),
+        ...(!planReturned && previousPlan && { interweavingFromPreviousRound: true }),
         arcCount: narrativeArcs?.length || 0,
         architecture: 'player-focus-guided-revision',
         revisionNumber: revisionCount,
@@ -1054,6 +1084,8 @@ async function reviseArcs(state, config) {
         _arcFeedback: state._arcFeedback,  // Preserve for retry — don't lose human intent
         _arcAnalysisCache: {
           synthesizedAt: new Date().toISOString(),
+          // Brief 2.2: the previous arcs are kept, so their plan is kept with them.
+          ...(state._arcAnalysisCache?.interweavingPlan && { interweavingPlan: state._arcAnalysisCache.interweavingPlan }),
           _revisionTimedOut: true,
           _revisionAttempt: revisionCount,
           _consecutiveTimeouts: consecutiveTimeouts,
@@ -1180,9 +1212,7 @@ ${contextSection}
 ## SESSION CONTEXT (Reference Only - Do NOT regenerate)
 
 ### Accusation
-**Accused:** ${JSON.stringify(accusation.accused || [])}
-**Charge:** ${accusation.charge || 'Not specified'}
-**Reasoning:** ${accusation.reasoning || 'Not documented'}
+${renderArcAccusation(accusation, directorAccusationText(state), 'Reasoning')}
 
 ### Roster
 ${JSON.stringify(roster)}
@@ -1194,7 +1224,8 @@ ${renderDirectorEnrichmentBlock({
   rawProse: directorProse,
   quotes: directorQuotes,
   transactionReferences: directorTxRefs,
-  postInvestigationDevelopments: directorPostInv
+  postInvestigationDevelopments: directorPostInv,
+  corrections: state.inputReviewCorrections || []
 })}
 
 ${buildCharacterCategoriesBlock(roster, theme, allCharacters)}
@@ -1205,6 +1236,9 @@ ${describeValidEvidence(evidenceSummary)}
 
 ${previousOutputSection}
 
+### PREVIOUS INTERWEAVING PLAN
+${JSON.stringify(state._arcAnalysisCache?.interweavingPlan || {}, null, 2)}
+
 ---
 
 ## YOUR TASK
@@ -1214,8 +1248,9 @@ ${previousOutputSection}
 3. Make TARGETED FIXES to address those specific issues
 4. PRESERVE everything that's working well
 5. Return the complete updated arc set in the same JSON format
+6. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving. Keep the PREVIOUS INTERWEAVING PLAN where the arcs it names still stand, and change it only where the revision changed those arcs.
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${buildArcStandingNotes(state)}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1547,6 +1582,10 @@ function validateArcStructure(state, config) {
   // 5. Filter arcs and check structural requirements (Commit 8.15)
   // ═══════════════════════════════════════════════════════════════════════
 
+  // Brief 2.2: a verdict that names no culprit (an accident, an overdose, self-harm).
+  // Its accusation arc is about the verdict itself and may have no one to place.
+  const noCulpritVerdict = isNoCulpritVerdict(state.sessionConfig?.accusation || state.playerFocus?.accusation);
+
   // Filter arcs that lost all evidence AND characters
   // NOTE: For speculative arcs, we allow no evidence if arcSource is 'accusation'
   const viableArcs = validatedArcs.filter(arc => {
@@ -1558,7 +1597,9 @@ function validateArcStructure(state, config) {
     if (isAccusationArc && !hasEvidence) {
       console.log(`[validateArcStructure] Accusation arc "${arc.title}" has no evidence - allowed (speculative)`);
       arc._noEvidence = true;
-      return hasCharacters;  // Still need characters
+      // Still needs characters, unless the verdict names no culprit: then an arc
+      // about the verdict with no one to place is the arc the rule asks for.
+      return hasCharacters || noCulpritVerdict;
     }
 
     if (!hasEvidence && !hasCharacters) {
@@ -1636,7 +1677,9 @@ function validateArcStructure(state, config) {
   if (!hasAccusationArc) {
     structuralIssues.push({
       type: 'no-accusation-arc',
-      message: 'No accusation arc present - must include arc based on player accusation',
+      message: noCulpritVerdict
+        ? 'No accusation arc present - must include an arc (arcSource "accusation") about the room\'s verdict, which names no culprit'
+        : 'No accusation arc present - must include arc based on player accusation',
       severity: 'structural'
     });
   }
@@ -1839,7 +1882,9 @@ module.exports = {
     buildArcRevisionPrompt,
     getArcRevisionSystemPrompt,
     buildCharacterCategoriesBlock,
-    describeValidEvidence
+    describeValidEvidence,
+    // Brief 2.2: standing notes at the arc stop
+    buildArcStandingNotes
   }
 };
 

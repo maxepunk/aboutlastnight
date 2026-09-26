@@ -2663,6 +2663,11 @@ textarea.input {
 .quote-text { color: var(--text-secondary); margin-right: 6px; }
 .quote-context { margin-top: 4px; font-size: 0.8rem; }
 
+/* Exposed memories: exposer, time, owner from the session report (phase 2, brief 2.2) */
+.exposure-table { width: 100%; border-collapse: collapse; }
+.exposure-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: var(--space-xs) var(--space-sm); border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.exposure-table td { padding: var(--space-xs) var(--space-sm); border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
+
 /* Transaction cross-references */
 .tx-ref-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); padding: var(--space-sm) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
 .tx-ref-excerpt { display: flex; flex-direction: column; gap: 4px; }

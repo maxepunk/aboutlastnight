@@ -2,7 +2,10 @@
  * CharacterIds Checkpoint Component
  * Per-photo character identification with thumbnails.
  * Shows AI analysis (read-only) alongside user input fields.
- * Submits combined AI + user descriptions as characterIdsRaw.
+ * Submits combined AI + user descriptions as characterIdsRaw, and (phase 2, brief
+ * 2.2) each description word for word in photoDescriptions, keyed by filename.
+ * Each card pairs an analysis with its photo BY FILENAME (ViewLogic.characterIdCards),
+ * never by position in the two lists.
  * Exports to window.Console.checkpoints.CharacterIds
  */
 
@@ -10,6 +13,7 @@ window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, truncate } = window.Console.utils;
+const ViewLogic = window.Console.checkpointViewLogic;
 
 function CharacterIds({ data, onApprove }) {
   const sessionPhotos = (data && data.sessionPhotos) || [];
@@ -23,14 +27,13 @@ function CharacterIds({ data, onApprove }) {
     || (data && data.sessionConfig && data.sessionConfig.roster)
     || [];
 
-  // Per-photo user descriptions keyed by index
+  // One card per analysis, each with its own photo (brief 2.2: by filename).
+  const cards = ViewLogic.characterIdCards(photoAnalyses, sessionPhotos);
+
+  // Per-photo user descriptions keyed by card key (the photo's filename)
   const [descriptions, setDescriptions] = React.useState({});
   // Track which cards are expanded (show full AI analysis)
   const [expanded, setExpanded] = React.useState({});
-
-  function getDisplayName(filepath) {
-    return (filepath || '').split('/').pop().split('\\').pop();
-  }
 
   /**
    * H24: the card read `photo.relevanceScore`, which no analysis object carries, and
@@ -55,47 +58,25 @@ function CharacterIds({ data, onApprove }) {
     return 'var(--text-muted)';
   }
 
-  function toggleExpanded(index) {
+  function toggleExpanded(key) {
     setExpanded(function (prev) {
       var next = Object.assign({}, prev);
-      next[index] = !prev[index];
+      next[key] = !prev[key];
       return next;
     });
   }
 
-  function updateDescription(index, value) {
+  function updateDescription(key, value) {
     setDescriptions(function (prev) {
       var next = Object.assign({}, prev);
-      next[index] = value;
+      next[key] = value;
       return next;
     });
-  }
-
-  function buildPayload() {
-    // Concatenate per-photo blocks with AI context + user input
-    var blocks = [];
-    photoAnalyses.forEach(function (photo, i) {
-      var filename = getDisplayName(sessionPhotos[i]) || 'Photo ' + (i + 1);
-      var userText = (descriptions[i] || '').trim();
-      var aiVisual = (photo.visualContent || '').trim();
-      var charDescs = (photo.characterDescriptions || [])
-        .map(function (d) {
-          return '[' + (d.description || 'unknown') + ', role: ' + (d.role || 'UNKNOWN') + ']';
-        })
-        .join(', ');
-
-      var lines = ['Photo ' + filename + ':'];
-      if (aiVisual) lines.push('  AI Description: ' + aiVisual);
-      if (charDescs) lines.push('  Character Descriptions: ' + charDescs);
-      if (userText) lines.push('  User Input: ' + userText);
-      blocks.push(lines.join('\n'));
-    });
-    return blocks.join('\n');
   }
 
   function handleSubmit() {
-    var payload = buildPayload();
-    onApprove({ characterIdsRaw: payload });
+    // The raw text the parser reads, plus each description as its own field.
+    onApprove(ViewLogic.characterIdsPayload(cards, descriptions));
   }
 
   function handleSkip() {
@@ -119,15 +100,17 @@ function CharacterIds({ data, onApprove }) {
     ),
 
     // Photo cards
-    photoAnalyses.length > 0 && React.createElement('div', { className: 'flex flex-col gap-md' },
-      photoAnalyses.map(function (photo, i) {
-        var filepath = sessionPhotos[i] || '';
-        var displayName = getDisplayName(filepath) || 'Photo ' + (i + 1);
+    cards.length > 0 && React.createElement('div', { className: 'flex flex-col gap-md' },
+      cards.map(function (card, i) {
+        var photo = card.analysis;
+        var cardKey = card.key;
+        var filepath = card.path;
+        var displayName = card.displayName;
         var relevanceBadge = getRelevanceBadge(photo.storyRelevance);
         var visual = photo.visualContent || '';
         var charDescs = photo.characterDescriptions || [];
         var caption = photo.suggestedCaption || '';
-        var isExpanded = !!expanded[i];
+        var isExpanded = !!expanded[cardKey];
         var thumbUrl = filepath
           ? '/api/file?path=' + encodeURIComponent(filepath)
           : null;
@@ -142,7 +125,7 @@ function CharacterIds({ data, onApprove }) {
             // Thumbnail
             thumbUrl && React.createElement('div', {
               className: 'photo-card__thumb-wrap',
-              onClick: function () { toggleExpanded(i); }
+              onClick: function () { toggleExpanded(cardKey); }
             },
               React.createElement('img', {
                 src: thumbUrl,
@@ -157,7 +140,7 @@ function CharacterIds({ data, onApprove }) {
               // Header: filename + score
               React.createElement('div', {
                 className: 'photo-card__header',
-                onClick: function () { toggleExpanded(i); },
+                onClick: function () { toggleExpanded(cardKey); },
                 style: { cursor: 'pointer' }
               },
                 React.createElement('span', { className: 'text-sm' }, displayName),
@@ -222,8 +205,8 @@ function CharacterIds({ data, onApprove }) {
                   id: 'char-input-' + i,
                   className: 'input text-sm photo-card__input',
                   rows: 2,
-                  value: descriptions[i] || '',
-                  onChange: function (e) { updateDescription(i, e.target.value); },
+                  value: descriptions[cardKey] || '',
+                  onChange: function (e) { updateDescription(cardKey, e.target.value); },
                   // Built from the session's own roster so the example names are people
                   // the director just typed, not names from another session.
                   placeholder: 'e.g., ' + (
@@ -242,7 +225,7 @@ function CharacterIds({ data, onApprove }) {
     ),
 
     // No photos fallback
-    photoAnalyses.length === 0 && React.createElement('p', {
+    cards.length === 0 && React.createElement('p', {
       className: 'text-muted text-sm'
     }, 'No photo analyses available.'),
 

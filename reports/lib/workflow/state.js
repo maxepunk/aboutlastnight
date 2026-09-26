@@ -12,10 +12,11 @@
  * State Fields (67 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
- *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections
+ *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections,
+ *     inputReviewCorrections
  *   - Fetched Data: memoryTokens, paperEvidence, sessionPhotos
  *   - User Selection (8.9): selectedPaperEvidence
- *   - Photo Analysis (8.6): photoAnalyses, characterIdMappings
+ *   - Photo Analysis (8.6): photoAnalyses, characterIdMappings, photoDescriptions
  *   - Preprocessed Data: preprocessedEvidence (Commit 8.5)
  *   - Curated Data: evidenceBundle
  *   - Arc Specialists (8.6): specialistAnalyses
@@ -163,6 +164,27 @@ const ReportStateAnnotation = Annotation.Root({
   _inputCorrections: Annotation({
     reducer: replaceReducer,
     default: () => null
+  }),
+
+  /**
+   * Every correction the director has sent back from the input review, in order
+   * (phase 2, brief 2.2). `_inputCorrections` is consumed by the re-parse and
+   * cleared; this is the session's record of what the director wrote.
+   *
+   * Appended by checkpointInputReview on each send back (a REPLACE channel it
+   * writes in full, like directorGateNotes). Read by every parse prompt (the whole
+   * list, because a re-parse starts again from the source text) and rendered after
+   * the director's notes for the arc, outline and article writers. The notes are
+   * never rewritten.
+   *
+   * Cleared where the parse it belongs to is redone: the points that re-collect
+   * the accusation, session report and notes (paper-evidence-selection,
+   * await-roster, await-full-context). A rollback to input-review keeps the parse
+   * and so keeps its corrections.
+   */
+  inputReviewCorrections: Annotation({
+    reducer: replaceReducer,
+    default: () => []
   }),
 
   // ═══════════════════════════════════════════════════════
@@ -348,6 +370,24 @@ const ReportStateAnnotation = Annotation.Root({
    * Added in Commit 8.9.x for natural language input support
    */
   characterIdsRaw: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * The director's description of each photo, word for word, keyed by filename
+   * (phase 2, brief 2.2). Sent by the character-IDs stop beside characterIdsRaw,
+   * and also written to data/<id>/inputs/photo-descriptions.json.
+   *
+   * characterIdsRaw folds every description into one text for the Sonnet parser,
+   * and until this channel the director's wording survived only as that parser
+   * rewrote it. The outline and article writers now read each description from
+   * here, joined to its photo by filename.
+   *
+   * Cleared at the same rollback points as characterIdMappings, the parse of the
+   * same input.
+   */
+  photoDescriptions: Annotation({
     reducer: replaceReducer,
     default: () => null
   }),
@@ -821,7 +861,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (76 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters)
+ * Get default state with all fields initialized (78 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -839,6 +879,7 @@ function getDefaultState() {
     // Input-review checkpoint (B2/B8)
     inputReviewApproved: false,
     _inputCorrections: null,
+    inputReviewCorrections: [],  // Phase 2 brief 2.2: every input-review correction, in order
     // Fetched data
     memoryTokens: [],
     canonicalCharacters: null,  // RC2: firstName -> fullName map from Notion tokens
@@ -861,6 +902,7 @@ function getDefaultState() {
     photoAnalyses: null,
     characterIdMappings: null,
     characterIdsRaw: null,  // Natural language character ID input (Commit 8.9.x)
+    photoDescriptions: null,  // Phase 2 brief 2.2: the director's photo descriptions by filename
     // Preprocessed data (Commit 8.5)
     preprocessedEvidence: null,
     characterData: null,  // Character groups, relationships, roles (pre-curation extraction)
@@ -1140,6 +1182,9 @@ const ROLLBACK_CLEARS = {
     // clear their captured inputs so they re-pause when rolling back here (else they skip on
     // stale roster/full-context). Mirrors the already-cleared downstream characterIdMappings.
     'roster', 'rosterPronouns', 'accusation', 'sessionReport', 'directorNotesRaw',
+    // Brief 2.2: the re-collected inputs are parsed again, so the corrections to the
+    // old parse go with it.
+    'inputReviewCorrections',
     // v2 I2: these two STAY. They are roster-DERIVED: the roster goes into every
     // Haiku photo prompt and into the character-ID parse, and finalizePhotoAnalyses
     // skips whenever any analysis is already enriched — so a roster change after the
@@ -1149,7 +1194,7 @@ const ROLLBACK_CLEARS = {
     // whiteboardPhotoPath/genericPhotoAnalyses) are NOT cleared here —
     // preprocessPhotos still skips on preprocessStats, so the resize is not re-paid,
     // only the analysis.
-    'photoAnalyses', 'characterIdMappings',
+    'photoAnalyses', 'characterIdMappings', 'photoDescriptions',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
@@ -1167,10 +1212,11 @@ const ROLLBACK_CLEARS = {
     // Per-point re-pause: await-full-context + input-review are downstream — clear
     // full-context so it re-pauses, and the input-review approval flag so its gate re-opens.
     'accusation', 'sessionReport', 'directorNotesRaw', 'inputReviewApproved',
+    'inputReviewCorrections',
     'whiteboardAnalysis',
     // v2 I2: photoAnalyses travels with characterIdMappings. This gate captures the
     // roster, and both outputs are keyed to it.
-    'photoAnalyses', 'characterIdMappings',
+    'photoAnalyses', 'characterIdMappings', 'photoDescriptions',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
@@ -1197,6 +1243,8 @@ const ROLLBACK_CLEARS = {
   'await-full-context': [
     'accusation', 'sessionReport', 'directorNotesRaw',
     'sessionConfig', 'directorNotes', 'playerFocus',
+    // Brief 2.2: the input-review corrections belong to the parse cleared above.
+    'inputReviewCorrections',
     // Per-point re-pause: the re-collected context is re-parsed, so the input-review
     // gate must re-open to show (and let the director reject) the NEW parse.
     'inputReviewApproved',
@@ -1270,7 +1318,7 @@ const ROLLBACK_CLEARS = {
   // stubs for outline + article instead (lib/api-helpers.js PHASES_INVALIDATED_BY).
   'photos': [
     'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses',
-    'photoAnalyses', 'characterIdMappings',
+    'photoAnalyses', 'characterIdMappings', 'photoDescriptions',
     'heroImage', 'arcEvidencePackages',
     'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport',
@@ -1292,7 +1340,7 @@ const ROLLBACK_CLEARS = {
   // skip compare the mappings; it is out of scope and recorded in the plan's
   // Follow-ups. Roll back to `photos` to actually redo them.
   'character-ids': [
-    'characterIdMappings',
+    'characterIdMappings', 'photoDescriptions',
     'heroImage', 'arcEvidencePackages',
     'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport',
@@ -1399,7 +1447,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 74
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 78
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

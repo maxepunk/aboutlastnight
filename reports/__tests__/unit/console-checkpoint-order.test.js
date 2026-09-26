@@ -112,12 +112,14 @@ describe('CHECKPOINT_ORDER', () => {
     expect(at('components/SessionStart.js')).toBeGreaterThan(at('api.js'));
     expect(at('app.js')).toBeGreaterThan(at('api.js'));
 
-    // checkpoint-view-logic: FIVE load-time consumers. Each of these does
+    // checkpoint-view-logic: SIX load-time consumers. Each of these does
     // `const ViewLogic = window.Console.checkpointViewLogic;` at load, so a later
     // tag means every field read on that gate throws on first render.
     [
       'components/checkpoints/InputReview.js',
       'components/checkpoints/AwaitFullContext.js',
+      // Brief 2.2: the per-photo pairing and payload live in checkpointViewLogic.
+      'components/checkpoints/CharacterIds.js',
       'components/checkpoints/ArcSelection.js',
       'components/checkpoints/Outline.js',
       'components/checkpoints/Article.js'

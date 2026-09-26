@@ -565,3 +565,53 @@ describe('ENRICHMENT prompts define the medium confidence band (Task 1 Minor)', 
     });
   });
 });
+
+describe('the accusation block (phase 2, brief 2.2)', () => {
+  it('stops dropping the parse\'s notes on the accusation', () => {
+    const { userPrompt } = buildEnrichmentPrompt({
+      rawProse: 'p',
+      accusation: { verdictKind: 'culprit', accused: ['Vic'], charge: 'Murder', notes: 'Nine votes; Alex held out.' }
+    });
+    expect(userPrompt).toContain('<ACCUSATION>\nAccused: Vic\nCharge: Murder\nNotes: Nine votes; Alex held out.\n</ACCUSATION>');
+  });
+
+  it('says a verdict with no culprit names no one, never "unspecified" and never the victim', () => {
+    const { userPrompt } = buildEnrichmentPrompt({
+      rawProse: 'p',
+      accusation: { verdictKind: 'overdose', accused: [], charge: 'Accidental overdose', notes: 'deadlocked 4 to 4' }
+    });
+    const block = userPrompt.slice(userPrompt.indexOf('<ACCUSATION>'), userPrompt.indexOf('</ACCUSATION>'));
+    expect(block).toContain("Accused: none (the room's verdict names no culprit: an overdose)");
+    expect(block).toContain('Charge: Accidental overdose');
+    expect(block).toContain('Notes: deadlocked 4 to 4');
+    expect(block).not.toMatch(/unspecified|Marcus/);
+  });
+
+  it('omits the Notes line when the parse kept none', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', accusation: { accused: ['Vic'], charge: 'Murder' } });
+    expect(userPrompt).not.toContain('Notes:');
+  });
+});
+
+describe('the corrections block (phase 2, brief 2.2)', () => {
+  it('renders one correction exactly as before, last in the prompt', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: 'Blake said it, not Vic.' });
+    expect(userPrompt.endsWith('</ENRICHMENT_RULES>\n\n<DIRECTOR_CORRECTIONS>\nBlake said it, not Vic.\n</DIRECTOR_CORRECTIONS>\nApply these corrections; they override anything in the source text.\n')).toBe(true);
+  });
+
+  it('takes the session\'s list and numbers the corrections in order', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: ['first', 'second'] });
+    expect(userPrompt).toContain('<DIRECTOR_CORRECTIONS>\n1. first\n\n2. second\n</DIRECTOR_CORRECTIONS>');
+  });
+
+  it('adds nothing when there are no corrections', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: [] });
+    expect(userPrompt.endsWith('</ENRICHMENT_RULES>\n')).toBe(true);
+  });
+
+  it('rawProse stays the caller\'s string (the corrections never rewrite it)', async () => {
+    const sdk = jest.fn().mockResolvedValue({ characterMentions: {}, quotes: [], transactionReferences: [] });
+    const result = await enrichDirectorNotes({ rawProse: 'Vic to Ashe: "very interesting."', corrections: ['It was Blake.'] }, sdk);
+    expect(result.rawProse).toBe('Vic to Ashe: "very interesting."');
+  });
+});

@@ -8,6 +8,9 @@
  * One note box is always on screen and is sent with whichever button the
  * director presses: with Approve as the outline's guidance, with Send back as
  * the arc rework's feedback, which also stands as a note for every later writer.
+ * The note is kept in the note slot of `pendingEdits` on either button, as the
+ * outline and article stops keep theirs, so a remount (a processing error, an
+ * attach) restores what the director typed (phase 2, brief 2.2).
  * Exports to window.Console.checkpoints.ArcSelection
  */
 
@@ -21,7 +24,7 @@ const ViewLogic = window.Console.checkpointViewLogic;
 // Outline.js and Article.js already use. Loaded before this file in index.html.
 const EditLogic = window.Console.outlineEditLogic;
 
-function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisionCache }) {
+function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisionCache, pendingNote }) {
   const arcs = (data && data.narrativeArcs) || [];
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -55,7 +58,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   // box for the approve and a feedback box behind the Reject button, which is why
   // the director wrote "there's just a reject button that doesn't allow me to give
   // any feedback". One box, on screen, sent with whichever button is pressed.
-  const [noteText, setNoteText] = React.useState(notePrefill);
+  // Brief 2.2: a note typed before a remount comes back (ViewLogic.arcNoteInitial).
+  const [noteText, setNoteText] = React.useState(ViewLogic.arcNoteInitial(pendingNote, notePrefill));
   // Send back takes two clicks, as it does at the outline and article stops: this
   // flag says the first one happened. ViewLogic.sendBackButton decides what that
   // means on screen. An arc rework is about eight minutes of Opus.
@@ -73,7 +77,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   React.useEffect(function () {
     setSelectedArcs(new Set(ViewLogic.defaultArcSelection(arcs)));
     setExpandedCards(new Set());
-    setNoteText(notePrefill);
+    setNoteText(ViewLogic.arcNoteInitial(pendingNote, notePrefill));
     setSendBackArmed(false);
   }, [resetKey]);
 
@@ -107,6 +111,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
     // the outline AND article prompts. On a send back the same box is the arc
     // rework's feedback instead, which is why the key assembly is one pure
     // function (ViewLogic.arcReviewPayload) rather than two inline literals.
+    // Brief 2.2: kept in the note slot first, as the outline and article stops do.
+    if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'arc-selection', note: noteText.trim() });
     onApprove(ViewLogic.arcReviewPayload(Array.from(selectedArcs), noteText, 'approve'));
   }
 
@@ -129,8 +135,10 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   function handleSendBack() {
     const payload = ViewLogic.arcReviewPayload(Array.from(selectedArcs), noteText, 'send-back');
     if (!payload) return;
-    // Cache current arcs for diff on next revision
+    // Cache current arcs for diff on next revision, and keep the note in its slot
+    // (brief 2.2) so a remount while the rework starts does not lose it.
     if (dispatch) {
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'arc-selection', note: noteText.trim() });
       dispatch({ type: 'CACHE_REVISION', contentType: 'arcs', data: arcs });
     }
     onReject(payload);

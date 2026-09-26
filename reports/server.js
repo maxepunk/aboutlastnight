@@ -463,6 +463,32 @@ function appendGateNote(stateUpdates, currentState, gate, text, kind) {
     stateUpdates.directorGateNotes = [...existing, { gate, kind, round, text, at: new Date().toISOString() }];
 }
 
+/**
+ * The per-photo descriptions a character-IDs approval carries (phase 2, brief 2.2).
+ *
+ * `{filename: text}`. Blank descriptions are dropped (the director left the box
+ * empty); every other value is the director's text trimmed at the ends, nothing
+ * else. Anything that is not an object of strings is refused, so a malformed
+ * payload never reaches a writer as the director's words.
+ *
+ * @param {*} value - approvals.photoDescriptions
+ * @returns {{map: Object|null, error: string|null}} map is null when nothing was described
+ */
+function normalizePhotoDescriptions(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { map: null, error: 'photoDescriptions must be an object of photo filename -> description text' };
+    }
+    const map = {};
+    for (const [filename, text] of Object.entries(value)) {
+        if (typeof text !== 'string') {
+            return { map: null, error: `photoDescriptions["${filename}"] must be a string` };
+        }
+        const name = String(filename).trim();
+        if (name && text.trim()) map[name] = text.trim();
+    }
+    return { map: Object.keys(map).length > 0 ? map : null, error: null };
+}
+
 /** Schema-check a director's edited object the same way the approve path does. */
 function validateEdits(schemaName, edits, noun) {
     const { valid, errors } = outlineValidator.validate(schemaName, edits);
@@ -526,6 +552,20 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         validApprovalDetected = true;
         stateUpdates.characterIdMappings = approvals.characterIds;
         resume.characterIdMappings = approvals.characterIds;
+    }
+    // Brief 2.2: the director's description of each photo, keyed by filename, sent
+    // beside the IDs. Never an approval on its own. Kept word for word (trimmed at the
+    // ends); checkpointCharacterIds re-captures it and writes the session folder copy.
+    if (approvals.photoDescriptions !== undefined
+        && (stateUpdates.characterIdsRaw !== undefined || stateUpdates.characterIdMappings !== undefined)) {
+        const described = normalizePhotoDescriptions(approvals.photoDescriptions);
+        if (described.error) {
+            return { resume, stateUpdates, error: described.error };
+        }
+        if (described.map) {
+            stateUpdates.photoDescriptions = described.map;
+            resume.photoDescriptions = described.map;
+        }
     }
 
     // Evidence bundle approval with rescue mechanism (Commit 8.10+)

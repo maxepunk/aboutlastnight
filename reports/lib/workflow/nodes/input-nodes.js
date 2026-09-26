@@ -17,9 +17,12 @@
  * - whiteboardPhotoPath: Path to whiteboard image (Layer 3 data)
  *
  * Output files (saved to data/{sessionId}/inputs/):
- * - session-config.json: roster, accusation, metadata (NOT photosPath - C1: state.photosPath owns it)
+ * - session-config.json: roster, accusation (with its verdictKind), the director's
+ *   accusation word for word (accusationRaw), each exposed memory's exposer/time/owner
+ *   (exposures, held from every writer and judge until phase 3), metadata
+ *   (NOT photosPath - C1: state.photosPath owns it)
  * - director-notes.json: observations, whiteboard data (from vision)
- * - orchestrator-parsed.json: exposedTokens, buriedTokens, shellAccounts
+ * - orchestrator-parsed.json: exposedTokens, exposures, buriedTokens, shellAccounts
  *
  * All nodes follow the LangGraph pattern:
  * - Accept (state, config) parameters
@@ -37,6 +40,8 @@ const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { traceNode } = require('../../observability');
 const { enrichDirectorNotes } = require('../../director-enricher');
 const { getThemeNPCs } = require('../../theme-config');
+const { VERDICT_KINDS, normalizeAccusation } = require('../../accusation-verdict');
+const { buildParseCorrectionsBlock, normalizeCorrections } = require('../../prompt-renderers/director-words-renderer');
 
 /**
  * Default data directory for session files
@@ -83,18 +88,26 @@ const SESSION_CONFIG_SCHEMA = {
       type: 'number',
       description: 'Number of characters in roster'
     },
+    // Phase 2 brief 2.2: a verdict with no culprit has its own shape. On 092026 the
+    // room voted for an accidental overdose and this schema, which could only name a
+    // defendant, got the victim as the accused.
     accusation: {
       type: 'object',
-      required: ['accused', 'charge'],
+      required: ['verdictKind', 'accused', 'charge'],
       properties: {
+        verdictKind: {
+          type: 'string',
+          enum: VERDICT_KINDS,
+          description: 'What kind of verdict the group reached. "culprit" when they held one or more characters responsible. Otherwise the verdict names no culprit: "accident", "overdose" (an accidental overdose included), "self-harm", or "other" for any other verdict that holds no one responsible.'
+        },
         accused: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Character names accused by the group'
+          description: 'Character names the group held responsible. EMPTY unless verdictKind is "culprit". Never the victim.'
         },
         charge: {
           type: 'string',
-          description: 'What the group accused them of'
+          description: 'What the group concluded, in their terms: the crime they accused the culprit of, or, for a verdict with no culprit, the verdict itself (e.g. "Accidental overdose").'
         },
         notes: {
           type: 'string',
@@ -128,6 +141,24 @@ const SESSION_REPORT_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
       description: 'Token IDs submitted to Detective (public evidence)'
+    },
+    // Phase 2 brief 2.2: the Detective Evidence Log's per-row columns were dropped
+    // here, which the director called a loss. They are held in state, on disk and at
+    // the input review. Until phase 3 rules on naming exposers they enter no writer's
+    // or judge's prompt.
+    exposures: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['tokenId'],
+        properties: {
+          tokenId: { type: 'string', description: 'Token ID, exactly as in exposedTokens' },
+          exposer: { type: 'string', description: 'The "Exposed By" column: the team or name that turned the memory in, verbatim (e.g. "NovaNews (Anonymous)")' },
+          time: { type: 'string', description: 'The exposure time from the log row, verbatim (e.g. "09:06 PM")' },
+          owner: { type: 'string', description: 'The "Owner" column: whose memory it is, verbatim' }
+        }
+      },
+      description: 'One entry per exposed token, from the Detective Evidence Log row: who exposed it, when, and whose memory it is'
     },
     exposedCount: {
       type: 'number',
@@ -376,20 +407,24 @@ function resolveRosterPronouns(state, rawInput) {
 }
 
 /**
- * Build the <DIRECTOR_CORRECTIONS> suffix appended to every parse prompt on a
- * re-parse (B2).
+ * The corrections a parse applies: every one the director has sent back from the
+ * input review this session, in order (phase 2, brief 2.2).
  *
- * The director rejected the previous parse at the input-review gate and typed
- * what was wrong. Those corrections outrank the source text: the source text is
- * exactly what produced the bad parse.
+ * A re-parse starts again from the source text, so a second send back that carried
+ * only its own correction undid the first one in the parse. The kept list is the
+ * record; `_inputCorrections` (the round's own correction) only stands in when the
+ * list is empty, for a thread whose send back predates the list.
  *
- * @param {string|null} corrections - state._inputCorrections
- * @returns {string} '' when there are no corrections
+ * The block itself is buildParseCorrectionsBlock (director-words-renderer.js), the
+ * one wording every parse prompt shares (B2).
+ *
+ * @param {Object} state
+ * @returns {string[]}
  */
-function buildCorrectionsBlock(corrections) {
-  if (typeof corrections !== 'string' || !corrections.trim()) return '';
-  return '\n\n<DIRECTOR_CORRECTIONS>\n' + corrections.trim() +
-    '\n</DIRECTOR_CORRECTIONS>\nApply these corrections; they override anything in the source text.';
+function correctionsForParse(state) {
+  const kept = normalizeCorrections(state.inputReviewCorrections || []);
+  if (kept.length > 0) return kept;
+  return normalizeCorrections(state._inputCorrections);
 }
 
 async function parseRawInput(state, config) {
@@ -449,9 +484,11 @@ async function parseRawInput(state, config) {
   const rosterForParsing = resolvedRoster.length > 0 ? resolvedRoster : rawInput.roster;
 
   // B2: on a re-parse the director's corrections ride along on every parse prompt.
-  const correctionsBlock = buildCorrectionsBlock(state._inputCorrections);
+  // Brief 2.2: all of them, in order, not only this round's.
+  const parseCorrections = correctionsForParse(state);
+  const correctionsBlock = buildParseCorrectionsBlock(parseCorrections);
   if (correctionsBlock) {
-    console.log('[parseRawInput] Re-parsing with director corrections');
+    console.log(`[parseRawInput] Re-parsing with ${parseCorrections.length} director correction(s)`);
   }
 
   // Step 1 Promise: Parse roster and accusation
@@ -470,7 +507,7 @@ ${sessionIdHint}
 
 Rules for parsing:
 1. Extract character first names from the roster (comma-separated list)
-2. For accusation, identify WHO was accused and WHAT they were accused of
+2. For accusation, identify WHO the group held responsible and WHAT they concluded. If the verdict names no culprit (an accident, an overdose, self-harm), set verdictKind to that kind, leave accused empty and put the verdict in charge. Never list the victim as accused.
 3. For sessionId: Use the provided sessionId verbatim. (B1: a derived id sent session 071126's inputs to data/0711/ and published report-0711.html with no photos. parseRawInput overrides a wrong answer, but do not produce one.)
 4. sessionDate should be YYYY-MM-DD format
 
@@ -485,6 +522,16 @@ Return structured JSON matching the schema.${correctionsBlock}`;
       loadProjectSettings: false
     });
     result.rosterCount = result.roster?.length || 0;
+    // Brief 2.2: a verdict with no culprit has no accused, whatever the model listed
+    // (on 092026 it listed the victim). Enforced here, in code, for every reader.
+    result.accusation = normalizeAccusation(result.accusation);
+    // Brief 2.2: the director's accusation, word for word, stored WITH the parse:
+    // in state through sessionConfig and on disk in inputs/session-config.json. A
+    // code stamp, like reportingMode: the model never writes or rewrites it. The
+    // writers read the director's words from here, beside the parsed accused and charge.
+    result.accusationRaw = typeof state.accusation === 'string' && state.accusation.trim()
+      ? state.accusation
+      : null;
     // photosPath is NOT copied here any more (C1): state.photosPath is the one
     // owner and fetchSessionPhotos reads only that. Two copies is how the gate
     // and the fetch came to disagree about which folder was in play.
@@ -531,6 +578,7 @@ EXPOSED tokens (sold to Detective, become public evidence):
 - "Detective Evidence Log" table (current orchestrator format)
 - "Detective Scans" table (older format)
 - Token IDs appear in the leftmost "Token" column
+- For each exposed token, also return an exposures entry from the same row: tokenId; exposer = the "Exposed By" column; time = the row's time; owner = the "Owner" column. Copy each value as written. Leave a field out when the table has no such column.
 
 BURIED tokens (sold to Black Market, buried in shell accounts):
 - "Scoring Timeline" table rows where Type = "Sale" (current orchestrator format)
@@ -600,6 +648,14 @@ Return structured JSON matching the schema.${correctionsBlock}`;
 
   console.log('[parseRawInput] Steps 1-2 complete');
 
+  // Brief 2.2: each exposed memory's exposer, exposure time and owner, from the
+  // session report's Detective Evidence Log. Kept in orchestrator-parsed.json (the
+  // step's own output, written below) and, so the input review shows them and a
+  // replay rehydrates them, on sessionConfig. HELD: until phase 3 rules on naming
+  // exposers, no writer's or judge's prompt reads this field.
+  orchestratorParsed.exposures = Array.isArray(orchestratorParsed.exposures) ? orchestratorParsed.exposures : [];
+  sessionConfig.exposures = orchestratorParsed.exposures;
+
   // Step 3: Director notes enrichment (depends on Step 1 roster + Step 2 orchestrator data)
   const theme = config?.configurable?.theme || 'journalist';
   const themeNPCs = getThemeNPCs(theme);
@@ -619,7 +675,7 @@ Return structured JSON matching the schema.${correctionsBlock}`;
       shellAccounts: orchestratorParsed.shellAccounts || [],
       detectiveEvidenceLog: orchestratorParsed.exposedTokens || [],
       scoringTimeline: projectBuriedTokensToScoringTimeline(orchestratorParsed.buriedTokens || []),
-      corrections: state._inputCorrections || null   // B2: re-parse corrections
+      corrections: parseCorrections   // B2 + brief 2.2: every correction so far, in order
     }, sdk);
 
     const counts = {
@@ -658,7 +714,8 @@ Return structured JSON matching the schema.${correctionsBlock}`;
     const { systemPrompt: whiteboardSystemPrompt, userPrompt: whiteboardUserPrompt } =
       await imagePromptBuilder.buildWhiteboardPrompt({
         roster: sessionConfig.roster || [],
-        whiteboardPhotoPath: rawInput.whiteboardPhotoPath
+        whiteboardPhotoPath: rawInput.whiteboardPhotoPath,
+        corrections: parseCorrections   // Brief 2.2: the one parse call that never got them
       });
 
     // N4 fail-loud: the whiteboard drives playerFocus (Layer 3), which grounds arc
@@ -832,6 +889,7 @@ module.exports = {
     sanitizePath,
     mergeDirectorOverrides,
     resolveRosterPronouns,
-    projectBuriedTokensToScoringTimeline
+    projectBuriedTokensToScoringTimeline,
+    correctionsForParse
   }
 };

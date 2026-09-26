@@ -63,7 +63,8 @@ function countImages(dir) {
  *
  * @param {Object} state - Current state with the parse outputs
  * @param {Object} config - Graph config
- * @returns {Object} Partial state update with inputReviewApproved, _inputCorrections
+ * @returns {Object} Partial state update with inputReviewApproved, _inputCorrections,
+ *   inputReviewCorrections (brief 2.2: the session's corrections, in order)
  */
 async function checkpointInputReview(state, config) {
   // Skip only when the director has explicitly approved this parse.
@@ -92,9 +93,14 @@ async function checkpointInputReview(state, config) {
   const feedback = typeof resumeValue?.feedback === 'string' ? resumeValue.feedback.trim() : '';
   if (resumeValue?.approved === false && feedback) {
     console.log('[checkpointInputReview] Rejected with corrections — re-parsing input');
+    // Brief 2.2: the correction is also kept for the session, in order, after every
+    // earlier one. `_inputCorrections` is consumed by the re-parse; this list is what
+    // every later parse and every writer reads.
+    const kept = Array.isArray(state.inputReviewCorrections) ? state.inputReviewCorrections : [];
     return {
       inputReviewApproved: false,
       _inputCorrections: feedback,
+      inputReviewCorrections: [...kept, feedback],
       sessionConfig: null,
       directorNotes: null,
       playerFocus: null,
@@ -204,6 +210,40 @@ async function checkpointPhotos(state, config) {
 }
 
 /**
+ * The director's per-photo descriptions from a character-IDs resume, written to the
+ * session folder (phase 2, brief 2.2).
+ *
+ * The server has already validated the map and put it in state through the Command
+ * update (buildResumePayload); this re-captures it, as the node does for the IDs
+ * themselves, and writes data/<id>/inputs/photo-descriptions.json beside the parse's
+ * inputs/*.json. A failed write throws: the record would otherwise exist in state only.
+ *
+ * @param {Object} state
+ * @param {Object} config - may carry configurable.dataDir
+ * @param {Object|undefined} descriptions - {filename: text}
+ * @returns {Object|null} the map, or null when the resume carried none
+ */
+function capturePhotoDescriptions(state, config, descriptions) {
+  if (!descriptions || typeof descriptions !== 'object' || Array.isArray(descriptions)) return null;
+  if (Object.keys(descriptions).length === 0) return null;
+  const sessionId = state.sessionId || config?.configurable?.sessionId;
+  if (sessionId) {
+    const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+    const inputsDir = path.join(dataDir, sessionId, 'inputs');
+    fs.mkdirSync(inputsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputsDir, 'photo-descriptions.json'),
+      JSON.stringify(descriptions, null, 2),
+      'utf-8'
+    );
+    console.log(`[checkpointCharacterIds] Wrote ${Object.keys(descriptions).length} photo description(s) to ${inputsDir}`);
+  } else {
+    console.warn('[checkpointCharacterIds] No sessionId; photo descriptions kept in state only');
+  }
+  return descriptions;
+}
+
+/**
  * Character IDs Checkpoint
  *
  * Pauses for user to map photo character descriptions to roster names.
@@ -272,11 +312,15 @@ async function checkpointCharacterIds(state, config) {
   // If resumed with character mappings, capture it in state return
   // This ensures subsequent nodes see the mappings (Command({ update }) may not persist)
   // Support both formats: characterIdMappings (structured) and characterIdsRaw (text)
+  // Brief 2.2: either one may carry the director's per-photo descriptions beside it;
+  // they are captured the same way and written to the session folder.
   if (!skipCondition) {
+    const photoDescriptions = capturePhotoDescriptions(state, config, resumeValue?.photoDescriptions);
     if (resumeValue?.characterIdMappings) {
       console.log(`[checkpointCharacterIds] Captured mappings from resume`);
       return {
         characterIdMappings: resumeValue.characterIdMappings,
+        ...(photoDescriptions && { photoDescriptions }),
         currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
       };
     }
@@ -284,6 +328,7 @@ async function checkpointCharacterIds(state, config) {
       console.log(`[checkpointCharacterIds] Captured raw character IDs from resume`);
       return {
         characterIdsRaw: resumeValue.characterIdsRaw,
+        ...(photoDescriptions && { photoDescriptions }),
         currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
       };
     }

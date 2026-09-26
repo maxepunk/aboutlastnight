@@ -216,3 +216,64 @@ describe('arc-specialist-nodes', () => {
     });
   });
 });
+
+/**
+ * The arc check accepts an arc about a verdict that names no culprit
+ * (phase 2, brief 2.2).
+ *
+ * An accusation arc with no valid evidence survived only when it placed someone.
+ * An arc about "the room voted for an accidental overdose" may have no one to
+ * place, and filtering it out made the check demand an accusation arc it had just
+ * removed, which routed to a paid rework.
+ */
+describe('validateArcStructure: a verdict with no culprit', () => {
+  const { validateArcStructure } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
+
+  const verdictArc = {
+    id: 'arc-the-overdose-verdict',
+    title: 'The room ruled it an accident',
+    arcSource: 'accusation',
+    keyEvidence: [],
+    characterPlacements: {},
+    evidenceStrength: 'speculative'
+  };
+  const otherArc = {
+    id: 'arc-ledger',
+    title: 'The ledger',
+    arcSource: 'discovered',
+    keyEvidence: [],
+    characterPlacements: { Alex: 'sold at 9:40' },
+    evidenceStrength: 'moderate'
+  };
+
+  function stateWith(accusation) {
+    return {
+      narrativeArcs: [verdictArc, otherArc],
+      sessionConfig: { roster: ['Alex'], accusation },
+      evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } },
+      canonicalCharacters: {},
+      theme: 'journalist'
+    };
+  }
+
+  it('keeps an accusation arc about the verdict with no one to place', () => {
+    const result = validateArcStructure(stateWith({ verdictKind: 'overdose', accused: [], charge: 'Accidental overdose' }), {});
+    expect(result.narrativeArcs.map((a) => a.id)).toContain('arc-the-overdose-verdict');
+    expect(result._arcValidation.hasAccusationArc).toBe(true);
+    expect(result._arcValidation.structuralPassed).toBe(true);
+  });
+
+  it('still filters such an arc when the verdict names a culprit', () => {
+    const result = validateArcStructure(stateWith({ verdictKind: 'culprit', accused: ['Vic'], charge: 'Murder' }), {});
+    expect(result.narrativeArcs.map((a) => a.id)).not.toContain('arc-the-overdose-verdict');
+    expect(result._arcValidation.hasAccusationArc).toBe(false);
+  });
+
+  it('asks for an arc about the verdict when a no-culprit session has none', () => {
+    const state = stateWith({ verdictKind: 'accident', accused: [], charge: 'Accident' });
+    state.narrativeArcs = [otherArc];
+    const result = validateArcStructure(state, {});
+    const issue = result.validationResults.issues.find((i) => i.type === 'no-accusation-arc');
+    expect(issue.message).toMatch(/about the room's verdict, which names no culprit/);
+  });
+});

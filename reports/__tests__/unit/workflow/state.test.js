@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 76 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 78 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -210,6 +210,7 @@ describe('ReportStateAnnotation', () => {
         // Input-review checkpoint (B2/B8)
         'inputReviewApproved',
         '_inputCorrections',
+        'inputReviewCorrections',  // Phase 2 brief 2.2: every input-review correction, in order
         // Fetched data
         'memoryTokens',
         'canonicalCharacters',
@@ -228,6 +229,7 @@ describe('ReportStateAnnotation', () => {
         'photoAnalyses',
         'characterIdMappings',
         'characterIdsRaw',  // Commit 8.9.x
+        'photoDescriptions',  // Phase 2 brief 2.2: the director's photo descriptions by filename
         // Preprocessed data (Commit 8.5)
         'preprocessedEvidence',
         'characterData',  // Character groups, relationships, roles (pre-curation extraction)
@@ -460,7 +462,15 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(76);
+      expect(Object.keys(getDefaultState()).length).toBe(78);
+    });
+
+    it('declares the channels for the director\'s own words (phase 2, brief 2.2)', () => {
+      const channels = Object.keys(ReportStateAnnotation.spec);
+      ['inputReviewCorrections', 'photoDescriptions'].forEach((c) => expect(channels).toContain(c));
+      const d = getDefaultState();
+      expect(d.inputReviewCorrections).toEqual([]);
+      expect(d.photoDescriptions).toBeNull();
     });
 
     it('declares the steering channels (spec 2026-09-19 §4.5, §5.1)', () => {

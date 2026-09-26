@@ -196,3 +196,112 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     expect(sdk.mock.calls[0][0].prompt).toContain(MEMORY_TEXT);
   });
 });
+
+/**
+ * The director's words in the arc writer and the arc reworker (phase 2, brief 2.2):
+ * standing notes through filterGateNotes with the gate `arc-selection`, the
+ * input-review corrections after the notes, and the accusation beside the
+ * director's account of it, with a no-culprit verdict said as such.
+ */
+describe("arc prompts: the director's words as record", () => {
+  const arcModule = require('../workflow/nodes/arc-specialist-nodes');
+  const { buildCoreArcPrompt, buildArcRevisionPrompt } = arcModule._testing;
+
+  const RAW_ACCUSATION = 'Six votes for an accidental overdose, in a final round that had already deadlocked 4 to 4 between Alex and Vic.';
+  const CORRECTION = 'This was actually Blake -> Ashe, and what was said was my company would be very interested.';
+  const NOTES = [
+    { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the succession thread.', at: 't1' },
+    { gate: 'arc-selection', kind: 'rejection', round: 2, text: 'Put the vote first.', at: 't2' }
+  ];
+
+  const base = {
+    sessionConfig: {
+      roster: ['Alex', 'Vic'],
+      accusation: { verdictKind: 'overdose', accused: [], charge: 'Accidental overdose' },
+      accusationRaw: RAW_ACCUSATION
+    },
+    playerFocus: {
+      accusation: { verdictKind: 'overdose', accused: [], charge: 'Accidental overdose', reasoning: 'deadlocked 4 to 4' },
+      whiteboardContext: { suspectsExplored: [], connections: [], notes: [], namesFound: [] },
+      primaryInvestigation: 'Accidental overdose'
+    },
+    directorNotes: {
+      rawProse: 'Vic to Ashe: "My company is very interesting."',
+      quotes: [], transactionReferences: [], postInvestigationDevelopments: []
+    },
+    inputReviewCorrections: [CORRECTION],
+    evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } },
+    theme: 'journalist',
+    canonicalCharacters: {}
+  };
+
+  describe('standing notes', () => {
+    it('the reworker shows every earlier arc note and leaves out the one it is acting on', () => {
+      const prompt = buildArcRevisionPrompt({ ...base, directorGateNotes: NOTES, _arcFeedback: 'Put the vote first.' }, 'CTX', 'PREV');
+      expect(prompt).toContain('<DIRECTOR_GUIDANCE>');
+      expect(prompt).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
+      expect(prompt).not.toContain('- [arc-selection, rejection 2] Put the vote first.');
+      expect(prompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+    });
+
+    it('the writer renders them through the same function', () => {
+      const prompt = buildCoreArcPrompt({ ...base, directorGateNotes: NOTES });
+      expect(prompt).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
+      expect(prompt).toContain('- [arc-selection, rejection 2] Put the vote first.');
+    });
+
+    it('adds nothing when there are no notes', () => {
+      expect(buildCoreArcPrompt({ ...base, directorGateNotes: [] })).not.toContain('DIRECTOR_GUIDANCE');
+      expect(buildArcRevisionPrompt({ ...base, directorGateNotes: null }, '', '')).not.toContain('DIRECTOR_GUIDANCE');
+    });
+  });
+
+  describe('input-review corrections', () => {
+    it('follow the notes in the writer and the reworker, which keep the uncorrected sentence', () => {
+      for (const prompt of [buildCoreArcPrompt(base), buildArcRevisionPrompt(base, '', '')]) {
+        expect(prompt).toContain('Vic to Ashe: "My company is very interesting."');
+        expect(prompt).toContain(CORRECTION);
+        expect(prompt.indexOf('</DIRECTOR_NOTES>')).toBeLessThan(prompt.indexOf('<DIRECTOR_CORRECTIONS>'));
+      }
+    });
+  });
+
+  describe('the accusation', () => {
+    it("carries the director's account word for word and names no culprit for an overdose", () => {
+      for (const prompt of [buildCoreArcPrompt(base), buildArcRevisionPrompt(base, '', '')]) {
+        expect(prompt).toContain(RAW_ACCUSATION);
+        expect(prompt).toContain("**Accused:** none (the room's verdict names no culprit: an overdose)");
+        expect(prompt).toContain('**Charge:** Accidental overdose');
+        expect(prompt).toMatch(/Place no one as the accused, and never the victim\./);
+      }
+    });
+
+    it('a culprit verdict prints as before', () => {
+      const culprit = {
+        ...base,
+        sessionConfig: { roster: ['Alex'] },
+        playerFocus: { ...base.playerFocus, accusation: { accused: ['Alex'], charge: 'Murder', reasoning: 'Motive present' } }
+      };
+      const prompt = buildCoreArcPrompt(culprit);
+      expect(prompt).toContain('**Accused:** ["Alex"]\n**Charge:** Murder\n**Players\' Reasoning:** Motive present\n\nYou MUST generate');
+      expect(prompt).not.toContain('<DIRECTOR_ACCUSATION>');
+    });
+  });
+
+  describe('the whiteboard section', () => {
+    it('is rendered by the shared function with the label it always had', () => {
+      const prompt = buildCoreArcPrompt(base);
+      expect(prompt).toContain('### Whiteboard Connections (Players drew these during investigation)\n**Suspects Explored:** []');
+    });
+  });
+
+  describe('the interweaving plan in the reworker', () => {
+    it('shows the previous plan and asks for the plan back', () => {
+      const plan = { suggestedOrder: ['arc-a', 'arc-b'], convergencePoint: 'the vote', keyCallbacks: [] };
+      const prompt = buildArcRevisionPrompt({ ...base, _arcAnalysisCache: { interweavingPlan: plan } }, '', '');
+      expect(prompt).toContain('### PREVIOUS INTERWEAVING PLAN');
+      expect(prompt).toContain('"convergencePoint": "the vote"');
+      expect(prompt).toMatch(/Return the interweavingPlan \(suggestedOrder, convergencePoint, keyCallbacks\)/);
+    });
+  });
+});

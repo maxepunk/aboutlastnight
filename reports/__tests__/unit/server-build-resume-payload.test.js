@@ -698,3 +698,59 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
     expect(afterSecondApproval.stateUpdates.directorGateNotes[2]).toMatchObject({ gate: 'outline', kind: 'approval', round: 2 });
   });
 });
+
+/**
+ * The character-IDs stop sends each photo's description as its own field, keyed by
+ * filename, beside the raw text (phase 2, brief 2.2). The server keeps it word for
+ * word in state and on the resume; checkpointCharacterIds writes the session folder.
+ */
+describe('buildResumePayload — the per-photo description map (brief 2.2)', () => {
+  const PHOTO_7 = "Alex and Sam react to a memory they've just unlocked.";
+
+  it('stores the map beside characterIdsRaw, in state and on the resume', () => {
+    const { resume, stateUpdates, error } = buildResumePayload({
+      characterIdsRaw: 'Photo aln092026 (7 of 9).jpg:\n  User Input: ' + PHOTO_7,
+      photoDescriptions: { 'aln092026 (7 of 9).jpg': PHOTO_7 }
+    }, {}, 'journalist', 'character-ids');
+    expect(error).toBeNull();
+    expect(stateUpdates.photoDescriptions).toEqual({ 'aln092026 (7 of 9).jpg': PHOTO_7 });
+    expect(resume.photoDescriptions).toEqual({ 'aln092026 (7 of 9).jpg': PHOTO_7 });
+    expect(stateUpdates.characterIdsRaw).toContain(PHOTO_7);
+  });
+
+  it('keeps the text word for word, trimmed at the ends only, and drops blank boxes', () => {
+    const { stateUpdates } = buildResumePayload({
+      characterIdsRaw: 'x',
+      photoDescriptions: { 'a.jpg': '  Kai, "the quiet one", by the bar.  ', 'b.jpg': '   ' }
+    }, {}, 'journalist', 'character-ids');
+    expect(stateUpdates.photoDescriptions).toEqual({ 'a.jpg': 'Kai, "the quiet one", by the bar.' });
+  });
+
+  it('writes nothing when every box was blank', () => {
+    const { stateUpdates, resume } = buildResumePayload({
+      characterIdsRaw: 'x', photoDescriptions: { 'a.jpg': '' }
+    }, {}, 'journalist', 'character-ids');
+    expect(stateUpdates).not.toHaveProperty('photoDescriptions');
+    expect(resume).not.toHaveProperty('photoDescriptions');
+  });
+
+  it('refuses a map that is not filename -> text', () => {
+    expect(buildResumePayload({ characterIdsRaw: 'x', photoDescriptions: ['a'] }, {}, 'journalist', 'character-ids').error)
+      .toMatch(/photoDescriptions must be an object/);
+    expect(buildResumePayload({ characterIdsRaw: 'x', photoDescriptions: { 'a.jpg': 7 } }, {}, 'journalist', 'character-ids').error)
+      .toMatch(/photoDescriptions\["a.jpg"\] must be a string/);
+  });
+
+  it('is never an approval on its own', () => {
+    const { error, stateUpdates } = buildResumePayload({ photoDescriptions: { 'a.jpg': 'text' } }, {}, 'journalist', 'character-ids');
+    expect(error).toBe('No valid approval detected in request');
+    expect(stateUpdates).not.toHaveProperty('photoDescriptions');
+  });
+
+  it('rides along with the structured characterIds form too', () => {
+    const { stateUpdates } = buildResumePayload({
+      characterIds: { 'a.jpg': { characterMappings: [] } }, photoDescriptions: { 'a.jpg': 'Kai at the bar.' }
+    }, {}, 'journalist', 'character-ids');
+    expect(stateUpdates.photoDescriptions).toEqual({ 'a.jpg': 'Kai at the bar.' });
+  });
+});

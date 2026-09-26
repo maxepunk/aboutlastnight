@@ -1,7 +1,9 @@
 /**
  * InputReview Checkpoint Component
  * Displays parsed session input for approval: session info, roster,
- * accusation (accused + charge + the full notes), player focus, director
+ * accusation (accused + charge + the full notes, and the verdict kind: a verdict
+ * with no culprit is shown as that, not as a missing parse), each exposed memory's
+ * exposer, time and owner (phase 2, brief 2.2), player focus, director
  * observations, the whiteboard analysis, and what the director-notes enricher
  * actually indexed. Approve, or reject with written corrections that re-parse.
  * Exports to window.Console.checkpoints.InputReview
@@ -102,6 +104,11 @@ function InputReview({ data, onApprove, onReject, theme }) {
   // rendered as "Accused: Vic" with the charge and the 400-character notes
   // (votes, motive, alternative theories) never shown.
   const accusation = ViewLogic.accusationView(sessionConfig.accusation);
+  // Brief 2.2: an overdose, an accident or self-harm names no culprit, so an empty
+  // accused is the parse being right, not the parse missing it.
+  const verdict = ViewLogic.verdictView(sessionConfig.accusation);
+  // Brief 2.2: the Detective Evidence Log's exposer / time / owner, kept by the parse.
+  const exposures = ViewLogic.exposuresView(sessionConfig.exposures);
   // The panel used to read connectionsMade / questionsRaised / votingResults;
   // WHITEBOARD_SCHEMA emits names/connections/groups/notes/structureType/
   // ambiguities, so the whole panel was permanently absent.
@@ -188,16 +195,56 @@ function InputReview({ data, onApprove, onReject, theme }) {
             React.createElement('span', { className: 'text-sm text-muted' }, 'Accused: '),
             React.createElement('span', { className: 'text-sm' }, accusation.accused)
           )
-        : React.createElement('p', { className: 'validation-error', role: 'alert' },
-            'Accusation: not parsed. Reject with corrections naming who the room ' +
-            'accused and of what, or the article has no verdict to write against.'
-          ),
+        : verdict.noCulprit
+          ? React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
+              React.createElement('span', { className: 'text-sm text-muted' }, 'Accused: '),
+              React.createElement('span', { className: 'text-sm' }, 'no one (the room named no culprit)')
+            )
+          : React.createElement('p', { className: 'validation-error', role: 'alert' },
+              'Accusation: not parsed. Reject with corrections naming who the room ' +
+              'accused and of what, or the article has no verdict to write against.'
+            ),
+      verdict.label && React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Verdict: '),
+        React.createElement('span', { className: 'text-sm' }, verdict.label)
+      ),
       accusation.charge && React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
         React.createElement('span', { className: 'text-sm text-muted' }, 'Charge: '),
         React.createElement('span', { className: 'text-sm' }, accusation.charge)
       ),
       accusation.notes && React.createElement('p', { className: 'text-sm text-secondary accusation__notes' },
         accusation.notes
+      )
+    ),
+
+    // Exposed memories (brief 2.2): who turned each one in, when, and whose it is,
+    // as the parse kept them from the session report. Held from the writers until
+    // phase 3 rules on naming exposers; shown here so the director can check them.
+    exposures.count > 0 && React.createElement('div', { className: 'checkpoint-section' },
+      React.createElement(window.Console.utils.CollapsibleSection, {
+        title: 'Exposed Memories (' + exposures.count + ')',
+        defaultOpen: false
+      },
+        React.createElement('table', { className: 'exposure-table text-sm' },
+          React.createElement('thead', null,
+            React.createElement('tr', null,
+              React.createElement('th', null, 'Memory'),
+              React.createElement('th', null, 'Exposed by'),
+              React.createElement('th', null, 'Time'),
+              React.createElement('th', null, 'Owner')
+            )
+          ),
+          React.createElement('tbody', null,
+            exposures.rows.map(function (row, i) {
+              return React.createElement('tr', { key: row.tokenId + '-' + i },
+                React.createElement('td', null, row.tokenId),
+                React.createElement('td', null, row.exposer || '\u2014'),
+                React.createElement('td', null, row.time || '\u2014'),
+                React.createElement('td', null, row.owner || '\u2014')
+              );
+            })
+          )
+        )
       )
     ),
 
