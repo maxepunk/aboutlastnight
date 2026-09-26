@@ -267,7 +267,7 @@ When writing each section, check:
 - [ ] Are there at least 2 "wait, so THAT'S why..." moments?
 
 **Temporal Discipline Checks:**
-- [ ] Does every "I watched" / "I saw" describe INVESTIGATION events (not party events)?
+- [ ] Does every account of something seen or heard describe INVESTIGATION events (not party events), told the way your reporting mode allows?
 - [ ] Are memory contents framed as recordings ("The memory shows"), not direct witness?
 
 **Visual Momentum Checks:**

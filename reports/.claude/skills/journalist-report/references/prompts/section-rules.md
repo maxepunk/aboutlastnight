@@ -97,7 +97,7 @@ If #3 is "no," rewrite the prose.
 1. Death declaration (1 sentence)
 2. Memory theft framing — what happened to the victims (1-2 sentences)
 3. Accusation preview — who's accused and why, plus any alternative theories (1-2 sentences)
-4. Nova's own stake in the story, in whatever way your reporting mode allows (1 sentence)
+4. Nova's own stake in the story: why it matters to her, not where she was (the reporting mode covers that) (1 sentence)
 
 Generate original prose for each session. Do NOT reuse phrasing from previous articles.
 
@@ -510,7 +510,7 @@ Must be a CRYSTALLIZATION (no attribution) that echoes earlier prose:
 2. **The harder question** (1-2 sentences): What the accusation doesn't address — the alternative theory, the uncomfortable implication, the thing nobody wanted to say.
 3. **Complacency thread** (2-3 sentences): Connect specific acts of looking the other way from THIS session to the larger consequence. Name the people. Name the choices.
 4. **Scale implication** (1-2 sentences): If this technology/system survives its creator, what happens next? Ground in what THIS session revealed, not generic tech commentary.
-5. **Nova's witness line** (1 sentence): Land on something only THIS group of players would recognize.
+5. **Nova's closing line** (1 sentence): Land on something only THIS group of players would recognize.
 
 **NEVER USE generic surveillance capitalism framing that could apply to any session.** The closing must be unreusable — if you could copy it into a different session's article unchanged, it's too generic.
 

@@ -126,6 +126,12 @@ function isVerbatim(cardContent, sourceText) {
  *   'leakedExample'- a two-word substring match on illustrative prompt strings.
  *                    The prompt files ship placeholders now, so a hit is far more
  *                    likely to be a session that legitimately wrote the sentence.
+ *   'repeatedAbsence' - remote only: the narrator says more than once that they
+ *                    were not in the room (phase 2, 2.6). A phrase count with no
+ *                    live session behind it yet; "I was not there" can also be
+ *                    about the party. Its message has its own prefix, "Absence
+ *                    stated", which no console group claims, so a promotion lands
+ *                    it in the ungrouped structural list instead of hiding it.
  *
  * To PROMOTE one back to structural after a live session's data supports it:
  * remove its name from this list and push its message to `structuralIssues`
@@ -133,7 +139,7 @@ function isVerbatim(cardContent, sourceText) {
  * The message strings themselves must not change — `console/checkpoint-view-logic.js`
  * groups the fact-check by message PREFIX.
  */
-const FACT_CHECK_ADVISORY_ONLY = ['npcPronouns', 'leakedExample'];
+const FACT_CHECK_ADVISORY_ONLY = ['npcPronouns', 'leakedExample', 'repeatedAbsence'];
 
 /**
  * Illustrative strings shipped in the prompt files that a model has been
@@ -164,6 +170,24 @@ const PRESENCE_CLAIMS = [
   'i was there in the room',
   'i sat in that room',
   'i watched from the room'
+];
+// First-person statements that the reporter was NOT in the room (remote only).
+// One is allowed; the attribution shows the absence everywhere else. 092026's
+// remote article opened with "I was not there." in the deck and "I was not in
+// that room." in the lede. Matched on word boundaries, so "Kai was not there"
+// does not count.
+const ABSENCE_STATEMENTS = [
+  'i was not there',
+  "i wasn't there",
+  'i was never there',
+  'i was not in that room',
+  "i wasn't in that room",
+  'i was never in that room',
+  'i was not in the room',
+  "i wasn't in the room",
+  'i was never in the room',
+  'i was not present',
+  "i wasn't present"
 ];
 
 /**
@@ -391,6 +415,27 @@ function narratorText(contentBundle) {
 }
 
 /**
+ * Every ABSENCE_STATEMENTS match in narrator text, in the text's own casing.
+ *
+ * Double-quoted spans are skipped first: a paragraph that quotes a player's
+ * alibi ("I wasn't in the room") is reporting what someone said, not the
+ * narrator stating where they were. Lenient on purpose, like the rest of the
+ * module.
+ *
+ * @param {string} text - narratorText output
+ * @returns {string[]}
+ */
+function findAbsenceStatements(text) {
+  const unquoted = String(text == null ? '' : text)
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/"[^"\n]*"/g, ' ')
+    .replace(/[ \t]+/g, ' ');
+  const pattern = new RegExp(`\\b(?:${ABSENCE_STATEMENTS.map(escapeRegExp).join('|')})\\b`, 'gi');
+  return unquoted.match(pattern) || [];
+}
+
+/**
  * Fact-check a generated ContentBundle against the session's own record.
  *
  * @param {Object}   args
@@ -548,11 +593,23 @@ function factCheckContentBundle({
       if (normProse.includes(phrase)) {
         violations.push(phrase);
         structuralIssues.push(
-          `Reporter-mode violation (remote): "${phrase}". This session was covered remotely — every ` +
-          `exposure, observation and the verdict arrived as a tip from someone who was there. Write ` +
-          `it from what they told you and attribute it.`
+          `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: every ` +
+          `exposure, observation and the verdict arrived as a tip from someone who was there. Show ` +
+          `where each fact came from by attributing it to the people who told you, and state your ` +
+          `absence at most once.`
         );
       }
+    }
+
+    // 'repeatedAbsence' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): one statement of
+    // the absence is allowed; the attribution shows it everywhere else.
+    const absences = findAbsenceStatements(narratorText(bundle));
+    if (absences.length > 1) {
+      advisoryWarnings.push(
+        `Absence stated ${absences.length} times (remote): ${absences.map(a => `"${a}"`).join(', ')}. ` +
+        `Say that you were not in the room at most once in the whole article, or not at all; ` +
+        `everywhere else, show where each fact came from by attributing it to the people who told you.`
+      );
     }
   }
 
@@ -590,8 +647,10 @@ module.exports = {
     scanNpcPronouns,
     visibleText,
     narratorText,
+    findAbsenceStatements,
     LEAKED_PROMPT_EXAMPLES,
     NEVER_VOTES,
-    PRESENCE_CLAIMS
+    PRESENCE_CLAIMS,
+    ABSENCE_STATEMENTS
   }
 };

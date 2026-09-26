@@ -242,9 +242,12 @@ function getArticleCriteria(theme = 'journalist') {
     // on-site, and there was no criterion for it at all -- the violation was
     // caught only by the human, after publication. Journalist-only: the detective
     // report is third-person and has no reporter presence to misstate.
+    // Phase 2 (2.6): 092026's remote article announced the absence five times and
+    // this criterion's evaluation praised it as voice. Remote attribution shows the
+    // absence; saying it more than once is a defect.
     ...(isDetective ? {} : {
       reporterMode: {
-        description: 'Does the article respect this session\'s REPORTING MODE (stated in the evaluation prompt)? On-site: the reporter watched the investigation from the room but was NOT at the party. Remote: the reporter was not in the room at all and must attribute every exposure, observation and the verdict to the people who were there. In BOTH modes the reporter never votes and owns no exposed memory.',
+        description: 'Does the article respect this session\'s REPORTING MODE (stated in the evaluation prompt)? On-site: the reporter watched the investigation from the room but was NOT at the party. Remote: the reporter was not in the room at all and must show where every exposure, observation and the verdict came from by attributing it to the people who were there; the article states that absence at most once, and stating it more than once is a defect, not a sign of voice. In BOTH modes the reporter never votes and owns no exposed memory.',
         weight: 0.10,
         type: 'structural'
       }
@@ -800,7 +803,7 @@ Is this outline ready for human review?`;
       // it was never told which mode the session ran in.
       const reportingMode = state.sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
       const modeRule = reportingMode === 'remote'
-        ? 'The reporter was NOT in the room. Every exposure, observation and the verdict reached them as tips from people who were there, and must be written and attributed that way. A first-person claim to have been present is a STRUCTURAL failure.'
+        ? 'The reporter was NOT in the room. Every exposure, observation and the verdict reached them as tips from people who were there, and must be written and attributed that way. A first-person claim to have been present is a STRUCTURAL failure. The attribution shows the absence, so the article states it at most once: stating it more than once ("I was not there.", "I was not in that room.") is a reporterMode defect, not a sign of voice.'
         : 'The reporter watched the investigation from inside the room and spoke to people there, but was NOT at the party; the party reaches them only through exposed memories.';
 
       return `Evaluate this article content:

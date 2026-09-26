@@ -361,8 +361,9 @@ describe('advisory-only checks (I2b)', () => {
   // data says otherwise they inform the director and nothing else.
   const { FACT_CHECK_ADVISORY_ONLY } = require('../content-bundle-fact-check');
 
-  it('names exactly the two uncalibrated checks', () => {
-    expect(FACT_CHECK_ADVISORY_ONLY).toEqual(['npcPronouns', 'leakedExample']);
+  it('names exactly the uncalibrated checks', () => {
+    // 'repeatedAbsence' joined in phase 2 (2.6): a phrase count with no live session behind it.
+    expect(FACT_CHECK_ADVISORY_ONLY).toEqual(['npcPronouns', 'leakedExample', 'repeatedAbsence']);
   });
 
   it('reports an NPC pronoun contradiction as an advisory, not a structural failure', () => {
@@ -574,5 +575,132 @@ describe('ellipsis normalisation', () => {
       contentBundle: { sections: [], evidenceCards: [card({ tokenId: 'vic001', content: SOURCE })] }
     }));
     expect(result.cardFidelity[0].ok).toBe(true);
+  });
+});
+
+describe('the remote reporter-mode message asks for attribution (phase 2, 2.6)', () => {
+  it('keeps its prefix and tells the rework to attribute and to state the absence at most once', () => {
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote',
+      contentBundle: {
+        sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text: 'I was in the room when the vote turned.' }] }],
+        evidenceCards: []
+      }
+    }));
+    expect(result.structuralIssues).toHaveLength(1);
+    const [message] = result.structuralIssues;
+    // The console groups this message under reporter-mode violations by this prefix.
+    expect(message.startsWith('Reporter-mode violation (remote): "i was in the room".')).toBe(true);
+    expect(message).toContain('attributing it to the people who told you');
+    expect(message).toContain('state your absence at most once');
+  });
+});
+
+describe('repeated absence statements, remote only (phase 2, 2.6)', () => {
+  // 092026's remote article said it was not there in the deck ("I was not there.")
+  // and again in the lede ("I was not in that room."). The remote block allows one
+  // statement; the attribution shows the absence everywhere else.
+  const bundle = ({ deck = 'd', paragraphs = [], blocks = [] } = {}) => ({
+    headline: { main: 'The Room Chose Vic', kicker: 'k', deck },
+    sections: [{
+      id: 'lede',
+      type: 'narrative',
+      content: [...paragraphs.map(text => ({ type: 'paragraph', text })), ...blocks]
+    }],
+    evidenceCards: []
+  });
+  const run = (mode, contentBundle) => factCheckContentBundle(baseArgs({ reportingMode: mode, contentBundle }));
+  const absenceAdvisories = (result) => result.advisoryWarnings.filter(w => w.startsWith('Absence stated '));
+
+  it('flags the 092026 shape as ONE advisory, never structural', () => {
+    const result = run('remote', bundle({
+      deck: 'The room chose Vic. I was not there.',
+      paragraphs: ['I was not in that room. Everything I know reached me from the nine who were.']
+    }));
+    const advisories = absenceAdvisories(result);
+    expect(advisories).toHaveLength(1);
+    expect(advisories[0]).toMatch(/^Absence stated 2 times \(remote\): "I was not there", "I was not in that room"\./);
+    expect(advisories[0]).toContain('attributing it to the people who told you');
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.reporterMode.violations).toEqual([]);
+  });
+
+  it('allows one statement', () => {
+    const result = run('remote', bundle({
+      paragraphs: ['I was not in that room. This morning, I am told, Alex carried the ledger to the table.']
+    }));
+    expect(absenceAdvisories(result)).toEqual([]);
+  });
+
+  it('allows none: attribution alone is the form the block asks for', () => {
+    const result = run('remote', bundle({
+      paragraphs: ['This morning, I am told, Alex carried the ledger. The room split four to four, per those keeping count.']
+    }));
+    expect(absenceAdvisories(result)).toEqual([]);
+  });
+
+  it('counts contractions and repeats of the same phrase', () => {
+    const result = run('remote', bundle({
+      paragraphs: ["I wasn't there.", 'I was not there when the vote turned, either.']
+    }));
+    expect(absenceAdvisories(result)[0]).toMatch(/^Absence stated 2 times \(remote\): "I wasn't there", "I was not there"\./);
+  });
+
+  it('does not run on an on-site session', () => {
+    const result = run('on-site', bundle({
+      deck: 'I was not there.',
+      paragraphs: ['I was not in that room.']
+    }));
+    expect(absenceAdvisories(result)).toEqual([]);
+  });
+
+  it('does not count a player quoted inside a narrator paragraph', () => {
+    const result = run('remote', bundle({
+      paragraphs: ['I was not in that room. Vic told the others, “I wasn’t in the room when it happened.”']
+    }));
+    expect(absenceAdvisories(result)).toEqual([]);
+  });
+
+  it('reads narrator text only: quote blocks, captions and cards do not count', () => {
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote',
+      sessionPhotos: ['a.jpg'],
+      contentBundle: {
+        headline: { main: 'm', kicker: 'k', deck: 'I was not there.' },
+        sections: [{
+          id: 'lede',
+          type: 'narrative',
+          content: [
+            { type: 'quote', text: 'I was not in the room.', attribution: 'Mel' },
+            { type: 'photo', filename: 'a.jpg', caption: 'I was not present, Mel said.' }
+          ]
+        }],
+        evidenceCards: [card({ content: TOKEN_TEXT })]
+      }
+    }));
+    expect(absenceAdvisories(result)).toEqual([]);
+  });
+
+  it('matches whole words only: another name ending in "i" is not the narrator', () => {
+    const result = run('remote', bundle({
+      paragraphs: ['Kai was not there. Remi was not in the room either.']
+    }));
+    expect(absenceAdvisories(result)).toEqual([]);
+  });
+
+  it('carries its own prefix, which no console group claims, so the stop shows it as an advisory', () => {
+    const {
+      factCheckSummary, approveLabel
+    } = require('../../console/checkpoint-view-logic');
+    const result = run('remote', bundle({
+      deck: 'I was not there.',
+      paragraphs: ['I was not in that room.']
+    }));
+    const summary = factCheckSummary(result);
+    expect(summary.structural).toBe(0);
+    expect(summary.advisory).toBe(1);
+    expect(summary.groups.map(g => g.key)).toEqual(['advisory']);
+    expect(summary.groups[0].items[0].text).toMatch(/^Absence stated 2 times \(remote\):/);
+    expect(approveLabel(summary, false).label).toBe('Approve (1 advisory)');
   });
 });

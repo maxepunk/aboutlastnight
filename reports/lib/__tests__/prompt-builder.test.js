@@ -717,22 +717,36 @@ describe('PromptBuilder', () => {
 
       expect(userPrompt).toContain('LAST NIGHT');
       expect(userPrompt).toContain('THIS MORNING');
-      expect(userPrompt).toContain('physically present');
+      // Phase 2 (2.6): where Nova was is the system prompt's mode block's to say.
+      expect(userPrompt).toContain('set by the REPORTING MODE in your system prompt');
+      expect(userPrompt).not.toContain('physically present');
     });
 
-    it('should use remote language when reportingMode is remote', async () => {
+    it('defers to the mode block in both modes instead of restating it (phase 2, 2.6)', async () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
         'anti-patterns': ''
       });
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
-      const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, [], 'hero.jpg'
-      );
+      const blockFor = async (reportingMode) => {
+        const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode });
+        const { userPrompt } = await builder.buildArticlePrompt(
+          { sections: [] }, [], 'hero.jpg'
+        );
+        return userPrompt.slice(
+          userPrompt.indexOf('<TEMPORAL_DISCIPLINE>'),
+          userPrompt.indexOf('</TEMPORAL_DISCIPLINE>')
+        );
+      };
+      const remote = await blockFor('remote');
+      const onSite = await blockFor('on-site');
 
-      expect(userPrompt).toContain('received real-time tips');
-      expect(userPrompt).not.toContain('physically present');
+      expect(remote.length).toBeGreaterThan(0);
+      expect(remote).toBe(onSite);
+      expect(remote).not.toContain('received real-time tips');
+      expect(remote).not.toContain('received reports and tips');
+      expect(remote).not.toContain('physically present');
+      expect(remote).not.toContain('directly witnessed');
     });
   });
 
@@ -1015,7 +1029,10 @@ describe('PromptBuilder', () => {
       );
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('Blake solicited Vic three times');
-      expect(userPrompt).toContain('What you observed during the investigation');
+      // Phase 2 (2.6): the header names what the notes are and defers to the mode
+      // block for how they reached the reporter; it no longer says "you observed".
+      expect(userPrompt).toContain('What happened during the investigation this morning');
+      expect(userPrompt).toContain('How it reached you is set by the reporting mode in your system prompt');
       // Whiteboard should NOT be in this section
       expect(userPrompt).not.toContain('suspects');
     });

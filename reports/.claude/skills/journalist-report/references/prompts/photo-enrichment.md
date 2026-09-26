@@ -33,7 +33,7 @@ With character identities known, you can add relevant context from director note
 
 **Director note:** "Vic and Morgan appeared to be colluding throughout the investigation"
 
-**Enhanced description:** "Vic examines evidence at the table while Morgan leans in beside her. Both appear focused on the same object. Not the first time I noticed these two operating together."
+**Enhanced description:** "Vic examines evidence at the table while Morgan leans in beside her. Both appear focused on the same object. Not the first time these two were seen operating together."
 
 ## Caption Generation
 
@@ -45,7 +45,7 @@ Generate 2-3 article-ready captions that:
 
 ### Correct Caption Examples
 
-> Vic and Morgan examine evidence together. I saw this partnership more than once that night.
+> Vic and Morgan examine evidence together. This partnership was seen more than once that night.
 
 > The moment Sam noticed something on the evidence table. What he did next is part of the public record.
 

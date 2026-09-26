@@ -1203,3 +1203,33 @@ describe('evaluateArticle fact-check guard', () => {
     expect(result._articleFactCheck).toBeUndefined();
   });
 });
+
+describe('reporterMode: a remote article states its absence at most once (phase 2, 2.6)', () => {
+  // 092026's remote article said it was not there five times, and this
+  // criterion's evaluation praised it as voice. Attribution shows the absence;
+  // announcing it again is a defect.
+  it('the journalist criterion asks for attribution and names repetition a defect, not voice', () => {
+    const { description } = getArticleCriteria('journalist').reporterMode;
+    expect(description).toContain('by attributing it to the people who were there');
+    expect(description).toContain('the article states that absence at most once');
+    expect(description).toContain('stating it more than once is a defect, not a sign of voice');
+  });
+
+  it('the remote mode rule in the evaluation prompt says the same', () => {
+    const prompt = buildEvaluationUserPrompt('article', {
+      contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' }
+    });
+    expect(prompt).toContain('the article states it at most once');
+    expect(prompt).toContain('is a reporterMode defect, not a sign of voice');
+    // Unchanged: a presence claim is still a structural failure.
+    expect(prompt).toContain('A first-person claim to have been present is a STRUCTURAL failure.');
+  });
+
+  it('the on-site mode rule carries no absence limit', () => {
+    const prompt = buildEvaluationUserPrompt('article', {
+      contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'on-site' }
+    });
+    expect(prompt).not.toContain('at most once');
+    expect(prompt).toContain('The reporter watched the investigation from inside the room');
+  });
+});

@@ -245,10 +245,17 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * "You did not vote" is in both blocks. The reporter covers the room; they are
  * never a member of it. hardConstraints used to say the opposite in so many words
  * (`use "We decided"`).
+ *
+ * Phase 2 (2.6): the remote block asks for attribution and allows the absence to
+ * be stated at most once. 092026's remote article announced it five times ("I was
+ * not there.", "I was not in that room.", "This is the story they told me.") and
+ * the article evaluation praised it as voice. The prompt lines that restated where
+ * the reporter was now defer to this block instead. Keep each block ONE line: the
+ * position test finds it by line.
  */
 const REPORTING_MODE_BLOCKS = {
   'on-site': 'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.',
-  remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there; write from what they told you and attribute it. You did not vote and you were not at the party.'
+  remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there: show where each fact came from by attributing it to the people who told you. State your absence at most once in the whole piece; the attribution shows it everywhere else. You did not vote and you were not at the party.'
 };
 
 /**
@@ -420,8 +427,8 @@ class PromptBuilder {
   _buildInvestigationObservations(directorNotes, corrections = null) {
     if (!directorNotes?.rawProse) return '';
     return `<INVESTIGATION_OBSERVATIONS>
-What you observed during the investigation this morning.
-These ground your behavioral claims — who you saw talking to whom, notable moments, patterns you noticed.
+What happened during the investigation this morning. How it reached you is set by the reporting mode in your system prompt.
+These ground your behavioral claims — who talked to whom, notable moments, recurring patterns.
 For the POST_INVESTIGATION_NEWS sub-block below (if present), write with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…" — do NOT conflate these with things Nova witnessed this morning.
 
 ${renderDirectorEnrichmentBlock({
@@ -1089,11 +1096,11 @@ This image is the HERO IMAGE at the top of the article.
 - Inline photos must use DIFFERENT photos from the session
 
 TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
-- "PARTY" = RECOVERED MEMORY from the night of the party. You watched this play back on a screen.
+- "PARTY" = RECOVERED MEMORY from the night of the party. It reached you the way your REPORTING MODE says.
   USE: "The memory shows..." / "Recovered footage from [time] captures..." / "A memory from [time] reveals..."
   NEVER: "I watched [character] do X" for party events. You were NOT at the party.
-- "INVESTIGATION" = Something you DIRECTLY OBSERVED or that occurred during this morning's investigation.
-  USE: "I watched..." / "I saw..." / "This morning..."
+- "INVESTIGATION" = Something that occurred during this morning's investigation. How it reached you is set by your REPORTING MODE.
+  USE: "This morning..." with first-person witness or attribution, as your REPORTING MODE allows.
 - "BACKGROUND" = Document or evidence that predates the party.
   USE: "Records show..." / "Documents reveal..."
 
@@ -1122,13 +1129,13 @@ ${this._rosterSection()}
 CRITICAL: FOUR STAGES. Get them right or the article makes no sense.
 
 1. THE PARTY (LAST NIGHT): Marcus's party where the death occurred. Events known ONLY through extracted memories. Nova was NOT there.
-2. THE INVESTIGATION (THIS MORNING): Party attendees woke up with holes in their memories. Memories were exposed to the Detective or buried via the Black Market. Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received real-time tips from investigators' : 'was physically present, witnessing the investigation firsthand'}.
+2. THE INVESTIGATION (THIS MORNING): Party attendees woke up with holes in their memories. Memories were exposed to the Detective or buried via the Black Market. How Nova learned of it is set by the REPORTING MODE in your system prompt.
 3. THE DELIBERATION (THIS MORNING, after the investigation): The room weighed the evidence and settled on a verdict, who they accused and why. The conclusion formed here may diverge from what the full record implies. That divergence is the article's central tension.
 4. THE ARTICLE (NOW): Written immediately after the deliberation concluded.
 
 LANGUAGE RULES:
 - Party events: "Last night..." / "The memory shows..." / "In the recording..." Nova was NOT at the party.
-- Investigation and deliberation events: "This morning..." / "I watched..." / "I saw..." Nova ${this.sessionConfig.reportingMode === 'remote' ? 'received reports and tips as they happened' : 'directly witnessed these'}.
+- Investigation and deliberation events: "This morning..." How each one reached Nova, and how she shows it, is set by the REPORTING MODE in your system prompt.
 - Burial transactions are INVESTIGATION actions (this morning), NOT party events (last night).
 - The verdict is a DELIBERATION outcome (this morning). Frame it as the room's conclusion, which the record may or may not support.
 - NEVER treat a party event and a this-morning event as simultaneous.
@@ -1199,7 +1206,7 @@ EVIDENCE-CARD INLINE EXAMPLE:
   "id": "the-story",
   "type": "narrative",
   "content": [
-    {"type": "paragraph", "text": "I watched them circle each other, [Character A]'s composure finally cracking..."},
+    {"type": "paragraph", "text": "They circled each other, [Character A]'s composure finally cracking..."},
     {"type": "evidence-card", "tokenId": "tok001", "headline": "The Moment of Truth", "content": "[Token ID] - [timestamp] - [Full verbatim text of ${DOCUMENT_POINTER} - do NOT truncate or summarize]", "owner": "[Character A]", "significance": "critical"},
     {"type": "paragraph", "text": "After that, nothing was the same between them..."}
   ]

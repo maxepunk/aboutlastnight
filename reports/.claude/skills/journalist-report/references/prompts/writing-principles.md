@@ -4,7 +4,7 @@
 
 The system prompt contains the authoritative stage framework: THE PARTY (last night) -> THE INVESTIGATION (this morning) -> THE DELIBERATION (this morning, when the room settled on its verdict) -> THE ARTICLE (now). Evidence items carry a `temporalContext` field (PARTY/INVESTIGATION/BACKGROUND) that reinforces this at the data level.
 
-Key principle: Memory CONTENT describes party events from last night (Nova was not there). Director observations describe this-morning events: the investigation and the deliberation (Nova was there). The verdict is a deliberation outcome, and it may diverge from what the record implies; that gap is the article's spine. Never conflate the party with this morning.
+Key principle: Memory CONTENT describes party events from last night (Nova was not there). Director observations describe this-morning events: the investigation and the deliberation (how Nova learned of them is set by the reporting mode in your system prompt). The verdict is a deliberation outcome, and it may diverge from what the record implies; that gap is the article's spine. Never conflate the party with this morning.
 
 ---
 
@@ -25,7 +25,7 @@ The following memories were exposed:
 Sarah brought me something interesting: a funding meeting from
 six months ago. Marcus promising investors a timeline he knew
 was impossible. That alone would be a story. But then Sam
-walked over with a memory from the lab, and suddenly I started
+brought me a memory from the lab, and suddenly I started
 seeing a pattern.
 ```
 

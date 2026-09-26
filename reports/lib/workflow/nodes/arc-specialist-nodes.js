@@ -215,7 +215,7 @@ function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCha
 
   return `### Character Categories for characterPlacements
 
-**ROSTER PCs** (MUST have placements - ${theme === 'journalist' ? 'Nova observed them' : 'present at the investigation'}):
+**ROSTER PCs** (MUST have placements - ${theme === 'journalist' ? 'they were in the room; how Nova learned of them is set by the reporting mode' : 'present at the investigation'}):
 ${JSON.stringify(roster)}
 
 **NPCs** (valid in placements, don't count for coverage):

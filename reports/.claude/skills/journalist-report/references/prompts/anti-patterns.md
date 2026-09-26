@@ -277,7 +277,7 @@ I watched Vic hand Marcus the contract that night.
 **RIGHT:**
 ```
 The memory shows Vic handing Marcus the contract.
-I watched the room react when it played.
+The room reacted when it played.
 ```
 
 **WRONG (mixing party behavior with investigation behavior):**
@@ -312,7 +312,7 @@ Before writing any sentence, apply this decision rule:
 |------------|--------------|---------------------|
 | Knows it first-hand | INVESTIGATION | first person, in whatever way your reporting mode allows |
 | READ/VIEWED it in a memory | PARTY (via recording) | "The memory shows," "In the recording," "The extracted memory reveals" |
-| Knows it from director notes | INVESTIGATION (behavioral observation) | "I noticed," "What I saw was" |
+| Knows it from director notes | INVESTIGATION (behavioral observation) | witnessed or attributed, in whatever way your reporting mode allows |
 | Knows it from paper evidence | PARTY (context) | "According to the documents," "The records show" |
 
 ### Never/Instead Substitutions

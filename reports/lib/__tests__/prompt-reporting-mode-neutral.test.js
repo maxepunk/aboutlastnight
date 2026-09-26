@@ -26,6 +26,17 @@
 const { createPromptBuilder } = require('../prompt-builder');
 const { _testing: { getArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
 
+/**
+ * Director notes with prose, so the <INVESTIGATION_OBSERVATIONS> header renders:
+ * its first two lines used to say "What you observed" and "who you saw".
+ */
+const DIRECTOR_NOTES = {
+  rawProse: 'Vic and Mel argued at the bar.',
+  quotes: [],
+  transactionReferences: [],
+  postInvestigationDevelopments: []
+};
+
 /** The whole rendered article prompt for `mode`, system + user. */
 async function renderArticlePrompt(mode) {
   const builder = createPromptBuilder({
@@ -33,7 +44,7 @@ async function renderArticlePrompt(mode) {
     sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
   });
   const { systemPrompt, userPrompt } = await builder.buildArticlePrompt(
-    { sections: [] }, [], null, [], null, null, null, {}
+    { sections: [] }, [], null, [], null, DIRECTOR_NOTES, null, {}
   );
   return { systemPrompt, userPrompt, all: systemPrompt + '\n' + userPrompt };
 }
@@ -57,7 +68,37 @@ const ON_SITE_PERSONA = [
   'spent two hours working alongside',
   'someone who was in that room',
   "Nova's presence — she was there",
-  'The reporter has opinions. She was there.'
+  'The reporter has opinions. She was there.',
+  // Phase 2 (2.6): presence lines that now defer to the mode block.
+  // lib/prompt-builder.js, the article prompt and the shared observations header
+  'You watched this play back on a screen',
+  'Something you DIRECTLY OBSERVED',
+  '"I watched..." / "I saw..."',
+  'was physically present, witnessing',
+  'directly witnessed these',
+  'I watched them circle each other',
+  'What you observed during the investigation',
+  'who you saw talking to whom',
+  // the craft files
+  '(Nova was there)',
+  'walked over with a memory',
+  'I saw Taylor at the Valet station',
+  'I watched the room react',
+  '"I noticed," "What I saw was"',
+  'the whole evening on this room',
+  'Does every "I watched" / "I saw"',
+  "Nova's witness line"
+];
+
+/**
+ * Phase 2 (2.6): lines outside the block that restated a remote session's
+ * absence, or told the writer to announce how each thing reached her. 092026's
+ * remote article said it was not there five times. The block says it once now.
+ */
+const RESTATEMENTS = [
+  'received real-time tips from investigators',
+  'received reports and tips as they happened',
+  'and says how it reached her'
 ];
 
 describe('article prompt, remote session', () => {
@@ -74,6 +115,16 @@ describe('article prompt, remote session', () => {
 
   it.each(ON_SITE_PERSONA)('does not assert: %s', (phrase) => {
     expect(rendered.all).not.toContain(phrase);
+  });
+
+  it.each(RESTATEMENTS)('does not restate the absence outside the block: %s', (phrase) => {
+    expect(rendered.all).not.toContain(phrase);
+  });
+
+  it('states the remote block once, in the system prompt only', () => {
+    const { REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+    expect(rendered.all.split(REPORTING_MODE_BLOCKS.remote).length - 1).toBe(1);
+    expect(rendered.userPrompt).not.toContain(REPORTING_MODE_BLOCKS.remote);
   });
 });
 
@@ -93,6 +144,10 @@ describe('article prompt, on-site session', () => {
     // The mode block is the single authority in BOTH modes. An on-site session
     // gets its presence from there, not from a persona sentence in a craft file
     // that a remote session would also be reading.
+    expect(rendered.all).not.toContain(phrase);
+  });
+
+  it.each(RESTATEMENTS)('carries no mode restatement either: %s', (phrase) => {
     expect(rendered.all).not.toContain(phrase);
   });
 });
@@ -208,5 +263,77 @@ describe('the mode block reaches the arc and outline writers', () => {
     Object.values(prompts).forEach((prompt) => {
       expect(prompt).toContain(REPORTING_MODE_BLOCKS['on-site']);
     });
+  });
+});
+
+/**
+ * Phase 2 (2.6): the remote block asks for attribution, and the absence is stated
+ * at most once. 092026's remote article said "I was not there.", "I was not in
+ * that room." and "This is the story they told me." and the article evaluation
+ * scored it as good voice.
+ */
+describe('the remote block asks for attribution and one statement of the absence', () => {
+  const { REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+
+  it('still opens with the absence and still says the reporter never voted', () => {
+    expect(REPORTING_MODE_BLOCKS.remote.startsWith('You were not in the room.')).toBe(true);
+    expect(REPORTING_MODE_BLOCKS.remote).toMatch(/You did not vote/);
+    expect(REPORTING_MODE_BLOCKS.remote).toMatch(/you were not at the party/);
+  });
+
+  it('tells the writer to show each source through attribution', () => {
+    expect(REPORTING_MODE_BLOCKS.remote).toContain('show where each fact came from by attributing it to the people who told you');
+  });
+
+  it('allows the absence to be stated at most once', () => {
+    expect(REPORTING_MODE_BLOCKS.remote).toContain('State your absence at most once in the whole piece');
+  });
+
+  it('stays one line, so the position test can find it', () => {
+    expect(REPORTING_MODE_BLOCKS.remote).not.toMatch(/\n/);
+  });
+
+  it('leaves the on-site block as it was', () => {
+    expect(REPORTING_MODE_BLOCKS['on-site']).toBe(
+      'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.'
+    );
+  });
+});
+
+/**
+ * Phase 2 (2.6): the presence lines outside the article prompt defer to the
+ * block too: the outline (third person in both modes), the arc writer's
+ * categories line and the photo enrichment examples.
+ */
+describe('presence lines outside the article prompt', () => {
+  it.each(['remote', 'on-site'])('the %s outline prompt carries none of them', async (mode) => {
+    const builder = createPromptBuilder({
+      theme: 'journalist',
+      sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
+    });
+    const { systemPrompt, userPrompt } = await builder.buildOutlinePrompt(
+      { narrativeArcs: [] }, [], 'hero.png', [], [], [], null, { directorNotes: DIRECTOR_NOTES }
+    );
+    const all = systemPrompt + '\n' + userPrompt;
+    expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');
+    [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
+      expect(`${mode}: ${all.includes(phrase)}`).toBe(`${mode}: false`);
+    });
+  });
+
+  it('the arc writer\'s roster line no longer says Nova observed them', () => {
+    const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
+    const block = arcTesting.buildCharacterCategoriesBlock(['Vic'], 'journalist', []);
+    expect(block).not.toContain('Nova observed them');
+    expect(block).toContain('how Nova learned of them is set by the reporting mode');
+  });
+
+  it('the photo enrichment examples make no first-person presence claim', async () => {
+    const { createThemeLoader } = require('../theme-loader');
+    const prompts = await createThemeLoader({ theme: 'journalist' }).loadPhasePrompts('imageAnalysis');
+    const enrichment = prompts['photo-enrichment'];
+    expect(enrichment.length).toBeGreaterThan(0);
+    expect(enrichment).not.toContain('I noticed these two');
+    expect(enrichment).not.toContain('I saw this partnership');
   });
 });

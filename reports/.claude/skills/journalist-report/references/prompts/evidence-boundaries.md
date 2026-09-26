@@ -131,7 +131,7 @@ WHY THIS IS WRONG: Buried evidence reveals NOTHING about content or ownership. O
 
 When director noted someone at Valet AND we see transaction timing:
 
-> I saw Taylor at the Valet station at 8:15 PM. A transaction hit ChaseT at 8:16 PM. Make of that what you will.
+> Taylor was seen at the Valet station at 8:15 PM. A transaction hit ChaseT at 8:16 PM. Make of that what you will.
 
 This is CORRECT because:
 - Director observation = we saw Taylor at Valet (public behavior)
