@@ -89,6 +89,20 @@ The director kept `xhigh` (roadmap open decision 3). Three calls did not run on 
 4. A click-through of every changed screen: the input review, the arc stop note after a reload, the character-IDs stop, the outline and article stops (the uncalibrated label, the trace panel with a fixture thread if no live pass occurred, the sidebar entry editor).
 5. The final whole-phase review, on Opus 5.5.
 
+**The phase gate result** (2026-09-26; merged to `main` at `6b01ed7`, 175 suites and 3148 tests).
+- **Review.** The final whole-phase review and a prompt-diff audit found that buried memories' ids reached nine prompts through `<TRANSACTION_LINKS>`. The leak predated the phase in four writer prompts, and reworkers and judges built "by construction" had spread it. `main` got a hotfix the same day (`d1c1988`). The phase's single fix wave then removed the ids from the renderer and from the enricher's own input, and added a cross-prompt sentinel test. The wave also fixed:
+  - the roster's two pronouns for Marcus;
+  - buried rows with no sale;
+  - curation keeping a model-echoed id, which lost 092026's funding-email text;
+  - the last presence lines.
+- **Live run.** A copy of 092026 was run from input review with a send-back at every stop. Every brief's check was met, and 27 logged calls were all served by their pinned models. No buried id appeared in any writer, reworker or judge prompt. The automatic article pass kept every card. The remote article stated the reporter's absence zero times.
+- **Durations.** The first-pass Opus set ran 2668 s, against 1905 s at the 2.0 gate: about 40% longer, from the larger prompts on top of `xhigh`. The director-round reworks took 513 to 664 s.
+- **Click-through.** It ran on fixture threads cut from the gate's own checkpoints at each stop, with no model calls. It covered input review, character IDs, arcs, outline and article.
+- **Gate lessons:**
+  - Every harness call carries `--resume`; without it the harness force-starts the thread.
+  - A rollback to input review skips the character-IDs stop because the mappings are kept, so descriptions are entered after a rollback to `character-ids` with `--photo-descriptions`.
+  - The preprocessor's Haiku calls are not written to the call log.
+
 ---
 
 ## Brief 2.0: the SDK and Opus 5.5
