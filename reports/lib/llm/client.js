@@ -416,6 +416,7 @@ async function sdkQueryImpl({
     let deltaCharCount = 0;   // running streamed-char total for the token-count cue
     let ttftMs = null;        // time-to-first-token (first non-empty delta)
     let lastAssistantError = null;  // the latest assistant frame's error, e.g. 'authentication_failed' — names the reason on an is_error result
+    const answerModels = [];        // every model named on the call's own assistant frames: the models that wrote the answer
 
     // A declined request inside the stream: one llm_error (with the result's envelope
     // when there is a result) plus the refusal, then the error to throw. When the refusal
@@ -511,6 +512,13 @@ async function sdkQueryImpl({
       if (msg.type === 'assistant') {
         lastAssistantError = !msg.error ? null
           : typeof msg.error === 'string' ? msg.error : (msg.error?.type || String(msg.error));
+        // The model a frame names wrote that frame. The call's own frames carry no
+        // parent_tool_use_id (a subagent's do). The substitution check reads these, not the
+        // result's modelUsage, which also counts the CLI's own helper requests: on
+        // 2026-09-26 a Sonnet session-report parse listed claude-haiku-4-5 beside
+        // claude-sonnet-5 there, while every frame of the answer was Sonnet's.
+        const frameModel = !msg.parent_tool_use_id && msg.message?.model;
+        if (frameModel && !answerModels.includes(frameModel)) answerModels.push(frameModel);
       }
 
       // Log context window on session init (verify 1M beta is active)
@@ -721,11 +729,12 @@ async function sdkQueryImpl({
           finalResult = msg.result;
         }
 
-        // Every served model (result modelUsage) that is not the one the call resolved to
-        // under servedModelMatches. Any one of them fails the call (integrator ruling,
-        // 2026-09-25; lib/llm/model-substitution.js). A result with no modelUsage names no
-        // model, so it has none and is returned.
-        const substitutes = substituteModelsOf(sdkDiagnostics.servedModels, resolvedModel);
+        // Every model that wrote part of the answer (the call's own assistant frames) and is
+        // not the one the call resolved to under servedModelMatches. Any one of them fails
+        // the call (lib/llm/model-substitution.js). The result's modelUsage (servedModels)
+        // is recorded, not judged: it also lists the CLI's own helper requests. A call with
+        // no frame naming a model has nothing to judge and is returned.
+        const substitutes = substituteModelsOf(answerModels, resolvedModel);
 
         // A refusal signal earlier in the stream, then a clean finish on another stop
         // reason. If the schema then fails, the refusal is the better name for it, and the
@@ -747,7 +756,7 @@ async function sdkQueryImpl({
         // cause, and its schemaErrors on the llm_error, as on a declined request.
         if (substitutes.length > 0) {
           const substitutionErr = new SdkModelSubstitutionError(
-            { requestedModel: resolvedModel, servedModels: sdkDiagnostics.servedModels, label: progressLabel },
+            { requestedModel: resolvedModel, servedModels: answerModels, label: progressLabel },
             extractionError ? { cause: extractionError } : undefined
           );
           console.error(`[${progressLabel}] ${substitutionErr.message}`);
@@ -761,6 +770,7 @@ async function sdkQueryImpl({
               schemaErrors: extractionError?.schemaErrors ?? null,
               jsonSchema,
               ...sdkDiagnostics,
+              answerModels: [...answerModels],
               refusalFallback: refusals.fallback()
             });
           }
@@ -786,7 +796,8 @@ async function sdkQueryImpl({
               errorName: extractionError.name,
               schemaErrors: extractionError.schemaErrors || null,
               jsonSchema,
-              ...sdkDiagnostics
+              ...sdkDiagnostics,
+              answerModels: [...answerModels]
             });
           } else {
             emit({
@@ -796,6 +807,7 @@ async function sdkQueryImpl({
               jsonSchema,
               channel: outputChannel,
               ...sdkDiagnostics,
+              answerModels: [...answerModels],
               refusalSignal: pendingRefusal,
               refusalFallback: refusals.fallback()
             });

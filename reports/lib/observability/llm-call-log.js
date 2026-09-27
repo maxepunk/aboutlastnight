@@ -99,8 +99,13 @@ function diagnosticsOf(msg) {
     terminalReason: msg.terminalReason ?? null,
     structuredOutputPresent: msg.structuredOutputPresent ?? null,
     resultTextLength: msg.resultTextLength ?? null,
-    // The models that answered (result modelUsage), next to the alias the call asked for.
+    // Every model the CLI used during the call (result modelUsage), next to the alias the
+    // call asked for. It can include the CLI's own helper requests (a Haiku beside the
+    // pinned model), so it is recorded, not judged.
     servedModels: msg.servedModels ?? null,
+    // The models that wrote the answer (the call's own assistant frames): the ones the
+    // substitution check judges (lib/llm/model-substitution.js).
+    answerModels: msg.answerModels ?? null,
     // A declined request: {category, explanation} (lib/llm/refusal.js).
     refusal: msg.refusal ?? null,
     // A refusal signal that a clean, returned finish followed (llm_complete only):
@@ -159,6 +164,7 @@ function recordLlmEvent(sessionId, context, msg) {
       writeJson(entry.file, record);
       fs.appendFileSync(path.join(dir, 'index.jsonl'), JSON.stringify({
         ts: completedAt, callId, context, model: record.model, servedModels: diagnostics.servedModels,
+        answerModels: diagnostics.answerModels,
         elapsed: record.elapsed, channel: diagnostics.channel, usage: diagnostics.usage,
         file: path.basename(entry.file), outcome: record.outcome
       }) + '\n');

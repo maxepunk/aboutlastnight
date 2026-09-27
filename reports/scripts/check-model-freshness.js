@@ -29,7 +29,7 @@ const { servedModelMatches } = require('../lib/llm/sdk-fields');
  * @returns {Promise<{ok: boolean, initModel: string|null, betas: string[]|null, servedModels: string[]|null, error: string|null}>}
  */
 async function checkModel(alias, expectedId, { sdkQuery }) {
-  const out = { ok: false, initModel: null, betas: null, servedModels: null, error: null };
+  const out = { ok: false, initModel: null, betas: null, servedModels: null, answerModels: null, error: null };
   try {
     await sdkQuery({
       prompt: 'Reply with OK',
@@ -41,18 +41,23 @@ async function checkModel(alias, expectedId, { sdkQuery }) {
           out.initModel = e.init.model ?? null;
           out.betas = e.init.betas ?? null;
         }
-        if (e.type === 'llm_complete' || e.type === 'llm_error') out.servedModels = e.servedModels ?? null;
+        if (e.type === 'llm_complete' || e.type === 'llm_error') {
+          out.servedModels = e.servedModels ?? null;
+          out.answerModels = e.answerModels ?? null;
+        }
       }
     });
   } catch (err) {
     out.error = err && err.message ? err.message : String(err);
   }
-  // The init model and the served models go through the same comparison, so a
-  // `[1m]` context suffix or a dated snapshot suffix passes on either.
+  // The init model and the models that wrote the answer go through the same comparison,
+  // so a `[1m]` context suffix or a dated snapshot suffix passes on either. The answer's
+  // frames decide: modelUsage (servedModels) can also list the CLI's own helper requests.
+  const judged = Array.isArray(out.answerModels) && out.answerModels.length > 0 ? out.answerModels : out.servedModels;
   out.ok = !out.error &&
     servedModelMatches(out.initModel, expectedId) &&
-    Array.isArray(out.servedModels) && out.servedModels.length > 0 &&
-    out.servedModels.every((m) => servedModelMatches(m, expectedId));
+    Array.isArray(judged) && judged.length > 0 &&
+    judged.every((m) => servedModelMatches(m, expectedId));
   return out;
 }
 

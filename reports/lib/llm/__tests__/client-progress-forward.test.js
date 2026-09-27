@@ -147,18 +147,38 @@ describe('client llm_complete — the served model (brief 2.0)', () => {
     expect(event.servedModels).toEqual(['claude-opus-5-5']);
   });
 
-  // Round 3: another model among the served fails the call (SdkModelSubstitutionError),
-  // so the list of every model that answered rides on the llm_error.
-  it('lists every model that answered on the llm_error when one is not the pinned model', async () => {
+  // Round 3 (corrected 2026-09-26): another model on the answer's own frames fails the call
+  // (SdkModelSubstitutionError); the llm_error carries both lists, what the CLI used
+  // (servedModels) and what wrote the answer (answerModels).
+  it('lists every model the CLI used and every model that wrote the answer on the llm_error', async () => {
     const events = [];
-    setMockQuery(() => makeAsyncIterable([{
-      type: 'result', subtype: 'success', result: 'ok',
-      modelUsage: { 'claude-opus-5-5': { outputTokens: 3 }, 'claude-opus-4-8': { outputTokens: 900 } }
-    }]));
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'assistant', parent_tool_use_id: null, message: { model: 'claude-opus-4-8', content: [{ type: 'text', text: 'ok' }] } },
+      {
+        type: 'result', subtype: 'success', result: 'ok',
+        modelUsage: { 'claude-opus-5-5': { outputTokens: 3 }, 'claude-opus-4-8': { outputTokens: 900 } }
+      }
+    ]));
     await expect(sdkQueryImpl({ prompt: 'x', model: 'opus', onProgress: (e) => events.push(e) }))
       .rejects.toThrow(/SDK model substitution/);
     expect(events.find(e => e.type === 'llm_complete')).toBeUndefined();
-    expect(events.find(e => e.type === 'llm_error').servedModels).toEqual(['claude-opus-5-5', 'claude-opus-4-8']);
+    const err = events.find(e => e.type === 'llm_error');
+    expect(err.servedModels).toEqual(['claude-opus-5-5', 'claude-opus-4-8']);
+    expect(err.answerModels).toEqual(['claude-opus-4-8']);
+  });
+
+  // The live case, 2026-09-26: the CLI's own Haiku helper in modelUsage, every frame of the
+  // answer the pinned model's. The call completes and the record shows both lists.
+  it('records a helper model in servedModels without failing a pinned-model answer', async () => {
+    const events = [];
+    setMockQuery(() => makeAsyncIterable([
+      { type: 'assistant', parent_tool_use_id: null, message: { model: 'claude-sonnet-5', content: [{ type: 'text', text: 'ok' }] } },
+      { type: 'result', subtype: 'success', result: 'ok', modelUsage: { 'claude-haiku-4-5': { outputTokens: 40 }, 'claude-sonnet-5': { outputTokens: 7988 } } }
+    ]));
+    await sdkQueryImpl({ prompt: 'x', model: 'sonnet', onProgress: (e) => events.push(e) });
+    const done = events.find(e => e.type === 'llm_complete');
+    expect(done.servedModels).toEqual(['claude-haiku-4-5', 'claude-sonnet-5']);
+    expect(done.answerModels).toEqual(['claude-sonnet-5']);
   });
 
   it('is null when the result has no modelUsage', async () => {

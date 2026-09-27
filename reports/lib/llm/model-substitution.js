@@ -1,13 +1,18 @@
 /**
  * A call served by a model other than the one it asked for.
  *
- * Ruling (integrator, 2026-09-25, adopted after the full 2.0 gate served all 19 calls on
- * their pinned models): when a completed call's `servedModels` (the result's modelUsage,
- * lib/llm/sdk-fields.js) names any model that is not the model the call resolved to under
- * `servedModelMatches`, the call fails with `SdkModelSubstitutionError`. Before the ruling
- * such a result was returned and the substitute was only recorded in `servedModels`.
- * CLAUDE_CODE_NO_MODEL_FALLBACK (client.js) tells the CLI never to substitute; this is the
- * check that it did not. A result with no modelUsage names no model and still returns.
+ * Ruling (integrator, 2026-09-25; corrected 2026-09-26): when a model that wrote part of a
+ * completed call's answer is not the model the call resolved to under
+ * `servedModelMatches`, the call fails with `SdkModelSubstitutionError`. The models that
+ * wrote the answer are the ones named on the call's own assistant frames (client.js,
+ * `answerModels`). CLAUDE_CODE_NO_MODEL_FALLBACK (client.js) tells the CLI never to
+ * substitute; this is the check that it did not. A call with no frame naming a model has
+ * nothing to judge and still returns.
+ *
+ * The first version judged the result's modelUsage (`servedModels`, lib/llm/sdk-fields.js).
+ * That also counts the CLI's own helper requests: on 2026-09-26 a Sonnet session-report
+ * parse listed claude-haiku-4-5 beside claude-sonnet-5 there, every frame of its answer
+ * was Sonnet's, and the check threw the answer away. modelUsage is now recorded, not judged.
  *
  * A substitute after a refusal signal is a declined request instead: `SdkRefusalError`
  * naming the fallback model (lib/llm/refusal.js).
@@ -29,9 +34,9 @@ const SUBSTITUTION_MARKER = 'SDK model substitution';
 const SUBSTITUTION_MESSAGE_RE = /\bSDK model substitution: requested /;
 
 /**
- * The served models that are not the requested one.
+ * The answer's models that are not the requested one.
  *
- * @param {string[]|null} servedModels - servedModelsOf(result.modelUsage)
+ * @param {string[]|null} servedModels - the models named on the call's own assistant frames
  * @param {string} requestedModel - the model id the call resolved to
  * @returns {string[]}
  */
@@ -44,7 +49,7 @@ class SdkModelSubstitutionError extends Error {
   /**
    * @param {Object} details
    * @param {string} details.requestedModel - the model id the call resolved to
-   * @param {string[]} details.servedModels - every model the result's modelUsage names
+   * @param {string[]} details.servedModels - every model that wrote part of the answer
    * @param {string} [details.label] - the call's label
    * @param {{cause?: unknown}} [options] - Error options: a failure the result also had
    *   (a schema mismatch)

@@ -663,17 +663,23 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
   });
 
   // Round 2: a clean finish after a refusal signal is returned only when the model the
-  // call resolved to served it. Another model in the result's modelUsage finished the
-  // declined request (a fallback the CLI never announced), so the call is declined.
+  // call resolved to wrote the answer. A frame of the answer written by another model
+  // finished the declined request (a fallback the CLI never announced), so the call is
+  // declined. (Since 2026-09-26 the answer's frames decide, not the result's modelUsage.)
   describe('another model finishing after a refusal signal is a declined request', () => {
     const cleanFinish = (modelUsage, extra = {}) => ({
       type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn',
       result: '{"ok":true}', structured_output: { ok: true }, modelUsage, ...extra
     });
+    const answerFrame = (model) => ({
+      type: 'assistant', parent_tool_use_id: null,
+      message: { model, content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }
+    });
 
-    test('a schema-valid finish served by another model throws, naming that model', async () => {
+    test('a schema-valid finish written by another model throws, naming that model', async () => {
       const { thrown, value, events } = await run([
         refusedFrame('bio'),
+        answerFrame('claude-opus-5'),
         cleanFinish({ 'claude-opus-5-5': { canonicalModel: 'claude-opus-5-5' }, 'claude-opus-5': { canonicalModel: 'claude-opus-5' } })
       ], { jsonSchema: SIMPLE_SCHEMA });
 
@@ -697,6 +703,7 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
     test('a text call finished by another model throws too', async () => {
       const { thrown, value } = await run([
         refusedFrame('cyber'),
+        answerFrame('claude-opus-4-8'),
         cleanFinish({ 'claude-opus-4-8': {} }, { structured_output: undefined, result: 'here is the answer' })
       ]);
       expect(value).toBeUndefined();
@@ -704,9 +711,10 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
       expect(thrown.refusalFallbackModel).toBe('claude-opus-4-8');
     });
 
-    test('a schema failure served by another model keeps the schema failure as the cause and names the model', async () => {
+    test('a schema failure written by another model keeps the schema failure as the cause and names the model', async () => {
       const { thrown } = await run([
         refusedFrame('bio'),
+        answerFrame('claude-opus-5'),
         cleanFinish({ 'claude-opus-5': {} }, { structured_output: undefined, result: 'no json here' })
       ], { jsonSchema: SIMPLE_SCHEMA });
       expect(thrown).toBeInstanceOf(SdkRefusalError);
@@ -715,22 +723,28 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
     });
 
     test('the pinned model under a [1m] or dated suffix is the same model, so the result returns', async () => {
-      for (const usage of [
-        { 'claude-opus-5-5[1m]': {} },
-        { 'claude-opus-5-5-20260901': {} },
-        { 'claude-opus-5-5[1m]': { canonicalModel: 'claude-opus-5-5' } }
-      ]) {
-        const { thrown, value, events } = await run([refusedFrame('bio'), cleanFinish(usage)], { jsonSchema: SIMPLE_SCHEMA });
+      for (const model of ['claude-opus-5-5', 'claude-opus-5-5[1m]', 'claude-opus-5-5-20260901']) {
+        const { thrown, value, events } = await run([refusedFrame('bio'), answerFrame(model), cleanFinish({ [model]: {} })], { jsonSchema: SIMPLE_SCHEMA });
         expect(thrown).toBeUndefined();
         expect(value).toEqual({ ok: true });
         expect(events.find((e) => e.type === 'llm_complete').refusalSignal).toEqual({ category: 'bio', explanation: 'This request may relate to biological harm.' });
       }
     });
 
+    test('a helper model in modelUsage beside a pinned-model answer is not a fallback, so the result returns', async () => {
+      const { thrown, value } = await run([
+        refusedFrame('bio'),
+        answerFrame('claude-opus-5-5'),
+        cleanFinish({ 'claude-opus-5-5': {}, 'claude-haiku-4-5': {} })
+      ], { jsonSchema: SIMPLE_SCHEMA });
+      expect(thrown).toBeUndefined();
+      expect(value).toEqual({ ok: true });
+    });
+
     // Without a refusal signal the same result is a model substitution, not a declined
-    // request: 'sdkQueryImpl model substitution (round 3 ruling)' below.
-    test('with no refusal signal, another served model is a model substitution, not a refusal', async () => {
-      const { thrown, value } = await run([cleanFinish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
+    // request: 'sdkQueryImpl model substitution' below.
+    test('with no refusal signal, an answer written by another model is a model substitution, not a refusal', async () => {
+      const { thrown, value } = await run([answerFrame('claude-opus-4-8'), cleanFinish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
       expect(value).toBeUndefined();
       expect(thrown).not.toBeInstanceOf(SdkRefusalError);
       expect(thrown.name).toBe('SdkModelSubstitutionError');
@@ -824,11 +838,28 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
         .toEqual({ originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber', scope: 'local' });
     });
 
-    // Round 3: a local fallback is not only recorded. When its model served part of the
-    // call, the result's modelUsage names it and the call fails as a model substitution.
-    test('a local fallback whose model shows in modelUsage fails the call as a model substitution', async () => {
+    // A local fallback runs inside a subagent: its frames carry a parent_tool_use_id and are
+    // not the call's answer, so its model in modelUsage is recorded, not judged (pipeline
+    // calls run no subagents). A local fallback frame without a parent id would be the
+    // call's own, and is judged: the next test.
+    test('a local fallback whose model shows only in modelUsage is recorded, and the call returns', async () => {
       const { thrown, value, events } = await runStream(() => makeAsyncIterable([
         notice({ scope: 'local', api_refusal_category: 'cyber', fallback_model: 'claude-opus-4-8' }),
+        { type: 'assistant', parent_tool_use_id: 'toolu_sub', message: { model: 'claude-opus-4-8', content: [], stop_reason: 'end_turn' } },
+        { type: 'assistant', parent_tool_use_id: null, message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' } },
+        { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: 'ok', modelUsage: { 'claude-opus-5-5': {}, 'claude-opus-4-8': {} } }
+      ]));
+      expect(thrown).toBeUndefined();
+      expect(value).toBe('ok');
+      const complete = events.find((e) => e.type === 'llm_complete');
+      expect(complete.servedModels).toEqual(['claude-opus-5-5', 'claude-opus-4-8']);
+      expect(complete.refusalFallback).toEqual({ originalModel: 'claude-opus-5-5', fallbackModel: 'claude-opus-4-8', category: 'cyber', scope: 'local' });
+    });
+
+    test('a fallback model on the call\'s own frame fails the call as a model substitution', async () => {
+      const { thrown, value, events } = await runStream(() => makeAsyncIterable([
+        notice({ scope: 'local', api_refusal_category: 'cyber', fallback_model: 'claude-opus-4-8' }),
+        { type: 'assistant', parent_tool_use_id: null, message: { model: 'claude-opus-4-8', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' } },
         { type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', result: 'ok', modelUsage: { 'claude-opus-5-5': {}, 'claude-opus-4-8': {} } }
       ]));
       expect(value).toBeUndefined();
@@ -921,11 +952,12 @@ describe('sdkQueryImpl declined requests (refusal, brief 2.0)', () => {
   });
 });
 
-// Round 3 ruling (integrator, 2026-09-25, adopted after the full gate served all 19 calls
-// on their pinned models): any served model that is not the one the call resolved to
-// fails the call, refusal signal or not. Before, a substitute with no refusal signal was
-// only recorded in servedModels.
-describe('sdkQueryImpl model substitution (round 3 ruling)', () => {
+// Round 3 ruling (integrator, 2026-09-25), corrected 2026-09-26: a model that wrote part of
+// the answer (the call's own assistant frames) and is not the one the call resolved to
+// fails the call, refusal signal or not. The first version judged the result's modelUsage,
+// which also lists the CLI's own helper requests, and threw away a correct Sonnet answer
+// on a live session; modelUsage is now recorded (servedModels), not judged.
+describe('sdkQueryImpl model substitution (round 3 ruling, judged on the answer\'s frames)', () => {
   const { isTransientError } = require('../retry');
   const { SdkModelSubstitutionError } = require('../model-substitution');
   const { SdkRefusalError } = require('../refusal');
@@ -934,6 +966,10 @@ describe('sdkQueryImpl model substitution (round 3 ruling)', () => {
   const finish = (modelUsage, extra = {}) => ({
     type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn',
     result: '{"ok":true}', structured_output: { ok: true }, duration_api_ms: 1200, ...(modelUsage && { modelUsage }), ...extra
+  });
+  const frame = (model, extra = {}) => ({
+    type: 'assistant', parent_tool_use_id: null,
+    message: { model, content: [{ type: 'text', text: 'ok' }], stop_reason: 'tool_use' }, ...extra
   });
 
   async function run(messages, opts = {}) {
@@ -947,8 +983,23 @@ describe('sdkQueryImpl model substitution (round 3 ruling)', () => {
     return { events, thrown, value };
   }
 
-  test('a schema-valid finish served by another model throws, naming the requested and the served model', async () => {
-    const { thrown, value, events } = await run([finish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
+  // The live case, 2026-09-26 (session 092626, the session-report parse): every frame of the
+  // answer was Sonnet's; the CLI's own Haiku helper showed only in modelUsage.
+  test('a helper model in modelUsage beside a pinned-model answer returns the answer and records both', async () => {
+    const { thrown, value, events } = await run([
+      frame('claude-sonnet-5'),
+      frame('claude-sonnet-5', { message: { model: 'claude-sonnet-5', content: [{ type: 'text', text: 'done' }], stop_reason: 'end_turn' } }),
+      finish({ 'claude-haiku-4-5': {}, 'claude-sonnet-5': {} })
+    ], { model: 'sonnet', jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeUndefined();
+    expect(value).toEqual({ ok: true });
+    const complete = events.find((e) => e.type === 'llm_complete');
+    expect(complete.servedModels).toEqual(['claude-haiku-4-5', 'claude-sonnet-5']);
+    expect(events.filter((e) => e.type === 'llm_error')).toHaveLength(0);
+  });
+
+  test('a schema-valid answer written by another model throws, naming the requested and the writing model', async () => {
+    const { thrown, value, events } = await run([frame('claude-opus-4-8'), finish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
 
     expect(value).toBeUndefined();
     expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
@@ -965,30 +1016,45 @@ describe('sdkQueryImpl model substitution (round 3 ruling)', () => {
     expect(errEvents).toHaveLength(1);
     expect(errEvents[0].errorName).toBe('SdkModelSubstitutionError');
     expect(errEvents[0].error).toBe(thrown.message);
-    expect(errEvents[0].servedModels).toEqual(['claude-opus-4-8']);
+    expect(errEvents[0].servedModels).toEqual(['claude-opus-4-8']);   // the result's modelUsage, recorded
+    expect(errEvents[0].answerModels).toEqual(['claude-opus-4-8']);   // the frames that were judged
     expect(errEvents[0].durationApiMs).toBe(1200);   // the result's envelope rides along
     expect(errEvents[0].schemaErrors).toBeNull();
     expect(errEvents[0].refusal).toBeUndefined();
     expect(events.filter((e) => e.type === 'llm_complete')).toHaveLength(0);
   });
 
-  test('a text call served by another model throws too', async () => {
-    const { thrown, value } = await run([finish({ 'claude-sonnet-5': {} }, { structured_output: undefined, result: 'plain text' })], { model: 'haiku' });
+  test('a text call written by another model throws too', async () => {
+    const { thrown, value } = await run([frame('claude-sonnet-5'), finish({ 'claude-sonnet-5': {} }, { structured_output: undefined, result: 'plain text' })], { model: 'haiku' });
     expect(value).toBeUndefined();
     expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
     expect(thrown.message).toMatch(/requested claude-haiku-4-5, served by claude-sonnet-5/);
   });
 
-  test('the pinned model beside another model: every served model is named, the substitute singled out', async () => {
-    const { thrown, events } = await run([finish({ 'claude-opus-5-5[1m]': { canonicalModel: 'claude-opus-5-5' }, 'claude-haiku-4-5': {} })], { jsonSchema: SIMPLE_SCHEMA });
+  test('an answer whose frames name the pinned model and another: both are named, the substitute singled out', async () => {
+    const { thrown, events } = await run([
+      frame('claude-opus-5-5'),
+      frame('claude-haiku-4-5'),
+      finish({ 'claude-opus-5-5[1m]': { canonicalModel: 'claude-opus-5-5' }, 'claude-haiku-4-5': {} })
+    ], { jsonSchema: SIMPLE_SCHEMA });
     expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
     expect(thrown.message).toMatch(/requested claude-opus-5-5, served by claude-opus-5-5, claude-haiku-4-5/);
     expect(thrown.substituteModels).toEqual(['claude-haiku-4-5']);
-    expect(events.find((e) => e.type === 'llm_error').servedModels).toEqual(['claude-opus-5-5', 'claude-haiku-4-5']);
+    expect(events.find((e) => e.type === 'llm_error').answerModels).toEqual(['claude-opus-5-5', 'claude-haiku-4-5']);
   });
 
-  test('a schema failure served by another model is the substitution, with the schema failure as its cause', async () => {
-    const { thrown, events } = await run([finish({ 'claude-opus-4-8': {} }, { structured_output: undefined, result: '{"ok":"yes"}' })], { jsonSchema: SIMPLE_SCHEMA });
+  test('a subagent frame (parent_tool_use_id set) is not the call\'s answer and is not judged', async () => {
+    const { thrown, value } = await run([
+      frame('claude-haiku-4-5', { parent_tool_use_id: 'toolu_sub' }),
+      frame('claude-opus-5-5'),
+      finish({ 'claude-opus-5-5': {}, 'claude-haiku-4-5': {} })
+    ], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeUndefined();
+    expect(value).toEqual({ ok: true });
+  });
+
+  test('a schema failure written by another model is the substitution, with the schema failure as its cause', async () => {
+    const { thrown, events } = await run([frame('claude-opus-4-8'), finish({ 'claude-opus-4-8': {} }, { structured_output: undefined, result: '{"ok":"yes"}' })], { jsonSchema: SIMPLE_SCHEMA });
     expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
     expect(thrown.cause).toBeInstanceOf(StructuredOutputExtractionError);
     const errEvents = events.filter((e) => e.type === 'llm_error');
@@ -997,27 +1063,29 @@ describe('sdkQueryImpl model substitution (round 3 ruling)', () => {
   });
 
   test('the pinned model under a [1m] or dated suffix is the same model, so the result returns', async () => {
-    for (const usage of [
-      { 'claude-opus-5-5': {} },
-      { 'claude-opus-5-5[1m]': {} },
-      { 'claude-opus-5-5-20260901': {} },
-      { 'claude-opus-5-5[1m]': { canonicalModel: 'claude-opus-5-5' } }
-    ]) {
-      const { thrown, value } = await run([finish(usage)], { jsonSchema: SIMPLE_SCHEMA });
+    for (const model of ['claude-opus-5-5', 'claude-opus-5-5[1m]', 'claude-opus-5-5-20260901']) {
+      const { thrown, value } = await run([frame(model), finish({ [model]: {} })], { jsonSchema: SIMPLE_SCHEMA });
       expect(thrown).toBeUndefined();
       expect(value).toEqual({ ok: true });
     }
   });
 
-  test('a result with no modelUsage names no model, so it returns (round 2 ruling)', async () => {
+  test('a call with no frame naming a model has nothing to judge, so it returns (round 2 ruling)', async () => {
     const { thrown, value, events } = await run([finish(undefined)], { jsonSchema: SIMPLE_SCHEMA });
     expect(thrown).toBeUndefined();
     expect(value).toEqual({ ok: true });
     expect(events.find((e) => e.type === 'llm_complete').servedModels).toBeNull();
   });
 
+  test('modelUsage alone never fails a call: another model there with no frame of the answer is recorded', async () => {
+    const { thrown, value, events } = await run([finish({ 'claude-opus-4-8': {} })], { jsonSchema: SIMPLE_SCHEMA });
+    expect(thrown).toBeUndefined();
+    expect(value).toEqual({ ok: true });
+    expect(events.find((e) => e.type === 'llm_complete').servedModels).toEqual(['claude-opus-4-8']);
+  });
+
   test('without onProgress the call still throws the substitution', async () => {
-    setMockQuery(() => makeAsyncIterable([finish({ 'claude-opus-4-8': {} })]));
+    setMockQuery(() => makeAsyncIterable([frame('claude-opus-4-8'), finish({ 'claude-opus-4-8': {} })]));
     await expect(sdkQueryImpl({ prompt: 'test', model: 'opus', jsonSchema: SIMPLE_SCHEMA }))
       .rejects.toBeInstanceOf(SdkModelSubstitutionError);
   });

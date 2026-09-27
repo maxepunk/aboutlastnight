@@ -79,11 +79,15 @@ function expectedInitTools(declaredTools, hasSchema) {
  * @param {boolean} [obs.hasSchema] - the call passed a jsonSchema
  * @param {Object[]} [obs.inits] - every forwarded `init` (per-turn frames can repeat)
  * @param {number} [obs.thinkingChars] - total deltaText of llm_delta phase 'thinking'
- * @param {string[]|null} [obs.servedModels] - from llm_complete / llm_error
+ * @param {string[]|null} [obs.servedModels] - from llm_complete / llm_error (result modelUsage)
+ * @param {string[]|null} [obs.answerModels] - from llm_complete / llm_error: the models named
+ *   on the call's own assistant frames. Judged when present; modelUsage can also list the
+ *   CLI's own helper requests (a Haiku beside the pinned model, seen live 2026-09-26), so it
+ *   is judged only for an observation with no frame models.
  * @param {string|null} [obs.error] - the thrown message, if the call failed
  * @returns {{ok: boolean, failures: string[]}}
  */
-function isolationVerdict({ alias, pinnedId, declaredTools = null, hasSchema = false, inits = [], thinkingChars = 0, servedModels = null, error = null }) {
+function isolationVerdict({ alias, pinnedId, declaredTools = null, hasSchema = false, inits = [], thinkingChars = 0, servedModels = null, answerModels = null, error = null }) {
   const failures = new Set();
   if (error) failures.add(`call failed: ${error}`);
   const expected = Array.isArray(declaredTools) ? expectedInitTools(declaredTools, hasSchema) : null;
@@ -104,10 +108,11 @@ function isolationVerdict({ alias, pinnedId, declaredTools = null, hasSchema = f
   if (THINKING_ALIASES.has(alias) && !(thinkingChars > 0)) {
     failures.add('no readable thinking text streamed (display "summarized" not honoured, or no thinking)');
   }
-  if (!Array.isArray(servedModels) || servedModels.length === 0) {
+  const judged = Array.isArray(answerModels) && answerModels.length > 0 ? answerModels : servedModels;
+  if (!Array.isArray(judged) || judged.length === 0) {
     failures.add('the result named no served model (no modelUsage)');
   } else {
-    const off = servedModels.filter((m) => !servedModelMatches(m, pinnedId));
+    const off = judged.filter((m) => !servedModelMatches(m, pinnedId));
     if (off.length > 0) failures.add(`served by ${off.join(', ')}, not ${pinnedId}`);
   }
   return { ok: failures.size === 0, failures: [...failures] };

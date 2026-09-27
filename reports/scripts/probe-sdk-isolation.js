@@ -93,6 +93,7 @@ async function probeOne(alias, { sdkQuery, modelIds }) {
     inits: [],
     thinkingChars: 0,
     servedModels: null,
+    answerModels: null,
     channel: null,
     durationApiMs: null,
     elapsed: null,
@@ -107,6 +108,7 @@ async function probeOne(alias, { sdkQuery, modelIds }) {
         if (e.type === 'llm_delta' && e.phase === 'thinking') obs.thinkingChars += (e.deltaText || '').length;
         if (e.type === 'llm_complete' || e.type === 'llm_error') {
           obs.servedModels = e.servedModels ?? null;
+          obs.answerModels = e.answerModels ?? null;
           obs.channel = e.channel ?? null;
           obs.durationApiMs = e.durationApiMs ?? null;
           obs.elapsed = e.elapsed ?? null;
@@ -149,7 +151,7 @@ function report({ obs, verdict }) {
       ` memory_paths=${init.memoryPaths === undefined ? 'absent' : JSON.stringify(init.memoryPaths)}`);
   });
   lines.push(`  thinking: ${obs.thinkingChars} chars streamed`);
-  lines.push(`  served: ${JSON.stringify(obs.servedModels)}   channel: ${obs.channel}`);
+  lines.push(`  answer written by: ${JSON.stringify(obs.answerModels)}   used by the CLI: ${JSON.stringify(obs.servedModels)}   channel: ${obs.channel}`);
   lines.push(`  answer: ${JSON.stringify(obs.answer)}`);
   verdict.failures.forEach((f) => lines.push(`  x ${f}`));
   return lines.join('\n');
