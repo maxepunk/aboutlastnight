@@ -31,6 +31,9 @@
  *                      the three judges, from the thread's state, as createEvaluator
  *                      builds them; the article judge's user prompt carries the fact
  *                      check run on the stored bundle (factCheckContentBundle)
+ * These four render through scripts/lib/render-calls.js, which repeats each node's
+ * argument list; __tests__/unit/scripts/render-calls.test.js fails when a node sends
+ * anything else, so a change to what a node passes its builders goes there too.
  * Every builder is awaited. The run fails (exit 1, naming the file) when a render's
  * system or user prompt is empty, when it contains "[object Promise]", or when no line
  * opens with one of the file's markers in REQUIRED_MARKERS below; a file in that table
@@ -51,6 +54,7 @@
 const path = require('path');
 const fs = require('fs');
 const { compareSections, renderProblems } = require('./lib/prompt-sections');
+const { JUDGE_PHASES, requireExports, loadCallModules, renderInterweaving, renderJudge } = require('./lib/render-calls');
 
 /**
  * The markers each render must carry: for each, a line that opens with it. Each is
@@ -92,9 +96,9 @@ const PRODUCTION_DB = path.resolve(path.join(__dirname, '..', 'data', 'checkpoin
 const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-generation.txt', 'article-revision.txt'];
 /** Rendered as well, but not compared (phase 2, 2.3): the arc writer and its reworker. */
 const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt'];
-/** Rendered as well, but not compared (phase 3, 3.0): the interweaving call and the judges. */
+/** Rendered as well, but not compared (phase 3, 3.0): the interweaving call and the judges, by phase. */
 const INTERWEAVING_FILE = 'interweaving.txt';
-const JUDGE_FILES = [['judge-arc.txt', 'arcs'], ['judge-outline.txt', 'outline'], ['judge-article.txt', 'article']];
+const JUDGE_FILES = { arcs: 'judge-arc.txt', outline: 'judge-outline.txt', article: 'judge-article.txt' };
 const FIXED_FEEDBACK = 'RENDER-DIFF FIXED FEEDBACK: tighten the second section.';
 /** The round a fixed send back opens, for the rework banner (2.3; an older tree ignores it). */
 const FIXED_ROUND = 2;
@@ -172,16 +176,11 @@ async function render() {
     buildOutlineRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
     buildSessionFacts, buildAvailablePhotos } } = req('lib/workflow/nodes/ai-nodes.js');
   const { _testing: arcNodes } = req('lib/workflow/nodes/arc-specialist-nodes.js');
-  // Brief 3.0: the judges, and the fact check the article judge reads, as createEvaluator uses them.
-  const { _testing: evalNodes } = req('lib/workflow/nodes/evaluator-nodes.js');
-  const { factCheckContentBundle } = req('lib/content-bundle-fact-check.js');
-  const { getThemeNPCPronouns } = req('lib/theme-config.js');
   requireExports('arc-specialist-nodes.js _testing', arcNodes, ['coreArcSystemPrompt', 'buildCoreArcPrompt',
-    'getArcRevisionSystemPrompt', 'buildArcRevisionPrompt', 'interweavingSystemPrompt', 'buildInterweavingPrompt']);
-  requireExports('evaluator-nodes.js _testing', evalNodes, ['buildEvaluationSystemPrompt', 'buildEvaluationUserPrompt',
-    'getOutlineCriteria', 'getArticleCriteria', 'QUALITY_CRITERIA']);
-  requireExports('content-bundle-fact-check.js', { factCheckContentBundle }, ['factCheckContentBundle']);
-  requireExports('theme-config.js', { getThemeNPCPronouns }, ['getThemeNPCPronouns']);
+    'getArcRevisionSystemPrompt', 'buildArcRevisionPrompt']);
+  // Brief 3.0: the interweaving call and the judges render through scripts/lib/render-calls.js,
+  // which a test holds to what their nodes send.
+  const calls = loadCallModules(req);
   let diffMod = null;
   // Only a MISSING module is expected (main has no hand-edit module). Anything else -
   // a syntax error, a throwing dependency - would make the guard pass vacuously (M4).
@@ -296,33 +295,15 @@ async function render() {
   write(ARC_FILES[1], await arcNodes.getArcRevisionSystemPrompt(true, state.sessionConfig || {}),
     await arcNodes.buildArcRevisionPrompt({ ...arcState, _arcFeedback: FIXED_FEEDBACK }, crc.contextSection, crc.previousOutputSection));
 
-  // 7. the interweaving call, as enrichWithInterweaving builds it: the stored arcs
-  // stand in for call 1's (the call reads only their id, title, summary, source and
-  // placements), with the session roster and the evidence bundle.
-  write(INTERWEAVING_FILE, await arcNodes.interweavingSystemPrompt(state.sessionConfig),
-    await arcNodes.buildInterweavingPrompt(state.narrativeArcs || [], roster, state.evidenceBundle));
+  // 7. the interweaving call, from the stored arcs in place of call 1's.
+  const iw = await renderInterweaving(calls, state);
+  write(INTERWEAVING_FILE, iw.systemPrompt, iw.userPrompt);
 
-  // 8-10. the three judges, as createEvaluator builds them, from the thread's state.
-  // Only the article judge reads a fact check: factCheckContentBundle on the stored
-  // bundle, with createEvaluator's arguments, or none when there is no bundle.
-  const criteriaFor = (phase) => (phase === 'article' ? evalNodes.getArticleCriteria(theme)
-    : phase === 'outline' ? evalNodes.getOutlineCriteria(theme)
-      : evalNodes.QUALITY_CRITERIA[phase]);
-  for (const [file, phase] of JUDGE_FILES) {
-    const factCheck = phase === 'article' && state.contentBundle
-      ? await factCheckContentBundle({
-        contentBundle: state.contentBundle,
-        arcEvidencePackages: state.arcEvidencePackages,
-        evidenceBundle: state.evidenceBundle,
-        roster: state.sessionConfig?.roster,
-        sessionPhotos: state.sessionPhotos,
-        reportingMode: state.sessionConfig?.reportingMode,
-        npcPronouns: getThemeNPCPronouns(theme),
-        theme
-      })
-      : null;
-    write(file, await evalNodes.buildEvaluationSystemPrompt(phase, criteriaFor(phase), theme),
-      await evalNodes.buildEvaluationUserPrompt(phase, state, { factCheck }));
+  // 8-10. the three judges, from the thread's state; the article judge's fact check
+  // is run on the stored bundle.
+  for (const phase of JUDGE_PHASES) {
+    const judge = await renderJudge(calls, state, phase);
+    write(JUDGE_FILES[phase], judge.systemPrompt, judge.userPrompt);
   }
 
   for (const f of written) console.log(`${f}: ${fs.statSync(path.join(outDir, f)).size.toLocaleString()} bytes`);
@@ -336,12 +317,6 @@ async function render() {
     problems.forEach((p) => console.error(`FAIL  ${p}`));
     process.exit(1);
   }
-}
-
-/** Throw, naming the module and the export, when a tree lacks a builder this script renders through. */
-function requireExports(where, mod, names) {
-  const missing = names.filter((n) => !mod || mod[n] === undefined);
-  if (missing.length > 0) throw new Error(`${where} does not export ${missing.join(', ')}: this tree cannot render every call`);
 }
 
 /**
