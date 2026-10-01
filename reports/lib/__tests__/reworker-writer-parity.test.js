@@ -260,7 +260,8 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     // investigation focus, the character context, the rules, the record, the
     // boundaries, temporal awareness, the tensions and the three lenses.
     [
-      '### Whiteboard Connections', '### Primary Investigation Focus', '### Character Context',
+      // Phase 3 (3.5): the whiteboard section's heading names it a model's reading.
+      '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',
       '## SECTION 2: ARC GENERATION RULES', '## SECTION 4: EVIDENCE BOUNDARIES',
       '## SECTION 4.5: TEMPORAL AWARENESS', '## SECTION 4.6: NARRATIVE TENSIONS',
       '## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT'

@@ -209,13 +209,16 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     expect(prompt).not.toContain('as ground truth');
   });
 
-  it('the interweaving call holds the whole view once: documents and buried transactions', () => {
+  it('the interweaving call holds the whole view once: documents and the morning timeline', () => {
     const arcs = [{ id: 'arc-1', title: 'T', summary: 'S', arcSource: 'accusation', characterPlacements: {} }];
-    const prompt = arcModule._testing.buildInterweavingPrompt(arcs, ['Alex'], evidenceBundle);
+    // Phase 3 (3.5): the session config reaches the record view, so the timeline
+    // carries the exposure beside the sale, on the evening clock.
+    const sessionConfig = { exposures: [{ tokenId: 'ale003', exposer: 'NovaNews (Anonymous)', time: '07:37 PM' }] };
+    const prompt = arcModule._testing.buildInterweavingPrompt(arcs, ['Alex'], evidenceBundle, sessionConfig);
     expect(prompt.match(/^<RECORD>$/gm)).toHaveLength(1);
     expect(count(prompt, MEMORY_TEXT)).toBe(1);
     expect(count(prompt, LONG_PAPER.trim())).toBe(1);
-    expect(prompt).toContain('- account: Melanie | amount: $75,000 | time: 07:50 PM');
+    expect(prompt).toContain('- 07:37 AM | exposure | document: ale003 | anonymous\n- 07:50 AM | sale | account: Melanie | amount: $75,000');
     expect(prompt.indexOf('</RECORD>')).toBeLessThan(prompt.indexOf('## YOUR TASK'));
   });
 
@@ -236,6 +239,7 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
 describe("arc prompts: the director's words as record", () => {
   const arcModule = require('../workflow/nodes/arc-specialist-nodes');
   const { buildCoreArcPrompt, buildArcRevisionPrompt } = arcModule._testing;
+  const { renderWhiteboardConnections } = require('../prompt-renderers/director-words-renderer');
 
   const RAW_ACCUSATION = 'Six votes for an accidental overdose, in a final round that had already deadlocked 4 to 4 between Alex and Vic.';
   const CORRECTION = 'This was actually Blake -> Ashe, and what was said was my company would be very interested.';
@@ -319,9 +323,11 @@ describe("arc prompts: the director's words as record", () => {
   });
 
   describe('the whiteboard section', () => {
-    it('is rendered by the shared function with the label it always had', () => {
+    it('is rendered by the shared function, labelled as a model\'s reading of the photo (phase 3, 3.5)', () => {
       const prompt = buildCoreArcPrompt(base);
-      expect(prompt).toContain('### Whiteboard Connections (Players drew these during investigation)\n**Suspects Explored:** []');
+      expect(prompt).toContain(renderWhiteboardConnections(base.playerFocus.whiteboardContext));
+      expect(prompt).toContain("### The Whiteboard (a model's reading of the photo)\nA model's reading of the photo of the whiteboard where the room kept its working notes during the investigation: context for how the room reasoned toward its verdict, not a source.\n**Regions, each under the heading the players wrote:** none");
+      expect(prompt).not.toContain('Players drew these');
     });
   });
 

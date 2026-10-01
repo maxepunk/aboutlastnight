@@ -17,12 +17,16 @@
  * - whiteboardPhotoPath: Path to whiteboard image (Layer 3 data)
  *
  * Output files (saved to data/{sessionId}/inputs/):
- * - session-config.json: roster, accusation (with its verdictKind), the director's
- *   accusation word for word (accusationRaw), each exposed memory's exposer/time/owner
- *   (exposures, held from every writer and judge until phase 3), metadata
- *   (NOT photosPath - C1: state.photosPath owns it)
+ * - session-config.json: roster (stamped from the roster stop), accusation (with its
+ *   verdictKind and, for a split final vote, its votes), the director's accusation
+ *   word for word (accusationRaw), each exposed memory's exposer/time/owner
+ *   (exposures, which the morning timeline reads since phase 3), the classified
+ *   adjustments, the totals check (ledgerCheck), the session clock (sessionClock),
+ *   metadata (NOT photosPath - C1: state.photosPath owns it)
  * - director-notes.json: observations, whiteboard data (from vision)
- * - orchestrator-parsed.json: exposedTokens, exposures, buriedTokens, shellAccounts
+ * - orchestrator-parsed.json: exposedTokens, exposures, buriedTokens, the Adjustment
+ *   rows and Final Standings as the model copied them, and shellAccounts as code
+ *   computed them
  *
  * All nodes follow the LangGraph pattern:
  * - Accept (state, config) parameters
@@ -39,9 +43,11 @@ const { getSdkClient, synthesizePlayerFocus, normalizeRosterPronounsToCanonical,
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 const { traceNode } = require('../../observability');
 const { enrichDirectorNotes } = require('../../director-enricher');
-const { getThemeNPCs } = require('../../theme-config');
+const { getThemeNPCs, getThemeNPCEntries } = require('../../theme-config');
 const { VERDICT_KINDS, normalizeAccusation } = require('../../accusation-verdict');
 const { buildParseCorrectionsBlock, normalizeCorrections } = require('../../prompt-renderers/director-words-renderer');
+const { decideSessionClock } = require('../../prompt-renderers/session-clock');
+const { buildLedger } = require('../../session-ledger');
 
 /**
  * Default data directory for session files
@@ -65,32 +71,21 @@ function getImagePromptBuilder(config) {
 // ═══════════════════════════════════════════════════════
 
 /**
- * Schema for session config parsing
+ * Schema for session config parsing: the group statement only.
+ *
+ * Phase 3 (brief 3.5): the roster, the session id, the reporter and the reporting
+ * mode are stamped by code from where the director entered them; the model is asked
+ * for none of them, so a parse can never rewrite them. (sessionDate went too: no
+ * date reached the call and nothing read it.)
  */
 const SESSION_CONFIG_SCHEMA = {
   type: 'object',
-  required: ['sessionId', 'roster', 'accusation'],
+  required: ['accusation'],
   properties: {
-    sessionId: {
-      type: 'string',
-      description: 'Copy the provided sessionId verbatim.'
-    },
-    sessionDate: {
-      type: 'string',
-      description: 'Full date in YYYY-MM-DD format'
-    },
-    roster: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'List of character first names played in this session'
-    },
-    rosterCount: {
-      type: 'number',
-      description: 'Number of characters in roster'
-    },
     // Phase 2 brief 2.2: a verdict with no culprit has its own shape. On 092026 the
     // room voted for an accidental overdose and this schema, which could only name a
-    // defendant, got the victim as the accused.
+    // defendant, got the victim as the accused. Phase 3 (3.5): a verdict that blames
+    // an institution or an unnamed person, and a split final vote, have theirs.
     accusation: {
       type: 'object',
       required: ['verdictKind', 'accused', 'charge'],
@@ -98,16 +93,29 @@ const SESSION_CONFIG_SCHEMA = {
         verdictKind: {
           type: 'string',
           enum: VERDICT_KINDS,
-          description: 'What kind of verdict the group reached. "culprit" when they held one or more characters responsible. Otherwise the verdict names no culprit: "accident", "overdose" (an accidental overdose included), "self-harm", or "other" for any other verdict that holds no one responsible.'
+          description: 'What kind of verdict the group statement is. "culprit" when it holds someone responsible: one or more characters, an institution such as NeurAI\'s board, or a person it does not name. Otherwise it names no culprit: "accident", "overdose" (an accidental overdose included), "self-harm", or "other" for any other verdict that holds no one responsible.'
         },
         accused: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Character names the group held responsible. EMPTY unless verdictKind is "culprit". Never the victim.'
+          description: 'The characters the group statement holds responsible, by name. Empty when it blames an institution or an unnamed person, and for every kind but "culprit". Marcus Blackwood is the man whose death the room investigates, so he is never listed here.'
         },
         charge: {
           type: 'string',
-          description: 'What the group concluded, in their terms: the crime they accused the culprit of, or, for a verdict with no culprit, the verdict itself (e.g. "Accidental overdose").'
+          description: 'What the group statement concluded, in the room\'s words: the charge against the culprit, naming the institution or unnamed person when that is who the room blamed, or, for a verdict with no culprit, the verdict itself (e.g. "Accidental overdose").'
+        },
+        votes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['option', 'count', 'adopted'],
+            properties: {
+              option: { type: 'string', description: 'What the votes were for, in the director\'s words: a character, an institution, or a verdict such as "accidental overdose".' },
+              count: { type: 'number', description: 'How many votes it drew.' },
+              adopted: { type: 'boolean', description: 'True for the option the group statement adopted.' }
+            }
+          },
+          description: 'Only for a split final vote that the text records: every option that drew votes, with its count. Mark the one the group statement adopted, or none when it adopted none of them. Leave this out when the final vote was unanimous or the text gives no tally.'
         },
         notes: {
           type: 'string',
@@ -119,11 +127,16 @@ const SESSION_CONFIG_SCHEMA = {
 };
 
 /**
- * Schema for session report parsing (tokens, shell accounts)
+ * Schema for session report parsing: the evidence log, the sales, the Adjustment
+ * rows and the Final Standings, each copied as written.
+ *
+ * Phase 3 (brief 3.5): the model copies rows and counts nothing. Code classifies the
+ * Adjustment rows and computes each account's total and sale count (session-ledger.js);
+ * the model's own account list, with its sale counts, is gone.
  */
 const SESSION_REPORT_SCHEMA = {
   type: 'object',
-  required: ['exposedTokens', 'buriedTokens'],
+  required: ['exposedTokens', 'buriedTokens', 'adjustmentRows', 'finalStandings'],
   properties: {
     sessionId: {
       type: 'string',
@@ -140,25 +153,25 @@ const SESSION_REPORT_SCHEMA = {
     exposedTokens: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Token IDs submitted to Detective (public evidence)'
+      description: 'The ids of the memories turned in to Nova, from the evidence log\'s Token column'
     },
-    // Phase 2 brief 2.2: the Detective Evidence Log's per-row columns were dropped
-    // here, which the director called a loss. They are held in state, on disk and at
-    // the input review. Until phase 3 rules on naming exposers they enter no writer's
-    // or judge's prompt.
+    // Phase 2 brief 2.2 kept the Detective Evidence Log's per-row columns. Phase 3
+    // (brief 3.5): the morning timeline prints each exposure's time and the name on
+    // its turn-in, for memories the bundle holds as exposed; the owner column prints
+    // nowhere.
     exposures: {
       type: 'array',
       items: {
         type: 'object',
         required: ['tokenId'],
         properties: {
-          tokenId: { type: 'string', description: 'Token ID, exactly as in exposedTokens' },
-          exposer: { type: 'string', description: 'The "Exposed By" column: the team or name that turned the memory in, verbatim (e.g. "NovaNews (Anonymous)")' },
-          time: { type: 'string', description: 'The exposure time from the log row, verbatim (e.g. "09:06 PM")' },
+          tokenId: { type: 'string', description: 'The memory id, exactly as in exposedTokens' },
+          exposer: { type: 'string', description: 'The "Exposed By" column, copied as written: the name the player put on the turn-in to Nova, or the anonymous default (e.g. "NovaNews (Anonymous)"). A name here is the player\'s honest attribution of who turned the memory in.' },
+          time: { type: 'string', description: 'The time the memory was turned in, from the log row, verbatim (e.g. "09:06 PM")' },
           owner: { type: 'string', description: 'The "Owner" column: whose memory it is, verbatim' }
         }
       },
-      description: 'One entry per exposed token, from the Detective Evidence Log row: who exposed it, when, and whose memory it is'
+      description: 'One entry per memory turned in to Nova, from its evidence log row: when it was turned in, the name on the turn-in, and whose memory it is'
     },
     exposedCount: {
       type: 'number',
@@ -176,29 +189,41 @@ const SESSION_REPORT_SCHEMA = {
           time: { type: 'string' }
         }
       },
-      description: 'Tokens sold to Black Market with shell account info'
+      description: 'The sales: each memory sold to be erased, with the account paid, the amount and the time'
     },
     buriedCount: {
       type: 'number',
       description: 'Number of buried tokens'
     },
-    shellAccounts: {
+    adjustmentRows: {
       type: 'array',
       items: {
         type: 'object',
-        required: ['name', 'total', 'tokenCount', 'rank'],
+        required: ['time', 'detail', 'team', 'amount'],
         properties: {
-          name: { type: 'string' },
-          total: { type: 'number' },
-          tokenCount: { type: 'number' },
-          rank: { type: 'number' }
+          time: { type: 'string', description: 'The row\'s time, verbatim' },
+          detail: { type: 'string', description: 'The Detail column, verbatim' },
+          team: { type: 'string', description: 'The Team column, verbatim' },
+          amount: { type: 'number', description: 'The Amount column as a number: negative when the row shows a minus' }
         }
       },
-      description: 'Shell account standings'
+      description: 'Every Scoring Timeline row whose Type is "Adjustment", copied as written'
+    },
+    finalStandings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['name', 'total'],
+        properties: {
+          name: { type: 'string', description: 'The account\'s name, verbatim' },
+          total: { type: 'number', description: 'Its total, as a number' }
+        }
+      },
+      description: 'Every row of the Final Standings section (or Final Totals, or Shell Account Standings), copied as written'
     },
     totalBuried: {
       type: 'number',
-      description: 'Total Black Market economy value'
+      description: 'The session report\'s total of all sales'
     },
     teamsRegistered: {
       type: 'array',
@@ -209,53 +234,61 @@ const SESSION_REPORT_SCHEMA = {
 };
 
 /**
- * Schema for whiteboard analysis
+ * Schema for whiteboard analysis.
+ *
+ * Phase 3 (brief 3.5): the regions of the whiteboard, each with the heading the
+ * players wrote, in place of groups under a model-written label (the old example
+ * "SUSPECTS" led the model to label clusters itself, and code read the first group
+ * so labelled as the room's suspects). Names are matched against every character and
+ * the NPCs, and kept as written when unsure.
  */
 const WHITEBOARD_SCHEMA = {
   type: 'object',
-  required: ['names'],
+  required: ['names', 'regions'],
   properties: {
     names: {
       type: 'array',
       items: { type: 'string' },
-      description: 'All character names found on whiteboard (roster-corrected via OCR disambiguation)'
+      description: 'Every name written on the whiteboard. A name whose handwriting clearly matches a character or an NPC takes that spelling; any other name, and any you are unsure of, is copied as written.'
+    },
+    regions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['label', 'entries'],
+        properties: {
+          label: { type: 'string', description: 'The heading the players wrote over this region, copied as written; empty when they wrote none.' },
+          location: { type: 'string', description: 'Where the region sits on the whiteboard, such as "left column" or "top right".' },
+          entries: { type: 'array', items: { type: 'string' }, description: 'The writing inside the region, item by item, copied as written, with names spelled as in names.' }
+        }
+      },
+      description: 'Each area of the whiteboard the players set apart (a column, a box, a circled cluster, a list), one entry per region, under the players\' own heading.'
     },
     connections: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          from: { type: 'string', description: 'Source element' },
-          to: { type: 'string', description: 'Target element' },
-          label: { type: 'string', description: 'Connection label or type' }
+          from: { type: 'string', description: 'Where the line or arrow starts' },
+          to: { type: 'string', description: 'Where it ends' },
+          label: { type: 'string', description: 'The words written on the line, copied as written; empty when there are none' }
         }
       },
-      description: 'Lines or arrows connecting elements on the whiteboard'
-    },
-    groups: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          label: { type: 'string', description: 'Group label (e.g., SUSPECTS, FACTS)' },
-          members: { type: 'array', items: { type: 'string' }, description: 'Items in this group' }
-        }
-      },
-      description: 'Boxed or circled clusters with a label'
+      description: 'Lines or arrows drawn between items on the whiteboard'
     },
     notes: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Text content not directly associated with connections or groups'
+      description: 'Writing that sits in no region and on no line, copied as written'
     },
     structureType: {
       type: 'string',
-      description: 'Overall organization observed (e.g., "accusation web", "timeline", "free-form notes")'
+      description: 'How the whiteboard is laid out, described plainly (e.g. "three columns", "names joined by lines", "free-form notes")'
     },
     ambiguities: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Unclear elements that may need verification'
+      description: 'Writing you could not read with confidence: the text as written, and what it might say'
     }
   }
 };
@@ -410,6 +443,48 @@ function resolveRosterPronouns(state, rawInput) {
 }
 
 /**
+ * The roster as the director entered it at the roster stop (phase 3, brief 3.5).
+ *
+ * Code stamps it, as it stamps rosterPronouns and reportingMode: the parse never
+ * rewrites it, so a name the model dropped or renamed can no longer leave a player
+ * out of every list that reads the roster. A name that matches a canonical character
+ * (its first name or its full name, case-insensitive) takes the canonical first name,
+ * the key normalizeRosterPronounsToCanonical stamps that player's pronouns under; any
+ * other name stays as the director typed it.
+ *
+ * @param {string[]|string|null} roster - state.roster (the roster stop), or the
+ *   at-start rawInput.roster (comma-separated)
+ * @param {Object|null} canonicalCharacters - firstName -> fullName
+ * @returns {string[]}
+ */
+function rosterFromRosterStop(roster, canonicalCharacters) {
+  const list = Array.isArray(roster) ? roster : (typeof roster === 'string' ? roster.split(',') : []);
+  const canonical = canonicalCharacters || {};
+  const keys = Object.keys(canonical);
+  return list
+    .map(entry => (typeof entry === 'string' ? entry : entry?.name))
+    .filter(name => typeof name === 'string' && name.trim())
+    .map(name => {
+      const lower = name.trim().toLowerCase();
+      return keys.find(k => k.toLowerCase() === lower) ||
+        keys.find(k => String(canonical[k]).trim().toLowerCase() === lower) ||
+        name.trim();
+    });
+}
+
+/**
+ * The NPCs' names for the whiteboard parse: full names where the theme gives one.
+ *
+ * @param {string} theme
+ * @returns {string[]}
+ */
+function npcNamesOf(theme) {
+  return getThemeNPCEntries(theme)
+    .map(n => (typeof n === 'string' ? n : (n.fullName || n.name)))
+    .filter(Boolean);
+}
+
+/**
  * The corrections a parse applies: every one the director has sent back from the
  * input review this session, in order (phase 2, brief 2.2).
  *
@@ -475,16 +550,13 @@ async function parseRawInput(state, config) {
 
   console.log('[parseRawInput] Running Steps 1-2 in parallel');
 
-  // Use config sessionId if provided, otherwise try to derive from session report
-  const sessionIdHint = configSessionId
-    ? `Use sessionId: "${configSessionId}" (provided by caller)`
-    : `Derive sessionId from: ${state.sessionReport?.match(/Start Time\s*\|\s*([^\n|]+)/)?.[1] || 'current date'}`;
-
   // Use state.roster if available (from await-roster checkpoint), otherwise fall
   // back to sessionConfig and finally to the at-start rawInput.roster (H4: one
   // shared resolver for the incremental-channel-vs-sessionConfig precedence).
   const resolvedRoster = resolveRoster(state);
-  const rosterForParsing = resolvedRoster.length > 0 ? resolvedRoster : rawInput.roster;
+  // Phase 3 (brief 3.5): the roster is stamped by code from the roster stop and
+  // shown to the parses as context; no parse returns it.
+  const roster = rosterFromRosterStop(resolvedRoster.length > 0 ? resolvedRoster : rawInput.roster, state.canonicalCharacters);
 
   // B2: on a re-parse the director's corrections ride along on every parse prompt.
   // Brief 2.2: all of them, in order, not only this round's.
@@ -494,29 +566,28 @@ async function parseRawInput(state, config) {
     console.log(`[parseRawInput] Re-parsing with ${parseCorrections.length} director correction(s)`);
   }
 
-  // Step 1 Promise: Parse roster and accusation
+  // Step 1 Promise: Parse the group statement; stamp the roster and the session's settings
   const step1Promise = (async () => {
-    console.log('[parseRawInput] Step 1: Parsing roster and accusation');
-    const sessionConfigPrompt = `Parse the following information into structured JSON:
+    console.log('[parseRawInput] Step 1: Parsing the group statement');
+    const sessionConfigPrompt = `Parse the group statement below into structured JSON.
 
-ROSTER OF CHARACTERS:
-${Array.isArray(rosterForParsing) ? rosterForParsing.join(', ') : (rosterForParsing || 'Not provided')}
+THE ROSTER (the characters played this session):
+${roster.length > 0 ? roster.join(', ') : 'Not provided'}
 
-MURDER ACCUSATION:
+THE GROUP STATEMENT (the room's verdict, as the director entered it):
 ${state.accusation || 'Not provided'}
 
-SESSION ID INSTRUCTION:
-${sessionIdHint}
-
-Rules for parsing:
-1. Extract character first names from the roster (comma-separated list)
-2. For accusation, identify WHO the group held responsible and WHAT they concluded. If the verdict names no culprit (an accident, an overdose, self-harm), set verdictKind to that kind, leave accused empty and put the verdict in charge. Never list the victim as accused.
-3. For sessionId: Use the provided sessionId verbatim. (B1: a derived id sent session 071126's inputs to data/0711/ and published report-0711.html with no photos. parseRawInput overrides a wrong answer, but do not produce one.)
-4. sessionDate should be YYYY-MM-DD format
+How to parse it:
+1. Record who the group statement holds responsible and what it concluded.
+   - It blames one or more characters: verdictKind "culprit", and those characters in accused.
+   - It blames an institution, such as NeurAI's board, or a person it does not name: verdictKind "culprit", accused empty, and the room's own words for who and what in charge.
+   - It names no culprit (an accident, an overdose, self-harm): verdictKind is that kind, accused empty, and the verdict in charge.
+   Marcus Blackwood is the man whose death the room investigates, so accused never lists him.
+2. When the text records a split final vote, list in votes every option that drew votes, with its count, and mark the one the group statement adopted; when it adopted none of them, mark none.
 
 Return structured JSON matching the schema.${correctionsBlock}`;
 
-    const result = await sdk({
+    const parsed = await sdk({
       prompt: sessionConfigPrompt,
       systemPrompt: 'You parse game session information into structured JSON. Be precise and accurate.',
       model: 'haiku',
@@ -524,7 +595,13 @@ Return structured JSON matching the schema.${correctionsBlock}`;
       disableTools: true,          // H21: pure parse; no tool needs it
       loadProjectSettings: false
     });
-    result.rosterCount = result.roster?.length || 0;
+    // Brief 3.5: the parse returns the group statement and nothing code sets. The
+    // session id (B1: a model-derived id once sent 071126's inputs to data/0711/) and
+    // the roster are stamped here, from the caller and the roster stop.
+    const result = { accusation: parsed.accusation };
+    result.sessionId = configSessionId || state.sessionId || null;
+    result.roster = roster;
+    result.rosterCount = roster.length;
     // Brief 2.2: a verdict with no culprit has no accused, whatever the model listed
     // (on 092026 it listed the victim). Enforced here, in code, for every reader.
     result.accusation = normalizeAccusation(result.accusation);
@@ -559,7 +636,8 @@ Return structured JSON matching the schema.${correctionsBlock}`;
     return result;
   })();
 
-  // Step 2 Promise: Parse session report (tokens, shell accounts)
+  // Step 2 Promise: Parse the session report (the evidence log, the sales, the
+  // Adjustment rows and the Final Standings, each copied as written)
   const step2Promise = (async () => {
     // ROLL-4 + N1 fail-loud: the await-full-context gate guarantees presence before
     // parseRawInput runs; a null here means the gate was bypassed. An empty session
@@ -575,33 +653,30 @@ Return structured JSON matching the schema.${correctionsBlock}`;
 SESSION REPORT:
 ${state.sessionReport}
 
-Section names vary between session-report generations. Recognize ALL of these patterns:
+Section names vary between session-report generations. Recognize all of these patterns.
 
-EXPOSED tokens (sold to Detective, become public evidence):
-- "Detective Evidence Log" table (current orchestrator format)
-- "Detective Scans" table (older format)
-- Token IDs appear in the leftmost "Token" column
-- For each exposed token, also return an exposures entry from the same row: tokenId; exposer = the "Exposed By" column; time = the row's time; owner = the "Owner" column. Copy each value as written. Leave a field out when the table has no such column.
+EXPOSED memories (each was turned in to Nova, and its summary went up on the Evidence Board):
+- The "Detective Evidence Log" table (current format) or the "Detective Scans" table (older format)
+- Memory ids appear in the leftmost "Token" column
+- For each exposed memory, also return an exposures entry from the same row: tokenId; time = the row's time; exposer = the "Exposed By" column, the name on the turn-in; owner = the "Owner" column. Copy each value as written. Leave a field out when the table has no such column.
 
-BURIED tokens (sold to Black Market, buried in shell accounts):
-- "Scoring Timeline" table rows where Type = "Sale" (current orchestrator format)
-- "Black Market Scans" table (older format)
-- For each Sale row: Detail column contains "<tokenId>/<Character Name>", Team column = shell account name, Amount column = dollar amount
-- Adjustment rows on the Scoring Timeline are NOT buried tokens — skip them
-- Only count true buries: rows whose Detail field begins with a tokenId like "fli001/" or "sar002/"
+BURIED memories (each was sold to be erased, and the sale paid the account the seller named):
+- "Scoring Timeline" rows whose Type is "Sale" (current format), or the "Black Market Scans" table (older format)
+- For each Sale row: the Detail column holds "<tokenId>/<Character Name>", the Team column is the account paid, and the Amount column is the sale's amount
+- A Sale row's Detail begins with a memory id, like "fli001/" or "sar002/"
 
-SHELL ACCOUNTS:
-- "Final Standings" or "Final Totals" section (current orchestrator format)
-- "Shell Account Standings" section (older format)
-- Each shell account has a name, a total dollar amount, and a rank
-- tokenCount = number of unique buried tokens routed to that account (count from the Scoring Timeline; if unavailable, use 0)
-- IMPORTANT: only include team names that appear in BOTH Final Standings AND as a Sale-target in the Scoring Timeline. Skip placeholder/bonus rows like "First Burial Bonus" if they don't represent a player shell account.
+ADJUSTMENTS (the rest of the money on the Scoring Timeline: the first-burial bonus, transfers between accounts, and the bookkeeping rows around them):
+- Return every Scoring Timeline row whose Type is "Adjustment", copied as written: time, detail (the Detail column), team (the Team column) and amount, negative when the row shows a minus. Code reads what each row means, so return each one as it stands.
+
+FINAL STANDINGS:
+- The "Final Standings" or "Final Totals" section (current format), or "Shell Account Standings" (older format)
+- Return every row: the account's name and its total, as written.
 
 OTHER FIELDS:
 - "Session ID" / "session UUID" → sessionId
 - "Teams Registered" or the comma-separated team list under "Session Summary" → teamsRegistered
 
-If you can't find a section, return an empty array for that field rather than failing. The downstream pipeline tolerates missing data better than wrong data.
+When the report has no such section, return an empty array for that field. Each list is read as the whole of its section, so copy every row exactly as it stands: a missing row drops a memory or a sale from the story, and an added one puts in one that never happened.
 
 Return structured JSON matching the schema.${correctionsBlock}`;
 
@@ -654,10 +729,38 @@ Return structured JSON matching the schema.${correctionsBlock}`;
   // Brief 2.2: each exposed memory's exposer, exposure time and owner, from the
   // session report's Detective Evidence Log. Kept in orchestrator-parsed.json (the
   // step's own output, written below) and, so the input review shows them and a
-  // replay rehydrates them, on sessionConfig. HELD: until phase 3 rules on naming
-  // exposers, no writer's or judge's prompt reads this field.
+  // replay rehydrates them, on sessionConfig. Phase 3 (brief 3.5): the morning
+  // timeline prints each one's time and the name on its turn-in, for memories the
+  // bundle holds as exposed; the owner column prints nowhere.
   orchestratorParsed.exposures = Array.isArray(orchestratorParsed.exposures) ? orchestratorParsed.exposures : [];
   sessionConfig.exposures = orchestratorParsed.exposures;
+
+  // Brief 3.5: the ledger, read by code. The Adjustment rows become the bonus and the
+  // transfers (sessionConfig.adjustments, beside the exposures), each account's total
+  // and sale count are computed (the model's counts are gone), and the totals are
+  // checked against the Final Standings (sessionConfig.ledgerCheck, shown at the input
+  // review). The computed accounts replace the model's on disk too, because
+  // loadDirectorNotes refills state.shellAccounts from orchestrator-parsed.json.
+  const ledger = buildLedger({
+    buriedTokens: orchestratorParsed.buriedTokens,
+    adjustmentRows: orchestratorParsed.adjustmentRows,
+    finalStandings: orchestratorParsed.finalStandings
+  });
+  sessionConfig.adjustments = ledger.adjustments;
+  sessionConfig.ledgerCheck = ledger.ledgerCheck;
+  orchestratorParsed.shellAccounts = ledger.shellAccounts;
+  if (!ledger.ledgerCheck.adjustmentsParsed) {
+    console.warn('[parseRawInput] No Adjustment rows parsed: account totals are the Final Standings, with no bonus or transfer events');
+  } else if (ledger.ledgerCheck.mismatches.length > 0) {
+    console.warn(`[parseRawInput] Account totals disagree with the Final Standings: ${JSON.stringify(ledger.ledgerCheck.mismatches)}`);
+  }
+
+  // Brief 3.5: one session clock, decided once from the first exposure or sale (never
+  // an adjustment: a setup row can fall before 5 PM in an evening session).
+  sessionConfig.sessionClock = decideSessionClock([
+    ...orchestratorParsed.exposures.map(e => e && e.time),
+    ...(Array.isArray(orchestratorParsed.buriedTokens) ? orchestratorParsed.buriedTokens : []).map(t => t && t.time)
+  ]);
 
   // Step 3: Director notes enrichment (depends on Step 1 roster + Step 2 orchestrator data)
   const theme = config?.configurable?.theme || 'journalist';
@@ -699,7 +802,7 @@ Return structured JSON matching the schema.${correctionsBlock}`;
 
   // ─────────────────────────────────────────────────────
   // Step 4: Analyze whiteboard photo (Layer 3 data)
-  // Sequential - depends on Step 1 roster for OCR disambiguation
+  // Sequential - depends on Step 1 roster for name matching
   // ─────────────────────────────────────────────────────
 
   let whiteboardData = {
@@ -712,11 +815,15 @@ Return structured JSON matching the schema.${correctionsBlock}`;
   if (rawInput.whiteboardPhotoPath) {
     console.log('[parseRawInput] Step 4: Analyzing whiteboard photo');
 
-    // Use ImagePromptBuilder for roster-aware OCR disambiguation
+    // Brief 3.5: names are matched against the roster, every character and the NPCs,
+    // and kept as written when unsure: a room can suspect someone not at the table,
+    // and matching against the roster alone rewrote that name into a player's.
     const imagePromptBuilder = getImagePromptBuilder(config);
     const { systemPrompt: whiteboardSystemPrompt, userPrompt: whiteboardUserPrompt } =
       await imagePromptBuilder.buildWhiteboardPrompt({
         roster: sessionConfig.roster || [],
+        characters: Object.values(state.canonicalCharacters || {}).filter(name => typeof name === 'string' && name.trim()),
+        npcs: npcNamesOf(theme),
         whiteboardPhotoPath: rawInput.whiteboardPhotoPath,
         corrections: parseCorrections   // Brief 2.2: the one parse call that never got them
       });
@@ -893,6 +1000,7 @@ module.exports = {
     mergeDirectorOverrides,
     resolveRosterPronouns,
     projectBuriedTokensToScoringTimeline,
-    correctionsForParse
+    correctionsForParse,
+    rosterFromRosterStop
   }
 };

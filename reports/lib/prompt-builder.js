@@ -494,7 +494,8 @@ ${renderDirectorEnrichmentBlock({
   quotes: directorNotes.quotes,
   transactionReferences: directorNotes.transactionReferences,
   postInvestigationDevelopments: directorNotes.postInvestigationDevelopments,
-  corrections
+  corrections,
+  sessionConfig: this.sessionConfig
 })}
 </INVESTIGATION_OBSERVATIONS>`;
   }
@@ -670,7 +671,7 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
     // Brief 2.1: every usable document in full, once, ahead of the per-arc lists that
     // name them by id. The planner used to read the text of at most five documents
     // per arc, and on 092026 never saw 12 of the 37 the article writer later used.
-    const recordSection = renderRecordView(options.evidenceBundle);
+    const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
 
     let userPrompt;
 
@@ -1106,7 +1107,7 @@ ${(pkg.photos || []).map(p => `- ${renderPhotoEntry({ filename: p.filename, name
 
     // Brief 2.1: the record, once, in the data part. The packages above name each
     // arc's documents by id instead of repeating their text.
-    const recordSection = renderRecordView(options.evidenceBundle);
+    const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
 
     // User prompt: Data first, then template, then RULES LAST (recency bias)
     // Branch by theme — detective gets simplified case report prompt, journalist gets full article prompt

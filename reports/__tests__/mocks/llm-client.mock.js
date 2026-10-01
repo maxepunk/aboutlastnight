@@ -201,6 +201,11 @@ function detectFixtureKey(options) {
   // Preprocessing
   if (promptLower.includes('preprocess') || promptLower.includes('batch')) return 'preprocess';
 
+  // The arc writer (and its reworker, built from its sections), by its own heading:
+  // since phase 3 (brief 3.5) its whiteboard section is labelled as a model's reading
+  // of the photo, which the photo match below would otherwise take.
+  if (promptLower.startsWith('# core arc generation')) return 'arcAnalysis';
+
   // Photo analysis
   if (promptLower.includes('photo') || promptLower.includes('image') ||
       systemLower.includes('photograph')) return 'photo';

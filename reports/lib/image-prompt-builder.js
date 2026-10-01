@@ -2,7 +2,7 @@
  * ImagePromptBuilder - Assemble image analysis prompts from ThemeLoader + session data
  *
  * Handles prompt construction for all image processing phases:
- * - Whiteboard analysis (OCR with roster-based name disambiguation)
+ * - Whiteboard analysis (names matched against the roster, every character and the NPCs)
  * - Photo analysis (generic descriptions, no names)
  * - Photo enrichment (character name replacement after user mapping)
  *
@@ -28,11 +28,17 @@ class ImagePromptBuilder {
   /**
    * Build whiteboard analysis prompt
    *
-   * Provides roster context for OCR name disambiguation and structure
-   * discovery guidance for spatial interpretation.
+   * Gives the names to match handwriting against and asks for the whiteboard's
+   * regions under the players' own headings.
+   *
+   * Phase 3 (brief 3.5): names are matched against the roster, every character in
+   * the game and the NPCs, and kept as written when unsure. Matching against the
+   * roster alone rewrote an absent suspect's name into the nearest player's.
    *
    * @param {Object} sessionData - Session data
-   * @param {string[]} sessionData.roster - Character names for OCR disambiguation
+   * @param {string[]} sessionData.roster - the characters played this session
+   * @param {string[]} [sessionData.characters] - every character in the game (full names)
+   * @param {string[]} [sessionData.npcs] - the NPCs' names
    * @param {string} sessionData.whiteboardPhotoPath - Path to whiteboard image
    * @param {string[]|string|null} [sessionData.corrections] - the director's input-review
    *   corrections (phase 2, brief 2.2). This parse was the one that never received them.
@@ -40,29 +46,31 @@ class ImagePromptBuilder {
    */
   async buildWhiteboardPrompt(sessionData) {
     const prompts = await this.theme.loadPhasePrompts('imageAnalysis');
-
-    // Build roster list for disambiguation
-    const rosterList = (sessionData.roster || []).join(', ');
+    const listOf = (names) => (Array.isArray(names) && names.length > 0 ? names.join(', ') : 'none given');
 
     const systemPrompt = prompts['whiteboard-analysis'];
 
     const userPrompt = `First, use the Read tool to view the whiteboard photograph at:
 ${sessionData.whiteboardPhotoPath}
 
-CHARACTER ROSTER (use for name disambiguation):
-${rosterList}
+THE ROSTER (the characters played this session):
+${listOf(sessionData.roster)}
 
-Analyze the whiteboard and extract all visible information. When transcribing handwritten names,
-use the roster above to correct OCR errors (e.g., "Vik" should be corrected to "Vic"
-if Vic is in the roster).
+EVERY CHARACTER IN THE GAME (the whiteboard can name one no one played this session):
+${listOf(sessionData.characters)}
+
+THE NPCS:
+${listOf(sessionData.npcs)}
+
+Read the whiteboard and extract all visible writing. Match each handwritten name against the three lists above: when the handwriting clearly matches one of those names, use that spelling; when you are unsure, keep the text as written and add it to ambiguities.
 
 Return structured JSON with:
-- names: All character names found (roster-corrected)
-- connections: Any lines/arrows between elements
-- groups: Any boxed or circled clusters
-- notes: Text content not part of connections
-- structureType: Overall organization observed
-- ambiguities: Unclear elements that may need verification${buildParseCorrectionsBlock(sessionData.corrections)}`;
+- names: every name written on the whiteboard
+- regions: each area the players set apart, under the heading they wrote (empty when they wrote none), with where it sits and what it holds
+- connections: lines and arrows, with any words written on them
+- notes: writing in no region and on no line
+- structureType: how the whiteboard is laid out
+- ambiguities: writing you could not read with confidence${buildParseCorrectionsBlock(sessionData.corrections)}`;
 
     return { systemPrompt, userPrompt };
   }

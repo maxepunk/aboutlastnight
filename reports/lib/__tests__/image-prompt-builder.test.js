@@ -97,7 +97,8 @@ describe('ImagePromptBuilder', () => {
         whiteboardPhotoPath: '/path/to/whiteboard.jpg'
       });
 
-      expect(result.userPrompt).toContain('CHARACTER ROSTER');
+      // Phase 3 (3.5): the roster sits beside every character and the NPCs.
+      expect(result.userPrompt).toContain('THE ROSTER (the characters played this session):\nnone given');
     });
   });
 

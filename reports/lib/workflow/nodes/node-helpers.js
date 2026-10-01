@@ -331,6 +331,15 @@ function extractFullContent(item) {
  *
  * PlayerFocus drives arc analysis via the playerFocusAlignment criterion (15%).
  *
+ * Phase 3 (brief 3.5):
+ * - The whiteboard is read as its regions, each under the heading the players
+ *   wrote. The suspect list that took the first group whose model-written label held
+ *   "suspect" is gone, with the secondary and combined suspect lists built from it
+ *   (nothing read them). An older parse's `groups` read as regions.
+ * - A split final vote travels with the accusation (`votes`).
+ * - With no charge, the investigation focus is the room's verdict on Marcus
+ *   Blackwood's death; it no longer assumes a killing.
+ *
  * @param {Object} sessionConfig - Session configuration with roster, accusation
  * @param {Object} directorNotes - Director notes with observations, whiteboard
  * @returns {Object} PlayerFocus object with investigation context
@@ -340,12 +349,17 @@ function synthesizePlayerFocus(sessionConfig, directorNotes) {
   const rawProse = directorNotes?.rawProse || '';
   const quotes = directorNotes?.quotes || [];
   const postInvestigationDevelopments = directorNotes?.postInvestigationDevelopments || [];
+  const accusation = sessionConfig?.accusation || {};
 
-  // Extract suspects from whiteboard if available
-  const suspectsGroup = whiteboard.groups?.find(g =>
-    g.label?.toLowerCase().includes('suspect')
-  );
-  const whiteboardSuspects = suspectsGroup?.members || [];
+  // Each region of the whiteboard under the players' own heading. A parse from
+  // before phase 3 has groups ({label, members}) in their place.
+  const regions = Array.isArray(whiteboard.regions)
+    ? whiteboard.regions
+    : (Array.isArray(whiteboard.groups) ? whiteboard.groups : []).map(g => ({
+      label: g?.label || '',
+      location: '',
+      entries: Array.isArray(g?.members) ? g.members : []
+    }));
 
   // Extract connections as context
   const whiteboardConnections = (whiteboard.connections || []).map(c =>
@@ -353,30 +367,25 @@ function synthesizePlayerFocus(sessionConfig, directorNotes) {
   );
 
   // Primary suspects from accusation
-  const primarySuspects = sessionConfig?.accusation?.accused || [];
-
-  // Secondary suspects from whiteboard not in primary
-  const secondarySuspects = whiteboardSuspects.filter(s =>
-    !primarySuspects.some(p => p.toLowerCase() === s.toLowerCase())
-  );
+  const primarySuspects = accusation.accused || [];
 
   return {
     // What the article is about
-    primaryInvestigation: sessionConfig?.accusation?.charge || 'Who killed Marcus Blackwood?',
+    primaryInvestigation: accusation.charge || "How the room reached its verdict on Marcus Blackwood's death",
 
-    // Who was accused (primary) vs explored (secondary)
+    // Who the group statement accused
     primarySuspects,
-    secondarySuspects,
-    allSuspects: [...primarySuspects, ...secondarySuspects],
 
     // The formal accusation details. Brief 2.2: verdictKind travels with them, so a
     // verdict with no culprit (empty accused) reads as that and not as "not parsed".
-    // Absent on a parse written before verdict kinds existed.
+    // Absent on a parse written before verdict kinds existed. Phase 3 (3.5): so does a
+    // split final vote.
     accusation: {
-      accused: sessionConfig?.accusation?.accused || [],
-      charge: sessionConfig?.accusation?.charge || '',
-      reasoning: sessionConfig?.accusation?.notes || '',
-      ...(sessionConfig?.accusation?.verdictKind && { verdictKind: sessionConfig.accusation.verdictKind })
+      accused: accusation.accused || [],
+      charge: accusation.charge || '',
+      reasoning: accusation.notes || '',
+      ...(accusation.verdictKind && { verdictKind: accusation.verdictKind }),
+      ...(Array.isArray(accusation.votes) && { votes: accusation.votes })
     },
 
     // Director observations (what ACTUALLY happened - highest weight for narrative)
@@ -387,10 +396,11 @@ function synthesizePlayerFocus(sessionConfig, directorNotes) {
       postInvestigationDevelopments
     },
 
-    // Whiteboard context (what players explored during investigation)
+    // The whiteboard parse: a model's reading of the photo of the room's working
+    // notes, context for how the room reasoned (renderWhiteboardConnections labels it so)
     whiteboardContext: {
       namesFound: whiteboard.names || [],
-      suspectsExplored: whiteboardSuspects,
+      regions,
       connections: whiteboardConnections,
       notes: whiteboard.notes || [],
       structureType: whiteboard.structureType || 'unknown',
@@ -398,7 +408,7 @@ function synthesizePlayerFocus(sessionConfig, directorNotes) {
     },
 
     // Emotional hook - synthesized from accusation reasoning
-    emotionalHook: sessionConfig?.accusation?.notes || '',
+    emotionalHook: accusation.notes || '',
 
     // Open questions - things to explore in article
     openQuestions: [

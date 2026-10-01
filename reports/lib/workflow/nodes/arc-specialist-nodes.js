@@ -327,7 +327,8 @@ ${renderDirectorEnrichmentBlock({
   quotes: context.directorQuotes,
   transactionReferences: context.directorTransactionLinks,
   postInvestigationDevelopments: context.directorPostInvestigation,
-  corrections: state.inputReviewCorrections || []
+  corrections: state.inputReviewCorrections || [],
+  sessionConfig: state.sessionConfig
 })}
 
 ### Primary Investigation Focus
@@ -479,10 +480,12 @@ For each arc, analyze through all three lenses and document in analysisNotes:
  * @param {Array} coreArcs - Generated arcs from Call 1 (required, non-empty)
  * @param {Array} roster - Character roster (defaults to empty array if invalid)
  * @param {Object|null} [evidenceBundle] - the curated bundle the record view renders
+ * @param {Object|null} [sessionConfig] - the session's parse, for the record view's
+ *   morning timeline (its exposures, adjustments and clock; phase 3, brief 3.5)
  * @returns {string} Prompt for interweaving enrichment
  * @throws {Error} If coreArcs is not a non-empty array
  */
-function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null) {
+function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessionConfig = null) {
   // M2: Input validation
   if (!Array.isArray(coreArcs) || coreArcs.length === 0) {
     throw new Error('buildInterweavingPrompt: coreArcs must be a non-empty array');
@@ -515,7 +518,7 @@ ${JSON.stringify(roster)}
 
 ## THE RECORD (the documents the arcs rest on)
 
-${renderRecordView(evidenceBundle)}
+${renderRecordView(evidenceBundle, { sessionConfig })}
 
 ## YOUR TASK
 
@@ -644,7 +647,7 @@ async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, e
   const startTime = Date.now();
 
   const sdkClient = getSdkClient(config, 'enrichWithInterweaving');
-  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle);
+  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle, sessionConfig);
 
   console.log(`[enrichWithInterweaving] Prompt built: ${prompt.length} characters`);
 

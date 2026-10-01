@@ -886,9 +886,9 @@ function advisoriesFromPreviousStage(state, previousPhase) {
  * One builder for both writers: the two copies this replaced printed only
  * `ACCUSATION: <accused>`, so an overdose verdict reached the writers as
  * `ACCUSATION: Marcus`, with no charge. The facts now carry the parsed accusation
- * whole (accused, charge, verdict kind), the director's accusation word for word,
- * and the players' whiteboard connections; renderSessionFactsVerdict
- * (director-words-renderer.js) prints them.
+ * whole (accused, charge, verdict kind, and since phase 3 (brief 3.5) a split final
+ * vote), the director's accusation word for word, and the whiteboard parse;
+ * renderSessionFactsVerdict (director-words-renderer.js) prints them.
  *
  * @param {Object} state
  * @returns {Object|null} null when there is no roster
@@ -914,7 +914,8 @@ function buildSessionFacts(state) {
     accusation: {
       accused: ensureArray(accusation.accused),
       charge: accusation.charge || '',
-      ...(accusation.verdictKind && { verdictKind: accusation.verdictKind })
+      ...(accusation.verdictKind && { verdictKind: accusation.verdictKind }),
+      ...(Array.isArray(accusation.votes) && { votes: accusation.votes })
     },
     accusationText: directorAccusationText(state),
     whiteboard: state.playerFocus?.whiteboardContext || null,

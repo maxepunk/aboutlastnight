@@ -11,8 +11,13 @@
  *   the document's full text
  *   </document>
  *
- * Buried memories are never documents. They are listed once, in
- * <buried-transactions>, as account, amount and time, with no id, owner or text.
+ * Buried memories are never documents. They appear once, as sales on the morning
+ * timeline (<morning-timeline>, phase 3 brief 3.5): account, amount and time, with no
+ * id, owner or text. The timeline merges the ledger (the sales and the classified
+ * adjustments on sessionConfig.adjustments) with the evidence log
+ * (sessionConfig.exposures, for memories the bundle holds as exposed) in time order,
+ * every logged time on the session clock (session-clock.js). It replaced the
+ * <buried-transactions> list, and this is the only place it is rendered.
  *
  * Before this, every call got its own cut of the record: the arc writer read
  * Haiku's summaries of each memory's name and the first 200 characters of each
@@ -22,6 +27,8 @@
  *
  * Pure: no I/O, no state, and the bundle is never mutated.
  */
+
+const { sessionClockOf, printLoggedTime, sessionOrderOf } = require('./session-clock');
 
 /** The one wording an instruction uses to point a writer at a document's text (R1). */
 const DOCUMENT_POINTER = 'the document with that id in <RECORD>';
@@ -149,23 +156,33 @@ function formatAmount(amount) {
   return String(amount).trim();
 }
 
+/** A field's text, or the mark for a field the record holds no value for. */
+function fieldText(value, format = (v) => String(v).trim()) {
+  return hasValue(value) ? format(value) : NOT_RECORDED;
+}
+
+/** "account: … | amount: …", each field marked when the record has no value for it. */
+function accountAmountFields(account, amount) {
+  return `account: ${fieldText(account)} | amount: ${fieldText(amount, formatAmount)}`;
+}
+
 /**
- * One buried transaction as a prompt prints it: the account, the amount and the
- * time, and nothing else. Every prompt line that shows a buried transaction is built
- * here (the <buried-transactions> block, and the <TRANSACTION_LINKS> the director's
- * notes are linked to), so no id, owner or text can reach a prompt through either.
+ * One buried transaction as a prompt prints it outside the timeline: the account,
+ * the amount and the time on the session clock, and nothing else. The
+ * <TRANSACTION_LINKS> the director's notes are linked to print each sale through
+ * here, and the timeline's sale lines go through the same account and amount
+ * formatter, so no id, owner or text can reach a prompt through either.
  *
  * @param {Object} fields
  * @param {*} [fields.account]
  * @param {*} [fields.amount] - a number, or a string already formatted
- * @param {*} [fields.time]
+ * @param {*} [fields.time] - the logged time
+ * @param {Object|null} [clock] - the session's clock decision (session-clock.js);
+ *   without one the time prints as logged
  * @returns {string} "account: … | amount: … | time: …"
  */
-function buriedTransactionFields({ account, amount, time } = {}) {
-  const accountText = hasValue(account) ? String(account).trim() : NOT_RECORDED;
-  const amountText = hasValue(amount) ? formatAmount(amount) : NOT_RECORDED;
-  const timeText = hasValue(time) ? String(time).trim() : NOT_RECORDED;
-  return `account: ${accountText} | amount: ${amountText} | time: ${timeText}`;
+function buriedTransactionFields({ account, amount, time } = {}, clock = null) {
+  return `${accountAmountFields(account, amount)} | time: ${fieldText(time, (t) => printLoggedTime(t, clock))}`;
 }
 
 /**
@@ -174,7 +191,7 @@ function buriedTransactionFields({ account, amount, time } = {}) {
  * A buried item with none of the three is not a transaction: it is a memory no one
  * scanned (fetch-nodes tagTokensWithDisposition marks every token in neither list
  * buried, with no transaction data). Every list of buried transactions a prompt
- * carries applies this one rule (the view below, the arc writer's and its
+ * carries applies this one rule (the timeline below, the arc writer's and its
  * reworker's list through extractEvidenceSummary, and the arc judge's), so each
  * prompt counts the same sales (phase 2 final fix wave).
  *
@@ -186,52 +203,179 @@ function isBuriedTransactionRow(row) {
   return hasValue(row.shellAccount) || hasValue(row.amount) || hasValue(row.time);
 }
 
+/** The order a shared minute lists its events in: the ledger's rows, then the evidence log's. */
+const TABLE_ORDER = { sale: 0, bonus: 1, transfer: 1, exposure: 2 };
+
 /**
- * The buried-transactions part of the view: one line per transaction, with only
- * the account, the amount and the time. Nothing else on a buried item is read, so
- * no id, owner or text can reach a prompt through it. A row that is not a
- * transaction (isBuriedTransactionRow) is left out rather than printed as a sale.
- *
- * @param {Object|null} evidenceBundle - the curated bundle ({buried: {transactions}})
- * @returns {string} the <buried-transactions> block
+ * The name on an exposure's turn-in: null when the evidence log records it as
+ * anonymous (empty, "NovaNews (Anonymous)", or Nova's outlet alone), else the name as
+ * written, which is an honest attribution (spec T6).
  */
-function renderBuriedTransactions(evidenceBundle) {
-  const buried = (evidenceBundle && evidenceBundle.buried) || {};
-  const lines = asArray(buried.transactions)
-    .filter(isBuriedTransactionRow)
-    .map(t => `- ${buriedTransactionFields({ account: t.shellAccount, amount: t.amount, time: t.time })}`);
-  return `<buried-transactions>\n${lines.length > 0 ? lines.join('\n') : '(none)'}\n</buried-transactions>`;
+function turnInName(exposer) {
+  const text = typeof exposer === 'string' ? exposer.trim() : '';
+  if (!text || /anonymous/i.test(text) || /^novanews$/i.test(text)) return null;
+  return text;
+}
+
+/** The memories the bundle holds as exposed: each known id, lower case, to the id the view prints. */
+function exposedMemoryIds(evidenceBundle) {
+  const ids = new Map();
+  const tokens = asArray(evidenceBundle && evidenceBundle.exposed && evidenceBundle.exposed.tokens);
+  tokens.filter((t) => t && typeof t === 'object').forEach((token) => {
+    const printed = recordIdOf(token);
+    if (!printed) return;
+    [printed, recordOf(token).tokenId, token.tokenId]
+      .filter((id) => typeof id === 'string' && id.trim())
+      .forEach((id) => ids.set(id.trim().toLowerCase(), printed));
+  });
+  return ids;
 }
 
 /**
- * The whole view: one <RECORD> section, the documents and then the buried
- * transactions. A prompt that already lists the buried transactions takes the
- * documents alone with `{ buried: false }` (R2), so they appear once per prompt.
+ * The morning timeline: the ledger and the evidence log merged in time order, every
+ * logged time on the session clock (phase 3, brief 3.5).
+ *
+ * - Sales: the bundle's buried transactions, as account, amount and time only.
+ * - Exposures: sessionConfig.exposures, only for a memory the bundle holds as
+ *   exposed (the list is model-filled, and an entry naming a buried memory is left
+ *   out), as the memory's document id and the name on the turn-in. Its owner column
+ *   is never read.
+ * - Adjustments: sessionConfig.adjustments, the bonus and the transfers.
+ *
+ * Events in the same minute keep each table's order, the ledger's (sales, then
+ * adjustments) before the evidence log's, and are flagged `sameMinute`. An event
+ * with no readable time goes last, in its table's order. A thread parsed before
+ * phase 3 (no exposures, no adjustments) gets its sales alone.
+ *
+ * @param {Object|null} evidenceBundle - the curated bundle
+ * @param {Object|null} sessionConfig - the parse: exposures, adjustments, sessionClock
+ * @returns {{clock: Object, events: Array<Object>}}
+ */
+function buildMorningTimeline(evidenceBundle, sessionConfig) {
+  const config = sessionConfig || {};
+  const clock = sessionClockOf(config, evidenceBundle);
+  const rows = [];
+
+  asArray(evidenceBundle && evidenceBundle.buried && evidenceBundle.buried.transactions)
+    .filter(isBuriedTransactionRow)
+    .forEach((t) => rows.push({ logged: t.time, event: { kind: 'sale', account: t.shellAccount, amount: t.amount } }));
+
+  asArray(config.adjustments)
+    .filter((a) => a && (a.kind === 'bonus' || a.kind === 'transfer'))
+    .forEach((a) => rows.push({
+      logged: a.time,
+      event: a.kind === 'bonus'
+        ? { kind: 'bonus', toAccount: a.toAccount, amount: a.amount }
+        : { kind: 'transfer', fromAccount: a.fromAccount, toAccount: a.toAccount, amount: a.amount }
+    }));
+
+  const exposed = exposedMemoryIds(evidenceBundle);
+  const exposedIdOf = (entry) => (entry && typeof entry.tokenId === 'string' ? exposed.get(entry.tokenId.trim().toLowerCase()) : undefined);
+  asArray(config.exposures)
+    .filter((e) => exposedIdOf(e))
+    .forEach((e) => rows.push({ logged: e.time, event: { kind: 'exposure', documentId: exposedIdOf(e), exposer: turnInName(e.exposer) } }));
+
+  const placed = rows.map((row, index) => ({ ...row, index, order: sessionOrderOf(row.logged, clock) }));
+  placed.sort((a, b) => {
+    if (a.order !== b.order) {
+      if (a.order === null) return 1;
+      if (b.order === null) return -1;
+      return a.order - b.order;
+    }
+    return TABLE_ORDER[a.event.kind] - TABLE_ORDER[b.event.kind] || a.index - b.index;
+  });
+
+  const perMinute = new Map();
+  placed.forEach((row) => { if (row.order !== null) perMinute.set(row.order, (perMinute.get(row.order) || 0) + 1); });
+
+  const events = placed.map((row) => ({
+    ...row.event,
+    time: fieldText(row.logged, (t) => printLoggedTime(t, clock)),
+    sameMinute: row.order !== null && perMinute.get(row.order) > 1
+  }));
+  return { clock, events };
+}
+
+/** One event's line, without its time. */
+function timelineEventText(event) {
+  switch (event.kind) {
+    case 'sale':
+      return `sale | ${accountAmountFields(event.account, event.amount)}`;
+    case 'exposure':
+      return `exposure | document: ${event.documentId} | ${event.exposer ? `named: ${event.exposer}` : 'anonymous'}`;
+    case 'bonus':
+      return `first-burial bonus | paid to: ${fieldText(event.toAccount)} | amount: ${fieldText(event.amount, formatAmount)}`;
+    case 'transfer':
+      return `transfer | from: ${fieldText(event.fromAccount)} | to: ${fieldText(event.toAccount)} | amount: ${fieldText(event.amount, formatAmount)}`;
+    default:
+      return '';
+  }
+}
+
+const TIMELINE_INTRO = 'The morning in time order: the ledger and the evidence log merged, each logged time on the morning clock. ' +
+  'A sale is a buried memory\'s ledger line: the account paid, the amount and the time. ' +
+  'An exposure names the memory\'s document id and the name on the turn-in. ' +
+  'Events logged in the same minute sit under that minute, in no known order.';
+
+/**
+ * The <morning-timeline> part of the view (buildMorningTimeline, printed): one line
+ * per event, time first, and the events of a shared minute under one heading.
+ *
+ * @param {Object|null} evidenceBundle
+ * @param {Object|null} sessionConfig
+ * @returns {string} the <morning-timeline> block
+ */
+function renderMorningTimeline(evidenceBundle, sessionConfig) {
+  const { events } = buildMorningTimeline(evidenceBundle, sessionConfig);
+  const lines = [];
+  events.forEach((event, i) => {
+    if (!event.sameMinute) {
+      lines.push(`- ${event.time} | ${timelineEventText(event)}`);
+      return;
+    }
+    const previous = events[i - 1];
+    if (!previous || !previous.sameMinute || previous.time !== event.time) lines.push(`- ${event.time}, same minute:`);
+    lines.push(`  - ${timelineEventText(event)}`);
+  });
+  return `<morning-timeline>\n${TIMELINE_INTRO}\n${lines.length > 0 ? lines.join('\n') : '(none)'}\n</morning-timeline>`;
+}
+
+/**
+ * The whole view: one <RECORD> section, the documents and then the morning
+ * timeline. A prompt that lists the buried transactions itself takes the documents
+ * alone with `{ buried: false }` (R2), so the sales appear once per prompt: the arc
+ * writer and the arc judge, until phase 3's 3.3 and 3.4 move them to the timeline.
  *
  * A missing bundle renders as an empty record, so the prompt says the record is
  * empty rather than dropping the section.
  *
  * @param {Object|null} evidenceBundle - the curated evidence bundle
  * @param {Object} [options]
- * @param {boolean} [options.buried=true] - include the <buried-transactions> block
+ * @param {boolean} [options.buried=true] - include the <morning-timeline> block
+ * @param {Object|null} [options.sessionConfig] - the session's parse: its exposures,
+ *   adjustments and clock (a caller without it gets the sales alone, on the clock
+ *   their times decide)
  * @returns {string}
  */
-function renderRecordView(evidenceBundle, { buried = true } = {}) {
+function renderRecordView(evidenceBundle, { buried = true, sessionConfig = null } = {}) {
   const intro = 'The session\'s record. Each exposed document below is complete: its id, its kind ' +
     '(memory, or the paper document\'s type), its name, its owner when the record names one, ' +
     'and its layer, then its full text.' +
-    (buried ? ' Buried memories appear only in <buried-transactions>, as account, amount and time.' : '');
+    (buried ? ' Buried memories appear only as sales on the <morning-timeline> that follows the documents.' : '');
   const parts = [intro, renderRecordDocuments(evidenceBundle)];
-  if (buried) parts.push(renderBuriedTransactions(evidenceBundle));
+  if (buried) parts.push(renderMorningTimeline(evidenceBundle, sessionConfig));
   return `<RECORD>\n${parts.join('\n\n')}\n</RECORD>`;
 }
 
 module.exports = {
   renderRecordView,
   renderRecordDocuments,
-  renderBuriedTransactions,
+  buildMorningTimeline,
+  renderMorningTimeline,
   buriedTransactionFields,
   isBuriedTransactionRow,
+  formatAmount,
   recordIdOf,
   DOCUMENT_POINTER
 };
+

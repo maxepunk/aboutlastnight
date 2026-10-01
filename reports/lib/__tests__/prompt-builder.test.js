@@ -1469,9 +1469,11 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt).toContain('<document id="mar004" kind="memory" name="MAR004 - name" owner="Marcus Blackwood" layer="exposed">');
     expect(userPrompt).toContain('<document id="p1" kind="Document" name="Board minutes" layer="exposed">');
     expect(userPrompt).not.toContain('Derived Guess');
-    // Buried memories: transactions only, once, with no id, owner or text.
-    expect(count(userPrompt, '<buried-transactions>\n')).toBe(1);
-    expect(userPrompt).toContain('- account: Deez | amount: $225,000 | time: 08:00 PM');
+    // Buried memories: sales only, once, on the morning timeline (phase 3, 3.5: it
+    // replaced <buried-transactions>; 07:50 PM is the first sale, so the evening clock
+    // shows each time as morning), with no id, owner or text.
+    expect(count(userPrompt, '<morning-timeline>\n')).toBe(1);
+    expect(userPrompt).toContain('- 08:00 AM | sale | account: Deez | amount: $225,000');
     for (const secret of ['zzq001', 'Quill']) expect(userPrompt).not.toContain(secret);
     // The director's words keep the last word.
     expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
@@ -1660,19 +1662,22 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
   });
 
   describe('the whiteboard', () => {
+    // Phase 3 (3.5): labelled as a model's reading of the photo, context for how the
+    // room reasoned, in place of "Players drew these during investigation".
     it("reaches the outline and article writers under the arc writer's label", async () => {
       for (const render of [() => outline(OVERDOSE_FACTS), () => article(OVERDOSE_FACTS)]) {
         const { userPrompt } = await render();
-        expect(userPrompt).toContain('### Whiteboard Connections (Players drew these during investigation)');
-        expect(userPrompt).toContain('**Suspects Explored:** ["Vic"]');
-        expect(userPrompt).toContain('**Names Identified:** ["Vic","Blake"]');
+        expect(userPrompt).toContain("### The Whiteboard (a model's reading of the photo)");
+        expect(userPrompt).not.toContain('Players drew these');
+        expect(userPrompt).toContain('- no heading: Vic');
+        expect(userPrompt).toContain('**Names on the whiteboard:** ["Vic","Blake"]');
       }
     });
 
-    it('is left out when the players drew nothing', async () => {
+    it('is left out when the whiteboard held nothing', async () => {
       const facts = { ...OVERDOSE_FACTS, whiteboard: { suspectsExplored: [], connections: [], notes: [], namesFound: [] } };
       const { userPrompt } = await article(facts);
-      expect(userPrompt).not.toContain('Whiteboard Connections');
+      expect(userPrompt).not.toContain('The Whiteboard');
     });
   });
 });

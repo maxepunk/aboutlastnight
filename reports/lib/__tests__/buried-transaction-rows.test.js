@@ -10,7 +10,7 @@
  * the view's own filter.
  */
 
-const { isBuriedTransactionRow, renderBuriedTransactions } = require('../prompt-renderers/record-view');
+const { isBuriedTransactionRow, renderMorningTimeline } = require('../prompt-renderers/record-view');
 const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
 const { _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
 const { reworkFixtureState } = require('./fixtures/rework-state');
@@ -37,9 +37,9 @@ describe('isBuriedTransactionRow: the record view\'s own rule', () => {
     expect([null, undefined, 'x'].map(isBuriedTransactionRow)).toEqual([false, false, false]);
   });
 
-  it('is the rule the <buried-transactions> block applies', () => {
-    const block = renderBuriedTransactions(bundleWith([...SOLD, ...UNSOLD]));
-    expect(block.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(2);
+  it('is the rule the morning timeline applies to sales (phase 3: it replaced the <buried-transactions> block)', () => {
+    const block = renderMorningTimeline(bundleWith([...SOLD, ...UNSOLD]), {});
+    expect(block.split('\n').filter((l) => l.includes('| sale |'))).toHaveLength(2);
   });
 });
 

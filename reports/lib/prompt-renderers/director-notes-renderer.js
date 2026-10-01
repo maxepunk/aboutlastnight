@@ -10,11 +10,14 @@
 
 const { renderDirectorCorrectionsBlock } = require('./director-words-renderer');
 const { buriedTransactionFields } = require('./record-view');
+const { sessionClockOf } = require('./session-clock');
 const { DERIVED_LABELS } = require('./derived-labels');
 
 /**
- * One linked transaction, as account, amount and time only: the fields a
- * <buried-transactions> line carries, through the same formatter.
+ * One linked transaction, as account, amount and time only, through the record
+ * view's own transaction formatter, with the time on the session clock (phase 3,
+ * brief 3.5: every logged time a prompt prints goes through the one clock, so an
+ * evening session's links read the morning times the timeline reads).
  *
  * The transactions the enricher links are buried memories. A thread enriched before
  * the phase 2 final fix wave stored each with its memory id and owner (`tokenId`,
@@ -23,11 +26,14 @@ const { DERIVED_LABELS } = require('./derived-labels');
  * neither can reach a prompt whatever a stored link carries.
  *
  * @param {Object} tx - a linked transaction ({timestamp, amount, sellingTeam})
+ * @param {Object|null} [sessionConfig] - the session's parse, whose clock decision
+ *   (session-clock.js sessionClockOf) the time prints on; without it, as logged
  * @returns {string}
  */
-function linkedTransactionLine(tx) {
+function linkedTransactionLine(tx, sessionConfig = null) {
   const link = tx && typeof tx === 'object' ? tx : {};
-  return buriedTransactionFields({ account: link.sellingTeam, amount: link.amount, time: link.timestamp });
+  const clock = sessionConfig ? sessionClockOf(sessionConfig) : null;
+  return buriedTransactionFields({ account: link.sellingTeam, amount: link.amount, time: link.timestamp }, clock);
 }
 
 /**
@@ -42,6 +48,9 @@ function linkedTransactionLine(tx) {
  * @param {string[]|string|null} [ctx.corrections] - the director's input-review
  *   corrections, in order (phase 2, brief 2.2). They follow the notes, which are
  *   never rewritten: the uncorrected sentence stays, and the correction sits beside it.
+ * @param {Object|null} [ctx.sessionConfig] - the session's parse, for the session clock
+ *   the transaction links print their times on (phase 3, brief 3.5); without it the
+ *   times print as logged
  * @returns {string} Multi-block XML-tagged string. Omits optional blocks when their arrays are empty.
  */
 function renderDirectorEnrichmentBlock({
@@ -49,7 +58,8 @@ function renderDirectorEnrichmentBlock({
   quotes = [],
   transactionReferences = [],
   postInvestigationDevelopments = [],
-  corrections = null
+  corrections = null,
+  sessionConfig = null
 } = {}) {
   const blocks = [];
 
@@ -73,7 +83,7 @@ ${lines}
 
   if (transactionReferences.length > 0) {
     const lines = transactionReferences.map(t => {
-      const txs = (t.linkedTransactions || []).map(linkedTransactionLine).join('; ');
+      const txs = (t.linkedTransactions || []).map((tx) => linkedTransactionLine(tx, sessionConfig)).join('; ');
       return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
     }).join('\n');
     blocks.push(`<TRANSACTION_LINKS>

@@ -38,22 +38,20 @@ const REPO = path.join(__dirname, '..', '..');
  *   the inline evidence-card block carries content. Both article writers.
  * - Final fix wave item 6: the journalist voiceQuestion's "events Nova observed"
  *   defers to the reporting mode. The journalist article writer only.
- * - Phase 3, task 3.1: the journalist's reporting-mode block is the rule set's mode
- *   file, read here from the stub root (fixtures/rules/mode-remote.md, "STUB
- *   mode-remote"), in place of the one-line remote string. One line changes in each
- *   journalist writer's system prompt; the detective keeps its block.
- * - Phase 3, task 3.1 fix batch item 4: the mode block comes in one tag named after
- *   its file (<mode-remote> ... </mode-remote>), as loadRuleSet wraps each file, so
- *   the text after it is not read as part of T8. Two lines added around the block in
- *   each journalist writer's system prompt; the detective is unchanged.
+ * - Phase 3 brief 3.5: the record view's <buried-transactions> list becomes the
+ *   <morning-timeline> (its intro line, and the fixture's 07:50 PM sale on the evening
+ *   clock as 07:50 AM), in the outline and article writers of both themes; and the
+ *   whiteboard section is relabelled "The Whiteboard (a model's reading of the photo)"
+ *   with its regions, in every writer that prints it (both arc writers, both outline
+ *   writers through SESSION_FACTS, the journalist article writer).
  */
 const PINNED = {
-  'outline-journalist': ['2fb407c5b2a0d55401395bdffcc6ed757b8bcedd81187257e093313c8f1f759b', 14336],
-  'article-journalist': ['5a1b3b5100cf5dea727c8f51cff97648280735c332d5161b80940024e9eb9b99', 43245],
-  'arcs-journalist': ['baa6a3e955d70a953c6041ef9665e6c686dab2dabe4afe188d49628569b4b589', 14009],
-  'outline-detective': ['20a166c6d64dd82a4d76da9d278a258ecac12b9e785402cece3dca1431cbcef6', 8226],
-  'article-detective': ['ddaf75cf913fac7dd89ae7d2b5939071b97e54d64f8c5d17dcd541c72f310506', 29096],
-  'arcs-detective': ['604b12053d9604c7baea83fdc2c6d289274b63e01532497cc3781745d007fe21', 14247]
+  'outline-journalist': ['8b6e03af8768adf55a44de6f5b6353062f0b38aeb147e6c27f527c16dfa7b9da', 15230],
+  'article-journalist': ['1c3f960f998bc630202506491998006b0acff9037f43483a109242e98e172608', 44139],
+  'arcs-journalist': ['9d594bf2c6163733bed15d1c202dd32c6464188c95fdc688ba0e12d85977408c', 14563],
+  'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
+  'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
+  'arcs-detective': ['9b78874634d5b1db7cf7b119b15e9c77e7ba0e7d409f28d93f591c5e96285f0b', 14509]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

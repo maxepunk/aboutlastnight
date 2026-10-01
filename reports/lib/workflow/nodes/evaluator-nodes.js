@@ -786,7 +786,8 @@ ${renderDirectorEnrichmentBlock({
   quotes: listOf(notes.quotes),
   transactionReferences: listOf(notes.transactionReferences),
   postInvestigationDevelopments: listOf(notes.postInvestigationDevelopments),
-  corrections: state.inputReviewCorrections || []
+  corrections: state.inputReviewCorrections || [],
+  sessionConfig: state.sessionConfig
 })}`;
 }
 
@@ -971,7 +972,7 @@ ${interweavingSection}${renderJudgePhotos(state)}
 
 ${renderJudgeSessionContext(state)}
 
-${renderRecordView(state.evidenceBundle)}
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 ═══════════════════════════════════════════════════════════════════════════
 MOMENTUM EVALUATION (Commit 8.24 - Compulsive Readability)
@@ -1017,7 +1018,7 @@ In BOTH modes the reporter never votes and owns no exposed memory. "I voted", "m
 
 ${renderJudgeSessionContext(state)}
 
-${renderRecordView(state.evidenceBundle)}
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 CONTENT BUNDLE:
 ${JSON.stringify(state.contentBundle || {}, null, 2)}

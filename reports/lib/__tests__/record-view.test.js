@@ -3,13 +3,13 @@
  *
  * One renderer turns the evidence bundle into the <RECORD> section every writer
  * reads: each exposed document in its own labelled tag with its full text, and the
- * buried memories as transactions only.
+ * buried memories as sales only, on the morning timeline (phase 3, brief 3.5).
  */
 
 const {
   renderRecordView,
   renderRecordDocuments,
-  renderBuriedTransactions,
+  renderMorningTimeline,
   recordIdOf,
   DOCUMENT_POINTER
 } = require('../prompt-renderers/record-view');
@@ -189,19 +189,18 @@ describe('record view: the id rule', () => {
   });
 });
 
-describe('record view: buried transactions', () => {
+describe('record view: buried memories reach the timeline as sales only', () => {
   const transactions = [
     { sourceType: 'memory-token', shellAccount: 'Melanie', amount: 75000, time: '07:50 PM', temporalContext: 'INVESTIGATION' },
     { sourceType: 'memory-token', shellAccount: 'Deez', amount: '$225,000', time: '08:00 PM', temporalContext: 'INVESTIGATION' }
   ];
 
-  it('lists each transaction on one line: account, amount, time', () => {
-    const out = renderBuriedTransactions(bundle({ transactions }));
-    expect(out).toBe(
-      '<buried-transactions>\n' +
-      '- account: Melanie | amount: $75,000 | time: 07:50 PM\n' +
-      '- account: Deez | amount: $225,000 | time: 08:00 PM\n' +
-      '</buried-transactions>'
+  it('prints each sale on one line: time, account, amount (phase 3: the timeline replaced <buried-transactions>)', () => {
+    const out = renderMorningTimeline(bundle({ transactions }), {});
+    expect(out).toContain(
+      '- 07:50 AM | sale | account: Melanie | amount: $75,000\n' +
+      '- 08:00 AM | sale | account: Deez | amount: $225,000\n' +
+      '</morning-timeline>'
     );
   });
 
@@ -213,33 +212,32 @@ describe('record view: buried transactions', () => {
       shellAccount: 'Melanie', amount: 75000, time: '07:50 PM'
     };
     const out = renderRecordView(bundle({ tokens: [], paper: [], transactions: [leaky] }));
-    expect(out).toContain('- account: Melanie | amount: $75,000 | time: 07:50 PM');
+    expect(out).toContain('- 07:50 AM | sale | account: Melanie | amount: $75,000');
     for (const secret of ['ril001', 'Riley', 'RIL001', 'paternity', 'saw the test']) {
       expect(out).not.toContain(secret);
     }
   });
 
   it('marks a missing field, and skips a row with no account, amount or time (a memory never sold)', () => {
-    const out = renderBuriedTransactions(bundle({
+    const out = renderMorningTimeline(bundle({
       transactions: [
         { shellAccount: 'Jinin', amount: null, time: '09:10 PM' },
         { shellAccount: null, amount: null, time: null }
       ]
-    }));
-    expect(out).toBe(
-      '<buried-transactions>\n' +
-      '- account: Jinin | amount: (not recorded) | time: 09:10 PM\n' +
-      '</buried-transactions>'
-    );
+    }), {});
+    expect(out.split('\n').slice(2)).toEqual([
+      '- 09:10 AM | sale | account: Jinin | amount: (not recorded)',
+      '</morning-timeline>'
+    ]);
   });
 
-  it('says (none) when nothing was buried', () => {
-    expect(renderBuriedTransactions(bundle())).toBe('<buried-transactions>\n(none)\n</buried-transactions>');
+  it('says (none) when nothing was sold or exposed', () => {
+    expect(renderMorningTimeline(bundle(), {})).toMatch(/\n\(none\)\n<\/morning-timeline>$/);
   });
 });
 
 describe('record view: the whole view', () => {
-  it('is one <RECORD> section holding the documents, then the buried transactions', () => {
+  it('is one <RECORD> section holding the documents, then the morning timeline', () => {
     const out = renderRecordView(bundle({
       transactions: [{ shellAccount: 'Melanie', amount: 75000, time: '07:50 PM' }]
     }));
@@ -247,16 +245,16 @@ describe('record view: the whole view', () => {
     expect(out.endsWith('\n</RECORD>')).toBe(true);
     expect(out.match(/<RECORD>/g)).toHaveLength(1);
     expect(out.indexOf('<document id="ale003"')).toBeLessThan(out.indexOf('<document id="p-test-1"'));
-    expect(out.indexOf('<document id="p-test-1"')).toBeLessThan(out.indexOf('<buried-transactions>\n'));
+    expect(out.indexOf('<document id="p-test-1"')).toBeLessThan(out.indexOf('<morning-timeline>\n'));
     expect(out).toContain(renderRecordDocuments(bundle()));
   });
 
-  it('takes the documents alone when the prompt lists the buried transactions itself (R2)', () => {
+  it('takes the documents alone when the prompt lists the buried transactions itself (R2; the arc writer and judge until 3.3 and 3.4)', () => {
     const out = renderRecordView(bundle({
       transactions: [{ shellAccount: 'Melanie', amount: 75000, time: '07:50 PM' }]
     }), { buried: false });
     expect(out).toContain('<document id="ale003"');
-    expect(out).not.toContain('buried-transactions');
+    expect(out).not.toContain('morning-timeline');
     expect(out).not.toContain('Melanie');
   });
 
@@ -265,7 +263,7 @@ describe('record view: the whole view', () => {
       const out = renderRecordView(empty);
       expect(out).toContain('<RECORD>');
       expect(out).toContain('(The record holds no exposed documents.)');
-      expect(out).toContain('<buried-transactions>\n(none)\n</buried-transactions>');
+      expect(out).toMatch(/<morning-timeline>\n[^\n]+\n\(none\)\n<\/morning-timeline>/);
       expect(out).not.toContain('<document');
     }
   });

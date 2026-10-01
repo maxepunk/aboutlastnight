@@ -1573,8 +1573,9 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     it('reads the whole record view', () => {
       const state = realisticState();
       const prompt = buildEvaluationUserPrompt('outline', state);
-      expect(prompt).toContain(renderRecordView(state.evidenceBundle));
-      expect(prompt).toContain('- account: Cayman | amount: $450,000 | time: 10:41 AM');
+      // Phase 3 (3.5): with the session config, so the sales sit on the morning timeline.
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }));
+      expect(prompt).toContain('- 10:41 AM | sale | account: Cayman | amount: $450,000');
     });
 
     it('sees every photo, each with the director\'s description joined by filename, and never the whiteboard', () => {
@@ -1734,7 +1735,8 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     it('reads the whole record view', () => {
       const state = realisticState();
       const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null });
-      expect(prompt).toContain(renderRecordView(state.evidenceBundle));
+      // Phase 3 (3.5): with the session config, so the sales sit on the morning timeline.
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }));
     });
 
     it('reads the fact check\'s result as two labelled lists, not the result object', () => {

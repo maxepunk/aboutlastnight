@@ -594,9 +594,11 @@ describe('the accusation block (phase 2, brief 2.2)', () => {
 });
 
 describe('the corrections block (phase 2, brief 2.2)', () => {
-  it('renders one correction exactly as before, last in the prompt', () => {
+  it('renders one correction as written, last in the prompt', () => {
+    // Phase 3 (3.5): the line after the block speaks only to what the parse reads
+    // from the source text (D15), not to "anything in the source text".
     const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: 'Blake said it, not Vic.' });
-    expect(userPrompt.endsWith('</ENRICHMENT_RULES>\n\n<DIRECTOR_CORRECTIONS>\nBlake said it, not Vic.\n</DIRECTOR_CORRECTIONS>\nApply these corrections; they override anything in the source text.\n')).toBe(true);
+    expect(userPrompt.endsWith('</ENRICHMENT_RULES>\n\n<DIRECTOR_CORRECTIONS>\nBlake said it, not Vic.\n</DIRECTOR_CORRECTIONS>\nApply these corrections to what you parse from the source text; where a correction and the source text differ, the correction is right.\n')).toBe(true);
   });
 
   it('takes the session\'s list and numbers the corrections in order', () => {
