@@ -52,7 +52,9 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // The writers' own builders: the arc writer's valid-id list, the writers'
 // SESSION_FACTS, the outline writer's inputs (its photo list among them) with the
 // hero it used, and the PromptBuilder (whose roster method gives the roster section).
-const { hasInterweavingPlan, extractEvidenceSummary } = require('./arc-specialist-nodes');
+// ARC_NOTES_LABEL is the arc writer's label for the director's notes, which the arc
+// judge's directorNotes line prints (one source, fix 3.4b).
+const { hasInterweavingPlan, extractEvidenceSummary, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } = require('./ai-nodes');
 // The page's own rule for which money tracker prints (printedWriterTracker).
 const { TemplateAssembler } = require('../../template-assembler');
@@ -1031,7 +1033,7 @@ ${boxedHeading('IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fix
 The following inputs were approved in earlier phases and CANNOT be modified:
 - evidenceBundle: The curated evidence is final (exposed/buried structure is locked)
 - playerFocus: The accusation and whiteboard conclusions are immutable
-- directorNotes: The director's notes are record for what happened and was said in the room, and stay as written; backstory in them that the session did not show is Nova's reading or question (T1)
+- directorNotes: ${ARC_NOTES_LABEL}
 - roster: The session roster is fixed (these are the players who attended)
 
 Your feedback should focus on how ARCS USE these inputs, not changing the inputs themselves.

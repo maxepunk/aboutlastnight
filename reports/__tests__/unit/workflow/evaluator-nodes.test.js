@@ -2351,11 +2351,42 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
   });
 
   describe('lines that contradicted the rules', () => {
-    it('the arc judge reads the director\'s notes as T1\'s evidence line, not as ground truth', () => {
+    it('the arc judge reads the director\'s notes through its writer\'s label, not as ground truth', () => {
       const prompt = systemFor('arcs', stateFor());
       expect(prompt).not.toMatch(/ground truth/i);
-      expect(prompt).toContain('record for what happened and was said in the room');
-      expect(prompt).toMatch(/\bT1\b/);
+      // The judge's own wording of the label is gone (fix 3.4b item 6): the line is the
+      // arc writer's label, below.
+      expect(prompt).not.toContain('record for what happened and was said in the room');
+    });
+
+    // Fix 3.4b item 6: one source for the notes label. The arc judge's directorNotes line
+    // prints ARC_NOTES_LABEL, which arc-specialist-nodes.js exports for the arc writer.
+    it('the arc judge\'s director-notes line prints the label arc-specialist-nodes.js exports', () => {
+      const ARC_NODES = '../../../lib/workflow/nodes/arc-specialist-nodes';
+      try {
+        jest.isolateModules(() => {
+          const actual = jest.requireActual(ARC_NODES);
+          jest.doMock(ARC_NODES, () => ({ ...actual, ARC_NOTES_LABEL: 'SENTINEL NOTES LABEL' }));
+          const isolated = require('../../../lib/workflow/nodes/evaluator-nodes')._testing;
+          const state = stateFor();
+          const prompt = isolated.buildEvaluationSystemPrompt('arcs', isolated.getPhaseCriteria('arcs', 'journalist'),
+            'journalist', { sessionConfig: state.sessionConfig });
+          expect(prompt).toContain('- directorNotes: SENTINEL NOTES LABEL\n');
+        });
+      } finally {
+        jest.dontMock(ARC_NODES);
+      }
+    });
+
+    // The connection itself. On this branch arc-specialist-nodes.js does not export
+    // ARC_NOTES_LABEL yet (the 3.3b fix adds it), so the test is marked `failing`. The
+    // integrator connects the two at merge and removes `.failing`: Jest fails the run
+    // while `.failing` stays on a test that passes.
+    it.failing('the arc judge\'s prompt carries the arc writer\'s label', () => {
+      const { ARC_NOTES_LABEL } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
+      expect(typeof ARC_NOTES_LABEL).toBe('string');
+      expect(ARC_NOTES_LABEL.trim()).not.toBe('');
+      expect(systemFor('arcs', stateFor())).toContain(`- directorNotes: ${ARC_NOTES_LABEL}`);
     });
 
     it('the journalist NPC list reads each canon line from the theme config (M26)', () => {

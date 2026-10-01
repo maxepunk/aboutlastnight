@@ -522,7 +522,7 @@ IMMUTABLE INPUTS (DO NOT suggest changes - fixed upstream)
 ═══════════════════════════════════════════════════════════════
 - evidenceBundle: Curated evidence is final
 - playerFocus: Accusation and whiteboard are immutable
-- directorNotes: Record for what happened and was said in the room, as written; backstory in them is Nova's reading (T1)
+- directorNotes: <the arc writer's notes label, ARC_NOTES_LABEL from arc-specialist-nodes.js>
 - roster: Session roster is fixed
 
 Your feedback should focus on how ARCS USE these inputs,
