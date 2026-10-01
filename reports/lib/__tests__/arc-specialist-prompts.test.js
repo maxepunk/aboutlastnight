@@ -93,6 +93,26 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     expect(arcModule._testing.getArcRevisionSystemPrompt(false, remote, 'detective')).toContain(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
   });
 
+  it('enrichWithInterweaving takes the theme from the graph config: a detective session gets the detective block', async () => {
+    // The interweaving call has no state, so the session's theme reaches it only through
+    // configurable.theme (server.js sets it on start, approve, rollback and resume). A
+    // caller that dropped it would fall back to the arc file's journalist default and put
+    // the journalist block in a detective prompt with no error (review of 3.1, finding 2).
+    const { loadModeBlock } = require('../rule-set');
+    const { DETECTIVE_REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+    const sdk = jest.fn().mockResolvedValue({ arcInterweaving: [], interweavingPlan: {} });
+    const arcs = [{ id: 'arc-1', title: 'T', summary: 'S', arcSource: 'accusation', characterPlacements: {} }];
+
+    await arcModule._testing.enrichWithInterweaving(
+      arcs, ['Alex'], { configurable: { sdkClient: sdk, theme: 'detective' } }, { reportingMode: 'remote' }
+    );
+
+    const { systemPrompt } = sdk.mock.calls[0][0];
+    expect(systemPrompt).toContain(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
+    expect(systemPrompt).not.toContain(loadModeBlock('remote'));
+    expect(systemPrompt).toBe(arcModule._testing.interweavingSystemPrompt({ reportingMode: 'remote' }, 'detective'));
+  });
+
   it('no arc system prompt hands the writer a first-person presence marker (integrator ruling, phase 1)', () => {
     const { CORE_ARC_SYSTEM_PROMPT, INTERWEAVING_SYSTEM_PROMPT } = require('../sdk-client/subagents');
     for (const text of [CORE_ARC_SYSTEM_PROMPT, INTERWEAVING_SYSTEM_PROMPT]) {
