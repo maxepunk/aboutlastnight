@@ -139,10 +139,13 @@ function reworkFixtureState(theme = 'journalist') {
       primaryInvestigation: 'Who sold the company?'
     },
     directorNotes: {
-      rawProse: 'Alex and Morgan argued at the bar. Riley watched the ledger all morning.',
+      rawProse: 'Alex and Morgan argued at the bar. Riley watched the ledger all morning. Following the investigation, Riley left town.',
       quotes: [{ speaker: 'Riley', text: 'I only kept the books', confidence: 'high' }],
       transactionReferences: [],
-      postInvestigationDevelopments: [{ headline: 'Riley left town' }]
+      // An item stored before 3.6, with the enricher's headline beside the director's
+      // sentence: the pinned renders print the sentence alone under <EPILOGUE> (3.6
+      // fix batch, item 10).
+      postInvestigationDevelopments: [{ headline: 'Riley left town', detail: 'Following the investigation, Riley left town.' }]
     },
     inputReviewCorrections: ['The quote at the bar was Morgan to Alex, not Alex to Morgan.'],
     evidenceBundle,
