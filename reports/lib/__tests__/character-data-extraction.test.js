@@ -173,6 +173,19 @@ describe('extractCharacterData', () => {
       expect(prompt).toContain(DOCUMENT_ONLY_RULE);
     });
 
+    // 3.6b fix batch, finding 8: "Stanford Four" is a real in-game group, so the
+    // example taught content; a placeholder teaches the shape. The fixture's own
+    // document says "Stanford Four", so only the instructions are read here.
+    test('gives the group example as a placeholder, in the field list and the schema', async () => {
+      const call = await callOf();
+      const instructions = call.prompt.slice(call.prompt.indexOf('For each ROSTER character'));
+      expect(instructions).toMatch(/^1\. groups: the named groups \(e\.g\., "<group name>"\) they are a member of\.$/m);
+      const groups = call.jsonSchema.properties.characters.additionalProperties.properties.groups;
+      expect(groups.description).toBe('Named groups this character is a member of (e.g., "<group name>")');
+      expect(`${call.systemPrompt}\n${call.prompt.slice(0, call.prompt.indexOf('THE PAPER DOCUMENTS'))}\n${instructions}\n${JSON.stringify(call.jsonSchema)}`)
+        .not.toMatch(/Stanford/);
+    });
+
     test('states the document-only rule once per call, with its reason (fix batch, item 5)', async () => {
       const call = await callOf();
       const entry = call.jsonSchema.properties.characters.additionalProperties;

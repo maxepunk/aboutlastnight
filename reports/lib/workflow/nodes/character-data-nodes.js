@@ -37,7 +37,9 @@ const CHARACTER_EXTRACTION_SCHEMA = {
           groups: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Named groups this character is a member of (e.g., "Stanford Four")'
+            // A placeholder, not a real in-game group: an example teaches the shape (3.6b
+            // fix batch, finding 8).
+            description: 'Named groups this character is a member of (e.g., "<group name>")'
           },
           relationships: {
             type: 'object',
@@ -94,7 +96,8 @@ async function extractCharacterData(state, config) {
   // batch, item 5): the schema and the system prompt only name the fields. The field
   // list defines a relationship as one a document states, to another character, so
   // the list itself asks for nothing inferred (3.6b fix batch, finding 2: "their
-  // relationship to each other character" asked for one entry per character). Phase
+  // relationship to each other character" asked for one entry per character), and
+  // its group example is a placeholder, not a real in-game group (finding 8). Phase
   // 3 (3.2; M26): the NPC lines are theme-config's canon lines, read from there, so
   // the canon is worded once for this call and every writer and judge.
   const prompt = `Extract character relationship data from these documents and memories.
@@ -109,7 +112,7 @@ THE PAPER DOCUMENTS AND EXPOSED MEMORIES:
 ${record}
 
 For each ROSTER character the documents mention, give:
-1. groups: the named groups (e.g., "Stanford Four") they are a member of.
+1. groups: the named groups (e.g., "<group name>") they are a member of.
 2. relationships: each relationship a document states between them and another character (e.g., "attorney for", "mentor to", "friend of").
 3. role: their professional or social role.
 
