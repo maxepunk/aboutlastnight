@@ -166,7 +166,12 @@
   const ENRICHMENT_WARNING_LABELS = [
     { key: 'unrecordedSpeakers', one: 'quote speaker', many: 'quote speakers', why: 'not recorded: the notes and corrections do not name them' },
     { key: 'droppedContexts', one: 'quote context', many: 'quote contexts', why: 'dropped: not copied word for word from the notes' },
-    { key: 'droppedEpilogueItems', one: 'epilogue item', many: 'epilogue items', why: 'dropped: not copied word for word from the notes' }
+    { key: 'droppedEpilogueItems', one: 'epilogue item', many: 'epilogue items', why: 'dropped: not copied word for word from the notes' },
+    // 3.6b fix batch: a quote's correction the director's corrections do not hold (its
+    // speaker is then left out too), and a transaction link whose observation the
+    // notes do not hold.
+    { key: 'droppedCorrections', one: 'quote correction', many: 'quote corrections', why: 'dropped: not copied word for word from the corrections' },
+    { key: 'droppedExcerpts', one: 'transaction link', many: 'transaction links', why: 'dropped: observation not copied word for word from the notes' }
   ];
 
   /**

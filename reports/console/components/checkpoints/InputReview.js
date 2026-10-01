@@ -50,7 +50,8 @@ function EnrichmentPanel({ enrichment }) {
       'has to be in the notes word for word to reach the article.'
     ),
     // Task 3.5 fix batch, item 9: what the enricher (task 3.6) left out of the quote
-    // bank and the epilogue because the notes do not carry it word for word.
+    // bank, the epilogue and the transaction links because the notes or the
+    // corrections do not carry it word for word (the 3.6b fix batch added the last two keys).
     enrichmentWarningLines(warnings).map(function (line, i) {
       return React.createElement('p', { key: 'ew-' + i, className: 'enrichment__warning' }, line);
     })

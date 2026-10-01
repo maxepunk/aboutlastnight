@@ -176,4 +176,23 @@ describe('enrichmentWarningLines: the enricher\'s new warnings, each a count wit
     expect(enrichmentWarningLines({ droppedQuotes: 4, droppedLinks: 1, droppedContexts: 0 })).toEqual([]);
     expect(enrichmentWarningLines(null)).toEqual([]);
   });
+
+  // 3.6b fix batch (3.5's deferred minor): the two keys the panel did not show yet.
+  it("counts a quote's correction the director's corrections do not hold", () => {
+    expect(enrichmentWarningLines({ droppedCorrections: 1 })).toEqual([
+      '1 quote correction dropped: not copied word for word from the corrections'
+    ]);
+    expect(enrichmentWarningLines({ droppedCorrections: 2 })).toEqual([
+      '2 quote corrections dropped: not copied word for word from the corrections'
+    ]);
+  });
+
+  it('counts a transaction link whose observation the notes do not hold', () => {
+    expect(enrichmentWarningLines({ droppedExcerpts: 1 })).toEqual([
+      '1 transaction link dropped: observation not copied word for word from the notes'
+    ]);
+    expect(enrichmentWarningLines({ droppedExcerpts: 3 })).toEqual([
+      '3 transaction links dropped: observation not copied word for word from the notes'
+    ]);
+  });
 });
