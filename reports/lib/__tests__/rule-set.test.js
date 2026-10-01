@@ -54,6 +54,9 @@ BRIEF_MAP['judge-arc'] = BRIEF_MAP.arc;
 BRIEF_MAP['judge-outline'] = BRIEF_MAP.outline;
 BRIEF_MAP['judge-article'] = BRIEF_MAP.article;
 
+/** The line buildRevisionContext (node-helpers.js) prints after the director's send-back note. */
+const SEND_BACK_NOTE_LINE = 'NOTE: The human reviewer has explicitly requested these changes.';
+
 /** Every rule id ("T8", "C16") in a text, in order. */
 const ruleIds = (text) => (String(text).match(/\b[TC]\d{1,2}\b/g) || []);
 /** The tag names a loaded string carries, in order. */
@@ -305,7 +308,7 @@ describe('the removed-phrase fixture', () => {
       '<EPILOGUE>\nthe murder revelation came at noon\n</EPILOGUE>',
       '<RECORD>\n<document id="x">the shape of the silence</document>\n</RECORD>',
       '<QUOTE_BANK>\nA model made this index.\n- Vic: "the murder victim had it coming"\n</QUOTE_BANK>',
-      'HUMAN FEEDBACK (HIGHEST PRIORITY):\nCut the resolution cascade line.\n\nNOTE: address it first.',
+      `HUMAN FEEDBACK (HIGHEST PRIORITY):\nCut the resolution cascade line.\n\n${SEND_BACK_NOTE_LINE}`,
       '- p1.jpg: The director\'s description, word for word: Nova and her camera'
     ].join('\n\n');
     const text = instructionText(render);
@@ -313,11 +316,200 @@ describe('the removed-phrase fixture', () => {
     expect(text).toContain('Write the article.');
     expect(text).toContain('A model made this index.');
     expect(text).toContain('<RECORD></RECORD>');
-    expect(text).toContain('NOTE: address it first.');
+    expect(text).toContain(SEND_BACK_NOTE_LINE);
   });
 
   it('still finds a removed phrase in the instruction text around them', () => {
     const render = '<DIRECTOR_NOTES>\nnotes\n</DIRECTOR_NOTES>\n\nMarcus is the murder victim.';
     expect(findRemovedPhrases(instructionText(render))).toEqual(['the murder victim']);
+  });
+});
+
+/**
+ * instructionText reads only the pipeline's own instructions (the integrator's ruling
+ * on review finding 3 of 3.1). Besides the director's words and <RECORD>, it strips the
+ * model output a prompt carries as data (a previous version shown in a rework, the
+ * approved outline, the arcs and the rest of the arc analysis, the plans, the content
+ * bundle, the whiteboard reading) and every paragraph of the director's send-back note.
+ * It keeps the pipeline's label lines, those inside <DIRECTOR_GUIDANCE> included, so
+ * they are scanned.
+ *
+ * The real builders make the renders here, so a reworded label fails these tests
+ * instead of letting a scan read the director's words or skip the pipeline's.
+ */
+describe('instructionText: the pipeline\'s own instructions only', () => {
+  const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
+  const { buildDirectorGuidanceSection, PromptBuilder } = require('../prompt-builder');
+
+  const NOTE = [
+    'First paragraph: lead with the money.',
+    'Second paragraph: drop the line about the murder victim.',
+    'Third paragraph: nobody asked who killed Marcus.'
+  ].join('\n\n');
+
+  it('strips every paragraph of the director\'s send-back note, up to the pipeline\'s NOTE line', () => {
+    const { contextSection } = buildRevisionContext({
+      phase: 'outline', revisionCount: 0, validationResults: null, previousOutput: null, humanFeedback: NOTE, round: 2
+    });
+    expect(contextSection).toContain('Third paragraph');
+    const text = instructionText(contextSection);
+    for (const paragraph of NOTE.split('\n\n')) expect(text).not.toContain(paragraph);
+    expect(text).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):');
+    expect(text).toContain(SEND_BACK_NOTE_LINE);
+    expect(text).toContain('Address human feedback FIRST');
+    expect(findRemovedPhrases(text)).not.toContain('the murder victim');
+    expect(findRemovedPhrases(text)).not.toContain('who killed Marcus');
+  });
+
+  it('strips the previous version a rework shows, and keeps its header and its end', () => {
+    const { previousOutputSection } = buildRevisionContext({
+      phase: 'outline', revisionCount: 1, validationResults: null,
+      previousOutput: { lede: { hook: 'Marcus, the murder victim, sold the company.' } }, humanFeedback: null
+    });
+    const text = instructionText(previousOutputSection);
+    expect(text).not.toContain('the murder victim');
+    expect(text).toMatch(/^PREVIOUS OUTLINE OUTPUT\b/m);
+    expect(text).toMatch(/^END PREVIOUS OUTPUT$/m);
+  });
+
+  it('strips an APPROVED OUTLINE carrying "the murder victim", and still scans the text after it', () => {
+    const render = [
+      'APPROVED OUTLINE:',
+      JSON.stringify({ lede: { hook: 'Marcus, the murder victim, sold the company.', primaryArc: 'arc-sale' } }, null, 2),
+      '',
+      'HERO IMAGE (CRITICAL - do NOT duplicate):'
+    ].join('\n');
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text)).toEqual([]);
+    expect(text).toContain('APPROVED OUTLINE:');
+    expect(text).toContain('HERO IMAGE (CRITICAL - do NOT duplicate):');
+    expect(findRemovedPhrases(instructionText(`${render}\nRemember who killed Marcus.`))).toEqual(['who killed Marcus']);
+  });
+
+  describe('<DIRECTOR_GUIDANCE>', () => {
+    const GUIDANCE = 'Lead with the money.\n\nThe murder victim is Marcus; say so once.';
+    const NOTES = [
+      { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Ask who killed Marcus.\nThen ask why.' },
+      { gate: 'outline', kind: 'approval', round: 1, text: 'Keep the shape of the silence.' }
+    ];
+    const section = buildDirectorGuidanceSection(GUIDANCE, NOTES);
+
+    it('strips the director\'s guidance and notes, every line of them', () => {
+      const text = instructionText(section);
+      expect(findRemovedPhrases(text)).toEqual([]);
+      for (const words of ['Lead with the money.', 'say so once', 'Ask who killed', 'Then ask why.', 'Keep the shape']) {
+        expect(text).not.toContain(words);
+      }
+    });
+
+    it('keeps the pipeline\'s label lines, the standing-notes preamble included', () => {
+      const text = instructionText(section);
+      expect(text).toContain('It outranks the craft rules above where they conflict');
+      expect(text).toContain('Standing notes the director gave at earlier stops, in order.');
+      expect(text).toContain('Keep honoring each in what you write now.');
+      expect(instructionText(buildDirectorGuidanceSection('', NOTES))).toContain('Standing notes the director gave at earlier stops');
+    });
+
+    it('scans a guidance label line: a removed phrase there is found', () => {
+      const relabelled = section.replace('It outranks the craft rules', 'It outranks the murder victim and the craft rules');
+      expect(findRemovedPhrases(instructionText(relabelled))).toEqual(['the murder victim']);
+      const preamble = section.replace('Keep honoring each', 'Keep honoring who killed Marcus and each');
+      expect(findRemovedPhrases(instructionText(preamble))).toEqual(['who killed Marcus']);
+    });
+  });
+
+  it('strips the whiteboard reading and keeps its labels, in the shape 3.5 prints too', () => {
+    const { renderWhiteboardConnections } = require('../prompt-renderers/director-words-renderer');
+    const today = renderWhiteboardConnections({ suspectsExplored: ['Vic'], connections: [], notes: ['the murder victim?'], namesFound: [] });
+    // The shape task 3.5 prints (the integrator merges it into this branch).
+    const regions = [
+      '### The Whiteboard (a model\'s reading of the photo)',
+      'A model\'s reading of the photo of the whiteboard where the room kept its working notes during the investigation: context for how the room reasoned toward its verdict, not a source.',
+      '**Regions, each under the heading the players wrote:**',
+      '- "SUSPECTS" (top left): Vic, the murder victim',
+      '**Lines drawn:** []',
+      '**Other writing:** ["who killed Marcus"]'
+    ].join('\n');
+    for (const reading of [today, regions]) {
+      const text = instructionText(`${reading}\n\n- a pipeline list line that stays`);
+      expect(findRemovedPhrases(text)).toEqual([]);
+      expect(text).toMatch(/^### (Whiteboard Connections|The Whiteboard)/);
+      expect(text).toContain('- a pipeline list line that stays');
+    }
+    expect(instructionText(regions)).toContain('A model\'s reading of the photo of the whiteboard');
+    expect(instructionText(regions)).toContain('**Other writing:**');
+  });
+
+  it('strips the model output every writer, reworker and judge prints as data', async () => {
+    const { reworkFixtureState } = require('./fixtures/rework-state');
+    const { stubThemeLoader } = require('./fixtures/render-writers');
+    const { PHASE_REQUIREMENTS } = require('../theme-loader');
+    const { _testing: arcs } = require('../workflow/nodes/arc-specialist-nodes');
+    const { _testing: judges } = require('../workflow/nodes/evaluator-nodes');
+    const MODEL = 'MODEL-OUTPUT-SENTINEL';
+
+    const state = reworkFixtureState('journalist');
+    state.narrativeArcs[0] = { ...state.narrativeArcs[0], summary: `${MODEL} summary`, caveats: [`${MODEL} caveat`] };
+    state._arcAnalysisCache = {
+      ...state._arcAnalysisCache,
+      synthesisNotes: `${MODEL} synthesis`,
+      interweavingPlan: { ...state._arcAnalysisCache.interweavingPlan, convergencePoint: `${MODEL} plan` }
+    };
+    state.outline = { ...state.outline, lede: { ...state.outline.lede, hook: `${MODEL} hook` } };
+    state.contentBundle = { headline: { main: `${MODEL} headline` }, sections: [] };
+    state.playerFocus = {
+      ...state.playerFocus, whiteboardContext: { ...state.playerFocus.whiteboardContext, notes: [`${MODEL} whiteboard`] }
+    };
+
+    const builder = new PromptBuilder(
+      stubThemeLoader(PHASE_REQUIREMENTS), 'journalist', state.sessionConfig,
+      state.canonicalCharacters, state.characterData.characters
+    );
+    const join = ({ systemPrompt, userPrompt }) => `${systemPrompt}\n${userPrompt}`;
+    const { contextSection, previousOutputSection } = buildRevisionContext({
+      phase: 'arcs', revisionCount: 0, validationResults: null, previousOutput: state.narrativeArcs, humanFeedback: NOTE, round: 1
+    });
+    const renders = {
+      'outline writer': join(await builder.buildOutlinePrompt(
+        { narrativeArcs: state.narrativeArcs, ...state._arcAnalysisCache }, state.selectedArcs, 'hero.jpg',
+        [], state.arcEvidencePackages, state.shellAccounts, null, { evidenceBundle: state.evidenceBundle }
+      )),
+      'article writer': join(await builder.buildArticlePrompt(
+        state.outline, state.arcEvidencePackages, 'hero.jpg', state.shellAccounts, null, state.directorNotes, null,
+        { evidenceBundle: state.evidenceBundle }
+      )),
+      'arc writer': arcs.buildCoreArcPrompt(state),
+      interweaving: arcs.buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle),
+      'arc reworker': arcs.buildArcRevisionPrompt(state, contextSection, previousOutputSection),
+      'arc judge': judges.buildEvaluationUserPrompt('arcs', state, {}),
+      'outline judge': judges.buildEvaluationUserPrompt('outline', state, {}),
+      'article judge': judges.buildEvaluationUserPrompt('article', state, {})
+    };
+
+    for (const [name, render] of Object.entries(renders)) {
+      expect(`${name}: ${render.includes(MODEL)}`).toBe(`${name}: true`);
+      expect(`${name}: ${instructionText(render).includes(MODEL)}`).toBe(`${name}: false`);
+    }
+  });
+
+  describe('fails loud on a shape it cannot read, rather than scan the director\'s words or skip the pipeline\'s', () => {
+    it('a send-back note with no NOTE line after it', () => {
+      expect(() => instructionText('HUMAN FEEDBACK (HIGHEST PRIORITY):\nCut it.\n\nThe end.')).toThrow(/NOTE: The human reviewer/);
+    });
+
+    it('model output whose JSON never closes', () => {
+      expect(() => instructionText('APPROVED OUTLINE:\n{\n  "lede": {}\n')).toThrow(/APPROVED OUTLINE:/);
+    });
+
+    it('a previous version with no end line', () => {
+      const { previousOutputSection } = buildRevisionContext({
+        phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: {} }, humanFeedback: null
+      });
+      expect(() => instructionText(previousOutputSection.replace('END PREVIOUS OUTPUT', 'THE END'))).toThrow(/END PREVIOUS OUTPUT/);
+    });
+
+    it('a <DIRECTOR_GUIDANCE> block with neither of the pipeline\'s labels', () => {
+      expect(() => instructionText('<DIRECTOR_GUIDANCE>\nLead with the money.\n</DIRECTOR_GUIDANCE>')).toThrow(/DIRECTOR_GUIDANCE/);
+    });
   });
 });
