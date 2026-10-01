@@ -453,4 +453,37 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
     const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline, evaluationHistory: [] }, state);
     expect(merged.writerQuestions).toEqual([Q1]);
   });
+
+  // Fix 3.7b (finding 5): a rollback to a stop clears that stop's questions with its
+  // output, through the field each stop reads them from (ROLLBACK_CLEARS clears
+  // _arcAnalysisCache, outline and contentBundle), and keeps the questions of the
+  // stops before it, whose output it keeps.
+  describe('a rollback clears a stop\'s questions with its output', () => {
+    const { buildRollbackState } = require('../../lib/api-helpers');
+    const Q3 = { kind: 'ledger', about: 'The 10:14 AM sale of $50,000', question: 'Is this a second entry for one sale?' };
+    const withQuestions = () => ({
+      evaluationHistory: [],
+      _arcAnalysisCache: { writerQuestions: [Q1] },
+      outline: { lede: { hook: 'h' }, writerQuestions: [Q2] },
+      contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q3] }
+    });
+    const questionsAtEachStop = async (state) => ({
+      'arc-selection': (await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).writerQuestions,
+      outline: (await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state)).writerQuestions,
+      article: (await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, state)).writerQuestions
+    });
+
+    it('every stop shows its questions before the rollback', async () => {
+      expect(await questionsAtEachStop(withQuestions())).toEqual({ 'arc-selection': [Q1], outline: [Q2], article: [Q3] });
+    });
+
+    it.each([
+      ['arc-selection', { 'arc-selection': [], outline: [], article: [] }],
+      ['outline', { 'arc-selection': [Q1], outline: [], article: [] }],
+      ['article', { 'arc-selection': [Q1], outline: [Q2], article: [] }]
+    ])('a rollback to %s', async (point, expected) => {
+      const state = { ...withQuestions(), ...buildRollbackState(point) };
+      expect(await questionsAtEachStop(state)).toEqual(expected);
+    });
+  });
 });
