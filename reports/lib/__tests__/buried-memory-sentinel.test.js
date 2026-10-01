@@ -195,9 +195,10 @@ describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge pro
       expect(leaksIn(prompts[0])).toEqual([]);
     }
     // The outline and article judges read the whole record view, timeline included;
-    // the arc judge keeps its own buried list until 3.4.
+    // since 3.4 so does the journalist arc judge, and the detective's keeps its own list.
     expect(promptsOf(outline)[0]).toContain('<morning-timeline>');
     expect(promptsOf(article)[0]).toContain('<morning-timeline>');
+    expect(promptsOf(arcs)[0].includes('<morning-timeline>')).toBe(theme === 'journalist');
   });
 });
 

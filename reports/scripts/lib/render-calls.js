@@ -59,28 +59,35 @@ async function renderInterweaving({ arcNodes }, state) {
  * One judge, as createEvaluator's evaluatePhase builds it, without its skip logic:
  * the phase's criteria for the state's theme and, for the article, the fact check run
  * on the stored bundle with the evaluator's arguments (none when there is no bundle).
+ *
+ * Phase 3 (3.4): a tree that exports getPhaseCriteria and buildFactCheckArgs builds
+ * both through the evaluator's own functions, and its system prompt takes the session
+ * config (the mode block). An older tree (a baseline render through --repo) gets the
+ * argument lists its evaluator used, below.
  * @param {string} phase - one of JUDGE_PHASES
  * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
  */
 async function renderJudge({ evalNodes, factCheckContentBundle, getThemeNPCPronouns }, state, phase) {
   const theme = state.theme || 'journalist';
-  const criteria = phase === 'article' ? evalNodes.getArticleCriteria(theme)
-    : phase === 'outline' ? evalNodes.getOutlineCriteria(theme)
-      : evalNodes.QUALITY_CRITERIA[phase];
+  const criteria = evalNodes.getPhaseCriteria ? evalNodes.getPhaseCriteria(phase, theme)
+    : phase === 'article' ? evalNodes.getArticleCriteria(theme)
+      : phase === 'outline' ? evalNodes.getOutlineCriteria(theme)
+        : evalNodes.QUALITY_CRITERIA[phase];
+  const factCheckArgs = evalNodes.buildFactCheckArgs ? evalNodes.buildFactCheckArgs(state) : {
+    contentBundle: state.contentBundle,
+    arcEvidencePackages: state.arcEvidencePackages,
+    evidenceBundle: state.evidenceBundle,
+    roster: state.sessionConfig?.roster,
+    sessionPhotos: state.sessionPhotos,
+    reportingMode: state.sessionConfig?.reportingMode,
+    npcPronouns: getThemeNPCPronouns(theme),
+    theme
+  };
   const factCheck = phase === 'article' && state.contentBundle
-    ? await factCheckContentBundle({
-      contentBundle: state.contentBundle,
-      arcEvidencePackages: state.arcEvidencePackages,
-      evidenceBundle: state.evidenceBundle,
-      roster: state.sessionConfig?.roster,
-      sessionPhotos: state.sessionPhotos,
-      reportingMode: state.sessionConfig?.reportingMode,
-      npcPronouns: getThemeNPCPronouns(theme),
-      theme
-    })
+    ? await factCheckContentBundle(factCheckArgs)
     : null;
   return {
-    systemPrompt: await evalNodes.buildEvaluationSystemPrompt(phase, criteria, theme),
+    systemPrompt: await evalNodes.buildEvaluationSystemPrompt(phase, criteria, theme, { sessionConfig: state.sessionConfig || null }),
     userPrompt: await evalNodes.buildEvaluationUserPrompt(phase, state, { factCheck })
   };
 }

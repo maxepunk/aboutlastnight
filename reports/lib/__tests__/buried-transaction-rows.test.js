@@ -81,8 +81,21 @@ describe('the arc writer, its reworker and the arc judge share the rule', () => 
     expect(list.match(/"shellAccount"/g)).toHaveLength(2);
   });
 
-  it('the arc judge lists 2 rows and no "Unknown" account', () => {
+  // Phase 3 (3.4): the journalist arc judge reads the sales on the record view's morning
+  // timeline, under the same rule, in place of a list of its own; the detective keeps it.
+  it('the journalist arc judge reads 2 sales on the timeline and no "Unknown" account', () => {
     const state = { ...reworkFixtureState('journalist'), evidenceBundle: bundleWith(ROWS), narrativeArcs: [] };
+    const prompt = evalTesting.buildEvaluationUserPrompt('arcs', state, {});
+    expect(prompt).not.toContain('BURIED TRANSACTIONS (');
+    const timeline = prompt.slice(prompt.indexOf('<morning-timeline>'), prompt.indexOf('</morning-timeline>'));
+    expect(timeline.split('\n').filter((l) => l.includes('| sale |'))).toHaveLength(2);
+    expect(timeline).not.toContain('Unknown');
+    expect(timeline).toContain('account: Melanie');
+    expect(timeline).toContain('account: Gorlan');
+  });
+
+  it('the detective arc judge lists 2 rows and no "Unknown" account', () => {
+    const state = { ...reworkFixtureState('detective'), evidenceBundle: bundleWith(ROWS), narrativeArcs: [] };
     const prompt = evalTesting.buildEvaluationUserPrompt('arcs', state, {});
     expect(prompt).toContain('BURIED TRANSACTIONS (2 - for amount/account verification):');
     const list = prompt.slice(prompt.indexOf('BURIED TRANSACTIONS ('), prompt.indexOf('EVALUATION CHECKLIST'));

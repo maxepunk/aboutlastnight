@@ -180,7 +180,8 @@ describe('the evaluator scores reporter mode (BASELINE §4 class 6)', () => {
 
   it('both themes’ weights still sum to 1', () => {
     ['journalist', 'detective'].forEach((theme) => {
-      const total = Object.values(getArticleCriteria(theme)).reduce((sum, c) => sum + c.weight, 0);
+      // Phase 3 (3.4): the journalist's truth criteria carry no weight; they decide readiness.
+      const total = Object.values(getArticleCriteria(theme)).filter((c) => !c.truth).reduce((sum, c) => sum + c.weight, 0);
       expect(total).toBeCloseTo(1.0, 5);
     });
   });
