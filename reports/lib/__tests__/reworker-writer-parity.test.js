@@ -129,9 +129,7 @@ describe.each(['journalist', 'detective'])('%s outline stop', (theme) => {
   it("the reworker's system prompt is its writer's, then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
     // Phase 3 (3.3): the rework rules are the theme's; the detective keeps today's.
-    expect(rework.system).toBe(`${writer.system}
-
-${outlineRevisionRules(theme)}`);
+    expect(rework.system).toBe(`${writer.system}\n\n${outlineRevisionRules(theme)}`);
     // Phase 3 (3.2): the journalist's system prompt carries the world and the truth
     // rules; the detective is parked and keeps its craft files there.
     if (theme === 'journalist') {

@@ -94,11 +94,31 @@ const REPO = path.join(__dirname, '..', '..');
  *   label, the narrative tensions (only the director's Blake sentences print, so the
  *   fixture's other tension prints nothing) and the generation instruction are
  *   rewritten. The journalist pins only; the detective and arc pins are unchanged.
+ * - Phase 3 (3.3), the journalist arc writer reads the rule set: its system prompt is
+ *   the new identity, the mode block, <world> and <truth-rules> (the stubs), then its
+ *   role, its honest-uncertainty lines and its output list, without the game context,
+ *   the drug line, the evidence boundaries, the anti-patterns and the timelines;
+ *   SECTION 3 is the whole record view with its morning timeline (no Buried
+ *   Transactions list); the director's notes are labelled record for the room (T1);
+ *   the old SECTION 4 and 4.5 give way to the stages line; the lenses are written in
+ *   C16's terms; the six arc craft files (stubs) come last; the fixture's
+ *   `public-vs-private` tension is not printed (only a blake-proximity tension's
+ *   sentences are); and the writer's revision hook is gone. arcs-journalist only;
+ *   arcs-detective is unchanged (the detective keeps today's text).
+ * - Phase 3 (3.3 fix round 1), each rule once (spec section 8): the arc writer's
+ *   inline text stops restating what its rule files say. The director's notes label
+ *   names the notes T1's record for the room and keeps only the mapping T1 does not
+ *   state (backstory in the notes is Nova's reading); SECTION 5 and the analysisNotes
+ *   placeholders point at <craft-arcs> for the lenses and map them onto the three
+ *   fields, without C16's reason or its supports-and-cuts-against wording.
+ *   arcs-journalist only (10881 -> 10347).
+ * - Integration of 3.3 onto 3.2: arcs-journalist is 3.3’s own render (10347); 3.2 leaves the
+ *   arc writer unchanged, and the other five pins are 3.2’s.
  */
 const PINNED = {
   'outline-journalist': ['f217ef6bf5ca8c32eb626e3d0c3dff56ca5aa2456f6f85a99d26527067bcef5c', 8712],
   'article-journalist': ['b204e2a94219bd5557fa6eb0c9d5d66cf41bbff1a7f4f52b1ea883700716e57d', 27149],
-  'arcs-journalist': ['671adab390beee1a4d9dfcdf38f6c4a58565562f609c5f3bec85425e37530ba4', 14492],
+  'arcs-journalist': ['24af24d2959a487bb4af99ca2381b773d7fec4d790ce079deabfd7a2abbb9b60', 10347],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
   'arcs-detective': ['41dace98218cf3f360893b995fa56031d926994f6c495a2568b217623df3df15', 14730]
