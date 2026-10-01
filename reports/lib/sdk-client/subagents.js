@@ -21,13 +21,17 @@
 
 /**
  * The journalist's wording for the three schema fields that place the arcs in the
- * article (phase 3, brief 3.3; spec C16 and TH2). The same three descriptions are in
- * both schemas that carry the fields, the interweaving call's and the arc reworker's,
- * and the reworker's prompt prints them (buildArcReworkOutputAddendum).
+ * article (phase 3, brief 3.3). The same three descriptions are in both schemas that
+ * carry the fields, the interweaving call's and the arc reworker's, and the reworker's
+ * prompt prints them (buildArcReworkOutputAddendum).
+ *
+ * C16, in <craft-arcs>, states the order (TH2) and the convergence with their reason,
+ * and both calls that fill these fields read it, so a description names the rule and
+ * restates none of it (spec section 8: each rule appears once).
  */
 const CONVERGENCE_ROLE_DESCRIPTION = 'What this arc brings to the convergence point';
-const SUGGESTED_ORDER_DESCRIPTION = "Arc ids in order of how each arc bears on the room's verdict";
-const CONVERGENCE_POINT_DESCRIPTION = 'The culmination near the end of the article, where the threads converge and the thesis lands';
+const SUGGESTED_ORDER_DESCRIPTION = 'Arc ids, in the order C16 (<craft-arcs>) gives the arcs';
+const CONVERGENCE_POINT_DESCRIPTION = "This session's convergence point, as C16 (<craft-arcs>) describes the convergence";
 
 /**
  * The detective's wording for the same three fields, parked with its theme (spec D13).
@@ -306,11 +310,13 @@ const CORE_ARC_SCHEMA = {
  *
  * Commit 8.28: Focused prompt for adding narrative bridge metadata
  *
- * Phase 3 (brief 3.3): the interweaving principles stay; the convergence is C16's
+ * Phase 3 (brief 3.3): the interweaving principles the rule set does not state stay
+ * here: the bridges, the callback seeds and the bridge types. The convergence (C16's
  * culmination near the end, where the thesis lands, not "the central event
- * (murder/accusation)"; the order is TH2's (how each arc bears on the verdict, not
- * "maximum payoff"); the callback example that gave Vic a pronoun and a hidden truth
- * is gone. interweavingSystemPrompt puts the mode block, the world and the truth
+ * (murder/accusation)") and the order (TH2: how each arc bears on the verdict, not
+ * "maximum payoff") are C16's, which this call reads in <craft-arcs>; its task names
+ * the fields that hold them. The callback example that gave Vic a pronoun and a hidden
+ * truth is gone. interweavingSystemPrompt puts the mode block, the world and the truth
  * rules after the identity line.
  */
 const INTERWEAVING_SYSTEM_PROMPT = `You plan how the arcs of one "About Last Night" session intercut in a NovaNews investigative article, and where they converge.
@@ -334,13 +340,6 @@ INTERWEAVING PRINCIPLES:
    - causal_chain: This arc explains WHY another happened
    - temporal: Events close together within one stage: two memories from the same moment of the party, or two events on the morning timeline. A memory's time is the party's clock and the timeline's is the morning's, so the two never line up
    - contradiction: This arc recontextualizes another
-
-4. CONVERGENCE
-   - The threads converge at the culmination the article builds toward, near its end, where the thesis lands
-   - Each arc brings its piece to that culmination
-
-5. ORDER
-   - Suggest the arcs in order of how they bear on the room's verdict, the official story the article examines
 
 OUTPUT:
 For each arc, provide interweaving metadata plus an overall interweaving plan.`;

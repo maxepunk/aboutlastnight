@@ -523,37 +523,65 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     });
   });
 
-  describe("what stays, in C16's terms", () => {
-    it('the arc writer examines every arc through the money, behaviour and victimization, for and against', () => {
+  describe("what stays, in C16's terms, stated once", () => {
+    // Spec section 8: each rule appears once. C16, in <craft-arcs>, states the lenses,
+    // the order (TH2) and the convergence with their reason; the inline text maps them
+    // onto the output fields (analysisNotes, suggestedOrder, convergencePoint) and
+    // states none of them again, so an edit to the rule file leaves no stale copy.
+    const C16_TERMS = [
+      /bears? on the room's verdict/g, /cuts? against/g, /its own material/g,
+      /culmination/g, /where the thesis lands/g, /near (its|the) end/g
+    ];
+    /** The C16 terms the render carries more often than the rule set it was given. */
+    const restated = (render, rules) => C16_TERMS
+      .filter((term) => (render.match(term) || []).length !== (rules.match(term) || []).length)
+      .map(String);
+    const { INTERWEAVING_SYSTEM_PROMPT, INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
+
+    it('the arc writer reads the three lenses from <craft-arcs> and writes them into analysisNotes', () => {
       const prompt = buildCoreArcSections(journalistState());
-      const section = prompt.slice(prompt.indexOf('THE THREE LENSES'));
-      expect(prompt).toContain('THE THREE LENSES');
-      expect(section).toMatch(/financial: the money/);
-      expect(section).toMatch(/behavioral: what people did and chose/);
-      expect(section).toMatch(/victimization: who was harmed, and whose memories were taken or erased/);
-      expect(section).toMatch(/supports the arc and where it cuts against it/);
-      expect(section).toMatch(/each section of the article its own material/);
+      const { craft } = loadRuleSet('arc');
+      expect(craft).toMatch(/## C16\./);
+      expect(count(prompt, craft)).toBe(1);
+      expect(restated(prompt, craft)).toEqual([]);
+      const section = prompt.slice(prompt.indexOf('## SECTION 5'), prompt.indexOf('## SECTION 6'));
+      expect(section).toContain('<craft-arcs>');
+      ['financial', 'behavioral', 'victimization'].forEach((field) => expect(section).toMatch(new RegExp(`^- ${field}: `, 'm')));
     });
 
-    it('the interweaving call converges the threads at the culmination near the end, where the thesis lands', () => {
+    it('the interweaving call reads the convergence and the order from <craft-arcs>, and its task names the fields that hold them', () => {
       const state = journalistState();
-      const render = `${interweavingSystemPrompt(state.sessionConfig, 'journalist')}\n${buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist')}`;
-      expect(render).toMatch(/culmination/);
-      expect(render).toMatch(/near (its|the) end/);
-      expect(render).toMatch(/where the thesis lands/);
-      // The interweaving principles stay: bridges, callback seeds, the bridge types.
+      const system = interweavingSystemPrompt(state.sessionConfig, 'journalist');
+      const user = buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist');
+      const { core, craft } = loadRuleSet('interweaving');
+      expect(restated(`${system}\n${user}`, `${core}\n${craft}`)).toEqual([]);
+      expect(INTERWEAVING_SYSTEM_PROMPT).not.toMatch(/CONVERGENCE|\bORDER\b/);
+      const task = user.slice(user.indexOf('## YOUR TASK'), user.indexOf('## OUTPUT FORMAT'));
+      expect(task).toMatch(/^- suggestedOrder: .*<craft-arcs>/m);
+      expect(task).toMatch(/^- convergencePoint: .*<craft-arcs>/m);
+      // The interweaving principles the rule set does not state stay: bridges, callback seeds, the bridge types.
       ['SHARED CHARACTERS ARE BRIDGES', 'CALLBACK SEEDS', 'shared_character', 'causal_chain', 'temporal', 'contradiction']
-        .forEach((s) => expect(render).toContain(s));
+        .forEach((s) => expect(`${system}\n${user}`).toContain(s));
     });
 
-    it("the arcs are ordered by how they bear on the room's verdict (TH2)", () => {
-      const state = journalistState();
-      const render = `${interweavingSystemPrompt(state.sessionConfig, 'journalist')}\n${buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist')}`;
-      expect(render).toMatch(/in order of how (each arc bears|they bear) on the room's verdict/);
-      const { INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
+    it('the schema descriptions refer to C16 for the order and the convergence, and restate neither', () => {
       for (const schema of [INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA]) {
-        expect(schema.properties.interweavingPlan.properties.suggestedOrder.description).toMatch(/bears on the room's verdict/);
+        const plan = schema.properties.interweavingPlan.properties;
+        for (const field of ['suggestedOrder', 'convergencePoint']) {
+          expect(plan[field].description).toMatch(/C16/);
+          expect(plan[field].description).not.toMatch(/verdict|culmination|thesis|end of the article/);
+        }
         expect(JSON.stringify(schema)).not.toMatch(/murder|maximum/i);
+      }
+    });
+
+    it('the arc rework carries C16 once too: its output addendum prints the schema descriptions', async () => {
+      const state = journalistState();
+      const { core, craft } = loadRuleSet('arc');
+      for (const overrides of [SEND_BACK, AUTOMATED]) {
+        const { systemPrompt, prompt } = await arcRework(state, overrides);
+        expect(prompt).toContain('## WHAT THIS REWORK RETURNS');
+        expect(restated(instructionText(`${systemPrompt}\n${prompt}`), `${core}\n${craft}`)).toEqual([]);
       }
     });
   });
@@ -581,15 +609,19 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     });
   });
 
-  describe("the director's notes, as T1 states them", () => {
-    it("are record for what happened and was said in the room; backstory in them is Nova's reading; never changed", () => {
-      const prompt = buildCoreArcSections(journalistState());
+  describe("the director's notes, under T1", () => {
+    it("the label names the notes T1's record for the room and backstory in them Nova's reading, and restates no rule", () => {
+      const state = journalistState();
+      const prompt = buildCoreArcSections(state);
       const label = prompt.slice(prompt.indexOf("### The Director's Notes"), prompt.indexOf('<DIRECTOR_NOTES>'));
-      expect(prompt).toContain("### The Director's Notes");
-      expect(label).toMatch(/record for what happened and was said in the room/);
-      expect(label).toMatch(/[Bb]ackstory[^.]*Nova's reading/);
-      expect(label).toMatch(/never changed/);
+      expect(label).toMatch(/^### The Director's Notes \(the record for the room, under T1\)$/m);
+      expect(label).toMatch(/[Bb]ackstory[^.]*Nova's reading under T1/);
       expect(prompt).not.toMatch(/ground truth/i);
+      // T1 says how the room's record and a reading are written, and T12 and the world
+      // say the director's words stay exact: the label states none of it again.
+      expect(label).not.toMatch(/what happened and was said|never changed|as written|unproven claim|open question/);
+      const system = coreArcSystemPrompt(state.sessionConfig, 'journalist');
+      expect(count(`${system}\n${prompt}`, "as the director's notes record it")).toBe(1);
     });
   });
 

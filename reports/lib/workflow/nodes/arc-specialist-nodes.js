@@ -354,9 +354,9 @@ function buildJournalistCoreArcSections(state) {
       "playerEmphasis": "high" | "medium" | "low",
       "storyRelevance": "critical" | "supporting" | "contextual",
       "analysisNotes": {
-        "financial": "The money lens: where it supports this arc and where it cuts against it",
-        "behavioral": "The behaviour lens: where it supports this arc and where it cuts against it",
-        "victimization": "The victimization lens: where it supports this arc and where it cuts against it"
+        "financial": "What the money lens shows for this arc",
+        "behavioral": "What the behaviour lens shows for this arc",
+        "victimization": "What the victimization lens shows for this arc"
       }
     }
   ],
@@ -403,8 +403,8 @@ You MUST generate an arc that addresses this accusation. Even if evidence is wea
 
 ${renderWhiteboardConnections(context.whiteboard)}
 
-### The Director's Notes (record for what happened in the room)
-The director's notes are record for what happened and was said in the room, the investigation and the deliberation: build the arcs about the room on them. Backstory in the notes, what the director knows about the characters beyond what the session showed, is Nova's reading: an arc carries it as an open question or an unproven claim. The notes are never changed: use their words as written.
+### The Director's Notes (the record for the room, under T1)
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is Nova's reading under T1.
 
 ${renderDirectorEnrichmentBlock({
   rawProse: context.directorProse,
@@ -467,10 +467,10 @@ Each arc summary says which stage each of its events belongs to (T7): the party,
 
 ## SECTION 5: THE THREE LENSES IN analysisNotes
 
-Examine every arc through the three lenses of <craft-arcs>, because they give each section of the article its own material, and write each lens into analysisNotes: where it supports the arc and where it cuts against it. Where the record holds nothing for a lens, write that it holds nothing.
-- financial: the money, as the morning timeline and the ledger show it
-- behavioral: what people did and chose
-- victimization: who was harmed, and whose memories were taken or erased
+Write each arc's three lenses, as <craft-arcs> sets them out, into analysisNotes, one field per lens. Where the record holds nothing for a lens, write that it holds nothing.
+- financial: the money lens, read from the morning timeline
+- behavioral: the behaviour lens
+- victimization: the victimization lens
 
 ---
 
@@ -801,9 +801,10 @@ Also provide an **interweavingPlan** with:
 /**
  * The journalist's interweaving prompt (phase 3, brief 3.3): the arcs, the roster, the
  * whole record view, the task and the output format, then the rule set's craft files
- * for this call, last, by the placement ruling. The bridge types, the convergence and
- * the order are the system prompt's principles; the task names the fields that hold
- * them.
+ * for this call, last, by the placement ruling. The bridge types are the system
+ * prompt's principles; the convergence and the order are C16's, in <craft-arcs>. The
+ * task names the fields that hold each and restates none of them (spec section 8:
+ * each rule appears once).
  *
  * @param {Array} compactArcs - the arcs, as buildInterweavingPrompt cuts them
  * @param {Array} roster
@@ -842,8 +843,8 @@ For each arc, provide:
 4. **convergenceRole** - What does this arc bring to the convergence?
 
 Also provide an **interweavingPlan** with:
-- suggestedOrder: the arc ids in order of how each arc bears on the room's verdict
-- convergencePoint: the culmination, near the end of the article, where the threads converge and the thesis lands
+- suggestedOrder: the arc ids, in the order <craft-arcs> gives the arcs
+- convergencePoint: this session's convergence point, as <craft-arcs> describes the convergence
 - keyCallbacks: Specific [plant → payoff] opportunities
 
 ## OUTPUT FORMAT
@@ -864,7 +865,7 @@ Also provide an **interweavingPlan** with:
   ],
   "interweavingPlan": {
     "suggestedOrder": ["arc-id-1", "arc-id-2", ...],
-    "convergencePoint": "The culmination where the threads converge",
+    "convergencePoint": "Where this session's threads converge",
     "keyCallbacks": [
       { "plantIn": "arc-id-1", "payoffIn": "arc-id-3", "detail": "Specific callback opportunity" }
     ]

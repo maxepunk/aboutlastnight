@@ -363,7 +363,7 @@ Nova's article is NOT just a factual record. It reflects:
 SECTION 1: WHAT PLAYERS CONCLUDED (PRIMARY)
   - The Accusation: Who they blamed, what charge
   - The Whiteboard: a model's reading of the photo, context only
-  - The Director's Notes: record for what happened and was said in the room
+  - The Director's Notes: the record for the room, under T1; backstory in them is Nova's reading
   - Blake and the Valet in the director's notes (when the notes name them)
 
 SECTION 2: ARC GENERATION RULES
@@ -376,10 +376,9 @@ SECTION 3: THE RECORD (every exposed document, then the morning timeline)
 SECTION 4: STAGES IN AN ARC SUMMARY
 
 SECTION 5: THE THREE LENSES IN analysisNotes
-  - Financial: the money, as the timeline and the ledger show it
-  - Behavioral: what people did and chose
-  - Victimization: who was harmed, and whose memories were taken or erased
-  (each lens: where it supports the arc and where it cuts against it)
+  - The lenses as C16 (<craft-arcs>) sets them out, one analysisNotes field each:
+    financial (read from the morning timeline), behavioral, victimization
+  (C16 is their one statement: this section maps them onto the fields)
 
 SECTION 6: CRAFT GUIDANCE (the rule set's craft files for the arc writer)
 ```
