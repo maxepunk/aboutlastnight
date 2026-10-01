@@ -1069,3 +1069,32 @@ describe('writerQuestionsView (phase 3, brief 3.7)', () => {
     expect(view.items.map((item) => [item.about, item.question])).toEqual([['Sarah', 'Where?']]);
   });
 });
+
+// Fix 3.7b (finding 4): RevisionDiff's client-side shallow diff walks the keys this
+// returns, so a round whose questions changed does not list `writerQuestions` as a
+// changed key, as the server's diffOutline skips it (lib/hand-edit-diff.js).
+describe('revisionDiffKeys (fix 3.7b)', () => {
+  const { revisionDiffKeys, REVISION_DIFF_IGNORED_KEYS } = require('../checkpoint-view-logic');
+  const Q = { kind: 'player', about: 'Sarah', question: 'Where was Sarah?' };
+
+  it('walks every top-level key of both versions, sorted', () => {
+    expect(revisionDiffKeys({ lede: {}, closing: {} }, { lede: {}, theStory: {} })).toEqual(['closing', 'lede', 'theStory']);
+  });
+
+  it('skips writerQuestions, whether added, removed or changed', () => {
+    expect(revisionDiffKeys({ lede: {} }, { lede: {}, writerQuestions: [Q] })).toEqual(['lede']);
+    expect(revisionDiffKeys({ lede: {}, writerQuestions: [Q] }, { lede: {} })).toEqual(['lede']);
+    expect(revisionDiffKeys({ headline: {}, writerQuestions: [Q] }, { headline: {}, writerQuestions: [] })).toEqual(['headline']);
+  });
+
+  it('reads a missing version as empty', () => {
+    expect(revisionDiffKeys(null, { lede: {}, writerQuestions: [] })).toEqual(['lede']);
+    expect(revisionDiffKeys(undefined, undefined)).toEqual([]);
+  });
+
+  it('skips exactly the keys the server\'s outline diff skips', () => {
+    const { _testing: { OUTLINE_IGNORED_KEYS } } = require('../../lib/hand-edit-diff');
+    expect(OUTLINE_IGNORED_KEYS).toContain('writerQuestions');
+    expect(REVISION_DIFF_IGNORED_KEYS).toEqual(OUTLINE_IGNORED_KEYS);
+  });
+});

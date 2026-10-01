@@ -39,7 +39,9 @@ const BUNDLE_INDEX_COLLECTIONS = ['pullQuotes', 'photos'];
 // Phase 3 (3.7): the writer's questions for the director are not part of the outline
 // the director edits or a rework changes, so neither diff shows them as a scope. The
 // bundle diff never visits them (its scope lists do not name them); the outline diff,
-// which walks every top-level key, skips them.
+// which walks every top-level key, skips them. The console's RevisionDiff skips the
+// same keys (console/checkpoint-view-logic.js REVISION_DIFF_IGNORED_KEYS; fix 3.7b, a
+// test holds the two lists equal).
 const OUTLINE_IGNORED_KEYS = ['writerQuestions'];
 const BEFORE_MAX = 300;
 const AFTER_MAX = 1500;
@@ -314,5 +316,5 @@ function changedScopes(diff, revised) {
 
 module.exports = {
   diffOutline, diffBundle, isEmpty, scopeKeys, formatHandEditsBlock, changedScopes, readAtPath,
-  _testing: { matchBlocks, blockKey, canon, same, matchesAfter, changeSurvives }
+  _testing: { matchBlocks, blockKey, canon, same, matchesAfter, changeSurvives, OUTLINE_IGNORED_KEYS }
 };

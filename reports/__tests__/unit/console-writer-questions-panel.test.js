@@ -45,6 +45,20 @@ describe('the panel is shared from utils.js', () => {
   });
 });
 
+// Fix 3.7b (finding 4): RevisionDiff's shallow diff walks ViewLogic.revisionDiffKeys,
+// which skips writerQuestions (pinned in checkpoint-view-logic.test.js), not its own
+// union of every key.
+describe('RevisionDiff skips the questions in its key walk', () => {
+  const src = read('components/RevisionDiff.js');
+
+  it('walks the keys revisionDiffKeys returns', () => {
+    const fn = src.slice(src.indexOf('function shallowDiff('));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/const allKeys = ViewLogic\.revisionDiffKeys\(previous, current\);/);
+    expect(body).not.toMatch(/new Set\(/);
+  });
+});
+
 describe.each([
   ['ArcSelection', 'components/checkpoints/ArcSelection.js', /React\.createElement\('div', \{ className: 'arc-grid' \}/],
   ['Outline', 'components/checkpoints/Outline.js', /\.\.\.renderOutlineSections\(\)/],
