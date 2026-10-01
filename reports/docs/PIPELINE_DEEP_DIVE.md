@@ -596,7 +596,7 @@ ${content.trim()}
 - `rosterCoverage`: Every player in at least one arc
 - `evidenceIdValidity`: All keyEvidence IDs exist
 - `accusationArcPresent`: arcSource="accusation" exists
-- `requiredSections`: lede, theStory, thePlayers, closing
+- `requiredSections`: journalist, each printed section earns its place (C2); detective, all five sections present (executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment)
 - `voiceConsistency`: Nova's first person; "we" as T8 allows it (C12, T8)
 - `antiPatterns`: No em-dashes (C4), no production words (T14)
 - `reporterMode`: T8 as the session's mode block states it (journalist)
@@ -604,7 +604,7 @@ ${content.trim()}
 - Truth criteria (journalist, phase 3): one per group of truth rules, no weight; a breach sends the output back
 
 **ADVISORY** (warnings only, don't block):
-- `coherence`: Consistent story
+- `coherence`: journalist, facts that cannot both be true (C3), never arcs that pull against the verdict; detective, a consistent story without contradictions
 - `evidenceConfidenceBalance`: Not all speculative
 - `sectionBalance`: Appropriate weighting
 - `emotionalResonance`: Delivers promised experience
