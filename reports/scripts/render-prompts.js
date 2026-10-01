@@ -127,9 +127,21 @@ if (args.compare) {
   render().catch((e) => { console.error(e); process.exit(2); });
 }
 
+/**
+ * The production database, from any checkout. Run from a worktree, PRODUCTION_DB is
+ * the worktree's own data/ (which holds none), not the director's in the main
+ * checkout, so any checkpoints.sqlite directly in a data folder is refused (brief 3.0's
+ * invariant, from the worktrees every phase 3 slice renders in).
+ */
+function isProductionDb(dbPath) {
+  const resolved = path.resolve(dbPath);
+  return resolved === PRODUCTION_DB
+    || (path.basename(resolved).toLowerCase() === 'checkpoints.sqlite' && path.basename(path.dirname(resolved)).toLowerCase() === 'data');
+}
+
 async function loadState(dbPath, threadId) {
-  if (path.resolve(dbPath) === PRODUCTION_DB) {
-    console.error('refusing to open the production database ' + PRODUCTION_DB + ' - render against a COPY (spec 2026-09-19 §7.3)');
+  if (isProductionDb(dbPath)) {
+    console.error('refusing to open the production database ' + path.resolve(dbPath) + ' - render against a COPY (spec 2026-09-19 §7.3)');
     process.exit(2);
   }
   const Database = require('better-sqlite3');
