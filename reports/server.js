@@ -31,6 +31,9 @@ const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
 const { diffOutline, diffBundle, isEmpty: isEmptyDiff, scopeKeys } = require('./lib/hand-edit-diff');
+// The outline editors' own list of the fields phase 3 retired (BU3), so the server
+// diffs a hand edit against the outline the director edited (fix 3.2b).
+const { dropRetiredOutlineFields } = require('./console/outline-edit-logic');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
@@ -693,7 +696,11 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         stateUpdates._outlineTrace = null;
         if (hasEdits) {
             stateUpdates.outline = approvals.outlineEdits;   // incrementOutlineRevision hands it to the reviser
-            const diff = diffOutline(currentState.outline, approvals.outlineEdits);
+            // An outline written before phase 3 still holds thePlayers.buried and
+            // whatsMissing.buriedItems, which the editors drop before sending: the
+            // diff starts from the outline without them, so it records no removal
+            // the director never made (fix 3.2b, finding 5).
+            const diff = diffOutline(dropRetiredOutlineFields(currentState.outline), approvals.outlineEdits);
             stateUpdates._outlineHandEdits = isEmptyDiff(diff) ? null : diff;
         }
     }

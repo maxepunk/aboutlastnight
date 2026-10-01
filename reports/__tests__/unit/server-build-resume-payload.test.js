@@ -552,6 +552,39 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     expect(stateUpdates._outlineHandEditReport).toBeNull();
   });
 
+  // Fix 3.2b (finding 5): an outline written before phase 3 still carries
+  // thePlayers.buried and whatsMissing.buriedItems, which the editors drop before
+  // sending (dropRetiredOutlineFields). The diff must not record those two as
+  // removals the director made.
+  test('outline: an outline written before phase 3 diffs without the retired fields', () => {
+    const before = validJournalistOutline();
+    before.thePlayers.buried = ['the silent partner'];
+    before.whatsMissing.buriedItems = ['transfer-009'];
+    const edits = validJournalistOutline();
+    edits.lede.hook = 'A sharper hook.';
+    const { stateUpdates, error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Tighten the lede', outlineEdits: edits },
+      { outline: before, directorGateNotes: [] }
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates._outlineHandEdits).toEqual({
+      kind: 'outline',
+      sections: [{ key: 'lede', changes: [{ path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }] }]
+    });
+    expect(before.thePlayers.buried).toEqual(['the silent partner']);   // the stored outline is not changed
+  });
+
+  test('outline: an outline written before phase 3, sent back unchanged, records no hand edit', () => {
+    const before = validJournalistOutline();
+    before.thePlayers.buried = ['the silent partner'];
+    before.whatsMissing.buriedItems = ['transfer-009'];
+    const { stateUpdates } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Rework the closing', outlineEdits: validJournalistOutline() },
+      { outline: before }
+    );
+    expect(stateUpdates._outlineHandEdits).toBeNull();
+  });
+
   test('outline: edits identical to the current outline write the outline but a null diff', () => {
     const before = validJournalistOutline();
     const { stateUpdates } = buildResumePayload(
