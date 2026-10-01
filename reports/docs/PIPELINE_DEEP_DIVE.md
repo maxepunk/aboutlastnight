@@ -522,7 +522,7 @@ IMMUTABLE INPUTS (DO NOT suggest changes - fixed upstream)
 ═══════════════════════════════════════════════════════════════
 - evidenceBundle: Curated evidence is final
 - playerFocus: Accusation and whiteboard are immutable
-- directorNotes: Ground truth - never question them
+- directorNotes: Record for what happened and was said in the room, as written; backstory in them is Nova's reading (T1)
 - roster: Session roster is fixed
 
 Your feedback should focus on how ARCS USE these inputs,
@@ -537,9 +537,8 @@ Evaluators know which non-roster characters are valid:
 ═══════════════════════════════════════════════════════════════
 KNOWN NPCs (Valid despite NOT being on roster)
 ═══════════════════════════════════════════════════════════════
-- Marcus Blackwood (the murder victim, NeurAI founder)
-- [Firstname] Nova (the journalist - players EXPOSE memories to her)
-- Blake / Valet (NeurAI rep / Black Market - players BURY memories to him)
+- Each NPC's full name, aliases and canon line, read from lib/theme-config.js
+  (the journalist judge, phase 3; the detective keeps its own lines)
 
 Do NOT flag these as "missing from roster coverage".
 ```
@@ -598,8 +597,11 @@ ${content.trim()}
 - `evidenceIdValidity`: All keyEvidence IDs exist
 - `accusationArcPresent`: arcSource="accusation" exists
 - `requiredSections`: lede, theStory, thePlayers, closing
-- `voiceConsistency`: First-person participatory voice
-- `antiPatterns`: No em-dashes, no "token", no game mechanics
+- `voiceConsistency`: Nova's first person; "we" as T8 allows it (C12, T8)
+- `antiPatterns`: No em-dashes (C4), no production words (T14)
+- `reporterMode`: T8 as the session's mode block states it (journalist)
+- `arcSectionFlow` / `arcThreading`: every section an essential part of one narrative (C2)
+- Truth criteria (journalist, phase 3): one per group of truth rules, no weight; a breach sends the output back
 
 **ADVISORY** (warnings only, don't block):
 - `coherence`: Consistent story
