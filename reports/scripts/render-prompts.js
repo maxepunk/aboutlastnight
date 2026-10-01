@@ -254,13 +254,15 @@ async function render() {
   const editedOutline = JSON.parse(JSON.stringify(outline));
   if (editedOutline.lede) editedOutline.lede.hook = String(editedOutline.lede.hook || '') + ' [RENDER-DIFF EDIT]';
   const outlineDiff = diffMod ? await diffMod.diffOutline(outline, editedOutline) : null;
+  // Every rework builder takes the theme as reviseOutline, reviseContentBundle and
+  // reviseArcs pass it (phase 3 fix 3.2b); an older tree ignores the extra argument.
   const orc = await buildRevisionContext({ phase: 'outline', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
-    previousOutput: editedOutline, humanFeedback: FIXED_FEEDBACK, handEdits: outlineDiff });
-  const orPrompt = await buildOutlineRevisionPrompt({ ...state, _outlineGuidance: guidance }, orc.contextSection, orc.previousOutputSection, promptBuilder, FIXED_NOTES);
+    previousOutput: editedOutline, humanFeedback: FIXED_FEEDBACK, handEdits: outlineDiff, theme });
+  const orPrompt = await buildOutlineRevisionPrompt({ ...state, _outlineGuidance: guidance }, orc.contextSection, orc.previousOutputSection, promptBuilder, FIXED_NOTES, theme);
   // Brief 2.3: a tree whose reworker is built from its writer composes the rework
   // system prompt from the writer's; an older tree took the theme.
   const orSystem = buildOutlineRevisionSystemPrompt
-    ? await buildOutlineRevisionSystemPrompt(promptBuilder)
+    ? await buildOutlineRevisionSystemPrompt(promptBuilder, theme)
     : await getOutlineRevisionSystemPrompt(theme, state.sessionConfig || {});
   write(FILES[1], orSystem, orPrompt);
 
@@ -277,8 +279,8 @@ async function render() {
   if (editedBundle.headline) editedBundle.headline.main = String(editedBundle.headline.main || '') + ' [RENDER-DIFF EDIT]';
   const bundleDiff = diffMod ? await diffMod.diffBundle(bundle, editedBundle) : null;
   const arc = await buildRevisionContext({ phase: 'article', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
-    previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: bundleDiff });
-  const arPrompt = await buildArticleRevisionPrompt({ ...state, _outlineGuidance: guidance }, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES);
+    previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: bundleDiff, theme });
+  const arPrompt = await buildArticleRevisionPrompt({ ...state, _outlineGuidance: guidance }, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES, theme);
   const arSystem = buildArticleRevisionSystemPrompt
     ? await buildArticleRevisionSystemPrompt(promptBuilder, theme)
     : await getArticleRevisionSystemPrompt(theme, state.sessionConfig || {});
@@ -291,7 +293,7 @@ async function render() {
   const arcState = { ...state, directorGateNotes: FIXED_NOTES };
   write(ARC_FILES[0], await arcNodes.coreArcSystemPrompt(state.sessionConfig || {}, theme), await arcNodes.buildCoreArcPrompt(arcState));
   const crc = await buildRevisionContext({ phase: 'arcs', revisionCount: 0, round: FIXED_ROUND, validationResults: state.validationResults || null,
-    previousOutput: state.narrativeArcs || [], humanFeedback: FIXED_FEEDBACK });
+    previousOutput: state.narrativeArcs || [], humanFeedback: FIXED_FEEDBACK, theme });
   write(ARC_FILES[1], await arcNodes.getArcRevisionSystemPrompt(true, state.sessionConfig || {}, theme),
     await arcNodes.buildArcRevisionPrompt({ ...arcState, _arcFeedback: FIXED_FEEDBACK }, crc.contextSection, crc.previousOutputSection));
 
