@@ -19,14 +19,17 @@ const DERIVED_LABELS = {
   /**
    * narrativeTensions, from surfaceContradictions (code, no model). Since phase 3
    * (3.6) the code no longer matches account names to roster names (T4): its one
-   * note lists the director's own sentences about Blake and the Valet, and says so
-   * itself. A thread surfaced before 3.6 keeps its stored notes (092026 and 092626
-   * carry "Director observed multiple characters interacting with Blake"), so this
-   * label claims only what holds for both.
+   * note lists the director's own sentences that name Blake or the Valet. From wave
+   * 2 the print sites drop the old-type tensions a thread surfaced before 3.6 stored
+   * (092026 and 092626 carry "Director observed multiple characters interacting
+   * with Blake") and re-print a stored blake-proximity tension from its
+   * `observations`, so every printed tension is the director's sentences. The label
+   * says so: the sentences are record, and only their gathering is code's (3.6 fix
+   * batch, item 4, integrator's ruling).
    */
   narrativeTensions:
-    'The pipeline\'s code found these by searching the director\'s notes. They are leads, ' +
-    'not the record: where one differs from the notes or the rest of the record, the record decides.',
+    "The pipeline's code gathered the sentences below by searching the director's notes for Blake and the Valet. " +
+    "Each is the director's own sentence, copied as written, so each is part of the record; only the choice of sentences is the code's.",
 
   /** photoAnalyses, from analyzePhotos and finalizePhotoAnalyses (Haiku). */
   photoDescriptions:

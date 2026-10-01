@@ -17,8 +17,11 @@ const {
 
 describe('derived-material labels', () => {
   it('each label says who made the material and that the record decides', () => {
-    for (const label of Object.values(DERIVED_LABELS)) {
-      expect(label).toMatch(/the record decides/);
+    for (const [kind, label] of Object.entries(DERIVED_LABELS)) {
+      // The tensions are the director's own sentences, which are record; only their
+      // gathering is code's (3.6 fix batch, item 4), so there is nothing for the
+      // record to overrule.
+      if (kind !== 'narrativeTensions') expect(label).toMatch(/the record decides/);
       expect(label).not.toMatch(/ground truth|verified to/i);
     }
     expect(DERIVED_LABELS.characterContext).toMatch(/model \(Haiku\)/);
@@ -30,12 +33,15 @@ describe('derived-material labels', () => {
   });
 
   it('labels the remaining machine-made material for what it is now (phase 3, 3.6)', () => {
-    // The tensions no longer match account names to roster names (T4). The label
-    // claims only what is true of a new note and of one stored before 3.6: code
-    // found it in the director's notes, and it is a lead the record overrules.
-    expect(DERIVED_LABELS.narrativeTensions).not.toMatch(/account names/);
-    expect(DERIVED_LABELS.narrativeTensions).toMatch(/director's notes/);
-    expect(DERIVED_LABELS.narrativeTensions).toMatch(/leads, not the record/);
+    // The tensions no longer match account names to roster names (T4). From wave 2
+    // the print sites drop stored old-type tensions, so a printed tension is the
+    // director's own sentences naming Blake or the Valet, gathered by code (3.6 fix
+    // batch, item 4, integrator's ruling): the label says so, and that they are record.
+    expect(DERIVED_LABELS.narrativeTensions).toBe(
+      "The pipeline's code gathered the sentences below by searching the director's notes for Blake and the Valet. " +
+      "Each is the director's own sentence, copied as written, so each is part of the record; only the choice of sentences is the code's."
+    );
+    expect(DERIVED_LABELS.narrativeTensions).not.toMatch(/account names|leads/);
     // A transaction link joins one of the director's observations to a sale: the
     // join is the model's reading.
     expect(DERIVED_LABELS.transactionLinks).toMatch(/observation/);
