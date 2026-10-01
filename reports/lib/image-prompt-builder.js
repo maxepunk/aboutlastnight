@@ -297,7 +297,7 @@ IMPORTANT: Include an entry for EACH photo the user provides mappings for. Use E
    * @returns {string[]} List of required prompt names
    */
   getPhaseRequirements() {
-    return PHASE_REQUIREMENTS.imageAnalysis || [];
+    return PHASE_REQUIREMENTS.journalist.imageAnalysis || [];
   }
 }
 
@@ -353,7 +353,7 @@ module.exports = {
   createMockImagePromptBuilder,
   // Expose for testing
   _testing: {
-    PHASE_REQUIREMENTS: PHASE_REQUIREMENTS.imageAnalysis
+    PHASE_REQUIREMENTS: PHASE_REQUIREMENTS.journalist.imageAnalysis
   }
 };
 

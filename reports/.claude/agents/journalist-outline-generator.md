@@ -16,10 +16,20 @@ You create a detailed article outline that makes ALL structural decisions before
 
 ## First: Load Reference Files
 
-Read for section and visual guidance:
+Read the rule set first: the world, the truth rules, the craft guidance for this task, and the reporting mode. Where anything below differs from it, the rule set decides.
 ```
-.claude/skills/journalist-report/references/prompts/section-rules.md
-.claude/skills/journalist-report/references/prompts/editorial-design.md
+.claude/skills/journalist-report/references/rules/world.md
+.claude/skills/journalist-report/references/rules/truth-rules.md
+.claude/skills/journalist-report/references/rules/craft-thesis.md
+.claude/skills/journalist-report/references/rules/craft-sections.md
+.claude/skills/journalist-report/references/rules/craft-arcs.md
+.claude/skills/journalist-report/references/rules/craft-room.md
+.claude/skills/journalist-report/references/rules/craft-tracing.md
+.claude/skills/journalist-report/references/rules/craft-telling.md
+.claude/skills/journalist-report/references/rules/craft-cards.md
+.claude/skills/journalist-report/references/rules/craft-judgement.md
+.claude/skills/journalist-report/references/rules/craft-questions.md
+.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, for a remote session)
 .claude/skills/journalist-report/references/schemas.md
 ```
 

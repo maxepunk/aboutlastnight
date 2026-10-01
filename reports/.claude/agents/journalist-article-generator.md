@@ -17,23 +17,26 @@ ContentBundle JSON and then invoking the shared rendering pipeline to produce HT
 
 ## First: Load Reference Files
 
-Before writing, READ these reference files from the skill directory:
+Read the rule set first: the world, the truth rules, the craft guidance for this task, and the reporting mode. Where anything below differs from it, the rule set decides.
 
 ```
-.claude/skills/journalist-report/references/prompts/character-voice.md
-.claude/skills/journalist-report/references/prompts/writing-principles.md
-.claude/skills/journalist-report/references/prompts/formatting.md
-.claude/skills/journalist-report/references/prompts/evidence-boundaries.md
-.claude/skills/journalist-report/references/prompts/section-rules.md
+.claude/skills/journalist-report/references/rules/world.md
+.claude/skills/journalist-report/references/rules/truth-rules.md
+.claude/skills/journalist-report/references/rules/craft-thesis.md
+.claude/skills/journalist-report/references/rules/craft-sections.md
+.claude/skills/journalist-report/references/rules/craft-arcs.md
+.claude/skills/journalist-report/references/rules/craft-room.md
+.claude/skills/journalist-report/references/rules/craft-tracing.md
+.claude/skills/journalist-report/references/rules/craft-telling.md
+.claude/skills/journalist-report/references/rules/craft-cards.md
+.claude/skills/journalist-report/references/rules/craft-voice.md
+.claude/skills/journalist-report/references/rules/craft-judgement.md
+.claude/skills/journalist-report/references/rules/craft-questions.md
+.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, for a remote session)
 .claude/skills/journalist-report/references/schemas.md
 ```
 
-These contain:
-- Nova's voice and language rules
-- Anti-patterns to avoid
-- ContentBundle field semantics (section types, content-block kinds, sidebar components)
-- Three-layer evidence boundaries
-- Section-by-section guidance
+schemas.md holds the ContentBundle's field semantics (section types, content-block kinds, sidebar components).
 
 Also READ the JSON schema that defines the shape of your output:
 `lib/schemas/content-bundle.schema.json`
@@ -42,7 +45,7 @@ Also READ the JSON schema that defines the shape of your output:
 
 **Before writing FOLLOW THE MONEY and WHAT'S MISSING sections, internalize these rules:**
 
-1. Review `evidence-boundaries.md` Layer 2 section carefully
+1. Review truth rules T3, T4 and T5 in `truth-rules.md` carefully
 2. **NEVER state whose memory was buried** - the Black Market display shows account totals, not individual token ownership
 3. Use **account-centric language**: "ChaseT received $750K" NOT "Kai's memories went to ChaseT"
 4. Transaction timestamps ARE visible - you can correlate timing with director observations

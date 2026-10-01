@@ -163,7 +163,7 @@ No prompt files needed. This phase uses scripts to collect all evidence.
 
 **Optional inputs (ask if not provided, but can proceed without):**
 - **Journalist first name** - Default: Cassandra
-- **Reporting mode** - `on-site` (default) or `remote`. On-site: Nova was physically present at the investigation. Remote: she received tips remotely (adjust participatory voice accordingly, see character-voice "REPORTING MODE OVERRIDE").
+- **Reporting mode** - `on-site` (default) or `remote`. On-site: Nova monitored the investigation in the warehouse. Remote: Nova monitored it from outside, and the room's events reached Nova from people in it. The mode files `references/rules/mode-on-site.md` and `mode-remote.md` say what Nova could witness.
 - **Guest reporter** - Optional name + role credited as co-reporter (omit if none).
 
 > **Canonical names:** Use the actual session roster's names. Do NOT use names from examples in this skill or its reference files. Those examples are illustrative and may be retired. If unsure of a last name, use the first name only (never invent one).
@@ -776,7 +776,7 @@ Task(subagent_type="journalist-evidence-curator", prompt=`
 
 **See `references/schemas.md`** for the complete evidence bundle and summary JSON structures.
 
-**See `references/prompts/evidence-boundaries.md`** for detailed rules on what can/cannot be reported from each layer.
+**See `references/rules/world.md` and `references/rules/truth-rules.md`** (T1, T3 to T6) for what can and cannot be reported from each layer.
 
 ### ★ USER CHECKPOINT: Evidence Bundle Review
 
@@ -1180,11 +1180,7 @@ Task(subagent_type="journalist-article-generator", prompt=`
 ```
 
 **The subagent loads these reference files internally:**
-- `references/prompts/character-voice.md`
-- `references/prompts/writing-principles.md`
-- `references/prompts/formatting.md`
-- `references/prompts/evidence-boundaries.md`
-- `references/prompts/section-rules.md`
+- the rule set in `references/rules/`: `world.md`, `truth-rules.md`, every `craft-*.md` file, and the session's mode file (`mode-on-site.md` or `mode-remote.md`)
 - `references/schemas.md`
 - `lib/schemas/content-bundle.schema.json`
 
@@ -1195,12 +1191,7 @@ The subagent produces:
 - `data/20251221/output/article.html` - Rendered HTML via shared `TemplateAssembler`
 - `data/20251221/output/article-metadata.json` - Generation metadata and self-assessment
 
-**Critical constraints enforced by subagent:**
-- First-person participatory voice ("I was there when...")
-- No em-dashes anywhere
-- "Extracted memories" never "tokens"
-- Blake suspicious but not condemned
-- Systemic critique woven throughout
+**The rules the subagent follows** are the rule set above: the world, the truth rules (T1 to T15) and the craft guidance (C1 to C16). Where anything in this skill differs from them, the rule set decides.
 
 **Structural consistency** is now enforced by the template system rather than by the
 LLM: evidence cards, financial trackers, pull quotes, and sidebar components are

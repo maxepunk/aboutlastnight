@@ -58,9 +58,9 @@ describe('ThemeLoader', () => {
     });
 
     it('should return missing files when prompts are missing', async () => {
-      // Make anti-patterns.md fail, rest succeed
+      // Make photo-analysis.md fail, rest succeed
       fs.access.mockImplementation((filePath) => {
-        if (filePath.includes('anti-patterns')) {
+        if (filePath.includes('photo-analysis')) {
           return Promise.reject(new Error('ENOENT'));
         }
         return Promise.resolve(undefined);
@@ -69,7 +69,7 @@ describe('ThemeLoader', () => {
       const result = await loader.validate();
 
       expect(result.valid).toBe(false);
-      expect(result.missing).toContain('prompts/anti-patterns.md');
+      expect(result.missing).toContain('prompts/photo-analysis.md');
       expect(loader.validated).toBe(false);
     });
 
@@ -105,7 +105,7 @@ describe('ThemeLoader', () => {
       await loader.validate();
 
       // Should call access for each prompt + template + schemas
-      const expectedCalls = ALL_PROMPTS.length + 2;
+      const expectedCalls = ALL_PROMPTS.journalist.length + 2;
       expect(fs.access).toHaveBeenCalledTimes(expectedCalls);
     });
   });
@@ -172,29 +172,44 @@ describe('ThemeLoader', () => {
     });
   });
 
+  // Phase 3 (3.2): the phase lists are keyed by theme. The journalist lists only the
+  // image calls' files (its writers read the rule set); the detective is parked and
+  // keeps its outline and article lists. The validation phase went with its builder.
   describe('loadPhasePrompts', () => {
-    it('should load all prompts for outlineGeneration phase', async () => {
+    const detectiveLoader = () => new ThemeLoader(testSkillPath, 'detective');
+
+    it('should load all prompts for the detective outlineGeneration phase', async () => {
       fs.readFile.mockResolvedValue('content');
 
-      const result = await loader.loadPhasePrompts('outlineGeneration');
+      const result = await detectiveLoader().loadPhasePrompts('outlineGeneration');
 
-      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.outlineGeneration);
+      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.detective.outlineGeneration);
     });
 
-    it('should load all prompts for articleGeneration phase', async () => {
+    it('should load all prompts for the detective articleGeneration phase', async () => {
       fs.readFile.mockResolvedValue('content');
 
-      const result = await loader.loadPhasePrompts('articleGeneration');
+      const result = await detectiveLoader().loadPhasePrompts('articleGeneration');
 
-      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.articleGeneration);
+      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.detective.articleGeneration);
     });
 
-    it('should load all prompts for validation phase', async () => {
+    it('should load the journalist imageAnalysis phase', async () => {
       fs.readFile.mockResolvedValue('content');
 
-      const result = await loader.loadPhasePrompts('validation');
+      const result = await loader.loadPhasePrompts('imageAnalysis');
 
-      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.validation);
+      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.journalist.imageAnalysis);
+    });
+
+    it('has no validation phase for either theme', async () => {
+      await expect(loader.loadPhasePrompts('validation')).rejects.toThrow('Unknown phase: validation');
+      await expect(detectiveLoader().loadPhasePrompts('validation')).rejects.toThrow('Unknown phase: validation');
+    });
+
+    it('refuses the journalist outline and article phases, whose rules are the rule set', async () => {
+      await expect(loader.loadPhasePrompts('outlineGeneration')).rejects.toThrow(/rule set/);
+      await expect(loader.loadPhasePrompts('articleGeneration')).rejects.toThrow(/rule set/);
     });
 
     it('should throw for unknown phase', async () => {
@@ -204,7 +219,7 @@ describe('ThemeLoader', () => {
 
     it('should include valid phase names in error message', async () => {
       await expect(loader.loadPhasePrompts('bad'))
-        .rejects.toThrow('Valid phases: imageAnalysis, outlineGeneration, articleGeneration, validation');
+        .rejects.toThrow('Valid phases: imageAnalysis');
     });
   });
 
@@ -347,25 +362,27 @@ describe('ThemeLoader', () => {
   });
 
   describe('static getPhaseRequirements', () => {
-    it('should return copy of phase requirements', () => {
-      const reqs = ThemeLoader.getPhaseRequirements();
+    it("should return copy of a theme's phase requirements", () => {
+      const reqs = ThemeLoader.getPhaseRequirements('detective');
 
-      expect(reqs.outlineGeneration).toEqual(PHASE_REQUIREMENTS.outlineGeneration);
-      expect(reqs.articleGeneration).toEqual(PHASE_REQUIREMENTS.articleGeneration);
-      expect(reqs.validation).toEqual(PHASE_REQUIREMENTS.validation);
+      expect(reqs.outlineGeneration).toEqual(PHASE_REQUIREMENTS.detective.outlineGeneration);
+      expect(reqs.articleGeneration).toEqual(PHASE_REQUIREMENTS.detective.articleGeneration);
+      expect(ThemeLoader.getPhaseRequirements()).toEqual({ imageAnalysis: PHASE_REQUIREMENTS.journalist.imageAnalysis });
     });
 
     it('should return a copy (not the original)', () => {
-      const reqs = ThemeLoader.getPhaseRequirements();
-      reqs.outlineGeneration = ['modified'];
+      const reqs = ThemeLoader.getPhaseRequirements('detective');
+      reqs.outlineGeneration.push('modified');
 
-      expect(PHASE_REQUIREMENTS.outlineGeneration).not.toEqual(['modified']);
+      expect(PHASE_REQUIREMENTS.detective.outlineGeneration).not.toContain('modified');
     });
   });
 
   describe('static getAllPrompts', () => {
     it('should return all prompt names', () => {
-      const prompts = ThemeLoader.getAllPrompts();
+      // Phase 3 (3.2): the journalist keeps only the image calls' files.
+      expect(ThemeLoader.getAllPrompts()).toEqual(['photo-analysis', 'photo-enrichment', 'whiteboard-analysis']);
+      const prompts = ThemeLoader.getAllPrompts('detective');
 
       expect(prompts).toContain('anti-patterns');
       expect(prompts).toContain('character-voice');
@@ -381,7 +398,7 @@ describe('ThemeLoader', () => {
       const prompts = ThemeLoader.getAllPrompts();
       prompts.push('hacked');
 
-      expect(ALL_PROMPTS).not.toContain('hacked');
+      expect(ALL_PROMPTS.journalist).not.toContain('hacked');
     });
   });
 
@@ -430,18 +447,19 @@ describe('ThemeLoader', () => {
 
     it('should export PHASE_REQUIREMENTS', () => {
       expect(PHASE_REQUIREMENTS).toBeDefined();
-      expect(PHASE_REQUIREMENTS.outlineGeneration).toBeDefined();
-      expect(PHASE_REQUIREMENTS.articleGeneration).toBeDefined();
-      expect(PHASE_REQUIREMENTS.validation).toBeDefined();
+      expect(PHASE_REQUIREMENTS.journalist.imageAnalysis).toBeDefined();
+      expect(PHASE_REQUIREMENTS.journalist.outlineGeneration).toBeUndefined();
+      expect(PHASE_REQUIREMENTS.detective.outlineGeneration).toBeDefined();
+      expect(PHASE_REQUIREMENTS.detective.articleGeneration).toBeDefined();
     });
 
     it('defines no revision phase: each reworker carries its writer\'s rules (brief 2.3)', () => {
       // PROMPT-REVIEW gave the reworkers a three-file 'revision' set because they
       // had no craft rules at all. Since phase 2 (2.3) each reworker is built from
       // its writer's prompt, so it carries the writer's whole rule set instead.
-      expect(PHASE_REQUIREMENTS.revision).toBeUndefined();
-      expect(PHASE_REQUIREMENTS.outlineGeneration).toContain('section-rules');
-      expect(PHASE_REQUIREMENTS.articleGeneration).toEqual(expect.arrayContaining([
+      expect(PHASE_REQUIREMENTS.detective.revision).toBeUndefined();
+      expect(PHASE_REQUIREMENTS.detective.outlineGeneration).toContain('section-rules');
+      expect(PHASE_REQUIREMENTS.detective.articleGeneration).toEqual(expect.arrayContaining([
         'character-voice',
         'evidence-boundaries',
         'anti-patterns'
@@ -450,9 +468,10 @@ describe('ThemeLoader', () => {
 
     it('should export ALL_PROMPTS', () => {
       expect(ALL_PROMPTS).toBeDefined();
-      expect(Array.isArray(ALL_PROMPTS)).toBe(true);
-      // 8 original + 3 image analysis - 1 arc-flow (merged into narrative-structure)
-      expect(ALL_PROMPTS.length).toBe(11);
+      // Phase 3 (3.2): the journalist's eight craft files are retired; the detective
+      // keeps its 8 craft files and 3 image files.
+      expect(ALL_PROMPTS.journalist.length).toBe(3);
+      expect(ALL_PROMPTS.detective.length).toBe(11);
     });
   });
 });

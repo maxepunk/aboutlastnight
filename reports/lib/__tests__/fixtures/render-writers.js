@@ -70,8 +70,10 @@ async function renderAll(req) {
   const out = {};
   for (const theme of ['journalist', 'detective']) {
     const base = reworkFixtureState(theme);
+    // Phase 3 (3.2): PHASE_REQUIREMENTS is keyed by theme; a tree from before that
+    // has the phases at its top level.
     const builder = new PromptBuilder(
-      stubThemeLoader(PHASE_REQUIREMENTS), theme, base.sessionConfig,
+      stubThemeLoader(PHASE_REQUIREMENTS[theme] || PHASE_REQUIREMENTS), theme, base.sessionConfig,
       base.canonicalCharacters, base.characterData.characters
     );
     const tail = { _outlineGuidance: 'PIN GUIDANCE: lead with the money.', directorGateNotes: TAIL_NOTES };

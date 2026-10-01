@@ -5,7 +5,6 @@
  * - curateEvidenceBundle: Curate evidence into three-layer structure (1.8)
  * - generateOutline: Generate article outline from selected arcs (3)
  * - generateContentBundle: Generate structured content JSON (4)
- * - validateArticle: Validate voice and anti-patterns (5.1)
  * - reviseContentBundle: Revise content based on validation feedback (4.2)
  *
  * All nodes follow the LangGraph pattern:
@@ -1575,78 +1574,6 @@ async function validateContentBundle(state, config) {
 }
 
 /**
- * Validate article against voice requirements and anti-patterns
- *
- * Uses Claude to check:
- * - First-person participatory voice
- * - No em-dashes
- * - No game mechanics language
- * - Character roster coverage
- *
- * @param {Object} state - Current state with contentBundle or assembledHtml, sessionConfig
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with validationResults, currentPhase, voiceRevisionCount
- */
-async function validateArticle(state, config) {
-  const sdk = getSdkClient(config, 'validateArticle');
-  const promptBuilder = getPromptBuilder(config, state);
-
-  // Get roster for coverage check
-  const roster = state.sessionConfig?.roster?.map(p => p.name) || [];
-
-  // Use assembled HTML if available, otherwise stringify contentBundle
-  const articleContent = state.assembledHtml ||
-    JSON.stringify(state.contentBundle, null, 2);
-
-  const { systemPrompt, userPrompt } = await promptBuilder.buildValidationPrompt(
-    articleContent,
-    roster
-  );
-
-  const validationResults = await sdk({
-    prompt: userPrompt,
-    systemPrompt,
-    model: 'opus',
-    disableTools: true,
-    jsonSchema: {
-      type: 'object',
-      properties: {
-        passed: { type: 'boolean' },
-        issues: { type: 'array' },
-        voice_score: { type: 'number' },
-        voice_notes: { type: 'string' },
-        roster_coverage: { type: 'object' },
-        systemic_critique_present: { type: 'boolean' },
-        blake_handled_correctly: { type: 'boolean' }
-      },
-      required: ['passed', 'issues']
-    }
-  });
-
-  // Determine next phase based on validation
-  const passed = validationResults.passed;
-  const currentRevisions = state.voiceRevisionCount || 0;
-  const maxRevisions = 2;
-
-  // Calculate new revision count first to align phase with routing logic
-  const newRevisionCount = currentRevisions + (passed ? 0 : 1);
-
-  let nextPhase;
-  if (passed || newRevisionCount >= maxRevisions) {
-    // Complete if passed OR max revisions reached (including this one)
-    nextPhase = PHASES.COMPLETE;
-  } else {
-    nextPhase = PHASES.REVISE_CONTENT;
-  }
-
-  return {
-    validationResults,
-    currentPhase: nextPhase,
-    voiceRevisionCount: newRevisionCount
-  };
-}
-
-/**
  * Revise ContentBundle based on validation feedback
  *
  * Called after incrementArticleRevision when evaluator says article needs work.
@@ -1965,20 +1892,6 @@ function createMockPromptBuilder() {
         systemPrompt: 'Mock system prompt for article generation',
         userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`
       };
-    },
-
-    async buildValidationPrompt(articleHtml, roster) {
-      return {
-        systemPrompt: 'Mock system prompt for validation',
-        userPrompt: `Validate article for roster: ${roster?.join(', ') || 'unknown roster'}`
-      };
-    },
-
-    async buildRevisionPrompt(articleHtml, voiceSelfCheck) {
-      return {
-        systemPrompt: 'Mock system prompt for revision',
-        userPrompt: `Revise based on: ${voiceSelfCheck}`
-      };
     }
   };
 }
@@ -2003,7 +1916,6 @@ module.exports = {
     stateFields: ['outline', 'selectedArcs']
   }),
   validateContentBundle: traceNode(validateContentBundle, 'validateContentBundle'),
-  validateArticle: traceNode(validateArticle, 'validateArticle'),
   reviseContentBundle: traceNode(reviseContentBundle, 'reviseContentBundle'),
 
   // Testing utilities

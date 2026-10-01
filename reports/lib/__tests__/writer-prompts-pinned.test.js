@@ -81,12 +81,23 @@ const REPO = path.join(__dirname, '..', '..');
  *   does not.
  * - Phase 3 (3.2), the canon lines (theme-config.js, T15, M26): Marcus is the man
  *   whose death the room investigates, Nova has no pronoun, Blake carries D7's line.
- *   The journalist article writer prints the roster block (twice until M20 lands
- *   with the rule-set wiring); the detective's NPC lines are its own and unchanged.
+ *   The journalist article writer prints the roster block; the detective's NPC lines
+ *   are its own and unchanged.
+ * - Phase 3 (3.2), the journalist outline and article writers read the rule set: the
+ *   world and the truth rules (stubs here) in the system prompt after the mode block,
+ *   the craft files (stubs) last in the user prompt; the retired craft files' stubs,
+ *   the hard constraints, <TEMPORAL_DISCIPLINE>, <arc-interweaving>, <visual-rules>,
+ *   <visual-principles>, <arc-section-flow>, <ARC_FLOW>, <VISUAL_DISTRIBUTION>,
+ *   <VISUAL_COMPONENT_TYPES>, <ANTI_PATTERNS>, <VOICE_CHECKPOINT>, the temporal context
+ *   key, the outline's JSON shape and the article's second roster (M20) go; the notes
+ *   header, FINANCIAL_SUMMARY, SESSION_FACTS's agency rule, the arc packages' excerpt
+ *   label, the narrative tensions (only the director's Blake sentences print, so the
+ *   fixture's other tension prints nothing) and the generation instruction are
+ *   rewritten. The journalist pins only; the detective and arc pins are unchanged.
  */
 const PINNED = {
-  'outline-journalist': ['719446ac7fe4af8e12e81c6d8aec68234ab741cd2b2e4c8de0196b2065c49023', 15133],
-  'article-journalist': ['620c56ac9af69e169ffbfbc5e92318116816c946d8e0ab5b04da919f56a4bc45', 42659],
+  'outline-journalist': ['f217ef6bf5ca8c32eb626e3d0c3dff56ca5aa2456f6f85a99d26527067bcef5c', 8712],
+  'article-journalist': ['b204e2a94219bd5557fa6eb0c9d5d66cf41bbff1a7f4f52b1ea883700716e57d', 27149],
   'arcs-journalist': ['671adab390beee1a4d9dfcdf38f6c4a58565562f609c5f3bec85425e37530ba4', 14492],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],

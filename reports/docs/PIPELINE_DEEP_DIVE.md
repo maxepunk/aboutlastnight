@@ -953,12 +953,14 @@ item.fullDescription || item.rawData?.fullDescription || item.content || item.su
 
 ### Prompt Reference Files
 
+The journalist writers and judges read the rule set (phase 3), which `lib/rule-set.js` loads from `.claude/skills/journalist-report/references/rules/`. The eight journalist craft files under `references/prompts/` that it replaced are deleted; the detective keeps its own.
+
 | File | Purpose |
 |------|---------|
-| `references/prompts/evidence-boundaries.md` | Three-layer model rules |
-| `references/prompts/writing-principles.md` | Nova's voice and style |
-| `references/prompts/anti-patterns.md` | What to avoid |
-| `references/prompts/narrative-structure.md` | Article structure rules |
+| `references/rules/world.md` | The world: the party, the investigation, the ledger, Nova, and what each memory became |
+| `references/rules/truth-rules.md` | T1 to T15, each with its reason |
+| `references/rules/craft-*.md` | C1 to C16, split so each call reads its own craft items |
+| `references/rules/mode-on-site.md`, `mode-remote.md` | The reporting-mode block: what Nova could witness |
 
 ### Data Directory Structure
 

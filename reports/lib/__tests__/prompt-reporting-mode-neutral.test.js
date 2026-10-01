@@ -126,8 +126,11 @@ describe('article prompt, remote session', () => {
   let rendered;
   beforeAll(async () => { rendered = await renderArticlePrompt('remote'); });
 
-  it('states the mode and defers to the system prompt for it', () => {
-    expect(rendered.userPrompt).toContain('reporting mode for this session is remote');
+  // Phase 3 (3.2): character-voice.md, whose POV section named the mode in the user
+  // prompt, is retired. The truth rules (T8, in the system prompt) defer to the block.
+  it('states the mode in the system prompt, where the truth rules defer to it', () => {
+    expect(rendered.systemPrompt).toContain('The reporting-mode block states what Nova could witness in this session.');
+    expect(rendered.userPrompt).not.toContain('<truth-rules>');
   });
 
   it('carries the remote mode block in the SYSTEM prompt', () => {
@@ -159,8 +162,8 @@ describe('article prompt, on-site session', () => {
   let rendered;
   beforeAll(async () => { rendered = await renderArticlePrompt('on-site'); });
 
-  it('states the mode', () => {
-    expect(rendered.userPrompt).toContain('reporting mode for this session is on-site');
+  it('states the mode in the system prompt, where the truth rules defer to it', () => {
+    expect(rendered.systemPrompt).toContain('The reporting-mode block states what Nova could witness in this session.');
   });
 
   it('carries the on-site mode block in the SYSTEM prompt, which is where presence is asserted', () => {
@@ -222,8 +225,10 @@ describe('article REVISION system prompt', () => {
     expect(revisionPrompt).not.toMatch(/I was there when/);
   });
 
-  it('still asks for the first-person participatory voice', () => {
-    expect(revisionPrompt).toMatch(/first-person participatory/i);
+  // Phase 3 (3.2): the first person stays; "participatory and implicated" went (T8, C12).
+  it('still asks for the first person, and nothing participatory', () => {
+    expect(revisionPrompt).toMatch(/in the first person/);
+    expect(revisionPrompt).not.toMatch(/participatory/i);
   });
 });
 
@@ -314,8 +319,9 @@ describe('the mode block reaches the arc and outline writers', () => {
       });
 
       it("the article rework states it once, where the article writer's system prompt does", async () => {
-        // The article writer's identity runs to three lines, so its block sits after
-        // them. The rework system prompt opens with the writer's whole system prompt.
+        // Phase 3 (3.2): the article writer's identity is one line now (its temporal
+        // line went to the world and T7), so its block sits where every writer's does.
+        // The rework system prompt opens with the writer's whole system prompt.
         const builder = makeBuilder({
           theme: 'journalist',
           sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
@@ -327,7 +333,7 @@ describe('the mode block reaches the arc and outline writers', () => {
         expect(rework).not.toContain(REPORTING_MODE_BLOCKS[mode === 'remote' ? 'on-site' : 'remote']);
         const identityLines = writer.slice(0, writer.indexOf(REPORTING_MODE_BLOCKS[mode])).trimEnd().split('\n');
         expect(identityLines[0]).toMatch(/^You are Nova, writing/);
-        expect(identityLines).toHaveLength(3);
+        expect(identityLines).toHaveLength(1);
       });
     });
   });
@@ -461,9 +467,10 @@ describe('presence lines outside the article prompt', () => {
       'CONTEXT', 'PREVIOUS', builder
     );
     const all = system + '\n' + user;
-    expect(all).toContain('<character-voice>');
-    expect(all).toContain('<evidence-boundaries>');
-    expect(all).toContain('<anti-patterns>');
+    // Phase 3 (3.2): the rule set in place of the retired craft files.
+    expect(all).toContain('<world>');
+    expect(all).toContain('<truth-rules>');
+    expect(all).toContain('<craft-voice>');
     expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');
     [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
       expect(`${mode}: ${phrase}: ${all.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);

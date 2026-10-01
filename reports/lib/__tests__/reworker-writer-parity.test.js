@@ -129,8 +129,15 @@ describe.each(['journalist', 'detective'])('%s outline stop', (theme) => {
   it("the reworker's system prompt is its writer's, then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
     expect(rework.system).toBe(`${writer.system}\n\n${OUTLINE_REVISION_RULES}`);
-    expect(writer.system).toContain('<section-rules>');
-    expect(writer.system).toContain('<editorial-design>');
+    // Phase 3 (3.2): the journalist's system prompt carries the world and the truth
+    // rules; the detective is parked and keeps its craft files there.
+    if (theme === 'journalist') {
+      expect(writer.system).toContain('<world>');
+      expect(writer.system).toContain('<truth-rules>');
+    } else {
+      expect(writer.system).toContain('<section-rules>');
+      expect(writer.system).toContain('<editorial-design>');
+    }
   });
 
   it("the guidance keeps phase 1's note filtering: every note but the one being acted on", async () => {
@@ -185,7 +192,14 @@ describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
     expectOneRecordAndGuidanceLast(rework.user);
 
     // The writer's rules and schema replace the reworker's own smaller copies.
-    expect(count(rework.user, '<RULES>')).toBe(1);
+    // Phase 3 (3.2): the journalist's rules are its craft files, once; the detective's
+    // are its <RULES> block.
+    if (theme === 'journalist') {
+      expect(count(rework.user, '<RULES>')).toBe(0);
+      expect(count(rework.user, '<craft-voice>')).toBe(1);
+    } else {
+      expect(count(rework.user, '<RULES>')).toBe(1);
+    }
     expect(count(rework.user, '<SCHEMA>')).toBe(1);
     expect(rework.user).not.toContain('## OUTPUT SCHEMA');
     expect(rework.user).toContain('APPROVED OUTLINE:');
@@ -216,7 +230,7 @@ describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
     expect(rework.system).toBe(`${writer.system}\n\n${articleRevisionRules(theme)}`);
     expect(writer.system).toContain('CANONICAL CHARACTER ROSTER');
     expect(writer.system).toContain('Morgan → Morgan Reed');
-    expect(writer.system).toContain('<evidence-boundaries>');
+    expect(writer.system).toContain(theme === 'journalist' ? '<truth-rules>' : '<evidence-boundaries>');
   });
 
   it("the guidance keeps phase 1's note filtering", async () => {

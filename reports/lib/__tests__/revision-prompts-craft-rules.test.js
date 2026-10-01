@@ -230,18 +230,40 @@ describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoad
   });
 
   it('has no revision phase to check any more', () => {
-    expect(PHASE_REQUIREMENTS.revision).toBeUndefined();
+    expect(PHASE_REQUIREMENTS.journalist.revision).toBeUndefined();
+    expect(PHASE_REQUIREMENTS.detective.revision).toBeUndefined();
   });
 
-  it('FAILS LOUD, naming the phase and the files, when a craft file is missing', async () => {
+  it('FAILS LOUD, naming the phase and the files, when a detective craft file is missing', async () => {
     const builder = new PromptBuilder(
-      createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
-      'journalist'
+      createThemeLoader({ theme: 'detective', customPath: '/definitely/not/a/skill' }),
+      'detective'
     );
     await expect(builder.requirePhasePrompts('outlineGeneration'))
-      .rejects.toThrow(/Missing outlineGeneration prompts for theme "journalist": section-rules, editorial-design/);
+      .rejects.toThrow(/Missing outlineGeneration prompts for theme "detective": section-rules, editorial-design/);
     await expect(builder.requirePhasePrompts('articleGeneration'))
       .rejects.toThrow(/Missing articleGeneration prompts/);
+  });
+
+  // Phase 3 (3.2): the journalist's writers read the rule set, so its check is the
+  // rule-set loader's, which names every missing rule file.
+  it('FAILS LOUD, naming the call and the files, when a journalist rule file is missing', async () => {
+    const os = require('os');
+    const path = require('path');
+    const fs = require('fs');
+    const { setDefaultRulesRoot } = require('../rule-set');
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'no-rules-'));
+    const builder = createPromptBuilder({ theme: 'journalist' });
+    setDefaultRulesRoot(empty);
+    try {
+      await expect(builder.requirePhasePrompts('outlineGeneration'))
+        .rejects.toThrow(/Missing or empty rule files for call "outline": world\.md, truth-rules\.md/);
+      await expect(builder.requirePhasePrompts('articleGeneration'))
+        .rejects.toThrow(/Missing or empty rule files for call "article"/);
+    } finally {
+      setDefaultRulesRoot(null);
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
   });
 });
 
@@ -251,14 +273,26 @@ describe('a missing craft file becomes the node error contract, not a graph reje
   // return is what clears the _previous* scratch and leaves the run resumable.
   const { reviseOutline, reviseContentBundle } = require('../workflow/nodes/ai-nodes');
   const { PHASES } = require('../workflow/state');
-  const { createThemeLoader } = require('../theme-loader');
-  const { PromptBuilder } = require('../prompt-builder');
+  const { createPromptBuilder } = require('../prompt-builder');
+  const { setDefaultRulesRoot } = require('../rule-set');
+  const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
 
-  /** A PromptBuilder whose craft files cannot be read. */
-  const brokenBuilder = () => new PromptBuilder(
-    createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
-    'journalist'
-  );
+  // Phase 3 (3.2): the journalist's writers read the rule set, so a builder whose
+  // rule files cannot be read is one whose rule root is an empty folder.
+  let empty;
+  beforeEach(() => {
+    empty = fs.mkdtempSync(path.join(os.tmpdir(), 'no-rules-'));
+    setDefaultRulesRoot(empty);
+  });
+  afterEach(() => {
+    setDefaultRulesRoot(null);
+    fs.rmSync(empty, { recursive: true, force: true });
+  });
+
+  /** A PromptBuilder whose rule files cannot be read. */
+  const brokenBuilder = () => createPromptBuilder({ theme: 'journalist' });
 
   const config = () => ({
     configurable: {
@@ -280,7 +314,7 @@ describe('a missing craft file becomes the node error contract, not a graph reje
     expect(result._previousOutline).toBeNull();
     expect(result._outlineFeedback).toBeNull();
     expect(result.errors[0].type).toBe('outline-revision-failed');
-    expect(result.errors[0].message).toMatch(/Missing outlineGeneration prompts/);
+    expect(result.errors[0].message).toMatch(/Missing or empty rule files for call "outline"/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
   });
 
@@ -296,7 +330,7 @@ describe('a missing craft file becomes the node error contract, not a graph reje
     expect(result._previousContentBundle).toBeNull();
     expect(result._articleFeedback).toBeNull();
     expect(result.errors[0].type).toBe('article-revision-failed');
-    expect(result.errors[0].message).toMatch(/Missing articleGeneration prompts/);
+    expect(result.errors[0].message).toMatch(/Missing or empty rule files for call "article"/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
   });
 });

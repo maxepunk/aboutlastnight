@@ -19,8 +19,11 @@
 const fs = require('fs');
 const path = require('path');
 
+// Phase 3 (3.2): the journalist's craft files are retired; its writers read the
+// rule set, whose files are swept here beside the image prompts and the detective's.
 const PROMPT_DIRS = [
   path.join(__dirname, '..', '..', '.claude', 'skills', 'journalist-report', 'references', 'prompts'),
+  path.join(__dirname, '..', '..', '.claude', 'skills', 'journalist-report', 'references', 'rules'),
   path.join(__dirname, '..', '..', '.claude', 'skills', 'detective-report', 'references', 'prompts')
 ];
 
@@ -59,22 +62,27 @@ describe('prompt files carry no leakable example content', () => {
     });
   });
 
-  it('keeps the SHAPES the examples were teaching', () => {
-    const formatting = fs.readFileSync(
-      path.join(PROMPT_DIRS[0], 'formatting.md'), 'utf8'
-    );
-    // The card/quote/pull-quote examples must still show their field sets, or
-    // removing the strings would have cost the model the contract.
-    expect(formatting).toContain('"type": "evidence-card"');
-    expect(formatting).toContain('"significance": "critical"');
-    expect(formatting).toContain('"type": "quote"');
-    expect(formatting).toContain('"attribution"');
-  });
+  // Phase 3 (3.2): formatting.md is retired. The shapes it taught are the article
+  // writer's generation instruction now, with "..." where the content goes.
+  describe("the journalist article writer's generation instruction", () => {
+    let instruction;
+    beforeAll(async () => {
+      const { PromptBuilder } = require('../prompt-builder');
+      const builder = new PromptBuilder({ loadPhasePrompts: async () => ({}) }, 'journalist', { roster: [] }, {}, null);
+      const { userPrompt } = await builder.buildArticlePrompt({ lede: {} }, [], 'hero.jpg', [], null, null, null);
+      instruction = userPrompt.slice(userPrompt.indexOf('<GENERATION_INSTRUCTION>'), userPrompt.indexOf('\n<SCHEMA>\n'));
+    });
 
-  it('replaces them with placeholders that cannot be mistaken for evidence', () => {
-    const formatting = fs.readFileSync(path.join(PROMPT_DIRS[0], 'formatting.md'), 'utf8');
-    expect(formatting).toContain("<verbatim sentence(s) copied from the token's full description>");
-    expect(formatting).toContain('<real token id from the evidence>');
-    expect(formatting).toContain('<verbatim line from the source>');
+    it('keeps the SHAPES the examples were teaching', () => {
+      // The card and quote shapes must still show their field sets, or removing the
+      // strings would have cost the model the contract.
+      expect(instruction).toContain('{"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "...", "owner": "...", "significance": "critical" | "supporting" | "contextual"}');
+      expect(instruction).toContain('{"type": "quote", "text": "...", "attribution": "..."}');
+    });
+
+    it('fills them with placeholders that cannot be mistaken for evidence', () => {
+      expect(instruction).not.toMatch(/"(?:text|content|headline|caption|tokenId)": "(?!\.\.\.")[^"]+"/);
+      LEAKABLE.forEach((phrase) => expect(instruction).not.toContain(phrase));
+    });
   });
 });
