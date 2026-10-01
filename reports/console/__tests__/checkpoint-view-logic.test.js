@@ -1007,3 +1007,44 @@ describe('the fact check\'s new advisory groups (phase 3, 3.4)', () => {
     expect(groups.map((g) => g.key)).toEqual(['other']);
   });
 });
+
+// Phase 3, brief 3.7 (spec C15, D8): the writer's questions for the director, one line
+// per question with what it is about first, at the arc, outline and article stops. The
+// director answers with the stop's note box. An empty list shows no panel.
+describe('writerQuestionsView (phase 3, brief 3.7)', () => {
+  const { writerQuestionsView } = require('../checkpoint-view-logic');
+  const Q1 = { about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
+  const Q2 = { about: 'The 10:02 AM sale of $250,000', question: 'Is this sale a duplicate?' };
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty list', []],
+    ['a list of nothing usable', [null, 'loose', { about: 'Sarah' }, { about: ' ', question: ' ' }]]
+  ])('shows no panel for %s', (_name, value) => {
+    const view = writerQuestionsView(value);
+    expect(view.any).toBe(false);
+    expect(view.items).toEqual([]);
+  });
+
+  it('lists each question with what it is about first, in the writer\'s order', () => {
+    const view = writerQuestionsView([Q1, Q2]);
+    expect(view.any).toBe(true);
+    expect(view.items.map((item) => [item.about, item.question])).toEqual([
+      ['Sarah', Q1.question],
+      ['The 10:02 AM sale of $250,000', 'Is this sale a duplicate?']
+    ]);
+    expect(new Set(view.items.map((item) => item.key)).size).toBe(2);
+  });
+
+  it('counts the questions in its title and points at the note box', () => {
+    expect(writerQuestionsView([Q1]).title).toBe('Questions from the writer (1)');
+    expect(writerQuestionsView([Q1, Q2]).title).toBe('Questions from the writer (2)');
+    expect(writerQuestionsView([Q1]).hint).toBe('Answer them in the note below.');
+  });
+
+  it('trims the ends of each string and skips an entry missing either one', () => {
+    const view = writerQuestionsView([{ about: '  Sarah ', question: ' Where? ' }, { question: 'No subject?' }]);
+    expect(view.items.map((item) => [item.about, item.question])).toEqual([['Sarah', 'Where?']]);
+  });
+});

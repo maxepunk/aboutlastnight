@@ -31,6 +31,8 @@ const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
 const { diffOutline, diffBundle, isEmpty: isEmptyDiff, scopeKeys } = require('./lib/hand-edit-diff');
+// Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
+const { writerQuestionsOf } = require('./lib/writer-questions');
 // The outline editors' own list of the fields phase 3 retired (BU3), so the server
 // diffs a hand edit against the outline the director edited (fix 3.2b).
 const { dropRetiredOutlineFields } = require('./console/outline-edit-logic');
@@ -406,7 +408,9 @@ async function getCheckpointData(checkpointType, state) {
                 _generationTimedOut: state._arcAnalysisCache?._generationTimedOut || false,
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 1.2: what each arc's keyEvidence id actually refers to.
-                evidenceIndex: buildEvidenceIndex(state.evidenceBundle)
+                evidenceIndex: buildEvidenceIndex(state.evidenceBundle),
+                // Brief 3.7: the arc writer's questions for the director (C15)
+                writerQuestions: writerQuestionsOf(state._arcAnalysisCache?.writerQuestions)
             };
         case CHECKPOINT_TYPES.OUTLINE:
             return {
@@ -420,7 +424,9 @@ async function getCheckpointData(checkpointType, state) {
                 handEditReport: state._outlineHandEditReport || null,
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 2.7: the automatic passes of this round, with what each changed.
-                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1)
+                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1),
+                // Brief 3.7: the outline writer's questions for the director (C15)
+                writerQuestions: writerQuestionsOf(state.outline?.writerQuestions)
             };
         case CHECKPOINT_TYPES.ARTICLE:
             return {
@@ -440,7 +446,9 @@ async function getCheckpointData(checkpointType, state) {
                 directorGateNotes: state.directorGateNotes || [],
                 outlineThesis: outlineThesisOf(state),
                 // Brief 2.7: the automatic passes of this round, with what each changed.
-                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1)
+                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1),
+                // Brief 3.7: the article writer's questions for the director (C15)
+                writerQuestions: writerQuestionsOf(state.contentBundle?.writerQuestions)
             };
         case CHECKPOINT_TYPES.PRE_CURATION:
             return {

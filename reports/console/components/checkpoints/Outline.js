@@ -12,7 +12,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, safeStringify, editBtn, EvalBar, TracePanel } = window.Console.utils;
+const { Badge, safeStringify, editBtn, EvalBar, TracePanel, WriterQuestionsPanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const EditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
@@ -545,6 +545,8 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'outline'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace);
+  // Brief 3.7: the outline writer's questions for the director, answered in the note box.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions);
   const previousOutline = (revisionCache && revisionCache.outline) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -1283,6 +1285,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
     // The trace (brief 2.7): the automatic reworks of this round, before the director
     React.createElement(TracePanel, { view: trace }),
+
+    // The writer's questions (brief 3.7), above the outline
+    React.createElement(WriterQuestionsPanel, { view: writerQuestions }),
 
     // Outline sections (theme-aware)
     ...renderOutlineSections(),

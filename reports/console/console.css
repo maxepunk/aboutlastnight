@@ -2887,3 +2887,26 @@ textarea.input {
 .revision-diff__hand-edits--kept { padding-left: var(--space-md); }
 .revision-diff__notes-list { list-style: none; padding-left: 0; margin: var(--space-xs) 0 0; }
 .revision-diff__notes-list li { margin-bottom: var(--space-xs); }
+
+/* ── The writer's questions (phase 3, brief 3.7) ──
+   What the writer asks the director instead of guessing, above the output at the arc,
+   outline and article stops. Cyan, apart from the trace's amber and the findings' red
+   and amber: a question is not a defect. */
+.writer-questions {
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid rgba(78, 205, 196, 0.35);
+  border-radius: var(--radius-md);
+}
+
+.writer-questions__list {
+  list-style: disc;
+  padding-left: 1.2rem;
+  margin: var(--space-xs) 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.writer-questions__about {
+  color: var(--accent-cyan);
+}

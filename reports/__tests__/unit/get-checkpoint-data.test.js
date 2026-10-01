@@ -403,3 +403,54 @@ describe('trace (phase 2, brief 2.7)', () => {
     expect(merged.trace[0].changedScopes).toEqual(['lede']);
   });
 });
+
+// Phase 3, brief 3.7 (spec C15): each of the three stops sends the current output's
+// questions for the director as `writerQuestions`, a key no interrupt payload uses.
+// The arcs keep theirs in the arc cache; the outline and the article carry theirs at
+// their top level. An entry without both strings is not a question and is not sent.
+describe('writerQuestions (phase 3, brief 3.7)', () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const Q1 = { about: 'Sarah', question: 'The record holds nothing about Sarah: where was Sarah?' };
+  const Q2 = { about: 'The 10:02 AM sale', question: 'Is this a duplicate?' };
+
+  it('the arc stop sends the arc cache\'s questions', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
+      narrativeArcs: [], _arcAnalysisCache: { writerQuestions: [Q1, Q2] }
+    });
+    expect(data.writerQuestions).toEqual([Q1, Q2]);
+  });
+
+  it('the outline stop sends the outline\'s questions', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
+      evaluationHistory: [], outline: { lede: { hook: 'h' }, writerQuestions: [Q2] }
+    });
+    expect(data.writerQuestions).toEqual([Q2]);
+  });
+
+  it('the article stop sends the article\'s questions', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q1] }
+    });
+    expect(data.writerQuestions).toEqual([Q1]);
+  });
+
+  it('is an empty list at each stop when the output has none, or there is no output yet', async () => {
+    const arcs = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { _arcAnalysisCache: null });
+    const outline = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], outline: null });
+    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: VALID_BUNDLE() });
+    expect([arcs.writerQuestions, outline.writerQuestions, article.writerQuestions]).toEqual([[], [], []]);
+  });
+
+  it('sends only entries with both an about and a question', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
+      _arcAnalysisCache: { writerQuestions: [Q1, { about: 'Alex' }, { about: '  ', question: 'x' }, 'loose', null] }
+    });
+    expect(data.writerQuestions).toEqual([Q1]);
+  });
+
+  it('survives the merge with the interrupt payload', async () => {
+    const state = { evaluationHistory: [], outline: { writerQuestions: [Q1] } };
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline, evaluationHistory: [] }, state);
+    expect(merged.writerQuestions).toEqual([Q1]);
+  });
+});

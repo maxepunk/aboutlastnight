@@ -1107,6 +1107,32 @@
     };
   }
 
+  // ── The writer's questions (phase 3, brief 3.7) ────────────────────────────
+
+  /**
+   * The writer's questions panel at the arc, outline and article stops (spec C15,
+   * D8): one line per question, what it is about first, skimmed in a glance. The
+   * director answers with the stop's note box. An entry without both strings is left
+   * out, and an empty list shows no panel.
+   *
+   * @param {Array|null} questions - data.writerQuestions
+   * @returns {{any: boolean, title: string, hint: string,
+   *            items: Array<{key: string, about: string, question: string}>}}
+   */
+  function writerQuestionsView(questions) {
+    var items = asArray(questions)
+      .filter(function (q) { return q && typeof q === 'object'; })
+      .map(function (q) { return { about: asString(q.about).trim(), question: asString(q.question).trim() }; })
+      .filter(function (q) { return q.about.length > 0 && q.question.length > 0; })
+      .map(function (q, index) { return { key: 'question-' + index, about: q.about, question: q.question }; });
+    return {
+      any: items.length > 0,
+      title: 'Questions from the writer (' + items.length + ')',
+      hint: 'Answer them in the note below.',
+      items: items
+    };
+  }
+
   var api = {
     lastEvaluationFrom: lastEvaluationFrom,
     evaluationView: evaluationView,
@@ -1137,7 +1163,9 @@
     exposuresView: exposuresView,
     characterIdCards: characterIdCards,
     characterIdsPayload: characterIdsPayload,
-    arcNoteInitial: arcNoteInitial
+    arcNoteInitial: arcNoteInitial,
+    // Phase 3, brief 3.7: the writer's questions at the arc, outline and article stops
+    writerQuestionsView: writerQuestionsView
   };
 
   if (typeof window !== 'undefined') {

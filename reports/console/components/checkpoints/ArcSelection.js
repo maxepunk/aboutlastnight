@@ -17,7 +17,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, EvalBar } = window.Console.utils;
+const { Badge, EvalBar, WriterQuestionsPanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ViewLogic = window.Console.checkpointViewLogic;
 // computeResetKey: the collision-resistant, content-sensitive reset key
@@ -44,6 +44,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   // phases, and this screen looked for a per-arc `arc.evaluationHistory` that
   // nothing populates, so the Opus arc verdict rendered nowhere.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'arcs'));
+  // Brief 3.7: the arc writer's questions for the director, answered in the note box.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions);
 
   // Selected arc IDs. H15: every arc used to arrive checked, which pushed the
   // director to approve all five; 5+ arcs routinely costs an outline revision.
@@ -205,6 +207,9 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
 
     // Evaluation bar (what Opus said about THESE arcs)
     React.createElement(EvalBar, { view: evaluation }),
+
+    // The writer's questions (brief 3.7), above the arcs
+    React.createElement(WriterQuestionsPanel, { view: writerQuestions }),
 
     // Hint text
     React.createElement('p', { className: 'text-sm text-muted' },

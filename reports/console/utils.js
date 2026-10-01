@@ -211,6 +211,33 @@ function TracePanel({ view }) {
 }
 
 /**
+ * The writer's questions for the director (phase 3, brief 3.7; spec C15, D8), above
+ * the output at the arc, outline and article stops: one line per question, what it
+ * is about first, folded away on a click. The director answers in the stop's note
+ * box. Nothing renders when the writer raised none.
+ *
+ * Takes an already-computed view, like EvalBar: callers pass
+ * `checkpointViewLogic.writerQuestionsView(data.writerQuestions)`.
+ *
+ * @param {{view: object|null}} props
+ */
+function WriterQuestionsPanel({ view }) {
+  if (!view || !view.any) return null;
+  return React.createElement('section', { className: 'writer-questions mb-md', 'aria-label': 'Questions from the writer' },
+    React.createElement(CollapsibleSection, { title: view.title, defaultOpen: true },
+      React.createElement('ul', { className: 'writer-questions__list' },
+        view.items.map((item) => React.createElement('li', { key: item.key, className: 'writer-questions__item' },
+          React.createElement('strong', { className: 'writer-questions__about' }, item.about),
+          ': ',
+          item.question
+        ))
+      ),
+      React.createElement('p', { className: 'text-xs text-muted' }, view.hint)
+    )
+  );
+}
+
+/**
  * Edit button (pencil icon)
  * @param {function} onClick
  * @returns {React.ReactElement}
@@ -253,6 +280,7 @@ window.Console.utils = {
   formatElapsed,
   EvalBar,
   TracePanel,
+  WriterQuestionsPanel,
   editBtn,
   CHECKPOINT_ORDER,
   CHECKPOINT_LABELS

@@ -498,6 +498,9 @@
     closing: { key: 'arcResolutions', subFields: ['arcName', 'resolution'] }
   };
   var JOURNALIST_ROOT_KEYS = ['lede', 'theStory', 'followTheMoney', 'thePlayers', 'whatsMissing', 'closing'];
+  // Phase 3 (3.7): the outline writer's questions for the director, a list beside the
+  // six slots (outline.schema.json), never a section.
+  var JOURNALIST_QUESTIONS_KEY = 'writerQuestions';
   var DETECTIVE_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'memoryAnalysis', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
   var DETECTIVE_REQUIRED_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
 
@@ -530,13 +533,20 @@
    * key is allowed, that each slot present is an object, and that each field
    * present has the schema's type. A required string may be empty, as the schema
    * allows; the editors write '' for a cleared field.
+   *
+   * Phase 3 (3.7): `writerQuestions`, the outline writer's questions for the director,
+   * is allowed beside the six slots: a list of objects, each with a string `about` and
+   * a string `question`, as the schema has it.
    */
   function validateJournalistOutlineShape(outline, errors) {
     Object.keys(outline).forEach(function (k) {
-      if (JOURNALIST_ROOT_KEYS.indexOf(k) === -1) {
+      if (JOURNALIST_ROOT_KEYS.indexOf(k) === -1 && k !== JOURNALIST_QUESTIONS_KEY) {
         errors.push({ path: '/' + k, message: 'is not an allowed top-level outline key' });
       }
     });
+    if (outline[JOURNALIST_QUESTIONS_KEY] !== undefined) {
+      validateObjectArray(errors, '/' + JOURNALIST_QUESTIONS_KEY, outline[JOURNALIST_QUESTIONS_KEY], ['about', 'question'], true);
+    }
     JOURNALIST_ROOT_KEYS.forEach(function (k) {
       if (outline[k] !== undefined && !isPlainObject(outline[k])) {
         errors.push({ path: '/' + k, message: 'must be an object' });

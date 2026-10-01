@@ -937,3 +937,39 @@ describe('phase 3 (3.2): the outline form (TH4)', () => {
     expect(L.buildFollowTheMoneyPayload(state, section).shellAccounts[0]).toEqual({ name: 'Ember', total: 5 });
   });
 });
+
+// Phase 3, brief 3.7 (spec C15): the outline writer's questions for the director ride
+// at the outline's top level as `writerQuestions`. The client gate accepts the field
+// as the schema does, never stricter, and still rejects what the schema rejects.
+describe('phase 3 (3.7): the writers\' questions in an outline', () => {
+  const Q = { about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
+
+  it('the schema and the client gate accept an outline with writerQuestions', () => {
+    const o = { ...validJournalistOutline(), writerQuestions: [Q] };
+    expect(validate('outline', o).valid).toBe(true);
+    const r = L.validateOutlineShape(o, 'journalist');
+    expect(`${r.valid}: ${JSON.stringify(r.errors)}`).toBe('true: []');
+  });
+
+  it('the client gate accepts an empty list', () => {
+    expect(L.validateOutlineShape({ ...validJournalistOutline(), writerQuestions: [] }, 'journalist').valid).toBe(true);
+  });
+
+  it.each([
+    ['a string in place of the list', 'Sarah?', '/writerQuestions'],
+    ['an entry with no question', [{ about: 'Sarah' }], '/writerQuestions/0/question'],
+    ['an entry that is not an object', ['Sarah?'], '/writerQuestions/0']
+  ])('both reject %s', (_name, value, errorPath) => {
+    const o = { ...validJournalistOutline(), writerQuestions: value };
+    expect(validate('outline', o).valid).toBe(false);
+    const r = L.validateOutlineShape(o, 'journalist');
+    expect(r.valid).toBe(false);
+    expect(r.errors.map((e) => e.path)).toContain(errorPath);
+  });
+
+  it('the detective gate is unchanged: the field is not a detective outline key', () => {
+    const r = L.validateOutlineShape({ ...validDetectiveOutline(), writerQuestions: [Q] }, 'detective');
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.path === '/writerQuestions')).toBe(true);
+  });
+});

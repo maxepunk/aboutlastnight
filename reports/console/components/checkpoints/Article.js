@@ -10,7 +10,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar, TracePanel } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar, TracePanel, WriterQuestionsPanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ArticleEditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
@@ -679,6 +679,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace);
+  // Brief 3.7: the article writer's questions for the director, answered in the note box.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions);
   // Absolute paths of this session's photos, for photoUrl (H13/F9).
   const sessionPhotos = (data && data.sessionPhotos) || [];
   // Task 3.6's programmatic fact-check of THIS bundle (baseline §5).
@@ -1415,6 +1417,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
     // The trace (brief 2.7): the automatic reworks of this round, before the director
     React.createElement(TracePanel, { view: trace }),
+
+    // The writer's questions (brief 3.7), above the article
+    React.createElement(WriterQuestionsPanel, { view: writerQuestions }),
 
     // Fact-check defect list, above the article body
     React.createElement(FactCheckPanel, { summary: factCheck, cardHeadlines: cardHeadlines }),
