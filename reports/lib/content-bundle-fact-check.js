@@ -336,18 +336,19 @@ const GENDERED_PRONOUNS = {
 };
 
 /**
- * The gendered forms an NPC scan reads: the subject and reflexive forms, "hers", and the
- * possessive "his" ("Blake counted his money"). The object forms ("Blake paid him") and
- * "her" point at someone else, so the Marcus and Blake scans leave them out, erring
- * toward not flagging: on the 53 published reports a "her" after Marcus was another
- * person's ("Marcus buried her exposé", "Marcus had cleaned out her bank account"), five
- * false flags and no true one (fix 3.4c). The Nova scan reads every form: Nova seldom
+ * The gendered forms an NPC scan reads: the subject and reflexive forms, and the
+ * possessive "his" ("Blake counted his money"). The object forms ("Blake paid him"),
+ * "her" and "hers" point at someone else, so the Marcus and Blake scans leave them out,
+ * erring toward not flagging: on the 53 published reports a "her" after Marcus was
+ * another person's ("Marcus buried her exposé", "Marcus had cleaned out her bank
+ * account"), five false flags and no true one (fix 3.4c), and "hers" goes with it
+ * ("Marcus took what was hers"; fix 3.4cb). The Nova scan reads every form: Nova seldom
  * appears in the third person, and a gendered pronoun beside the name with no one else
  * in the sentence is Nova's.
  */
 const NPC_GENDERED_PRONOUNS = {
   masculine: ['he', 'his', 'himself'],
-  feminine: ['she', 'hers', 'herself']
+  feminine: ['she', 'herself']
 };
 
 /**

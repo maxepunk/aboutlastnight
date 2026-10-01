@@ -1198,12 +1198,15 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       expect(flagged(run(paragraphs('Marcus signed his name to the transfer.')), 'npcPronouns')).toEqual([]);
     });
 
-    it('never reads "her" after Marcus or Blake as theirs (3.4c)', () => {
+    // Fix 3.4cb: "hers" goes with "her". In "Marcus took what was hers" the word is
+    // someone else's.
+    it('never reads "her" or "hers" after Marcus or Blake as theirs (3.4c)', () => {
       const sentences = [
         'Marcus buried her exposé.',
         'Marcus had cleaned out her bank account.',
         'Marcus signed her name to the transfer.',
-        'The Valet bought her memory.'
+        'The Valet bought her memory.',
+        'Marcus took what was hers.'
       ];
       expect(sentences.map((s) => [s, flagged(run(paragraphs(s)), 'npcPronouns')]))
         .toEqual(sentences.map((s) => [s, []]));
