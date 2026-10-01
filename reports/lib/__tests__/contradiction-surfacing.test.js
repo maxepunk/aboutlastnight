@@ -5,7 +5,9 @@ describe('surfaceContradictions', () => {
     // An account's name is a message its seller chose: a joke, a borrowed identity,
     // the seller's own name or a frame. The named-account and transparency tensions
     // read it as the character's own account ("used their own name ... a deliberate
-    // choice to be identifiable"); 26 sessions on disk have such an account.
+    // choice to be identifiable"); 26 sessions on disk have such an account. Burns is
+    // an account named after no one, which produces nothing either (it replaces the
+    // anonymous-account test, which no code could fail once these tensions went).
     const state = {
       narrativeTensions: null,
       sessionConfig: { roster: ['Skyler', 'Alex', 'Mel', 'Remi'] },
@@ -25,22 +27,6 @@ describe('surfaceContradictions', () => {
     expect(tensions).toEqual([]);
     const json = JSON.stringify(tensions);
     ['used their own name', 'deliberate choice', 'identifiable', 'maintaining', 'transparency'].forEach((claim) => expect(json).not.toContain(claim));
-  });
-
-  test('does NOT flag anonymous accounts as roster matches', () => {
-    const state = {
-      narrativeTensions: null,
-      sessionConfig: { roster: ['Sarah', 'Morgan'] },
-      shellAccounts: [
-        { name: 'Burns', total: 1300000, tokenCount: 7 },
-        { name: 'Daisy', total: 1312500, tokenCount: 3 }
-      ],
-      directorNotes: { rawProse: '', transactionReferences: [] }
-    };
-
-    const result = surfaceContradictions(state);
-    const namedAccounts = result.narrativeTensions.tensions.filter(t => t.type === 'named-account');
-    expect(namedAccounts.length).toBe(0);
   });
 
   test('does NOT reference specific token IDs or buried content', () => {

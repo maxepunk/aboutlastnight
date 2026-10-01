@@ -1275,7 +1275,7 @@ describe('PromptBuilder', () => {
         postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'It has just been announced that Sarah is interim CEO.' }]
       };
       const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
-      // This tag must be DISTINCT from general observations so Nova writes "It has just been announced..."
+      // The epilogue is its own block, apart from the notes, holding the director's sentence as written.
       expect(userPrompt).toMatch(/<EPILOGUE>[\s\S]*It has just been announced that Sarah is interim CEO\.[\s\S]*<\/EPILOGUE>/);
       expect(userPrompt).not.toContain('Sarah named interim CEO');
     });
