@@ -471,6 +471,16 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/revision context/);
     // The article rework's first line is the theme's revision framing (3.2's string).
     expect(articleRevisionRules('journalist').startsWith(`${THEME_SYSTEM_PROMPTS.journalist.revision}\n`)).toBe(true);
+    // 3.3's finding 4 (fix 3.2b): that line, the first of the rework rules, right
+    // after the writer's system prompt, names the task the revision context gives:
+    // the director's note on a send back, or the findings on an automatic pass.
+    const articleLine = firstLine(articleRevisionRules('journalist'));
+    expect(articleLine).toMatch(/reworking your article/);
+    expect(articleLine).toMatch(/REVISION CONTEXT/);
+    expect(articleLine).toMatch(/the director's note on a send back/);
+    expect(articleLine).toMatch(/the evaluation's findings on an automatic pass/);
+    expect(articleLine).not.toMatch(/voice issues|you identified/);
+    expect(getArticleRevisionSystemPrompt('W1\nW2', 'journalist').split('\n')[3]).toBe(articleLine);
   });
 
   it('the article rework rules give no advisory criterion as a defect to fix', () => {
