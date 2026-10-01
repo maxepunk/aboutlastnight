@@ -51,7 +51,7 @@ Why: at turn-in the player chooses whether to go on the record, and anonymity pr
 
 - **The party** exists only as memories, never as something witnessed.
 - **The investigation** is told as the reporting mode allows. It ends in the group statement as the police come.
-- **Nova's day** comes from the epilogue alone. The writer adds no follow-up fact or outreach result the epilogue does not give. All follow-up is Nova's own reporting, and a channel the epilogue names (a leaked email, an anonymous tip) is Nova's source for that item.
+- **Nova's day** comes from the epilogue alone. The writer adds no follow-up fact or outreach result the epilogue does not give. All follow-up is Nova's own reporting, and a channel the director names (a leaked email, an anonymous tip) is Nova's source for that item.
 
 Logged times appear on the morning clock, as the record's timeline prints them. "Tonight" and "this afternoon" belong only to Nova's day.
 
