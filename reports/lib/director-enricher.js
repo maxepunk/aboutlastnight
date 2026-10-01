@@ -36,9 +36,16 @@ const VERBATIM_RULE =
   "that a director's correction gives, which you copy from that correction; where you would rewrite the director's words, quote them instead. " +
   "The writers print these as the director's own words, so code keeps only what the prose or a correction holds word for word.";
 
+/**
+ * The roster and empty rules (3.6b fix batch, finding 5): stated as what to do, each
+ * with its reason. The input review's character-mentions panel (InputReview.js
+ * CharacterMentionsSection) lists the mentions under each roster name, and every
+ * index reaches the writers or the director as resting on the notes.
+ */
 const ROSTER_RULE =
-  'Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes ' +
-  '(npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).';
+  "characterMentions: key each entry by the character's name as <ROSTER> gives it, and list a known NPC from <NPCS> in entityNotes.npcsReferenced; " +
+  'a name on neither list stays in the excerpts that carry it. ' +
+  "The input review shows each character's mentions under that character's roster name, so an entry keyed by any other name never reaches the director.";
 
 const LINK_RULE =
   'transactionReferences: link an observation to a <SCORING_TIMELINE> row only when the notes describe that sale ' +
@@ -65,7 +72,8 @@ const EPILOGUE_RULE =
   "The writers take the article's follow-up news from these details alone, printed as the director's own words.";
 
 const EMPTY_RULE =
-  'Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.';
+  'When the notes hold nothing for an index, return that index empty: [] for a list, {} for characterMentions. ' +
+  'Each entry reaches the writers or the director as resting on the notes, so an empty index is a complete and correct answer.';
 
 const ENRICHMENT_RULES = [VERBATIM_RULE, ROSTER_RULE, LINK_RULE, QUOTE_RULE, EPILOGUE_RULE, EMPTY_RULE];
 

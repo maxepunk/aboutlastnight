@@ -890,13 +890,15 @@ describe('the enricher rules (task 3.6 fix batch)', () => {
 
     it('states the rules once, in <ENRICHMENT_RULES>, and the system prompt points there', () => {
       expect(systemPrompt).toContain('<ENRICHMENT_RULES>');
+      // The roster and empty rules as the 3.6b fix batch (finding 5) words them:
+      // positively, each with its reason.
       [
         'verbatim substring of the prose',
-        'canonical names from the provided <ROSTER>',
+        "key each entry by the character's name as <ROSTER> gives it",
         'naming each linked row by its key',
         'each unambiguous direct speech',
         'explicit post-investigation marker',
-        'Empty arrays are always valid',
+        'return that index empty',
         DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.confidence.description
       ].forEach((phrase) => {
         expect(`${phrase}: ${both.split(phrase).length - 1}`).toBe(`${phrase}: 1`);
@@ -961,5 +963,27 @@ describe('the enricher prompt (task 3.6b fix batch)', () => {
     expect(systemPrompt).toContain('The rules for every index are in <ENRICHMENT_RULES>.');
     expect(systemPrompt).not.toMatch(/end of the user/i);
     expect(userPrompt.indexOf('</ENRICHMENT_RULES>')).toBeLessThan(userPrompt.indexOf('<DIRECTOR_CORRECTIONS>'));
+  });
+
+  describe('the roster and empty rules: stated positively, each with a one-sentence reason (finding 5)', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', roster: ['Remi'], npcs: ['Blake'] });
+    const rules = rulesOf(userPrompt);
+    const ruleNumbered = (n) => (rules.split('\n').find(line => line.startsWith(`${n}. `)) || '');
+
+    it('keys each character mention by its roster name, says where an NPC goes, and why', () => {
+      expect(ruleNumbered(2)).toBe(
+        "2. characterMentions: key each entry by the character's name as <ROSTER> gives it, and list a known NPC from <NPCS> in entityNotes.npcsReferenced; " +
+        'a name on neither list stays in the excerpts that carry it. ' +
+        "The input review shows each character's mentions under that character's roster name, so an entry keyed by any other name never reaches the director."
+      );
+    });
+
+    it('says what to return when nothing in the notes matches an index, and why, in place of "Never fabricate"', () => {
+      expect(ruleNumbered(6)).toBe(
+        '6. When the notes hold nothing for an index, return that index empty: [] for a list, {} for characterMentions. ' +
+        'Each entry reaches the writers or the director as resting on the notes, so an empty index is a complete and correct answer.'
+      );
+      expect(`${systemPrompt}\n${userPrompt}`).not.toMatch(/fabricate|unflagged/i);
+    });
   });
 });
