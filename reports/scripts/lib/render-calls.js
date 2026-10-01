@@ -50,7 +50,7 @@ function loadCallModules(req) {
 async function renderInterweaving({ arcNodes }, state) {
   const roster = state.sessionConfig?.roster || [];
   return {
-    systemPrompt: await arcNodes.interweavingSystemPrompt(state.sessionConfig),
+    systemPrompt: await arcNodes.interweavingSystemPrompt(state.sessionConfig, state.theme || 'journalist'),
     userPrompt: await arcNodes.buildInterweavingPrompt(state.narrativeArcs || [], roster, state.evidenceBundle)
   };
 }

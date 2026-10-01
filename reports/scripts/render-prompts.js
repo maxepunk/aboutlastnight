@@ -289,10 +289,10 @@ async function render() {
   // director's, the fixed feedback for the note the send back acts on, and the
   // persisted arcs for the previous version.
   const arcState = { ...state, directorGateNotes: FIXED_NOTES };
-  write(ARC_FILES[0], await arcNodes.coreArcSystemPrompt(state.sessionConfig || {}), await arcNodes.buildCoreArcPrompt(arcState));
+  write(ARC_FILES[0], await arcNodes.coreArcSystemPrompt(state.sessionConfig || {}, theme), await arcNodes.buildCoreArcPrompt(arcState));
   const crc = await buildRevisionContext({ phase: 'arcs', revisionCount: 0, round: FIXED_ROUND, validationResults: state.validationResults || null,
     previousOutput: state.narrativeArcs || [], humanFeedback: FIXED_FEEDBACK });
-  write(ARC_FILES[1], await arcNodes.getArcRevisionSystemPrompt(true, state.sessionConfig || {}),
+  write(ARC_FILES[1], await arcNodes.getArcRevisionSystemPrompt(true, state.sessionConfig || {}, theme),
     await arcNodes.buildArcRevisionPrompt({ ...arcState, _arcFeedback: FIXED_FEEDBACK }, crc.contextSection, crc.previousOutputSection));
 
   // 7. the interweaving call, from the stored arcs in place of call 1's.
