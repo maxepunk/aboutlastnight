@@ -21,10 +21,10 @@ const {
 } = require('../workflow/nodes/ai-nodes');
 const {
   reviseArcs,
-  _testing: { generateCoreArcs, arcRevisionRules }
+  _testing: { generateCoreArcs, arcRevisionRules, arcReworkSchema }
 } = require('../workflow/nodes/arc-specialist-nodes');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
-const { PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
+const { PLAYER_FOCUS_GUIDED_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
 const { PromptBuilder } = require('../prompt-builder');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -275,13 +275,18 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
 
     // What the reworker used to lack (rework-inputs.md Step 2): the whiteboard, the
     // investigation focus, the character context, the rules, the record, the
-    // boundaries, temporal awareness, the tensions and the three lenses.
+    // boundaries, temporal awareness, the tensions and the three lenses. Phase 3 (3.3):
+    // the journalist's sections are the rule set's (its truth rules state the old
+    // boundaries and timelines), and its craft files come last.
+    const headings = theme === 'detective'
+      ? ['## SECTION 4: EVIDENCE BOUNDARIES', '## SECTION 4.5: TEMPORAL AWARENESS', '## SECTION 4.6: NARRATIVE TENSIONS',
+        '## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT']
+      : ['## SECTION 3: THE RECORD', '## SECTION 4: STAGES IN AN ARC SUMMARY', '## SECTION 5: THE THREE LENSES IN analysisNotes',
+        '## SECTION 6: CRAFT GUIDANCE', '<craft-arcs>'];
     [
       // Phase 3 (3.5): the whiteboard section's heading names it a model's reading.
       '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',
-      '## SECTION 2: ARC GENERATION RULES', '## SECTION 4: EVIDENCE BOUNDARIES',
-      '## SECTION 4.5: TEMPORAL AWARENESS', '## SECTION 4.6: NARRATIVE TENSIONS',
-      '## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT'
+      '## SECTION 2: ARC GENERATION RULES', ...headings
     ].forEach((heading) => expect(rework.user).toContain(heading));
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user).toContain(text));
 
@@ -331,9 +336,12 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     expect(rework.user.indexOf('## WHAT THIS REWORK RETURNS')).toBeGreaterThan(rework.user.indexOf('### PREVIOUS INTERWEAVING PLAN'));
     expect(addendum).toContain('A PREVIOUS INTERWEAVING PLAN is shown above: keep it, or update it for the revised arcs. Do not drop it.');
 
-    // One wording: every field and every description comes from the schema.
-    const arcFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties.narrativeArcs.items.properties.interweaving.properties;
-    const planFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan.properties;
+    // One wording: every field and every description comes from the schema (the
+    // theme's: the detective keeps today's wording, phase 3, 3.3).
+    const schema = arcReworkSchema(theme);
+    expect(schema).toBe(theme === 'detective' ? DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA : PLAYER_FOCUS_GUIDED_SCHEMA);
+    const arcFields = schema.properties.narrativeArcs.items.properties.interweaving.properties;
+    const planFields = schema.properties.interweavingPlan.properties;
     Object.entries({ ...arcFields, ...planFields }).forEach(([name, spec]) => {
       expect(addendum).toContain(`- "${name}"`);
       expect(addendum).toContain(spec.description);

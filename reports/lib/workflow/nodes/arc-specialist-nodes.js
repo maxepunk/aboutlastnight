@@ -56,18 +56,24 @@ const {
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
   // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
-  PLAYER_FOCUS_GUIDED_SCHEMA
+  PLAYER_FOCUS_GUIDED_SCHEMA,
+  // Phase 3 (3.3): the detective's prompts and schemas, parked with its theme (D13)
+  DETECTIVE_CORE_ARC_SYSTEM_PROMPT,
+  DETECTIVE_INTERWEAVING_SYSTEM_PROMPT,
+  DETECTIVE_INTERWEAVING_SCHEMA,
+  DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA
   // Commit 8.xx: Removed legacy parallel architecture imports
   // (SPECIALIST_AGENT_NAMES, getSpecialistAgents, ORCHESTRATOR_*, SYNTHESIS_*, SPECIALIST_*)
 } = require('../../sdk-client/subagents');
 
-const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
+const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('../../prompt-renderers/director-notes-renderer');
 const { renderRecordView, recordIdOf, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
 const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = require('../../accusation-verdict');
 const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
+const { loadRuleSet } = require('../../rule-set');
 
 /**
  * Whether a call keeps the detective's parked text (spec D13). The journalist reads
@@ -114,17 +120,39 @@ function buildArcStandingNotes(state) {
  * set's mode files, the detective keeps its own), so each composer takes it, with
  * this file's default.
  *
+ * Phase 3 (3.3): the journalist's prompt also carries the rule set's world and truth
+ * rules (loadRuleSet's `core`), after the mode block, by the placement ruling: the
+ * identity line, the mode block, <world>, <truth-rules>, then the prompt's own text.
+ * The call's craft files go in its user prompt. The detective keeps today's prompt.
+ *
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
  * @param {string} [theme='journalist'] - state.theme
  * @returns {string}
  */
 function coreArcSystemPrompt(sessionConfig, theme = 'journalist') {
-  return withReportingModeBlock(CORE_ARC_SYSTEM_PROMPT, sessionConfig, theme);
+  if (isParkedDetective(theme)) return withReportingModeBlock(DETECTIVE_CORE_ARC_SYSTEM_PROMPT, sessionConfig, theme);
+  return withReportingModeBlock(withRuleSetCore(CORE_ARC_SYSTEM_PROMPT, 'arc'), sessionConfig, theme);
 }
 
 /** @see coreArcSystemPrompt */
 function interweavingSystemPrompt(sessionConfig, theme = 'journalist') {
-  return withReportingModeBlock(INTERWEAVING_SYSTEM_PROMPT, sessionConfig, theme);
+  if (isParkedDetective(theme)) return withReportingModeBlock(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT, sessionConfig, theme);
+  return withReportingModeBlock(withRuleSetCore(INTERWEAVING_SYSTEM_PROMPT, 'interweaving'), sessionConfig, theme);
+}
+
+/**
+ * A system prompt with the rule set's core (the world, then the truth rules) right
+ * after its identity line, where withReportingModeBlock then puts the mode block
+ * before it.
+ *
+ * @param {string} systemPrompt - a prompt whose first line is its identity
+ * @param {'arc'|'interweaving'} call - the rule set's call
+ * @returns {string}
+ */
+function withRuleSetCore(systemPrompt, call) {
+  const identityLine = systemPrompt.split('\n', 1)[0];
+  const rest = systemPrompt.slice(identityLine.length).replace(/^\n+/, '');
+  return `${identityLine}\n\n${loadRuleSet(call).core}\n\n${rest}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -262,21 +290,204 @@ ${nonRosterPCs.length > 0 ? `- These are valid game characters not playing this 
  * @returns {string} Prompt for core arc generation
  */
 function buildCoreArcPrompt(state) {
-  return `${buildCoreArcSections(state)}${buildArcRevisionContext(state)}${buildArcStandingNotes(state)}`;
+  // Phase 3 (3.3): the journalist writer carries no revision hook of its own. Its
+  // text ("Do not just regenerate - IMPROVE") was fixed rework text (TH7), and every
+  // rework goes through reviseArcs, whose revision context is buildRevisionContext's.
+  const hook = isParkedDetective(state.theme) ? buildArcRevisionContext(state) : '';
+  return `${buildCoreArcSections(state)}${hook}${buildArcStandingNotes(state)}`;
 }
 
 /**
  * The arc writer's user prompt up to, not including, its revision hook and its
- * <DIRECTOR_GUIDANCE>: the output format, what the players concluded (accusation,
- * whiteboard, the director's observations and corrections, the investigation focus,
- * the roster, the character categories and context), the generation rules, the
- * record and the valid ids, the evidence boundaries, temporal awareness, the
- * tensions and the three-lens requirement. Shared with the arc reworker (2.3).
+ * <DIRECTOR_GUIDANCE>. Shared with the arc reworker (2.3), so the reworker carries
+ * whatever the writer is given, the rule set's craft files included (M23).
  *
  * @param {Object} state - Current workflow state
  * @returns {string}
  */
 function buildCoreArcSections(state) {
+  return isParkedDetective(state.theme)
+    ? buildDetectiveCoreArcSections(state)
+    : buildJournalistCoreArcSections(state);
+}
+
+/**
+ * The journalist arc writer's sections (phase 3, brief 3.3): the output format; what
+ * the room concluded (the accusation, the whiteboard, the director's notes and
+ * corrections and their sentences about Blake and the Valet, the investigation
+ * focus, the roster, the character categories and context); the generation rules;
+ * the record with its morning timeline and the valid ids; the stages in a summary;
+ * the three lenses in analysisNotes; and the rule set's craft files, last, by the
+ * placement ruling.
+ *
+ * The truth rules (in the system prompt) state what the old SECTION 4 and 4.5 said
+ * about evidence and time, and contradicted parts of them: they named each memory's
+ * exposer, read an account's name for involvement, dated the party "the murder night"
+ * and called the notes "GROUND TRUTH". Those sections are gone, and the sales come
+ * from the record view's timeline instead of the writer's own buried list.
+ *
+ * @param {Object} state - Current workflow state
+ * @returns {string}
+ */
+function buildJournalistCoreArcSections(state) {
+  const context = extractPlayerFocusContext(state);
+  const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
+  const allCharacters = Object.keys(state.canonicalCharacters || {});
+  const { craft } = loadRuleSet('arc');
+  const blakeSentences = directorTensionSentences(state.narrativeTensions, context.directorProse);
+
+  // Output format at TOP for recency bias. Brief 1.2: the summary is the claim
+  // itself, in the third person, with no presence claim.
+  const outputFormat = buildOutputFormatSection(`{
+  "narrativeArcs": [
+    {
+      "id": "arc-[descriptive-slug]",
+      "title": "Compelling arc title",
+      "summary": "1 to 3 plain sentences stating what this thread claims happened. Third person, no reporter persona, no presence claims.",
+      "arcSource": "accusation" | "whiteboard" | "observation" | "discovered",
+      "keyEvidence": ["exact-id-1", "exact-id-2"],
+      "characterPlacements": { "RosterName": "Role in this arc" },
+      "evidenceStrength": "strong" | "moderate" | "weak" | "speculative",
+      "caveats": ["What complicates this arc"],
+      "unansweredQuestions": ["What gaps exist"],
+      "emotionalHook": "What makes this compelling",
+      "playerEmphasis": "high" | "medium" | "low",
+      "storyRelevance": "critical" | "supporting" | "contextual",
+      "analysisNotes": {
+        "financial": "The money lens: where it supports this arc and where it cuts against it",
+        "behavioral": "The behaviour lens: where it supports this arc and where it cuts against it",
+        "victimization": "The victimization lens: where it supports this arc and where it cuts against it"
+      }
+    }
+  ],
+  "synthesisNotes": "How you addressed player conclusions and what patterns emerged"
+}`);
+
+  const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
+### Character Context (${DERIVED_LABELS.characterContext})
+${Object.entries(state.characterData.characters).map(([name, data]) => {
+  const parts = [];
+  if (data.groups?.length) parts.push(`Member of: ${data.groups.join(', ')}`);
+  if (data.role) parts.push(`Role: ${data.role}`);
+  if (data.relationships) {
+    const rels = Object.entries(data.relationships).slice(0, 4).map(([k, v]) => `${k} (${v})`).join(', ');
+    if (rels) parts.push(`Relationships: ${rels}`);
+  }
+  return parts.length > 0 ? `- ${name}: ${parts.join(' | ')}` : null;
+}).filter(Boolean).join('\n')}
+
+IMPORTANT: Take group memberships from the paper documents in <RECORD>, not from memory content. Where this list differs from those documents, the documents decide.
+` : '';
+
+  // The director's sentences about Blake and the Valet, the one tension the code
+  // gathers since 3.6 (directorTensionSentences drops the retired types).
+  const blakeSection = blakeSentences.length > 0 ? `
+### Blake and the Valet in the director's notes
+${DERIVED_LABELS.narrativeTensions}
+
+${blakeSentences.map(sentence => `- ${sentence}`).join('\n')}
+` : '';
+
+  return `# Core Arc Generation
+
+${outputFormat}
+
+---
+
+## SECTION 1: WHAT PLAYERS CONCLUDED (PRIMARY - Your arcs must address this)
+
+### The Accusation (REQUIRED ARC)
+${renderArcAccusation(context.accusation, directorAccusationText(state), "Players' Reasoning")}
+
+You MUST generate an arc that addresses this accusation. Even if evidence is weak, include this arc and mark it appropriately with evidenceStrength="speculative" if needed.
+
+${renderWhiteboardConnections(context.whiteboard)}
+
+### The Director's Notes (record for what happened in the room)
+The director's notes are record for what happened and was said in the room, the investigation and the deliberation: build the arcs about the room on them. Backstory in the notes, what the director knows about the characters beyond what the session showed, is Nova's reading: an arc carries it as an open question or an unproven claim. The notes are never changed: use their words as written.
+
+${renderDirectorEnrichmentBlock({
+  rawProse: context.directorProse,
+  quotes: context.directorQuotes,
+  transactionReferences: context.directorTransactionLinks,
+  postInvestigationDevelopments: context.directorPostInvestigation,
+  corrections: state.inputReviewCorrections || [],
+  sessionConfig: withSessionClock(state.sessionConfig, state.evidenceBundle)
+})}
+${blakeSection}
+### Primary Investigation Focus
+${context.primaryInvestigation}
+
+### Session Roster (ALL characters who need placement)
+${JSON.stringify(context.roster)}
+
+${buildCharacterCategoriesBlock(context.roster, 'journalist', allCharacters).trimEnd()}
+${characterContext}
+---
+
+## SECTION 2: ARC GENERATION RULES
+
+Generate 3-5 narrative arcs following this priority:
+
+### Priority 1: ACCUSATION ARC (Required)
+- Must directly address the accusation above
+- arcSource: "accusation"
+- Include even if evidenceStrength is "speculative"
+- If evidence is thin, use caveats to acknowledge uncertainty
+
+### Priority 2: WHITEBOARD/OBSERVATION ARCS (1-3 arcs)
+- Generated from significant whiteboard connections or director observations
+- arcSource: "whiteboard" or "observation"
+- Should have at least "weak" evidenceStrength
+
+### Priority 3: DISCOVERED ARC (Optional, max 1)
+- A pattern in the record that the room did not take up, framed as just that
+- arcSource: "discovered"
+- Must have evidenceStrength "strong" or "moderate"
+
+---
+
+## SECTION 3: THE RECORD
+
+The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents in full, then the morning timeline: every sale, exposure, bonus and transfer, in time order on the morning clock.
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
+
+### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
+${JSON.stringify(evidenceSummary.allEvidenceIds)}
+
+CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
+
+---
+
+## SECTION 4: STAGES IN AN ARC SUMMARY
+
+Each arc summary says which stage each of its events belongs to (T7): the party, as what a memory shows; the investigation, in the third person, as the reporting mode allows; Nova's day, only as the epilogue gives it.
+
+---
+
+## SECTION 5: THE THREE LENSES IN analysisNotes
+
+Examine every arc through the three lenses of <craft-arcs>, because they give each section of the article its own material, and write each lens into analysisNotes: where it supports the arc and where it cuts against it. Where the record holds nothing for a lens, write that it holds nothing.
+- financial: the money, as the morning timeline and the ledger show it
+- behavioral: what people did and chose
+- victimization: who was harmed, and whose memories were taken or erased
+
+---
+
+## SECTION 6: CRAFT GUIDANCE
+
+${craft}
+`;
+}
+
+/**
+ * The detective arc writer's sections: today's text, parked with its theme (spec D13).
+ * Phase 3 rewrote the journalist's (buildJournalistCoreArcSections).
+ *
+ * @param {Object} state - Current workflow state
+ * @returns {string}
+ */
+function buildDetectiveCoreArcSections(state) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
 
@@ -495,10 +706,13 @@ For each arc, analyze through all three lenses and document in analysisNotes:
  * @param {Object|null} [evidenceBundle] - the curated bundle the record view renders
  * @param {Object|null} [sessionConfig] - the session's parse, for the record view's
  *   morning timeline (its exposures, adjustments and clock; phase 3, brief 3.5)
+ * @param {string} [theme='journalist'] - the session's theme: the journalist's prompt
+ *   ends with the rule set's craft files (phase 3, brief 3.3); the detective keeps
+ *   today's text (D13)
  * @returns {string} Prompt for interweaving enrichment
  * @throws {Error} If coreArcs is not a non-empty array
  */
-function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessionConfig = null) {
+function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessionConfig = null, theme = 'journalist') {
   // M2: Input validation
   if (!Array.isArray(coreArcs) || coreArcs.length === 0) {
     throw new Error('buildInterweavingPrompt: coreArcs must be a non-empty array');
@@ -516,6 +730,8 @@ function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessio
     arcSource: arc.arcSource,
     characterPlacements: arc.characterPlacements
   }));
+
+  if (!isParkedDetective(theme)) return journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig);
 
   return `# Interweaving Enrichment
 
@@ -580,6 +796,85 @@ Also provide an **interweavingPlan** with:
     ]
   }
 }`;
+}
+
+/**
+ * The journalist's interweaving prompt (phase 3, brief 3.3): the arcs, the roster, the
+ * whole record view, the task and the output format, then the rule set's craft files
+ * for this call, last, by the placement ruling. The bridge types, the convergence and
+ * the order are the system prompt's principles; the task names the fields that hold
+ * them.
+ *
+ * @param {Array} compactArcs - the arcs, as buildInterweavingPrompt cuts them
+ * @param {Array} roster
+ * @param {Object|null} evidenceBundle
+ * @param {Object|null} sessionConfig
+ * @returns {string}
+ */
+function journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig) {
+  return `# Interweaving Enrichment
+
+Analyze the following narrative arcs and identify how they can interweave for compulsive readability.
+
+## GENERATED ARCS
+
+${JSON.stringify(compactArcs, null, 2)}
+
+## ROSTER (for identifying shared characters)
+
+${JSON.stringify(roster)}
+
+## THE RECORD (the documents the arcs rest on, and the morning timeline)
+
+${renderRecordView(evidenceBundle, { sessionConfig })}
+
+## YOUR TASK
+
+For each arc, provide:
+
+1. **sharedCharacters** - Which characters in this arc also appear in OTHER arcs?
+   These are natural bridge points for transitions.
+
+2. **bridgeOpportunities** - How can this arc connect to others? Each bridge has one of the four bridge types: shared_character, causal_chain, temporal or contradiction.
+
+3. **callbackSeeds** - Which details in this arc, from the record, could come back changed later?
+
+4. **convergenceRole** - What does this arc bring to the convergence?
+
+Also provide an **interweavingPlan** with:
+- suggestedOrder: the arc ids in order of how each arc bears on the room's verdict
+- convergencePoint: the culmination, near the end of the article, where the threads converge and the thesis lands
+- keyCallbacks: Specific [plant → payoff] opportunities
+
+## OUTPUT FORMAT
+
+{
+  "arcInterweaving": [
+    {
+      "arcId": "arc-id-from-above",
+      "interweaving": {
+        "sharedCharacters": ["Character1", "Character2"],
+        "bridgeOpportunities": [
+          { "toArc": "other-arc-id", "bridgeType": "shared_character", "bridgeDetail": "..." }
+        ],
+        "callbackSeeds": ["A detail from the record that can come back changed later"],
+        "convergenceRole": "What this arc brings to the convergence"
+      }
+    }
+  ],
+  "interweavingPlan": {
+    "suggestedOrder": ["arc-id-1", "arc-id-2", ...],
+    "convergencePoint": "The culmination where the threads converge",
+    "keyCallbacks": [
+      { "plantIn": "arc-id-1", "payoffIn": "arc-id-3", "detail": "Specific callback opportunity" }
+    ]
+  }
+}
+
+## CRAFT GUIDANCE
+
+${loadRuleSet('interweaving').craft}
+`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -660,18 +955,19 @@ async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, e
   const startTime = Date.now();
 
   const sdkClient = getSdkClient(config, 'enrichWithInterweaving');
-  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle, sessionConfig);
+  // No state here: the graph config carries the session's theme (createGraphAndConfig).
+  const theme = config?.configurable?.theme;
+  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle, sessionConfig, theme);
 
   console.log(`[enrichWithInterweaving] Prompt built: ${prompt.length} characters`);
 
   try {
     const result = await sdkClient({
       prompt,
-      // No state here: the graph config carries the session's theme (createGraphAndConfig).
-      systemPrompt: interweavingSystemPrompt(sessionConfig, config?.configurable?.theme),
+      systemPrompt: interweavingSystemPrompt(sessionConfig, theme),
       model: 'opus',
       disableTools: true,          // H21: pure analysis over the arcs in the prompt
-      jsonSchema: INTERWEAVING_SCHEMA,
+      jsonSchema: isParkedDetective(theme) ? DETECTIVE_INTERWEAVING_SCHEMA : INTERWEAVING_SCHEMA,
       label: 'Interweaving enrichment (Call 2)'
     });
 
@@ -856,7 +1152,9 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
   console.log(`[analyzeArcsPlayerFocusGuided] Input data check:`);
   console.log(`  - accusation.accused: ${JSON.stringify(acc.accused || [])}`);
   console.log(`  - accusation.charge: ${acc.charge || 'MISSING'}`);
-  console.log(`  - whiteboard.suspectsExplored: ${JSON.stringify(wbCtx.suspectsExplored || [])}`);
+  // Phase 3 (3.5): the whiteboard parse keeps the board's regions, each under the
+  // players' own heading; suspectsExplored is no longer written.
+  console.log(`  - whiteboard.regions: ${JSON.stringify((wbCtx.regions || []).map(r => r?.label || ''))}`);
   console.log(`  - director: ${(directorNotes.rawProse || '').length} chars prose, ${(directorNotes.quotes || []).length} quotes, ${(directorNotes.transactionReferences || []).length} tx refs`);
   console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
   console.log(`  - roster: ${JSON.stringify(state.sessionConfig?.roster || [])}`);
@@ -1045,7 +1343,7 @@ async function reviseArcs(state, config) {
       prompt: revisionPrompt,
       systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback, state.sessionConfig, state.theme),
       model: 'opus',
-      jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
+      jsonSchema: arcReworkSchema(state.theme),
       disableTools: true,        // Pure analytical task — no tool access needed
       label: `Arc revision ${revisionCount}`
     });
@@ -1247,6 +1545,17 @@ function arcRevisionRules(hasHumanFeedback, theme = 'journalist') {
 }
 
 /**
+ * The arc reworker's output schema for a theme: the detective's keeps today's wording
+ * for the convergence and the order (D13).
+ *
+ * @param {string} [theme]
+ * @returns {Object}
+ */
+function arcReworkSchema(theme) {
+  return isParkedDetective(theme) ? DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA : PLAYER_FOCUS_GUIDED_SCHEMA;
+}
+
+/**
  * Whether an interweaving plan says anything: an order, a convergence point or a
  * callback, the fields the schema defines. The degradation default
  * (createDefaultInterweavingPlan), `{}` and an array do not.
@@ -1299,12 +1608,14 @@ function describeSchemaField(name, spec) {
  * properties and descriptions, so there is one wording.
  *
  * @param {boolean} hasPlan - whether the prompt shows a PREVIOUS INTERWEAVING PLAN
+ * @param {string} [theme] - the schema whose words it prints (arcReworkSchema)
  * @returns {string}
  * @throws {Error} when the schema no longer defines either field
  */
-function buildArcReworkOutputAddendum(hasPlan) {
-  const arcFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties?.narrativeArcs?.items?.properties?.interweaving?.properties;
-  const planFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties?.interweavingPlan?.properties;
+function buildArcReworkOutputAddendum(hasPlan, theme = 'journalist') {
+  const schema = arcReworkSchema(theme);
+  const arcFields = schema.properties?.narrativeArcs?.items?.properties?.interweaving?.properties;
+  const planFields = schema.properties?.interweavingPlan?.properties;
   if (!arcFields || !planFields) {
     throw new Error('buildArcReworkOutputAddendum: PLAYER_FOCUS_GUIDED_SCHEMA no longer defines interweaving / interweavingPlan');
   }
@@ -1369,7 +1680,7 @@ ${previousOutputSection}${planSection}
 
 ---
 
-${buildArcReworkOutputAddendum(hasPlan)}
+${buildArcReworkOutputAddendum(hasPlan, state.theme)}
 
 ---
 
@@ -2058,8 +2369,9 @@ module.exports = {
     ARC_REVISION_RULES,
     hasInterweavingPlan,
     buildArcReworkOutputAddendum,
-    // Phase 3 (3.3): the rework rules by theme
-    arcRevisionRules
+    // Phase 3 (3.3): the rework rules and schema by theme
+    arcRevisionRules,
+    arcReworkSchema
   }
 };
 

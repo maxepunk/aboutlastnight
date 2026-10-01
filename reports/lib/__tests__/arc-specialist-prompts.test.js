@@ -132,7 +132,8 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
  * The arc writer used to read Haiku's summary of each memory's name and the first
  * 200 characters of each paper document. SECTION 3's exposed items are now the
  * record view's documents, in full; its buried transactions stay as they were (R2),
- * so they appear once.
+ * so they appear once. Phase 3 (3.3): the journalist writer's SECTION 3 is the whole
+ * view, the sales on its morning timeline; the detective keeps its own list.
  */
 describe('arc prompts carry the record view (brief 2.1)', () => {
   const arcModule = require('../workflow/nodes/arc-specialist-nodes');
@@ -183,15 +184,24 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     // The summaries of names no longer stand in for a document.
     expect(prompt).not.toContain('Haiku summary of the name');
     expect(prompt).not.toContain('Derived Guess');
-    expect(section3).toContain('### Exposed Documents (1 memories - Layer 1, PARTY MEMORIES; 2 paper documents - Layer 1, PARTY CONTEXT)');
+    // Phase 3 (3.3): SECTION 3 is the whole record view, its intro counting the documents.
+    expect(section3).toContain('The 1 exposed memories and 2 paper documents in full, then the morning timeline');
   });
 
-  it('keeps SECTION 3\'s buried transactions as they were, so they appear once (R2)', () => {
+  it('the sales appear once, on the record view\'s morning timeline (phase 3, 3.3); the detective keeps its list (R2)', () => {
+    // Brief 2.1 kept the writer's own Buried Transactions list beside the documents;
+    // 3.3 gives the journalist writer the record view's timeline in its place.
     const prompt = arcModule._testing.buildCoreArcPrompt(state);
-    expect(prompt).toContain('### Buried Transactions (1 items - Layer 2, INVESTIGATION ACTIONS)');
-    expect(prompt).toContain('"shellAccount": "Melanie"');
+    expect(prompt).not.toContain('### Buried Transactions');
+    expect(prompt).toContain('- 07:50 AM | sale | account: Melanie | amount: $75,000');
     expect(prompt).not.toContain('<buried-transactions>');
     expect(count(prompt, 'Melanie')).toBe(1);
+
+    const detective = arcModule._testing.buildCoreArcPrompt({ ...state, theme: 'detective' });
+    expect(detective).toContain('### Buried Transactions (1 items - Layer 2, INVESTIGATION ACTIONS)');
+    expect(detective).toContain('"shellAccount": "Melanie"');
+    expect(detective).not.toContain('<morning-timeline>\n');
+    expect(count(detective, 'Melanie')).toBe(1);
   });
 
   it('names a rescued document by the id the view gives it, in the id list and the arc check', () => {
@@ -342,5 +352,295 @@ describe("arc prompts: the director's words as record", () => {
       expect(prompt).toContain('"convergencePoint": "the vote"');
       expect(prompt).toMatch(/Return the interweavingPlan \(suggestedOrder, convergencePoint, keyCallbacks\)/);
     });
+  });
+});
+
+/**
+ * Phase 3, brief 3.3: the arc calls read the rule set.
+ *
+ * The arc writer, the interweaving call and the arc reworker decide the story, and
+ * until now read no rule file: their inline text asked for each memory's exposer,
+ * read accounts as people, converged every arc on "the murder revelation", described
+ * burial as a drug and called the director's notes "GROUND TRUTH". Each journalist
+ * call now carries the world, the truth rules and the mode block in its system prompt
+ * and its craft files in its user prompt (the placement ruling); the inline text the
+ * rule set states or contradicts is gone. The detective keeps today's text (D13).
+ */
+describe('phase 3 (3.3): the arc calls read the rule set', () => {
+  const arcModule = require('../workflow/nodes/arc-specialist-nodes');
+  const { reviseArcs } = arcModule;
+  const {
+    buildCoreArcPrompt, buildCoreArcSections, buildInterweavingPrompt,
+    coreArcSystemPrompt, interweavingSystemPrompt, generateCoreArcs
+  } = arcModule._testing;
+  const { loadRuleSet, loadModeBlock } = require('../rule-set');
+  const { reworkFixtureState } = require('./fixtures/rework-state');
+  const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
+  const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
+
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const count = (haystack, needle) => haystack.split(needle).length - 1;
+
+  /** The phrases this slice takes out of the arc calls, in today's wording (reported to the integrator). */
+  const ARC_REMOVED = [
+    'name who exposed each memory',
+    'Account naming that suggests involvement',
+    'Victim/operator relationships',
+    'Targeting patterns',
+    'murder',
+    'memory-altering drug',
+    'the memory drug',
+    'GROUND TRUTH',
+    'AUTHORITATIVE',
+    'Sarah exposed three memories',
+    'Never use "token"',
+    'Black Market',
+    'maximum payoff',
+    'maximum interweaving potential',
+    'confident smile',
+    'knew all along',
+    'completely missed',
+    'before Marcus died',
+    'Do not just regenerate',
+    'She was NOT there',
+    'reached her as tips'
+  ];
+  const leftovers = (render) => {
+    const text = instructionText(render).toLowerCase();
+    return ARC_REMOVED.filter((phrase) => text.includes(phrase.toLowerCase()));
+  };
+
+  /** A state whose tensions are the three stored shapes: one new, two retired. */
+  function journalistState(overrides = {}) {
+    const base = reworkFixtureState('journalist');
+    return {
+      ...base,
+      // The director's sentences the stored blake-proximity tension carries are the
+      // notes' own, as surfaceContradictions gathers them.
+      directorNotes: {
+        ...base.directorNotes,
+        rawProse: `${base.directorNotes.rawProse} Blake pulled Morgan into the corner by the bar. The Valet waved Riley over twice.`
+      },
+      sessionConfig: {
+        ...base.sessionConfig,
+        exposures: [{ tokenId: 'ale003', exposer: 'NovaNews (Anonymous)', time: '07:37 PM' }]
+      },
+      narrativeTensions: {
+        tensions: [
+          { type: 'named-account', narrativeNote: 'Morgan used their own name for a burial account.' },
+          { type: 'transparency-vs-burial', narrativeNote: 'Alex exposed memories yet an account took money.' },
+          {
+            type: 'blake-proximity',
+            observations: ['Blake pulled Morgan into the corner by the bar.', 'The Valet waved Riley over twice.'],
+            narrativeNote: 'Director observed multiple characters interacting with Blake'
+          }
+        ]
+      },
+      ...overrides
+    };
+  }
+
+  async function arcRework(state, reworkOverrides) {
+    const sdk = jest.fn(async () => ({
+      narrativeArcs: clone(state.narrativeArcs), synthesisNotes: 's', interweavingPlan: state._arcAnalysisCache.interweavingPlan
+    }));
+    await reviseArcs(
+      { ...state, narrativeArcs: null, _previousArcs: clone(state.narrativeArcs), ...reworkOverrides },
+      { configurable: { sdkClient: sdk, theme: state.theme } }
+    );
+    return sdk.mock.calls[0][0];
+  }
+  const SEND_BACK = { _arcFeedback: 'Rethink the money thread from scratch.', humanArcRevisionCount: 1, arcRevisionCount: 0 };
+  const AUTOMATED = {
+    arcRevisionCount: 1,
+    validationResults: {
+      phase: 'arcs', passed: false, structuralIssues: ['Riley has no placement'],
+      criteriaScores: { coherence: { score: 0.5, type: 'advisory', notes: 'thin', fix: 'tie the threads' } }
+    }
+  };
+
+  beforeAll(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterAll(() => jest.restoreAllMocks());
+
+  describe('the rule sections, placed by the placement ruling', () => {
+    it('the arc writer: identity, mode block, the world and the truth rules in the system prompt; its craft files in the user prompt', () => {
+      const state = journalistState();
+      const { core, craft } = loadRuleSet('arc');
+      const system = coreArcSystemPrompt(state.sessionConfig, 'journalist');
+      expect(count(system, core)).toBe(1);
+      expect(system.indexOf(loadModeBlock('remote'))).toBeLessThan(system.indexOf('<world>'));
+      expect(system.indexOf('<world>')).toBeLessThan(system.indexOf('<truth-rules>'));
+      expect(system).not.toContain('<craft-');
+
+      const user = buildCoreArcPrompt({
+        ...state,
+        directorGateNotes: [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the succession thread.', at: 't1' }]
+      });
+      expect(count(user, craft)).toBe(1);
+      expect(user).not.toContain('<world>');
+      // The craft files come after the data and before <DIRECTOR_GUIDANCE>, which stays last.
+      expect(user.indexOf(craft)).toBeGreaterThan(user.indexOf('</RECORD>'));
+      expect(user.indexOf(craft)).toBeLessThan(user.indexOf('<DIRECTOR_GUIDANCE>'));
+      expect(user.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+    });
+
+    it('the interweaving call: the world and the truth rules in the system prompt, its craft files (no questions) in the user prompt', () => {
+      const state = journalistState();
+      const { core, craft } = loadRuleSet('interweaving');
+      const system = interweavingSystemPrompt(state.sessionConfig, 'journalist');
+      expect(count(system, core)).toBe(1);
+      expect(system.indexOf(loadModeBlock('remote'))).toBeLessThan(system.indexOf('<world>'));
+      const user = buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist');
+      expect(count(user, craft)).toBe(1);
+      expect(user.indexOf(craft)).toBeGreaterThan(user.indexOf('</RECORD>'));
+      expect(user).not.toContain('<craft-questions>');
+    });
+
+    it("the arc reworker carries the rule set through its writer's builders (M23)", async () => {
+      const state = journalistState();
+      const { core, craft } = loadRuleSet('arc');
+      for (const overrides of [SEND_BACK, AUTOMATED]) {
+        const { systemPrompt, prompt } = await arcRework(state, overrides);
+        expect(count(systemPrompt, core)).toBe(1);
+        expect(count(prompt, craft)).toBe(1);
+        expect(prompt.startsWith(buildCoreArcSections(state))).toBe(true);
+      }
+    });
+
+    it("the detective calls carry no rule file and keep today's text (D13)", () => {
+      const state = reworkFixtureState('detective');
+      const writer = `${coreArcSystemPrompt(state.sessionConfig, 'detective')}\n${buildCoreArcPrompt(state)}`;
+      const interweaving = `${interweavingSystemPrompt(state.sessionConfig, 'detective')}\n${buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'detective')}`;
+      for (const render of [writer, interweaving]) {
+        expect(render).not.toMatch(/<(world|truth-rules|craft-[a-z]+)>/);
+      }
+      expect(writer).toContain('A memory-altering drug called "the memory drug"');
+      expect(writer).toContain('### Buried Transactions (1 items - Layer 2, INVESTIGATION ACTIONS)');
+      expect(interweaving).toContain('All arcs should connect to the central event (murder/accusation)');
+    });
+  });
+
+  describe("what stays, in C16's terms", () => {
+    it('the arc writer examines every arc through the money, behaviour and victimization, for and against', () => {
+      const prompt = buildCoreArcSections(journalistState());
+      const section = prompt.slice(prompt.indexOf('THE THREE LENSES'));
+      expect(prompt).toContain('THE THREE LENSES');
+      expect(section).toMatch(/financial: the money/);
+      expect(section).toMatch(/behavioral: what people did and chose/);
+      expect(section).toMatch(/victimization: who was harmed, and whose memories were taken or erased/);
+      expect(section).toMatch(/supports the arc and where it cuts against it/);
+      expect(section).toMatch(/each section of the article its own material/);
+    });
+
+    it('the interweaving call converges the threads at the culmination near the end, where the thesis lands', () => {
+      const state = journalistState();
+      const render = `${interweavingSystemPrompt(state.sessionConfig, 'journalist')}\n${buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist')}`;
+      expect(render).toMatch(/culmination/);
+      expect(render).toMatch(/near (its|the) end/);
+      expect(render).toMatch(/where the thesis lands/);
+      // The interweaving principles stay: bridges, callback seeds, the bridge types.
+      ['SHARED CHARACTERS ARE BRIDGES', 'CALLBACK SEEDS', 'shared_character', 'causal_chain', 'temporal', 'contradiction']
+        .forEach((s) => expect(render).toContain(s));
+    });
+
+    it("the arcs are ordered by how they bear on the room's verdict (TH2)", () => {
+      const state = journalistState();
+      const render = `${interweavingSystemPrompt(state.sessionConfig, 'journalist')}\n${buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist')}`;
+      expect(render).toMatch(/in order of how (each arc bears|they bear) on the room's verdict/);
+      const { INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
+      for (const schema of [INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA]) {
+        expect(schema.properties.interweavingPlan.properties.suggestedOrder.description).toMatch(/bears on the room's verdict/);
+        expect(JSON.stringify(schema)).not.toMatch(/murder|maximum/i);
+      }
+    });
+  });
+
+  describe('the removed lines', () => {
+    it('are absent from the instruction text of the arc writer, the interweaving call and the arc rework', async () => {
+      const state = journalistState();
+      const renders = {
+        writer: `${coreArcSystemPrompt(state.sessionConfig, 'journalist')}\n=====\n${buildCoreArcPrompt({ ...state, arcRevisionCount: 1, validationResults: { phase: 'arcs', issues: ['x'] } })}`,
+        interweaving: `${interweavingSystemPrompt(state.sessionConfig, 'journalist')}\n=====\n${buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist')}`
+      };
+      for (const [name, overrides] of [['send-back rework', SEND_BACK], ['automated rework', AUTOMATED]]) {
+        const { systemPrompt, prompt } = await arcRework(state, overrides);
+        renders[name] = `${systemPrompt}\n=====\n${prompt}`;
+      }
+      Object.entries(renders).forEach(([name, render]) => {
+        expect(`${name}: ${JSON.stringify(findRemovedPhrases(instructionText(render)).map(String))}`).toBe(`${name}: []`);
+        expect(`${name}: ${JSON.stringify(leftovers(render))}`).toBe(`${name}: []`);
+      });
+    });
+
+    it("the arc writer's own revision hook is gone for the journalist: a rework goes through reviseArcs", () => {
+      const prompt = buildCoreArcPrompt({ ...journalistState(), arcRevisionCount: 1, validationResults: { phase: 'arcs', issues: ['x'] } });
+      expect(prompt).not.toContain('REVISION 1: Address these issues');
+    });
+  });
+
+  describe("the director's notes, as T1 states them", () => {
+    it("are record for what happened and was said in the room; backstory in them is Nova's reading; never changed", () => {
+      const prompt = buildCoreArcSections(journalistState());
+      const label = prompt.slice(prompt.indexOf("### The Director's Notes"), prompt.indexOf('<DIRECTOR_NOTES>'));
+      expect(prompt).toContain("### The Director's Notes");
+      expect(label).toMatch(/record for what happened and was said in the room/);
+      expect(label).toMatch(/[Bb]ackstory[^.]*Nova's reading/);
+      expect(label).toMatch(/never changed/);
+      expect(prompt).not.toMatch(/ground truth/i);
+    });
+  });
+
+  describe("the record: the morning timeline in place of the writer's own buried list", () => {
+    it('carries the whole view once, with the session config, and no Buried Transactions list', () => {
+      const prompt = buildCoreArcSections(journalistState());
+      expect(prompt.match(/^<RECORD>$/gm)).toHaveLength(1);
+      expect(prompt.match(/^<morning-timeline>$/gm)).toHaveLength(1);
+      expect(prompt).toContain('- 07:37 AM | exposure | document: ale003 | anonymous\n- 07:50 AM | sale | account: Melanie | amount: $75,000');
+      expect(prompt).not.toContain('### Buried Transactions');
+      expect(prompt).not.toContain('"shellAccount"');
+      expect(count(prompt, 'Melanie')).toBe(1);
+    });
+  });
+
+  describe("the director's sentences about Blake and the Valet (the narrative tensions)", () => {
+    it("print from the stored observations, drop the retired types, and label the sentences as the director's", () => {
+      const prompt = buildCoreArcSections(journalistState());
+      expect(prompt).toContain(DERIVED_LABELS.narrativeTensions);
+      expect(prompt).toContain('- Blake pulled Morgan into the corner by the bar.\n- The Valet waved Riley over twice.');
+      expect(prompt).not.toContain('used their own name');
+      expect(prompt).not.toContain('Alex exposed memories yet');
+      expect(prompt).not.toContain('Director observed multiple characters');
+      expect(prompt).not.toContain('[blake-proximity]');
+      const heading = prompt.split('\n').find((l) => l.startsWith('#') && l.includes('Blake and the Valet'));
+      expect(heading).toBeDefined();
+      expect(heading).not.toMatch(/[–—]/);
+    });
+
+    it('leave no section when nothing printable is stored', () => {
+      const prompt = buildCoreArcSections(journalistState({ narrativeTensions: { tensions: [{ type: 'named-account', narrativeNote: 'x' }] } }));
+      expect(prompt).not.toContain(DERIVED_LABELS.narrativeTensions);
+    });
+  });
+
+  it('the arc analysis logs the whiteboard regions, the field the parse carries since 3.5', async () => {
+    const sdk = jest.fn(async (options) => (options.label.startsWith('Interweaving')
+      ? { arcInterweaving: [], interweavingPlan: {} }
+      : { narrativeArcs: [{ id: 'arc-a' }], synthesisNotes: '' }));
+    const state = journalistState({ narrativeArcs: null });
+    state.playerFocus = { ...state.playerFocus, whiteboardContext: { regions: [{ label: 'SUSPECTS', entries: ['Alex'] }] } };
+    console.log.mockClear();
+    await arcModule.analyzeArcsPlayerFocusGuided(state, { configurable: { sdkClient: sdk, theme: 'journalist' } });
+    const lines = console.log.mock.calls.map((c) => c.join(' '));
+    expect(lines.some((l) => l.includes('whiteboard.regions') && l.includes('SUSPECTS'))).toBe(true);
+    expect(lines.some((l) => l.includes('suspectsExplored'))).toBe(false);
+  });
+
+  it('generateCoreArcs sends the journalist rule set', async () => {
+    const sdk = jest.fn(async () => ({ narrativeArcs: [], synthesisNotes: '' }));
+    await generateCoreArcs(journalistState(), { configurable: { sdkClient: sdk } });
+    expect(sdk.mock.calls[0][0].systemPrompt).toContain(loadRuleSet('arc').core);
   });
 });

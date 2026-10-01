@@ -157,4 +157,31 @@ ${epilogue.map(sentence => `- ${sentence}`).join('\n')}
   return blocks.join('\n\n');
 }
 
-module.exports = { renderDirectorEnrichmentBlock };
+/**
+ * The director's sentences a print site of the narrative tensions shows (phase 3,
+ * brief 3.3, carry-over from 3.6).
+ *
+ * Since 3.6 the tensions node (contradiction-nodes.js) stores one tension, type
+ * `blake-proximity`, whose `observations` are the director's sentences that name Blake
+ * or the Valet. A thread surfaced before 3.6 may still store `named-account` and
+ * `transparency-vs-burial` tensions, which read an account's name as its holder (T4),
+ * and a `blake-proximity` tension whose `narrativeNote` is a generic line. Only the
+ * stored observations are read, and only the ones the notes hold word for word, so
+ * every sentence a print site shows is the director's, as DERIVED_LABELS.narrativeTensions
+ * says. A sentence wrapped across lines prints on one line.
+ *
+ * @param {Object|null} narrativeTensions - state.narrativeTensions ({tensions: [...]})
+ * @param {string} rawProse - the director's notes
+ * @returns {string[]} the sentences, in stored order, each once
+ */
+function directorTensionSentences(narrativeTensions, rawProse) {
+  const tensions = Array.isArray(narrativeTensions?.tensions) ? narrativeTensions.tensions : [];
+  const sentences = tensions
+    .filter(t => t && t.type === 'blake-proximity' && Array.isArray(t.observations))
+    .flatMap(t => t.observations)
+    .filter(s => typeof s === 'string' && s.trim() && isVerbatimIn(s, rawProse))
+    .map(s => s.trim().replace(/\s*\n\s*/g, ' '));
+  return [...new Set(sentences)];
+}
+
+module.exports = { renderDirectorEnrichmentBlock, directorTensionSentences };
