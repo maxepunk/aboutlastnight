@@ -559,7 +559,7 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       const task = user.slice(user.indexOf('## YOUR TASK'), user.indexOf('## OUTPUT FORMAT'));
       expect(task).toMatch(/^- suggestedOrder: .*<craft-arcs>/m);
       expect(task).toMatch(/^- convergencePoint: .*<craft-arcs>/m);
-      // The interweaving principles the rule set does not state stay: bridges, callback seeds, the bridge types.
+      // The interweaving call's own mechanics stay, as the brief keeps them: bridges, callback seeds, the bridge types.
       ['SHARED CHARACTERS ARE BRIDGES', 'CALLBACK SEEDS', 'shared_character', 'causal_chain', 'temporal', 'contradiction']
         .forEach((s) => expect(`${system}\n${user}`).toContain(s));
     });

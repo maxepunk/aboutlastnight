@@ -310,14 +310,16 @@ const CORE_ARC_SCHEMA = {
  *
  * Commit 8.28: Focused prompt for adding narrative bridge metadata
  *
- * Phase 3 (brief 3.3): the interweaving principles the rule set does not state stay
- * here: the bridges, the callback seeds and the bridge types. The convergence (C16's
- * culmination near the end, where the thesis lands, not "the central event
- * (murder/accusation)") and the order (TH2: how each arc bears on the verdict, not
- * "maximum payoff") are C16's, which this call reads in <craft-arcs>; its task names
- * the fields that hold them. The callback example that gave Vic a pronoun and a hidden
- * truth is gone. interweavingSystemPrompt puts the mode block, the world and the truth
- * rules after the identity line.
+ * Phase 3 (brief 3.3): the bridges, the callback seeds and the bridge types stay here
+ * because the brief keeps them: they are this call's own mechanics, the metadata its
+ * output records. (C16 states the craft idea a callback seed plans, "Details planted
+ * early come back changed later"; the seed is how this call carries it out.) The
+ * convergence (C16's culmination near the end, where the thesis lands, not "the
+ * central event (murder/accusation)") and the order (TH2: how each arc bears on the
+ * verdict, not "maximum payoff") are C16's, which this call reads in <craft-arcs>; its
+ * task names the fields that hold them. The callback example that gave Vic a pronoun
+ * and a hidden truth is gone. interweavingSystemPrompt puts the mode block, the world
+ * and the truth rules after the identity line.
  */
 const INTERWEAVING_SYSTEM_PROMPT = `You plan how the arcs of one "About Last Night" session intercut in a NovaNews investigative article, and where they converge.
 
