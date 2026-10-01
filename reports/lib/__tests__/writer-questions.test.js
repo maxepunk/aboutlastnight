@@ -106,6 +106,23 @@ describe('the optional writerQuestions field in the four schemas', () => {
     }
   });
 
+  // Fix 3.7b (finding 3): one wording for the field. The arc schemas use the JS
+  // constant itself; the three JSON files repeat it, with the `additionalProperties:
+  // false` those files put on every object, so a wording change must touch all four.
+  it('one wording: each JSON schema defines the field exactly as WRITER_QUESTIONS_PROPERTY', () => {
+    const { WRITER_QUESTIONS_PROPERTY } = require('../writer-questions');
+    const expected = { ...WRITER_QUESTIONS_PROPERTY, items: { ...WRITER_QUESTIONS_PROPERTY.items, additionalProperties: false } };
+    for (const [label, schema] of [
+      ['outline.schema.json', outlineSchema],
+      ['content-bundle.schema.json', contentBundleSchema],
+      ['content-bundle.detective-prompt.json', detectiveBundleCopy]
+    ]) {
+      expect({ label, field: schema.properties.writerQuestions }).toEqual({ label, field: expected });
+    }
+    expect(subagents.CORE_ARC_SCHEMA.properties.writerQuestions).toBe(WRITER_QUESTIONS_PROPERTY);
+    expect(subagents.PLAYER_FOCUS_GUIDED_SCHEMA.properties.writerQuestions).toBe(WRITER_QUESTIONS_PROPERTY);
+  });
+
   it('the interweaving call has no field (spec section 8)', () => {
     expect(subagents.INTERWEAVING_SCHEMA.properties.writerQuestions).toBeUndefined();
   });
