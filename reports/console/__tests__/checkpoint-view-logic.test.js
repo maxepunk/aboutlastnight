@@ -1013,8 +1013,8 @@ describe('the fact check\'s new advisory groups (phase 3, 3.4)', () => {
 // director answers with the stop's note box. An empty list shows no panel.
 describe('writerQuestionsView (phase 3, brief 3.7)', () => {
   const { writerQuestionsView } = require('../checkpoint-view-logic');
-  const Q1 = { about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
-  const Q2 = { about: 'The 10:02 AM sale of $250,000', question: 'Is this sale a duplicate?' };
+  const Q1 = { kind: 'player', about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
+  const Q2 = { kind: 'ledger', about: 'The 10:02 AM sale of $250,000', question: 'Is this sale a duplicate?' };
 
   it.each([
     ['undefined', undefined],
@@ -1041,6 +1041,27 @@ describe('writerQuestionsView (phase 3, brief 3.7)', () => {
     expect(writerQuestionsView([Q1]).title).toBe('Questions from the writer (1)');
     expect(writerQuestionsView([Q1, Q2]).title).toBe('Questions from the writer (2)');
     expect(writerQuestionsView([Q1]).hint).toBe('Answer them in the note below.');
+  });
+
+  // Fix 3.7b (finding 1): each line shows the question's kind; a question with no kind,
+  // or an unknown one, from a list made before the field had one, still renders.
+  it('labels exactly the schema\'s kinds (lib/writer-questions.js)', () => {
+    const { WRITER_QUESTION_KIND_LABELS } = require('../checkpoint-view-logic');
+    const { WRITER_QUESTION_KINDS } = require('../../lib/writer-questions');
+    expect(Object.keys(WRITER_QUESTION_KIND_LABELS)).toEqual([...WRITER_QUESTION_KINDS]);
+  });
+
+  it('shows each question\'s kind', () => {
+    const view = writerQuestionsView([Q1, Q2, { kind: 'pronoun', about: 'Riley', question: 'Which pronoun?' }]);
+    expect(view.items.map((item) => [item.kind, item.kindLabel])).toEqual([
+      ['player', 'Player'], ['ledger', 'Ledger'], ['pronoun', 'Pronoun']
+    ]);
+  });
+
+  it('renders a question with no kind, or an unknown one, with no kind shown', () => {
+    const view = writerQuestionsView([{ about: 'Sarah', question: 'Where?' }, { kind: 'other', about: 'Alex', question: 'Who?' }]);
+    expect(view.any).toBe(true);
+    expect(view.items.map((item) => [item.kind, item.kindLabel, item.about])).toEqual([[null, '', 'Sarah'], [null, '', 'Alex']]);
   });
 
   it('trims the ends of each string and skips an entry missing either one', () => {

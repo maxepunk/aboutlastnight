@@ -24,6 +24,8 @@ describe('e2e-walkthrough prints the writer\'s questions', () => {
     expect(fn).toMatch(/if \(!view\.any\) return;/);
     expect(fn).toMatch(/item\.about/);
     expect(fn).toMatch(/item\.question/);
+    // Fix 3.7b (finding 1): the kind, when the question has one, before the subject.
+    expect(fn).toMatch(/item\.kindLabel \? `\[\$\{item\.kindLabel\}\] ` : ''/);
   });
 
   it.each(['arc-selection', 'outline', 'article'])('step mode prints them at the %s stop', (stop) => {

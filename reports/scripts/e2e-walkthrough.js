@@ -1218,7 +1218,8 @@ function displayTrace(trace) {
 /**
  * The writer's questions for the director (phase 3, brief 3.7), from the SAME view
  * model as the console's panel (console/checkpoint-view-logic.js#writerQuestionsView):
- * one line per question, what it is about first. Nothing is shown when there are none.
+ * one line per question, its kind (fix 3.7b) and what it is about first. Nothing is
+ * shown when there are none.
  *
  * @param {Array|null} questions - checkpoint.writerQuestions at the arc, outline or article stop
  */
@@ -1226,7 +1227,7 @@ function displayWriterQuestions(questions) {
   const view = ViewLogic.writerQuestionsView(questions);
   if (!view.any) return;
   sectionBox(view.title, 'cyan');
-  view.items.forEach(item => console.log(`  ${color(item.about, 'bright')}: ${item.question}`));
+  view.items.forEach(item => console.log(`  ${item.kindLabel ? `[${item.kindLabel}] ` : ''}${color(item.about, 'bright')}: ${item.question}`));
   console.log(color(`  ${view.hint}`, 'dim'));
   sectionEnd('cyan');
 }

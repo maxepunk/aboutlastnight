@@ -212,8 +212,8 @@ function TracePanel({ view }) {
 
 /**
  * The writer's questions for the director (phase 3, brief 3.7; spec C15, D8), above
- * the output at the arc, outline and article stops: one line per question, what it
- * is about first, folded away on a click. The director answers in the stop's note
+ * the output at the arc, outline and article stops: one line per question, its kind
+ * (fix 3.7b) and what it is about first, folded away on a click. The director answers in the stop's note
  * box. Nothing renders when the writer raised none.
  *
  * Takes an already-computed view, like EvalBar: callers pass
@@ -227,6 +227,7 @@ function WriterQuestionsPanel({ view }) {
     React.createElement(CollapsibleSection, { title: view.title, defaultOpen: true },
       React.createElement('ul', { className: 'writer-questions__list' },
         view.items.map((item) => React.createElement('li', { key: item.key, className: 'writer-questions__item' },
+          item.kindLabel && React.createElement('span', { className: 'writer-questions__kind' }, item.kindLabel),
           React.createElement('strong', { className: 'writer-questions__about' }, item.about),
           ': ',
           item.question

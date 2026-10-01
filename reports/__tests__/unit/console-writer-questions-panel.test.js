@@ -35,6 +35,14 @@ describe('the panel is shared from utils.js', () => {
     expect(body).toMatch(/item\.about/);
     expect(body).toMatch(/item\.question/);
   });
+
+  // Fix 3.7b (finding 1): each line shows the question's kind before what it is about.
+  it('shows the kind, when the question has one, before what it is about', () => {
+    const fn = src.slice(src.indexOf('function WriterQuestionsPanel('));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/item\.kindLabel && React\.createElement\('span', \{ className: 'writer-questions__kind' \}, item\.kindLabel\)/);
+    expect(body.indexOf('item.kindLabel')).toBeLessThan(body.indexOf('item.about'));
+  });
 });
 
 describe.each([

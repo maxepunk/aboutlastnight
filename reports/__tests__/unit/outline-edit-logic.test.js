@@ -951,14 +951,29 @@ describe('phase 3 (3.7): the writers\' questions in an outline', () => {
     expect(`${r.valid}: ${JSON.stringify(r.errors)}`).toBe('true: []');
   });
 
+  it('the client gate\'s kinds are the schema\'s (lib/writer-questions.js)', () => {
+    const { WRITER_QUESTION_KINDS } = require('../../lib/writer-questions');
+    expect(L.WRITER_QUESTION_KINDS).toEqual([...WRITER_QUESTION_KINDS]);
+  });
+
+  it('the client gate accepts each of the three kinds', () => {
+    for (const kind of ['player', 'pronoun', 'ledger']) {
+      const o = { ...validJournalistOutline(), writerQuestions: [{ ...Q, kind }] };
+      expect(`${kind}: ${validate('outline', o).valid} ${L.validateOutlineShape(o, 'journalist').valid}`).toBe(`${kind}: true true`);
+    }
+  });
+
   it('the client gate accepts an empty list', () => {
     expect(L.validateOutlineShape({ ...validJournalistOutline(), writerQuestions: [] }, 'journalist').valid).toBe(true);
   });
 
   it.each([
     ['a string in place of the list', 'Sarah?', '/writerQuestions'],
-    ['an entry with no question', [{ about: 'Sarah' }], '/writerQuestions/0/question'],
-    ['an entry that is not an object', ['Sarah?'], '/writerQuestions/0']
+    ['an entry with no question', [{ kind: 'player', about: 'Sarah' }], '/writerQuestions/0/question'],
+    ['an entry that is not an object', ['Sarah?'], '/writerQuestions/0'],
+    // Fix 3.7b (finding 1): the kind is required, one of the schema's three.
+    ['an entry with no kind', [{ about: 'Sarah', question: 'Where?' }], '/writerQuestions/0/kind'],
+    ['an entry with an unknown kind', [{ kind: 'other', about: 'Sarah', question: 'Where?' }], '/writerQuestions/0/kind']
   ])('both reject %s', (_name, value, errorPath) => {
     const o = { ...validJournalistOutline(), writerQuestions: value };
     expect(validate('outline', o).valid).toBe(false);

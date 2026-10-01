@@ -501,6 +501,9 @@
   // Phase 3 (3.7): the outline writer's questions for the director, a list beside the
   // six slots (outline.schema.json), never a section.
   var JOURNALIST_QUESTIONS_KEY = 'writerQuestions';
+  // Fix 3.7b: a question's kind, one of the schema's three (lib/writer-questions.js
+  // WRITER_QUESTION_KINDS; a test holds the two lists equal).
+  var WRITER_QUESTION_KINDS = ['player', 'pronoun', 'ledger'];
   var DETECTIVE_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'memoryAnalysis', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
   var DETECTIVE_REQUIRED_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
 
@@ -526,6 +529,19 @@
   }
 
   /**
+   * Each question's `kind` is one of WRITER_QUESTION_KINDS, as the schema requires
+   * (fix 3.7b). A list or an entry of the wrong type is validateObjectArray's to report.
+   */
+  function validateQuestionKinds(errors, path, questions) {
+    if (!Array.isArray(questions)) return;
+    questions.forEach(function (q, i) {
+      if (isPlainObject(q) && WRITER_QUESTION_KINDS.indexOf(q.kind) === -1) {
+        errors.push({ path: path + '/' + i + '/kind', message: "must have 'kind', one of " + WRITER_QUESTION_KINDS.join(', ') });
+      }
+    });
+  }
+
+  /**
    * The journalist outline's client gate. Phase 3 (3.2; TH4): it follows
    * outline.schema.json and is never stricter. The six section keys are optional
    * slots, a slot may be empty, a section lists only the arcs it carries, and the
@@ -535,8 +551,9 @@
    * allows; the editors write '' for a cleared field.
    *
    * Phase 3 (3.7): `writerQuestions`, the outline writer's questions for the director,
-   * is allowed beside the six slots: a list of objects, each with a string `about` and
-   * a string `question`, as the schema has it.
+   * is allowed beside the six slots: a list of objects, each with a `kind` (player,
+   * pronoun or ledger; fix 3.7b), a string `about` and a string `question`, as the
+   * schema has it.
    */
   function validateJournalistOutlineShape(outline, errors) {
     Object.keys(outline).forEach(function (k) {
@@ -546,6 +563,7 @@
     });
     if (outline[JOURNALIST_QUESTIONS_KEY] !== undefined) {
       validateObjectArray(errors, '/' + JOURNALIST_QUESTIONS_KEY, outline[JOURNALIST_QUESTIONS_KEY], ['about', 'question'], true);
+      validateQuestionKinds(errors, '/' + JOURNALIST_QUESTIONS_KEY, outline[JOURNALIST_QUESTIONS_KEY]);
     }
     JOURNALIST_ROOT_KEYS.forEach(function (k) {
       if (outline[k] !== undefined && !isPlainObject(outline[k])) {
@@ -786,7 +804,8 @@
     validateOutline: validateOutline,
     validateOutlineShape: validateOutlineShape,
     validateBundleShape: validateBundleShape,
-    CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES
+    CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES,
+    WRITER_QUESTION_KINDS: WRITER_QUESTION_KINDS
   };
 
   if (typeof window !== 'undefined') {

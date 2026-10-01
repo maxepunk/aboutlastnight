@@ -1110,21 +1110,40 @@
   // ── The writer's questions (phase 3, brief 3.7) ────────────────────────────
 
   /**
+   * Each kind a question can have and the word the panel shows for it (fix 3.7b): the
+   * schema's three, lib/writer-questions.js WRITER_QUESTION_KINDS (a test holds the
+   * keys equal to that list).
+   */
+  var WRITER_QUESTION_KIND_LABELS = { player: 'Player', pronoun: 'Pronoun', ledger: 'Ledger' };
+
+  /**
    * The writer's questions panel at the arc, outline and article stops (spec C15,
-   * D8): one line per question, what it is about first, skimmed in a glance. The
-   * director answers with the stop's note box. An entry without both strings is left
-   * out, and an empty list shows no panel.
+   * D8): one line per question, its kind and what it is about first, skimmed in a
+   * glance. The director answers with the stop's note box. An entry without both
+   * strings is left out, and an empty list shows no panel. A question with no kind,
+   * or an unknown one (a list from before the field had a kind), renders with none.
    *
    * @param {Array|null} questions - data.writerQuestions
    * @returns {{any: boolean, title: string, hint: string,
-   *            items: Array<{key: string, about: string, question: string}>}}
+   *            items: Array<{key: string, kind: (string|null), kindLabel: string, about: string, question: string}>}}
    */
   function writerQuestionsView(questions) {
     var items = asArray(questions)
       .filter(function (q) { return q && typeof q === 'object'; })
-      .map(function (q) { return { about: asString(q.about).trim(), question: asString(q.question).trim() }; })
+      .map(function (q) {
+        var kind = Object.prototype.hasOwnProperty.call(WRITER_QUESTION_KIND_LABELS, q.kind) ? q.kind : null;
+        return { kind: kind, about: asString(q.about).trim(), question: asString(q.question).trim() };
+      })
       .filter(function (q) { return q.about.length > 0 && q.question.length > 0; })
-      .map(function (q, index) { return { key: 'question-' + index, about: q.about, question: q.question }; });
+      .map(function (q, index) {
+        return {
+          key: 'question-' + index,
+          kind: q.kind,
+          kindLabel: q.kind ? WRITER_QUESTION_KIND_LABELS[q.kind] : '',
+          about: q.about,
+          question: q.question
+        };
+      });
     return {
       any: items.length > 0,
       title: 'Questions from the writer (' + items.length + ')',
@@ -1165,7 +1184,8 @@
     characterIdsPayload: characterIdsPayload,
     arcNoteInitial: arcNoteInitial,
     // Phase 3, brief 3.7: the writer's questions at the arc, outline and article stops
-    writerQuestionsView: writerQuestionsView
+    writerQuestionsView: writerQuestionsView,
+    WRITER_QUESTION_KIND_LABELS: WRITER_QUESTION_KIND_LABELS
   };
 
   if (typeof window !== 'undefined') {

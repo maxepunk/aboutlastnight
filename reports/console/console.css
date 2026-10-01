@@ -2910,3 +2910,13 @@ textarea.input {
 .writer-questions__about {
   color: var(--accent-cyan);
 }
+
+/* Fix 3.7b: the question's kind (player, pronoun, ledger), a small tag before its subject. */
+.writer-questions__kind {
+  margin-right: var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
