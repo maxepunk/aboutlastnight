@@ -151,13 +151,15 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
       items: {
         type: 'object',
         // Phase 3 (3.6): the speaker may be unknown. The words and the director's
-        // words around them are always there to give.
+        // words around them are always there to give. The descriptions give each
+        // field's shape; the one-passage rule is in QUOTE_RULE and EPILOGUE_RULE alone
+        // (3.6b fix batch, finding 1), since this schema reaches the model too.
         required: ['text', 'context'],
         properties: {
           speaker: { type: 'string', description: 'Who said it, as the prose or a correction names them' },
           text: { type: 'string', description: 'The words said, copied from the prose, or from the correction that gives the wording' },
           addressee: { type: 'string', description: 'Who it was said to, as the prose or a correction names them' },
-          context: { type: 'string', description: "The director's words around the quote, as one unbroken passage copied from the prose" },
+          context: { type: 'string', description: "The director's words around the quote" },
           correction: { type: 'string', description: "The director's correction that changed this quote's speaker, addressee or wording, copied from <DIRECTOR_CORRECTIONS>" },
           proseOffset: { type: 'integer', minimum: 0 },
           confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: QUOTE_CONFIDENCE_BANDS }
@@ -171,7 +173,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
         type: 'object',
         required: ['detail'],
         properties: {
-          detail: { type: 'string', description: "The director's words reporting the development, as one unbroken passage copied from the prose" },
+          detail: { type: 'string', description: "The director's sentence or sentences reporting the development" },
           subjects: { type: 'array', items: { type: 'string' }, description: 'The characters the detail names, as an index' },
           proseOffset: { type: 'integer', minimum: 0 }
         }

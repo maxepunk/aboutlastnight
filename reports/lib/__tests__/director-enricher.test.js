@@ -934,3 +934,25 @@ describe('the enricher rules (task 3.6 fix batch)', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.6b fix batch. The schema reaches the model through the structured-output
+// channel, so a rule restated in a field's description is stated twice per call.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('the enricher prompt (task 3.6b fix batch)', () => {
+  const rulesOf = (userPrompt) =>
+    userPrompt.slice(userPrompt.indexOf('<ENRICHMENT_RULES>'), userPrompt.indexOf('</ENRICHMENT_RULES>'));
+
+  it('describes a quote\'s context and an epilogue detail by their shape, and states the one-passage rule only in <ENRICHMENT_RULES> (finding 1)', () => {
+    const { quotes, postInvestigationDevelopments } = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties;
+    expect(quotes.items.properties.context.description).toBe("The director's words around the quote");
+    expect(postInvestigationDevelopments.items.properties.detail.description)
+      .toBe("The director's sentence or sentences reporting the development");
+
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
+    const everything = `${systemPrompt}\n${userPrompt}\n${JSON.stringify(DIRECTOR_NOTES_ENRICHED_SCHEMA)}`;
+    // Once in the quote rule, once in the epilogue rule.
+    expect(everything.match(/unbroken passage/g)).toHaveLength(2);
+    expect(rulesOf(userPrompt).match(/unbroken passage/g)).toHaveLength(2);
+  });
+});
