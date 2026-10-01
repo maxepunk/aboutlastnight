@@ -274,9 +274,12 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * {{REPORTING_MODE}} and defers here. This block is the only place the reporter's
  * whereabouts are stated. Pinned by prompt-reporting-mode-neutral.test.js.
  *
- * "You did not vote" is in both blocks. The reporter covers the room; they are
- * never a member of it. hardConstraints used to say the opposite in so many words
- * (`use "We decided"`).
+ * "You did not vote" is in both of the detective's blocks below. The reporter covers
+ * the room and is never a member of it; hardConstraints used to say the opposite in
+ * so many words (`use "We decided"`). The journalist's blocks said it too until
+ * phase 3 (task 3.1); for the journalist it is now T8's shared part in
+ * truth-rules.md, and no journalist prompt says it until wave 2 wires the truth
+ * rules into the calls.
  *
  * Phase 2 (2.6): the remote block asks for attribution and allows the absence to
  * be stated at most once. 092026's remote article announced it five times ("I was
