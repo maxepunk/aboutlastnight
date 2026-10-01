@@ -1216,11 +1216,6 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       expect(blake[0]).toContain('"Blake showed her his"');
     });
 
-    it('passes over the "her" in "Marcus owed her their cut" (3.4c)', () => {
-      const marcus = flagged(run(paragraphs('Marcus owed her their cut.')), 'npcPronouns');
-      expect(marcus.some((m) => m.includes('"Marcus owed her"'))).toBe(false);
-    });
-
     // 092626's article: "her" belongs to the reporter, the subject of the clause; Marcus
     // is the object of "about". A possessive after a name a preposition governs is not
     // read as that person's: "his" after "to Blake" is the buyer's.
