@@ -814,6 +814,18 @@ function resolveArcs(arcs, availableArcs) {
 // SOLID: Dependency Inversion - nodes depend on this abstraction, not vice versa
 
 /**
+ * The journalist revision context's line above CRITERIA SCORES: who computed the
+ * scores. A model evaluation's scores are the judge's own and uncalibrated (phase 7
+ * calibrates them); a check that computes its scores in code names itself instead,
+ * keyed by the `source` it stamps on validationResults.
+ */
+const MODEL_SCORES_LINE = "The scores below are the evaluating model's own and uncalibrated: no one has yet checked them against the director's approvals and send-backs.";
+const CODE_COMPUTED_SCORES_LINES = {
+  // validateArcStructure (arc-specialist-nodes.js): rosterCoverage and accusationArcPresent
+  'programmatic-validation': "The scores below are the arc check's, computed in code from the arcs."
+};
+
+/**
  * Build revision context for any phase (DRY helper)
  *
  * This solves the "whack-a-mole" revision problem by providing:
@@ -842,7 +854,8 @@ function resolveArcs(arcs, availableArcs) {
  * @param {string} [options.theme='journalist'] - the session's theme. The journalist's
  *   context (phase 3, brief 3.3; TH7) has no fixed "preserve" text: the director's note
  *   sets how much a send back keeps, an automatic pass changes what its findings name,
- *   an advisory criterion is a suggestion, and the scores are said to be uncalibrated.
+ *   an advisory criterion is a suggestion, and a model evaluation's scores are said to
+ *   be uncalibrated (a code check's are named as the check's).
  *   The detective keeps today's text (D13).
  * @returns {Object} { contextSection, previousOutputSection }
  *
@@ -964,7 +977,13 @@ ${advisories.map(formatIssue).join('\n')}`
   // journalist's (phase 3, 3.3) drops them: "PRESERVE THESE" listed every criterion at
   // 0.8 or more, which after a pass is every criterion, so it outranked the director's
   // note (TH7); and "need improvement" listed every criterion under 0.7, an advisory
-  // one included, as a defect. The scores are the judge's own, uncalibrated.
+  // one included, as a defect.
+  //
+  // The journalist's line says only who computed the scores (post-merge fix, 3.3
+  // review findings 1 and 2). A model evaluation's are the judge's own, uncalibrated;
+  // the arc check computes its two in code (validateArcStructure), and the fact check
+  // that runs before the article judge writes none, so neither gets the model's line.
+  // What to do with each kind of finding is WHAT THIS REWORK DOES's to say, once.
   let scoresGuide;
   if (parkedDetective) {
     const workingWell = scored.filter(([, score]) => score >= 0.8).map(([name]) => name);
@@ -977,9 +996,12 @@ ${advisories.map(formatIssue).join('\n')}`
       ? `These aspects need improvement: ${needsWork.join(', ')}`
       : '';
     scoresGuide = `${workingWellText}\n${needsWorkText}`;
+  } else if (scored.length === 0) {
+    scoresGuide = '';
   } else {
-    scoresGuide = "The scores below are the evaluating model's own and uncalibrated: no one has yet checked them against the director's approvals and send-backs. Only ISSUES TO ADDRESS is must-fix; a criterion marked [advisory] is a suggestion.";
+    scoresGuide = CODE_COMPUTED_SCORES_LINES[validationResults.source] || MODEL_SCORES_LINE;
   }
+  const scoresGuideBlock = scoresGuide ? `${scoresGuide}\n\n` : '';
 
   // Confidence is a string ('high'|'medium'|'low') in the current schema and a
   // number in the legacy one; the old code multiplied both by 100 -> "NaN%".
@@ -999,9 +1021,7 @@ ${advisories.map(formatIssue).join('\n')}`
   Confidence: ${confidenceText}
   Ready: ${passed ? 'YES' : 'NO (must address issues)'}${sendBackLine}
 
-${scoresGuide}
-
-CRITERIA SCORES:
+${scoresGuideBlock}CRITERIA SCORES:
 ${criteriaList}
 
 ISSUES TO ADDRESS:
@@ -1045,6 +1065,8 @@ ${formatHandEditsBlock(handEdits)}
   // "do not regenerate" text. On a send back the director's note sets how much the
   // rework keeps; on an automatic pass the findings do: what they do not name was not
   // questioned (row 64: an automatic pass once reshaped what the director never had).
+  // Every reworker carries this section, so the rethink rule and the must-fix /
+  // suggestion rule are stated here and nowhere else in a rework (3.3 review, finding 2).
   // The detective keeps today's four lines (D13).
   const instructionsSection = parkedDetective
     ? `═══════════════════════════════════════════════════════════════════════════════

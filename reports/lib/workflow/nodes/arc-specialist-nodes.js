@@ -1456,14 +1456,14 @@ async function reviseArcs(state, config) {
  * automatic pass. How much of the previous arcs a rework keeps is the revision
  * context's to say (buildRevisionContext), from the director's note, so no fixed
  * "preserve" or "do not regenerate" text is here: on 091826 that text turned the
- * director's "rethink" into a relabel.
+ * director's "rethink" into a relabel. The rethink rule is the revision context's too,
+ * the one place every reworker shares, so the send back's rules add only what it
+ * does not say: a corrected game mechanic reaches every arc (3.3 review, finding 2).
  */
 const ARC_REVISION_RULES = {
   human: `You are reworking the arcs you wrote: the director sent them back, and the director's note in the revision context is the task.
 
-The director knows the game and this session, so the note governs:
-- A note can call for a rethink: replace or restructure whole arcs when it does.
-- A note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every arc it touches, not only the one it names.`,
+The director knows the game, so a note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every arc it touches, not only the one it names.`,
 
   evaluator: `You are reworking the arcs you wrote: an automatic check or evaluation found what the revision context lists, and this rework answers it.`
 };

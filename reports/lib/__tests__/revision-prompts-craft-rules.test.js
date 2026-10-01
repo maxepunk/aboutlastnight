@@ -490,10 +490,25 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(rules).not.toMatch(/anti-patterns flagged/i);
   });
 
-  it('a send back may replace or restructure whole arcs, and a corrected mechanic reaches every arc', () => {
+  // Post-merge fix (3.3 review, finding 2): each rule once. The arc send back's rules
+  // said "A note can call for a rethink" and its revision context said "a note that
+  // asks for a rethink gets a rethink". The rethink rule is the revision context's,
+  // the one place every reworker shares; the arc rules add only the mechanic line.
+  it("an arc send back states the rethink rule once, in the revision context, and a corrected mechanic reaches every arc", () => {
     const rules = arcRevisionRules(true, 'journalist');
-    expect(rules).toMatch(/replace or restructure whole arcs/);
-    expect(rules).toMatch(/every arc/);
+    expect(rules).not.toMatch(/rethink/i);
+    expect(rules).toMatch(/corrects every arc it touches/);
+    const feedback = 'Merge the two money arcs.';
+    const context = buildRevisionContext({
+      phase: 'arcs', revisionCount: 0, round: 1, previousOutput: [], humanFeedback: feedback,
+      validationResults: { phase: 'arcs', passed: true, criteriaScores: { coherence: { score: 0.9, type: 'advisory' } } }
+    });
+    const system = getArcRevisionSystemPrompt(true, ARC_STATE.sessionConfig, 'journalist');
+    const user = buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: feedback }, context.contextSection, context.previousOutputSection);
+    const whole = `${system}\n${user}`;
+    expect(whole.match(/rethink/gi)).toHaveLength(2);
+    expect(whole.match(/a note that asks for a rethink gets a rethink/g)).toHaveLength(1);
+    expect(user.indexOf('rethink')).toBeGreaterThan(user.indexOf('WHAT THIS REWORK DOES'));
   });
 
   it('the detective keeps its rework rules and tasks (D13)', async () => {

@@ -436,6 +436,58 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
     expect(contextSection.indexOf('uncalibrated')).toBeLessThan(contextSection.indexOf('CRITERIA SCORES:'));
   });
 
+  // Post-merge fix (3.3 review, finding 1): the arc check computes rosterCoverage and
+  // accusationArcPresent in code (validateArcStructure, source 'programmatic-validation').
+  // The context called them "the evaluating model's own and uncalibrated" too, right
+  // above "rosterCoverage: 0.75". Only a model evaluation's scores are the model's.
+  it("labels the arc check's code-computed scores as the check's, never as the evaluating model's", () => {
+    const ARC_CHECK = {
+      phase: 'arcs',
+      ready: false,
+      structuralPassed: false,
+      issues: [{ type: 'missing-roster-coverage', message: 'Missing roster members: Alex', severity: 'structural' }],
+      revisionGuidance: 'Place Alex in an arc.',
+      criteriaScores: { rosterCoverage: 0.75, accusationArcPresent: 1.0 },
+      source: 'programmatic-validation'
+    };
+    for (const humanFeedback of [null, 'Merge the two money arcs.']) {
+      const { contextSection } = buildRevisionContext({
+        phase: 'arcs', revisionCount: 1, validationResults: ARC_CHECK, previousOutput: [], humanFeedback
+      });
+      expect(contextSection).not.toMatch(/uncalibrated|evaluating model/i);
+      const guide = contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY:'), contextSection.indexOf('CRITERIA SCORES:'));
+      expect(guide).toMatch(/The scores below are the arc check's, computed in code from the arcs\./);
+      expect(contextSection).toContain('  - rosterCoverage: 0.75\n  - accusationArcPresent: 1.00');
+    }
+  });
+
+  it('says nothing about scores when the findings carry none (the fact check before the model)', () => {
+    const FACT_CHECK = {
+      phase: 'article',
+      passed: false,
+      structuralIssues: ['Evidence card "ale003" quotes text its document does not hold.'],
+      advisoryWarnings: [],
+      feedback: 'Evidence card "ale003" quotes text its document does not hold.'
+    };
+    const { contextSection } = buildRevisionContext({
+      phase: 'article', revisionCount: 1, validationResults: FACT_CHECK, previousOutput: {}
+    });
+    expect(contextSection).not.toMatch(/uncalibrated|evaluating model|scores below/i);
+    expect(contextSection).toMatch(/Ready: NO \(must address issues\)\n\nCRITERIA SCORES:\n {2}\(no criteria scores available\)/);
+  });
+
+  // Post-merge fix (3.3 review, finding 2): each rule once. The scores' line said "Only
+  // ISSUES TO ADDRESS is must-fix; a criterion marked [advisory] is a suggestion", and the
+  // automatic pass's WHAT THIS REWORK DOES said both again, with the reason.
+  it('on an automated pass, states once that ISSUES TO ADDRESS are must-fix and an [advisory] criterion a suggestion', () => {
+    const { contextSection } = build({ humanFeedback: null });
+    expect(contextSection.match(/must-fix/g)).toHaveLength(1);
+    expect(contextSection.match(/marked \[advisory\]/g)).toHaveLength(1);
+    const instructions = contextSection.slice(contextSection.indexOf('WHAT THIS REWORK DOES'));
+    expect(instructions).toMatch(/The ISSUES TO ADDRESS are must-fix\./);
+    expect(instructions).toMatch(/criteria marked \[advisory\] are suggestions: take one up where/);
+  });
+
   it("keeps the fixture's anchors: the send-back NOTE line, the previous version's header and its end", () => {
     const { contextSection, previousOutputSection } = build({ humanFeedback: 'x' });
     expect(contextSection).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nx\n\nNOTE: The human reviewer has explicitly requested these changes.');
