@@ -7,7 +7,8 @@
  *
  * Each theme defines:
  * - npcs: Characters valid in characterPlacements but not on player roster
- * - outlineRules: Structural requirements for article outlines
+ * - outlineRules: Structural requirements for article outlines (detective only;
+ *   the journalist's went in phase 3)
  *
  * To add a new theme:
  * 1. Add entry to THEME_CONFIGS with theme name as key
@@ -40,24 +41,10 @@ const THEME_CONFIGS = {
       { name: 'Valet', aliasOf: 'Blake', role: 'alias for Blake' }
     ],
 
-    // Outline structure rules (Commit 8.19)
-    // Used by programmatic validation BEFORE LLM evaluation
-    outlineRules: {
-      // Sections that MUST exist (structural requirement)
-      requiredSections: ['lede', 'theStory', 'thePlayers', 'closing'],
-      // Sections that MAY exist
-      optionalSections: ['followTheMoney', 'whatsMissing'],
-      // Target word counts per section (advisory)
-      // Reconciled to sum to 1000-1500 word envelope (see docs/superpowers/plans/2026-03-30-word-budget-reconciliation.md)
-      wordBudgets: {
-        lede: { min: 75, max: 150 },
-        theStory: { min: 350, max: 550 },
-        followTheMoney: { min: 75, max: 200 },
-        thePlayers: { min: 150, max: 250 },
-        whatsMissing: { min: 75, max: 150 },
-        closing: { min: 75, max: 150 }
-      }
-    },
+    // Outline rules: REMOVED for the journalist (phase 3, fix 3.2b). The fixed list
+    // of required sections and the per-section word budgets had no reader, and they
+    // stated the contract TH4 and C2 retired: the outline's six keys are optional
+    // slots (outline.schema.json), and the rule set says what each section does.
 
     // Article content rules: REMOVED (F9/CR-5). The bannedPatterns/getArticleRules
     // config had zero runtime consumers. Since phase 3 the writers read the rule set
@@ -184,7 +171,8 @@ function isValidTheme(theme) {
 /**
  * Get outline rules for a theme (Commit 8.19)
  * @param {string} theme - Theme name
- * @returns {Object} Outline rules or empty object if theme not found
+ * @returns {Object} Outline rules, or an empty object for a theme with none (the
+ *   journalist since phase 3) or an unknown one
  */
 function getOutlineRules(theme) {
   return THEME_CONFIGS[theme]?.outlineRules || {};

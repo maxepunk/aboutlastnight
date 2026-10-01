@@ -349,7 +349,7 @@ The pipeline supports multiple report themes via `state.theme`. Each theme produ
 | `detective` | Detective case file | Third-person investigative | ~750 words | Det. Anondono |
 
 **Theme-aware layers:**
-- `lib/theme-config.js` — NPCs, outline rules, article rules, canonical characters per theme
+- `lib/theme-config.js` — NPCs (the canon lines) and display constants per theme; the detective's outline rules (the journalist's went in phase 3, unread)
 - `lib/theme-loader.js` — Resolves prompt files from `.claude/skills/{theme}-report/references/prompts/`
 - `lib/prompt-builder.js` — Builds system prompts with theme-specific voice, constraints, sections
 - `templates/{theme}/` — Handlebars templates (layouts, partials, content blocks)
