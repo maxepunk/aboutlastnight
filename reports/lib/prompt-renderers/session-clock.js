@@ -20,8 +20,9 @@
  *   its clock is decided from what it holds (its exposures, and the bundle's sales
  *   when the caller has the bundle).
  *
- * Every logged time a prompt prints goes through printLoggedTime: the morning
- * timeline in the record view and the transaction links. The director's notes are
+ * Every logged time a prompt prints goes through printLoggedTime (the morning
+ * timeline in the record view and the transaction links), or printClockMinute for
+ * the heading of a same-minute group on the timeline. The director's notes are
  * never changed; nothing here touches them.
  *
  * Pure: no I/O, no state.
@@ -65,6 +66,14 @@ function parseLoggedTime(text) {
   return null;
 }
 
+/** The times that read as times, each with its minutes after midnight. */
+function readTimes(times) {
+  return (Array.isArray(times) ? times : [])
+    .map((text) => ({ text, read: parseLoggedTime(text) }))
+    .filter(({ read }) => read)
+    .map(({ text, read }) => ({ text: text.trim(), minutes: read.minutes }));
+}
+
 /**
  * The session's first event among these times: the one after the longest quiet
  * stretch of the 24-hour clock.
@@ -94,13 +103,25 @@ function firstEventOf(parsed) {
  * @returns {{decided: boolean, evening: boolean, firstTime: string|null}}
  */
 function decideSessionClock(times) {
-  const parsed = (Array.isArray(times) ? times : [])
-    .map((text) => ({ text, read: parseLoggedTime(text) }))
-    .filter(({ read }) => read)
-    .map(({ text, read }) => ({ text: text.trim(), minutes: read.minutes }));
+  const parsed = readTimes(times);
   if (parsed.length === 0) return { ...UNDECIDED };
   const first = firstEventOf(parsed);
   return { decided: true, evening: first.minutes >= EVENING_FROM_MINUTES, firstTime: first.text };
+}
+
+/**
+ * The logged time the session starts at, among any of its times: the first event by
+ * the rule the clock decision reads. The morning timeline orders its events from
+ * this, over every event it prints, the adjustments included, so a bonus logged a
+ * minute before the first sale opens the timeline rather than closing it. The clock
+ * decision itself still reads the exposures and sales alone.
+ *
+ * @param {Array<*>} times - logged times
+ * @returns {string|null} null when none reads as a time
+ */
+function firstEventTime(times) {
+  const parsed = readTimes(times);
+  return parsed.length > 0 ? firstEventOf(parsed).text : null;
 }
 
 /** A stamped decision, when it has the shape decideSessionClock returns. */
@@ -158,7 +179,9 @@ function printLoggedTime(text, clock) {
   const logged = String(text).trim();
   if (!clock || !clock.evening || !parseLoggedTime(logged)) return logged;
   if (TWELVE_HOUR.test(logged)) {
-    return logged.replace(/([AaPp])(\.?\s*[Mm]\.?)/, (match, letter, rest) => swapMeridiem(letter) + rest);
+    // Inside the time parseLoggedTime read, the meridiem is the only A or P: the
+    // match opens on the hour's digits. Text around the time keeps its letters.
+    return logged.replace(TWELVE_HOUR, (time) => time.replace(/[AaPp]/, swapMeridiem));
   }
   // A 24-hour time: move the hour by 12, keeping the logged hour's width.
   return logged.replace(/(\d{1,2}):(\d{2})/, (match, hour, minute) => {
@@ -168,16 +191,38 @@ function printLoggedTime(text, clock) {
 }
 
 /**
- * Where a logged time falls in the session: minutes after the session's first event.
+ * One minute on the session clock, in one format: "07:50 AM", the hour two digits.
+ *
+ * printLoggedTime keeps each time's logged format, and the session report writes one
+ * minute more than one way ("07:50 PM" for a sale, "07:50PM" for an adjustment). The
+ * morning timeline heads each same-minute group with this, so one minute prints one
+ * way. The clock is printLoggedTime's: the evening clock moves the time 12 hours.
  *
  * @param {*} text - the logged time
- * @param {Object|null} clock
- * @returns {number|null} null when the text is not a time
+ * @param {Object|null} clock - a decision from decideSessionClock or sessionClockOf
+ * @returns {string|null} null when the text is not a time
  */
-function sessionOrderOf(text, clock) {
+function printClockMinute(text, clock) {
   const read = parseLoggedTime(typeof text === 'string' ? text : '');
   if (!read) return null;
-  const start = clock && clock.firstTime ? parseLoggedTime(clock.firstTime) : null;
+  const minutes = clock && clock.evening ? (read.minutes + MINUTES_PER_DAY / 2) % MINUTES_PER_DAY : read.minutes;
+  const hour = Math.floor(minutes / 60);
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(hour12)}:${pad(minutes % 60)} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+/**
+ * Where a logged time falls in the session: minutes after the session's start.
+ *
+ * @param {*} text - the logged time
+ * @param {string|null} startTime - the logged time the session starts at (firstEventTime)
+ * @returns {number|null} null when the text is not a time
+ */
+function sessionOrderOf(text, startTime) {
+  const read = parseLoggedTime(typeof text === 'string' ? text : '');
+  if (!read) return null;
+  const start = parseLoggedTime(typeof startTime === 'string' ? startTime : '');
   if (!start) return read.minutes;
   return (read.minutes - start.minutes + MINUTES_PER_DAY) % MINUTES_PER_DAY;
 }
@@ -187,6 +232,8 @@ module.exports = {
   parseLoggedTime,
   decideSessionClock,
   sessionClockOf,
+  firstEventTime,
   printLoggedTime,
+  printClockMinute,
   sessionOrderOf
 };

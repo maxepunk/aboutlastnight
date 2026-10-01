@@ -28,7 +28,7 @@
  * Pure: no I/O, no state, and the bundle is never mutated.
  */
 
-const { sessionClockOf, printLoggedTime, sessionOrderOf } = require('./session-clock');
+const { sessionClockOf, firstEventTime, printLoggedTime, printClockMinute, sessionOrderOf } = require('./session-clock');
 
 /** The one wording an instruction uses to point a writer at a document's text (R1). */
 const DOCUMENT_POINTER = 'the document with that id in <RECORD>';
@@ -242,10 +242,15 @@ function exposedMemoryIds(evidenceBundle) {
  *   is never read.
  * - Adjustments: sessionConfig.adjustments, the bonus and the transfers.
  *
- * Events in the same minute keep each table's order, the ledger's (sales, then
- * adjustments) before the evidence log's, and are flagged `sameMinute`. An event
- * with no readable time goes last, in its table's order. A thread parsed before
- * phase 3 (no exposures, no adjustments) gets its sales alone.
+ * Events go in order from the first of them, the adjustments included, so an
+ * adjustment logged before the first exposure or sale opens the timeline; the clock
+ * decision reads the exposures and sales alone (session-clock.js). Events in the
+ * same minute keep each table's order, the ledger's (sales, then adjustments) before
+ * the evidence log's, and are flagged `sameMinute`. Each event's `minute` is its
+ * minute on the session clock in one format (printClockMinute), so two events share
+ * it exactly when they share a minute, however each row wrote its time. An event
+ * with no readable time goes last, in its table's order, with no minute. A thread
+ * parsed before phase 3 (no exposures, no adjustments) gets its sales alone.
  *
  * @param {Object|null} evidenceBundle - the curated bundle
  * @param {Object|null} sessionConfig - the parse: exposures, adjustments, sessionClock
@@ -275,7 +280,8 @@ function buildMorningTimeline(evidenceBundle, sessionConfig) {
     .filter((e) => exposedIdOf(e))
     .forEach((e) => rows.push({ logged: e.time, event: { kind: 'exposure', documentId: exposedIdOf(e), exposer: turnInName(e.exposer) } }));
 
-  const placed = rows.map((row, index) => ({ ...row, index, order: sessionOrderOf(row.logged, clock) }));
+  const start = firstEventTime(rows.map((row) => row.logged));
+  const placed = rows.map((row, index) => ({ ...row, index, order: sessionOrderOf(row.logged, start) }));
   placed.sort((a, b) => {
     if (a.order !== b.order) {
       if (a.order === null) return 1;
@@ -291,6 +297,7 @@ function buildMorningTimeline(evidenceBundle, sessionConfig) {
   const events = placed.map((row) => ({
     ...row.event,
     time: fieldText(row.logged, (t) => printLoggedTime(t, clock)),
+    minute: row.order === null ? null : printClockMinute(row.logged, clock),
     sameMinute: row.order !== null && perMinute.get(row.order) > 1
   }));
   return { clock, events };
@@ -319,7 +326,8 @@ const TIMELINE_INTRO = 'The morning in time order: the ledger and the evidence l
 
 /**
  * The <morning-timeline> part of the view (buildMorningTimeline, printed): one line
- * per event, time first, and the events of a shared minute under one heading.
+ * per event, time first, and the events of a shared minute under one heading, which
+ * prints the minute in one format.
  *
  * @param {Object|null} evidenceBundle
  * @param {Object|null} sessionConfig
@@ -334,7 +342,7 @@ function renderMorningTimeline(evidenceBundle, sessionConfig) {
       return;
     }
     const previous = events[i - 1];
-    if (!previous || !previous.sameMinute || previous.time !== event.time) lines.push(`- ${event.time}, same minute:`);
+    if (!previous || !previous.sameMinute || previous.minute !== event.minute) lines.push(`- ${event.minute}, same minute:`);
     lines.push(`  - ${timelineEventText(event)}`);
   });
   return `<morning-timeline>\n${TIMELINE_INTRO}\n${lines.length > 0 ? lines.join('\n') : '(none)'}\n</morning-timeline>`;

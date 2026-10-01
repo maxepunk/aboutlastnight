@@ -13,6 +13,8 @@ const {
   decideSessionClock,
   sessionClockOf,
   printLoggedTime,
+  printClockMinute,
+  firstEventTime,
   sessionOrderOf
 } = require('../prompt-renderers/session-clock');
 
@@ -76,8 +78,53 @@ describe('the evening clock across midnight', () => {
   });
 
   it('orders 12:15 AM after 11:50 PM', () => {
-    expect(sessionOrderOf('12:15 AM', clock)).toBeGreaterThan(sessionOrderOf('11:50 PM', clock));
-    expect(sessionOrderOf('11:50 PM', clock)).toBeGreaterThan(sessionOrderOf('07:37 PM', clock));
+    const start = clock.firstTime;
+    expect(sessionOrderOf('12:15 AM', start)).toBeGreaterThan(sessionOrderOf('11:50 PM', start));
+    expect(sessionOrderOf('11:50 PM', start)).toBeGreaterThan(sessionOrderOf('07:37 PM', start));
+  });
+});
+
+describe('printLoggedTime rewrites only the meridiem of the time it read (fix batch, finding 3)', () => {
+  const evening = decideSessionClock(['07:37 PM']);
+
+  it('leaves letters before the time alone', () => {
+    expect(printLoggedTime('Sam 07:50 PM', evening)).toBe('Sam 07:50 AM');
+    expect(printLoggedTime('Pam at 07:50pm', evening)).toBe('Pam at 07:50am');
+  });
+});
+
+describe('printClockMinute: one format for a minute on the session clock (fix batch, finding 1)', () => {
+  const evening = decideSessionClock(['07:37 PM']);
+  const daytime = decideSessionClock(['01:07 PM']);
+
+  it('prints the same minute the same way however it was logged', () => {
+    expect(printClockMinute('07:50 PM', evening)).toBe('07:50 AM');
+    expect(printClockMinute('07:50PM', evening)).toBe('07:50 AM');
+    expect(printClockMinute('7:50 pm', evening)).toBe('07:50 AM');
+    expect(printClockMinute('19:50', evening)).toBe('07:50 AM');
+  });
+
+  it('keeps noon, midnight and a daytime session on the clock printLoggedTime uses', () => {
+    expect(printClockMinute('12:15 AM', evening)).toBe('12:15 PM');
+    expect(printClockMinute('2:25PM', daytime)).toBe('02:25 PM');
+    expect(printClockMinute('12:05 PM', daytime)).toBe('12:05 PM');
+    expect(printClockMinute('12:05 AM', daytime)).toBe('12:05 AM');
+  });
+
+  it('is null for text that is not a time', () => {
+    expect(printClockMinute('sometime', evening)).toBeNull();
+    expect(printClockMinute(null, evening)).toBeNull();
+  });
+});
+
+describe('firstEventTime: where the session starts among any times (fix batch, finding 2)', () => {
+  it('is the time after the longest quiet stretch, as the clock decision reads it', () => {
+    expect(firstEventTime(['02:30 PM', '01:51 PM', '01:52 PM'])).toBe('01:51 PM');
+    expect(firstEventTime(['12:15 AM', '11:50 PM', '07:37 PM'])).toBe('07:37 PM');
+  });
+
+  it('is null with no readable time', () => {
+    expect(firstEventTime(['', null, 'after the vote'])).toBeNull();
   });
 });
 
@@ -85,12 +132,12 @@ describe('noon in a daytime session', () => {
   it('orders 12:05 PM after 11:55 AM', () => {
     const clock = decideSessionClock(['11:40 AM', '11:55 AM', '12:05 PM']);
     expect(clock.evening).toBe(false);
-    expect(sessionOrderOf('12:05 PM', clock)).toBeGreaterThan(sessionOrderOf('11:55 AM', clock));
+    expect(sessionOrderOf('12:05 PM', clock.firstTime)).toBeGreaterThan(sessionOrderOf('11:55 AM', clock.firstTime));
   });
 
   it('gives no order to a time it cannot read', () => {
     const clock = decideSessionClock(['11:40 AM']);
-    expect(sessionOrderOf('sometime', clock)).toBeNull();
+    expect(sessionOrderOf('sometime', clock.firstTime)).toBeNull();
     expect(printLoggedTime('sometime', clock)).toBe('sometime');
   });
 });

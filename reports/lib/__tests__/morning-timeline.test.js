@@ -32,11 +32,11 @@ describe('buildMorningTimeline', () => {
     );
     expect(clock).toEqual({ decided: true, evening: true, firstTime: '07:37 PM' });
     expect(events).toEqual([
-      { kind: 'exposure', time: '07:37 AM', sameMinute: false, documentId: 'ale003', exposer: null },
-      { kind: 'sale', time: '07:50 AM', sameMinute: true, account: 'Ember', amount: 500000 },
-      { kind: 'bonus', time: '07:50 AM', sameMinute: true, toAccount: 'Ember', amount: 50000 },
-      { kind: 'sale', time: '08:02 AM', sameMinute: false, account: 'Ember', amount: 375000 },
-      { kind: 'transfer', time: '10:30 AM', sameMinute: false, fromAccount: 'Vic', toAccount: 'L', amount: 375000 }
+      { kind: 'exposure', time: '07:37 AM', minute: '07:37 AM', sameMinute: false, documentId: 'ale003', exposer: null },
+      { kind: 'sale', time: '07:50 AM', minute: '07:50 AM', sameMinute: true, account: 'Ember', amount: 500000 },
+      { kind: 'bonus', time: '07:50 AM', minute: '07:50 AM', sameMinute: true, toAccount: 'Ember', amount: 50000 },
+      { kind: 'sale', time: '08:02 AM', minute: '08:02 AM', sameMinute: false, account: 'Ember', amount: 375000 },
+      { kind: 'transfer', time: '10:30 AM', minute: '10:30 AM', sameMinute: false, fromAccount: 'Vic', toAccount: 'L', amount: 375000 }
     ]);
   });
 
@@ -59,7 +59,7 @@ describe('buildMorningTimeline', () => {
       bundle({ tokens: [exposedToken('ale003')] }),
       { exposures: [{ tokenId: 'ALE003', exposer: 'Ashe', time: '09:06 PM' }, { tokenId: 'qzx913', exposer: 'Ashe', time: '09:10 PM', owner: 'Octavia Quillfeather' }] }
     );
-    expect(events).toEqual([{ kind: 'exposure', time: '09:06 AM', sameMinute: false, documentId: 'ale003', exposer: 'Ashe' }]);
+    expect(events).toEqual([{ kind: 'exposure', time: '09:06 AM', minute: '09:06 AM', sameMinute: false, documentId: 'ale003', exposer: 'Ashe' }]);
   });
 
   it('names the turn-in only when the evidence log carries a name', () => {
@@ -82,7 +82,23 @@ describe('buildMorningTimeline', () => {
 
   it('renders a thread from before phase 3 (no exposures, no adjustments) with its sales', () => {
     const { events } = buildMorningTimeline(bundle({ transactions: [sale('Ember', 75000, '07:50 PM')] }), { accusation: { accused: [] } });
-    expect(events).toEqual([{ kind: 'sale', time: '07:50 AM', sameMinute: false, account: 'Ember', amount: 75000 }]);
+    expect(events).toEqual([{ kind: 'sale', time: '07:50 AM', minute: '07:50 AM', sameMinute: false, account: 'Ember', amount: 75000 }]);
+  });
+
+  it('opens on an adjustment logged before the first sale, and the sales still decide the clock (fix batch, finding 2)', () => {
+    const daytime = buildMorningTimeline(
+      bundle({ transactions: [sale('Ember', 100000, '01:52 PM'), sale('Ember', 50000, '02:30 PM')] }),
+      { adjustments: [{ time: '01:51 PM', kind: 'bonus', amount: 50000, toAccount: 'Ember' }] }
+    );
+    expect(daytime.clock).toEqual({ decided: true, evening: false, firstTime: '01:52 PM' });
+    expect(daytime.events.map((e) => `${e.time} ${e.kind}`)).toEqual(['01:51 PM bonus', '01:52 PM sale', '02:30 PM sale']);
+
+    const evening = buildMorningTimeline(
+      bundle({ transactions: [sale('Ember', 100000, '07:50 PM'), sale('Ember', 50000, '09:10 PM')] }),
+      { adjustments: [{ time: '07:49PM', kind: 'bonus', amount: 50000, toAccount: 'Ember' }] }
+    );
+    expect(evening.clock).toEqual({ decided: true, evening: true, firstTime: '07:50 PM' });
+    expect(evening.events.map((e) => `${e.minute} ${e.kind}`)).toEqual(['07:49 AM bonus', '07:50 AM sale', '09:10 AM sale']);
   });
 });
 
@@ -111,6 +127,27 @@ describe('renderMorningTimeline', () => {
       '  - first-burial bonus | paid to: Ember | amount: $50,000',
       '- 09:40 AM | exposure | document: ash003 | named: Ashe',
       '- 10:30 AM | transfer | from: Vic | to: L | amount: $375,000'
+    ]);
+  });
+
+  it('heads one minute once however its rows were logged (fix batch, finding 1: 092026 writes "07:51PM")', () => {
+    const out = renderMorningTimeline(
+      bundle({ tokens: [exposedToken('ale003')], transactions: [sale('Ember', 500000, '07:50 PM')] }),
+      {
+        exposures: [{ tokenId: 'ale003', exposer: 'Ashe', time: '07:51 PM' }],
+        adjustments: [
+          { time: '07:50PM', kind: 'bonus', amount: 50000, toAccount: 'Ember' },
+          { time: '07:51PM', kind: 'transfer', amount: 20000, fromAccount: 'Vic', toAccount: 'L' }
+        ]
+      }
+    );
+    expect(out.split('\n').slice(2, -1)).toEqual([
+      '- 07:50 AM, same minute:',
+      '  - sale | account: Ember | amount: $500,000',
+      '  - first-burial bonus | paid to: Ember | amount: $50,000',
+      '- 07:51 AM, same minute:',
+      '  - transfer | from: Vic | to: L | amount: $20,000',
+      '  - exposure | document: ale003 | named: Ashe'
     ]);
   });
 
