@@ -134,6 +134,13 @@ describe('article prompt, remote session', () => {
     expect(rendered.systemPrompt).toContain(loadModeBlock('remote'));
   });
 
+  it('closes the block in its tag, then a blank line, before the rest of the system prompt', () => {
+    // Review of 3.1, finding 4: the block opens with "## T8, remote", and the article
+    // system prompt's next part (the roster) has no heading of its own.
+    expect(rendered.systemPrompt).toContain('<mode-remote>\n## T8, remote');
+    expect(rendered.systemPrompt).toContain('\n</mode-remote>\n\n');
+  });
+
   it.each(ON_SITE_PERSONA)('does not assert: %s', (phrase) => {
     expect(rendered.all).not.toContain(phrase);
   });
@@ -293,6 +300,19 @@ describe('the mode block reaches the arc and outline writers', () => {
         });
       });
 
+      it('wraps the block in its tag, so the prompt\'s next part is not read as part of T8', () => {
+        // Review of 3.1, finding 4: the block opens with a "## T8" heading, and the text
+        // after it in the arc calls ("GAME CONTEXT:") has none of its own. The closing
+        // tag ends the block; the outline writer's next part is its own tagged section.
+        Object.entries(prompts).forEach(([name, prompt]) => {
+          const lines = prompt.split('\n');
+          const open = lines.indexOf(`<mode-${mode}>`);
+          const close = lines.indexOf(`</mode-${mode}>`);
+          expect(`${name}:${open}:${lines[open + 1]?.startsWith('## T8, ')}`).toBe(`${name}:2:true`);
+          expect(`${name}:${close > open}:${/^(|<[a-z-]+>)$/.test(lines[close + 1])}`).toBe(`${name}:true:true`);
+        });
+      });
+
       it("the article rework states it once, where the article writer's system prompt does", async () => {
         // The article writer's identity runs to three lines, so its block sits after
         // them. The rework system prompt opens with the writer's whole system prompt.
@@ -342,8 +362,9 @@ describe('the mode block reaches the arc and outline writers', () => {
 describe("the journalist mode blocks state T8's mode part", () => {
   const blocks = { 'on-site': loadModeBlock('on-site'), remote: loadModeBlock('remote') };
 
-  it.each(['on-site', 'remote'])("%s: opens with its T8 heading and states Nova's position", (mode) => {
-    expect(blocks[mode]).toMatch(new RegExp(`^## T8, ${mode === 'remote' ? 'remote' : 'on site'}:`));
+  it.each(['on-site', 'remote'])("%s: sits in its tag, opens with its T8 heading and states Nova's position", (mode) => {
+    expect(blocks[mode]).toMatch(new RegExp(`^<mode-${mode}>\\n## T8, ${mode === 'remote' ? 'remote' : 'on site'}:`));
+    expect(blocks[mode].endsWith(`\n</mode-${mode}>`)).toBe(true);
     expect(blocks[mode]).toMatch(/uninterested third party Fremont PD required/);
   });
 

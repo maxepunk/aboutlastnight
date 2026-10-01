@@ -122,8 +122,11 @@ describe('the loader', () => {
 });
 
 describe('the mode block', () => {
-  it.each(['on-site', 'remote'])('%s: returns the mode file\'s text, untagged', (mode) => {
-    expect(loadModeBlock(mode, { root: STUB_ROOT })).toBe(`STUB mode-${mode}`);
+  // Wrapped as loadRuleSet wraps each file (review of 3.1, finding 4): the block sits in
+  // the middle of a system prompt, and its closing tag ends it, so the text after it is
+  // not read as part of T8.
+  it.each(['on-site', 'remote'])('%s: returns the mode file\'s text in one tag named after the file', (mode) => {
+    expect(loadModeBlock(mode, { root: STUB_ROOT })).toBe(`<mode-${mode}>\nSTUB mode-${mode}\n</mode-${mode}>`);
   });
 
   it('the two real blocks differ, and each carries T8', () => {
@@ -152,13 +155,13 @@ describe('the default root, which a test can point at the stubs', () => {
     const previous = setDefaultRulesRoot(STUB_ROOT);
     expect(path.resolve(previous)).toBe(path.resolve(DEFAULT_RULES_ROOT));
     expect(loadRuleSet('arc').core).toContain('STUB world');
-    expect(loadModeBlock('remote')).toBe('STUB mode-remote');
+    expect(loadModeBlock('remote')).toBe('<mode-remote>\nSTUB mode-remote\n</mode-remote>');
   });
 
   it('goes back to the skill\'s folder on null', () => {
     setDefaultRulesRoot(STUB_ROOT);
     setDefaultRulesRoot(null);
-    expect(loadModeBlock('remote')).not.toBe('STUB mode-remote');
+    expect(loadModeBlock('remote')).not.toContain('STUB mode-remote');
   });
 });
 

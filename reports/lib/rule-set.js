@@ -9,7 +9,8 @@
  * - `truth-rules.md`: T1 to T15, with T8's mode-independent part;
  * - ten `craft-*.md` files, split so each call reads exactly the craft items spec
  *   section 8 gives it (RULE_SET_CALLS);
- * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block.
+ * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block,
+ *   which loadModeBlock hands back in its tag as loadRuleSet does each file.
  *
  * Synchronous on purpose: it reads with readFileSync and caches, so every prompt
  * builder that calls it stays synchronous. The cache lives for the process: a
@@ -138,9 +139,14 @@ function loadRuleSet(call, { root } = {}) {
 }
 
 /**
- * The reporting-mode block for one mode: T8's mode part, untagged. It goes in a
- * system prompt right after the identity line (buildReportingModeBlock in
- * lib/prompt-builder.js).
+ * The reporting-mode block for one mode: T8's mode part. It goes in a system prompt
+ * right after the identity line (buildReportingModeBlock in lib/prompt-builder.js),
+ * with the prompt's own text after it.
+ *
+ * Wrapped in one tag named after its file (`<mode-remote>`), as loadRuleSet wraps each
+ * file, and the caller inserts it unchanged. The file opens with its "## T8" heading
+ * (the lint counts the id there); the closing tag ends the block, so the text that
+ * follows it in the prompt is not read as part of T8.
  *
  * @param {'on-site'|'remote'} mode
  * @param {Object} [options]
@@ -154,7 +160,7 @@ function loadModeBlock(mode, { root } = {}) {
     throw new Error(`[rule-set] Unknown reporting mode "${mode}". Modes: ${Object.keys(MODE_FILES).join(', ')}.`);
   }
   const folder = root ? path.resolve(root) : defaultRoot;
-  return readRuleFiles([name], folder, `the ${mode} mode block`)[name];
+  return tagged(name, readRuleFiles([name], folder, `the ${mode} mode block`)[name]);
 }
 
 module.exports = {

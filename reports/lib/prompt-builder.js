@@ -308,7 +308,9 @@ const DETECTIVE_REPORTING_MODE_BLOCKS = {
  * phase 2 (2.3) every rework system prompt opens with its writer's, so each rework
  * carries the block its writer does, once, in the writer's position.
  *
- * The journalist reads the rule set's mode file (loadModeBlock); the detective keeps
+ * The journalist reads the rule set's mode file (loadModeBlock), wrapped in one tag
+ * named after the file (`<mode-remote>`), so the system prompt's text after the block
+ * is not read as part of its "## T8" section; the detective keeps
  * DETECTIVE_REPORTING_MODE_BLOCKS. The theme is required: a missing one would
  * silently give one theme the other's block.
  *

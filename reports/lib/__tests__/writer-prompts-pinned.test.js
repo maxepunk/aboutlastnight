@@ -42,11 +42,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   file, read here from the stub root (fixtures/rules/mode-remote.md, "STUB
  *   mode-remote"), in place of the one-line remote string. One line changes in each
  *   journalist writer's system prompt; the detective keeps its block.
+ * - Phase 3, task 3.1 fix batch item 4: the mode block comes in one tag named after
+ *   its file (<mode-remote> ... </mode-remote>), as loadRuleSet wraps each file, so
+ *   the text after it is not read as part of T8. Two lines added around the block in
+ *   each journalist writer's system prompt; the detective is unchanged.
  */
 const PINNED = {
-  'outline-journalist': ['bc7386eca7dd39c97c4ec87004a3ba1bcf3c21efc265e546fb0b9541bb7e549c', 14307],
-  'article-journalist': ['8511e0ba1704de1af53d3b347aa7d6fa15005e59e8a1fba17f8643f7793b7f78', 43216],
-  'arcs-journalist': ['351b4d7a32d00569fda7e570afe0aaf7391f366792f0fac9b6627c5cb4c45e1c', 13980],
+  'outline-journalist': ['2fb407c5b2a0d55401395bdffcc6ed757b8bcedd81187257e093313c8f1f759b', 14336],
+  'article-journalist': ['5a1b3b5100cf5dea727c8f51cff97648280735c332d5161b80940024e9eb9b99', 43245],
+  'arcs-journalist': ['baa6a3e955d70a953c6041ef9665e6c686dab2dabe4afe188d49628569b4b589', 14009],
   'outline-detective': ['20a166c6d64dd82a4d76da9d278a258ecac12b9e785402cece3dca1431cbcef6', 8226],
   'article-detective': ['ddaf75cf913fac7dd89ae7d2b5939071b97e54d64f8c5d17dcd541c72f310506', 29096],
   'arcs-detective': ['604b12053d9604c7baea83fdc2c6d289274b63e01532497cc3781745d007fe21', 14247]
