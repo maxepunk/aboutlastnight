@@ -391,9 +391,9 @@
    * Anything else it can emit has no structured counterpart, so it would be
    * invisible if the screen showed only the four groups. Those land in the `other`
    * group. (I2b: the two messages that used to arrive this way — a leaked prompt
-   * example and an NPC pronoun error — are advisories now and render in the
-   * `advisory` group. Their prefixes were left unchanged so that promoting one back
-   * to structural needs no change here.)
+   * example and an NPC pronoun error — are advisories now; the pronoun error has
+   * its own advisory group since phase 3, see ADVISORY_GROUPS. Their prefixes were
+   * left unchanged so that promoting one back to structural needs no change here.)
    *
    * Prefix matching is deliberate and fails safe: if a message is reworded, its
    * issue moves INTO `other` (still on screen, just ungrouped) rather than out
@@ -408,6 +408,31 @@
 
   function isGroupedIssue(text) {
     return GROUPED_ISSUE_PREFIXES.some(function (prefix) { return text.indexOf(prefix) === 0; });
+  }
+
+  /**
+   * The advisory checks that get a group of their own (phase 3, 3.4), by the message
+   * prefix lib/content-bundle-fact-check.js gives each. Every advisory none of them
+   * claims (a leaked prompt example, a repeated absence, an unverifiable photo list)
+   * stays in the general `advisory` group. Only advisories are grouped here: a
+   * structural message with one of these prefixes, which a promotion would produce,
+   * lands in `other` as before. None of them counts toward the approve button's
+   * unresolved count (approveLabel), which is structural only.
+   */
+  var ADVISORY_GROUPS = [
+    { key: 'emDash', prefix: 'Em-dash in the narrator\'s prose:', label: 'Em-dashes in Nova\'s prose' },
+    { key: 'productionWords', prefix: 'Production word in print:', label: 'Production words in print' },
+    { key: 'novaPronoun', prefix: 'Gendered pronoun for Nova:', label: 'Nova written with a gendered pronoun' },
+    { key: 'npcPronouns', prefix: 'Pronoun error:', label: 'Pronouns for Marcus and Blake' },
+    { key: 'length', prefix: 'Over length:', label: 'Length' },
+    { key: 'headCount', prefix: 'Head count:', label: 'Head count' }
+  ];
+
+  function advisoryGroupOf(text) {
+    for (var i = 0; i < ADVISORY_GROUPS.length; i += 1) {
+      if (text.indexOf(ADVISORY_GROUPS[i].prefix) === 0) return ADVISORY_GROUPS[i];
+    }
+    return null;
   }
 
   function group(key, label, severity, items) {
@@ -502,9 +527,18 @@
       groups.push(group('other', 'Other structural issues', 'structural', other));
     }
 
-    if (advisoryWarnings.length > 0) {
-      groups.push(group('advisory', 'Advisory', 'advisory',
-        advisoryWarnings.map(function (text) { return { text: text }; })));
+    ADVISORY_GROUPS.forEach(function (spec) {
+      var items = advisoryWarnings
+        .filter(function (text) { return advisoryGroupOf(text) === spec; })
+        .map(function (text) { return { text: text }; });
+      if (items.length > 0) groups.push(group(spec.key, spec.label, 'advisory', items));
+    });
+
+    var otherAdvisories = advisoryWarnings
+      .filter(function (text) { return advisoryGroupOf(text) === null; })
+      .map(function (text) { return { text: text }; });
+    if (otherAdvisories.length > 0) {
+      groups.push(group('advisory', 'Advisory', 'advisory', otherAdvisories));
     }
 
     return {

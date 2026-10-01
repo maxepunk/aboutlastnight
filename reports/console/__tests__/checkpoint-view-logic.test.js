@@ -949,3 +949,61 @@ describe('traceView (phase 2, brief 2.7)', () => {
     expect(new Set(view.passes.map((p) => p.key)).size).toBe(2);
   });
 });
+
+// Phase 3, brief 3.4: the fact check's new code checks are advisories, each with its
+// own message prefix. Each lands in a group of its own, so the director sees what kind
+// of finding it is, and none counts toward the approve button's unresolved count.
+describe('the fact check\'s new advisory groups (phase 3, 3.4)', () => {
+  const { factCheckSummary, approveLabel } = require('../checkpoint-view-logic');
+  const ADVISORIES = [
+    'Em-dash in the narrator\'s prose: 2 em-dashes, in section "the-story", paragraph 1.',
+    'Production word in print: "token" in section "lede", paragraph 2.',
+    'Gendered pronoun for Nova: "Nova filed her" in the deck.',
+    'Pronoun error: Blake has no pronoun in the record, but the article writes "Blake said he".',
+    'Pronoun error: Marcus takes he/him, but the article writes "Marcus said she".',
+    'Over length: the narrator\'s prose runs 1,950 words.',
+    'Head count: "ten people in the room" in section "lede", paragraph 1, but the roster lists 9 players.',
+    'Absence stated 2 times (remote): "I was not there", "I was not in that room".',
+    'Could not verify 2 photo reference(s): the photo list is empty.'
+  ];
+  const summary = () => factCheckSummary({
+    structuralIssues: ['Roster coverage gap: Remi is on the session roster but never named.'],
+    advisoryWarnings: ADVISORIES,
+    cardFidelity: [],
+    rosterCoverage: { missing: ['Remi'] },
+    photoReferences: { invalid: [] },
+    reporterMode: { violations: [] }
+  });
+
+  it('puts each new check in its own advisory group, and the rest under Advisory', () => {
+    const { groups } = summary();
+    expect(groups.map((g) => [g.key, g.severity, g.items.length])).toEqual([
+      ['roster', 'structural', 1],
+      ['emDash', 'advisory', 1],
+      ['productionWords', 'advisory', 1],
+      ['novaPronoun', 'advisory', 1],
+      ['npcPronouns', 'advisory', 2],
+      ['length', 'advisory', 1],
+      ['headCount', 'advisory', 1],
+      ['advisory', 'advisory', 2]
+    ]);
+    const byKey = Object.fromEntries(groups.map((g) => [g.key, g]));
+    expect(byKey.headCount.items[0].text).toBe(ADVISORIES[6]);
+    expect(byKey.advisory.items.map((i) => i.text)).toEqual([ADVISORIES[7], ADVISORIES[8]]);
+    groups.forEach((g) => expect(typeof g.label === 'string' && g.label.length > 0).toBe(true));
+  });
+
+  it('counts every advisory once, and none of them as unresolved on the approve button', () => {
+    const s = summary();
+    expect(s.structural).toBe(1);
+    expect(s.advisory).toBe(ADVISORIES.length);
+    expect(approveLabel(s, false).label).toBe(`Approve anyway (1 unresolved, ${ADVISORIES.length} advisory)`);
+    const advisoryOnly = factCheckSummary({ structuralIssues: [], advisoryWarnings: ADVISORIES.slice(0, 7) });
+    expect(approveLabel(advisoryOnly, false).label).toBe('Approve (7 advisory)');
+  });
+
+  it('leaves a structural message with a new prefix in Other, where a promotion would land it', () => {
+    const { groups } = factCheckSummary({ structuralIssues: ['Head count: promoted'], advisoryWarnings: [] });
+    expect(groups.map((g) => g.key)).toEqual(['other']);
+  });
+});
