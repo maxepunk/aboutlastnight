@@ -22,9 +22,10 @@ const QUOTE_CONFIDENCE_BANDS =
   '"low" = neither names the speaker, and the speaker is left out.';
 
 /**
- * The enrichment rules, each stated once per call, in <ENRICHMENT_RULES> at the end
- * of the user prompt, with its reason (3.6 fix batch, item 5; the system prompt
- * points there). Code keeps a context, an epilogue detail or a link's observation
+ * The enrichment rules, each stated once per call, in <ENRICHMENT_RULES> after the
+ * notes in the user prompt, with its reason (3.6 fix batch, item 5; the system prompt
+ * points there by the tag alone, since the corrections block follows the rules when
+ * there are corrections: 3.6b fix batch, finding 4). Code keeps a context, an epilogue detail or a link's observation
  * only when the notes hold it as one piece (groundQuotes, groundEpilogue,
  * groundLinkExcerpts), so the quote and epilogue rules ask for one unbroken passage
  * (item 1). A link needs the notes to describe the sale; an account's name never
@@ -188,7 +189,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
  */
 const EMPTY_ENRICHMENT_PROSE_THRESHOLD = 400;
 
-const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*. The rules for every index are in <ENRICHMENT_RULES>, at the end of the user message.
+const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*. The rules for every index are in <ENRICHMENT_RULES>.
 
 You are an INDEXER, not a SUMMARIZER.`;
 

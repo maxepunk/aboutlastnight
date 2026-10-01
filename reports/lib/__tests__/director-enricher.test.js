@@ -955,4 +955,11 @@ describe('the enricher prompt (task 3.6b fix batch)', () => {
     expect(everything.match(/unbroken passage/g)).toHaveLength(2);
     expect(rulesOf(userPrompt).match(/unbroken passage/g)).toHaveLength(2);
   });
+
+  it('points the system prompt at <ENRICHMENT_RULES> by its tag alone, since the corrections block can follow it (finding 4)', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: ['c'] });
+    expect(systemPrompt).toContain('The rules for every index are in <ENRICHMENT_RULES>.');
+    expect(systemPrompt).not.toMatch(/end of the user/i);
+    expect(userPrompt.indexOf('</ENRICHMENT_RULES>')).toBeLessThan(userPrompt.indexOf('<DIRECTOR_CORRECTIONS>'));
+  });
 });
