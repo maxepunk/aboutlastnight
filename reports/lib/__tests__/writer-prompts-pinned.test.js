@@ -133,11 +133,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   record shows or by a question about them (10347 -> 10614). The detective pins do
  *   not move: its arc schemas and roster lines are unchanged, and its <SCHEMA> prints
  *   the frozen copy without the field.
+ * - Phase 3 (fix 3.7b, finding 2): the journalist arc writer's OUTPUT FORMAT shows
+ *   `writerQuestions` as an empty list, then a line saying it stays empty unless the
+ *   record leaves something only the director can settle (C15) and one entry's shape,
+ *   its `about` in the schema's wording. arcs-journalist only (10614 -> 10735).
  */
 const PINNED = {
   'outline-journalist': ['22fb0f2f807933db7784a16528860a77dd04c7ee94a2d391b4ac27c5203f0c88', 20471],
   'article-journalist': ['c61fe26d275940b43ec3240c01fcbc992bf08e859001662c0eef79f2941537d9', 27750],
-  'arcs-journalist': ['e13f9d8ac9f3877094d0a641395c7f62f424cf569c3c74395c5728162f9483cb', 10614],
+  'arcs-journalist': ['847db6301637d0776f472288dfd87f8fb3ecf29f1118616d9d8242da07ae39fb', 10735],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
   'arcs-detective': ['41dace98218cf3f360893b995fa56031d926994f6c495a2568b217623df3df15', 14730]

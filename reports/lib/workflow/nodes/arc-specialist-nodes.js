@@ -75,7 +75,7 @@ const { renderArcAccusation, renderWhiteboardConnections } = require('../../prom
 const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = require('../../accusation-verdict');
 const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
 const { loadRuleSet } = require('../../rule-set');
-const { writerQuestionsOf, carriedWriterQuestions, questionedRosterNames } = require('../../writer-questions');
+const { WRITER_QUESTIONS_PROPERTY, writerQuestionsOf, carriedWriterQuestions, questionedRosterNames } = require('../../writer-questions');
 
 /**
  * Whether a call keeps the detective's parked text (spec D13). The journalist reads
@@ -327,6 +327,21 @@ const ARC_NOTES_LABEL = `The Director's Notes (the record for the room, under T1
 Backstory in the notes, what the director knows about the characters beyond what the session showed, is Nova's reading under T1.`;
 
 /**
+ * The journalist arc writer's OUTPUT FORMAT line for `writerQuestions` (fix 3.7b,
+ * finding 2): the list is optional and stays empty unless the record leaves
+ * something only the director can settle (C15), then one entry's shape in
+ * placeholders. `about` is shown in the schema's own wording (WRITER_QUESTIONS_PROPERTY),
+ * so the format and the schema say one thing.
+ *
+ * @returns {string}
+ */
+function writerQuestionsFormatLine() {
+  const { about } = WRITER_QUESTIONS_PROPERTY.items.properties;
+  return `"writerQuestions" stays [] unless the record leaves something only the director can settle (C15). Each entry:
+{ "about": ${JSON.stringify(about.description)}, "question": "The question for the director" }`;
+}
+
+/**
  * The journalist arc writer's sections (phase 3, brief 3.3): the output format; what
  * the room concluded (the accusation, the whiteboard, the director's notes and
  * corrections and their sentences about Blake and the Valet, the investigation
@@ -380,10 +395,10 @@ function buildJournalistCoreArcSections(state) {
     }
   ],
   "synthesisNotes": "How you addressed player conclusions and what patterns emerged",
-  "writerQuestions": [
-    { "about": "A player by name, a player's pronoun, or a ledger line", "question": "The question C15 raises for the director" }
-  ]
-}`);
+  "writerQuestions": []
+}
+
+${writerQuestionsFormatLine()}`);
 
   const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
 ### Character Context (${DERIVED_LABELS.characterContext})

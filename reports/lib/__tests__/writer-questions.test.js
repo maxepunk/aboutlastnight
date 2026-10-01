@@ -566,7 +566,18 @@ describe('the arc writer\'s roster lines offer the question (C7, C15)', () => {
     expect(prompt).toContain('### Session Roster (the players at the investigation)');
     expect(prompt).toContain('**ROSTER PCs** (each has a placement the record shows, or a writerQuestions entry about them - they were in the room;');
     expect(prompt).not.toMatch(/MUST have placements|ALL characters who need placement/);
-    expect(prompt).toContain('"writerQuestions": [');
+  });
+
+  // Fix 3.7b (finding 2): the OUTPUT FORMAT shows the list as optional and empty, then
+  // one entry's shape in placeholders, its `about` in the schema's own wording.
+  it('the journalist OUTPUT FORMAT shows writerQuestions empty unless the director alone can settle something', () => {
+    const { WRITER_QUESTIONS_PROPERTY } = require('../writer-questions');
+    const prompt = arcNodes._testing.buildCoreArcPrompt(reworkFixtureState('journalist'));
+    const format = prompt.slice(prompt.indexOf('## OUTPUT FORMAT'), prompt.indexOf('CRITICAL: Your response MUST be'));
+    expect(format).toContain('  "writerQuestions": []\n}\n');
+    expect(format).toContain('"writerQuestions" stays [] unless the record leaves something only the director can settle (C15). Each entry:\n{ ');
+    expect(format).toContain(`"about": ${JSON.stringify(WRITER_QUESTIONS_PROPERTY.items.properties.about.description)}`);
+    expect(format).not.toContain('"writerQuestions": [\n');
   });
 
   it('the detective writer keeps its lines (D13)', () => {
@@ -583,7 +594,8 @@ describe('the arc reworker carries the writer\'s OUTPUT FORMAT with the field', 
   it('journalist', () => {
     const state = reworkFixtureState('journalist');
     const prompt = arcNodes._testing.buildArcRevisionPrompt({ ...state, _previousArcs: state.narrativeArcs }, 'CTX', 'PREV');
-    expect(prompt).toContain('"writerQuestions": [');
+    expect(prompt).toContain('  "writerQuestions": []\n}\n');
+    expect(prompt).toContain('"writerQuestions" stays [] unless the record leaves something only the director can settle (C15).');
   });
 });
 
