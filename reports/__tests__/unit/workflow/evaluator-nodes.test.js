@@ -2378,11 +2378,9 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       }
     });
 
-    // The connection itself. On this branch arc-specialist-nodes.js does not export
-    // ARC_NOTES_LABEL yet (the 3.3b fix adds it), so the test is marked `failing`. The
-    // integrator connects the two at merge and removes `.failing`: Jest fails the run
-    // while `.failing` stays on a test that passes.
-    it.failing('the arc judge\'s prompt carries the arc writer\'s label', () => {
+    // The connection itself: the arc judge prints the arc writer's own label, exported
+    // by arc-specialist-nodes.js (one source, fixes 3.3b and 3.4b).
+    it('the arc judge\'s prompt carries the arc writer\'s label', () => {
       const { ARC_NOTES_LABEL } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
       expect(typeof ARC_NOTES_LABEL).toBe('string');
       expect(ARC_NOTES_LABEL.trim()).not.toBe('');
