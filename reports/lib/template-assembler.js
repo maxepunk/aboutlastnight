@@ -231,6 +231,11 @@ class TemplateAssembler {
    * @returns {Promise<Object>} Template context
    */
   async buildContext(contentBundle, sessionId, shellAccounts) {
+    // The money tracker, from the ledger (phase 3, 3.2; M2): overrideFinancialTracker
+    // replaces the writer's entries with the ledger's whenever an account has a
+    // positive total, and passes the writer's through otherwise.
+    const correctedTracker = this.overrideFinancialTracker(contentBundle.financialTracker, shellAccounts || []);
+
     // Calculate photos base path for session-specific photo serving
     // Use relative path (no leading /) for standalone HTML compatibility (GitHub Pages, file://)
     const photosBasePath = sessionId ? `sessionphotos/${sessionId}/` : 'photos/';
@@ -321,22 +326,19 @@ class TemplateAssembler {
       // Theme identifier
       theme: this.theme,
 
-      // Computed values
-      hasFinancialTracker: contentBundle.financialTracker &&
-        Array.isArray(contentBundle.financialTracker.entries) &&
-        contentBundle.financialTracker.entries.length > 0,
+      // Computed values. The tracker prints whenever it has entries: the ledger's when
+      // an account has a positive total. It used to print only when the writer had
+      // filled its own entries, which the ledger then replaced anyway, so a writer no
+      // longer asked for them would have lost the tracker from every article.
+      hasFinancialTracker: !!correctedTracker &&
+        Array.isArray(correctedTracker.entries) &&
+        correctedTracker.entries.length > 0,
 
       // Override LLM-generated financial data with deterministic values
-      financialTracker: (() => {
-        const correctedTracker = this.overrideFinancialTracker(
-          contentBundle.financialTracker,
-          shellAccounts || []
-        );
-        return correctedTracker ? {
-          ...correctedTracker,
-          entries: this._calculateBarWidths(correctedTracker.entries)
-        } : null;
-      })(),
+      financialTracker: correctedTracker ? {
+        ...correctedTracker,
+        entries: this._calculateBarWidths(correctedTracker.entries)
+      } : null,
 
       hasPullQuotes: Array.isArray(contentBundle.pullQuotes) &&
         contentBundle.pullQuotes.length > 0,

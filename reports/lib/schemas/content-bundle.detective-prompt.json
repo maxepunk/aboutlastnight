@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "content-bundle",
   "title": "ContentBundle",
-  "description": "Structured content for a report",
+  "description": "Structured content for report generation - prose only, no HTML",
   "type": "object",
   "required": ["metadata", "headline", "sections"],
   "properties": {
@@ -17,16 +17,16 @@
         "theme": {
           "type": "string",
           "enum": ["journalist", "detective"],
-          "description": "The report theme"
+          "description": "Report theme determining template selection"
         },
         "generatedAt": {
           "type": "string",
-          "description": "ISO 8601 timestamp of generation"
+          "description": "ISO 8601 timestamp of generation (server-stamped; see ai-nodes.js generateContentBundle). NO format:date-time — that keyword disables the SDK constrained-decoding channel (#277)."
         },
         "version": {
           "type": "string",
           "default": "1.0.0",
-          "description": "Schema version"
+          "description": "Schema version for future compatibility"
         },
         "storyDate": {
           "type": "string",
@@ -53,7 +53,7 @@
         "deck": {
           "type": "string",
           "maxLength": 300,
-          "description": "Subheadline under the main headline"
+          "description": "Subheadline summarizing the article"
         }
       },
       "additionalProperties": false
@@ -79,7 +79,7 @@
         },
         "guestReporter": {
           "type": "string",
-          "description": "Guest-reporter credit, as 'Name | Role'"
+          "description": "Optional guest-reporter credit (rendered by templates/journalist/partials/header.hbs). Produced by lib/prompt-builder.js when sessionConfig.guestReporter is set; emit as 'Name | Role'."
         }
       },
       "additionalProperties": false
@@ -99,7 +99,7 @@
           "type": {
             "type": "string",
             "enum": ["narrative", "evidence-highlight", "investigation-notes", "conclusion", "case-summary"],
-            "description": "Section type"
+            "description": "Section type for styling"
           },
           "heading": {
             "type": "string",
@@ -127,7 +127,7 @@
                     "text": { "type": "string", "minLength": 1 },
                     "attribution": {
                       "type": "string",
-                      "description": "The speaker's name"
+                      "description": "Speaker name for a verbatim quote. OMIT for a crystallization quote (the narrator's own crystallized insight, with no speaker attribution). See lib/prompt-builder.js CRYSTALLIZATION & VERBATIM MOMENTS."
                     }
                   },
                   "additionalProperties": false
@@ -178,7 +178,7 @@
                     "type": { "const": "evidence-card" },
                     "tokenId": { "type": "string" },
                     "headline": { "type": "string" },
-                    "content": { "type": "string", "description": "The card's text" },
+                    "content": { "type": "string", "description": "Full quotable evidence text" },
                     "owner": { "type": "string", "description": "Evidence owner name" },
                     "significance": {
                       "type": "string",
@@ -197,7 +197,7 @@
     },
     "pullQuotes": {
       "type": "array",
-      "description": "Featured quotes",
+      "description": "Featured quotes - verbatim (from evidence, with attribution) or crystallization (the narrator's insight, no attribution)",
       "items": {
         "type": "object",
         "required": ["type", "text"],
@@ -205,16 +205,16 @@
           "type": {
             "type": "string",
             "enum": ["verbatim", "crystallization"],
-            "description": "The quote's kind"
+            "description": "verbatim = exact quote from evidence (has attribution), crystallization = the narrator's insight echoing article prose (NO attribution)"
           },
           "text": { "type": "string", "description": "The quote text" },
           "attribution": {
             "type": ["string", "null"],
-            "description": "The speaker's name, or null"
+            "description": "Character name for verbatim quotes (e.g., 'Skyler'), null for crystallization"
           },
           "sourceTokenId": {
             "type": "string",
-            "description": "The id of the document quoted"
+            "description": "For verbatim quotes: the tokenId of the evidence being quoted"
           },
           "placement": {
             "type": "string",
@@ -233,7 +233,7 @@
         "required": ["tokenId", "headline"],
         "properties": {
           "tokenId": { "type": "string", "description": "Unique evidence identifier" },
-          "headline": { "type": "string", "description": "The entry's headline" },
+          "headline": { "type": "string", "description": "Compelling headline for the evidence card" },
           "content": { "type": "string", "description": "Not printed: a sidebar entry prints only its headline and summary. Leave it out; document text belongs on the inline evidence-card block." },
           "summary": { "type": "string", "description": "Brief summary for sidebar display" },
           "owner": { "type": "string", "description": "Character who owns this evidence (e.g., 'Riley Torres')" },
@@ -255,7 +255,7 @@
     },
     "financialTracker": {
       "type": "object",
-      "description": "The ledger's accounts, one entry per account",
+      "description": "Shell-account ledger for FOLLOW THE MONEY. Each entry is ONE shell account, not a narrative description. Values are server-overridden from authoritative shellAccounts when available (see lib/template-assembler.js#overrideFinancialTracker).",
       "properties": {
         "entries": {
           "type": "array",
@@ -264,31 +264,31 @@
             "required": ["description", "amount"],
             "properties": {
               "date": { "type": "string", "description": "Optional. Usually omitted for shell-account entries." },
-              "description": { "type": "string", "description": "The account name" },
-              "amount": { "type": "string", "description": "The account total as a dollar string, e.g. '$<amount>'" },
+              "description": { "type": "string", "description": "The shell-account NAME exactly as it appears in AUTHORITATIVE SHELL ACCOUNT DATA — e.g., 'Jamie', 'Person', 'Sarah'. Not a narrative description." },
+              "amount": { "type": "string", "description": "Clean dollar string parseable as currency — e.g., '$1,299,997', '$385,003'. Not prose like 'largest concentration'." },
               "category": { "type": "string", "description": "Optional. Usually 'shell-account'." }
             },
             "additionalProperties": false
           }
         },
-        "totalExposed": { "type": "string", "description": "The ledger's total as a dollar string" }
+        "totalExposed": { "type": "string", "description": "Sum of all entries as a clean dollar string — e.g., '$3,569,997'." }
       },
       "additionalProperties": false
     },
     "photos": {
       "type": "array",
-      "description": "Session photos with captions",
+      "description": "Session photos for inline article placement",
       "items": {
         "type": "object",
         "required": ["filename", "caption"],
         "properties": {
           "filename": {
             "type": "string",
-            "description": "Photo filename"
+            "description": "Photo filename in photos/ directory"
           },
           "caption": {
             "type": "string",
-            "description": "Photo caption"
+            "description": "Photo caption for figcaption element"
           },
           "characters": {
             "type": "array",
@@ -299,7 +299,7 @@
             "type": "string",
             "enum": ["inline", "sidebar"],
             "default": "inline",
-            "description": "Where the photo appears"
+            "description": "Where photo appears in article layout"
           },
           "afterSection": {
             "type": "string",
@@ -315,7 +315,7 @@
       "properties": {
         "filename": {
           "type": "string",
-          "description": "Photo filename"
+          "description": "Photo filename in photos/ directory"
         },
         "caption": {
           "type": "string",
@@ -331,7 +331,7 @@
     },
     "voice_self_check": {
       "type": "object",
-      "description": "A self-assessment",
+      "description": "Self-assessment of voice requirements compliance during generation",
       "properties": {
         "influences_check": {
           "type": "object",
@@ -351,7 +351,7 @@
         "issues_found": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Issues found"
+          "description": "List of specific issues to fix in revision"
         },
         "overall_assessment": {
           "type": "string",
@@ -362,7 +362,7 @@
     },
     "_revisionHistory": {
       "type": "array",
-      "description": "Revision iterations",
+      "description": "Internal: tracks revision iterations for debugging",
       "items": {
         "type": "object",
         "properties": {

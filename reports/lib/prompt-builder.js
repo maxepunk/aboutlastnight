@@ -12,6 +12,11 @@ const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
 const { renderSessionFactsVerdict, renderPhotoEntry } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
+// The detective is parked (spec D13) and its prompt keeps today's text, the <SCHEMA>
+// it embeds included. Phase 3 (3.2) cut the schema's descriptions down to shape only,
+// so the detective prints this copy of the schema as it was before that cut. It is
+// printed, never validated against: the schema above is the one every check uses.
+const detectivePromptSchema = require('./schemas/content-bundle.detective-prompt.json');
 const { getThemeNPCEntries } = require('./theme-config');
 const { loadModeBlock } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -1222,7 +1227,7 @@ TARGET LENGTH: ~750 words (+-50 words acceptable). Be economical. Every sentence
 Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields. Note: the schema permits pullQuotes/evidenceCards/financialTracker as optional properties, but the detective theme excludes them per the rule above; if anything else contradicts the schema, the schema wins.
 
 \`\`\`json
-${JSON.stringify(contentBundleSchema, null, 2)}
+${JSON.stringify(detectivePromptSchema, null, 2)}
 \`\`\`
 </SCHEMA>
 </GENERATION_INSTRUCTION>`;

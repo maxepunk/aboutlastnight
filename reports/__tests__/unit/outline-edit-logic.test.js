@@ -50,7 +50,6 @@ function validJournalistOutline() {
         { arcName: 'The embezzlement', characterAngle: 'Sarah controlled the accounts.' }
       ],
       exposed: ['Sarah Blackwood'],
-      buried: ['the silent partner'],
       characterHighlights: { 'Sarah Blackwood': 'Cool under questioning.' }
     },
     whatsMissing: {
@@ -58,8 +57,7 @@ function validJournalistOutline() {
         { arcName: 'The embezzlement', openQuestion: 'Who signed the final transfer?' }
       ],
       knownUnknowns: ['The third signatory'],
-      narrativePurpose: 'Flag the gap the room never closed.',
-      buriedItems: ['transfer-009']
+      narrativePurpose: 'Flag the gap the room never closed.'
     },
     closing: {
       arcResolutions: [
@@ -367,7 +365,8 @@ describe('journalist builders', () => {
     const out = L.buildWhatsMissingPayload(state, orig);
     expect(out.arcConnections[0].openQuestion).toBe('Edited question?');
     expect(out.narrativePurpose).toBeUndefined();
-    expect(out.buriedItems).toEqual(['transfer-009']);
+    // Phase 3 (3.2; BU3): buriedItems left the schema, and the builder drops it.
+    expect(out.buriedItems).toBeUndefined();
     expect(out.shellAccounts).toBeUndefined();
     expect(out.characterHighlights).toBeUndefined();
     const full = L.mergeSection(validJournalistOutline(), 'whatsMissing', out);
@@ -398,14 +397,13 @@ describe('preservation invariant', () => {
     expect(out.photoPlacement).toEqual(orig.photoPlacement);
   });
 
-  it('thePlayers: editing characterHighlights leaves arcConnections/exposed/buried untouched', () => {
+  it('thePlayers: editing characterHighlights leaves arcConnections/exposed untouched', () => {
     const orig = validJournalistOutline().thePlayers;
     const state = L.initThePlayers(orig);
     state.characterHighlights = L.setRowField(state.characterHighlights, 0, 'value', 'Only this changed.');
     const out = L.buildThePlayersPayload(state, orig);
     expect(out.arcConnections).toEqual(orig.arcConnections);
     expect(out.exposed).toEqual(orig.exposed);
-    expect(out.buried).toEqual(orig.buried);
     expect(out.characterHighlights).toEqual({ 'Sarah Blackwood': 'Only this changed.' });
   });
 
@@ -576,9 +574,10 @@ describe('validateOutlineShape (client gate)', () => {
     expect(r.errors.some(e => e.path === '/followTheMoney/arcConnections')).toBe(true);
   });
 
-  it('rejects missing required lede.primaryArc (B2)', () => {
+  // Phase 3 (3.2; TH4): the lede's fields are optional now, so B2 is pinned on the type.
+  it('rejects a lede.primaryArc that is not a string (B2)', () => {
     const o = validJournalistOutline();
-    delete o.lede.primaryArc;
+    o.lede.primaryArc = 42;
     const r = L.validateOutlineShape(o, 'journalist');
     expect(r.valid).toBe(false);
     expect(r.errors.some(e => e.path === '/lede/primaryArc')).toBe(true);
@@ -809,5 +808,111 @@ describe('thesis editor logic (spec 2026-09-19 §6.1)', () => {
     const outline = validJournalistOutline();
     outline.lede = L.buildThesisPayload({ hook: 'h', keyTension: 't', primaryArc: 'a' }, outline.lede);
     expect(validate('outline', outline).valid).toBe(true);
+  });
+});
+
+// ── Phase 3 (3.2): the outline form as TH4 ruled ──────────────────────────────
+//
+// The six keys stay as slots for tooling, and a slot may be left out or left empty;
+// a section's arc connections list the arcs it carries, not every arc; the
+// convergence point stays, optional; an account's inference is optional; and
+// thePlayers.buried and whatsMissing.buriedItems go (BU3: whose memory was sold
+// never appears). The client gate follows the schema and is never stricter.
+describe('phase 3 (3.2): the outline form (TH4)', () => {
+  const ARCS = ['The embezzlement', 'The envelope', 'The vote'];
+  function outlineWithSomeArcs() {
+    return validJournalistOutline();
+  }
+
+  /** Outlines the schema now accepts, each a case a writer or the director can produce. */
+  const ACCEPTED = {
+    'every slot left out': () => ({}),
+    'a slot left out': () => { const o = outlineWithSomeArcs(); delete o.whatsMissing; delete o.followTheMoney; return o; },
+    'a slot left empty': () => ({ ...outlineWithSomeArcs(), thePlayers: {}, closing: {} }),
+    'a section listing one arc of three': () => {
+      const o = outlineWithSomeArcs();
+      o.theStory.arcs = ARCS.map((name) => ({ name, paragraphCount: 2 }));
+      o.followTheMoney.arcConnections = [{ arcName: ARCS[2], financialAngle: 'The vote, seen through the money.' }];
+      o.thePlayers.arcConnections = [];
+      return o;
+    },
+    'no convergence point': () => { const o = outlineWithSomeArcs(); delete o.theStory.arcInterweaving.convergencePoint; return o; },
+    'an account with no inference': () => { const o = outlineWithSomeArcs(); delete o.followTheMoney.shellAccounts[0].inference; return o; },
+    'a lede with no primary arc': () => { const o = outlineWithSomeArcs(); delete o.lede.primaryArc; return o; },
+    'empty strings where the editors write them': () => {
+      const o = outlineWithSomeArcs();
+      o.lede.keyTension = '';
+      o.theStory.arcInterweaving.convergencePoint = '';
+      o.followTheMoney.arcConnections = [{ arcName: '', financialAngle: '' }];
+      return o;
+    }
+  };
+
+  it.each(Object.keys(ACCEPTED))('the schema accepts %s', (name) => {
+    const r = validate('outline', ACCEPTED[name]());
+    expect(`${name}: ${r.valid}: ${JSON.stringify(r.errors || [])}`).toBe(`${name}: true: []`);
+  });
+
+  it.each(Object.keys(ACCEPTED))('the client gate accepts %s: never stricter than the schema', (name) => {
+    const r = L.validateOutlineShape(ACCEPTED[name](), 'journalist');
+    expect(`${name}: ${r.valid}: ${JSON.stringify(r.errors)}`).toBe(`${name}: true: []`);
+  });
+
+  it('never stricter: every outline the schema accepts, the client gate accepts', () => {
+    const corpus = [
+      ...Object.values(ACCEPTED).map((make) => make()),
+      validJournalistOutline(),
+      { lede: {} }, { theStory: {} }, { theStory: { arcs: [] } }, { closing: { arcResolutions: [] } },
+      { followTheMoney: { shellAccounts: [{ name: 'X', total: 1 }] } },
+      { thePlayers: { characterHighlights: {} } }
+    ];
+    corpus.forEach((o, i) => {
+      if (validate('outline', o).valid) {
+        expect(`${i}: ${JSON.stringify(L.validateOutlineShape(o, 'journalist').errors)}`).toBe(`${i}: []`);
+      }
+    });
+  });
+
+  it("the client gate still rejects what the schema rejects: a section that is not an object, a collapsed array, a stray key", () => {
+    [
+      { ...outlineWithSomeArcs(), closing: 'collapsed' },
+      { ...outlineWithSomeArcs(), followTheMoney: { arcConnections: 'collapsed' } },
+      { ...outlineWithSomeArcs(), pullQuotes: [] }
+    ].forEach((o) => {
+      expect(validate('outline', o).valid).toBe(false);
+      expect(L.validateOutlineShape(o, 'journalist').valid).toBe(false);
+    });
+  });
+
+  it('thePlayers.buried and whatsMissing.buriedItems are gone from the schema (BU3)', () => {
+    expect(validate('outline', { thePlayers: {}, whatsMissing: {} }).valid).toBe(true);
+    expect(validate('outline', { thePlayers: { buried: ['Morgan'] } }).valid).toBe(false);
+    expect(validate('outline', { whatsMissing: { buriedItems: ['tx-1'] } }).valid).toBe(false);
+  });
+
+  it('the editors drop them from an outline written before phase 3, so an edit never fails the schema', () => {
+    const old = validJournalistOutline();
+    old.thePlayers.buried = ['the silent partner'];
+    old.whatsMissing.buriedItems = ['transfer-009'];
+    const players = L.buildThePlayersPayload(L.initThePlayers(old.thePlayers), old.thePlayers);
+    const missing = L.buildWhatsMissingPayload(L.initWhatsMissing(old.whatsMissing), old.whatsMissing);
+    expect(players.buried).toBeUndefined();
+    expect(missing.buriedItems).toBeUndefined();
+    expect(L.initThePlayers(old.thePlayers).buried).toBeUndefined();
+    expect(L.initWhatsMissing(old.whatsMissing).buriedItems).toBeUndefined();
+
+    const cleaned = L.dropRetiredOutlineFields(old);
+    expect(cleaned.thePlayers.buried).toBeUndefined();
+    expect(cleaned.whatsMissing.buriedItems).toBeUndefined();
+    expect(old.thePlayers.buried).toEqual(['the silent partner']);
+    expect(validate('outline', cleaned).valid).toBe(true);
+    expect(L.dropRetiredOutlineFields({ lede: { hook: 'h' } })).toEqual({ lede: { hook: 'h' } });
+  });
+
+  it('an account edited with its inference left blank omits the field', () => {
+    const section = { arcConnections: [], shellAccounts: [{ name: 'Ember', total: 5, inference: 'x' }] };
+    const state = L.initFollowTheMoney(section);
+    state.shellAccounts[0].inference = '';
+    expect(L.buildFollowTheMoneyPayload(state, section).shellAccounts[0]).toEqual({ name: 'Ember', total: 5 });
   });
 });

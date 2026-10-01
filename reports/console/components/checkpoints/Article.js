@@ -375,13 +375,16 @@ function PullQuoteEditor({ pq, idx, original, onSave, onCancel }) {
  * badge); its `content` never prints, so the editor offers the summary and not
  * the content. An existing `content` is carried through untouched by the
  * Object.assign on save.
+ *
+ * Phase 3 (3.2; HY1): nor does its `owner` print, so the editor no longer offers or
+ * seeds it, and the writer is no longer asked for it. An entry that has one keeps
+ * it through the same Object.assign; the schema keeps the field optional.
  */
 function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
     return {
       headline: card.headline || '',
       summary: card.summary || '',
-      owner: card.owner || '',
       significance: card.significance || 'supporting',
       placement: card.placement || 'sidebar'
     };
@@ -403,13 +406,6 @@ function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
         onChange: function (e) { setLocal(Object.assign({}, local, { summary: e.target.value })); },
         rows: 3,
         'aria-label': 'Sidebar entry summary'
-      }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Owner'),
-      React.createElement('input', {
-        className: 'input',
-        value: local.owner,
-        onChange: function (e) { setLocal(Object.assign({}, local, { owner: e.target.value })); },
-        'aria-label': 'Card owner'
       }),
       React.createElement('div', { className: 'flex gap-sm mt-sm' },
         React.createElement('div', { className: 'form-group', style: { flex: 1 } },

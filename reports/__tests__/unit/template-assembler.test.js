@@ -169,6 +169,27 @@ describe('TemplateAssembler', () => {
       });
     });
 
+    // Phase 3 (3.2; M2): the tracker prints itself from the ledger. It used to print
+    // only when the writer had filled financialTracker.entries, which the assembler
+    // then replaced from the ledger anyway, so a writer no longer asked for entries
+    // would have lost the tracker from every article.
+    it('prints the money tracker from the ledger when the writer gave no entries', async () => {
+      const { financialTracker, ...noTracker } = validBundle;
+      const ledger = [{ name: 'Ember', total: 250000, tokenCount: 2 }, { name: 'Gone', total: 0, tokenCount: 0 }];
+      const context = await assembler.buildContext(noTracker, 'test', ledger);
+      expect(context.hasFinancialTracker).toBe(true);
+      expect(context.financialTracker.entries.map((e) => [e.description, e.amount])).toEqual([['Ember', '$250,000']]);
+
+      const html = await assembler.assemble(noTracker, { shellAccounts: ledger });
+      expect(html).toContain('financial-tracker');
+    });
+
+    it('prints no tracker when no account has a positive total and the writer gave no entries', async () => {
+      const { financialTracker, ...noTracker } = validBundle;
+      const context = await assembler.buildContext(noTracker, 'test', [{ name: 'Gone', total: 0, tokenCount: 0 }]);
+      expect(context.hasFinancialTracker).toBe(false);
+    });
+
     it('passes through original ContentBundle data', async () => {
       const context = await assembler.buildContext(validBundle);
 
