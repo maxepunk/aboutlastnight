@@ -266,9 +266,11 @@ describe('evaluator-nodes', () => {
 
     it('does not duplicate Blake/Valet entry', () => {
       const desc = getNpcDescriptions('journalist');
-      const blakeMatches = desc.match(/Blake/g);
-      // Blake appears once in the "Blake / Valet" description
-      expect(blakeMatches.length).toBe(1);
+      // One entry line for Blake, with the Valet as its alias. The canon role names
+      // Blake too ("Marcus called Blake his Valet", T15), so count entries, not words.
+      const blakeEntries = desc.split('\n').filter((line) => /^- Blake\b/.test(line));
+      expect(blakeEntries).toHaveLength(1);
+      expect(desc.split('\n').filter((line) => /^- (?:the )?Valet\b/.test(line))).toHaveLength(0);
     });
 
     it('returns empty string for unknown theme', () => {
