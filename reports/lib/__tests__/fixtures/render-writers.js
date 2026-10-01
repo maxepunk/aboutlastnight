@@ -92,8 +92,9 @@ async function renderAll(req) {
     );
     out[`article-${theme}`] = `${articleSdk.calls[0].systemPrompt}\n=====\n${articleSdk.calls[0].prompt}`;
 
-    // The arc writer, with its revision hook rendered (arcRevisionCount > 0) and
-    // standing notes, so both tail parts are pinned too.
+    // The arc writer, with arcRevisionCount > 0 and standing notes, so its tail is
+    // pinned too. Since phase 3 (3.3) only the detective arc writer renders a
+    // revision hook (buildArcRevisionContext); the journalist's tail is the notes alone.
     const arcSdk = recordingSdk({ narrativeArcs: [], synthesisNotes: '' });
     await arcNodes.generateCoreArcs(
       {
