@@ -66,7 +66,7 @@ const { renderRecordView, recordIdOf, isBuriedTransactionRow } = require('../../
 const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
-const { isNoCulpritVerdict, directorAccusationText } = require('../../accusation-verdict');
+const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = require('../../accusation-verdict');
 const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
 
 /**
@@ -1468,11 +1468,17 @@ function buildValidationRevisionGuidance(issues, missingRoster) {
  * Runs AFTER analyzeArcsPlayerFocusGuided to:
  * - Validate keyEvidence IDs exist in evidence bundle
  * - Validate characterPlacements use roster names
- * - Warn on contradictory character roles
  * - Filter arcs that lost all evidence
  * - Validate arcSource and evidenceStrength enums (8.15)
  * - Check for required accusation arc (8.15)
  * - Ensure caveats/unansweredQuestions are arrays (8.15)
+ *
+ * Phase 3 (brief 3.3): an arc with a missing or invalid source label is sent back for
+ * a label (V5). It used to be relabelled "discovered", which the outline writer frames
+ * as something the room missed, so a thread from the director's notes or the
+ * whiteboard could reach print as the room's blind spot. The note that called a role
+ * naming both victim and operator a "contradiction" is gone (V4): a character can be
+ * both wronged and complicit.
  *
  * @param {Object} state - Current state with narrativeArcs, evidenceBundle, sessionConfig
  * @param {Object} config - Graph config (unused)
@@ -1526,6 +1532,7 @@ function validateArcStructure(state, config) {
   let totalEvidenceRemoved = 0;
   let totalCharactersRemoved = 0;
   let totalCharactersCorrected = 0;
+  const unlabelledArcs = [];  // arcs with a missing or invalid arcSource (V5)
 
   const validatedArcs = arcs.map((arc, index) => {
     const issues = [];
@@ -1559,7 +1566,6 @@ function validateArcStructure(state, config) {
     // 2. Validate characterPlacements use roster names
     // ═══════════════════════════════════════════════════════════════════════
     const validatedPlacements = {};
-    const placementRoles = {};  // Track roles for coherence check
 
     Object.entries(arc.characterPlacements || {}).forEach(([name, role]) => {
       // Use fuzzy matching helper (now uses Notion-derived canonical characters map)
@@ -1569,7 +1575,6 @@ function validateArcStructure(state, config) {
       if (matchedName) {
         // Roster member or canonical full name - preserve as-is
         validatedPlacements[matchedName] = role;
-        placementRoles[matchedName.toLowerCase()] = role;
 
         // Note: since validateRosterName now returns the input name unchanged,
         // this "correction" logging will rarely trigger (only for case normalization)
@@ -1581,7 +1586,7 @@ function validateArcStructure(state, config) {
         // Commit 8.17: Known NPC from theme config - preserve as-is
         // NPCs are valid in characterPlacements but don't count toward roster coverage
         validatedPlacements[name] = role;
-        // Don't add to placementRoles - NPCs don't affect roster coverage checks
+        // NPCs don't affect roster coverage checks
       } else if (isNonRosterPC(name, roster, allCharacters, themeNPCs)) {
         // Commit 8.xx: Non-roster PC - valid game character not playing this session
         // They appear in evidence about them but Nova didn't observe their behavior
@@ -1591,7 +1596,7 @@ function validateArcStructure(state, config) {
         arc._nonRosterPCs = arc._nonRosterPCs || [];
         arc._nonRosterPCs.push(name);
         issues.push(`Character "${name}" is non-roster PC (evidence-based mention - valid)`);
-        // Don't add to placementRoles - non-roster PCs don't affect roster coverage checks
+        // Non-roster PCs don't affect roster coverage checks
       } else {
         issues.push(`Removed unknown character: ${name}`);
         totalCharactersRemoved++;
@@ -1599,27 +1604,14 @@ function validateArcStructure(state, config) {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // 3. Check for role coherence (warn on contradictions)
-    // ═══════════════════════════════════════════════════════════════════════
-    Object.entries(placementRoles).forEach(([name, role]) => {
-      const roleLower = role.toLowerCase();
-      const isVictim = roleLower.includes('victim');
-      const isOperator = roleLower.includes('operator') || roleLower.includes('perpetrator');
-
-      if (isVictim && isOperator) {
-        issues.push(`Role contradiction for ${name}: "${role}" contains both victim and operator`);
-      }
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 4. Validate new player-focus-guided fields (Commit 8.15)
+    // 3. Validate new player-focus-guided fields (Commit 8.15)
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Validate arcSource enum (default to 'discovered' if invalid/missing)
-    let validatedArcSource = arc.arcSource;
-    if (!validatedArcSource || !VALID_ARC_SOURCES.includes(validatedArcSource)) {
-      issues.push(`Invalid arcSource "${arc.arcSource || 'missing'}" - defaulting to "discovered"`);
-      validatedArcSource = 'discovered';
+    // A missing or invalid arcSource stays as the writer gave it and the arc goes
+    // back for a label (phase 3, V5): see the invalid-arc-source issue below.
+    const labelled = VALID_ARC_SOURCES.includes(arc.arcSource);
+    if (!labelled) {
+      issues.push(`Invalid arcSource "${arc.arcSource || 'missing'}" - sent back for a label`);
     }
 
     // Validate evidenceStrength enum (default to 'weak' if invalid/missing)
@@ -1653,7 +1645,6 @@ function validateArcStructure(state, config) {
       ...arc,
       keyEvidence: validatedEvidence,
       characterPlacements: validatedPlacements,
-      arcSource: validatedArcSource,
       evidenceStrength: validatedEvidenceStrength,
       caveats: validatedCaveats,
       unansweredQuestions: validatedQuestions,
@@ -1667,6 +1658,7 @@ function validateArcStructure(state, config) {
       issues.forEach(issue => console.log(`    - ${issue}`));
     }
 
+    if (!labelled) unlabelledArcs.push(validatedArc);
     return validatedArc;
   });
 
@@ -1676,7 +1668,11 @@ function validateArcStructure(state, config) {
 
   // Brief 2.2: a verdict that names no culprit (an accident, an overdose, self-harm).
   // Its accusation arc is about the verdict itself and may have no one to place.
-  const noCulpritVerdict = isNoCulpritVerdict(state.sessionConfig?.accusation || state.playerFocus?.accusation);
+  // Phase 3 (3.3): so may a verdict that blames an institution and names no character
+  // (blamesNoCharacter, 3.5's parse of it).
+  const verdict = state.sessionConfig?.accusation || state.playerFocus?.accusation;
+  const noCulpritVerdict = isNoCulpritVerdict(verdict);
+  const verdictNamesNoCharacter = noCulpritVerdict || blamesNoCharacter(verdict);
 
   // Filter arcs that lost all evidence AND characters
   // NOTE: For speculative arcs, we allow no evidence if arcSource is 'accusation'
@@ -1689,9 +1685,9 @@ function validateArcStructure(state, config) {
     if (isAccusationArc && !hasEvidence) {
       console.log(`[validateArcStructure] Accusation arc "${arc.title}" has no evidence - allowed (speculative)`);
       arc._noEvidence = true;
-      // Still needs characters, unless the verdict names no culprit: then an arc
+      // Still needs characters, unless the verdict names no character: then an arc
       // about the verdict with no one to place is the arc the rule asks for.
-      return hasCharacters || noCulpritVerdict;
+      return hasCharacters || verdictNamesNoCharacter;
     }
 
     if (!hasEvidence && !hasCharacters) {
@@ -1762,6 +1758,17 @@ function validateArcStructure(state, config) {
     structuralIssues.push({
       type: 'missing-roster-coverage',
       message: `Missing roster members: ${missingRoster.join(', ')}`,
+      severity: 'structural'
+    });
+  }
+
+  const unlabelledViable = unlabelledArcs.filter(arc => viableArcs.includes(arc));
+  if (unlabelledViable.length > 0) {
+    structuralIssues.push({
+      type: 'invalid-arc-source',
+      message: 'Arcs with no valid source label: ' +
+        unlabelledViable.map(arc => `"${arc.title}" (${arc.id}), ${arc.arcSource ? `labelled "${arc.arcSource}"` : 'with no label'}`).join('; ') +
+        '. Give each arc the arcSource for where its thread came from: accusation, whiteboard, observation or discovered.',
       severity: 'structural'
     });
   }

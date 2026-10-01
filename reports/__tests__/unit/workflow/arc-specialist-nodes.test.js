@@ -276,4 +276,73 @@ describe('validateArcStructure: a verdict with no culprit', () => {
     const issue = result.validationResults.issues.find((i) => i.type === 'no-accusation-arc');
     expect(issue.message).toMatch(/about the room's verdict, which names no culprit/);
   });
+
+  it('keeps the accusation arc of a verdict that blames an institution and names no character (phase 3, 3.3)', () => {
+    // 3.5 parses such a verdict as a culprit verdict with an empty accused list and the
+    // room's words for who it blamed as the charge (blamesNoCharacter). Its arc, like a
+    // no-culprit verdict's, may have no one to place.
+    const result = validateArcStructure(stateWith({ verdictKind: 'culprit', accused: [], charge: "NeurAI's board" }), {});
+    expect(result.narrativeArcs.map((a) => a.id)).toContain('arc-the-overdose-verdict');
+    expect(result._arcValidation.hasAccusationArc).toBe(true);
+  });
+});
+
+/**
+ * The arc check's notes and labels (phase 3, brief 3.3; coverage-judges V4, V5).
+ *
+ * An arc with a missing or invalid source label was relabelled "discovered", which the
+ * outline writer frames as a revelation the room missed: a thread from the director's
+ * notes or the whiteboard printed as something the room "completely missed" (TH5). It
+ * is sent back for a label instead. And every role naming both victim and operator got
+ * a "Role contradiction" note, though a character can be both wronged and complicit.
+ */
+describe('validateArcStructure: source labels and roles (phase 3, 3.3)', () => {
+  const { validateArcStructure } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
+
+  const accusationArc = {
+    id: 'arc-verdict', title: 'The verdict', arcSource: 'accusation',
+    keyEvidence: [], characterPlacements: { Alex: 'accused' }, evidenceStrength: 'moderate'
+  };
+  function stateWith(arcs) {
+    return {
+      narrativeArcs: arcs,
+      sessionConfig: { roster: ['Alex'], accusation: { verdictKind: 'culprit', accused: ['Alex'], charge: 'Murder' } },
+      evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } },
+      canonicalCharacters: {},
+      theme: 'journalist'
+    };
+  }
+
+  it.each([
+    ['missing', undefined],
+    ['invalid', 'hunch']
+  ])('sends an arc with a %s source label back for a label, never relabelled "discovered"', (kind, label) => {
+    const unlabelled = {
+      id: 'arc-ledger', title: 'The ledger', arcSource: label,
+      keyEvidence: [], characterPlacements: { Alex: 'sold at 9:40' }, evidenceStrength: 'moderate'
+    };
+    const result = validateArcStructure(stateWith([accusationArc, unlabelled]), {});
+    const arc = result.narrativeArcs.find((a) => a.id === 'arc-ledger');
+    expect(arc.arcSource).not.toBe('discovered');
+    expect(arc.arcSource).toBe(label);
+    expect(result._arcValidation.structuralPassed).toBe(false);
+    const issue = result.validationResults.issues.find((i) => i.type === 'invalid-arc-source');
+    expect(issue.severity).toBe('structural');
+    expect(issue.message).toContain('"The ledger" (arc-ledger)');
+    expect(issue.message).toMatch(/accusation, whiteboard, observation or discovered/);
+    expect(result.validationResults.revisionGuidance).toContain(issue.message);
+  });
+
+  it('passes when every arc carries a valid label', () => {
+    const result = validateArcStructure(stateWith([accusationArc]), {});
+    expect(result._arcValidation.structuralPassed).toBe(true);
+    expect(result.validationResults).toBeUndefined();
+  });
+
+  it('writes no "Role contradiction" note for a role naming both victim and operator (V4)', () => {
+    const both = { ...accusationArc, characterPlacements: { Alex: 'victim of the sale, and its operator' } };
+    const result = validateArcStructure(stateWith([both]), {});
+    const notes = result.narrativeArcs[0]._validationIssues || [];
+    expect(notes.join('\n')).not.toMatch(/contradiction/i);
+  });
 });
