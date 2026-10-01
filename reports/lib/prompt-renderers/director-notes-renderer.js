@@ -8,10 +8,56 @@
  * Spec: docs/superpowers/specs/2026-04-20-director-notes-enrichment-design.md
  */
 
-const { renderDirectorCorrectionsBlock } = require('./director-words-renderer');
+const { renderDirectorCorrectionsBlock, normalizeCorrections } = require('./director-words-renderer');
 const { buriedTransactionFields } = require('./record-view');
 const { sessionClockOf } = require('./session-clock');
 const { DERIVED_LABELS } = require('./derived-labels');
+const { isVerbatimIn } = require('../director-enricher');
+
+/** What a quote whose speaker the notes do not record prints in the speaker's place. */
+const SPEAKER_NOT_RECORDED = '(speaker not recorded)';
+
+/**
+ * One quote of <QUOTE_BANK> (phase 3, 3.6): its speaker, or "speaker not recorded",
+ * then the director's words around it and the correction that applied, each on its
+ * own line. A line is printed only when the notes, or the corrections, hold it word
+ * for word: a thread enriched before 3.6 stored the enricher's own prose as context
+ * (092026), and the line's label says it is the director's words.
+ *
+ * @param {Object} quote - a stored quote ({speaker?, addressee?, text, context?, correction?})
+ * @param {string} rawProse - the director's notes
+ * @param {string[]} corrections - the director's input-review corrections
+ * @returns {string}
+ */
+function quoteEntry(quote, rawProse, corrections) {
+  const speaker = typeof quote.speaker === 'string' ? quote.speaker.trim() : '';
+  // An enricher from before 3.6 wrote "unknown" where it could not name the speaker.
+  const who = speaker && speaker.toLowerCase() !== 'unknown' ? speaker : SPEAKER_NOT_RECORDED;
+  const lines = [`- ${who}${quote.addressee ? ` (to ${quote.addressee})` : ''}: "${quote.text}"`];
+  if (quote.context && isVerbatimIn(quote.context, rawProse)) {
+    lines.push(`  In the notes: ${quote.context}`);
+  }
+  if (quote.correction && corrections.some(c => isVerbatimIn(quote.correction, c))) {
+    lines.push(`  The director's correction: ${quote.correction}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * The epilogue as the director wrote it (phase 3, 3.6): each item's `detail` that
+ * the notes hold word for word. An item stored before 3.6 also carries the
+ * enricher's headline, subjects and "why this matters"; only its detail prints, and
+ * an item with no detail prints nothing.
+ *
+ * @param {Array} items - stored postInvestigationDevelopments
+ * @param {string} rawProse - the director's notes
+ * @returns {string[]}
+ */
+function epilogueSentences(items, rawProse) {
+  return (Array.isArray(items) ? items : [])
+    .map(item => (item && typeof item.detail === 'string' ? item.detail.trim() : ''))
+    .filter(detail => detail && isVerbatimIn(detail, rawProse));
+}
 
 /**
  * One linked transaction, as account, amount and time only, through the record
@@ -43,10 +89,12 @@ function linkedTransactionLine(tx, sessionConfig = null) {
  *
  * @param {Object} ctx - Director-notes context
  * @param {string} [ctx.rawProse] - Verbatim director prose
- * @param {Array} [ctx.quotes] - Extracted quotes
+ * @param {Array} [ctx.quotes] - Extracted quotes, each printed with the director's
+ *   words around it (see quoteEntry)
  * @param {Array} [ctx.transactionReferences] - Observation → transaction links
  *   (each transaction printed as account, amount and time only)
- * @param {Array} [ctx.postInvestigationDevelopments] - Post-investigation news items
+ * @param {Array} [ctx.postInvestigationDevelopments] - The epilogue items, printed as
+ *   the director's sentences under <EPILOGUE> (see epilogueSentences)
  * @param {string[]|string|null} [ctx.corrections] - the director's input-review
  *   corrections, in order (phase 2, brief 2.2). They follow the notes, which are
  *   never rewritten: the uncorrected sentence stays, and the correction sits beside it.
@@ -73,12 +121,14 @@ ${rawProse || '(no director notes provided)'}
   if (correctionsBlock) blocks.push(correctionsBlock);
 
   if (quotes.length > 0) {
-    const lines = quotes.map(q =>
-      `- ${q.speaker}${q.addressee ? ` (to ${q.addressee})` : ''}: "${q.text}"${q.context ? ` — ${q.context}` : ''} [${q.confidence}]`
-    ).join('\n');
+    const correctionList = normalizeCorrections(corrections);
+    const lines = quotes
+      .filter(q => q && typeof q === 'object')
+      .map(q => quoteEntry(q, rawProse, correctionList))
+      .join('\n');
     blocks.push(`<QUOTE_BANK>
 ${DERIVED_LABELS.directorNotesIndex}
-Verbatim quotes extracted from the director's prose — prefer these when citing what someone said:
+The lines the director's notes quote, each with its speaker as the notes and corrections give it:
 ${lines}
 </QUOTE_BANK>`);
   }
@@ -89,20 +139,19 @@ ${lines}
       return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
     }).join('\n');
     blocks.push(`<TRANSACTION_LINKS>
-${DERIVED_LABELS.directorNotesIndex}
-Behavioral observations pre-linked to specific burial transactions, each shown as account, amount and time:
+${DERIVED_LABELS.transactionLinks}
+Each line: an observation, the sales paired with it (each shown as account, amount and time), and the model's confidence in the pairing:
 ${lines}
 </TRANSACTION_LINKS>`);
   }
 
-  if (postInvestigationDevelopments.length > 0) {
-    const lines = postInvestigationDevelopments.map(d =>
-      `- ${d.headline}${d.detail ? `: ${d.detail}` : ''}${d.subjects?.length ? ` [subjects: ${d.subjects.join(', ')}]` : ''}${d.bearingOnNarrative ? ` — ${d.bearingOnNarrative}` : ''}`
-    ).join('\n');
-    blocks.push(`<POST_INVESTIGATION_NEWS>
-Developments that occurred AFTER the investigation concluded — distinct epistemic status:
-${lines}
-</POST_INVESTIGATION_NEWS>`);
+  // Phase 3 (3.6): the director's sentences as written, under the glossary's name.
+  const epilogue = epilogueSentences(postInvestigationDevelopments, rawProse);
+  if (epilogue.length > 0) {
+    blocks.push(`<EPILOGUE>
+${DERIVED_LABELS.epilogue}
+${epilogue.map(sentence => `- ${sentence}`).join('\n')}
+</EPILOGUE>`);
   }
 
   return blocks.join('\n\n');

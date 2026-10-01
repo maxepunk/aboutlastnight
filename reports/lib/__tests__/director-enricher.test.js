@@ -43,23 +43,25 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
     expect(item.properties.linkReasoning.type).toBe('string');
   });
 
-  it('defines quotes with speaker, text, addressee, context, confidence', () => {
+  it('defines quotes with speaker, text, addressee, context, correction, confidence', () => {
     const item = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items;
     expect(item.properties.speaker.type).toBe('string');
     expect(item.properties.text.type).toBe('string');
     expect(item.properties.addressee.type).toBe('string');
     expect(item.properties.context.type).toBe('string');
+    expect(item.properties.correction.type).toBe('string');
     // B3: aligned with transactionReferences; 'medium' used to fail validation.
     expect(item.properties.confidence.enum).toEqual(['high', 'medium', 'low']);
-    expect(item.required).toEqual(expect.arrayContaining(['speaker', 'text']));
+    // Phase 3 (3.6): a speaker may be unknown, so only the words and the director's
+    // words around them are required.
+    expect(item.required).toEqual(['text', 'context']);
   });
 
-  it('defines postInvestigationDevelopments with headline, detail, subjects', () => {
+  it('defines an epilogue item as the director\'s sentence and an index of subjects, with no headline or reading of its own (phase 3, 3.6)', () => {
     const item = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.postInvestigationDevelopments.items;
-    expect(item.properties.headline.type).toBe('string');
-    expect(item.properties.detail.type).toBe('string');
+    expect(Object.keys(item.properties).sort()).toEqual(['detail', 'proseOffset', 'subjects']);
+    expect(item.required).toEqual(['detail']);
     expect(item.properties.subjects.type).toBe('array');
-    expect(item.properties.bearingOnNarrative.type).toBe('string');
   });
 
   it('does NOT include the legacy observations.{behaviorPatterns,...} field', () => {
@@ -195,11 +197,12 @@ describe('enrichDirectorNotes', () => {
   });
 
   it('returns the SDK result on success', async () => {
+    // Phase 3 (3.6): the quote carries the director's words around it, which name its speaker.
     const expected = {
       rawProse: baseContext.rawProse,
       characterMentions: { Vic: [{ excerpt: 'Vic was working the room.' }] },
       entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
-      quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }],
+      quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', context: '"do you want to trade a little" Remi said to Mel.', confidence: 'high' }],
       transactionReferences: [],
       postInvestigationDevelopments: []
     };
@@ -362,7 +365,8 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA — prose is not round-tripped (B3)', (
     const ok = validate({
       characterMentions: {},
       entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
-      quotes: [{ speaker: 'Remi', text: 'do you want to trade', confidence: 'medium' }],
+      // Phase 3 (3.6): a quote carries the director's words around it.
+      quotes: [{ speaker: 'Remi', text: 'do you want to trade', context: 'Later, Remi said "do you want to trade".', confidence: 'medium' }],
       transactionReferences: [],
       postInvestigationDevelopments: []
     });
@@ -400,7 +404,8 @@ describe('enrichDirectorNotes — keeps the payload the model produced (B3)', ()
   const modelPayload = () => ({
     characterMentions: { Vic: [{ excerpt: 'Vic was working the room.' }] },
     entityNotes: { npcsReferenced: ['Blake'], shellAccountsReferenced: [] },
-    quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }],
+    // Phase 3 (3.6): the context names the speaker, so the speaker is kept.
+    quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', context: '"do you want to trade a little" Remi said to Mel.', confidence: 'high' }],
     transactionReferences: [{ excerpt: 'Vic was working the room.', linkedTransactions: [], confidence: 'low' }],
     postInvestigationDevelopments: []
   });
@@ -435,17 +440,18 @@ describe('enrichDirectorNotes — quote grounding (B3)', () => {
   const prose = 'Vic was working the room. "do you want to trade a little" Remi said to Mel.';
 
   it('drops a quote that is not in the prose and counts it, keeping the grounded one', async () => {
+    const context = '"do you want to trade a little" Remi said to Mel.';
     const sdk = jest.fn().mockResolvedValue({
       quotes: [
-        { speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' },
-        { speaker: 'Mel', text: 'I never touched the account', confidence: 'low' }  // invented
+        { speaker: 'Remi', text: 'do you want to trade a little', context, confidence: 'high' },
+        { speaker: 'Mel', text: 'I never touched the account', context, confidence: 'low' }  // invented
       ]
     });
 
     const result = await enrichDirectorNotes({ rawProse: prose, roster: ['Vic'] }, sdk);
 
     expect(result.quotes).toEqual([
-      { speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }
+      { speaker: 'Remi', text: 'do you want to trade a little', context, confidence: 'high' }
     ]);
     expect(result._enrichmentWarnings).toEqual({ droppedQuotes: 1 });
   });
@@ -453,12 +459,14 @@ describe('enrichDirectorNotes — quote grounding (B3)', () => {
   it('keeps a quote whose curly quotes and whitespace differ from the prose', async () => {
     const curlyProse = 'Remi said “do you  want to trade” to Mel.';
     const sdk = jest.fn().mockResolvedValue({
-      quotes: [{ speaker: 'Remi', text: "do you want to trade", confidence: 'high' }]
+      // Phase 3 (3.6): the context is grounded the same way, curly quotes and all.
+      quotes: [{ speaker: 'Remi', text: "do you want to trade", context: 'Remi said "do you want to trade" to Mel.', confidence: 'high' }]
     });
 
     const result = await enrichDirectorNotes({ rawProse: curlyProse, roster: ['Remi'] }, sdk);
 
     expect(result.quotes).toHaveLength(1);
+    expect(result.quotes[0].speaker).toBe('Remi');
     expect(result._enrichmentWarnings).toBeUndefined();
   });
 
@@ -541,12 +549,14 @@ describe('normalizeForGrounding folds dashes (the JSDoc already claimed it)', ()
     const prose = 'Vic said the deal was already done - signed, filed, forgotten.';
     const sdk = jest.fn().mockResolvedValue({
       characterMentions: {}, transactionReferences: [],
-      quotes: [{ speaker: 'Vic', text: 'the deal was already done — signed, filed, forgotten.' }]
+      // Phase 3 (3.6): with the director's words around it, which name the speaker.
+      quotes: [{ speaker: 'Vic', text: 'the deal was already done — signed, filed, forgotten.', context: prose }]
     });
 
     const result = await enrichDirectorNotes({ rawProse: prose }, sdk);
 
     expect(result.quotes).toHaveLength(1);
+    expect(result.quotes[0].speaker).toBe('Vic');
     expect(result._enrichmentWarnings).toBeUndefined();
   });
 });
@@ -563,6 +573,15 @@ describe('ENRICHMENT prompts define the medium confidence band (Task 1 Minor)', 
       expect(text).toMatch(/same sentence/i);
       expect(text).toMatch(/surrounding paragraph/i);
     });
+  });
+
+  it('the schema states the bands in the rules\' own words (M5: "adjacent" against "same sentence")', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'x' });
+    const bands = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.confidence.description;
+    expect(bands).toMatch(/same sentence/);
+    expect(bands).not.toMatch(/adjacent/);
+    expect(systemPrompt).toContain(bands);
+    expect(userPrompt).toContain(bands);
   });
 });
 
@@ -666,5 +685,118 @@ describe('the enricher never carries a buried memory id (phase 2 final fix wave)
     expect(result.transactionReferences[0].linkedTransactions).toEqual([{ timestamp: '09:26 PM', amount: '$450,000', sellingTeam: 'Elephant' }]);
     expect(result._enrichmentWarnings).toEqual({ droppedLinks: 1 });
     expect(JSON.stringify(result)).not.toMatch(/sar004|tay004/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 3 (3.6): the director's notes, unguessed. A quote's speaker and wording come
+// from the notes as the director corrected them at the input review, its context is
+// the director's own words around it, and an epilogue item is the director's
+// sentence. On 092026 the notes say "Vic to Ashe" and the director corrected the line
+// to Blake, with different wording; an overheard line named no speaker at all.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe("the director's notes, unguessed (phase 3, 3.6)", () => {
+  const PROSE = [
+    'Early on, Sam and Sarah talked.',
+    'Overheard near the end: "Oh, Sam exposed everything."',
+    'Vic to Ashe: "My company is very interesting."',
+    'Remi was not available for comment after the investigation. According to his assistant, he is on a short vacation.'
+  ].join(' ');
+  const CORRECTION = 'The line to Ashe was Blake, not Vic, and Blake said "my company would be very interested".';
+  const run = async (payload) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: PROSE, corrections: [CORRECTION] }, jest.fn().mockResolvedValue(payload));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it('keeps a quote whose speaker the notes do not record, with no speaker', async () => {
+    const quote = { text: 'Oh, Sam exposed everything.', context: 'Overheard near the end: "Oh, Sam exposed everything."', confidence: 'low' };
+    const result = await run({ quotes: [quote] });
+    expect(result.quotes).toEqual([quote]);
+  });
+
+  it('leaves the speaker out when only the quoted words name them, never the director\'s', async () => {
+    const result = await run({
+      quotes: [{ speaker: 'Sam', text: 'Oh, Sam exposed everything.', context: 'Overheard near the end: "Oh, Sam exposed everything."', confidence: 'medium' }]
+    });
+    expect(result.quotes).toEqual([
+      { text: 'Oh, Sam exposed everything.', context: 'Overheard near the end: "Oh, Sam exposed everything."', confidence: 'low' }
+    ]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it('keeps a corrected speaker and wording, with the notes\' words around it and the correction that applied', async () => {
+    const corrected = {
+      speaker: 'Blake',
+      addressee: 'Ashe',
+      text: 'my company would be very interested',
+      context: 'Vic to Ashe: "My company is very interesting."',
+      correction: CORRECTION,
+      confidence: 'high'
+    };
+    const result = await run({ quotes: [corrected] });
+    expect(result.quotes).toEqual([corrected]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  it('keeps only a context copied from the notes; the quote stays', async () => {
+    const result = await run({
+      quotes: [{
+        speaker: 'Blake', text: 'My company is very interesting.',
+        context: 'Prose attributes this to Vic but the correction says Blake.',
+        correction: CORRECTION, confidence: 'high'
+      }]
+    });
+    expect(result.quotes).toEqual([
+      { speaker: 'Blake', text: 'My company is very interesting.', correction: CORRECTION, confidence: 'high' }
+    ]);
+    expect(result._enrichmentWarnings).toEqual({ droppedContexts: 1 });
+  });
+
+  it('keeps only a correction copied from the director\'s corrections', async () => {
+    const result = await run({
+      quotes: [{
+        speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.',
+        context: 'Vic to Ashe: "My company is very interesting."',
+        correction: 'The director said it was Blake.', confidence: 'high'
+      }]
+    });
+    expect(result.quotes).toEqual([
+      { speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'high' }
+    ]);
+    expect(result._enrichmentWarnings).toEqual({ droppedCorrections: 1 });
+  });
+
+  it('keeps an epilogue item as the director\'s sentences alone, and drops one the notes do not hold', async () => {
+    const result = await run({
+      postInvestigationDevelopments: [
+        {
+          headline: 'Remi unavailable for comment',
+          detail: 'Remi was not available for comment after the investigation. According to his assistant, he is on a short vacation.',
+          subjects: ['Remi'],
+          bearingOnNarrative: 'The accused left town.',
+          proseOffset: 120
+        },
+        { headline: 'Remi fled', detail: 'Remi fled to the Cayman Islands.', subjects: ['Remi'] }
+      ]
+    });
+    expect(result.postInvestigationDevelopments).toEqual([{
+      detail: 'Remi was not available for comment after the investigation. According to his assistant, he is on a short vacation.',
+      subjects: ['Remi'],
+      proseOffset: 120
+    }]);
+    expect(result._enrichmentWarnings).toEqual({ droppedEpilogueItems: 1 });
+  });
+
+  it('tells the model where a quote\'s speaker and wording come from, in the system rule and the user rule', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: PROSE, corrections: [CORRECTION] });
+    [systemPrompt, userPrompt].forEach((text) => {
+      expect(text).toMatch(/correction/i);
+      expect(text).toMatch(/leave the speaker out/i);
+      expect(text).not.toMatch(/inferable/);
+    });
   });
 });

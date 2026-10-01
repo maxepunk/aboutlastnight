@@ -24,6 +24,9 @@ describe('derived-material labels', () => {
     expect(DERIVED_LABELS.characterContext).toMatch(/model \(Haiku\)/);
     expect(DERIVED_LABELS.photoDescriptions).toMatch(/model \(Haiku\)/);
     expect(DERIVED_LABELS.narrativeTensions).toMatch(/pipeline's code/);
+    expect(DERIVED_LABELS.directorNotesIndex).toMatch(/model \(Opus\)/);
+    expect(DERIVED_LABELS.transactionLinks).toMatch(/model \(Opus\)/);
+    expect(DERIVED_LABELS.epilogue).toMatch(/model \(Opus\)/);
   });
 
   it('labels the remaining machine-made material for what it is now (phase 3, 3.6)', () => {
@@ -33,6 +36,14 @@ describe('derived-material labels', () => {
     expect(DERIVED_LABELS.narrativeTensions).not.toMatch(/account names/);
     expect(DERIVED_LABELS.narrativeTensions).toMatch(/director's notes/);
     expect(DERIVED_LABELS.narrativeTensions).toMatch(/leads, not the record/);
+    // A transaction link joins one of the director's observations to a sale: the
+    // join is the model's reading.
+    expect(DERIVED_LABELS.transactionLinks).toMatch(/observation/);
+    expect(DERIVED_LABELS.transactionLinks).toMatch(/sale/);
+    expect(DERIVED_LABELS.transactionLinks).toMatch(/reading/);
+    // The epilogue's sentences are the director's; which sentences is the model's choice.
+    expect(DERIVED_LABELS.epilogue).toMatch(/epilogue/);
+    expect(DERIVED_LABELS.epilogue).toMatch(/as written/);
     for (const label of Object.values(DERIVED_LABELS)) expect(label).not.toContain('\u2014');
   });
 

@@ -34,14 +34,34 @@ const DERIVED_LABELS = {
     'where they differ from the record, the record decides.',
 
   /**
-   * The director-notes indexes, from enrichDirectorNotes (Opus): <QUOTE_BANK> and
-   * <TRANSACTION_LINKS> (integrator ruling, phase 2 final fix wave: they are
-   * machine-made). The notes themselves, and the corrections after them, are the
-   * director's words and carry no label.
+   * The director-notes indexes, from enrichDirectorNotes (Opus): <QUOTE_BANK>
+   * (integrator ruling, phase 2 final fix wave: they are machine-made). The notes
+   * themselves, and the corrections after them, are the director's words and carry
+   * no label.
    */
   directorNotesIndex:
     'A model (Opus) built this from the director\'s notes above. It is derived, not the record: ' +
-    'where it differs from the notes or the rest of the record, the record decides.'
+    'where it differs from the notes or the rest of the record, the record decides.',
+
+  /**
+   * <TRANSACTION_LINKS>, from enrichDirectorNotes (Opus). Phase 3 (3.6): a link joins
+   * one of the director's observations to ledger sales, and that join is the model's
+   * reading of the notes, never something the notes state (T4).
+   */
+  transactionLinks:
+    'A model (Opus) paired each observation below, quoted from the director\'s notes, with ledger ' +
+    'sales it judged to match. Each pairing is the model\'s reading, not something the notes state: ' +
+    'where it differs from the notes or the rest of the record, the record decides.',
+
+  /**
+   * <EPILOGUE>, from enrichDirectorNotes (Opus). Phase 3 (3.6): the sentences are the
+   * director's, checked word for word against the notes; which sentences make the
+   * epilogue is the model's choice.
+   */
+  epilogue:
+    'A model (Opus) picked these sentences out of the director\'s notes as the epilogue, what ' +
+    'happened after the investigation, and each is copied as written. The picking is derived, ' +
+    'not the record: where it differs from the notes, the record decides.'
 };
 
 module.exports = { DERIVED_LABELS };

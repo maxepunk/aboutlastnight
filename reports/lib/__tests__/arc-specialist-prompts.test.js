@@ -18,14 +18,16 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
       primaryInvestigation: 'Who killed Marcus'
     },
     directorNotes: {
-      rawProse: 'Alex was seen with Sam in the corner. "we had to act" Alex said.',
+      // Phase 3 (3.6): an epilogue item prints as the director's sentence, so the
+      // sentence is in the notes.
+      rawProse: 'Alex was seen with Sam in the corner. "we had to act" Alex said. Alex was detained after the investigation.',
       quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
       transactionReferences: [{
         excerpt: 'Alex paid Blake',
         linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }],
         confidence: 'high'
       }],
-      postInvestigationDevelopments: [{ headline: 'Alex detained' }],
+      postInvestigationDevelopments: [{ detail: 'Alex was detained after the investigation.' }],
       whiteboard: {}
     },
     evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] }, allEvidenceIds: [] },
@@ -48,7 +50,8 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     // (phase 2 final fix wave).
     expect(prompt).toContain('amount: $450,000 | time: 09:40 PM');
     expect(prompt).not.toContain('tay004');
-    expect(prompt).toContain('Alex detained');
+    expect(prompt).toContain('<EPILOGUE>');
+    expect(prompt).toContain('- Alex was detained after the investigation.');
   });
 
   it('buildArcRevisionPrompt includes rawProse and NOT legacy arrays', () => {

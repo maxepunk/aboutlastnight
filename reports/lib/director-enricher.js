@@ -4,12 +4,43 @@
  * Replaces the legacy Haiku 3-bucket compressor with an Opus-backed enricher
  * that preserves the director's prose verbatim and adds four context-grounded
  * indexes over it (entity resolution, transaction cross-references, quote
- * bank, post-investigation developments).
+ * bank, the epilogue).
  *
  * Spec: docs/superpowers/specs/2026-04-20-director-notes-enrichment-design.md
  */
 
-const { formatAccused, buildParseCorrectionsBlock } = require('./prompt-renderers/director-words-renderer');
+const { formatAccused, buildParseCorrectionsBlock, normalizeCorrections } = require('./prompt-renderers/director-words-renderer');
+
+/**
+ * How a quote's speaker is known: one wording for the schema and both rule lists
+ * (M5: the rules said "same sentence" where the schema said "adjacent").
+ */
+const QUOTE_CONFIDENCE_BANDS =
+  '"high" = the prose or a correction names the speaker in the same sentence as the quote; ' +
+  '"medium" = the prose names the speaker in the surrounding paragraph, outside the quote\'s sentence; ' +
+  '"low" = neither names the speaker, and the speaker is left out.';
+
+/**
+ * The quote rule and the epilogue rule, stated once and given in both the system
+ * rules and the user rules (phase 3, 3.6). A quote's speaker and wording come from
+ * the notes as the director corrected them at the input review; its context is the
+ * director's own words; an epilogue item is the director's sentence.
+ */
+const QUOTE_RULE =
+  'quotes: each phrase the prose puts in quotation marks, and each unambiguous direct speech. ' +
+  'Copy the wording, the speaker and the addressee as the prose gives them. Where a director\'s correction changes who said a line, ' +
+  'to whom, or its wording, take that from the correction and copy the correction into the quote\'s correction field. ' +
+  'The context is the director\'s words around the quote, copied from the prose: its sentence, and the sentence that names the speaker when that is another one. ' +
+  'Leave the speaker out when neither the prose nor a correction names who said it. Confidence: ' + QUOTE_CONFIDENCE_BANDS;
+
+const EPILOGUE_RULE =
+  'postInvestigationDevelopments (the epilogue): each passage with an explicit post-investigation marker ("just been announced", ' +
+  '"currently whereabouts unknown", "is on his way to", "following the investigation", "at the time of this article\'s writing"). ' +
+  'Copy the director\'s sentence or sentences into detail, word for word, and list the characters they name in subjects.';
+
+const VERBATIM_RULE =
+  'Every excerpt, quote, context and epilogue detail you emit is a verbatim substring of the prose, except a speaker, addressee or wording ' +
+  'that a director\'s correction gives, which you copy from that correction; where you would rewrite the director\'s words, quote them instead.';
 
 // B3: the model is NOT asked to echo the prose back. The caller already holds it,
 // and requiring a byte-exact round trip made a single stray character discard the
@@ -93,27 +124,29 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['speaker', 'text'],
+        // Phase 3 (3.6): the speaker may be unknown. The words and the director's
+        // words around them are always there to give.
+        required: ['text', 'context'],
         properties: {
-          speaker: { type: 'string' },
-          text: { type: 'string', description: 'Verbatim quote' },
-          addressee: { type: 'string', description: 'Who the speaker was addressing, if known' },
-          context: { type: 'string', description: 'Surrounding context from prose' },
+          speaker: { type: 'string', description: 'Who said it, as the prose or a correction names them. Left out when neither does.' },
+          text: { type: 'string', description: 'The words said, copied from the prose, or from the correction that gives the wording' },
+          addressee: { type: 'string', description: 'Who it was said to, as the prose or a correction names them. Left out when neither does.' },
+          context: { type: 'string', description: "The director's words around the quote, copied from the prose: its sentence, and the sentence that names the speaker when that is another one" },
+          correction: { type: 'string', description: "The director's correction that changed this quote's speaker, addressee or wording, copied from <DIRECTOR_CORRECTIONS>. Left out when no correction applies." },
           proseOffset: { type: 'integer', minimum: 0 },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: 'high = speaker named adjacent' }
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: QUOTE_CONFIDENCE_BANDS }
         }
       }
     },
     postInvestigationDevelopments: {
       type: 'array',
+      description: 'The epilogue: what happened after the investigation, as the director wrote it into the notes',
       items: {
         type: 'object',
-        required: ['headline'],
+        required: ['detail'],
         properties: {
-          headline: { type: 'string', description: 'One-line summary of the development' },
-          detail: { type: 'string', description: 'Full text from prose' },
-          subjects: { type: 'array', items: { type: 'string' }, description: 'Characters involved' },
-          bearingOnNarrative: { type: 'string', description: 'Why this matters for the article' },
+          detail: { type: 'string', description: "The director's sentence or sentences reporting the development, copied from the prose word for word" },
+          subjects: { type: 'array', items: { type: 'string' }, description: 'The characters those sentences name, as an index' },
           proseOffset: { type: 'integer', minimum: 0 }
         }
       }
@@ -130,11 +163,11 @@ const EMPTY_ENRICHMENT_PROSE_THRESHOLD = 400;
 const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*.
 
 Hard rules:
-1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
+1. ${VERBATIM_RULE}
 2. Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes (npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).
 3. transactionReferences: link an observation to a scoring-timeline row ONLY when timestamp, actor, and amount converge, naming each linked row by its key. If no row matches cleanly, emit linkedTransactions: [] with confidence: "low" and a linkReasoning explaining the ambiguity. Do NOT fabricate.
-4. quotes: only extract phrases that appear in quotation marks in the prose, or unambiguous direct speech. Preserve wording exactly. Confidence bands: "high" = the speaker is named in the SAME SENTENCE as the quote; "medium" = the speaker is not named beside the quote but is unambiguous from the SURROUNDING PARAGRAPH; "low" = anything else. Never guess a speaker to reach a higher band.
-5. postInvestigationDevelopments: only passages with explicit post-investigation temporal markers ("just been announced", "currently whereabouts unknown", "is on his way to", "following the investigation", "at the time of this article's writing").
+4. ${QUOTE_RULE}
+5. ${EPILOGUE_RULE}
 6. Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.
 
 You are an INDEXER, not a SUMMARIZER.`;
@@ -276,11 +309,11 @@ ${rawProse}
 </DIRECTOR_NOTES_RAW>
 
 <ENRICHMENT_RULES>
-1. Every excerpt and quote you emit is a verbatim substring of the prose; where you would rewrite the director's words, quote them instead.
+1. ${VERBATIM_RULE}
 2. Use ONLY roster names from the roster section as keys in characterMentions.
 3. Link transactionReferences only when timestamp, actor, and amount converge with the scoring timeline, naming each linked row by its key. Otherwise confidence: "low" and empty linkedTransactions.
-4. Extract quotes verbatim. Confidence: "high" = speaker named in the same sentence; "medium" = speaker inferable from the surrounding paragraph; "low" = otherwise.
-5. postInvestigationDevelopments only for passages with explicit post-investigation markers.
+4. ${QUOTE_RULE}
+5. ${EPILOGUE_RULE}
 6. Empty arrays are valid. Never fabricate.
 </ENRICHMENT_RULES>${correctionsBlock}
 `;
@@ -316,6 +349,126 @@ function normalizeForGrounding(value) {
 }
 
 /**
+ * Whether `fragment` is in `source` word for word, under normalizeForGrounding.
+ * The renderer asks the same question before it prints a quote's context or an
+ * epilogue sentence as the director's words (phase 3, 3.6).
+ *
+ * @param {string} fragment
+ * @param {string} source
+ * @returns {boolean}
+ */
+function isVerbatimIn(fragment, source) {
+  const piece = normalizeForGrounding(fragment);
+  return piece.length > 0 && normalizeForGrounding(source).includes(piece);
+}
+
+/** Words in a name that name no one ("the Valet" is named by "Valet"). */
+const NAME_FILLER = new Set(['the', 'a', 'an', 'and', 'of', 'to', 'mr', 'ms', 'mrs', 'dr']);
+
+/**
+ * Whether one of `sources` names `name` in the director's own words: a word of the
+ * name, matched whole and in any case, outside the quoted words themselves. A line
+ * such as "Oh, Sam exposed everything." names Sam without saying who spoke it.
+ *
+ * @param {string} name - a speaker or addressee
+ * @param {string[]} sources - the quote's context and correction
+ * @param {string} quoteText - the quoted words, which never count as naming
+ * @returns {boolean}
+ */
+function namedOutsideQuote(name, sources, quoteText) {
+  const words = (String(name || '').match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || [])
+    .filter(word => word.length >= 2 && !NAME_FILLER.has(word.toLowerCase()));
+  if (words.length === 0) return false;
+  const quoted = normalizeForGrounding(quoteText);
+  return sources.some(source => {
+    const outside = quoted ? normalizeForGrounding(source).split(quoted).join(' ') : normalizeForGrounding(source);
+    return words.some(word => {
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(outside);
+    });
+  });
+}
+
+/**
+ * Keep each quote as the director's words give it (phase 3, 3.6).
+ *
+ * - The words are in the notes, or in the correction that gives the wording;
+ *   otherwise the quote is dropped (`droppedQuotes`).
+ * - The context is kept only when the notes hold it word for word
+ *   (`droppedContexts`), and the correction only when a correction does
+ *   (`droppedCorrections`).
+ * - The speaker and the addressee are kept only when the kept context or
+ *   correction names them outside the quoted words. A speaker left out is not
+ *   recorded (`unrecordedSpeakers`), and the quote's confidence is "low".
+ *
+ * @param {Array} quotes - the model's quotes
+ * @param {string} rawProse - the director's notes
+ * @param {string[]} corrections - the director's input-review corrections
+ * @returns {{quotes: Array, counts: Object}}
+ */
+function groundQuotes(quotes, rawProse, corrections) {
+  const counts = { droppedQuotes: 0, droppedContexts: 0, droppedCorrections: 0, unrecordedSpeakers: 0 };
+  const text = (value) => (typeof value === 'string' && value.trim() ? value : null);
+  const kept = [];
+  for (const q of Array.isArray(quotes) ? quotes : []) {
+    const quote = q && typeof q === 'object' ? q : {};
+    const words = text(quote.text);
+    if (!words || ![rawProse, ...corrections].some(source => isVerbatimIn(words, source))) {
+      counts.droppedQuotes += 1;
+      continue;
+    }
+    const context = text(quote.context) && isVerbatimIn(quote.context, rawProse) ? quote.context : null;
+    if (text(quote.context) && !context) counts.droppedContexts += 1;
+    const correction = text(quote.correction) && corrections.some(c => isVerbatimIn(quote.correction, c)) ? quote.correction : null;
+    if (text(quote.correction) && !correction) counts.droppedCorrections += 1;
+
+    const witnesses = [context, correction].filter(Boolean);
+    const speaker = text(quote.speaker) && namedOutsideQuote(quote.speaker, witnesses, words) ? quote.speaker : null;
+    if (text(quote.speaker) && !speaker) counts.unrecordedSpeakers += 1;
+    const addressee = text(quote.addressee) && namedOutsideQuote(quote.addressee, witnesses, words) ? quote.addressee : null;
+
+    kept.push({
+      ...(speaker && { speaker }),
+      ...(addressee && { addressee }),
+      text: words,
+      ...(context && { context }),
+      ...(correction && { correction }),
+      ...(Number.isInteger(quote.proseOffset) && { proseOffset: quote.proseOffset }),
+      ...(speaker ? (quote.confidence && { confidence: quote.confidence }) : { confidence: 'low' })
+    });
+  }
+  return { quotes: kept, counts };
+}
+
+/**
+ * Keep each epilogue item as the director's sentence alone (phase 3, 3.6): its
+ * `detail` when the notes hold it word for word, with its subjects as an index. The
+ * enricher's own headline and "why this matters" are not kept; an item the notes
+ * do not hold is dropped (`droppedEpilogueItems`).
+ *
+ * @param {Array} items - the model's postInvestigationDevelopments
+ * @param {string} rawProse - the director's notes
+ * @returns {{items: Array, dropped: number}}
+ */
+function groundEpilogue(items, rawProse) {
+  let dropped = 0;
+  const kept = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const detail = item && typeof item.detail === 'string' ? item.detail : '';
+    if (!isVerbatimIn(detail, rawProse)) {
+      dropped += 1;
+      continue;
+    }
+    kept.push({
+      detail,
+      ...(Array.isArray(item.subjects) && { subjects: item.subjects.filter(subject => typeof subject === 'string') }),
+      ...(Number.isInteger(item.proseOffset) && { proseOffset: item.proseOffset })
+    });
+  }
+  return { items: kept, dropped };
+}
+
+/**
  * Enrich director prose with four indexes over it.
  *
  * B3: the prose is supplied BY THE CALLER and returned unchanged -- it is never
@@ -327,9 +480,12 @@ function normalizeForGrounding(value) {
  * emptiness is visible instead of looking like prose with nothing in it.
  *
  * Quotes are still grounded: one that is not a substring of the prose is dropped
- * and counted in `_enrichmentWarnings.droppedQuotes`.
+ * and counted in `_enrichmentWarnings.droppedQuotes`. Since phase 3 (3.6) a quote's
+ * words may come from a correction instead, its context and correction must be the
+ * director's words, its speaker must be named in them, and an epilogue item is the
+ * director's sentence (groundQuotes, groundEpilogue).
  *
- * @param {Object} context - { rawProse, roster, accusation, npcs, shellAccounts, detectiveEvidenceLog, scoringTimeline }
+ * @param {Object} context - { rawProse, roster, accusation, npcs, shellAccounts, detectiveEvidenceLog, scoringTimeline, corrections }
  * @param {Function} sdk - sdkQuery-compatible client
  * @returns {Promise<Object>} enriched director notes (never throws)
  */
@@ -375,13 +531,18 @@ async function enrichDirectorNotes(context, sdk) {
       console.warn(`[enrichDirectorNotes] model returned no indexes over ${rawProse.length} chars of prose`);
     }
 
-    const proseNorm = normalizeForGrounding(rawProse);
-    const quotes = (result.quotes || []).filter(
-      q => q && normalizeForGrounding(q.text) && proseNorm.includes(normalizeForGrounding(q.text))
-    );
-    const droppedQuotes = (result.quotes || []).length - quotes.length;
+    // Phase 3 (3.6): every quote, context, correction and epilogue item is checked
+    // against the director's own words, and a speaker they do not name is left out.
+    const { quotes, counts: quoteCounts } =
+      groundQuotes(result.quotes, rawProse, normalizeCorrections(context.corrections || []));
+    const { items: epilogue, dropped: droppedEpilogueItems } =
+      groundEpilogue(result.postInvestigationDevelopments, rawProse);
+    const { droppedQuotes, droppedContexts, droppedCorrections, unrecordedSpeakers } = quoteCounts;
     if (droppedQuotes > 0) {
-      console.warn(`[enrichDirectorNotes] dropped ${droppedQuotes} quote(s) not found verbatim in prose`);
+      console.warn(`[enrichDirectorNotes] dropped ${droppedQuotes} quote(s) not found verbatim in the notes or corrections`);
+    }
+    if (droppedContexts + droppedCorrections + unrecordedSpeakers + droppedEpilogueItems > 0) {
+      console.warn(`[enrichDirectorNotes] not in the director's words: ${droppedContexts} context(s), ${droppedCorrections} correction(s), ${unrecordedSpeakers} speaker(s), ${droppedEpilogueItems} epilogue item(s)`);
     }
 
     // The model names each linked row by its key; the row itself comes from the
@@ -393,7 +554,11 @@ async function enrichDirectorNotes(context, sdk) {
     }
     const warnings = {
       ...(droppedQuotes > 0 && { droppedQuotes }),
-      ...(droppedLinks > 0 && { droppedLinks })
+      ...(droppedLinks > 0 && { droppedLinks }),
+      ...(droppedContexts > 0 && { droppedContexts }),
+      ...(droppedCorrections > 0 && { droppedCorrections }),
+      ...(unrecordedSpeakers > 0 && { unrecordedSpeakers }),
+      ...(droppedEpilogueItems > 0 && { droppedEpilogueItems })
     };
 
     // Normalize optional fields so downstream consumers always see the expected shape
@@ -403,7 +568,7 @@ async function enrichDirectorNotes(context, sdk) {
       entityNotes: result.entityNotes || { npcsReferenced: [], shellAccountsReferenced: [] },
       quotes,
       transactionReferences,
-      postInvestigationDevelopments: result.postInvestigationDevelopments || [],
+      postInvestigationDevelopments: epilogue,
       ...(Object.keys(warnings).length > 0 && { _enrichmentWarnings: warnings }),
       ...(indexedNothing && substantialProse && {
         _enrichmentFallback: { reason: 'model returned no indexes' }
@@ -421,5 +586,6 @@ module.exports = {
   enrichDirectorNotes,
   createFallback,
   keyedScoringTimeline,
-  resolveTransactionLinks
+  resolveTransactionLinks,
+  isVerbatimIn
 };

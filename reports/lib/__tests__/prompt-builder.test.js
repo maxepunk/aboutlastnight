@@ -1265,18 +1265,19 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('tay004');
     });
 
-    it('emits <POST_INVESTIGATION_NEWS> when developments present', async () => {
+    it('emits <EPILOGUE> with the director\'s sentence when the notes carry an epilogue (phase 3, 3.6)', async () => {
+      // The block was <POST_INVESTIGATION_NEWS> and led with the enricher's headline;
+      // it now prints the director's sentence as written, under the glossary's name.
       const directorNotes = {
-        rawProse: 'notes',
+        rawProse: 'notes. It has just been announced that Sarah is interim CEO.',
         quotes: [],
         transactionReferences: [],
-        postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'Just been announced' }]
+        postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'It has just been announced that Sarah is interim CEO.' }]
       };
       const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
-      expect(userPrompt).toContain('<POST_INVESTIGATION_NEWS>');
-      expect(userPrompt).toContain('Sarah named interim CEO');
       // This tag must be DISTINCT from general observations so Nova writes "It has just been announced..."
-      expect(userPrompt).toMatch(/<POST_INVESTIGATION_NEWS>[\s\S]*Sarah named interim CEO[\s\S]*<\/POST_INVESTIGATION_NEWS>/);
+      expect(userPrompt).toMatch(/<EPILOGUE>[\s\S]*It has just been announced that Sarah is interim CEO\.[\s\S]*<\/EPILOGUE>/);
+      expect(userPrompt).not.toContain('Sarah named interim CEO');
     });
 
     it('omits empty tags', async () => {
@@ -1289,7 +1290,7 @@ describe('PromptBuilder', () => {
       const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).not.toContain('<QUOTE_BANK>');
       expect(userPrompt).not.toContain('<TRANSACTION_LINKS>');
-      expect(userPrompt).not.toContain('<POST_INVESTIGATION_NEWS>');
+      expect(userPrompt).not.toContain('<EPILOGUE>');
     });
 
     it('handles null directorNotes gracefully', async () => {
@@ -1312,14 +1313,16 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
   const { PromptBuilder } = require('../prompt-builder');
 
   const DIRECTOR_NOTES = {
-    rawProse: 'Blake solicited Vic three times. Heated argument at the bar.',
+    // Phase 3 (3.6): an epilogue item prints as the director's sentence, so the
+    // sentence is in the notes.
+    rawProse: 'Blake solicited Vic three times. Heated argument at the bar. Sarah was named interim CEO after the investigation.',
     quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
     transactionReferences: [{
       excerpt: 'Alex paid Blake',
       linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }],
       confidence: 'high'
     }],
-    postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO' }],
+    postInvestigationDevelopments: [{ detail: 'Sarah was named interim CEO after the investigation.' }],
     whiteboard: { suspects: ['Vic'] }
   };
 
@@ -1346,7 +1349,8 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     expect(userPrompt).toContain('we had to act');
     expect(userPrompt).toContain('amount: $450,000 | time: 09:40 PM');
     expect(userPrompt).not.toContain('tay004');
-    expect(userPrompt).toContain('Sarah named interim CEO');
+    expect(userPrompt).toContain('<EPILOGUE>');
+    expect(userPrompt).toContain('- Sarah was named interim CEO after the investigation.');
   });
 
   it('places it before the arc metadata, and leaves the guidance last', async () => {
