@@ -20,7 +20,8 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     directorNotes: {
       // Phase 3 (3.6): an epilogue item prints as the director's sentence, so the
       // sentence is in the notes.
-      rawProse: 'Alex was seen with Sam in the corner. "we had to act" Alex said. Alex was detained after the investigation.',
+      // The link's observation too (3.6b fix batch: a link prints only when the notes hold it).
+      rawProse: 'Alex was seen with Sam in the corner. "we had to act" Alex said. Alex paid Blake. Alex was detained after the investigation.',
       quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
       transactionReferences: [{
         excerpt: 'Alex paid Blake',

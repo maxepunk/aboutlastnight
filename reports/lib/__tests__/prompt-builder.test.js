@@ -1079,7 +1079,8 @@ describe('PromptBuilder', () => {
 
     it('emits <TRANSACTION_LINKS> when links present', async () => {
       const directorNotes = {
-        rawProse: 'notes',
+        // A link prints only when the notes hold its observation (3.6b fix batch).
+        rawProse: 'Kai paid Blake at the bar.',
         quotes: [],
         transactionReferences: [{
           excerpt: 'Kai paid Blake', linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }], confidence: 'high'
@@ -1143,7 +1144,8 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
   const DIRECTOR_NOTES = {
     // Phase 3 (3.6): an epilogue item prints as the director's sentence, so the
     // sentence is in the notes.
-    rawProse: 'Blake solicited Vic three times. Heated argument at the bar. Sarah was named interim CEO after the investigation.',
+    // The link's observation too (3.6b fix batch: a link prints only when the notes hold it).
+    rawProse: 'Blake solicited Vic three times. Heated argument at the bar. Alex paid Blake. Sarah was named interim CEO after the investigation.',
     quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
     transactionReferences: [{
       excerpt: 'Alex paid Blake',

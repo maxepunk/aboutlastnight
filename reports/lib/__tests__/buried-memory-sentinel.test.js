@@ -103,6 +103,9 @@ function sentinelState(theme = 'journalist') {
   const state = reworkFixtureState(theme);
   state.evidenceBundle.buried.transactions.push(clone(HOSTILE_BURIED_ROW));
   state.directorNotes.transactionReferences = [clone(OLD_LINK)];
+  // A stored link prints only when the notes hold its observation word for word (3.6b
+  // fix batch), so the notes hold this one, and the prompts print it.
+  state.directorNotes.rawProse = `${state.directorNotes.rawProse} ${OLD_LINK.excerpt}`;
   state.sessionConfig.exposures = clone(EXPOSURES_WITH_BURIED);
   return state;
 }

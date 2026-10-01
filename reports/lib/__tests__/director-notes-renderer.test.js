@@ -45,8 +45,9 @@ describe('renderDirectorEnrichmentBlock', () => {
   });
 
   it('emits <TRANSACTION_LINKS> when references present, each linked transaction as account, amount and time', () => {
+    // A link prints only when the notes hold its observation (3.6b fix batch).
     const out = renderDirectorEnrichmentBlock({
-      rawProse: 'p',
+      rawProse: 'Kai paid Blake',
       quotes: [],
       transactionReferences: [{
         excerpt: 'Kai paid Blake',
@@ -62,13 +63,13 @@ describe('renderDirectorEnrichmentBlock', () => {
   it("prints a linked transaction with the <buried-transactions> line's own formatter", () => {
     const { buriedTransactionFields } = require('../prompt-renderers/record-view');
     const tx = { timestamp: '09:40 PM', amount: '$450,000', sellingTeam: 'Cass' };
-    const out = renderDirectorEnrichmentBlock({ rawProse: 'p', transactionReferences: [{ excerpt: 'x', linkedTransactions: [tx], confidence: 'high' }] });
+    const out = renderDirectorEnrichmentBlock({ rawProse: 'Kai paid Blake', transactionReferences: [{ excerpt: 'Kai paid Blake', linkedTransactions: [tx], confidence: 'high' }] });
     expect(out).toContain(buriedTransactionFields({ account: 'Cass', amount: '$450,000', time: '09:40 PM' }));
   });
 
   it("never prints a buried memory's id or owner, though a thread enriched before the fix stored both (092026)", () => {
     const out = renderDirectorEnrichmentBlock({
-      rawProse: 'p',
+      rawProse: 'Kai paid Blake',
       transactionReferences: [{
         excerpt: 'Kai paid Blake',
         linkedTransactions: [
@@ -85,9 +86,9 @@ describe('renderDirectorEnrichmentBlock', () => {
   it('labels <QUOTE_BANK> and <TRANSACTION_LINKS> as machine-made (integrator ruling)', () => {
     const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
     const out = renderDirectorEnrichmentBlock({
-      rawProse: 'p',
+      rawProse: 'Kai paid Blake',
       quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
-      transactionReferences: [{ excerpt: 'x', linkedTransactions: [], confidence: 'low' }]
+      transactionReferences: [{ excerpt: 'Kai paid Blake', linkedTransactions: [], confidence: 'low' }]
     });
     expect(out).toContain(`<QUOTE_BANK>
 ${DERIVED_LABELS.directorNotesIndex}
@@ -104,7 +105,7 @@ ${DERIVED_LABELS.transactionLinks}
 
   it('emits "no link" marker when linkedTransactions is empty', () => {
     const out = renderDirectorEnrichmentBlock({
-      rawProse: 'p',
+      rawProse: 'An ambiguous observation.',
       quotes: [],
       transactionReferences: [{ excerpt: 'ambiguous observation', linkedTransactions: [], confidence: 'low' }],
       postInvestigationDevelopments: []
@@ -286,5 +287,49 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
     expect(out).not.toContain('<EPILOGUE>');
     expect(out).not.toContain('Riley left town');
     expect(out).not.toContain('Cayman');
+  });
+});
+
+/**
+ * 3.6b fix batch, finding 7: the enricher keeps a link only when the notes hold its
+ * observation word for word (groundLinkExcerpts), but a thread enriched before that
+ * check stored the model's own wording, and <TRANSACTION_LINKS> prints each excerpt
+ * under a label that says it is quoted from the director's notes. The renderer
+ * re-checks a stored excerpt, as it does a quote's context and an epilogue detail,
+ * and prints nothing of a link whose observation the notes do not hold: the link is
+ * the pairing of that observation with sales.
+ */
+describe('renderDirectorEnrichmentBlock: a stored transaction link prints only when the notes hold its observation (3.6b fix batch)', () => {
+  const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
+  const PROSE = 'Kai was seen handing Blake an envelope at the Valet desk.\nRemi kept to the bar - all night.';
+  const KAI = { excerpt: 'Kai was seen handing Blake an envelope at the Valet desk.', linkedTransactions: [{ timestamp: '09:40 PM', amount: '$450,000', sellingTeam: 'Cass' }], confidence: 'high' };
+  const MODEL_WORDS = { excerpt: 'Remi appeared to coordinate a sale with Blake.', linkedTransactions: [{ timestamp: '10:13 PM', amount: '$400,000', sellingTeam: 'RW' }], confidence: 'medium' };
+
+  it("prints a link whose observation the notes hold word for word, under the label that says it is quoted from them", () => {
+    const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, transactionReferences: [KAI] });
+    expect(out).toContain(`<TRANSACTION_LINKS>\n${DERIVED_LABELS.transactionLinks}\n`);
+    expect(DERIVED_LABELS.transactionLinks).toMatch(/quoted from the director's notes/);
+    expect(out).toContain('- "Kai was seen handing Blake an envelope at the Valet desk." → [account: Cass | amount: $450,000 | time: 09:40 PM] (high)');
+  });
+
+  it('prints nothing of a stored link whose observation the notes do not hold: not its words, not its sales', () => {
+    const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, transactionReferences: [KAI, MODEL_WORDS] });
+    expect(out).not.toContain('coordinate a sale');
+    expect(out).not.toContain('RW');
+    expect(out).not.toContain('$400,000');
+    expect(out.match(/^- "/gm)).toHaveLength(1);
+  });
+
+  it('prints no <TRANSACTION_LINKS> block when the notes hold none of the stored observations', () => {
+    const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, transactionReferences: [MODEL_WORDS, { linkedTransactions: [], confidence: 'low' }, null] });
+    expect(out).not.toContain('TRANSACTION_LINKS');
+  });
+
+  it('reads the notes as the enricher does: an observation retyped with a different dash or line break is the same words', () => {
+    const out = renderDirectorEnrichmentBlock({
+      rawProse: PROSE,
+      transactionReferences: [{ excerpt: 'Remi kept to the bar \u2014 all night.', linkedTransactions: [], confidence: 'low' }]
+    });
+    expect(out).toContain('- "Remi kept to the bar \u2014 all night." → [no link] (low)');
   });
 });

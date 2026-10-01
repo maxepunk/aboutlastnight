@@ -60,6 +60,24 @@ function epilogueSentences(items, rawProse) {
 }
 
 /**
+ * The stored transaction links whose observation the notes hold word for word (3.6b
+ * fix batch, finding 7). <TRANSACTION_LINKS> prints each link's excerpt under a label
+ * that says it is quoted from the director's notes. The enricher keeps a link only
+ * when that holds (groundLinkExcerpts), but a thread enriched before that check
+ * stored the model's own wording, so the renderer checks again, as it does a quote's
+ * context and an epilogue detail. A link is the pairing of its observation with
+ * sales, so one whose observation the notes do not hold prints nothing at all.
+ *
+ * @param {Array} references - stored transactionReferences
+ * @param {string} rawProse - the director's notes
+ * @returns {Array} the links to print, in stored order
+ */
+function linksInTheNotes(references, rawProse) {
+  return (Array.isArray(references) ? references : [])
+    .filter(ref => ref && typeof ref === 'object' && typeof ref.excerpt === 'string' && isVerbatimIn(ref.excerpt, rawProse));
+}
+
+/**
  * One linked transaction, as account, amount and time only, through the record
  * view's own transaction formatter, with the time on the session clock (phase 3,
  * brief 3.5: every logged time a prompt prints goes through the one clock, so an
@@ -92,7 +110,8 @@ function linkedTransactionLine(tx, sessionConfig = null) {
  * @param {Array} [ctx.quotes] - Extracted quotes, each printed with the director's
  *   words around it (see quoteEntry)
  * @param {Array} [ctx.transactionReferences] - Observation → transaction links
- *   (each transaction printed as account, amount and time only)
+ *   (each transaction printed as account, amount and time only; a link prints only
+ *   when the notes hold its observation word for word, see linksInTheNotes)
  * @param {Array} [ctx.postInvestigationDevelopments] - The epilogue items, printed as
  *   the director's sentences under <EPILOGUE> (see epilogueSentences)
  * @param {string[]|string|null} [ctx.corrections] - the director's input-review
@@ -133,8 +152,10 @@ ${lines}
 </QUOTE_BANK>`);
   }
 
-  if (transactionReferences.length > 0) {
-    const lines = transactionReferences.map(t => {
+  // 3.6b fix batch, finding 7: only the links whose observation the notes hold.
+  const links = linksInTheNotes(transactionReferences, rawProse);
+  if (links.length > 0) {
+    const lines = links.map(t => {
       const txs = (t.linkedTransactions || []).map((tx) => linkedTransactionLine(tx, sessionConfig)).join('; ');
       return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
     }).join('\n');
