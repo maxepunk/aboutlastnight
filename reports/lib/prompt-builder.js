@@ -21,6 +21,9 @@ const { getThemeNPCEntries } = require('./theme-config');
 const { loadModeBlock } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
+/** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */
+const PRONOUN_NOT_GIVEN = 'pronoun not given';
+
 /**
  * Generate canonical character roster section
  * Uses Notion-derived canonical characters map directly (sole source of truth).
@@ -28,8 +31,13 @@ const { loadModeBlock } = require('./rule-set');
  * Each character gets at most one pronoun, and none is guessed (phase 2 final fix
  * wave; the director's ruling): an NPC is listed once, in the NPC block, with its
  * canon pronoun or none; a canonical character not on this session's roster prints
- * no pronoun; a roster character with no captured pronoun keeps they/them.
- * Pronouns show for the journalist theme only.
+ * no pronoun. Pronouns show for the journalist theme only.
+ *
+ * Phase 3 (3.2; spec T9): a roster character with no captured pronoun prints
+ * "pronoun not given", which the writer raises as a question to the director, in
+ * place of the they/them default. The pronoun the roster stop sets is the
+ * director's choice, they/them included (R3), and prints as set. Nova has no
+ * pronoun in the canon, Marcus is he/him, and Blake has none.
  *
  * @param {string} theme - Theme name (e.g., 'journalist') — kept for signature compatibility
  * @param {Object|null} canonicalCharacters - Notion-derived map of firstName -> fullName
@@ -70,7 +78,7 @@ function generateRosterSection(theme = 'journalist', canonicalCharacters = null,
   const showPronouns = theme === 'journalist';
   const pronounOf = (first) => {
     if (!showPronouns || !onRoster(first)) return null;
-    return capturedPronouns(first) || 'they/them';
+    return capturedPronouns(first) || PRONOUN_NOT_GIVEN;
   };
   const entries = Object.entries(characters).filter(([first]) => !npcNames.has(lower(first)));
   const lines = entries

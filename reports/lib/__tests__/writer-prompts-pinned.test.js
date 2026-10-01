@@ -79,10 +79,14 @@ const REPO = path.join(__dirname, '..', '..');
  *   embeds the schema, so its pin moves. The detective prints a frozen copy of the
  *   schema as it was (lib/schemas/content-bundle.detective-prompt.json), so its pin
  *   does not.
+ * - Phase 3 (3.2), the canon lines (theme-config.js, T15, M26): Marcus is the man
+ *   whose death the room investigates, Nova has no pronoun, Blake carries D7's line.
+ *   The journalist article writer prints the roster block (twice until M20 lands
+ *   with the rule-set wiring); the detective's NPC lines are its own and unchanged.
  */
 const PINNED = {
   'outline-journalist': ['719446ac7fe4af8e12e81c6d8aec68234ab741cd2b2e4c8de0196b2065c49023', 15133],
-  'article-journalist': ['d4b9eb4b63112078e71269ad1f37cde7b45d75acf84b5cfeb50b5e6340b38783', 42543],
+  'article-journalist': ['620c56ac9af69e169ffbfbc5e92318116816c946d8e0ab5b04da919f56a4bc45', 42659],
   'arcs-journalist': ['671adab390beee1a4d9dfcdf38f6c4a58565562f609c5f3bec85425e37530ba4', 14492],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],

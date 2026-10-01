@@ -1149,20 +1149,22 @@ describe('PromptBuilder', () => {
       expect(result).toContain('Alex Reeves: Role: CEO | Member of: Board');
     });
 
-    it('appends pronouns from rosterPronouns, defaulting a roster member to they/them', () => {
+    // Phase 3 (3.2; T9): a roster member with no captured pronoun prints "pronoun
+    // not given", which the writer raises with the director.
+    it('appends pronouns from rosterPronouns, and says when a roster member has none', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const canonical = { Vic: 'Vic Kingsley', Sam: 'Sam Rivera' };
       const pronouns = { Vic: 'she/her' };
       const result = generateRosterSection('journalist', canonical, null, pronouns, ['Vic', 'Sam']);
       expect(result).toContain('Vic Kingsley (she/her)');
-      expect(result).toContain('Sam Rivera (they/them)');
+      expect(result).toContain('Sam Rivera (pronoun not given)');
     });
 
-    it('defaults every roster member to they/them when no pronoun map is given', () => {
+    it('says "pronoun not given" for every roster member when no pronoun map is given', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const canonical = { Vic: 'Vic Kingsley' };
       const result = generateRosterSection('journalist', canonical, null, null, ['Vic']);
-      expect(result).toContain('Vic Kingsley (they/them)');
+      expect(result).toContain('Vic Kingsley (pronoun not given)');
     });
 
     it('guesses no pronoun for a character off the roster (final fix wave)', () => {

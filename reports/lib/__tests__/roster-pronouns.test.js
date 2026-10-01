@@ -10,7 +10,8 @@
  *
  * - An NPC is listed once, in the NPC block, with its canon pronoun (or none).
  * - A canonical character not on this session's roster prints no pronoun.
- * - A roster character with no captured pronoun keeps they/them.
+ * - A roster character with no captured pronoun prints "pronoun not given" (phase 3,
+ *   3.2; T9: the writer raises it with the director, where it used to default to they/them).
  * - Pronouns show for the journalist theme only.
  */
 
@@ -33,14 +34,15 @@ describe('generateRosterSection (journalist)', () => {
   const section = generateRosterSection('journalist', CANONICAL, null, PRONOUNS, ROSTER);
 
   it('lists Marcus once, in the NPC block, with his canon pronoun', () => {
-    const marcus = linesOf(section).filter((l) => l.includes('Marcus'));
-    expect(marcus).toEqual(['- Marcus Blackwood (he/him) - the murder victim - central to every arc']);
+    // Phase 3 (3.2; T15, M26): the canon line names the man whose death the room investigates.
+    const marcus = linesOf(section).filter((l) => l.startsWith('- Marcus'));
+    expect(marcus).toEqual(['- Marcus Blackwood (he/him) - the man whose death the room investigates']);
     expect(section).not.toContain('Marcus → Marcus Blackwood');
   });
 
   it('lists Blake once, in the NPC block, with no pronoun (the canon states none)', () => {
     const blake = linesOf(section).filter((l) => /\bBlake\b/.test(l));
-    expect(blake).toEqual(['- Blake - the valet NPC']);
+    expect(blake).toEqual(['- Blake - manages operations at NeurAI; Marcus called Blake his Valet']);
   });
 
   it('gives a roster character its captured pronoun', () => {
@@ -48,8 +50,8 @@ describe('generateRosterSection (journalist)', () => {
     expect(section).toContain('- Morgan → Morgan Reed (she/her)');
   });
 
-  it('keeps they/them for a roster character with no captured pronoun', () => {
-    expect(section).toContain('- Riley → Riley Torres (they/them)');
+  it('prints "pronoun not given" for a roster character with no captured pronoun', () => {
+    expect(section).toContain('- Riley → Riley Torres (pronoun not given)');
   });
 
   it('prints no pronoun for a canonical character not on this session\'s roster, and says why', () => {
@@ -60,7 +62,7 @@ describe('generateRosterSection (journalist)', () => {
   it('matches roster names case-insensitively, and takes {name} roster entries', () => {
     const s = generateRosterSection('journalist', CANONICAL, null, { alex: 'he/him' }, [{ name: 'ALEX' }, 'riley']);
     expect(s).toContain('- Alex → Alex Reeves (he/him)');
-    expect(s).toContain('- Riley → Riley Torres (they/them)');
+    expect(s).toContain('- Riley → Riley Torres (pronoun not given)');
     expect(linesOf(s)).toContain('- Morgan → Morgan Reed');
   });
 
@@ -84,8 +86,8 @@ describe('the writers\' and judges\' roster section passes the session roster', 
   it('PromptBuilder#_rosterSection reads sessionConfig.roster', () => {
     const builder = new PromptBuilder({}, 'journalist', { roster: ROSTER, rosterPronouns: PRONOUNS }, CANONICAL, null);
     const section = builder._rosterSection();
-    expect(section).toContain('- Riley → Riley Torres (they/them)');
+    expect(section).toContain('- Riley → Riley Torres (pronoun not given)');
     expect(linesOf(section)).toContain('- Jamie → Jamie Park');
-    expect(linesOf(section).filter((l) => l.includes('Marcus'))).toHaveLength(1);
+    expect(linesOf(section).filter((l) => l.startsWith('- Marcus'))).toHaveLength(1);
   });
 });

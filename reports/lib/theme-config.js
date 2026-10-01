@@ -27,10 +27,16 @@ const THEME_CONFIGS = {
     // they/them" (BASELINE.md §4 class 3). Omit the field rather than invent it:
     // the references use they/them for Blake in prose but never DECLARE Blake's
     // pronouns, so Blake carries none.
+    //
+    // Phase 3 (3.2): the roles are the canon, stated once, here (spec T15 and D7;
+    // M26). The roster block prints them to every writer and judge, and character
+    // extraction reads them too. What Marcus's death was is the room's verdict (T2),
+    // so the line names no murder. Nova has no pronoun field: Nova is never gendered
+    // (T9), and writes in the first person.
     npcs: [
-      { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the murder victim - central to every arc' },
-      { name: 'Nova', fullName: 'Nova', pronouns: 'she/her', role: 'the journalist narrator' },
-      { name: 'Blake', fullName: 'Blake', role: 'the valet NPC' },
+      { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the man whose death the room investigates' },
+      { name: 'Nova', fullName: 'Nova', role: 'the NovaNews reporter who writes the article' },
+      { name: 'Blake', fullName: 'Blake', role: 'manages operations at NeurAI; Marcus called Blake his Valet' },
       { name: 'Valet', aliasOf: 'Blake', role: 'alias for Blake' }
     ],
 
@@ -54,8 +60,8 @@ const THEME_CONFIGS = {
     },
 
     // Article content rules: REMOVED (F9/CR-5). The bannedPatterns/getArticleRules
-    // config had zero runtime consumers — ban enforcement is PROMPT-ONLY (see
-    // anti-patterns.md + evaluator-nodes.js critical checks + buildValidationPrompt).
+    // config had zero runtime consumers. Since phase 3 the writers read the rule set
+    // (lib/rule-set.js), and the evaluator holds the checks.
 
     // canonicalCharacters REMOVED — now derived from Notion Character database
     // via extractCanonicalCharacters() in node-helpers.js at fetch time.

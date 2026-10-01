@@ -120,9 +120,10 @@ describe('F1 pronoun key chain (X-1 + X-7): normalize then render', () => {
     const normalized = normalizeRosterPronounsToCanonical(typed, canonicalCharacters);
     const section = generateRosterSection('journalist', canonicalCharacters, null, normalized, ['Victoria', 'Sam']);
     expect(section).toContain('Victoria → Victoria Kingsley (she/her)');
-    // Sam unset -> still they/them; proves we did not over-apply.
-    expect(section).toContain('Sam → Sam Rivera (they/them)');
+    // Sam unset -> "pronoun not given" (phase 3, 3.2; T9); proves we did not over-apply.
+    expect(section).toContain('Sam → Sam Rivera (pronoun not given)');
     // Regression guard for the masking default the audit called out.
+    expect(section).not.toContain('Victoria Kingsley (pronoun not given)');
     expect(section).not.toContain('Victoria Kingsley (they/them)');
   });
 });

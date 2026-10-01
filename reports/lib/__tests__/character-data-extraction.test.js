@@ -190,6 +190,17 @@ describe('extractCharacterData', () => {
       expect(prompt).toContain('Blake: manages operations at NeurAI; Marcus called Blake his Valet');
     });
   
+    // Phase 3 (3.2; M26): the NPC lines are theme-config's canon, stated once there
+    // and read here, so the extraction and the writers never word the canon twice.
+    test("prints each NPC from theme-config's canon lines", async () => {
+      const { getThemeNPCEntries } = require('../theme-config');
+      const prompt = await promptOf();
+      const canon = getThemeNPCEntries('journalist').filter((e) => !e.aliasOf);
+      expect(canon.length).toBe(3);
+      canon.forEach((e) => expect(prompt).toContain(`- ${e.fullName}: ${e.role}\n`));
+      expect(prompt).toContain('- Marcus Blackwood: the man whose death the room investigates\n');
+    });
+
     test('carries no em-dash', async () => {
       expect(await promptOf()).not.toContain('—');
     });
