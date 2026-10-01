@@ -509,17 +509,25 @@ function countOf(token) {
  * Statements of how many people were in the room (T10), each with the count in group 1.
  * Narrow on purpose: a count of people tied to the room or the warehouse, said as the
  * whole ("there were nine people in the room", "the nine players in that room", "a
- * room of nine", "nine people were in the room"). "Two people in the room never sold"
- * is a subset, and a vote or account count is not a head count; none of them match.
+ * room of nine", "nine people were in the room", "nine players sat in the room.").
+ * Statements about part of the room do not match: "two people in the room never sold";
+ * "the two people in the room who never sold", where a relative clause picks the two
+ * out; "three players sat in the room and never said a word", where the sentence goes on
+ * to what only they did (so "sat" and "stood" count only when the clause ends at the
+ * room). A vote or account count is not a head count either.
  */
 const HEAD_COUNT_NUMBER = `(\\d{1,3}|${NUMBER_WORDS.join('|')})`;
 const HEAD_COUNT_WHO = '(?:people|players|investigators|guests|suspects|of us|of them)';
 const HEAD_COUNT_PLACE = '(?:in|inside)\\s+(?:the|that|this)\\s+(?:room|warehouse)';
+/** No relative clause follows ("who", "which", or a "that" that is not "that morning"). */
+const HEAD_COUNT_NO_RELATIVE_CLAUSE =
+  '(?!\\s+(?:who|whom|whose|which)\\b|\\s+that\\b(?!\\s+(?:morning|afternoon|evening|night|day)\\b))';
 const HEAD_COUNT_PATTERNS = [
   new RegExp(`\\bthere\\s+were\\s+${HEAD_COUNT_NUMBER}\\s+${HEAD_COUNT_WHO}(?:\\s+[a-z]+){0,3}?\\s+${HEAD_COUNT_PLACE}\\b`, 'gi'),
-  new RegExp(`\\b(?:all\\s+of\\s+the|all\\s+the|all|the)\\s+${HEAD_COUNT_NUMBER}\\s+${HEAD_COUNT_WHO}\\s+${HEAD_COUNT_PLACE}\\b`, 'gi'),
+  new RegExp(`\\b(?:all\\s+of\\s+the|all\\s+the|all|the)\\s+${HEAD_COUNT_NUMBER}\\s+${HEAD_COUNT_WHO}\\s+${HEAD_COUNT_PLACE}\\b${HEAD_COUNT_NO_RELATIVE_CLAUSE}`, 'gi'),
   new RegExp(`\\b(?:a|the|that)\\s+(?:room|warehouse)\\s+of\\s+${HEAD_COUNT_NUMBER}\\b`, 'gi'),
-  new RegExp(`\\b${HEAD_COUNT_NUMBER}\\s+(?:people|players)\\s+(?:were|sat|stood|gathered)\\s+${HEAD_COUNT_PLACE}\\b(?!\\s+(?:when|as|while|before|after)\\b)`, 'gi')
+  new RegExp(`\\b${HEAD_COUNT_NUMBER}\\s+(?:people|players)\\s+(?:were|gathered)\\s+${HEAD_COUNT_PLACE}\\b(?!\\s+(?:when|as|while|before|after)\\b)`, 'gi'),
+  new RegExp(`\\b${HEAD_COUNT_NUMBER}\\s+(?:people|players)\\s+(?:sat|stood)\\s+${HEAD_COUNT_PLACE}\\b(?=\\s*(?:[.;!?]|$))`, 'gi')
 ];
 
 /** Basename of a path, tolerating both separators. */

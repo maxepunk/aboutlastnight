@@ -1257,6 +1257,30 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       expect(flagged(result, 'headCount')).toEqual([]);
     });
 
+    // Fix 3.4b (review finding 2): a relative clause after "the N people in the room",
+    // or what only they did after "N players sat in the room", picks out part of the room.
+    it('never reads a statement about part of the room as a head count', () => {
+      const result = run(paragraphs(
+        'The two people in the room who never sold walked out clean.',
+        'Three players sat in the room and never said a word.',
+        'The two players in the room that Marcus had hired kept quiet.',
+        'Two people stood in that room while the rest voted.'
+      ), { roster });
+      expect(flagged(result, 'headCount')).toEqual([]);
+    });
+
+    it('still flags a whole-room head count in those forms', () => {
+      for (const text of [
+        'The eight people in the room voted.',
+        'The eight people in the room that morning voted.',
+        'Eight players sat in the room.',
+        'Eight people stood in the warehouse; the vote was close.'
+      ]) {
+        const [message] = flagged(run(paragraphs(text), { roster }), 'headCount');
+        expect([text, message]).toEqual([text, expect.stringContaining('9 players')]);
+      }
+    });
+
     it('counts a guest reporter on the roster once, as one of the players', () => {
       const guestReporter = { name: 'Ashe Motoko', role: 'Contributing Reporter' };
       expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporter }), 'headCount')).toEqual([]);
