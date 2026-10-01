@@ -25,16 +25,16 @@ const CHARACTER_EXTRACTION_SCHEMA = {
           groups: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Named groups a document says this character belongs to (e.g., "Stanford Four"); empty when no document names one'
+            description: 'Named groups this character is a member of (e.g., "Stanford Four")'
           },
           relationships: {
             type: 'object',
             additionalProperties: { type: 'string' },
-            description: 'Map of another character\'s name to the relationship a document states between them; empty when no document states one'
+            description: 'Map of another character\'s name to this character\'s relationship to them'
           },
           role: {
             type: 'string',
-            description: 'The professional or social role a document states (e.g., "Attorney", "Investor"); left out when no document states one'
+            description: 'Their professional or social role (e.g., "Attorney", "Investor")'
           }
         },
         // Phase 3 (3.6): no field the record may not give is required. A role was,
@@ -78,7 +78,9 @@ async function extractCharacterData(state, config) {
   // Phase 3 (3.6): every field rests on a document's own words. The prompt used to
   // accept relationships "strongly implied", ask for ALL members of a group, and give
   // Blake as "the Black Market operator"; Blake and Marcus are now the canon lines
-  // (T15, D7).
+  // (T15, D7). The document-only rule is stated once, last, with its reason (3.6 fix
+  // batch, item 5): the field list, the schema and the system prompt only name the
+  // fields.
   const prompt = `Extract character relationship data from these documents and memories.
 
 ROSTER (characters in this session): ${roster.join(', ')}
@@ -92,17 +94,17 @@ NPCs may appear as relationship targets (e.g., "Marcus": "old friend").
 THE PAPER DOCUMENTS AND EXPOSED MEMORIES:
 ${record}
 
-For each ROSTER character the documents mention, extract what a document states:
-1. groups: each named group (e.g., "Stanford Four") a document names them as a member of.
-2. relationships: each relationship a document states between them and another character (e.g., "attorney for", "mentor to", "friend of").
-3. role: their professional or social role, when a document states it.
+For each ROSTER character the documents mention, give:
+1. groups: the named groups (e.g., "Stanford Four") they are a member of.
+2. relationships: their relationship to each other character (e.g., "attorney for", "mentor to", "friend of").
+3. role: their professional or social role.
 
-Every entry rests on a document's own words, and a field stays empty when no document states it.`;
+Take each entry from what a document states about that character, and leave a field empty when no document states it. The writers read these entries as what the documents say about each character, so an inferred group, relationship or role would reach the article as a claim no document makes.`;
 
   try {
     const result = await sdk({
       prompt,
-      systemPrompt: 'You extract structured character data from narrative evidence. Be factual and precise. Only report what the evidence explicitly states.',
+      systemPrompt: 'You extract structured character data from narrative evidence.',
       model: 'haiku',
       jsonSchema: CHARACTER_EXTRACTION_SCHEMA,
       // Inherits the standardized 10-min model default (lib/llm/client.js).

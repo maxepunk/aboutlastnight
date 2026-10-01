@@ -147,16 +147,41 @@ describe('extractCharacterData', () => {
       expect(entry.properties.role.type).toBe('string');
     });
   
+    /**
+     * The one rule that covers a relationship, a group and a role (3.6 fix batch,
+     * item 5): every entry is what a document states about that character. It used
+     * to be stated in the schema, the numbered list, a closing line and the system
+     * prompt, with no reason.
+     */
+    const DOCUMENT_ONLY_RULE = 'Take each entry from what a document states about that character, and leave a field empty when no document states it.';
+    const DOCUMENT_ONLY_REASON = 'The writers read these entries as what the documents say about each character, so an inferred group, relationship or role would reach the article as a claim no document makes.';
+
     test('lists a relationship only where a document states it, never an implied one', async () => {
       const prompt = await promptOf();
       expect(prompt).not.toMatch(/implied/i);
-      expect(prompt).toMatch(/relationship[^\n]*a document states/i);
+      expect(prompt).toMatch(/^2\. relationships:/m);
+      expect(prompt).toContain(DOCUMENT_ONLY_RULE);
     });
-  
+
     test("lists a group's members only where a document names them", async () => {
       const prompt = await promptOf();
       expect(prompt).not.toMatch(/include ALL members/i);
-      expect(prompt).toMatch(/a document names (them|the character) as a member/i);
+      expect(prompt).toMatch(/^1\. groups:/m);
+      expect(prompt).toContain(DOCUMENT_ONLY_RULE);
+    });
+
+    test('states the document-only rule once per call, with its reason (fix batch, item 5)', async () => {
+      const call = await callOf();
+      const entry = call.jsonSchema.properties.characters.additionalProperties;
+      const everything = [
+        call.systemPrompt,
+        call.prompt,
+        ...Object.values(entry.properties).map((field) => field.description)
+      ].join('\n');
+      expect(call.prompt).toContain(`${DOCUMENT_ONLY_RULE} ${DOCUMENT_ONLY_REASON}`);
+      // The rule's words appear in the rule alone: not in the field list, the schema
+      // or the system prompt.
+      expect(everything.match(/a document states|no document|explicitly states|Every entry rests/g)).toEqual(['a document states', 'no document', 'no document']);
     });
   
     test('describes Blake by the canon line, not as "the Black Market operator"', async () => {
