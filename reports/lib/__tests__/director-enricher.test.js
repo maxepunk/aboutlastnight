@@ -674,6 +674,27 @@ describe('the enricher never carries a buried memory id (phase 2 final fix wave)
     expect(droppedLinks).toBe(1);
   });
 
+  it("keeps a link only when the notes hold its observation word for word; one they do not is dropped and counted (fix batch, item 3)", async () => {
+    // <TRANSACTION_LINKS> prints each link's excerpt under a label that calls it the
+    // director's words, so a paraphrased observation never reaches it.
+    const sdk = jest.fn().mockResolvedValue({
+      characterMentions: {}, quotes: [], postInvestigationDevelopments: [],
+      transactionReferences: [
+        { excerpt: 'Vic was  working\nthe room.', linkedTransactions: [{ key: 'tx-1' }], confidence: 'high' },
+        { excerpt: 'Vic sold a large batch to Blake late in the evening.', linkedTransactions: [{ key: 'tx-2' }], confidence: 'medium' }
+      ]
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await enrichDirectorNotes({ rawProse: 'Vic was working the room. Blake kept to the bar.', scoringTimeline: TIMELINE }, sdk);
+    warn.mockRestore();
+    expect(result.transactionReferences).toEqual([{
+      excerpt: 'Vic was  working\nthe room.',
+      linkedTransactions: [{ timestamp: '09:26 PM', amount: '$450,000', sellingTeam: 'Elephant' }],
+      confidence: 'high'
+    }]);
+    expect(result._enrichmentWarnings).toEqual({ droppedExcerpts: 1 });
+  });
+
   it('enrichDirectorNotes resolves the links against the timeline it was given, and warns of a dropped one', async () => {
     const sdk = jest.fn().mockResolvedValue({
       characterMentions: {}, quotes: [], postInvestigationDevelopments: [],

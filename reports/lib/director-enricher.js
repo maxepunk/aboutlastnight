@@ -232,6 +232,23 @@ function resolveTransactionLinks(references, scoringTimeline) {
   return { transactionReferences, droppedLinks };
 }
 
+/**
+ * Keep a transaction link only when the notes hold its observation word for word
+ * (phase 3, 3.6 fix). <TRANSACTION_LINKS> prints each link's `excerpt` under a label
+ * that calls it the director's words, and a link is the pairing of that observation
+ * with sales, so a link whose excerpt the notes do not hold is dropped whole and
+ * counted (`droppedExcerpts`).
+ *
+ * @param {Array} references - the model's transactionReferences
+ * @param {string} rawProse - the director's notes
+ * @returns {{references: Array, dropped: number}}
+ */
+function groundLinkExcerpts(references, rawProse) {
+  const all = (Array.isArray(references) ? references : []).filter(ref => ref && typeof ref === 'object');
+  const kept = all.filter(ref => typeof ref.excerpt === 'string' && isVerbatimIn(ref.excerpt, rawProse));
+  return { references: kept, dropped: all.length - kept.length };
+}
+
 function buildEnrichmentPrompt({
   rawProse,
   roster,
@@ -458,8 +475,9 @@ function groundEpilogue(items, rawProse) {
  * Quotes are still grounded: one that is not a substring of the prose is dropped
  * and counted in `_enrichmentWarnings.droppedQuotes`. Since phase 3 (3.6) a quote's
  * words may come from a correction instead, its context and correction must be the
- * director's words, its speaker must be named in them, and an epilogue item is the
- * director's sentence (groundQuotes, groundEpilogue).
+ * director's words, its speaker must be named in them, an epilogue item is the
+ * director's sentence, and a transaction link's observation is the director's words
+ * (groundQuotes, groundEpilogue, groundLinkExcerpts).
  *
  * @param {Object} context - { rawProse, roster, accusation, npcs, shellAccounts, detectiveEvidenceLog, scoringTimeline, corrections }
  * @param {Function} sdk - sdkQuery-compatible client
@@ -521,16 +539,23 @@ async function enrichDirectorNotes(context, sdk) {
       console.warn(`[enrichDirectorNotes] not in the director's words: ${droppedContexts} context(s), ${droppedCorrections} correction(s), ${unrecordedSpeakers} speaker(s), ${droppedEpilogueItems} epilogue item(s)`);
     }
 
-    // The model names each linked row by its key; the row itself comes from the
-    // timeline this call was given (phase 2 final fix wave).
+    // A link's observation is the director's words (phase 3, 3.6 fix). The model
+    // names each linked row by its key; the row itself comes from the timeline this
+    // call was given (phase 2 final fix wave).
+    const { references: groundedLinks, dropped: droppedExcerpts } =
+      groundLinkExcerpts(result.transactionReferences, rawProse);
+    if (droppedExcerpts > 0) {
+      console.warn(`[enrichDirectorNotes] dropped ${droppedExcerpts} transaction link(s) whose observation is not in the notes word for word`);
+    }
     const { transactionReferences, droppedLinks } =
-      resolveTransactionLinks(result.transactionReferences, context.scoringTimeline);
+      resolveTransactionLinks(groundedLinks, context.scoringTimeline);
     if (droppedLinks > 0) {
       console.warn(`[enrichDirectorNotes] dropped ${droppedLinks} transaction link(s) whose key names no scoring-timeline row`);
     }
     const warnings = {
       ...(droppedQuotes > 0 && { droppedQuotes }),
       ...(droppedLinks > 0 && { droppedLinks }),
+      ...(droppedExcerpts > 0 && { droppedExcerpts }),
       ...(droppedContexts > 0 && { droppedContexts }),
       ...(droppedCorrections > 0 && { droppedCorrections }),
       ...(unrecordedSpeakers > 0 && { unrecordedSpeakers }),
