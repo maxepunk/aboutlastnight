@@ -10,6 +10,7 @@
  */
 
 const { formatAccused, buildParseCorrectionsBlock, normalizeCorrections } = require('./prompt-renderers/director-words-renderer');
+const { normalizeForGrounding, isVerbatimIn } = require('./grounding');
 
 /**
  * How a quote's speaker is known: one wording for the schema and both rule lists
@@ -332,36 +333,6 @@ function createFallback(rawProse) {
   };
 }
 
-/**
- * Normalize for substring comparison: curly quotes to straight, runs of
- * whitespace to one space. A quote the model retyped with a different dash or
- * line wrap is still the director's quote.
- */
-function normalizeForGrounding(value) {
-  return String(value || '')
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    // The JSDoc above already promised this: a quote the model retyped with an
-    // em-dash where the prose has a hyphen was being DROPPED as ungrounded.
-    .replace(/[\u2013\u2014-]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * Whether `fragment` is in `source` word for word, under normalizeForGrounding.
- * The renderer asks the same question before it prints a quote's context or an
- * epilogue sentence as the director's words (phase 3, 3.6).
- *
- * @param {string} fragment
- * @param {string} source
- * @returns {boolean}
- */
-function isVerbatimIn(fragment, source) {
-  const piece = normalizeForGrounding(fragment);
-  return piece.length > 0 && normalizeForGrounding(source).includes(piece);
-}
-
 /** Words in a name that name no one ("the Valet" is named by "Valet"). */
 const NAME_FILLER = new Set(['the', 'a', 'an', 'and', 'of', 'to', 'mr', 'ms', 'mrs', 'dr']);
 
@@ -586,6 +557,5 @@ module.exports = {
   enrichDirectorNotes,
   createFallback,
   keyedScoringTimeline,
-  resolveTransactionLinks,
-  isVerbatimIn
+  resolveTransactionLinks
 };

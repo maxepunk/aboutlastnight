@@ -12,7 +12,7 @@ const { renderDirectorCorrectionsBlock, normalizeCorrections } = require('./dire
 const { buriedTransactionFields } = require('./record-view');
 const { sessionClockOf } = require('./session-clock');
 const { DERIVED_LABELS } = require('./derived-labels');
-const { isVerbatimIn } = require('../director-enricher');
+const { isVerbatimIn } = require('../grounding');
 
 /** What a quote whose speaker the notes do not record prints in the speaker's place. */
 const SPEAKER_NOT_RECORDED = '(speaker not recorded)';
