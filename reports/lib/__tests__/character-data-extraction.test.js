@@ -159,7 +159,10 @@ describe('extractCharacterData', () => {
     test('lists a relationship only where a document states it, never an implied one', async () => {
       const prompt = await promptOf();
       expect(prompt).not.toMatch(/implied/i);
-      expect(prompt).toMatch(/^2\. relationships:/m);
+      // 3.6b fix batch, finding 2: the field list itself asks for a relationship a
+      // document states, to another character, not one entry per other character.
+      expect(prompt).toMatch(/^2\. relationships: each relationship a document states between them and another character \(e\.g\./m);
+      expect(prompt).not.toMatch(/each other character/);
       expect(prompt).toContain(DOCUMENT_ONLY_RULE);
     });
 
@@ -179,9 +182,12 @@ describe('extractCharacterData', () => {
         ...Object.values(entry.properties).map((field) => field.description)
       ].join('\n');
       expect(call.prompt).toContain(`${DOCUMENT_ONLY_RULE} ${DOCUMENT_ONLY_REASON}`);
-      // The rule's words appear in the rule alone: not in the field list, the schema
-      // or the system prompt.
-      expect(everything.match(/a document states|no document|explicitly states|Every entry rests/g)).toEqual(['a document states', 'no document', 'no document']);
+      // The rule's words appear in the rule, and in the relationships field of the
+      // list, which says what the field holds (3.6b fix batch, finding 2: the list
+      // itself asks for nothing inferred); not in the schema or the system prompt.
+      expect(everything.match(/a document states|no document|explicitly states|Every entry rests/g))
+        .toEqual(['a document states', 'a document states', 'no document', 'no document']);
+      expect(call.prompt).toMatch(/^2\. relationships: each relationship a document states/m);
     });
   
     test('describes Blake by the canon line, not as "the Black Market operator"', async () => {

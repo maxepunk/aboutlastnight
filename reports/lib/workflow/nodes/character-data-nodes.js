@@ -91,9 +91,12 @@ async function extractCharacterData(state, config) {
   // accept relationships "strongly implied", ask for ALL members of a group, and give
   // Blake as "the Black Market operator"; Blake and Marcus are now the canon lines
   // (T15, D7). The document-only rule is stated once, last, with its reason (3.6 fix
-  // batch, item 5): the field list, the schema and the system prompt only name the
-  // fields. Phase 3 (3.2; M26): the NPC lines are theme-config's canon lines, read
-  // from there, so the canon is worded once for this call and every writer and judge.
+  // batch, item 5): the schema and the system prompt only name the fields. The field
+  // list defines a relationship as one a document states, to another character, so
+  // the list itself asks for nothing inferred (3.6b fix batch, finding 2: "their
+  // relationship to each other character" asked for one entry per character). Phase
+  // 3 (3.2; M26): the NPC lines are theme-config's canon lines, read from there, so
+  // the canon is worded once for this call and every writer and judge.
   const prompt = `Extract character relationship data from these documents and memories.
 
 ROSTER (characters in this session): ${roster.join(', ')}
@@ -107,7 +110,7 @@ ${record}
 
 For each ROSTER character the documents mention, give:
 1. groups: the named groups (e.g., "Stanford Four") they are a member of.
-2. relationships: their relationship to each other character (e.g., "attorney for", "mentor to", "friend of").
+2. relationships: each relationship a document states between them and another character (e.g., "attorney for", "mentor to", "friend of").
 3. role: their professional or social role.
 
 Take each entry from what a document states about that character, and leave a field empty when no document states it. The writers read these entries as what the documents say about each character, so an inferred group, relationship or role would reach the article as a claim no document makes.`;
