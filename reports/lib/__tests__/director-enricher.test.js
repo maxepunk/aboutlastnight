@@ -756,7 +756,11 @@ describe("the director's notes, unguessed (phase 3, 3.6)", () => {
     expect(result._enrichmentWarnings).toEqual({ droppedContexts: 1 });
   });
 
-  it('keeps only a correction copied from the director\'s corrections', async () => {
+  it('a correction the director\'s corrections do not hold leaves the speaker and addressee out, never the notes\' names (fix batch, item 2)', async () => {
+    // The model's correction says the director changed this quote, but the director's
+    // corrections do not hold it. Keeping the notes' names could print the line in the
+    // mouth the director corrected it away from (T12), so the bank says "speaker not
+    // recorded" instead.
     const result = await run({
       quotes: [{
         speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.',
@@ -765,9 +769,9 @@ describe("the director's notes, unguessed (phase 3, 3.6)", () => {
       }]
     });
     expect(result.quotes).toEqual([
-      { speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'high' }
+      { text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'low' }
     ]);
-    expect(result._enrichmentWarnings).toEqual({ droppedCorrections: 1 });
+    expect(result._enrichmentWarnings).toEqual({ droppedCorrections: 1, unrecordedSpeakers: 1 });
   });
 
   it('keeps an epilogue item as the director\'s sentences alone, and drops one the notes do not hold', async () => {

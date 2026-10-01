@@ -369,7 +369,8 @@ function namedOutsideQuote(name, sources, quoteText) {
  *   (`droppedContexts`), and the correction only when a correction does
  *   (`droppedCorrections`).
  * - The speaker and the addressee are kept only when the kept context or
- *   correction names them outside the quoted words. A speaker left out is not
+ *   correction names them outside the quoted words, and never when the quote
+ *   carries a correction the corrections do not hold. A speaker left out is not
  *   recorded (`unrecordedSpeakers`), and the quote's confidence is "low".
  *
  * @param {Array} quotes - the model's quotes
@@ -391,9 +392,13 @@ function groundQuotes(quotes, rawProse, corrections) {
     const context = text(quote.context) && isVerbatimIn(quote.context, rawProse) ? quote.context : null;
     if (text(quote.context) && !context) counts.droppedContexts += 1;
     const correction = text(quote.correction) && corrections.some(c => isVerbatimIn(quote.correction, c)) ? quote.correction : null;
-    if (text(quote.correction) && !correction) counts.droppedCorrections += 1;
+    const correctionFailed = Boolean(text(quote.correction) && !correction);
+    if (correctionFailed) counts.droppedCorrections += 1;
 
-    const witnesses = [context, correction].filter(Boolean);
+    // A correction the director's corrections do not hold still says the director
+    // changed this quote, so the notes' own names may be the ones corrected away: the
+    // speaker and addressee are left out rather than printed in the wrong mouth (T12).
+    const witnesses = correctionFailed ? [] : [context, correction].filter(Boolean);
     const speaker = text(quote.speaker) && namedOutsideQuote(quote.speaker, witnesses, words) ? quote.speaker : null;
     if (text(quote.speaker) && !speaker) counts.unrecordedSpeakers += 1;
     const addressee = text(quote.addressee) && namedOutsideQuote(quote.addressee, witnesses, words) ? quote.addressee : null;
