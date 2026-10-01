@@ -253,8 +253,9 @@ function createDefaultInterweavingPlan() {
  * placements for characters who were never in the session.
  *
  * Phase 3 (3.7; C7, C15): the journalist's ROSTER PCs line counts a player covered by
- * a placement the record shows or by a question to the director about them, as the
- * arc check does. The detective keeps "MUST have placements" (D13).
+ * a placement the record shows or by a question of kind "player" to the director
+ * about them, as the arc check does (fix 3.7b). The detective keeps "MUST have
+ * placements" (D13).
  *
  * @param {string[]} roster - session roster (first names)
  * @param {string} theme - 'journalist' | 'detective'
@@ -267,7 +268,7 @@ function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCha
 
   return `### Character Categories for characterPlacements
 
-**ROSTER PCs** (${theme === 'journalist' ? 'each has a placement the record shows, or a writerQuestions entry about them - they were in the room; how Nova learned of them is set by the reporting mode' : 'MUST have placements - present at the investigation'}):
+**ROSTER PCs** (${theme === 'journalist' ? 'each has a placement the record shows, or a writerQuestions entry of kind "player" about them - they were in the room; how Nova learned of them is set by the reporting mode' : 'MUST have placements - present at the investigation'}):
 ${JSON.stringify(roster)}
 
 **NPCs** (valid in placements, don't count for coverage):
@@ -330,15 +331,15 @@ Backstory in the notes, what the director knows about the characters beyond what
  * The journalist arc writer's OUTPUT FORMAT line for `writerQuestions` (fix 3.7b,
  * finding 2): the list is optional and stays empty unless the record leaves
  * something only the director can settle (C15), then one entry's shape in
- * placeholders. `about` is shown in the schema's own wording (WRITER_QUESTIONS_PROPERTY),
- * so the format and the schema say one thing.
+ * placeholders. `kind` lists the schema's values and `about` is shown in the schema's
+ * own wording (WRITER_QUESTIONS_PROPERTY), so the format and the schema say one thing.
  *
  * @returns {string}
  */
 function writerQuestionsFormatLine() {
-  const { about } = WRITER_QUESTIONS_PROPERTY.items.properties;
+  const { kind, about } = WRITER_QUESTIONS_PROPERTY.items.properties;
   return `"writerQuestions" stays [] unless the record leaves something only the director can settle (C15). Each entry:
-{ "about": ${JSON.stringify(about.description)}, "question": "The question for the director" }`;
+{ "kind": ${kind.enum.map((value) => JSON.stringify(value)).join(' | ')}, "about": ${JSON.stringify(about.description)}, "question": "The question for the director" }`;
 }
 
 /**
@@ -352,7 +353,8 @@ function writerQuestionsFormatLine() {
  *
  * Phase 3 (3.7): the output format carries `writerQuestions`, the questions C15 has
  * the writer raise to the director, and the roster lines count a player covered by a
- * placement the record shows or by a question about them (C7).
+ * placement the record shows or by a question of kind "player" about them (C7; fix
+ * 3.7b).
  *
  * The truth rules (in the system prompt) state what the old SECTION 4 and 4.5 said
  * about evidence and time, and contradicted parts of them: they named each memory's
@@ -1875,7 +1877,7 @@ const VALID_EVIDENCE_STRENGTHS = ['strong', 'moderate', 'weak', 'speculative'];
  *
  * Phase 3 (3.7; C7, C15): the journalist's fix line offers both ways a player is
  * covered: a placement through what the record shows, or, where the record holds
- * nothing about them, a question to the director. It used to demand a placement,
+ * nothing about them, a question of kind "player" to the director (fix 3.7b). It used to demand a placement,
  * which pushed the rework to invent one. The detective keeps its line (D13).
  *
  * @param {Array} issues - Array of structural issues with type/message/severity
@@ -1895,9 +1897,9 @@ function buildValidationRevisionGuidance(issues, missingRoster, theme = 'journal
     missingRoster.forEach(name => lines.push(`  - ${name}`));
     lines.push(`\nEnsure each missing member appears in at least one arc's characterPlacements.`);
   } else if (missingRoster.length > 0) {
-    lines.push(`\nRoster members with no placement and no writerQuestions entry about them:`);
+    lines.push(`\nRoster members with no placement and no writerQuestions entry of kind "player" about them:`);
     missingRoster.forEach(name => lines.push(`  - ${name}`));
-    lines.push(`\nGive each one a placement in an arc's characterPlacements through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry about them for the director (C15).`);
+    lines.push(`\nGive each one a placement in an arc's characterPlacements through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry of kind "player" about them for the director (C15).`);
   }
 
   return lines.join('\n');
@@ -2186,10 +2188,11 @@ function validateArcStructure(state, config) {
     });
   });
 
-  // Phase 3 (3.7; C7, C15): a roster member a question to the director names counts
-  // as covered, by first name or full name (questionedRosterNames). A player the
-  // record says nothing about is asked about, not placed by invention. Journalist
-  // only: the detective's writer raises no questions (D13).
+  // Phase 3 (3.7; C7, C15): a roster member a question of kind "player" to the
+  // director names counts as covered, by first name or full name
+  // (questionedRosterNames; a pronoun or ledger question covers no one, fix 3.7b). A
+  // player the record says nothing about is asked about, not placed by invention.
+  // Journalist only: the detective's writer raises no questions (D13).
   const questionedRoster = isParkedDetective(theme)
     ? []
     : questionedRosterNames(state._arcAnalysisCache?.writerQuestions, roster, canonicalCharsForCoverage);

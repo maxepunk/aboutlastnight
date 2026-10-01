@@ -37,8 +37,9 @@ const FAILING_EVALUATION = {
   revisionGuidance: 'Name a roster member in the LEDE.', confidence: 'high'
 };
 
-const Q_ZIA = { about: 'Zia', question: 'The record holds nothing Zia did this morning: what did Zia do?' };
-const Q_LEDGER = { about: 'The 10:02 AM sale of $250,000 into Ember', question: 'Is this sale a duplicate entry?' };
+// Fix 3.7b: each question carries its kind; only a "player" question covers a player.
+const Q_ZIA = { kind: 'player', about: 'Zia', question: 'The record holds nothing Zia did this morning: what did Zia do?' };
+const Q_LEDGER = { kind: 'ledger', about: 'The 10:02 AM sale of $250,000 into Ember', question: 'Is this sale a duplicate entry?' };
 
 /**
  * A scripted SDK: each rework by its label returns the next of its scripted outputs
@@ -192,7 +193,7 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
 
   it('the outline stop: an automatic pass whose rework returns a shorter list drops nothing; only the director\'s note clears one', async () => {
     const base = require('../fixtures/mock-responses/outline.json');
-    const Q_VIC = { about: 'Vic', question: 'Did Vic leave the room before the vote?' };
+    const Q_VIC = { kind: 'player', about: 'Vic', question: 'Did Vic leave the room before the vote?' };
     const withQuestions = { ...clone(base), writerQuestions: [Q_ZIA, Q_LEDGER] };
     const sdk = scriptedSdk({
       reworks: [

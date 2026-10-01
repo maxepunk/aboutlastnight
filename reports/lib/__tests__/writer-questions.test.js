@@ -14,9 +14,11 @@
  *   rework that returns no field keeps the previous list.
  * - The field never prints, and never reaches the template, the fact check's printed
  *   text or a later writer's prompt.
- * - At the arc stage a roster member a question names counts as covered, by first
- *   name or full name, in the arc check, its fix line, the arc judge and the arc
- *   writer's own roster lines. The article fact check's coverage is unchanged.
+ * - At the arc stage a roster member a question of kind "player" names counts as
+ *   covered, by first name or full name, in the arc check, its fix line, the arc judge
+ *   and the arc writer's own roster lines (fix 3.7b: a pronoun or ledger question
+ *   covers no one; T4, an account's name never proves who holds it). The article fact
+ *   check's coverage is unchanged.
  * - The detective is parked (spec D13): its schemas, prompts and checks do not change.
  */
 
@@ -36,10 +38,11 @@ const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rew
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
-const Q_SARAH = { about: 'Sarah', question: 'The record holds nothing Sarah did this morning: where was Sarah?' };
-const Q_FULL = { about: 'Sarah Blackwood', question: 'The record holds nothing Sarah Blackwood did: what did the room see?' };
-const Q_LEDGER = { about: 'The 07:50 AM sale of $75,000 into Melanie', question: 'Is this sale a duplicate entry?' };
-const Q_PRONOUN = { about: "Riley's pronoun", question: 'The roster gives Riley no pronoun: which one?' };
+// Fix 3.7b (finding 1): each question carries its kind, one of C15's three cases.
+const Q_SARAH = { kind: 'player', about: 'Sarah', question: 'The record holds nothing Sarah did this morning: where was Sarah?' };
+const Q_FULL = { kind: 'player', about: 'Sarah Blackwood', question: 'The record holds nothing Sarah Blackwood did: what did the room see?' };
+const Q_LEDGER = { kind: 'ledger', about: 'The 07:50 AM sale of $75,000 into Melanie', question: 'Is this sale a duplicate entry?' };
+const Q_PRONOUN = { kind: 'pronoun', about: 'Riley', question: 'The roster gives Riley no pronoun: which one?' };
 const QUESTION_TEXTS = [Q_SARAH, Q_FULL, Q_LEDGER, Q_PRONOUN].map((q) => q.question);
 
 beforeAll(() => {
@@ -49,15 +52,16 @@ beforeAll(() => {
 });
 afterAll(() => jest.restoreAllMocks());
 
-/** The field, wherever a schema defines it: an optional list of {about, question} strings. */
+/** The field, wherever a schema defines it: an optional list of {kind, about, question}. */
 function expectQuestionsField(schema, label) {
   const field = schema.properties && schema.properties.writerQuestions;
   expect(`${label}: ${field ? 'has' : 'lacks'} writerQuestions`).toBe(`${label}: has writerQuestions`);
   expect(field.type).toBe('array');
   expect(field.items.type).toBe('object');
+  expect(field.items.properties.kind).toEqual(expect.objectContaining({ type: 'string', enum: ['player', 'pronoun', 'ledger'] }));
   expect(field.items.properties.about.type).toBe('string');
   expect(field.items.properties.question.type).toBe('string');
-  expect(field.items.required).toEqual(['about', 'question']);
+  expect(field.items.required).toEqual(['kind', 'about', 'question']);
   expect(schema.required || []).not.toContain('writerQuestions');
 }
 
@@ -87,6 +91,10 @@ describe('the optional writerQuestions field in the four schemas', () => {
     expect(validator.validate('outline', outline).valid).toBe(true);
     expect(validator.validate('outline', { ...outline, writerQuestions: [Q_SARAH] }).valid).toBe(true);
     expect(validator.validate('outline', { ...outline, writerQuestions: [{ about: 'Sarah' }] }).valid).toBe(false);
+    // Fix 3.7b: the kind is required, and is one of the three.
+    const { kind, ...noKind } = Q_SARAH;
+    expect(validator.validate('outline', { ...outline, writerQuestions: [noKind] }).valid).toBe(false);
+    expect(validator.validate('outline', { ...outline, writerQuestions: [{ ...Q_SARAH, kind: 'other' }] }).valid).toBe(false);
   });
 
   it('the content-bundle schema, at the top level, and the validator accepts it', () => {
@@ -95,13 +103,16 @@ describe('the optional writerQuestions field in the four schemas', () => {
     const bundle = clone(require('../../__tests__/fixtures/content-bundles/valid-journalist.json'));
     expect(validator.validate('content-bundle', bundle).valid).toBe(true);
     expect(validator.validate('content-bundle', { ...bundle, writerQuestions: [Q_LEDGER] }).valid).toBe(true);
+    const { kind, ...noKind } = Q_LEDGER;
+    expect(validator.validate('content-bundle', { ...bundle, writerQuestions: [noKind] }).valid).toBe(false);
   });
 
   it('the descriptions state the shape and name C15, with no em-dash', () => {
     for (const schema of [subagents.CORE_ARC_SCHEMA, subagents.PLAYER_FOCUS_GUIDED_SCHEMA, outlineSchema, contentBundleSchema]) {
       const field = schema.properties.writerQuestions;
       expect(field.description).toMatch(/C15/);
-      expect(field.items.properties.about.description).toMatch(/a player/);
+      expect(field.items.properties.kind.description).toMatch(/C15/);
+      expect(field.items.properties.about.description).toMatch(/player's name/);
       expect(JSON.stringify(field)).not.toMatch(/—/);
     }
   });
@@ -244,6 +255,22 @@ describe('the rework rule: only the director answers a question (R5)', () => {
   it('an output with no field and nothing to carry comes back as it was', () => {
     const output = { lede: {} };
     expect(withCarriedWriterQuestions(output, { lede: {} }, { afterDirectorNote: false })).toBe(output);
+  });
+});
+
+// Fix 3.7b (finding 1): the normalizer keeps a question's kind when it is one of the
+// three, and still keeps a question with no kind (a list from before the field had
+// one), so an old list renders.
+describe('writerQuestionsOf keeps the kind', () => {
+  const { writerQuestionsOf } = require('../writer-questions');
+
+  it('keeps each of the three kinds', () => {
+    expect(writerQuestionsOf([Q_SARAH, Q_PRONOUN, Q_LEDGER])).toEqual([Q_SARAH, Q_PRONOUN, Q_LEDGER]);
+  });
+
+  it('keeps a question with no kind, or an unknown one, without a kind', () => {
+    expect(writerQuestionsOf([{ about: 'Sarah', question: 'Where?' }, { kind: 'other', about: 'Alex', question: 'Who?' }]))
+      .toEqual([{ about: 'Sarah', question: 'Where?' }, { about: 'Alex', question: 'Who?' }]);
   });
 });
 
@@ -485,9 +512,8 @@ describe('the arc check counts a questioned player as covered (C7, C15)', () => 
 
   it.each([
     ['first name', Q_SARAH],
-    ['full name', Q_FULL],
-    ['a pronoun question', { about: "Sarah's pronoun", question: 'Which pronoun?' }]
-  ])('a question naming the player by %s covers them', (_kind, question) => {
+    ['full name', Q_FULL]
+  ])('a player question naming the player by %s covers them', (_kind, question) => {
     const result = arcNodes.validateArcStructure(stateWith([question]), {});
     expect(result._arcValidation.missingRoster).toEqual([]);
     expect(result._arcValidation.rosterCoverage).toBe(1);
@@ -496,8 +522,22 @@ describe('the arc check counts a questioned player as covered (C7, C15)', () => 
   });
 
   it('a question about someone else, or about a ledger line, covers no one else', () => {
-    const result = arcNodes.validateArcStructure(stateWith([Q_LEDGER, { about: 'Sarahson', question: 'Who?' }]), {});
+    const result = arcNodes.validateArcStructure(stateWith([Q_LEDGER, { kind: 'player', about: 'Sarahson', question: 'Who?' }]), {});
     expect(result._arcValidation.missingRoster).toEqual(['Sarah']);
+  });
+
+  // Fix 3.7b (finding 1): only a question of kind "player" covers a player. An account
+  // can carry any name, a player's included, and its name never proves who holds it
+  // (T4), so a ledger question about the Sarah account places no one.
+  it.each([
+    ['a ledger question about an account named after the player', { kind: 'ledger', about: 'The 10:02 AM sale of $250,000 into Sarah', question: 'Is this sale a duplicate entry?' }],
+    ['a pronoun question about the player', { kind: 'pronoun', about: 'Sarah', question: 'The roster gives Sarah no pronoun: which one?' }],
+    ['a question with no kind', { about: 'Sarah', question: 'Where was Sarah?' }]
+  ])('%s covers no one', (_name, question) => {
+    const result = arcNodes.validateArcStructure(stateWith([question]), {});
+    expect(result._arcValidation.missingRoster).toEqual(['Sarah']);
+    expect(result._arcValidation.rosterCoveredByQuestion).toEqual([]);
+    expect(result._arcValidation.structuralPassed).toBe(false);
   });
 
   it('a thread with no cache counts placements only', () => {
@@ -507,8 +547,8 @@ describe('the arc check counts a questioned player as covered (C7, C15)', () => 
 
   it('the fix line offers a placement through the record or a question to the director', () => {
     const guidance = arcNodes.validateArcStructure(stateWith([]), {}).validationResults.revisionGuidance;
-    expect(guidance).toContain('Roster members with no placement and no writerQuestions entry about them:\n  - Sarah');
-    expect(guidance).toMatch(/through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry about them for the director \(C15\)/);
+    expect(guidance).toContain('Roster members with no placement and no writerQuestions entry of kind "player" about them:\n  - Sarah');
+    expect(guidance).toMatch(/through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry of kind "player" about them for the director \(C15\)/);
     expect(guidance).not.toMatch(/MUST appear/);
   });
 
@@ -525,7 +565,7 @@ describe('the arc judge counts a questioned player as covered (C7, C15)', () => 
     const criterion = getArcCriteria('journalist').rosterCoverage;
     expect(criterion.type).toBe('structural');
     expect(criterion.description).toBe(
-      'Does every roster member have a placement in at least one arc, or a question about them in QUESTIONS FOR THE DIRECTOR (C7, C15)?'
+      'Does every roster member have a placement in at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR (C7, C15)?'
     );
   });
 
@@ -533,7 +573,7 @@ describe('the arc judge counts a questioned player as covered (C7, C15)', () => 
     const state = { ...reworkFixtureState('journalist'), _arcAnalysisCache: { writerQuestions: [Q_SARAH] } };
     const prompt = buildEvaluationUserPrompt('arcs', state, {});
     expect(prompt).toContain(`QUESTIONS FOR THE DIRECTOR (writerQuestions):\n${JSON.stringify([Q_SARAH], null, 2)}`);
-    expect(prompt).toContain('1. ROSTER COVERAGE: Every name in SESSION ROSTER has a role in characterPlacements of at least one arc, or a question about them in QUESTIONS FOR THE DIRECTOR');
+    expect(prompt).toContain('1. ROSTER COVERAGE: Every name in SESSION ROSTER has a role in characterPlacements of at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR');
   });
 
   it('the journalist judge is told when there are none', () => {
@@ -543,7 +583,7 @@ describe('the arc judge counts a questioned player as covered (C7, C15)', () => 
 
   it('the journalist judge\'s system prompt counts a question in its distinction line', () => {
     const system = buildEvaluationSystemPrompt('arcs', getArcCriteria('journalist'), 'journalist', { sessionConfig: { reportingMode: 'on-site' } });
-    expect(system).toContain('- rosterCoverage: Check that every roster member appears in characterPlacements of at least one arc, or has a question about them in QUESTIONS FOR THE DIRECTOR');
+    expect(system).toContain('- rosterCoverage: Check that every roster member appears in characterPlacements of at least one arc, or has a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR');
   });
 
   it('the detective judge is unchanged (D13)', () => {
@@ -557,14 +597,14 @@ describe('the arc judge counts a questioned player as covered (C7, C15)', () => 
 
 describe('the arc writer\'s roster lines offer the question (C7, C15)', () => {
   it('the journalist system prompt\'s output list', () => {
-    expect(subagents.CORE_ARC_SYSTEM_PROMPT).toContain('- Each roster member has a placement the record shows, or a writerQuestions entry about them (C7, C15)');
+    expect(subagents.CORE_ARC_SYSTEM_PROMPT).toContain('- Each roster member has a placement the record shows, or a writerQuestions entry of kind "player" about them (C7, C15)');
     expect(subagents.CORE_ARC_SYSTEM_PROMPT).not.toContain('Every roster member has at least one placement');
   });
 
   it('the journalist writer\'s roster heading, character categories and OUTPUT FORMAT', () => {
     const prompt = arcNodes._testing.buildCoreArcPrompt(reworkFixtureState('journalist'));
     expect(prompt).toContain('### Session Roster (the players at the investigation)');
-    expect(prompt).toContain('**ROSTER PCs** (each has a placement the record shows, or a writerQuestions entry about them - they were in the room;');
+    expect(prompt).toContain('**ROSTER PCs** (each has a placement the record shows, or a writerQuestions entry of kind "player" about them - they were in the room;');
     expect(prompt).not.toMatch(/MUST have placements|ALL characters who need placement/);
   });
 
@@ -576,7 +616,7 @@ describe('the arc writer\'s roster lines offer the question (C7, C15)', () => {
     const format = prompt.slice(prompt.indexOf('## OUTPUT FORMAT'), prompt.indexOf('CRITICAL: Your response MUST be'));
     expect(format).toContain('  "writerQuestions": []\n}\n');
     expect(format).toContain('"writerQuestions" stays [] unless the record leaves something only the director can settle (C15). Each entry:\n{ ');
-    expect(format).toContain(`"about": ${JSON.stringify(WRITER_QUESTIONS_PROPERTY.items.properties.about.description)}`);
+    expect(format).toContain(`{ "kind": "player" | "pronoun" | "ledger", "about": ${JSON.stringify(WRITER_QUESTIONS_PROPERTY.items.properties.about.description)}, `);
     expect(format).not.toContain('"writerQuestions": [\n');
   });
 

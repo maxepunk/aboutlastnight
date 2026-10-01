@@ -942,7 +942,7 @@ describe('phase 3 (3.2): the outline form (TH4)', () => {
 // at the outline's top level as `writerQuestions`. The client gate accepts the field
 // as the schema does, never stricter, and still rejects what the schema rejects.
 describe('phase 3 (3.7): the writers\' questions in an outline', () => {
-  const Q = { about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
+  const Q = { kind: 'player', about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
 
   it('the schema and the client gate accept an outline with writerQuestions', () => {
     const o = { ...validJournalistOutline(), writerQuestions: [Q] };

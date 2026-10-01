@@ -593,7 +593,7 @@ ${content.trim()}
 ### Structural vs Advisory Criteria
 
 **STRUCTURAL** (must pass, block if failed):
-- `rosterCoverage`: Every player in at least one arc, or, since phase 3 (3.7), named in a question to the director (journalist)
+- `rosterCoverage`: Every player in at least one arc, or, since phase 3 (3.7), named in a question of kind `player` to the director (journalist)
 - `evidenceIdValidity`: All keyEvidence IDs exist
 - `accusationArcPresent`: arcSource="accusation" exists
 - `requiredSections`: journalist, each printed section earns its place (C2); detective, all five sections present (executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment)
@@ -665,7 +665,7 @@ This short-circuits the expensive Opus evaluator call when issues can be detecte
 
 | Category | Definition | Coverage Rule | Example |
 |----------|-----------|---------------|---------|
-| **Roster PCs** | Characters present at investigation | MUST appear in arcs, or (journalist, phase 3) in a question to the director | "Sarah", "Alex", "Victoria" |
+| **Roster PCs** | Characters present at investigation | MUST appear in arcs, or (journalist, phase 3) in a question of kind `player` to the director | "Sarah", "Alex", "Victoria" |
 | **NPCs** | Non-player game characters | Valid but don't count | "Marcus", "Nova", "Blake", "Valet" |
 | **Non-Roster PCs** | Valid game characters NOT in session | Evidence-based mentions only | "Sofia" (if not playing) |
 
@@ -842,7 +842,7 @@ State persists via `MemorySaver` (in-memory) or `SqliteSaver` (persistent).
 1. Is roster correctly parsed in `sessionConfig.roster`?
 2. Are arc `characterPlacements` using exact roster names?
 3. Are NPCs (Marcus, Nova, Blake) being incorrectly flagged?
-4. Journalist: does a question for the director (`_arcAnalysisCache.writerQuestions`) name the missing player in its `about`? Such a player counts as covered (`_arcValidation.rosterCoveredByQuestion`).
+4. Journalist: does a question for the director (`_arcAnalysisCache.writerQuestions`) of kind `player` name the missing player in its `about`? Such a player counts as covered (`_arcValidation.rosterCoveredByQuestion`). A `pronoun` or `ledger` question, or one with no kind, covers no one.
 
 **Fix**: Evaluator has NPC allowlist - ensure it's not treating NPCs as roster members.
 

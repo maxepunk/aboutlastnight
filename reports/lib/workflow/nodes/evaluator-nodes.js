@@ -266,11 +266,12 @@ const ARC_JUDGE_QUESTIONS_LABEL = 'QUESTIONS FOR THE DIRECTOR (writerQuestions):
  * name the rule or craft item it scores, with the same weight and type.
  *
  * Phase 3 (3.7; C7, C15): rosterCoverage counts a player covered by a placement or by
- * a question to the director about them, as the arc check does. It stays structural.
+ * a question of kind "player" to the director about them, as the arc check does (fix
+ * 3.7b). It stays structural.
  */
 const JOURNALIST_ARC_CRITERIA = {
   rosterCoverage: {
-    description: 'Does every roster member have a placement in at least one arc, or a question about them in QUESTIONS FOR THE DIRECTOR (C7, C15)?',
+    description: 'Does every roster member have a placement in at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR (C7, C15)?',
     weight: 0.30,
     type: 'structural'
   },
@@ -1079,7 +1080,7 @@ ${judging}
 CRITICAL DISTINCTION:
 - accusationArcPresent: Check if any arc has arcSource="accusation"
 - evidenceIdValidity: Check if keyEvidence IDs exist in the evidence bundle
-- rosterCoverage: Check that every roster member appears in characterPlacements of at least one arc, or has a question about them in QUESTIONS FOR THE DIRECTOR
+- rosterCoverage: Check that every roster member appears in characterPlacements of at least one arc, or has a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR
 
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC names (characters missing from roster coverage)
@@ -1591,7 +1592,7 @@ ${JSON.stringify(buriedEvidence, null, 2)}`;
       }
 
       const checklist = journalist
-        ? `1. ROSTER COVERAGE: Every name in SESSION ROSTER has a role in characterPlacements of at least one arc, or a question about them in QUESTIONS FOR THE DIRECTOR
+        ? `1. ROSTER COVERAGE: Every name in SESSION ROSTER has a role in characterPlacements of at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR
 2. EVIDENCE ID VALIDITY: Every keyEvidence ID should exist in ALL VALID EVIDENCE IDS list
 3. ACCUSATION ARC PRESENT: At least one arc should have arcSource="accusation"
 4. TRUTH RULES: Every truth criterion in your instructions, each breach written under its rule ids

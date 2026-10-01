@@ -201,7 +201,7 @@ The director reads every arc at the arc stop and chooses which ones the article 
 OUTPUT:
 Generate 3-5 narrative arcs. Ensure:
 - One arc with arcSource="accusation" (required)
-- Each roster member has a placement the record shows, or a writerQuestions entry about them (C7, C15)
+- Each roster member has a placement the record shows, or a writerQuestions entry of kind "player" about them (C7, C15)
 - All keyEvidence IDs are from the valid ID list
 - Each arc has caveats and unansweredQuestions (even if minimal)`;
 

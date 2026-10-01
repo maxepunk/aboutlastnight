@@ -4,8 +4,9 @@
  * When the record holds nothing about a player, a roster pronoun is missing, or a
  * ledger line looks wrong, a writer asks the director instead of guessing. Each
  * writer's output carries the questions in one optional field, `writerQuestions`: a
- * list of `{about, question}`, where `about` names what the question is about (a
- * player, a pronoun, a ledger line). The arcs keep theirs in
+ * list of `{kind, about, question}`, where `kind` is which of C15's three cases the
+ * question raises (`player`, `pronoun`, `ledger`) and `about` names its subject (the
+ * player's name, or the ledger entry's time and amount). The arcs keep theirs in
  * `_arcAnalysisCache.writerQuestions`; the outline and the article at their top
  * level. The interweaving call has no field (spec section 8).
  *
@@ -22,35 +23,52 @@ const { getCanonicalName } = require('./theme-config');
 const WRITER_QUESTIONS_KEY = 'writerQuestions';
 
 /**
+ * A question's kind: which of C15's three cases it raises, in the rule's order (fix
+ * 3.7b). `player`: the record holds nothing about a player; `pronoun`: a roster
+ * pronoun is missing; `ledger`: a ledger entry looks wrong.
+ */
+const WRITER_QUESTION_KINDS = Object.freeze(['player', 'pronoun', 'ledger']);
+
+/**
  * The field as the two arc schemas define it (lib/sdk-client/subagents.js). The
  * outline and content-bundle schema files carry the same shape and wording, with the
- * `additionalProperties: false` those files put on every object.
+ * `additionalProperties: false` those files put on every object; a test holds the
+ * four to one wording (fix 3.7b). The arc writer's OUTPUT FORMAT shows `about` in
+ * this wording too.
  */
 const WRITER_QUESTIONS_PROPERTY = Object.freeze({
   type: 'array',
-  description: 'Questions for the director (C15), each with what it is about and the question',
+  description: 'Questions for the director (C15), each with its kind, what it is about and the question',
   items: {
     type: 'object',
     properties: {
-      about: { type: 'string', description: 'What the question is about: a player by name, a player\'s pronoun, or a ledger line' },
+      kind: { type: 'string', enum: [...WRITER_QUESTION_KINDS], description: 'The C15 case the question raises' },
+      about: { type: 'string', description: 'The player\'s name, or for a ledger question the entry\'s time and amount' },
       question: { type: 'string' }
     },
-    required: ['about', 'question']
+    required: ['kind', 'about', 'question']
   }
 });
 
 /**
- * The questions in a list, as `{about, question}` with each string trimmed at the
- * ends. An entry without both strings is not a question and is left out.
+ * The questions in a list, as `{kind, about, question}` with each string trimmed at
+ * the ends. An entry without both strings is not a question and is left out. The
+ * kind is kept when it is one of WRITER_QUESTION_KINDS; a question with no kind, or
+ * an unknown one, is kept without it (a list from before the field had a kind still
+ * renders), and counts for no player's coverage.
  *
  * @param {*} value - an output's writerQuestions
- * @returns {Array<{about: string, question: string}>}
+ * @returns {Array<{kind?: string, about: string, question: string}>}
  */
 function writerQuestionsOf(value) {
   if (!Array.isArray(value)) return [];
   return value
     .filter((q) => q && typeof q === 'object' && typeof q.about === 'string' && typeof q.question === 'string')
-    .map((q) => ({ about: q.about.trim(), question: q.question.trim() }))
+    .map((q) => ({
+      ...(WRITER_QUESTION_KINDS.includes(q.kind) && { kind: q.kind }),
+      about: q.about.trim(),
+      question: q.question.trim()
+    }))
     .filter((q) => q.about && q.question);
 }
 
@@ -161,8 +179,11 @@ function namesWord(text, name) {
 
 /**
  * The roster members a question names, in roster order (C7, C15). A question names a
- * player when what it is about (`about`) holds the roster name or the character's
- * full name as a whole word, so a question about "Sarah Blackwood" covers "Sarah".
+ * player when its kind is `player` and what it is about (`about`) holds the roster
+ * name or the character's full name as a whole word, so a question about "Sarah
+ * Blackwood" covers "Sarah". A pronoun or ledger question covers no one (fix 3.7b): a
+ * ledger question about an account named after a player is about the account, and an
+ * account's name never proves who holds it (T4).
  *
  * @param {*} questions - writerQuestions
  * @param {string[]} roster - the session roster (first names)
@@ -170,7 +191,7 @@ function namesWord(text, name) {
  * @returns {string[]}
  */
 function questionedRosterNames(questions, roster, canonicalCharacters = {}) {
-  const abouts = writerQuestionsOf(questions).map((q) => q.about);
+  const abouts = writerQuestionsOf(questions).filter((q) => q.kind === 'player').map((q) => q.about);
   if (abouts.length === 0) return [];
   return (Array.isArray(roster) ? roster : [])
     .filter((name) => typeof name === 'string' && name.trim())
@@ -182,6 +203,7 @@ function questionedRosterNames(questions, roster, canonicalCharacters = {}) {
 
 module.exports = {
   WRITER_QUESTIONS_KEY,
+  WRITER_QUESTION_KINDS,
   WRITER_QUESTIONS_PROPERTY,
   writerQuestionsOf,
   carriedWriterQuestions,
