@@ -113,15 +113,34 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('HERO IMAGE: hero.png');
     });
 
-    // Phase 3 (3.2; M27): the outline's shape is outline.schema.json's alone, which
-    // the SDK channel gives the writer; the prompt no longer restates it.
-    it('restates no JSON output structure', async () => {
+    // Phase 3 (3.2; M27): the outline's shape is outline.schema.json's alone; the
+    // prompt no longer restates it in its own words. Fix 3.2b (finding 10): the
+    // prompt embeds that one schema under <SCHEMA>, as the article writer embeds the
+    // content-bundle schema, a backstop for the SDK channel (#277). It sits after
+    // the data and before the craft files.
+    it('embeds outline.schema.json under a <SCHEMA> tag, and restates the shape nowhere else', async () => {
+      const outlineSchema = require('../schemas/outline.schema.json');
       const { userPrompt } = await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage
+        mockArcAnalysis, selectedArcs, heroImage, [], [], [],
+        { roster: ['Alex Reeves'], accusation: 'Alex', playerCount: 1 }
       );
 
-      expect(userPrompt).not.toContain('Return JSON with the following structure');
-      expect(userPrompt).not.toContain('"followTheMoney": {');
+      const printed = JSON.stringify(outlineSchema, null, 2);
+      expect(userPrompt.split(printed).length - 1).toBe(1);
+      const schemaBlock = userPrompt.slice(userPrompt.indexOf('\n<SCHEMA>\n'), userPrompt.indexOf('\n</SCHEMA>\n'));
+      expect(schemaBlock).toContain(printed);
+      expect(userPrompt.indexOf('\n<SCHEMA>\n')).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
+      expect(userPrompt.indexOf('\n</SCHEMA>\n')).toBeLessThan(userPrompt.indexOf('<craft-'));
+      const outsideSchema = userPrompt.replace(/<SCHEMA>[\s\S]*?<\/SCHEMA>/g, '');
+      expect(outsideSchema).not.toContain('Return JSON with the following structure');
+      expect(outsideSchema).not.toContain('"followTheMoney": {');
+    });
+
+    it('the detective outline prompt embeds no <SCHEMA> (D13)', async () => {
+      const detective = new PromptBuilder(mockThemeLoader, 'detective', {});
+      const { userPrompt } = await detective.buildOutlinePrompt(mockArcAnalysis, selectedArcs, heroImage);
+      expect(userPrompt).not.toContain('<SCHEMA>');
+      expect(userPrompt).toContain('Return JSON with the following structure');
     });
   });
 

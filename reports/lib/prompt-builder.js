@@ -12,6 +12,9 @@ const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
 const { renderSessionFactsVerdict, renderPhotoEntry } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
+// The journalist outline writer embeds this file as its <SCHEMA> (fix 3.2b), the one
+// the SDK channel enforces (ai-nodes.js), as the article writer embeds the schema above.
+const outlineSchema = require('./schemas/outline.schema.json');
 // The detective is parked (spec D13) and its prompt keeps today's text, the <SCHEMA>
 // it embeds included. Phase 3 (3.2) cut the schema's descriptions down to shape only,
 // so the detective prints this copy of the schema as it was before that cut. It is
@@ -883,7 +886,11 @@ Return JSON with the following structure:
       // in every section, the convergence in THE STORY), <visual-rules> and
       // <visual-principles> (pull quotes, a fixed section table, photos as pacing),
       // <TEMPORAL_DISCIPLINE> (the world and T7), the old agency rule, and the JSON
-      // shape, which outline.schema.json alone gives the writer now (M27).
+      // shape restated in the prompt's own words (M27). The shape comes from
+      // outline.schema.json alone: the SDK channel enforces it, and since fix 3.2b
+      // (finding 10) the prompt embeds the same file as <SCHEMA>, after the data and
+      // before the craft files, a backstop for the channel (SDK #277) as the article
+      // writer's <SCHEMA> is.
       userPrompt = `Plan the outline of the article from these selected arcs. Write the plan in the third person: the article writer gives it Nova's voice.
 
 SELECTED ARCS:
@@ -927,6 +934,14 @@ ${JSON.stringify(arcAnalysisOnly, null, 2)}
 </arc-analysis>
 ${this._buildFinancialSummary(shellAccounts)}
 ${this._sessionFactsSection(sessionFacts)}
+
+<SCHEMA>
+The outline is JSON in this shape: field names, types, enum values and required fields.
+
+\`\`\`json
+${JSON.stringify(outlineSchema, null, 2)}
+\`\`\`
+</SCHEMA>
 
 ${loadRuleSet('outline').craft}`;
     }

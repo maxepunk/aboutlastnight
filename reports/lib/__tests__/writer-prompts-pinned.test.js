@@ -119,9 +119,14 @@ const REPO = path.join(__dirname, '..', '..');
  *   in T10's words, "When the article counts the people at the investigation, it
  *   counts these N players." The journalist outline and article writers (8712 -> 8718,
  *   27149 -> 27155); the detective keeps its own lines.
+ * - Phase 3 (fix 3.2b, finding 10), the journalist outline writer embeds
+ *   outline.schema.json as a <SCHEMA> block (one line saying the outline is JSON in
+ *   that shape, then the file printed), after SESSION_FACTS and before the craft
+ *   files, as the article writer embeds the content-bundle schema. outline-journalist
+ *   only (8718 -> 19876); the detective outline keeps its own JSON shape.
  */
 const PINNED = {
-  'outline-journalist': ['d7bcdf50d9d43f311d4069e87170e70c7c9167f41631f5d9a84bbd17b0cb481b', 8718],
+  'outline-journalist': ['b529c752f46deaebd7cd9a0975c33539b7054437b184afae07bf9f02c72d14ae', 19876],
   'article-journalist': ['7c308f56061c5871a136673923fe2ef33bcc3825289cf71c27f451ce702cf5eb', 27155],
   'arcs-journalist': ['24af24d2959a487bb4af99ca2381b773d7fec4d790ce079deabfd7a2abbb9b60', 10347],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
