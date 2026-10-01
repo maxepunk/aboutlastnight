@@ -121,4 +121,63 @@ describe('extractCharacterData', () => {
       expect(prompt).not.toContain('bur001');
     });
   });
+
+  /**
+   * Phase 3 (3.6): character extraction stops filling gaps. A role was required for
+   * every character, relationships could be "strongly implied", and the prompt told
+   * the model to include ALL members of a group, so the writers' character context
+   * carried roles and ties no document gives. Blake was "the Black Market operator".
+   */
+  describe('extractCharacterData asks only for what a document states (phase 3, 3.6)', () => {
+    const callOf = async () => {
+      const mockSdk = jest.fn().mockResolvedValueOnce({ characters: {} });
+      await extractCharacterData({
+        characterData: null,
+        paperEvidence: [{ notionId: 'p-1', name: 'Mel - Nat texts', basicType: 'Document', description: 'Mel: our Stanford Four era.', owners: ['Mel Nilsson'] }],
+        memoryTokens: [],
+        sessionConfig: { roster: ['Mel', 'Nat'] }
+      }, { configurable: { sdkClient: mockSdk } });
+      return mockSdk.mock.calls[0][0];
+    };
+    const promptOf = async () => (await callOf()).prompt;
+  
+    test('requires no role: the record may not give one', async () => {
+      const entry = (await callOf()).jsonSchema.properties.characters.additionalProperties;
+      expect(entry.required || []).not.toContain('role');
+      expect(entry.properties.role.type).toBe('string');
+    });
+  
+    test('lists a relationship only where a document states it, never an implied one', async () => {
+      const prompt = await promptOf();
+      expect(prompt).not.toMatch(/implied/i);
+      expect(prompt).toMatch(/relationship[^\n]*a document states/i);
+    });
+  
+    test("lists a group's members only where a document names them", async () => {
+      const prompt = await promptOf();
+      expect(prompt).not.toMatch(/include ALL members/i);
+      expect(prompt).toMatch(/a document names (them|the character) as a member/i);
+    });
+  
+    test('describes Blake by the canon line, not as "the Black Market operator"', async () => {
+      const prompt = await promptOf();
+      expect(prompt).not.toMatch(/Black Market/i);
+      expect(prompt).toContain('Blake: manages operations at NeurAI; Marcus called Blake his Valet');
+    });
+  
+    test('carries no em-dash', async () => {
+      expect(await promptOf()).not.toContain('—');
+    });
+  
+    test('keeps an extracted character with no role', async () => {
+      const mockSdk = jest.fn().mockResolvedValueOnce({ characters: { Nat: { groups: ['Stanford Four'], relationships: {} } } });
+      const result = await extractCharacterData({
+        characterData: null,
+        paperEvidence: [{ notionId: 'p-1', name: 'Mel - Nat texts', description: 'Mel: our Stanford Four era.', owners: ['Mel Nilsson'] }],
+        memoryTokens: [],
+        sessionConfig: { roster: ['Mel', 'Nat'] }
+      }, { configurable: { sdkClient: mockSdk } });
+      expect(result.characterData.characters.Nat).toEqual({ groups: ['Stanford Four'], relationships: {} });
+    });
+  });
 });

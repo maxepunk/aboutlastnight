@@ -25,19 +25,21 @@ const CHARACTER_EXTRACTION_SCHEMA = {
           groups: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Named groups this character belongs to (e.g., "Stanford Four", "Ezra\'s mentees")'
+            description: 'Named groups a document says this character belongs to (e.g., "Stanford Four"); empty when no document names one'
           },
           relationships: {
             type: 'object',
             additionalProperties: { type: 'string' },
-            description: 'Map of other character names to relationship description'
+            description: 'Map of another character\'s name to the relationship a document states between them; empty when no document states one'
           },
           role: {
             type: 'string',
-            description: 'Professional or social role (e.g., "Attorney", "Bartender", "Investor")'
+            description: 'The professional or social role a document states (e.g., "Attorney", "Investor"); left out when no document states one'
           }
         },
-        required: ['groups', 'relationships', 'role']
+        // Phase 3 (3.6): no field the record may not give is required. A role was,
+        // so the model gave every character one.
+        required: ['groups', 'relationships']
       }
     }
   },
@@ -73,25 +75,29 @@ async function extractCharacterData(state, config) {
     { buried: false }
   );
 
+  // Phase 3 (3.6): every field rests on a document's own words. The prompt used to
+  // accept relationships "strongly implied", ask for ALL members of a group, and give
+  // Blake as "the Black Market operator"; Blake and Marcus are now the canon lines
+  // (T15, D7).
   const prompt = `Extract character relationship data from these documents and memories.
 
 ROSTER (characters in this session): ${roster.join(', ')}
 
-NPCs (not on roster, do NOT create top-level entries for these):
-- Marcus Blackwood: the deceased victim, founder of NeurAI
-- Blake/Valet: the Black Market operator
-- Nova: the journalist narrator
-NPCs may appear as relationship targets (e.g., "Marcus": "old friend") but should not have their own character entries.
+NPCs (not on the roster, so the result gives them no entry of their own):
+- Marcus Blackwood: founder of NeurAI, the man whose death the room investigates
+- Blake: manages operations at NeurAI; Marcus called Blake his Valet
+- Nova: the NovaNews reporter who writes the article
+NPCs may appear as relationship targets (e.g., "Marcus": "old friend").
 
 THE PAPER DOCUMENTS AND EXPOSED MEMORIES:
 ${record}
 
-For each ROSTER character mentioned in the evidence, extract:
-1. Named groups they belong to (e.g., "Stanford Four" — include ALL members of the group)
-2. Key relationships with other characters (role-based: "attorney for", "mentor to", "friend of")
-3. Their professional/social role
+For each ROSTER character the documents mention, extract what a document states:
+1. groups: each named group (e.g., "Stanford Four") a document names them as a member of.
+2. relationships: each relationship a document states between them and another character (e.g., "attorney for", "mentor to", "friend of").
+3. role: their professional or social role, when a document states it.
 
-Only include data explicitly stated or strongly implied by the evidence. Do not infer or speculate.`;
+Every entry rests on a document's own words, and a field stays empty when no document states it.`;
 
   try {
     const result = await sdk({
