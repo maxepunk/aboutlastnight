@@ -45,15 +45,22 @@ describe('exposuresView', () => {
   });
 
   it('drops rows with no token id and blanks the fields the log did not carry', () => {
-    const view = exposuresView([{ exposer: 'Ashe' }, null, { tokenId: 'mel004' }]);
-    expect(view).toEqual({ rows: [{ tokenId: 'mel004', exposer: '', time: '', owner: '' }], count: 1, parsedEmpty: false });
-    expect(exposuresView(undefined)).toEqual({ rows: [], count: 0, parsedEmpty: false });
+    const view = exposuresView([{ exposer: 'Ashe' }, null, { tokenId: 'mel004' }], 1);
+    expect(view).toEqual({ rows: [{ tokenId: 'mel004', exposer: '', time: '', owner: '' }], count: 1, noneExposed: false, logEmpty: false });
+    expect(exposuresView(undefined, undefined)).toEqual({ rows: [], count: 0, noneExposed: false, logEmpty: false });
   });
 
-  it('says when the parse found no exposure at all, and not for a thread whose parse never kept them (phase 3, 3.5)', () => {
-    // An empty list makes every memory count as buried, so the input review shows it.
-    expect(exposuresView([]).parsedEmpty).toBe(true);
-    expect(exposuresView(undefined).parsedEmpty).toBe(false);
+  it('says every memory counts as buried from the exposed-memory list disposition reads, not the per-row log (fix batch, finding 4)', () => {
+    const row = { tokenId: 'ale003', exposer: 'Ashe', time: '09:06 PM' };
+    // exposedTokens empty: every memory is buried, whatever the per-row log holds.
+    expect(exposuresView([], 0)).toMatchObject({ noneExposed: true, logEmpty: false });
+    expect(exposuresView([row], 0)).toMatchObject({ noneExposed: true, count: 1 });
+    // exposedTokens held memories: no alarm, and an empty per-row log is its own line.
+    expect(exposuresView([], 3)).toMatchObject({ noneExposed: false, logEmpty: true });
+    expect(exposuresView([row], 3)).toMatchObject({ noneExposed: false, logEmpty: false });
+    // A parse from before the count: nothing to say about disposition.
+    expect(exposuresView([], undefined)).toMatchObject({ noneExposed: false, logEmpty: true });
+    expect(exposuresView(undefined, undefined)).toMatchObject({ noneExposed: false, logEmpty: false });
   });
 });
 

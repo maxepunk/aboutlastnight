@@ -156,7 +156,7 @@ function InputReview({ data, onApprove, onReject, theme }) {
   // Brief 3.5: a split final vote, every option with its count.
   const votes = ViewLogic.votesView(sessionConfig.accusation);
   // Brief 2.2: the Detective Evidence Log's exposer / time / owner, kept by the parse.
-  const exposures = ViewLogic.exposuresView(sessionConfig.exposures);
+  const exposures = ViewLogic.exposuresView(sessionConfig.exposures, sessionConfig.exposedTokenCount);
   // The panel used to read connectionsMade / questionsRaised / votingResults;
   // WHITEBOARD_SCHEMA emits names/regions/connections/notes/structureType/
   // ambiguities (regions since brief 3.5), so the whole panel was permanently absent.
@@ -279,11 +279,16 @@ function InputReview({ data, onApprove, onReject, theme }) {
     // totals, then the accounts and adjustments folded away.
     React.createElement(LedgerPanel, { ledger: data && data.ledger }),
 
-    // Brief 3.5: an evidence log the parse read as empty makes every memory count as
-    // buried, so it is said in red rather than left as a missing section.
-    exposures.parsedEmpty && React.createElement('p', { className: 'validation-error', role: 'alert' },
+    // Brief 3.5: no exposed memory parsed makes every memory count as buried, so it is
+    // said in red rather than left as a missing section. It reads the exposed-memory
+    // list disposition reads; an empty per-row log is its own, quieter line.
+    exposures.noneExposed && React.createElement('p', { className: 'validation-error', role: 'alert' },
       'Exposed memories: none parsed from the session report, so every memory will count ' +
       'as buried. Reject with corrections if the evidence log had rows.'
+    ),
+    exposures.logEmpty && React.createElement('p', { className: 'enrichment__warning', role: 'alert' },
+      'Evidence log: no exposure times or turn-in names parsed, so the writers’ morning ' +
+      'timeline shows no exposures. Reject with corrections if the evidence log had rows.'
     ),
 
     // Exposed memories (brief 2.2): who turned each one in, when, and whose it is,

@@ -734,6 +734,11 @@ Return structured JSON matching the schema.${correctionsBlock}`;
   // bundle holds as exposed; the owner column prints nowhere.
   orchestratorParsed.exposures = Array.isArray(orchestratorParsed.exposures) ? orchestratorParsed.exposures : [];
   sessionConfig.exposures = orchestratorParsed.exposures;
+  // Brief 3.5 fix batch: how many memories the evidence log turned in, from the id
+  // list disposition reads (fetch-nodes tagTokensWithDisposition reads exposedTokens,
+  // never the per-row exposures). The input review says every memory will count as
+  // buried only when this is 0.
+  sessionConfig.exposedTokenCount = Array.isArray(orchestratorParsed.exposedTokens) ? orchestratorParsed.exposedTokens.length : 0;
 
   // Brief 3.5: the ledger, read by code. The Adjustment rows become the bonus and the
   // transfers (sessionConfig.adjustments, beside the exposures), each account's total

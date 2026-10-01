@@ -107,6 +107,15 @@ describe('parseRawInput: the ledger', () => {
     expect(result.sessionConfig.sessionClock).toEqual({ decided: true, evening: true, firstTime: '05:10 PM' });
   });
 
+  it('stamps how many memories the evidence log turned in, from the list disposition reads (fix batch, finding 4)', async () => {
+    const { sdk } = makeSdk();
+    expect((await run(sdk)).sessionConfig.exposedTokenCount).toBe(1);
+    // The per-row log and the id list are separate fields of the parse: the count is
+    // the id list's, because tagTokensWithDisposition reads exposedTokens alone.
+    const rowsOnly = makeSdk({ ...REPORT_ANSWER, exposedTokens: [] });
+    expect((await run(rowsOnly.sdk)).sessionConfig.exposedTokenCount).toBe(0);
+  });
+
   it('with no adjustment rows, keeps the Final Standings totals and says so', async () => {
     const { sdk } = makeSdk({ ...REPORT_ANSWER, adjustmentRows: [] });
     const result = await run(sdk);

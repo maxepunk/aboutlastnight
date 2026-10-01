@@ -840,14 +840,19 @@
    * turn-in on the morning timeline, for memories the bundle holds as exposed; the
    * owner column is shown here only.
    *
-   * `parsedEmpty` (phase 3, brief 3.5) is true when the parse kept the list and it is
-   * empty: every memory then counts as buried, so the screen says so. A thread whose
-   * parse predates the list has none to judge.
+   * Two alarms (phase 3, brief 3.5), from two lists the parse keeps apart:
+   * - `noneExposed`: the parse's list of exposed memory ids (exposedTokens, counted as
+   *   sessionConfig.exposedTokenCount) is empty. Disposition reads that list alone,
+   *   so every memory then counts as buried, whatever the per-row log holds.
+   * - `logEmpty`: the per-row log is empty while memories were exposed (or the count
+   *   predates the field): no exposure times or turn-in names reach the writers.
+   * A thread whose parse predates either list has nothing to judge.
    *
-   * @param {Array|null} exposures
-   * @returns {{rows: Array<{tokenId: string, exposer: string, time: string, owner: string}>, count: number, parsedEmpty: boolean}}
+   * @param {Array|null} exposures - sessionConfig.exposures
+   * @param {number|undefined} exposedTokenCount - sessionConfig.exposedTokenCount
+   * @returns {{rows: Array<{tokenId: string, exposer: string, time: string, owner: string}>, count: number, noneExposed: boolean, logEmpty: boolean}}
    */
-  function exposuresView(exposures) {
+  function exposuresView(exposures, exposedTokenCount) {
     var rows = asArray(exposures)
       .filter(function (e) { return e && typeof e === 'object' && asString(e.tokenId).trim(); })
       .map(function (e) {
@@ -858,7 +863,13 @@
           owner: asString(e.owner).trim()
         };
       });
-    return { rows: rows, count: rows.length, parsedEmpty: Array.isArray(exposures) && rows.length === 0 };
+    var noneExposed = exposedTokenCount === 0;
+    return {
+      rows: rows,
+      count: rows.length,
+      noneExposed: noneExposed,
+      logEmpty: !noneExposed && Array.isArray(exposures) && rows.length === 0
+    };
   }
 
   /** The basename of a path, for the photo join. */
