@@ -97,15 +97,17 @@ ${text}
 /**
  * The one sentence a verdict that places no character adds to the arc prompts'
  * accusation: a no-culprit verdict, or (phase 3, brief 3.5) a culprit verdict that
- * blames an institution or an unnamed person.
+ * blames an institution or an unnamed person, in the room's words as the charge
+ * (blamesNoCharacter holds only with a charge).
  *
  * @param {Object|null} accusation
- * @returns {string} '' for a verdict that names a character
+ * @returns {string} '' for a verdict that names a character, and for a culprit parse
+ *   that named no one and no charge
  */
 function noCulpritInstruction(accusation) {
   const charge = typeof accusation?.charge === 'string' ? accusation.charge.trim() : '';
   if (blamesNoCharacter(accusation)) {
-    return `The group statement holds no character responsible: it blames ${charge ? `"${charge}"` : 'an institution or an unnamed person'}. ` +
+    return `The group statement holds no character responsible: it blames "${charge}". ` +
       'The accusation arc is about that verdict. Place no character as the accused.';
   }
   if (!isNoCulpritVerdict(accusation)) return '';

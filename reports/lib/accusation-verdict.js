@@ -57,15 +57,18 @@ function accusedNames(accusation) {
  * Does this verdict blame someone who is not a character: an institution such as
  * NeurAI's board, or a person the room did not name?
  *
- * That is a `culprit` verdict with no character in `accused`; the room's words for
- * who it blamed are the charge. A parse from before verdict kinds is never read this
- * way: its empty `accused` means "not parsed".
+ * That is a `culprit` verdict with no character in `accused` and the room's words
+ * for who it blamed as the charge. Without a charge it is a failed parse, never this
+ * shape: a culprit verdict that names no one and no charge stays "not parsed" at the
+ * input review, and no writer is told to place no character. A parse from before
+ * verdict kinds is never read this way either: its empty `accused` means "not parsed".
  *
  * @param {Object|null} accusation
  * @returns {boolean}
  */
 function blamesNoCharacter(accusation) {
-  return !!accusation && accusation.verdictKind === 'culprit' && accusedNames(accusation).length === 0;
+  const charge = accusation && typeof accusation.charge === 'string' ? accusation.charge.trim() : '';
+  return !!accusation && accusation.verdictKind === 'culprit' && accusedNames(accusation).length === 0 && charge !== '';
 }
 
 /**

@@ -143,6 +143,13 @@ describe('verdictView: a culprit verdict that names no character', () => {
       label: 'the room blamed an institution or an unnamed person'
     });
   });
+
+  it('a culprit parse with neither accused nor charge stays "not parsed" (fix batch, finding 6)', () => {
+    expect(verdictView({ verdictKind: 'culprit', accused: [], charge: '' })).toEqual({
+      verdictKind: 'culprit', noCulprit: false, blamesNoCharacter: false, label: 'the room named a culprit'
+    });
+    expect(verdictView({ verdictKind: 'culprit', accused: [] }).blamesNoCharacter).toBe(false);
+  });
 });
 
 describe('votesView: the split final vote', () => {

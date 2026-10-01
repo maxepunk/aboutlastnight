@@ -792,7 +792,8 @@
    * is what lets it say what the room decided instead. Phase 3 (brief 3.5): so does
    * `blamesNoCharacter`, for a culprit verdict that blames an institution or an
    * unnamed person (lib/accusation-verdict.js blamesNoCharacter), whose charge holds
-   * the room's words for who.
+   * the room's words for who. A culprit verdict with neither an accused nor a charge
+   * is a failed parse, and keeps the red "not parsed" line.
    *
    * @param {object|null} accusation - sessionConfig.accusation
    * @returns {{verdictKind: string, noCulprit: boolean, blamesNoCharacter: boolean, label: string}}
@@ -801,7 +802,8 @@
     var a = accusation || {};
     var kind = asString(a.verdictKind);
     var known = Object.prototype.hasOwnProperty.call(VERDICT_KIND_LABELS, kind);
-    var namesNoOne = kind === 'culprit' && accusationView(a).accused === '';
+    var parsed = accusationView(a);
+    var namesNoOne = kind === 'culprit' && parsed.accused === '' && parsed.charge.trim() !== '';
     return {
       verdictKind: known ? kind : '',
       noCulprit: known && kind !== 'culprit',

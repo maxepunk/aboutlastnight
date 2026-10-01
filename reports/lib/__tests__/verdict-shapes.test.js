@@ -85,6 +85,12 @@ describe('normalizeAccusation: the institution verdict', () => {
     expect(blamesNoCharacter({ verdictKind: 'culprit', accused: ['Vic'], charge: 'Murder' })).toBe(false);
     expect(blamesNoCharacter({ verdictKind: 'overdose', accused: [], charge: 'Overdose' })).toBe(false);
   });
+
+  it('needs the room\'s words as the charge: a culprit parse with neither accused nor charge failed (fix batch, finding 6)', () => {
+    expect(blamesNoCharacter({ verdictKind: 'culprit', accused: [], charge: '' })).toBe(false);
+    expect(blamesNoCharacter({ verdictKind: 'culprit', accused: [], charge: '   ' })).toBe(false);
+    expect(blamesNoCharacter({ verdictKind: 'culprit', accused: [] })).toBe(false);
+  });
 });
 
 describe('Review Focus 4: the verdicts reach SESSION_FACTS and the arc writer\'s block', () => {
@@ -118,6 +124,14 @@ describe('Review Focus 4: the verdicts reach SESSION_FACTS and the arc writer\'s
     expect(r.arc).toContain('**Accused:** no character (the group statement blames an institution or an unnamed person: see the charge)');
     expect(r.arc).toContain('The group statement holds no character responsible');
     expect(r.arc).not.toContain('**Accused:** []');
+  });
+
+  it('a culprit parse that named no one and no charge is not an institution verdict (fix batch, finding 6)', () => {
+    const r = bothRenders({ verdictKind: 'culprit', accused: [], charge: '' });
+    expect(r.arc).not.toContain('Place no character');
+    expect(r.arc).not.toContain('The group statement holds no character responsible');
+    expect(r.sessionFacts).not.toContain('blames an institution');
+    expect(r.arc).not.toContain('blames an institution');
   });
 
   it('a verdict with no culprit names no one', () => {
