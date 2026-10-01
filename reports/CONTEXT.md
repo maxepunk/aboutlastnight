@@ -29,15 +29,19 @@ A programmatic test of an output, free to run, with a definite answer.
 _Avoid_: validation, fact check (one particular check)
 
 **Record**:
-The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the director's own notes and accusation text, the roster and pronouns, the whiteboard, the director's photo descriptions and the director's edits.
+The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the director's photo descriptions and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's question, unless the director writes it into the article.
 _Avoid_: session data, ground truth, context
+
+**Epilogue**:
+What happened after the investigation, as the director writes it into the notes: a successor named, someone fled, a warrant, a leak, a call that went unanswered. It is record and the only source of the article's follow-up news. All of that news is Nova's own reporting; a channel the director names (a leaked email, an anonymous tip) is Nova's source for that item.
+_Avoid_: post-investigation news, aftermath facts
 
 **Owner**:
 The character whose memory it is: the point of view the memory records. The article can always name the owner.
 _Avoid_: author, source
 
 **Exposer**:
-The player who turned a memory in to Nova. Anonymous unless they put their name on it at turn-in. Never assumed to be the owner.
+The player who turned a memory in to Nova. Anonymous unless a name is on it at turn-in; a name there is an honest attribution, and the article may credit it. Never assumed to be the owner.
 _Avoid_: source, submitter
 
 **Ledger**:
@@ -72,6 +76,10 @@ _Avoid_: review, verdict, validation, evaluator feedback
 The batch the director submits at a stop in one go: anchored notes, a cover note, edits and the action (approve or send back). Nothing in it reaches the writer before the submit.
 _Avoid_: approval, feedback, submission
 
+**Nova**:
+The NovaNews reporter who writes the article, in the first person. An independent journalist who had been investigating Marcus. Fremont PD required Nova to monitor the investigation as an uninterested third party: the condition of Blake's deal to delay sending officers while the room investigates, agrees its statement and leaves. Exposed memories are turned in to Nova. On site Nova is in the warehouse; remote, Nova monitors from outside. Nova takes no part in the group statement and is never referred to with gendered pronouns.
+_Avoid_: the writer (the model pass), the narrator
+
 **Writer**:
 The model pass that produces the arcs, the outline or the article.
 _Avoid_: generator, agent, model, Nova (the reporter persona, not the pass)
@@ -84,9 +92,17 @@ _Avoid_: narrative moment, story relevance, context
 One thread of the session's story: a claim about what happened, the evidence it rests on, who did what, and what is uncertain. The director selects arcs at the arc stop.
 _Avoid_: thread, storyline, angle
 
+**Verdict**:
+The official story: the group statement the room agrees on when the recovery window closes, before the police arrive. It is negotiated under the clock, can cite only evidence on the board, leaves out whatever the room chooses, and is a version every character can live with, so it is shaped by everything the players exposed, sold and argued. The director enters it as the accusation. The article reports it as the official story and shows how the players' choices made it, never claiming to know what really happened to Marcus.
+_Avoid_: the answer, the solution, the truth
+
 **Thesis**:
-The story's angle in one sentence: what the room decided and where the record points instead. Proposed by the writer and settled by the director at the arc stop; the outline is built to it.
+The most interesting journalistic angle on what happened in the session. Usually it lies in the gap between the verdict and what happened leading up to it, and in what that gap shows about the biases the group brought to what it decided to tell the world. When the verdict agrees with everything the room found, it is the angle the players chose to explore together. Proposed by the writer and settled by the director at the arc stop; the outline is built to it.
 _Avoid_: angle, key tension, hook, primary arc
+
+**Whiteboard**:
+The working notes the game master and the players keep during the investigation and before the deliberation. It is context for how the room reached its verdict, not record: the article never cites it or prints it.
+_Avoid_: evidence board (the Evidence Board is where exposed memories' summaries go up), source
 
 **Story memo**:
 What the arc stop shows: the arcs as plain claims with named evidence, roles, strength and open questions, the thesis, and how the arcs pull against each other.

@@ -2,6 +2,27 @@
 
 Written 2026-09-25 at `main` `b3d1a1a` and ruled by the director the same day (every entry now carries a ruling), for phase 3, "One rule set" (`docs/superpowers/plans/2026-09-22-roadmap.md`:15, :127). Nothing else in the repository was changed.
 
+> **Status, 2026-09-30.** Phase 3 is now built from `docs/superpowers/specs/2026-09-30-rule-set.md`, not from this sheet. The spec holds the rulings below together with the phase 3 prep grill of 2026-09-27 to 2026-09-30, and where the two differ, the spec wins. This sheet stays as the record of how each ruling was reached; nothing below is rewritten. The later decisions change these entries:
+> - **TH1.**
+>   - Part (2), backstory only as a question, becomes a line of evidence: Nova states what the record backs, reports what was seen or said in the room, and presents what Nova knows but cannot back as a reading or a question (spec T1).
+>   - Part (3) falls: the whiteboard is context, never cited or printed (spec T13).
+> - **TL1.**
+>   - The deliberation is the investigation's final act, not a separate stage.
+>   - Logged times are shown on the morning clock by code: an evening session's times show AM for PM. They are no longer shifted or made relative by the writer (spec T7, section 6).
+> - **PE1.** Nova is never gendered; Nova's she/her goes (spec T9).
+> - **EX1.** A name on the evidence log is an honest attribution (spec T6).
+> - **VO3.** The line is characters, not players: commentary may land on a character's choices, never on the player (spec T11, C13).
+> - **PH1.** Every photo the director has not excluded appears, except the whiteboard photo, which is never printed (spec T13).
+> - **BU3.** Talk in the room about a buried memory, recorded in the director's notes, may be reported with the speaker named (spec T3).
+> - **TH3.** About 1,500 words stands, with its reason recorded: players were not reading longer articles in full (spec C4).
+> - **"Rules your notes state that no prompt states yet."**
+>   - A16 (a whiteboard claim names its region) falls with TH1 (3).
+>   - P9 is reversed: a guest reporter who plays a character is counted (spec T10).
+>   - P10 is dropped: the roster is the director's own input.
+>   - T12 becomes D9: every observation is weighed, and the article prints what the thesis uses.
+>   - V6 is read through the epilogue rule (spec T7).
+> - **Mechanical fixes.** Phase 2 already made several (M14 to M19, M23); the rest stand.
+
 The writers' instructions conflict in 62 places: 37 between documents and 25 inside single calls (information-architecture spec, §2.4). This sheet turns them into 43 questions. For each one you confirm a pre-filled answer, pick a side, or note that phase 2 already settled it. Defects that need no ruling are listed after the entries, under "Mechanical fixes".
 
 ## Counts
