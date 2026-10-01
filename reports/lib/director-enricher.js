@@ -13,7 +13,7 @@ const { formatAccused, buildParseCorrectionsBlock, normalizeCorrections } = requ
 const { normalizeForGrounding, isVerbatimIn } = require('./grounding');
 
 /**
- * How a quote's speaker is known: one wording for the schema and both rule lists
+ * How a quote's speaker is known: one wording for the schema and the rules
  * (M5: the rules said "same sentence" where the schema said "adjacent").
  */
 const QUOTE_CONFIDENCE_BANDS =
@@ -22,26 +22,51 @@ const QUOTE_CONFIDENCE_BANDS =
   '"low" = neither names the speaker, and the speaker is left out.';
 
 /**
- * The quote rule and the epilogue rule, stated once and given in both the system
- * rules and the user rules (phase 3, 3.6). A quote's speaker and wording come from
- * the notes as the director corrected them at the input review; its context is the
- * director's own words; an epilogue item is the director's sentence.
+ * The enrichment rules, each stated once per call, in <ENRICHMENT_RULES> at the end
+ * of the user prompt, with its reason (3.6 fix batch, item 5; the system prompt
+ * points there). Code keeps a context, an epilogue detail or a link's observation
+ * only when the notes hold it as one piece (groundQuotes, groundEpilogue,
+ * groundLinkExcerpts), so the quote and epilogue rules ask for one unbroken passage
+ * (item 1). A link needs the notes to describe the sale; an account's name never
+ * makes one (item 9, T4).
  */
+const VERBATIM_RULE =
+  'Every excerpt, quote, context and epilogue detail you emit is a verbatim substring of the prose, except a speaker, addressee or wording ' +
+  "that a director's correction gives, which you copy from that correction; where you would rewrite the director's words, quote them instead. " +
+  "The writers print these as the director's own words, so code keeps only what the prose or a correction holds word for word.";
+
+const ROSTER_RULE =
+  'Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes ' +
+  '(npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).';
+
+const LINK_RULE =
+  'transactionReferences: link an observation to a <SCORING_TIMELINE> row only when the notes describe that sale ' +
+  '(someone seen selling, or a deal with Blake) and its time and amount converge with the row, naming each linked row by its key. ' +
+  "An account's name matching a character never makes a link: a seller can give an account any name, another character's included, " +
+  'so the name says nothing about who sold. When no row matches cleanly, emit linkedTransactions: [] with confidence: "low" ' +
+  'and a linkReasoning explaining the ambiguity.';
+
 const QUOTE_RULE =
   'quotes: each phrase the prose puts in quotation marks, and each unambiguous direct speech. ' +
-  'Copy the wording, the speaker and the addressee as the prose gives them. Where a director\'s correction changes who said a line, ' +
-  'to whom, or its wording, take that from the correction and copy the correction into the quote\'s correction field. ' +
-  'The context is the director\'s words around the quote, copied from the prose: its sentence, and the sentence that names the speaker when that is another one. ' +
-  'Leave the speaker out when neither the prose nor a correction names who said it. Confidence: ' + QUOTE_CONFIDENCE_BANDS;
+  "Copy the wording, the speaker and the addressee as the prose gives them. Where a director's correction changes who said a line, " +
+  "to whom, or its wording, take that from the correction and copy the correction into the quote's correction field. " +
+  "The context is one unbroken passage copied whole from the prose: the quote's sentence, together with the sentence that names the speaker " +
+  'and every sentence between them when that is another one. ' +
+  'Leave the speaker out when neither the prose nor a correction names who said it. ' +
+  "The writers print each line in its speaker's mouth, so code keeps a speaker only when the context or correction you copy names them. " +
+  'Confidence: ' + QUOTE_CONFIDENCE_BANDS;
 
 const EPILOGUE_RULE =
   'postInvestigationDevelopments (the epilogue): each passage with an explicit post-investigation marker ("just been announced", ' +
   '"currently whereabouts unknown", "is on his way to", "following the investigation", "at the time of this article\'s writing"). ' +
-  'Copy the director\'s sentence or sentences into detail, word for word, and list the characters they name in subjects.';
+  "Copy each item's detail word for word as one unbroken passage of the prose (a development the notes report in two separate places is two items), " +
+  'and list the characters it names in subjects. ' +
+  "The writers take the article's follow-up news from these details alone, printed as the director's own words.";
 
-const VERBATIM_RULE =
-  'Every excerpt, quote, context and epilogue detail you emit is a verbatim substring of the prose, except a speaker, addressee or wording ' +
-  'that a director\'s correction gives, which you copy from that correction; where you would rewrite the director\'s words, quote them instead.';
+const EMPTY_RULE =
+  'Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.';
+
+const ENRICHMENT_RULES = [VERBATIM_RULE, ROSTER_RULE, LINK_RULE, QUOTE_RULE, EPILOGUE_RULE, EMPTY_RULE];
 
 // B3: the model is NOT asked to echo the prose back. The caller already holds it,
 // and requiring a byte-exact round trip made a single stray character discard the
@@ -129,11 +154,11 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
         // words around them are always there to give.
         required: ['text', 'context'],
         properties: {
-          speaker: { type: 'string', description: 'Who said it, as the prose or a correction names them. Left out when neither does.' },
+          speaker: { type: 'string', description: 'Who said it, as the prose or a correction names them' },
           text: { type: 'string', description: 'The words said, copied from the prose, or from the correction that gives the wording' },
-          addressee: { type: 'string', description: 'Who it was said to, as the prose or a correction names them. Left out when neither does.' },
-          context: { type: 'string', description: "The director's words around the quote, copied from the prose: its sentence, and the sentence that names the speaker when that is another one" },
-          correction: { type: 'string', description: "The director's correction that changed this quote's speaker, addressee or wording, copied from <DIRECTOR_CORRECTIONS>. Left out when no correction applies." },
+          addressee: { type: 'string', description: 'Who it was said to, as the prose or a correction names them' },
+          context: { type: 'string', description: "The director's words around the quote, as one unbroken passage copied from the prose" },
+          correction: { type: 'string', description: "The director's correction that changed this quote's speaker, addressee or wording, copied from <DIRECTOR_CORRECTIONS>" },
           proseOffset: { type: 'integer', minimum: 0 },
           confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: QUOTE_CONFIDENCE_BANDS }
         }
@@ -146,8 +171,8 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
         type: 'object',
         required: ['detail'],
         properties: {
-          detail: { type: 'string', description: "The director's sentence or sentences reporting the development, copied from the prose word for word" },
-          subjects: { type: 'array', items: { type: 'string' }, description: 'The characters those sentences name, as an index' },
+          detail: { type: 'string', description: "The director's words reporting the development, as one unbroken passage copied from the prose" },
+          subjects: { type: 'array', items: { type: 'string' }, description: 'The characters the detail names, as an index' },
           proseOffset: { type: 'integer', minimum: 0 }
         }
       }
@@ -161,15 +186,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
  */
 const EMPTY_ENRICHMENT_PROSE_THRESHOLD = 400;
 
-const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*.
-
-Hard rules:
-1. ${VERBATIM_RULE}
-2. Character mentions use canonical names from the provided <ROSTER> only. Non-roster names go to entityNotes (npcsReferenced for known NPCs from <NPCS>, otherwise leave unflagged).
-3. transactionReferences: link an observation to a scoring-timeline row ONLY when timestamp, actor, and amount converge, naming each linked row by its key. If no row matches cleanly, emit linkedTransactions: [] with confidence: "low" and a linkReasoning explaining the ambiguity. Do NOT fabricate.
-4. ${QUOTE_RULE}
-5. ${EPILOGUE_RULE}
-6. Never fabricate. Empty arrays are always valid. A missing anchor is better than an invented one.
+const ENRICHMENT_SYSTEM_PROMPT = `You enrich director notes with context-grounded indexes. You do NOT summarize, paraphrase, or compress. The director's prose is the source of truth; your job is to build *indexes into it*. The rules for every index are in <ENRICHMENT_RULES>, at the end of the user message.
 
 You are an INDEXER, not a SUMMARIZER.`;
 
@@ -327,12 +344,7 @@ ${rawProse}
 </DIRECTOR_NOTES_RAW>
 
 <ENRICHMENT_RULES>
-1. ${VERBATIM_RULE}
-2. Use ONLY roster names from the roster section as keys in characterMentions.
-3. Link transactionReferences only when timestamp, actor, and amount converge with the scoring timeline, naming each linked row by its key. Otherwise confidence: "low" and empty linkedTransactions.
-4. ${QUOTE_RULE}
-5. ${EPILOGUE_RULE}
-6. Empty arrays are valid. Never fabricate.
+${ENRICHMENT_RULES.map((rule, i) => `${i + 1}. ${rule}`).join('\n')}
 </ENRICHMENT_RULES>${correctionsBlock}
 `;
 

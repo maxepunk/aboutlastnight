@@ -88,11 +88,13 @@ describe('buildEnrichmentPrompt', () => {
     expect(out.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it('system prompt forbids summarization and requires verbatim excerpts', () => {
-    const { systemPrompt } = buildEnrichmentPrompt(sampleContext);
+  it('system prompt forbids summarization and points to the rules, where the verbatim rule is', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt(sampleContext);
     expect(systemPrompt).toMatch(/not.*summariz/i);
-    // B3: the echo-the-prose rule is gone; what remains is the grounding rule.
-    expect(systemPrompt).toMatch(/verbatim substring of the prose/i);
+    // B3: the echo-the-prose rule is gone; what remains is the grounding rule. Since
+    // the 3.6 fix batch (item 5) each rule is stated once, in <ENRICHMENT_RULES>.
+    expect(systemPrompt).toContain('<ENRICHMENT_RULES>');
+    expect(userPrompt).toMatch(/verbatim substring of the prose/i);
   });
 
   it('user prompt contains all context sections as XML tags', () => {
@@ -390,10 +392,10 @@ describe('ENRICHMENT prompts — no verbatim-echo rule (B3)', () => {
     expect(userPrompt).not.toMatch(/rawProse/);
   });
 
-  it('keeps a positive verbatim requirement on excerpts and quotes', () => {
+  it('keeps a positive verbatim requirement on excerpts and quotes, stated once (3.6 fix batch, item 5)', () => {
     const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
-    expect(systemPrompt).toMatch(/verbatim substring of the prose/i);
     expect(userPrompt).toMatch(/verbatim substring of the prose/i);
+    expect(systemPrompt).not.toMatch(/verbatim substring of the prose/i);
   });
 });
 
@@ -564,15 +566,13 @@ describe('normalizeForGrounding folds dashes (the JSDoc already claimed it)', ()
 describe('ENRICHMENT prompts define the medium confidence band (Task 1 Minor)', () => {
   const { buildEnrichmentPrompt } = require('../director-enricher');
 
-  it('the system rule and the user rules both say what medium means', () => {
-    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'x' });
-    [systemPrompt, userPrompt].forEach((text) => {
-      // "high iff speaker named adjacent; otherwise low" left medium undefined,
-      // so the enum's middle value was unreachable by instruction.
-      expect(text).toMatch(/"medium"/);
-      expect(text).toMatch(/same sentence/i);
-      expect(text).toMatch(/surrounding paragraph/i);
-    });
+  it('the rules say what medium means (stated once, in the user rules, since the 3.6 fix batch)', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'x' });
+    // "high iff speaker named adjacent; otherwise low" left medium undefined,
+    // so the enum's middle value was unreachable by instruction.
+    expect(userPrompt).toMatch(/"medium"/);
+    expect(userPrompt).toMatch(/same sentence/i);
+    expect(userPrompt).toMatch(/surrounding paragraph/i);
   });
 
   it('the schema states the bands in the rules\' own words (M5: "adjacent" against "same sentence")', () => {
@@ -580,8 +580,8 @@ describe('ENRICHMENT prompts define the medium confidence band (Task 1 Minor)', 
     const bands = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.confidence.description;
     expect(bands).toMatch(/same sentence/);
     expect(bands).not.toMatch(/adjacent/);
-    expect(systemPrompt).toContain(bands);
     expect(userPrompt).toContain(bands);
+    expect(systemPrompt).not.toContain(bands);
   });
 });
 
@@ -655,10 +655,10 @@ describe('the enricher never carries a buried memory id (phase 2 final fix wave)
     expect(`${systemPrompt}\n${userPrompt}`).not.toMatch(/tay004|Taylor/);
   });
 
-  it('asks the model to name each linked row by its key, in the system rule and the user rule', () => {
+  it('asks the model to name each linked row by its key, once, in the user rules', () => {
     const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
-    expect(systemPrompt).toContain('naming each linked row by its key');
     expect(userPrompt).toContain('naming each linked row by its key');
+    expect(systemPrompt).not.toContain('naming each linked row by its key');
   });
 
   it('maps each key back to its row as time, amount and account; an unknown key is dropped and counted', () => {
@@ -816,12 +816,121 @@ describe("the director's notes, unguessed (phase 3, 3.6)", () => {
     expect(result._enrichmentWarnings).toEqual({ droppedEpilogueItems: 1 });
   });
 
-  it('tells the model where a quote\'s speaker and wording come from, in the system rule and the user rule', () => {
+  it('tells the model where a quote\'s speaker and wording come from, once, in the user rules', () => {
     const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: PROSE, corrections: [CORRECTION] });
-    [systemPrompt, userPrompt].forEach((text) => {
-      expect(text).toMatch(/correction/i);
-      expect(text).toMatch(/leave the speaker out/i);
-      expect(text).not.toMatch(/inferable/);
+    const rules = userPrompt.slice(userPrompt.indexOf('<ENRICHMENT_RULES>'), userPrompt.indexOf('</ENRICHMENT_RULES>'));
+    expect(rules).toMatch(/take that from the correction/);
+    expect(rules).toMatch(/leave the speaker out/i);
+    expect(`${systemPrompt}\n${userPrompt}`.match(/leave the speaker out/gi)).toHaveLength(1);
+    expect(`${systemPrompt}\n${userPrompt}`).not.toMatch(/inferable/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.6 fix batch. Code keeps a quote's context or an epilogue detail only when
+// the notes hold it as one piece, so the rules ask for one unbroken passage (item
+// 1). Each rule is stated once per call, with its reason (item 5). A link needs the
+// notes to describe the sale; an account's name never makes one (item 9, T4).
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('the enricher rules (task 3.6 fix batch)', () => {
+  const rulesOf = (userPrompt) =>
+    userPrompt.slice(userPrompt.indexOf('<ENRICHMENT_RULES>'), userPrompt.indexOf('</ENRICHMENT_RULES>'));
+  const ruleNumbered = (rules, n) => (rules.split('\n').find(line => line.startsWith(`${n}. `)) || '');
+
+  describe('one unbroken passage (item 1)', () => {
+    // The review's probe: the speaker is named two sentences before the quote.
+    const NOTES = 'Jess walked over to Sarah at the bar. The room was loud. She leaned in. "You deserve to know the truth."';
+    const run = async (quote) => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        return await enrichDirectorNotes({ rawProse: NOTES }, jest.fn().mockResolvedValue({ quotes: [quote] }));
+      } finally {
+        warn.mockRestore();
+      }
+    };
+
+    it('asks for the context as one unbroken passage from the quote\'s sentence to the sentence that names the speaker', () => {
+      const quoteRule = ruleNumbered(rulesOf(buildEnrichmentPrompt({ rawProse: NOTES }).userPrompt), 4);
+      expect(quoteRule).toMatch(/^4\. quotes:/);
+      expect(quoteRule).toContain("The context is one unbroken passage copied whole from the prose: the quote's sentence, together with the sentence that names the speaker and every sentence between them");
+    });
+
+    it('asks for each epilogue item as one unbroken passage', () => {
+      const epilogueRule = ruleNumbered(rulesOf(buildEnrichmentPrompt({ rawProse: NOTES }).userPrompt), 5);
+      expect(epilogueRule).toMatch(/^5\. postInvestigationDevelopments \(the epilogue\):/);
+      expect(epilogueRule).toContain('as one unbroken passage of the prose');
+      expect(epilogueRule).not.toMatch(/sentence or sentences/);
+    });
+
+    it('keeps the speaker of the probe when the context is the passage the rule asks for', async () => {
+      const result = await run({
+        speaker: 'Jess', addressee: 'Sarah', text: 'You deserve to know the truth.',
+        context: NOTES, confidence: 'medium'
+      });
+      expect(result.quotes).toEqual([{
+        speaker: 'Jess', addressee: 'Sarah', text: 'You deserve to know the truth.', context: NOTES, confidence: 'medium'
+      }]);
+      expect(result._enrichmentWarnings).toBeUndefined();
+    });
+
+    it('leaves the probe\'s speaker unrecorded when the context joins the two named sentences, which is why the rule asks for one passage', async () => {
+      const result = await run({
+        speaker: 'Jess', text: 'You deserve to know the truth.',
+        context: 'Jess walked over to Sarah at the bar. She leaned in. "You deserve to know the truth."', confidence: 'medium'
+      });
+      expect(result.quotes).toEqual([{ text: 'You deserve to know the truth.', confidence: 'low' }]);
+      expect(result._enrichmentWarnings).toEqual({ droppedContexts: 1, unrecordedSpeakers: 1 });
+    });
+  });
+
+  describe('each rule once per call, with its reason (item 5)', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: ['c'] });
+    const both = `${systemPrompt}\n${userPrompt}`;
+    const rules = rulesOf(userPrompt);
+
+    it('states the rules once, in <ENRICHMENT_RULES>, and the system prompt points there', () => {
+      expect(systemPrompt).toContain('<ENRICHMENT_RULES>');
+      [
+        'verbatim substring of the prose',
+        'canonical names from the provided <ROSTER>',
+        'naming each linked row by its key',
+        'each unambiguous direct speech',
+        'explicit post-investigation marker',
+        'Empty arrays are always valid',
+        DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.confidence.description
+      ].forEach((phrase) => {
+        expect(`${phrase}: ${both.split(phrase).length - 1}`).toBe(`${phrase}: 1`);
+        expect(rules).toContain(phrase);
+      });
+    });
+
+    it('gives the verbatim, quote and epilogue rules each its reason', () => {
+      expect(ruleNumbered(rules, 1)).toContain("The writers print these as the director's own words, so code keeps only what the prose or a correction holds word for word.");
+      expect(ruleNumbered(rules, 4)).toContain("The writers print each line in its speaker's mouth, so code keeps a speaker only when the context or correction you copy names them.");
+      expect(ruleNumbered(rules, 5)).toContain("The writers take the article's follow-up news from these details alone, printed as the director's own words.");
+    });
+  });
+
+  describe('the link rule (item 9)', () => {
+    // An observation about Remi, and an account someone named Remi.
+    const probe = buildEnrichmentPrompt({
+      rawProse: 'Remi spent the evening at the bar with Sarah.',
+      roster: ['Remi', 'Sarah'],
+      shellAccounts: [{ name: 'Remi', total: 450000, tokenCount: 2 }],
+      scoringTimeline: [{ time: '09:26 PM', type: 'Sale', team: 'Remi', amount: '+$450,000' }]
+    });
+    const linkRule = ruleNumbered(rulesOf(probe.userPrompt), 3);
+
+    it('links an observation to a row only when the notes describe that sale and its time and amount converge', () => {
+      expect(linkRule).toMatch(/^3\. transactionReferences:/);
+      expect(linkRule).toContain('only when the notes describe that sale (someone seen selling, or a deal with Blake) and its time and amount converge with the row');
+      // "actor" convergence was the opening for a name match: the account's name is
+      // the only actor a timeline row carries.
+      expect(`${probe.systemPrompt}\n${probe.userPrompt}`).not.toMatch(/actor/);
+    });
+
+    it("never links an observation about a character to the account named after them on the name alone, and says why", () => {
+      expect(linkRule).toContain("An account's name matching a character never makes a link: a seller can give an account any name, another character's included, so the name says nothing about who sold.");
     });
   });
 });
