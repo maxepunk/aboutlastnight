@@ -516,3 +516,172 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     });
   });
 });
+
+/**
+ * The 3.6b fix batch: the phrases the tasks of waves 1 and 2 reported removing join the
+ * list (removed-phrases-reported.md in the phase workspace), with 3.4's suggested
+ * patterns. Each task's own wording is found, and a line that only resembles one is not.
+ */
+describe('the removed-phrase fixture: the phrases waves 1 and 2 reported removing', () => {
+  const found = (text) => `${text}: ${findRemovedPhrases(text).length > 0}`;
+
+  it.each([
+    // 3.4's wording the patterns are for.
+    'Every exposure, observation and the verdict reached them as tips from people who were there',
+    'every exposure, observation and the verdict arrived as a tip from someone who was there',
+    'by attributing it to the people who told you',
+    'Attribute the action to whoever took it',
+    'Where do all threads meet (the murder, the accusation)?',
+    'Are photos placed for emotional pacing (breathe before escalation)?',
+    "directorNotes: The director's observations are ground truth - never question them",
+    'NovaNews first-person participatory voice (I, my, we)',
+    "Nova (the journalist narrator) - may appear as the article's narrator/voice",
+    'Marcus (the murder victim) - should appear in most arcs as the central victim',
+    // A phrase an earlier entry finds.
+    'Who killed Marcus Blackwood?',
+    'Tokens sold to Black Market',
+    'Buried memories appear only in <buried-transactions>, as account, amount and time',
+    'The murder revelation / accusation climax',
+    "PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch",
+    // Patterns for quotation marks, an elision and the old headings.
+    'A memory-altering drug called "the memory drug"',
+    'A memory-altering drug called “the memory drug”',
+    'Never use "token" (say "memory")',
+    "Vic's confident smile at the vote said she knew all along",
+    'Do not just regenerate - IMPROVE',
+    'You are IMPROVING, not regenerating',
+    '### Whiteboard Connections (players drew these)',
+    '**Names Identified:** Riley',
+    'HARD CONSTRAINTS:',
+    'OMIT for a detective session',
+    'WHAT TO PRESERVE',
+    'Low-scoring criteria need targeted fixes',
+    'Remember: it reached her as tips.',
+    '<POST_INVESTIGATION_NEWS>',
+    "Verbatim quotes extracted from the director's prose: prefer these when citing what someone said"
+  ])('finds "%s"', (text) => {
+    expect(found(text)).toBe(`${text}: true`);
+  });
+
+  it.each([
+    // The judges' photo lists; the old heading was title case.
+    "each gives the names identified in it, the director's description joined by filename",
+    // Lower case: ordinary words, not the old headings and labels.
+    'name the hard constraints the record sets',
+    'omit for brevity',
+    'say what to fix first',
+    'the record is the ground truth for the timeline'
+  ])('does not find "%s"', (text) => {
+    expect(found(text)).toBe(`${text}: false`);
+  });
+});
+
+/**
+ * The 3.6b fix batch: instructionText also strips the data three prompts carry, built
+ * here by the real builders: the arc packages' excerpts (the documents' own words, in
+ * the outline writer's <arc-evidence> and the article writer's packages), the outline
+ * judge's photo analyses (Haiku's output), and the director's Blake and Valet sentences
+ * (the article writer's <NARRATIVE_TENSIONS> and the arc writer's heading). The
+ * pipeline's labels around them stay scanned.
+ */
+describe('instructionText: the excerpts, the photo analyses and the tension sentences (3.6b fix batch)', () => {
+  const { reworkFixtureState } = require('./fixtures/rework-state');
+  const { stubThemeLoader } = require('./fixtures/render-writers');
+  const { PHASE_REQUIREMENTS } = require('../theme-loader');
+  const { PromptBuilder } = require('../prompt-builder');
+  const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
+  const { _testing: arcs } = require('../workflow/nodes/arc-specialist-nodes');
+  const { _testing: judges } = require('../workflow/nodes/evaluator-nodes');
+
+  // Data that carries a removed phrase, as the director's and the documents' words may.
+  const EXCERPT = 'Marcus, the murder victim, owed a favour\nto who killed Marcus (EXCERPT-SENTINEL)';
+  const SENTENCE = 'Blake said the murder victim had paid the Valet twice.';
+  const ANALYSIS = "Nova and her camera stand by the murder victim's portrait.";
+
+  const state = () => {
+    const s = reworkFixtureState('journalist');
+    s.arcEvidencePackages[0].evidenceItems[0].quotableExcerpts = [EXCERPT, '"Worth it."'];
+    s.directorNotes.rawProse = `${s.directorNotes.rawProse} ${SENTENCE}`;
+    s.narrativeTensions = { tensions: [{ type: 'blake-proximity', observations: [SENTENCE] }] };
+    s.photoAnalyses.analyses[1] = { ...s.photoAnalyses.analyses[1], visualContent: ANALYSIS };
+    return s;
+  };
+  const builderFor = (s) => new PromptBuilder(
+    stubThemeLoader(PHASE_REQUIREMENTS), 'journalist', s.sessionConfig, s.canonicalCharacters, s.characterData.characters
+  );
+  const join = ({ systemPrompt, userPrompt }) => `${systemPrompt}\n${userPrompt}`;
+  const outlineRender = async (s = state()) => join(await builderFor(s).buildOutlinePrompt(
+    { narrativeArcs: s.narrativeArcs, ...s._arcAnalysisCache }, s.selectedArcs, 'hero.jpg',
+    [], s.arcEvidencePackages, s.shellAccounts, null, { evidenceBundle: s.evidenceBundle }
+  ));
+  const articleRender = async (s = state()) => join(await builderFor(s).buildArticlePrompt(
+    s.outline, s.arcEvidencePackages, 'hero.jpg', s.shellAccounts, null, s.directorNotes, s.narrativeTensions,
+    { evidenceBundle: s.evidenceBundle }
+  ));
+
+  it("strips the outline writer's excerpts, a multi-line one included, and keeps each document's line and its label", async () => {
+    const render = await outlineRender();
+    expect(render).toContain(`  Excerpts: "${EXCERPT}" | ""Worth it.""`);
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text)).toEqual([]);
+    expect(text).not.toContain('EXCERPT-SENTINEL');
+    expect(text).toMatch(/^- ale003: memory\n {2}Excerpts:\n- p-dna: paper\n {2}Excerpts:\n\*\*Photos in which/m);
+    // The photos label after the excerpts is the pipeline's, and stays scanned.
+    expect(findRemovedPhrases(instructionText(render.replace("**Photos in which this arc's", "**Photos in which the murder victim and this arc's"))))
+      .toEqual(['the murder victim']);
+  });
+
+  it("strips the article writer's excerpts, a multi-line one included, and keeps EXCERPTS:, DOCUMENTS: and the documents", async () => {
+    const render = await articleRender();
+    expect(render).toContain(`- "${EXCERPT}" (from ale003)`);
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text)).toEqual([]);
+    expect(text).not.toContain('EXCERPT-SENTINEL');
+    expect(text).toMatch(/^EXCERPTS:\nDOCUMENTS:\nale003 \(memory\)\np-dna \(paper\)$/m);
+    expect(findRemovedPhrases(instructionText(render.replace('DOCUMENTS:\nale003', 'DOCUMENTS:\nthe murder victim\nale003'))))
+      .toEqual(['the murder victim']);
+  });
+
+  it("strips the outline judge's photo analyses, and keeps each photo's line and the analysis label", () => {
+    const render = judges.buildEvaluationUserPrompt('outline', state(), {});
+    expect(render).toContain(ANALYSIS);
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text)).toEqual([]);
+    expect(text).not.toContain('camera');
+    expect(text).toMatch(/^ {3}Photo analysis: \{\n {3}\}$/m);
+    expect(text).toContain('PHOTOS (all ');
+  });
+
+  it("strips the director's sentences under <NARRATIVE_TENSIONS>, and keeps the label", async () => {
+    const render = await articleRender();
+    expect(render).toContain(`- ${SENTENCE}`);
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text)).toEqual([]);
+    expect(text).toContain(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n-\n</NARRATIVE_TENSIONS>`);
+  });
+
+  it("strips the director's sentences under the arc writer's Blake and Valet heading, and keeps the label and what follows", () => {
+    const render = arcs.buildCoreArcPrompt(state());
+    expect(render).toContain(`- ${SENTENCE}`);
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text)).toEqual([]);
+    expect(text).toContain(`### Blake and the Valet in the director's notes\n${DERIVED_LABELS.narrativeTensions}\n\n-\n`);
+    const after = render.indexOf(`- ${SENTENCE}`) + `- ${SENTENCE}`.length;
+    const relabelled = `${render.slice(0, after)}\n\nRemember who killed Marcus.${render.slice(after)}`;
+    expect(findRemovedPhrases(instructionText(relabelled))).toEqual(['who killed Marcus']);
+  });
+
+  describe('fails loud on a shape it cannot read', () => {
+    it('excerpts in the outline writer with no next document or photos line after them', () => {
+      expect(() => instructionText('- ale003: memory\n  Excerpts: "the murder victim"\nSomething else.')).toThrow(/Excerpts:/);
+    });
+
+    it('an EXCERPTS: list with no DOCUMENTS: line after it', () => {
+      expect(() => instructionText('EXCERPTS:\n- "the murder victim" (from ale003)\n\nARC PHOTOS:')).toThrow(/DOCUMENTS:/);
+    });
+
+    it('a photo analysis whose JSON never closes', () => {
+      expect(() => instructionText('1. hero.jpg: Alex\n   Photo analysis: {\n     "visualContent": "x"\n')).toThrow(/photo analysis/);
+    });
+  });
+});
