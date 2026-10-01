@@ -797,9 +797,10 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('INVESTIGATION ROSTER (3 players)');
       expect(userPrompt).toContain('Alex Reeves');
       expect(userPrompt).toContain('Vic Kingsley');
-      // Phase 3 (3.2): the agency rule rewritten (Blake acts in the room) and the head count.
+      // Phase 3 (3.2): the agency rule rewritten (Blake acts in the room) and the head
+      // count in T10's words (fix 3.2b, finding 7).
       expect(userPrompt).toContain('Only the 3 players above were at the investigation');
-      expect(userPrompt).toContain('the number is 3');
+      expect(userPrompt).toContain('When the article counts the people at the investigation, it counts these 3 players.');
     });
 
     it('should omit SESSION_FACTS when sessionFacts is null', async () => {
@@ -1696,10 +1697,14 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       const { userPrompt } = which === 'outline' ? await outlineOf(journalist()) : await articleOf(journalist());
       const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
       expect(facts).toContain('Only the 2 players above were at the investigation');
-      expect(facts).toMatch(/Every other character, Marcus included, appears only through the memories and documents/);
+      // Fix 3.2b (finding 7): the line no longer says Marcus and every other character
+      // reach the article only through memories and then puts Blake in the room, and
+      // the count is of the players at the investigation (T10), not of the room.
+      expect(facts).toContain('Every other character except Blake appears only through the memories and documents.');
       expect(facts).toMatch(/Blake was in the room too/);
       expect(facts).toMatch(/Nova is not one of the players/);
-      expect(facts).toMatch(/how many people were in the room, the number is 2/);
+      expect(facts).toContain('When the article counts the people at the investigation, it counts these 2 players.');
+      expect(facts).not.toMatch(/Marcus included|how many people were in the room|the number is/);
       expect(facts).not.toMatch(/NEVER give non-roster characters/);
     });
 

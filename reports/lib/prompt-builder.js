@@ -610,7 +610,10 @@ All accounts together: $${total.toLocaleString('en-US')}. That is what NeurAI's 
    * players were at the investigation, every other character reaches the article
    * through the memories and documents, Blake acts in the room, and Nova is not one
    * of the players. The head count is the roster's (T10), a guest reporter who
-   * plays a character included, since that character is on the roster.
+   * plays a character included, since that character is on the roster. Fix 3.2b
+   * (finding 7): "every other character except Blake", so the line does not put
+   * Blake among the absent and then in the room, and the count is in T10's words,
+   * of the people at the investigation (Blake, and Nova on site, were in the room).
    *
    * @param {Object|null} sessionFacts - ai-nodes.js buildSessionFacts
    * @returns {string} the XML section, or '' without facts
@@ -625,7 +628,7 @@ ${sessionFacts.roster.join('\n')}
 
 ${renderSessionFactsVerdict(sessionFacts)}
 
-Only the ${n} players above were at the investigation. Every other character, Marcus included, appears only through the memories and documents. Blake was in the room too, working it for NeurAI, and acts and speaks there as the record shows. Nova is not one of the players. When the article says how many people were in the room, the number is ${n}.
+Only the ${n} players above were at the investigation. Every other character except Blake appears only through the memories and documents. Blake was in the room too, working it for NeurAI, and acts and speaks there as the record shows. Nova is not one of the players. When the article counts the people at the investigation, it counts these ${n} players.
 </SESSION_FACTS>`;
   }
 

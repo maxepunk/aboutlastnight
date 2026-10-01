@@ -114,10 +114,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   arcs-journalist only (10881 -> 10347).
  * - Integration of 3.3 onto 3.2: arcs-journalist is 3.3’s own render (10347); 3.2 leaves the
  *   arc writer unchanged, and the other five pins are 3.2’s.
+ * - Phase 3 (fix 3.2b, finding 7), SESSION_FACTS's agency line: "Every other character
+ *   except Blake appears only through the memories and documents", and the head count
+ *   in T10's words, "When the article counts the people at the investigation, it
+ *   counts these N players." The journalist outline and article writers (8712 -> 8718,
+ *   27149 -> 27155); the detective keeps its own lines.
  */
 const PINNED = {
-  'outline-journalist': ['f217ef6bf5ca8c32eb626e3d0c3dff56ca5aa2456f6f85a99d26527067bcef5c', 8712],
-  'article-journalist': ['b204e2a94219bd5557fa6eb0c9d5d66cf41bbff1a7f4f52b1ea883700716e57d', 27149],
+  'outline-journalist': ['d7bcdf50d9d43f311d4069e87170e70c7c9167f41631f5d9a84bbd17b0cb481b', 8718],
+  'article-journalist': ['7c308f56061c5871a136673923fe2ef33bcc3825289cf71c27f451ce702cf5eb', 27155],
   'arcs-journalist': ['24af24d2959a487bb4af99ca2381b773d7fec4d790ce079deabfd7a2abbb9b60', 10347],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
