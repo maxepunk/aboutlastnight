@@ -117,6 +117,20 @@ describe('surfaceContradictions', () => {
     ]);
   });
 
+  test('a CRLF paragraph break ends a sentence and an open quote, as an LF one does (3.6 fix batch, item 6)', () => {
+    // Notes pasted from Windows carry CRLF. With one unclosed quotation mark, the
+    // rest of the notes used to be one "sentence", and all of it printed in the
+    // tension when it named Blake.
+    const { proseSentences } = require('../workflow/nodes/contradiction-nodes')._testing;
+    const lf = 'Vic said "wait.\n\nBlake left. Mel stayed.\n\nThe Valet returned.';
+    const crlf = lf.replace(/\n/g, '\r\n');
+    const sentences = ['Vic said "wait.', 'Blake left.', 'Mel stayed.', 'The Valet returned.'];
+    expect(proseSentences(lf)).toEqual(sentences);
+    expect(proseSentences(crlf)).toEqual(sentences);
+    // A CRLF line wrap inside a sentence still keeps it whole.
+    expect(proseSentences('Blake told Vic that the room\r\nwas running out of time.')).toEqual(['Blake told Vic that the room\r\nwas running out of time.']);
+  });
+
   test('handles missing state fields gracefully', () => {
     const state = { narrativeTensions: null };
     const result = surfaceContradictions(state);

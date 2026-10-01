@@ -19,11 +19,11 @@ const { traceNode } = require('../../observability');
 /**
  * The director's prose as sentences, each a verbatim piece of the notes. A sentence
  * ends at whitespace after ".", "!" or "?" (or after one of them and a closing
- * quotation mark) outside the director's quotation marks, and at a paragraph break,
- * which also closes a quotation left open. A full stop inside a quoted line does not
- * end the director's sentence: on 092626 `Blake to Remi: "Remi, I hope that we can
- * work together. I may have acquired something for you."` used to be cut after
- * "together.".
+ * quotation mark) outside the director's quotation marks, and at a paragraph break
+ * (a blank line, LF or CRLF), which also closes a quotation left open. A full stop
+ * inside a quoted line does not end the director's sentence: on 092626 `Blake to
+ * Remi: "Remi, I hope that we can work together. I may have acquired something for
+ * you."` used to be cut after "together.".
  *
  * @param {string} rawProse
  * @returns {string[]}
@@ -35,7 +35,8 @@ function proseSentences(rawProse) {
   let inQuote = false;
   for (let i = 0; i < prose.length; i++) {
     const ch = prose[i];
-    if (ch === '\n' && /^[ \t]*\n/.test(prose.slice(i + 1))) {
+    // A blank line, with LF or CRLF line endings (notes pasted from Windows).
+    if (ch === '\n' && /^[ \t\r]*\n/.test(prose.slice(i + 1))) {
       sentences.push(prose.slice(start, i));
       start = i + 1;
       inQuote = false;
