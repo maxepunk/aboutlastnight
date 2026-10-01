@@ -38,11 +38,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   the inline evidence-card block carries content. Both article writers.
  * - Final fix wave item 6: the journalist voiceQuestion's "events Nova observed"
  *   defers to the reporting mode. The journalist article writer only.
+ * - Phase 3, task 3.1: the journalist's reporting-mode block is the rule set's mode
+ *   file, read here from the stub root (fixtures/rules/mode-remote.md, "STUB
+ *   mode-remote"), in place of the one-line remote string. One line changes in each
+ *   journalist writer's system prompt; the detective keeps its block.
  */
 const PINNED = {
-  'outline-journalist': ['297f99ce92b11185dee3021c5761111fc01d92ab0cc915eeb824c110316704bd', 14628],
-  'article-journalist': ['afb7152db8b2e0bb2da1cfc85704a7b0d697dffde3444851a69a83ee89889469', 43537],
-  'arcs-journalist': ['33a281d15bc0a5bdc9189a5328fc0360aaccc533f66d5e95b83f776cda4716a0', 14301],
+  'outline-journalist': ['bc7386eca7dd39c97c4ec87004a3ba1bcf3c21efc265e546fb0b9541bb7e549c', 14307],
+  'article-journalist': ['8511e0ba1704de1af53d3b347aa7d6fa15005e59e8a1fba17f8643f7793b7f78', 43216],
+  'arcs-journalist': ['351b4d7a32d00569fda7e570afe0aaf7391f366792f0fac9b6627c5cb4c45e1c', 13980],
   'outline-detective': ['20a166c6d64dd82a4d76da9d278a258ecac12b9e785402cece3dca1431cbcef6', 8226],
   'article-detective': ['ddaf75cf913fac7dd89ae7d2b5939071b97e54d64f8c5d17dcd541c72f310506', 29096],
   'arcs-detective': ['604b12053d9604c7baea83fdc2c6d289274b63e01532497cc3781745d007fe21', 14247]

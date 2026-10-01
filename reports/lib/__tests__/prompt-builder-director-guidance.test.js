@@ -115,29 +115,34 @@ describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
   // existed at character-voice.md lines 89-94 but lost to the on-site persona
   // stated earlier in the same file and to hardConstraints' own
   // `use "We decided"` line. One mode block, stated once, wins.
+  //
+  // Phase 3 (3.1): the journalist's block is the rule set's mode file (T8's mode
+  // part). "You did not vote" left the block: it is T8's mode-independent part, in
+  // the truth rules every writer reads from wave 2 on. The detective keeps the old
+  // block, so REMOTE below is the detective's.
+  const { loadModeBlock } = require('../rule-set');
+  const JOURNALIST_REMOTE = loadModeBlock('remote');
+  const JOURNALIST_ONSITE = loadModeBlock('on-site');
   const REMOTE = 'You were not in the room';
-  const ONSITE = 'You watched the investigation from inside the room';
 
-  it('remote: says you were not in the room and never voted', async () => {
+  it('remote: carries the remote block and not the on-site one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
       .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
-    expect(systemPrompt).toContain(REMOTE);
-    expect(systemPrompt).toMatch(/you did not vote/i);
-    expect(systemPrompt).not.toContain(ONSITE);
+    expect(systemPrompt).toContain(JOURNALIST_REMOTE);
+    expect(systemPrompt).not.toContain(JOURNALIST_ONSITE);
   });
 
-  it('on-site: says you watched from the room and still never voted', async () => {
+  it('on-site: carries the on-site block and not the remote one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'on-site' })
       .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
-    expect(systemPrompt).toContain(ONSITE);
-    expect(systemPrompt).toMatch(/you did not vote/i);
-    expect(systemPrompt).not.toContain(REMOTE);
+    expect(systemPrompt).toContain(JOURNALIST_ONSITE);
+    expect(systemPrompt).not.toContain(JOURNALIST_REMOTE);
   });
 
   it('defaults to on-site when the session config says nothing', async () => {
     const { systemPrompt } = await makeBuilder('journalist', {})
       .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
-    expect(systemPrompt).toContain(ONSITE);
+    expect(systemPrompt).toContain(JOURNALIST_ONSITE);
   });
 
   it('no longer tells the reporter to write "We decided"', async () => {

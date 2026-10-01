@@ -97,16 +97,21 @@ function buildArcStandingNotes(state) {
  * those summaries are what the outline and then the article are built from. The
  * block goes where the article's goes: immediately after the identity line.
  *
+ * Phase 3 (3.1): the block depends on the theme (the journalist's comes from the rule
+ * set's mode files, the detective keeps its own), so each composer takes it, with
+ * this file's default.
+ *
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
+ * @param {string} [theme='journalist'] - state.theme
  * @returns {string}
  */
-function coreArcSystemPrompt(sessionConfig) {
-  return withReportingModeBlock(CORE_ARC_SYSTEM_PROMPT, sessionConfig);
+function coreArcSystemPrompt(sessionConfig, theme = 'journalist') {
+  return withReportingModeBlock(CORE_ARC_SYSTEM_PROMPT, sessionConfig, theme);
 }
 
 /** @see coreArcSystemPrompt */
-function interweavingSystemPrompt(sessionConfig) {
-  return withReportingModeBlock(INTERWEAVING_SYSTEM_PROMPT, sessionConfig);
+function interweavingSystemPrompt(sessionConfig, theme = 'journalist') {
+  return withReportingModeBlock(INTERWEAVING_SYSTEM_PROMPT, sessionConfig, theme);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -589,7 +594,7 @@ async function generateCoreArcs(state, config) {
   try {
     const result = await sdkClient({
       prompt,
-      systemPrompt: coreArcSystemPrompt(state.sessionConfig),
+      systemPrompt: coreArcSystemPrompt(state.sessionConfig, state.theme),
       model: 'opus',
       jsonSchema: CORE_ARC_SCHEMA,
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
@@ -646,7 +651,8 @@ async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, e
   try {
     const result = await sdkClient({
       prompt,
-      systemPrompt: interweavingSystemPrompt(sessionConfig),
+      // No state here: the graph config carries the session's theme (createGraphAndConfig).
+      systemPrompt: interweavingSystemPrompt(sessionConfig, config?.configurable?.theme),
       model: 'opus',
       disableTools: true,          // H21: pure analysis over the arcs in the prompt
       jsonSchema: INTERWEAVING_SCHEMA,
@@ -1020,7 +1026,7 @@ async function reviseArcs(state, config) {
     const revisionPrompt = buildArcRevisionPrompt(state, contextSection, previousOutputSection);
     const result = await sdkClient({
       prompt: revisionPrompt,
-      systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback, state.sessionConfig),
+      systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback, state.sessionConfig, state.theme),
       model: 'opus',
       jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
       disableTools: true,        // Pure analytical task — no tool access needed
@@ -1185,11 +1191,12 @@ DO:
  *
  * @param {boolean} hasHumanFeedback - Whether revision is driven by human rejection
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
+ * @param {string} [theme] - state.theme; coreArcSystemPrompt's default when absent
  * @returns {string} System prompt
  */
-function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined) {
+function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined, theme = undefined) {
   const rules = hasHumanFeedback ? ARC_REVISION_RULES.human : ARC_REVISION_RULES.evaluator;
-  return `${coreArcSystemPrompt(sessionConfig)}\n\n${rules}`;
+  return `${coreArcSystemPrompt(sessionConfig, theme)}\n\n${rules}`;
 }
 
 /**

@@ -75,14 +75,22 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
 
   it('the arc system prompts state the reporting mode of the session (brief 1.5)', () => {
     // The arc writer was never told where the reporter was, so a remote session's
-    // arc summaries said "I watched". The block is the same constant the article
-    // system prompt carries, in the same position: after the identity line.
-    const { REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+    // arc summaries said "I watched". The block is the same one the article system
+    // prompt carries, in the same position: after the identity line. Phase 3 (3.1):
+    // the journalist's is the rule set's mode file; the detective keeps the old block.
+    const { loadModeBlock } = require('../rule-set');
+    const { DETECTIVE_REPORTING_MODE_BLOCKS } = require('../prompt-builder');
     const remote = { reportingMode: 'remote' };
 
-    expect(arcModule._testing.coreArcSystemPrompt(remote)).toContain(REPORTING_MODE_BLOCKS.remote);
-    expect(arcModule._testing.interweavingSystemPrompt(remote)).toContain(REPORTING_MODE_BLOCKS.remote);
-    expect(arcModule._testing.coreArcSystemPrompt({})).toContain(REPORTING_MODE_BLOCKS['on-site']);
+    expect(arcModule._testing.coreArcSystemPrompt(remote, 'journalist')).toContain(loadModeBlock('remote'));
+    expect(arcModule._testing.interweavingSystemPrompt(remote, 'journalist')).toContain(loadModeBlock('remote'));
+    expect(arcModule._testing.coreArcSystemPrompt({}, 'journalist')).toContain(loadModeBlock('on-site'));
+    expect(arcModule._testing.getArcRevisionSystemPrompt(true, remote, 'journalist')).toContain(loadModeBlock('remote'));
+    // No theme: the arc file's own default, the journalist.
+    expect(arcModule._testing.coreArcSystemPrompt(remote)).toContain(loadModeBlock('remote'));
+    expect(arcModule._testing.coreArcSystemPrompt(remote, 'detective')).toContain(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
+    expect(arcModule._testing.interweavingSystemPrompt(remote, 'detective')).toContain(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
+    expect(arcModule._testing.getArcRevisionSystemPrompt(false, remote, 'detective')).toContain(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
   });
 
   it('no arc system prompt hands the writer a first-person presence marker (integrator ruling, phase 1)', () => {

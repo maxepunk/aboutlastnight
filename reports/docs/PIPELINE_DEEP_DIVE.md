@@ -159,7 +159,7 @@ Nova's article is NOT just a factual record. It reflects:
 
 ### Layer 3: CONTEXT (Director Notes = the Director's Observations)
 
-**Game Reality**: Director watched everything - player dynamics, conversations. Where Nova was is set by the session's reporting mode block (`REPORTING_MODE_BLOCKS` in `lib/prompt-builder.js`): on site she watched the investigation from the room; remote it reached her as tips she attributes. Either way she doesn't have the extracted memories.
+**Game Reality**: Director watched everything - player dynamics, conversations. Where Nova was is set by the session's reporting mode block (the journalist's mode file, `references/rules/mode-on-site.md` or `mode-remote.md`, through `buildReportingModeBlock` in `lib/prompt-builder.js`): on site Nova saw and heard the investigation; remote, the room's events reached Nova from people in the room, shown by attribution. Either way exposed memories were turned in to Nova directly, anonymous unless the evidence log names someone, and Nova never has a buried memory's content.
 
 **Director Provides**:
 - `playerFocus`: What players actually investigated
@@ -443,7 +443,7 @@ SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
 **Node**: `generateContentBundle` (in `lib/workflow/nodes/ai-nodes.js`)
 
 **Nova's Voice** (first-person participatory journalism):
-- First person placed the way the session's reporting mode block allows (on site: what she watched; remote: tips she attributes, with the absence stated at most once), not "The investigation revealed..."
+- First person placed the way the session's reporting mode block allows (on site: what Nova saw and heard; remote: what people in the room reported, by attribution, with the absence stated at most once), not "The investigation revealed..."
 - A named, specific source, not "Sources indicate..."
 - Hunter S. Thompson meets Kara Swisher - gonzo tech journalism
 

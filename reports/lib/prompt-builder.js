@@ -12,6 +12,7 @@ const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
 const { renderSessionFactsVerdict, renderPhotoEntry } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 const { getThemeNPCEntries } = require('./theme-config');
+const { loadModeBlock } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
 /**
@@ -281,16 +282,23 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * be stated at most once. 092026's remote article announced it five times ("I was
  * not there.", "I was not in that room.", "This is the story they told me.") and
  * the article evaluation praised it as voice. The prompt lines that restated where
- * the reporter was now defer to this block instead. Keep each block ONE line: the
- * position test finds it by line.
+ * the reporter was now defer to this block instead.
+ *
+ * Phase 3 (task 3.1): these two strings are the DETECTIVE's blocks only, kept as they
+ * were while the detective is parked (spec D13). The journalist's block is the rule
+ * set's mode file, `references/rules/mode-on-site.md` or `mode-remote.md`, read
+ * through lib/rule-set.js: T8's mode part, Nova's position as the uninterested
+ * third party and what Nova could witness. Its remote file sends exposures to Nova
+ * by turn-in, never as tips; "never votes" moved to the truth rules (T8's shared
+ * part) and the party to T7.
  */
-const REPORTING_MODE_BLOCKS = {
+const DETECTIVE_REPORTING_MODE_BLOCKS = {
   'on-site': 'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.',
   remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there: show where each fact came from by attributing it to the people who told you. State your absence at most once in the whole piece; the attribution shows it everywhere else. You did not vote and you were not at the party.'
 };
 
 /**
- * The block for one session, defaulting to on-site.
+ * The block for one session and theme, defaulting to on-site.
  *
  * The single source of the wording for all eight system prompts that carry it:
  * the article's (PromptBuilder._buildReportingModeBlock) and the article rework's,
@@ -300,12 +308,22 @@ const REPORTING_MODE_BLOCKS = {
  * phase 2 (2.3) every rework system prompt opens with its writer's, so each rework
  * carries the block its writer does, once, in the writer's position.
  *
+ * The journalist reads the rule set's mode file (loadModeBlock); the detective keeps
+ * DETECTIVE_REPORTING_MODE_BLOCKS. The theme is required: a missing one would
+ * silently give one theme the other's block.
+ *
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
+ * @param {'journalist'|'detective'} theme
  * @returns {string}
+ * @throws {Error} on any other theme, a missing one included
  */
-function buildReportingModeBlock(sessionConfig) {
+function buildReportingModeBlock(sessionConfig, theme) {
   const mode = sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
-  return REPORTING_MODE_BLOCKS[mode];
+  if (theme === 'journalist') return loadModeBlock(mode);
+  if (theme === 'detective') return DETECTIVE_REPORTING_MODE_BLOCKS[mode];
+  throw new Error(
+    `buildReportingModeBlock: unknown theme "${theme}"; the theme is required ('journalist' or 'detective')`
+  );
 }
 
 /**
@@ -319,13 +337,14 @@ function buildReportingModeBlock(sessionConfig) {
  *
  * @param {string} systemPrompt - a system prompt whose FIRST LINE is its identity
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
+ * @param {'journalist'|'detective'} theme - see buildReportingModeBlock
  * @returns {string}
  */
-function withReportingModeBlock(systemPrompt, sessionConfig) {
+function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
   const text = String(systemPrompt || '');
   const identityLine = text.split('\n', 1)[0];
   const rest = text.slice(identityLine.length).replace(/^\n+/, '');
-  return `${identityLine}\n\n${buildReportingModeBlock(sessionConfig)}\n\n${rest}`;
+  return `${identityLine}\n\n${buildReportingModeBlock(sessionConfig, theme)}\n\n${rest}`;
 }
 
 // Theme-specific system prompt framing
@@ -442,7 +461,7 @@ class PromptBuilder {
    * @returns {string}
    */
   _buildReportingModeBlock() {
-    return buildReportingModeBlock(this.sessionConfig);
+    return buildReportingModeBlock(this.sessionConfig, this.themeName);
   }
 
   /**
@@ -1755,7 +1774,7 @@ module.exports = {
   // generation prompt introduce the advisory list in the same words (brief 1.3).
   SHOULD_CONSIDER_PREAMBLE,
   filterGateNotes,
-  REPORTING_MODE_BLOCKS,
+  DETECTIVE_REPORTING_MODE_BLOCKS,
   buildReportingModeBlock,
   // Consumed by the system prompts assembled outside PromptBuilder (the two arc
   // calls, and through the arc writer's the two arc rework branches), so the
