@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * scripts/render-prompts.js — render the four director-facing prompts from a thread's
- * PERSISTED state, with NO model calls (spec 2026-09-19 §7.3), or compare two renders.
+ * scripts/render-prompts.js — render the pipeline's prompts from a thread's PERSISTED
+ * state, with NO model calls (spec 2026-09-19 §7.3), or compare two renders.
  *
- *   node scripts/render-prompts.js --session 0919269 --db <copy.sqlite> --out <dir> [--repo <path>]
+ *   node scripts/render-prompts.js --session 0919269 --db <copy.sqlite> --out <dir> [--repo <path>] [--theme <journalist|detective>]
  *   node scripts/render-prompts.js --compare <dirA> <dirB>
+ *   node scripts/render-prompts.js --sections <dirA> <dirB>
  *
  * --repo points at the tree whose lib/ renders (default: this repo). Run once with the
  * `main` worktree and once with the branch, then --compare: the only permitted
@@ -19,10 +20,60 @@
  * Phase 2 (2.3): the arc writer and the arc reworker (a send back) are rendered too,
  * as arc-generation.txt and arc-revision.txt, for the plain prompt diff; --compare
  * reads only the four files above.
+ *
+ * Phase 3 (brief 3.0): every call the phase rewires is rendered, ten files in all:
+ *   outline-generation.txt, outline-revision.txt, article-generation.txt,
+ *   article-revision.txt, arc-generation.txt, arc-revision.txt  (as above)
+ *   interweaving.txt   the interweaving call (call 2 of the arc analysis), from the
+ *                      stored arcs, the session roster and the evidence bundle, as
+ *                      enrichWithInterweaving builds it
+ *   judge-arc.txt, judge-outline.txt, judge-article.txt
+ *                      the three judges, from the thread's state, as createEvaluator
+ *                      builds them; the article judge's user prompt carries the fact
+ *                      check run on the stored bundle (factCheckContentBundle)
+ * Every builder is awaited. The run fails (exit 1, naming the file) when a render's
+ * system or user prompt is empty, when it contains "[object Promise]", or when no line
+ * opens with one of the file's markers in REQUIRED_MARKERS below; a file in that table
+ * that is not rendered fails too. A tree that lacks a builder fails (exit 2, naming it).
+ *
+ * --theme overrides the thread's theme for every render, so the detective prompts
+ * can be rendered from a journalist thread and diffed against a baseline.
+ *
+ * --sections is a report for the integrator, not a check: for each .txt file present in both
+ * directories, the file is split into its top-level sections (an XML-style tag that
+ * opens a line, through its matching close; the text between sections is a section
+ * of its own; the SYSTEM and USER parts are split apart) and the report prints, per
+ * file, which sections differ, which exist in only one directory, and each section's
+ * size in both (bytes). An unclosed tag is reported. It always exits 0. The splitter
+ * is scripts/lib/prompt-sections.js.
  */
 'use strict';
 const path = require('path');
 const fs = require('fs');
+const { compareSections, renderProblems } = require('./lib/prompt-sections');
+
+/**
+ * The markers each render must carry: for each, a line that opens with it. Each is
+ * one that every render of that call carries at bad9781, for both themes, on 092026
+ * and 092626, whatever the session's data: every call prints the record view, and
+ * the six writer renders print the fixed gate notes inside <DIRECTOR_GUIDANCE>. A
+ * render without one is missing its frame, and an absence scan over it would pass
+ * for nothing.
+ */
+const REQUIRED_MARKERS = {
+  'outline-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'outline-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'article-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'article-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'arc-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'arc-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'interweaving.txt': ['<RECORD>'],
+  'judge-arc.txt': ['<RECORD>'],
+  'judge-outline.txt': ['<RECORD>'],
+  'judge-article.txt': ['<RECORD>']
+};
+
+const THEMES = ['journalist', 'detective'];
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -41,6 +92,9 @@ const PRODUCTION_DB = path.resolve(path.join(__dirname, '..', 'data', 'checkpoin
 const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-generation.txt', 'article-revision.txt'];
 /** Rendered as well, but not compared (phase 2, 2.3): the arc writer and its reworker. */
 const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt'];
+/** Rendered as well, but not compared (phase 3, 3.0): the interweaving call and the judges. */
+const INTERWEAVING_FILE = 'interweaving.txt';
+const JUDGE_FILES = [['judge-arc.txt', 'arcs'], ['judge-outline.txt', 'outline'], ['judge-article.txt', 'article']];
 const FIXED_FEEDBACK = 'RENDER-DIFF FIXED FEEDBACK: tighten the second section.';
 /** The round a fixed send back opens, for the rework banner (2.3; an older tree ignores it). */
 const FIXED_ROUND = 2;
@@ -57,7 +111,21 @@ if (args.compare) {
   const [dirA, dirB] = typeof args.compare === 'string' ? [args.compare, args._[0]] : [args._[0], args._[1]];
   if (!dirA || !dirB) { console.error('usage: render-prompts.js --compare <dirA> <dirB>'); process.exit(2); }
   compare(dirA, dirB);
-} else { render().catch((e) => { console.error(e); process.exit(2); }); }
+} else if (args.sections) {
+  // Same argument shapes as --compare.
+  const [dirA, dirB] = typeof args.sections === 'string' ? [args.sections, args._[0]] : [args._[0], args._[1]];
+  if (!dirA || !dirB || ![dirA, dirB].every((d) => fs.existsSync(d) && fs.statSync(d).isDirectory())) {
+    console.error('usage: render-prompts.js --sections <dirA> <dirB> (two existing directories)');
+    process.exit(2);
+  }
+  sections(dirA, dirB);
+} else {
+  if (args.theme !== undefined && !THEMES.includes(args.theme)) {
+    console.error(`usage: --theme takes one of ${THEMES.join(', ')}`);
+    process.exit(2);
+  }
+  render().catch((e) => { console.error(e); process.exit(2); });
+}
 
 async function loadState(dbPath, threadId) {
   if (path.resolve(dbPath) === PRODUCTION_DB) {
@@ -92,6 +160,16 @@ async function render() {
     buildOutlineRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
     buildSessionFacts, buildAvailablePhotos } } = req('lib/workflow/nodes/ai-nodes.js');
   const { _testing: arcNodes } = req('lib/workflow/nodes/arc-specialist-nodes.js');
+  // Brief 3.0: the judges, and the fact check the article judge reads, as createEvaluator uses them.
+  const { _testing: evalNodes } = req('lib/workflow/nodes/evaluator-nodes.js');
+  const { factCheckContentBundle } = req('lib/content-bundle-fact-check.js');
+  const { getThemeNPCPronouns } = req('lib/theme-config.js');
+  requireExports('arc-specialist-nodes.js _testing', arcNodes, ['coreArcSystemPrompt', 'buildCoreArcPrompt',
+    'getArcRevisionSystemPrompt', 'buildArcRevisionPrompt', 'interweavingSystemPrompt', 'buildInterweavingPrompt']);
+  requireExports('evaluator-nodes.js _testing', evalNodes, ['buildEvaluationSystemPrompt', 'buildEvaluationUserPrompt',
+    'getOutlineCriteria', 'getArticleCriteria', 'QUALITY_CRITERIA']);
+  requireExports('content-bundle-fact-check.js', { factCheckContentBundle }, ['factCheckContentBundle']);
+  requireExports('theme-config.js', { getThemeNPCPronouns }, ['getThemeNPCPronouns']);
   let diffMod = null;
   // Only a MISSING module is expected (main has no hand-edit module). Anything else -
   // a syntax error, a throwing dependency - would make the guard pass vacuously (M4).
@@ -99,6 +177,9 @@ async function render() {
   catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
 
   const state = await loadState(dbPath, sessionId);
+  // --theme renders every call for that theme, whatever the thread ran as: every
+  // builder below reads the theme from state.theme or from this one value.
+  if (args.theme) state.theme = args.theme;
   const theme = state.theme || 'journalist';
   const promptBuilder = createPromptBuilder({
     theme, sessionConfig: state.sessionConfig || {},
@@ -112,7 +193,7 @@ async function render() {
   // nodes; the inline copies below are for a tree from before they existed (main).
   const roster = (state.sessionConfig && state.sessionConfig.roster) || [];
   const canonical = state.canonicalCharacters || {};
-  const sessionFacts = buildSessionFacts ? buildSessionFacts(state) : (roster.length > 0 ? {
+  const sessionFacts = buildSessionFacts ? await buildSessionFacts(state) : (roster.length > 0 ? {
     roster: roster.map((p) => { const n = p.name || p; return canonical[n] || n; }),
     accusation: (state.sessionConfig && state.sessionConfig.accusation && state.sessionConfig.accusation.accused || []).join(' and ') || 'Unknown',
     playerCount: roster.length
@@ -125,7 +206,7 @@ async function render() {
   const analysisByName = new Map(((state.photoAnalyses && state.photoAnalyses.analyses) || [])
     .filter((a) => a && a.filename)
     .map((a) => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a]));
-  const availablePhotos = buildAvailablePhotos ? buildAvailablePhotos(state, heroImage, whiteboard) : (state.sessionPhotos || [])
+  const availablePhotos = buildAvailablePhotos ? await buildAvailablePhotos(state, heroImage, whiteboard) : (state.sessionPhotos || [])
     .filter((p) => nameOf(p) !== heroImage && (!whiteboard || nameOf(p) !== whiteboard))
     .map((p, i) => {
       const a = analysisByName.get(String(nameOf(p) || `photo-${i}.jpg`).toLowerCase()) || {};
@@ -141,8 +222,14 @@ async function render() {
   const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
   const guidance = state._outlineGuidance || null;
 
-  const write = (name, systemPrompt, userPrompt) =>
+  // Every render is written, then checked (brief 3.0); the run fails after all are written.
+  const written = [];
+  const problems = [];
+  const write = (name, systemPrompt, userPrompt) => {
     fs.writeFileSync(path.join(outDir, name), `===== SYSTEM =====\n${systemPrompt}\n\n===== USER =====\n${userPrompt}\n`);
+    written.push(name);
+    problems.push(...renderProblems(name, systemPrompt, userPrompt, REQUIRED_MARKERS[name]));
+  };
 
   // 1. outline generation
   const og = await promptBuilder.buildOutlinePrompt(arcAnalysis, state.selectedArcs || [], heroImage, availablePhotos,
@@ -155,15 +242,15 @@ async function render() {
   const outline = state.outline || {};
   const editedOutline = JSON.parse(JSON.stringify(outline));
   if (editedOutline.lede) editedOutline.lede.hook = String(editedOutline.lede.hook || '') + ' [RENDER-DIFF EDIT]';
-  const outlineDiff = diffMod ? diffMod.diffOutline(outline, editedOutline) : null;
-  const orc = buildRevisionContext({ phase: 'outline', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
+  const outlineDiff = diffMod ? await diffMod.diffOutline(outline, editedOutline) : null;
+  const orc = await buildRevisionContext({ phase: 'outline', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
     previousOutput: editedOutline, humanFeedback: FIXED_FEEDBACK, handEdits: outlineDiff });
   const orPrompt = await buildOutlineRevisionPrompt({ ...state, _outlineGuidance: guidance }, orc.contextSection, orc.previousOutputSection, promptBuilder, FIXED_NOTES);
   // Brief 2.3: a tree whose reworker is built from its writer composes the rework
   // system prompt from the writer's; an older tree took the theme.
   const orSystem = buildOutlineRevisionSystemPrompt
     ? await buildOutlineRevisionSystemPrompt(promptBuilder)
-    : getOutlineRevisionSystemPrompt(theme, state.sessionConfig || {});
+    : await getOutlineRevisionSystemPrompt(theme, state.sessionConfig || {});
   write(FILES[1], orSystem, orPrompt);
 
   // 3. article generation
@@ -177,31 +264,72 @@ async function render() {
   const bundle = state.contentBundle || {};
   const editedBundle = JSON.parse(JSON.stringify(bundle));
   if (editedBundle.headline) editedBundle.headline.main = String(editedBundle.headline.main || '') + ' [RENDER-DIFF EDIT]';
-  const bundleDiff = diffMod ? diffMod.diffBundle(bundle, editedBundle) : null;
-  const arc = buildRevisionContext({ phase: 'article', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
+  const bundleDiff = diffMod ? await diffMod.diffBundle(bundle, editedBundle) : null;
+  const arc = await buildRevisionContext({ phase: 'article', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
     previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: bundleDiff });
   const arPrompt = await buildArticleRevisionPrompt({ ...state, _outlineGuidance: guidance }, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES);
   const arSystem = buildArticleRevisionSystemPrompt
     ? await buildArticleRevisionSystemPrompt(promptBuilder, theme)
-    : getArticleRevisionSystemPrompt(theme, state.sessionConfig || {});
+    : await getArticleRevisionSystemPrompt(theme, state.sessionConfig || {});
   write(FILES[3], arSystem, arPrompt);
 
-  // 5. arc generation (call 1) and 6. arc revision (a send back), when the tree
-  // exports them. Rendered for the plain prompt diff only; --compare reads FILES.
-  // The fixed notes stand in for the director's, the fixed feedback for the note the
-  // send back acts on, and the persisted arcs for the previous version.
-  const rendered = [...FILES];
-  if (arcNodes && arcNodes.buildCoreArcPrompt && arcNodes.buildArcRevisionPrompt) {
-    const arcState = { ...state, directorGateNotes: FIXED_NOTES };
-    write(ARC_FILES[0], arcNodes.coreArcSystemPrompt(state.sessionConfig || {}), arcNodes.buildCoreArcPrompt(arcState));
-    const crc = buildRevisionContext({ phase: 'arcs', revisionCount: 0, round: FIXED_ROUND, validationResults: state.validationResults || null,
-      previousOutput: state.narrativeArcs || [], humanFeedback: FIXED_FEEDBACK });
-    write(ARC_FILES[1], arcNodes.getArcRevisionSystemPrompt(true, state.sessionConfig || {}),
-      arcNodes.buildArcRevisionPrompt({ ...arcState, _arcFeedback: FIXED_FEEDBACK }, crc.contextSection, crc.previousOutputSection));
-    rendered.push(...ARC_FILES);
+  // 5. arc generation (call 1) and 6. arc revision (a send back). Rendered for the
+  // plain prompt diff only; --compare reads FILES. The fixed notes stand in for the
+  // director's, the fixed feedback for the note the send back acts on, and the
+  // persisted arcs for the previous version.
+  const arcState = { ...state, directorGateNotes: FIXED_NOTES };
+  write(ARC_FILES[0], await arcNodes.coreArcSystemPrompt(state.sessionConfig || {}), await arcNodes.buildCoreArcPrompt(arcState));
+  const crc = await buildRevisionContext({ phase: 'arcs', revisionCount: 0, round: FIXED_ROUND, validationResults: state.validationResults || null,
+    previousOutput: state.narrativeArcs || [], humanFeedback: FIXED_FEEDBACK });
+  write(ARC_FILES[1], await arcNodes.getArcRevisionSystemPrompt(true, state.sessionConfig || {}),
+    await arcNodes.buildArcRevisionPrompt({ ...arcState, _arcFeedback: FIXED_FEEDBACK }, crc.contextSection, crc.previousOutputSection));
+
+  // 7. the interweaving call, as enrichWithInterweaving builds it: the stored arcs
+  // stand in for call 1's (the call reads only their id, title, summary, source and
+  // placements), with the session roster and the evidence bundle.
+  write(INTERWEAVING_FILE, await arcNodes.interweavingSystemPrompt(state.sessionConfig),
+    await arcNodes.buildInterweavingPrompt(state.narrativeArcs || [], roster, state.evidenceBundle));
+
+  // 8-10. the three judges, as createEvaluator builds them, from the thread's state.
+  // Only the article judge reads a fact check: factCheckContentBundle on the stored
+  // bundle, with createEvaluator's arguments, or none when there is no bundle.
+  const criteriaFor = (phase) => (phase === 'article' ? evalNodes.getArticleCriteria(theme)
+    : phase === 'outline' ? evalNodes.getOutlineCriteria(theme)
+      : evalNodes.QUALITY_CRITERIA[phase]);
+  for (const [file, phase] of JUDGE_FILES) {
+    const factCheck = phase === 'article' && state.contentBundle
+      ? await factCheckContentBundle({
+        contentBundle: state.contentBundle,
+        arcEvidencePackages: state.arcEvidencePackages,
+        evidenceBundle: state.evidenceBundle,
+        roster: state.sessionConfig?.roster,
+        sessionPhotos: state.sessionPhotos,
+        reportingMode: state.sessionConfig?.reportingMode,
+        npcPronouns: getThemeNPCPronouns(theme),
+        theme
+      })
+      : null;
+    write(file, await evalNodes.buildEvaluationSystemPrompt(phase, criteriaFor(phase), theme),
+      await evalNodes.buildEvaluationUserPrompt(phase, state, { factCheck }));
   }
 
-  for (const f of rendered) console.log(`${f}: ${fs.statSync(path.join(outDir, f)).size.toLocaleString()} bytes`);
+  for (const f of written) console.log(`${f}: ${fs.statSync(path.join(outDir, f)).size.toLocaleString()} bytes`);
+
+  // Every file in the marker table must have been rendered, so the table and the
+  // renders cannot drift apart unnoticed.
+  for (const f of Object.keys(REQUIRED_MARKERS)) {
+    if (!written.includes(f)) problems.push(`${f}: was not rendered`);
+  }
+  if (problems.length > 0) {
+    problems.forEach((p) => console.error(`FAIL  ${p}`));
+    process.exit(1);
+  }
+}
+
+/** Throw, naming the module and the export, when a tree lacks a builder this script renders through. */
+function requireExports(where, mod, names) {
+  const missing = names.filter((n) => !mod || mod[n] === undefined);
+  if (missing.length > 0) throw new Error(`${where} does not export ${missing.join(', ')}: this tree cannot render every call`);
 }
 
 /**
@@ -230,4 +358,31 @@ function compare(dirA, dirB) {
     console.log(`DIFF  ${f} — first difference at line ${i + 1}:\n  A: ${JSON.stringify(la[i] || '')}\n  B: ${JSON.stringify(lb[i] || '')}`);
   }
   process.exit(failed ? 1 : 0);
+}
+
+/**
+ * `--sections <dirA> <dirB>`: the section report (brief 3.0). For each .txt file in
+ * both directories, every top-level section with its status and its size in A and B.
+ * The pass and fail rules are the integrator's, so this always exits 0.
+ */
+function sections(dirA, dirB) {
+  const txt = (dir) => fs.readdirSync(dir).filter((f) => f.endsWith('.txt')).sort();
+  const inA = txt(dirA);
+  const inB = txt(dirB);
+  const both = inA.filter((f) => inB.includes(f));
+  const LABEL = { same: 'same', differs: 'DIFFERS', 'only-a': 'ONLY A', 'only-b': 'ONLY B' };
+  const size = (n) => (n === null ? '-' : n.toLocaleString());
+  console.log(`A: ${path.resolve(dirA)}\nB: ${path.resolve(dirB)}`);
+  for (const f of inA.filter((x) => !inB.includes(x))) console.log(`\nONLY A  ${f} (not compared)`);
+  for (const f of inB.filter((x) => !inA.includes(x))) console.log(`\nONLY B  ${f} (not compared)`);
+  for (const f of both) {
+    const result = compareSections(fs.readFileSync(path.join(dirA, f), 'utf8'), fs.readFileSync(path.join(dirB, f), 'utf8'));
+    console.log(`\n== ${f}: ${result.differences === 0 ? 'no differences' : `${result.differences} section(s) differ or exist in one directory only`}`);
+    const width = Math.max(...result.rows.map((r) => r.key.length), 0);
+    for (const r of result.rows) {
+      console.log(`  ${LABEL[r.status].padEnd(7)}  ${r.key.padEnd(width)}  A ${size(r.sizeA).padStart(9)}  B ${size(r.sizeB).padStart(9)}`);
+    }
+    for (const u of result.unclosed) console.log(`  UNCLOSED in ${u.side}: ${u.key} at line ${u.line}`);
+  }
+  process.exit(0);
 }
