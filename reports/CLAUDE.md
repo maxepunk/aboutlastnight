@@ -179,6 +179,7 @@ lib/template-assembler.js           # Handlebars template compilation
 lib/template-helpers.js             # Handlebars helper registration
 lib/theme-config.js                 # Theme settings, NPC definitions, validation rules
 lib/prompt-builder.js               # Prompt assembly for each phase
+lib/rule-set.js                     # The rule set (phase 3): loadRuleSet(call) -> {core, craft}, loadModeBlock(mode); reads references/rules/*.md
 lib/prompt-renderers/
 ├── record-view.js                  # The record view: <RECORD>, every exposed document in full + buried transactions (one line formatter, one row filter)
 ├── derived-labels.js               # Labels for machine-made material: who made it, and that the record decides
@@ -346,6 +347,8 @@ The pipeline supports multiple report themes via `state.theme`. Each theme produ
 4. Add theme framing to `PromptBuilder` methods in `lib/prompt-builder.js`
 
 ### Prompt Architecture
+
+**The rule set (phase 3, task 3.1).** The journalist's rules are model-facing Markdown files in `.claude/skills/journalist-report/references/rules/`, written from the rule-set spec (`docs/superpowers/specs/2026-09-30-rule-set.md`): `world.md` (the article's purpose, the world, how a memory moves through the game), `truth-rules.md` (T1 to T15), ten `craft-*.md` files (C1 to C16, split so each call reads exactly the items spec section 8 gives it) and the two mode files. Each rule id appears once, in a heading (`lib/__tests__/rule-set.test.js` lints the files: ids, no em-dash, no gendered Nova, nothing on `lib/__tests__/fixtures/removed-phrases.js`, no old example accounts or sums). `lib/rule-set.js` is synchronous (readFileSync, cached for the process, so an edited rule file reaches the prompts on the next server start): `loadRuleSet(call)` for `arc`, `interweaving`, `outline`, `article`, `judge-arc`, `judge-outline` or `judge-article` returns `{core, craft}`, the world then the truth rules and the call's craft files (`RULE_SET_CALLS`), each wrapped in one tag named after its file; a reworker passes its writer's call; a missing or empty file throws, named. `loadModeBlock(mode)` returns the mode file untagged. Tests pass `{root}`, and the pinned renders point the default root at the one-line stubs in `lib/__tests__/fixtures/rules/` (`setDefaultRulesRoot`), so a rule-text edit never moves a pin. Journalist only: a detective caller keeps its own text. Until wave 2 of phase 3 wires the rest, only the mode block reaches the calls.
 
 **Prompt Loading (ThemeLoader):**
 - Prompts stored in `.claude/skills/{theme}-report/references/prompts/`

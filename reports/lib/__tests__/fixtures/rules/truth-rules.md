@@ -1,0 +1,1 @@
+STUB truth-rules

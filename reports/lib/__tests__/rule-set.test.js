@@ -1,0 +1,304 @@
+/**
+ * The rule set (phase 3, task 3.1; spec docs/superpowers/specs/2026-09-30-rule-set.md).
+ *
+ * The rule files under .claude/skills/journalist-report/references/rules/ state the
+ * world (spec sections 1, 2 and 3a), the truth rules T1 to T15 and the craft items C1
+ * to C16, each once. lib/rule-set.js hands each call the files spec section 8 gives
+ * it, and the reporting-mode block for the session's mode.
+ *
+ * Three parts:
+ * - the loader: the map per call, the files, the throws, the stub root;
+ * - a lint over the real rule files;
+ * - the removed-phrase fixture's helpers, which the lint and the gate use.
+ */
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const {
+  loadRuleSet, loadModeBlock, setDefaultRulesRoot, DEFAULT_RULES_ROOT, RULE_SET_CALLS
+} = require('../rule-set');
+const { REMOVED_PHRASES, instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
+
+const RULES_ROOT = path.join(__dirname, '..', '..', '.claude', 'skills', 'journalist-report', 'references', 'rules');
+const STUB_ROOT = path.join(__dirname, 'fixtures', 'rules');
+
+const CORE_FILES = ['world', 'truth-rules'];
+const CRAFT_FILES = [
+  'craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing',
+  'craft-telling', 'craft-cards', 'craft-voice', 'craft-judgement', 'craft-questions'
+];
+const MODE_FILES = ['mode-on-site', 'mode-remote'];
+const ALL_FILES = [...CORE_FILES, ...CRAFT_FILES, ...MODE_FILES];
+
+const ALL_CRAFT = Array.from({ length: 16 }, (_, i) => `C${i + 1}`);
+/** Spec section 8: the craft items each call reads. */
+const SPEC_SECTION_8 = {
+  arc: ['C1', 'C3', 'C6', 'C7', 'C8', 'C10', 'C11', 'C13', 'C15', 'C16'],
+  interweaving: ['C1', 'C3', 'C6', 'C7', 'C8', 'C10', 'C11', 'C13', 'C16'],
+  outline: ALL_CRAFT.filter((id) => id !== 'C12'),
+  article: ALL_CRAFT
+};
+SPEC_SECTION_8['judge-arc'] = SPEC_SECTION_8.arc;
+SPEC_SECTION_8['judge-outline'] = SPEC_SECTION_8.outline;
+SPEC_SECTION_8['judge-article'] = SPEC_SECTION_8.article;
+
+/** The brief's map: each call's craft files, in the map's order. */
+const BRIEF_MAP = {
+  arc: ['craft-thesis', 'craft-arcs', 'craft-room', 'craft-tracing', 'craft-judgement', 'craft-questions'],
+  interweaving: ['craft-thesis', 'craft-arcs', 'craft-room', 'craft-tracing', 'craft-judgement'],
+  outline: CRAFT_FILES.filter((name) => name !== 'craft-voice'),
+  article: CRAFT_FILES
+};
+BRIEF_MAP['judge-arc'] = BRIEF_MAP.arc;
+BRIEF_MAP['judge-outline'] = BRIEF_MAP.outline;
+BRIEF_MAP['judge-article'] = BRIEF_MAP.article;
+
+/** Every rule id ("T8", "C16") in a text, in order. */
+const ruleIds = (text) => (String(text).match(/\b[TC]\d{1,2}\b/g) || []);
+/** The tag names a loaded string carries, in order. */
+const tagsOf = (text) => (String(text).match(/^<([a-z-]+)>$/gm) || []).map((t) => t.slice(1, -1));
+
+/** A temporary copy of the stub root, to break one file in. */
+function tempStubRoot() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rule-set-'));
+  for (const name of ALL_FILES) fs.copyFileSync(path.join(STUB_ROOT, `${name}.md`), path.join(dir, `${name}.md`));
+  return dir;
+}
+
+describe('the loader', () => {
+  it('reads the journalist skill\'s rules folder by default', () => {
+    expect(path.resolve(DEFAULT_RULES_ROOT)).toBe(path.resolve(RULES_ROOT));
+  });
+
+  it('serves exactly the seven calls of the plan', () => {
+    expect(Object.keys(RULE_SET_CALLS).sort()).toEqual(Object.keys(BRIEF_MAP).sort());
+  });
+
+  it.each(Object.keys(BRIEF_MAP))('%s: the core is the world then the truth rules, each in its own tag', (call) => {
+    const { core } = loadRuleSet(call, { root: STUB_ROOT });
+    expect(core).toBe('<world>\nSTUB world\n</world>\n\n<truth-rules>\nSTUB truth-rules\n</truth-rules>');
+  });
+
+  it.each(Object.keys(BRIEF_MAP))('%s: the craft files are the map\'s, in its order', (call) => {
+    const { craft } = loadRuleSet(call, { root: STUB_ROOT });
+    expect(tagsOf(craft)).toEqual(BRIEF_MAP[call]);
+    expect(craft).toBe(BRIEF_MAP[call].map((name) => `<${name}>\nSTUB ${name}\n</${name}>`).join('\n\n'));
+  });
+
+  it.each(Object.keys(SPEC_SECTION_8))('%s: the real files give exactly the craft items spec section 8 lists', (call) => {
+    const { core, craft } = loadRuleSet(call);
+    const crafted = ruleIds(craft).filter((id) => id.startsWith('C'));
+    expect(crafted.sort()).toEqual([...SPEC_SECTION_8[call]].sort());
+    // The core carries no craft item: every call reads all of the world and the truth rules.
+    expect(ruleIds(core).filter((id) => id.startsWith('C'))).toEqual([]);
+  });
+
+  it.each(ALL_FILES)('the real %s.md exists and is not empty', (name) => {
+    const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8');
+    expect(text.trim().length).toBeGreaterThan(0);
+  });
+
+  it('throws on a call it does not know, naming the calls it does', () => {
+    expect(() => loadRuleSet('revision', { root: STUB_ROOT })).toThrow(/revision.*arc.*interweaving/s);
+  });
+
+  it('throws naming every missing or empty file a call needs', () => {
+    const root = tempStubRoot();
+    fs.unlinkSync(path.join(root, 'craft-arcs.md'));
+    fs.writeFileSync(path.join(root, 'truth-rules.md'), '  \n');
+    expect(() => loadRuleSet('arc', { root })).toThrow(/truth-rules\.md.*craft-arcs\.md/s);
+  });
+
+  it('does not throw for a broken file the call does not read', () => {
+    const root = tempStubRoot();
+    fs.unlinkSync(path.join(root, 'craft-voice.md'));
+    expect(() => loadRuleSet('outline', { root })).not.toThrow();
+    expect(() => loadRuleSet('article', { root })).toThrow(/craft-voice\.md/);
+  });
+});
+
+describe('the mode block', () => {
+  it.each(['on-site', 'remote'])('%s: returns the mode file\'s text, untagged', (mode) => {
+    expect(loadModeBlock(mode, { root: STUB_ROOT })).toBe(`STUB mode-${mode}`);
+  });
+
+  it('the two real blocks differ, and each carries T8', () => {
+    const onSite = loadModeBlock('on-site');
+    const remote = loadModeBlock('remote');
+    expect(onSite).not.toBe(remote);
+    expect(ruleIds(onSite)).toEqual(['T8']);
+    expect(ruleIds(remote)).toEqual(['T8']);
+  });
+
+  it('throws on a mode it does not know', () => {
+    expect(() => loadModeBlock('hybrid', { root: STUB_ROOT })).toThrow(/hybrid/);
+  });
+
+  it('throws naming a missing mode file', () => {
+    const root = tempStubRoot();
+    fs.unlinkSync(path.join(root, 'mode-remote.md'));
+    expect(() => loadModeBlock('remote', { root })).toThrow(/mode-remote\.md/);
+  });
+});
+
+describe('the default root, which a test can point at the stubs', () => {
+  afterEach(() => setDefaultRulesRoot(null));
+
+  it('serves the stubs to every call that passes no root, and returns the previous root', () => {
+    const previous = setDefaultRulesRoot(STUB_ROOT);
+    expect(path.resolve(previous)).toBe(path.resolve(DEFAULT_RULES_ROOT));
+    expect(loadRuleSet('arc').core).toContain('STUB world');
+    expect(loadModeBlock('remote')).toBe('STUB mode-remote');
+  });
+
+  it('goes back to the skill\'s folder on null', () => {
+    setDefaultRulesRoot(STUB_ROOT);
+    setDefaultRulesRoot(null);
+    expect(loadModeBlock('remote')).not.toBe('STUB mode-remote');
+  });
+});
+
+/**
+ * The lint over the real rule files (the brief's tests). Model-facing text: each rule
+ * once, no em-dash, Nova never gendered, nothing on the removed list, and the examples
+ * carry placeholders, never the old examples' accounts or sums.
+ */
+describe('the rule files', () => {
+  const files = Object.fromEntries(ALL_FILES.map((name) => [name, fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8')]));
+  const T8_HOMES = ['truth-rules', 'mode-on-site', 'mode-remote'];
+
+  it('carry each of T1 to T15 and C1 to C16 exactly once, T8 once in the truth rules and once in each mode file', () => {
+    const expected = [...Array.from({ length: 15 }, (_, i) => `T${i + 1}`), ...ALL_CRAFT];
+    const counts = {};
+    for (const [name, text] of Object.entries(files)) {
+      for (const id of ruleIds(text)) {
+        const key = id === 'T8' ? `T8@${name}` : id;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+    const want = Object.fromEntries(expected.filter((id) => id !== 'T8').map((id) => [id, 1]));
+    for (const home of T8_HOMES) want[`T8@${home}`] = 1;
+    expect(counts).toEqual(want);
+  });
+
+  it('carry each rule id in a heading', () => {
+    for (const [name, text] of Object.entries(files)) {
+      const headings = (text.match(/^#{1,6} .*$/gm) || []).join('\n');
+      expect(`${name}: ${ruleIds(text).join(',')}`).toBe(`${name}: ${ruleIds(headings).join(',')}`);
+    }
+  });
+
+  it('put each item in its file', () => {
+    const where = {
+      'truth-rules': Array.from({ length: 15 }, (_, i) => `T${i + 1}`),
+      'craft-thesis': ['C1', 'C3'],
+      'craft-sections': ['C2'],
+      'craft-arcs': ['C16'],
+      'craft-room': ['C6', 'C7', 'C8'],
+      'craft-tracing': ['C10', 'C11'],
+      'craft-telling': ['C4', 'C5', 'C14'],
+      'craft-cards': ['C9'],
+      'craft-voice': ['C12'],
+      'craft-judgement': ['C13'],
+      'craft-questions': ['C15'],
+      'mode-on-site': ['T8'],
+      'mode-remote': ['T8'],
+      world: []
+    };
+    for (const [name, ids] of Object.entries(where)) {
+      expect(`${name}: ${ruleIds(files[name]).sort().join(',')}`).toBe(`${name}: ${[...ids].sort().join(',')}`);
+    }
+  });
+
+  it.each(ALL_FILES)('%s.md has no em-dash', (name) => {
+    expect(files[name]).not.toMatch(/—/);
+  });
+
+  it.each(ALL_FILES)('%s.md carries nothing on the removed list, and never genders Nova', (name) => {
+    expect(findRemovedPhrases(files[name])).toEqual([]);
+  });
+
+  it.each(ALL_FILES)('%s.md names none of the old examples\' accounts, sums or sessions', (name) => {
+    // The accounts the coverage pass found in the retired files' examples
+    // (coverage-journalist-craft-1.md section 3; -2.md X-2).
+    for (const account of ['ChaseT', 'Gorlan', 'Offbeat', 'John D.', 'Dominic', 'Motherofmen']) {
+      expect(`${name}: ${account}: ${files[name].includes(account)}`).toBe(`${name}: ${account}: false`);
+    }
+    expect(files[name]).not.toMatch(/\$\s?\d/);
+    expect(files[name]).not.toMatch(/\b\d{6,7}\b/);
+    expect(files[name]).not.toMatch(/\bDec(ember)? 21\b/);
+  });
+
+  it('open the world with the purpose of the article, without its length', () => {
+    expect(files.world).toMatch(/how your choices shaped the official story/);
+    expect(files.world).not.toMatch(/1,500/);
+  });
+
+  it('come to less than half the eight craft files they replace', () => {
+    // The eight journalist craft files at bad9781 (writing-principles, anti-patterns,
+    // character-voice, evidence-boundaries, narrative-structure, section-rules,
+    // editorial-design, formatting): 100,005 characters. 3.2 deletes them, so the
+    // figure is fixed here.
+    const EIGHT_FILES_CHARACTERS = 100005;
+    const size = Object.values(files).reduce((sum, text) => sum + text.length, 0);
+    expect(size).toBeLessThan(EIGHT_FILES_CHARACTERS / 2);
+  });
+});
+
+describe('the removed-phrase fixture', () => {
+  it('is a list of strings and patterns', () => {
+    expect(REMOVED_PHRASES.length).toBeGreaterThan(0);
+    for (const entry of REMOVED_PHRASES) {
+      expect(typeof entry === 'string' || entry instanceof RegExp).toBe(true);
+    }
+  });
+
+  it('starts with the murder framing exactly as the spec names it', () => {
+    for (const phrase of ['the murder victim', 'hint at the murder', 'the murder revelation', 'who killed Marcus']) {
+      expect(REMOVED_PHRASES).toContain(phrase);
+    }
+  });
+
+  it('finds the brief\'s phrase and today\'s remote block: exposures as tips', () => {
+    expect(findRemovedPhrases('Remember: exposures reached you as tips.')).toHaveLength(1);
+    expect(findRemovedPhrases('Every exposure, observation, and the verdict reached you as tips from people who were there')).toHaveLength(1);
+  });
+
+  it('finds Nova with a gendered pronoun in one clause, and nothing across clauses', () => {
+    expect(findRemovedPhrases('Nova acknowledges her own motivations.')).toHaveLength(1);
+    expect(findRemovedPhrases('She told Nova everything.')).toHaveLength(1);
+    expect(findRemovedPhrases('Nova reported it. She left.')).toEqual([]);
+    expect(findRemovedPhrases('NovaNews ran it and he denied it.')).toEqual([]);
+    expect(findRemovedPhrases('Nova monitored the room, and Marcus kept his secrets.')).toEqual([]);
+  });
+
+  it('matches its strings in any case', () => {
+    expect(findRemovedPhrases('Marcus, The Murder Victim, was found')).toHaveLength(1);
+  });
+
+  it('scans instruction text only: the director\'s words and <RECORD> are stripped', () => {
+    const render = [
+      'Write the article.',
+      '<DIRECTOR_NOTES>\nafter the murder investigation blows over, one more went to the black market\n</DIRECTOR_NOTES>',
+      '<DIRECTOR_CORRECTIONS>\n- who killed Marcus was the question\n</DIRECTOR_CORRECTIONS>',
+      '<DIRECTOR_ACCUSATION>\nThe murder victim was poisoned by Vic.\n</DIRECTOR_ACCUSATION>',
+      '<EPILOGUE>\nthe murder revelation came at noon\n</EPILOGUE>',
+      '<RECORD>\n<document id="x">the shape of the silence</document>\n</RECORD>',
+      '<QUOTE_BANK>\nA model made this index.\n- Vic: "the murder victim had it coming"\n</QUOTE_BANK>',
+      'HUMAN FEEDBACK (HIGHEST PRIORITY):\nCut the resolution cascade line.\n\nNOTE: address it first.',
+      '- p1.jpg: The director\'s description, word for word: Nova and her camera'
+    ].join('\n\n');
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text)).toEqual([]);
+    expect(text).toContain('Write the article.');
+    expect(text).toContain('A model made this index.');
+    expect(text).toContain('<RECORD></RECORD>');
+    expect(text).toContain('NOTE: address it first.');
+  });
+
+  it('still finds a removed phrase in the instruction text around them', () => {
+    const render = '<DIRECTOR_NOTES>\nnotes\n</DIRECTOR_NOTES>\n\nMarcus is the murder victim.';
+    expect(findRemovedPhrases(instructionText(render))).toEqual(['the murder victim']);
+  });
+});
