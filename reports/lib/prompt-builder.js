@@ -6,7 +6,7 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
-const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
+const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('./prompt-renderers/director-notes-renderer');
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
@@ -37,28 +37,6 @@ const JOURNALIST_RULE_SET_CALLS = Object.freeze({
  */
 const ARC_EXCERPTS_LABEL =
   "Excerpts are fragments code cut from each document's text at its sentence breaks, in the document's own words: pointers to lines worth reading in its full text.";
-
-/**
- * The sentences a stored narrative-tensions note prints, for the journalist article
- * writer (phase 3, 3.2; T4). Since 3.6 the code gathers only the director's own
- * sentences that name Blake or the Valet (type `blake-proximity`, its `observations`).
- * A thread surfaced before 3.6 also stored `named-account` and
- * `transparency-vs-burial` notes, which read an account's name as its holder, and a
- * `blake-proximity` note whose `narrativeNote` was the code's own generalisation:
- * those notes print nothing, and the observations print as the director wrote them.
- * Exported so the arc writer's section (3.3's) can print the same list.
- *
- * @param {Object|null} narrativeTensions - state.narrativeTensions
- * @returns {string[]} the director's sentences, each on one line
- */
-function narrativeTensionSentences(narrativeTensions) {
-  const tensions = Array.isArray(narrativeTensions?.tensions) ? narrativeTensions.tensions : [];
-  return tensions
-    .filter(t => t && t.type === 'blake-proximity' && Array.isArray(t.observations))
-    .flatMap(t => t.observations)
-    .filter(s => typeof s === 'string' && s.trim())
-    .map(s => s.replace(/\s*\n\s*/g, ' ').trim());
-}
 
 /**
  * Generate canonical character roster section
@@ -1236,7 +1214,10 @@ ${(pkg.photos || []).map(p => `- ${renderPhotoEntry({ filename: p.filename, name
 `).join('\n---\n')}
 ` : '';
 
-    const tensions = narrativeTensionSentences(narrativeTensions);
+    // T4: the director's sentences about Blake and the Valet, through the filter the
+    // arc writer's section uses (fix 3.2b): each stored sentence prints only when the
+    // notes hold it word for word.
+    const tensions = directorTensionSentences(narrativeTensions, directorNotes?.rawProse || '');
     const tensionsSection = tensions.length > 0 ? `
 <NARRATIVE_TENSIONS>
 ${DERIVED_LABELS.narrativeTensions}
@@ -1405,10 +1386,7 @@ module.exports = {
   withReportingModeBlock,
   // Theme framing, consumed by the article rework rules in ai-nodes.js
   THEME_SYSTEM_PROMPTS,
-  THEME_CONSTRAINTS,
-  // Phase 3 (3.2): the director's sentences a narrative-tensions note prints, so
-  // the article writer and the arc writer print the same list.
-  narrativeTensionSentences
+  THEME_CONSTRAINTS
 };
 
 // Self-test when run directly

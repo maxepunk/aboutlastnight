@@ -85,4 +85,39 @@ describe('contradiction data in arc prompt', () => {
       expect(prompt).not.toContain(DERIVED_LABELS.narrativeTensions);
     }
   });
+
+  // Fix 3.2b: one filter, directorTensionSentences, for both journalist print sites.
+  // Given the same stored tensions and notes, the arc writer's Blake section and the
+  // article writer's <NARRATIVE_TENSIONS> list the same sentences, in the same order.
+  test('the arc writer and the article writer print the same sentences, through one filter', async () => {
+    const { directorTensionSentences } = require('../prompt-renderers/director-notes-renderer');
+    const promptBuilderModule = require('../prompt-builder');
+    const OTHER = 'The Valet counted the cash at the door.';
+    const state = baseState({
+      directorNotes: { rawProse: `${BLAKE_SENTENCE} Skyler left early. ${OTHER}`, transactionReferences: [] },
+      narrativeTensions: {
+        tensions: [
+          ...STORED.tensions,
+          { type: 'blake-proximity', observations: ['Blake paid Alex.', OTHER, BLAKE_SENTENCE] }
+        ]
+      }
+    });
+    const expected = directorTensionSentences(state.narrativeTensions, state.directorNotes.rawProse);
+    expect(expected).toEqual([BLAKE_SENTENCE, OTHER]);
+    const listed = (text) => text.split('\n').filter(line => line.startsWith('- ')).map(line => line.slice(2));
+
+    const arcPrompt = buildCoreArcPrompt(state);
+    const arcSection = arcPrompt.slice(arcPrompt.indexOf("### Blake and the Valet in the director's notes"), arcPrompt.indexOf('### Primary Investigation Focus'));
+    expect(listed(arcSection)).toEqual(expected);
+
+    const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };
+    const builder = new promptBuilderModule.PromptBuilder(themeLoader, 'journalist', { roster: ['Skyler', 'Alex'] });
+    const { userPrompt } = await builder.buildArticlePrompt(
+      {}, [], null, [], null, state.directorNotes, state.narrativeTensions, { evidenceBundle: state.evidenceBundle }
+    );
+    const articleBlock = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
+    expect(listed(articleBlock)).toEqual(expected);
+
+    expect(promptBuilderModule.narrativeTensionSentences).toBeUndefined();
+  });
 });

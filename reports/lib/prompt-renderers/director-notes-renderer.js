@@ -168,7 +168,9 @@ ${epilogue.map(sentence => `- ${sentence}`).join('\n')}
  * and a `blake-proximity` tension whose `narrativeNote` is a generic line. Only the
  * stored observations are read, and only the ones the notes hold word for word, so
  * every sentence a print site shows is the director's, as DERIVED_LABELS.narrativeTensions
- * says. A sentence wrapped across lines prints on one line.
+ * says. A sentence wrapped across lines prints on one line. It is the one filter for
+ * both journalist print sites (fix 3.2b): the arc writer's Blake section and the
+ * article writer's <NARRATIVE_TENSIONS>.
  *
  * @param {Object|null} narrativeTensions - state.narrativeTensions ({tensions: [...]})
  * @param {string} rawProse - the director's notes

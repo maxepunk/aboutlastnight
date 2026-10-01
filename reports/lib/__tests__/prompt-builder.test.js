@@ -1343,7 +1343,10 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
   // Phase 3 (3.2; T4): the tensions print as the director's sentences that name Blake
   // or the Valet. A note from before 3.6 that read an account's name as its holder
   // prints nothing, and an old blake-proximity note prints its observations, not its
-  // generic narrativeNote.
+  // generic narrativeNote. The filter is the arc writer's (directorTensionSentences,
+  // fix 3.2b): only the sentences the notes hold word for word print, each once.
+  const TENSION_NOTES = { rawProse: 'Blake pulled Vic aside at the bar. The Valet read the balances.' };
+
   it('prints the director\'s sentences about Blake, labelled, and drops the old account-name notes', async () => {
     const tensions = {
       tensions: [
@@ -1357,11 +1360,34 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
       ]
     };
     const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      {}, [], null, [], null, null, tensions, { evidenceBundle }
+      {}, [], null, [], null, TENSION_NOTES, tensions, { evidenceBundle }
     );
     const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
     expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- Blake pulled Vic aside at the bar.\n- The Valet read the balances.\n`);
     expect(block).not.toMatch(/Black Market|verified to respect|named-account|Director observed/);
+  });
+
+  it('prints a stored sentence only when the notes hold it word for word, and each once', async () => {
+    const tensions = {
+      tensions: [{
+        type: 'blake-proximity',
+        observations: ['Blake paid Vic.', 'The Valet read the balances.', 'The Valet read the balances.']
+      }]
+    };
+    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
+      {}, [], null, [], null, TENSION_NOTES, tensions, { evidenceBundle }
+    );
+    const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
+    expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- The Valet read the balances.\n`);
+    expect(userPrompt).not.toContain('Blake paid Vic.');
+  });
+
+  it('prints no tensions block when the thread has no notes to hold the sentences', async () => {
+    const tensions = { tensions: [{ type: 'blake-proximity', observations: ['The Valet read the balances.'] }] };
+    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
+      {}, [], null, [], null, null, tensions, { evidenceBundle }
+    );
+    expect(userPrompt).not.toContain('<NARRATIVE_TENSIONS>');
   });
 
   it('prints no tensions block when only old account-name notes are stored', async () => {
