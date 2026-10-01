@@ -1123,48 +1123,6 @@ function extractCanonicalCharacters(tokens, theme = 'journalist', paperEvidence 
   return characters;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// FINANCIAL VALIDATION (Pipeline Quality D2)
-// ═══════════════════════════════════════════════════════════════════════════════
-//
-// Compares LLM-generated financial tracker amounts against authoritative shell
-// account totals from orchestratorParsed. Returns issue strings for mismatches.
-
-/**
- * Validate financial tracker entries against authoritative shell account data
- * Returns array of issue strings (empty = valid)
- *
- * @param {Object} financialTracker - LLM-generated financial tracker with entries array
- * @param {Array} shellAccounts - Authoritative shell account data from orchestratorParsed
- * @returns {string[]} Array of issue descriptions (empty if all valid)
- */
-function validateFinancialData(financialTracker, shellAccounts) {
-  if (!financialTracker?.entries?.length || !shellAccounts?.length) return [];
-
-  const accountMap = new Map(
-    shellAccounts.filter(a => a.total > 0).map(a => [a.name.toLowerCase(), a.total])
-  );
-
-  const issues = [];
-  for (const entry of financialTracker.entries) {
-    const name = entry.name || entry.account || '';
-    const expectedTotal = accountMap.get(name.toLowerCase());
-    if (expectedTotal === undefined) continue;
-
-    const actualAmount = typeof entry.amount === 'number'
-      ? entry.amount
-      : parseFloat(String(entry.amount).replace(/[$,]/g, '')) || 0;
-
-    if (actualAmount !== expectedTotal) {
-      issues.push(
-        `Financial mismatch: "${name}" shows $${actualAmount.toLocaleString('en-US')} but authoritative data is $${expectedTotal.toLocaleString('en-US')}`
-      );
-    }
-  }
-
-  return issues;
-}
-
 /**
  * Resolve the session roster from wherever it currently lives (CODE-REVIEW H4).
  *
@@ -1292,9 +1250,6 @@ module.exports = {
 
   // F1 invariant guard: roster names with no canonicalCharacters match
   findUncoveredRosterNames,
-
-  // Financial validation (Pipeline Quality D2)
-  validateFinancialData,
 
   // Revision context helper (DRY)
   buildRevisionContext,
