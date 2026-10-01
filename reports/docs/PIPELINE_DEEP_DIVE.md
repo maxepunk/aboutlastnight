@@ -357,27 +357,31 @@ Nova's article is NOT just a factual record. It reflects:
 **Architecture** (Commit 8.15+): Player-focus-guided split-call approach where player conclusions drive everything.
 *Note: See arc-specialist-nodes.js header comments for architecture evolution (8.12 parallel → 8.15 single → 8.28 split)*
 
-**Prompt Structure** (recency bias - rules LAST):
+**Prompt Structure** (recency bias - rules LAST). The journalist's since phase 3 (brief 3.3); the system prompt carries the mode block, the world and the truth rules (`loadRuleSet('arc')`), and the detective keeps its older sections:
 
 ```
 SECTION 1: WHAT PLAYERS CONCLUDED (PRIMARY)
   - The Accusation: Who they blamed, what charge
-  - Whiteboard Content: Their investigation notes
+  - The Whiteboard: a model's reading of the photo, context only
+  - The Director's Notes: record for what happened and was said in the room
+  - Blake and the Valet in the director's notes (when the notes name them)
 
 SECTION 2: ARC GENERATION RULES
   - Priority 1: ACCUSATION ARC (required, even if speculative)
-  - Priority 2: Whiteboard-driven arcs
-  - Priority 3: Director observation arcs
-  - Priority 4: Discovered patterns (optional)
+  - Priority 2: Whiteboard and observation arcs
+  - Priority 3: Discovered: a pattern the room did not take up (optional)
 
-SECTION 3: EVIDENCE BOUNDARIES (three-layer model)
+SECTION 3: THE RECORD (every exposed document, then the morning timeline)
 
-SECTION 4: EVIDENCE BUNDLE (full curated evidence)
+SECTION 4: STAGES IN AN ARC SUMMARY
 
-SECTION 5: THREE-LENS ANALYSIS REQUIREMENT
-  - Financial lens: Money flows, shell accounts
-  - Behavioral lens: Character dynamics
-  - Victimization lens: Who was targeted, why
+SECTION 5: THE THREE LENSES IN analysisNotes
+  - Financial: the money, as the timeline and the ledger show it
+  - Behavioral: what people did and chose
+  - Victimization: who was harmed, and whose memories were taken or erased
+  (each lens: where it supports the arc and where it cuts against it)
+
+SECTION 6: CRAFT GUIDANCE (the rule set's craft files for the arc writer)
 ```
 
 **Arc Structure**:
@@ -625,10 +629,10 @@ Generate → Evaluate → [structuralPassed?]
 - Outline: 2 automated reworks per round
 - Article: 2 automated reworks per round
 
-**Targeted Fixes Pattern** (DRY):
+**Rework Pattern** (DRY):
 - `incrementXxxRevision` preserves `_previousOutput`
 - `reviseXxx` receives previous output + feedback
-- Makes surgical fixes, not full regeneration
+- How much it keeps follows the revision context (phase 3, TH7): on a send back the director's note decides ("rethink" gets a rethink); on an automatic pass the rework changes what the findings name. The detective keeps its older "targeted fixes" rules
 
 ---
 
