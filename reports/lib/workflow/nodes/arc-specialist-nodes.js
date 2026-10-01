@@ -312,6 +312,15 @@ function buildCoreArcSections(state) {
 }
 
 /**
+ * The journalist arc writer's label for the director's notes (phase 3, brief 3.3):
+ * T1's record for the room, and the one mapping T1 does not state, that backstory in
+ * the notes is Nova's reading. The writer prints it as its notes heading; the arc
+ * judge (evaluator-nodes.js) imports it, so both name the notes in one text.
+ */
+const ARC_NOTES_LABEL = `The Director's Notes (the record for the room, under T1)
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is Nova's reading under T1.`;
+
+/**
  * The journalist arc writer's sections (phase 3, brief 3.3): the output format; what
  * the room concluded (the accusation, the whiteboard, the director's notes and
  * corrections and their sentences about Blake and the Valet, the investigation
@@ -403,8 +412,7 @@ You MUST generate an arc that addresses this accusation. Even if evidence is wea
 
 ${renderWhiteboardConnections(context.whiteboard)}
 
-### The Director's Notes (the record for the room, under T1)
-Backstory in the notes, what the director knows about the characters beyond what the session showed, is Nova's reading under T1.
+### ${ARC_NOTES_LABEL}
 
 ${renderDirectorEnrichmentBlock({
   rawProse: context.directorProse,
@@ -2335,6 +2343,8 @@ module.exports = {
   // valid-id list and buried transactions).
   hasInterweavingPlan,
   extractEvidenceSummary,
+  // The arc writer's director-notes label, which the arc judge prints too.
+  ARC_NOTES_LABEL,
 
   // Export for testing
   _testing: {

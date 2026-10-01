@@ -623,6 +623,17 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       const system = coreArcSystemPrompt(state.sessionConfig, 'journalist');
       expect(count(`${system}\n${prompt}`, "as the director's notes record it")).toBe(1);
     });
+
+    // Post-merge fix: the arc judge prints the arc writer's own label, so the label has
+    // one source. The module exports it at the top level for evaluator-nodes.js.
+    it('the label is ARC_NOTES_LABEL, the one text the arc writer prints and the arc judge imports', () => {
+      const { ARC_NOTES_LABEL } = arcModule;
+      expect(typeof ARC_NOTES_LABEL).toBe('string');
+      expect(ARC_NOTES_LABEL).toMatch(/^The Director's Notes \(the record for the room, under T1\)\n[Bb]ackstory[^.]*Nova's reading under T1\.$/);
+      const prompt = buildCoreArcSections(journalistState());
+      expect(count(prompt, ARC_NOTES_LABEL)).toBe(1);
+      expect(prompt).toContain(`### ${ARC_NOTES_LABEL}\n`);
+    });
   });
 
   describe("the record: the morning timeline in place of the writer's own buried list", () => {
