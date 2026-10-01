@@ -119,3 +119,61 @@ describe('ledgerView: the adjustments beside the sales', () => {
     expect(view.warnings[0]).toMatch(/^Adjustments not parsed/);
   });
 });
+
+// ── Task 3.5 fix batch, item 9: the notes panel reads the enricher's stored shape and
+// the one task 3.6 stores (a quote may have no speaker and carries the director's
+// correction; an epilogue item is the director's sentence, with no headline). ──
+
+const { quoteView, epilogueItemView, enrichmentWarningLines } = require('../input-review-logic');
+
+describe('quoteView: a quote as the notes panel shows it', () => {
+  it('says "speaker not recorded" when the quote has no speaker, or the stored "unknown"', () => {
+    expect(quoteView({ text: 'He was a dead man.', context: 'At the bar, someone said' }).speaker).toBe('speaker not recorded');
+    expect(quoteView({ speaker: '  ', text: 'x' }).speaker).toBe('speaker not recorded');
+    expect(quoteView({ speaker: 'unknown', text: 'x' }).speaker).toBe('speaker not recorded');
+    expect(quoteView({ speaker: 'Unknown', text: 'x' }).speakerRecorded).toBe(false);
+  });
+
+  it('keeps a recorded speaker, the addressee, the text and the context as stored', () => {
+    expect(quoteView({ speaker: 'Blake', addressee: 'Ashe', text: 'He was a dead man.', context: 'Blake to Ashe at the bar', confidence: 'high' }))
+      .toEqual({ speaker: 'Blake', speakerRecorded: true, addressee: 'Ashe', text: 'He was a dead man.', context: 'Blake to Ashe at the bar', correction: '', confidence: 'high' });
+  });
+
+  it('carries the director\'s correction when the quote has one', () => {
+    const view = quoteView({ speaker: 'Blake', text: 'He was a dead man.', context: 'Vic to Ashe', correction: 'Blake said "he was a dead man", not Vic.' });
+    expect(view.correction).toBe('Blake said "he was a dead man", not Vic.');
+    expect(quoteView({ speaker: 'Blake', text: 'x' }).correction).toBe('');
+  });
+});
+
+describe('epilogueItemView: an epilogue item as the notes panel shows it', () => {
+  it('a stored item keeps its headline beside the director\'s sentence', () => {
+    expect(epilogueItemView({ headline: 'Riley left town', detail: 'Riley left town the next day.', subjects: ['Riley'] }))
+      .toEqual({ headline: 'Riley left town', detail: 'Riley left town the next day.', subjects: ['Riley'], bearing: '' });
+  });
+
+  it('a new item is the director\'s sentence alone, with no headline', () => {
+    expect(epilogueItemView({ detail: 'Remi was not available for comment.', subjects: ['Remi'] }))
+      .toEqual({ headline: '', detail: 'Remi was not available for comment.', subjects: ['Remi'], bearing: '' });
+  });
+
+  it('keeps a stored item\'s bearing, and an empty detail as empty', () => {
+    expect(epilogueItemView({ headline: 'H', bearingOnNarrative: 'B' })).toEqual({ headline: 'H', detail: '', subjects: [], bearing: 'B' });
+    expect(epilogueItemView(null)).toEqual({ headline: '', detail: '', subjects: [], bearing: '' });
+  });
+});
+
+describe('enrichmentWarningLines: the enricher\'s new warnings, each a count with a short label', () => {
+  it('lists each new key with its count', () => {
+    expect(enrichmentWarningLines({ unrecordedSpeakers: 2, droppedContexts: 1, droppedEpilogueItems: 3 })).toEqual([
+      '2 quote speakers not recorded: the notes and corrections do not name them',
+      '1 quote context dropped: not copied word for word from the notes',
+      '3 epilogue items dropped: not copied word for word from the notes'
+    ]);
+  });
+
+  it('says nothing for a key that is absent or zero, and leaves the existing keys to their own lines', () => {
+    expect(enrichmentWarningLines({ droppedQuotes: 4, droppedLinks: 1, droppedContexts: 0 })).toEqual([]);
+    expect(enrichmentWarningLines(null)).toEqual([]);
+  });
+});

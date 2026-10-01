@@ -104,7 +104,89 @@
     };
   }
 
-  const api = { resolveRosterPronoun, clockLine, ledgerView };
+  // ── The director's notes as the enricher indexed them (task 3.5 fix batch, item 9) ──
+  //
+  // The panel reads two shapes: the one stored before task 3.6 (every quote with a
+  // speaker, every epilogue item with a model-written headline) and the one 3.6
+  // stores (a quote's speaker only where the notes or a correction name it, and the
+  // director's correction beside it; an epilogue item is the director's sentence).
+
+  /** A field as trimmed text, '' for anything that is not text. */
+  function text(value) {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  /** What the panel shows for a quote whose speaker the notes do not name. */
+  const SPEAKER_NOT_RECORDED = 'speaker not recorded';
+
+  /**
+   * One quote from the quote bank, for the notes panel.
+   *
+   * A quote with no speaker, or the stored "unknown", shows "speaker not recorded",
+   * as the writers' <QUOTE_BANK> prints it.
+   *
+   * @param {Object|null} quote - a directorNotes.quotes entry
+   * @returns {{speaker: string, speakerRecorded: boolean, addressee: string, text: string,
+   *            context: string, correction: string, confidence: string}}
+   */
+  function quoteView(quote) {
+    const q = quote && typeof quote === 'object' ? quote : {};
+    const speaker = text(q.speaker);
+    const recorded = speaker !== '' && speaker.toLowerCase() !== 'unknown';
+    return {
+      speaker: recorded ? speaker : SPEAKER_NOT_RECORDED,
+      speakerRecorded: recorded,
+      addressee: text(q.addressee),
+      text: text(q.text),
+      context: text(q.context),
+      correction: text(q.correction),
+      confidence: text(q.confidence)
+    };
+  }
+
+  /**
+   * One epilogue item (directorNotes.postInvestigationDevelopments), for the notes
+   * panel: the headline only when a stored item has one, the director's sentence
+   * (`detail`) always.
+   *
+   * @param {Object|null} item
+   * @returns {{headline: string, detail: string, subjects: string[], bearing: string}}
+   */
+  function epilogueItemView(item) {
+    const d = item && typeof item === 'object' ? item : {};
+    return {
+      headline: text(d.headline),
+      detail: text(d.detail),
+      subjects: Array.isArray(d.subjects) ? d.subjects.filter(function (s) { return text(s) !== ''; }) : [],
+      bearing: text(d.bearingOnNarrative)
+    };
+  }
+
+  /** The enricher's warnings since task 3.6, each counted under a short label. */
+  const ENRICHMENT_WARNING_LABELS = [
+    { key: 'unrecordedSpeakers', one: 'quote speaker', many: 'quote speakers', why: 'not recorded: the notes and corrections do not name them' },
+    { key: 'droppedContexts', one: 'quote context', many: 'quote contexts', why: 'dropped: not copied word for word from the notes' },
+    { key: 'droppedEpilogueItems', one: 'epilogue item', many: 'epilogue items', why: 'dropped: not copied word for word from the notes' }
+  ];
+
+  /**
+   * The enricher's warnings the panel lists beside the dropped-quote line: one line
+   * per key with a count above zero.
+   *
+   * @param {Object|null} warnings - data.enrichment.warnings (_enrichmentWarnings)
+   * @returns {string[]}
+   */
+  function enrichmentWarningLines(warnings) {
+    const w = warnings && typeof warnings === 'object' ? warnings : {};
+    return ENRICHMENT_WARNING_LABELS
+      .filter(function (label) { return typeof w[label.key] === 'number' && w[label.key] > 0; })
+      .map(function (label) {
+        const n = w[label.key];
+        return n + ' ' + (n === 1 ? label.one : label.many) + ' ' + label.why;
+      });
+  }
+
+  const api = { resolveRosterPronoun, clockLine, ledgerView, quoteView, epilogueItemView, enrichmentWarningLines };
 
   if (typeof window !== 'undefined') {
     window.Console = window.Console || {};

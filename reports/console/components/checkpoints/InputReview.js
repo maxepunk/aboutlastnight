@@ -15,7 +15,7 @@ window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, safeStringify } = window.Console.utils;
-const { resolveRosterPronoun, ledgerView } = window.Console.inputReviewLogic;
+const { resolveRosterPronoun, ledgerView, quoteView, epilogueItemView, enrichmentWarningLines } = window.Console.inputReviewLogic;
 const { validateRosterEntry } = window.Console.awaitRosterLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
 
@@ -48,7 +48,12 @@ function EnrichmentPanel({ enrichment }) {
       warnings.droppedQuotes + ' quote' + (warnings.droppedQuotes === 1 ? '' : 's') +
       ' dropped: not found verbatim in the prose. Anything a player actually said ' +
       'has to be in the notes word for word to reach the article.'
-    )
+    ),
+    // Task 3.5 fix batch, item 9: what the enricher (task 3.6) left out of the quote
+    // bank and the epilogue because the notes do not carry it word for word.
+    enrichmentWarningLines(warnings).map(function (line, i) {
+      return React.createElement('p', { key: 'ew-' + i, className: 'enrichment__warning' }, line);
+    })
   );
 }
 
@@ -396,18 +401,23 @@ function InputReview({ data, onApprove, onReject, theme }) {
           defaultOpen: false
         },
           React.createElement('ul', { className: 'quote-list' },
-            directorNotes.quotes.map((q, i) =>
+            // Item 9: a quote with no speaker says so, and the director's correction
+            // shows beside the quote it applied to (quoteView).
+            directorNotes.quotes.map(quoteView).map((q, i) =>
               React.createElement('li', { key: i, className: 'quote-row' + (q.confidence === 'low' ? ' is-low-confidence' : '') },
-                React.createElement('span', { className: 'quote-speaker' },
+                React.createElement('span', { className: 'quote-speaker' + (q.speakerRecorded ? '' : ' text-muted') },
                   q.speaker,
                   q.addressee && React.createElement('span', { className: 'text-muted' }, ' \u2192 ' + q.addressee),
                   ': '
                 ),
                 React.createElement('span', { className: 'quote-text' }, '"' + q.text + '"'),
-                React.createElement(Badge, {
+                q.confidence && React.createElement(Badge, {
                   label: q.confidence,
                   color: q.confidence === 'high' ? 'var(--accent-green)' : 'var(--accent-amber)'
                 }),
+                q.correction && React.createElement('p', { className: 'text-sm text-secondary quote-correction' },
+                  'The director’s correction: ' + q.correction
+                ),
                 q.context && React.createElement('details', { className: 'quote-context' },
                   React.createElement('summary', null, 'context'),
                   React.createElement('p', { className: 'text-sm text-muted' }, q.context)
@@ -467,14 +477,16 @@ function InputReview({ data, onApprove, onReject, theme }) {
           defaultOpen: false
         },
           React.createElement('div', { className: 'news-card-list' },
-            directorNotes.postInvestigationDevelopments.map((d, i) =>
+            // Item 9: the headline only where a stored item has one; the director's
+            // sentence always (epilogueItemView).
+            directorNotes.postInvestigationDevelopments.map(epilogueItemView).map((d, i) =>
               React.createElement('div', { key: i, className: 'news-card' },
-                React.createElement('h5', { className: 'news-card__headline' }, d.headline),
-                d.detail && React.createElement('p', { className: 'news-card__detail text-sm' }, d.detail),
-                (d.subjects || []).length > 0 && React.createElement('div', { className: 'news-card__subjects' },
+                d.headline && React.createElement('h5', { className: 'news-card__headline' }, d.headline),
+                React.createElement('p', { className: 'news-card__detail text-sm' }, d.detail),
+                d.subjects.length > 0 && React.createElement('div', { className: 'news-card__subjects' },
                   d.subjects.map(s => React.createElement(Badge, { key: s, label: s, color: 'var(--accent-cyan)' }))
                 ),
-                d.bearingOnNarrative && React.createElement('p', { className: 'news-card__bearing text-sm text-muted' }, d.bearingOnNarrative)
+                d.bearing && React.createElement('p', { className: 'news-card__bearing text-sm text-muted' }, d.bearing)
               )
             )
           )
