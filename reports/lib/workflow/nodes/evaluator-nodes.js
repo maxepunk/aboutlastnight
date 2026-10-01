@@ -544,6 +544,22 @@ function failedTruthCriteria(evaluation, criteria) {
     .map(([key, criterion]) => ({ key, rules: criterion.rules, notes: scores[key].notes, fix: scores[key].fix }));
 }
 
+/**
+ * The truth criteria a judge left out of its scores (no numeric score). Each counts as
+ * not scored: it is logged by name and does not hold the output (fix 3.4b, ruled).
+ *
+ * @param {Object} evaluation - the judge's output
+ * @param {Object} criteria - the criteria the judge was given
+ * @returns {string[]} the criteria's keys
+ */
+function unscoredTruthCriteria(evaluation, criteria) {
+  const scores = (evaluation && evaluation.criteriaScores) || {};
+  return Object.entries(criteria || {})
+    .filter(([key, criterion]) => criterion && criterion.truth
+      && !(scores[key] && typeof scores[key].score === 'number'))
+    .map(([key]) => key);
+}
+
 /** The rule ids an issue opens with ("T3: ...", "T4, T6: ..."), or none. */
 function leadingRuleIds(issue) {
   const lead = String(issue == null ? '' : issue).match(/^\s*((?:T\d{1,2}(?:\s*(?:,|&|\/|and)\s*)?)+)/);
@@ -1977,6 +1993,12 @@ function createEvaluator(phase, options = {}) {
       const isReady = failedTruth.length > 0 ? false : judgeReady;
       if (failedTruth.length > 0) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Truth criteria failed: ${failedTruth.map(f => f.key).join(', ')}`);
+      }
+      // A truth criterion the judge left out of its scores is not scored: logged by
+      // name, never a hold on the output.
+      const unscoredTruth = unscoredTruthCriteria(evaluation, criteria);
+      if (unscoredTruth.length > 0) {
+        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Truth criteria not scored: ${unscoredTruth.join(', ')}`);
       }
 
       // Create evaluation history entry

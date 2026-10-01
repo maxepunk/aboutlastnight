@@ -2181,6 +2181,43 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(result.evaluationHistory.ready).toBe(true);
       expect(result.evaluationHistory.structuralIssues).toEqual([]);
     });
+
+    // Fix 3.4b (review finding 4, ruled): a truth criterion the judge leaves out of its
+    // scores counts as not scored. It is logged by name and does not hold the output.
+    it('logs each truth criterion the judge left unscored by name, and does not hold the output for it', async () => {
+      const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const mockClient = judgeWith({
+          ready: true, structuralPassed: true, overallScore: 0.9,
+          criteriaScores: {
+            evidenceTruth: { score: 0.9 }, moneyTruth: { score: 1 }, verdictTruth: { score: 1 },
+            stagesTruth: { score: 1 }, novaPositionTruth: { score: 1 },
+            wordsTruth: { notes: 'no score given' }   // present, but with no number: not scored
+          },
+          structuralIssues: [], advisoryWarnings: []
+        });
+        const result = await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+        expect(result.evaluationHistory.ready).toBe(true);
+        expect(result.evaluationHistory.structuralIssues).toEqual([]);
+        const lines = log.mock.calls.map((call) => call.join(' ')).filter((line) => line.includes('not scored'));
+        expect(lines).toEqual(['[evaluateArcs] Truth criteria not scored: playersTruth, wordsTruth']);
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it('logs nothing as unscored when the judge scored every truth criterion', async () => {
+      const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const scores = Object.fromEntries(Object.entries(getPhaseCriteria('arcs', 'journalist'))
+          .filter(([, criterion]) => criterion.truth).map(([key]) => [key, { score: 1 }]));
+        const mockClient = judgeWith({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: scores, structuralIssues: [], advisoryWarnings: [] });
+        await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+        expect(log.mock.calls.map((call) => call.join(' ')).filter((line) => line.includes('not scored'))).toEqual([]);
+      } finally {
+        log.mockRestore();
+      }
+    });
   });
 
   describe('the existing criteria keep their status', () => {
