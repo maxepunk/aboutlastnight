@@ -272,8 +272,10 @@ const MODEL_OUTPUT_LABELS = new Set([
   '## GENERATED ARCS',
   // the arc reworker
   '### PREVIOUS INTERWEAVING PLAN',
+  '### PREVIOUS QUESTIONS FOR THE DIRECTOR (writerQuestions)',
   // the judges
   'ARCS:',
+  'QUESTIONS FOR THE DIRECTOR (writerQuestions):',
   'OUTLINE:',
   'SELECTED ARCS (with interweaving metadata):',
   'INTERWEAVING PLAN (from arc analysis):',
@@ -454,7 +456,8 @@ function stripPhotoAnalyses(text) {
  *   excerpts, the documents' own words (3.6b fix batch);
  * - a model's output the prompt carries as data: the previous version a rework shows,
  *   the JSON after each MODEL_OUTPUT_LABELS line (the approved outline, the arcs and the
- *   rest of the arc analysis, the plans, the content bundle), the whiteboard reading's
+ *   rest of the arc analysis, the plans, the content bundle, the arc writer's questions
+ *   for the director as the arc reworker and the arc judge print them; fix 3.7b), the whiteboard reading's
  *   values, and the outline judge's photo analyses (3.6b fix batch).
  *
  * Kept: every label, the ones inside <DIRECTOR_GUIDANCE> included, so a scan reads them.

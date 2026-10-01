@@ -456,7 +456,10 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     state._arcAnalysisCache = {
       ...state._arcAnalysisCache,
       synthesisNotes: `${MODEL} synthesis`,
-      interweavingPlan: { ...state._arcAnalysisCache.interweavingPlan, convergencePoint: `${MODEL} plan` }
+      interweavingPlan: { ...state._arcAnalysisCache.interweavingPlan, convergencePoint: `${MODEL} plan` },
+      // Fix 3.7b: the arc writer's questions, which the arc reworker and the arc judge
+      // print back under their own labels
+      writerQuestions: [{ kind: 'player', about: `${MODEL} about`, question: `${MODEL} question` }]
     };
     state.outline = { ...state.outline, lede: { ...state.outline.lede, hook: `${MODEL} hook` } };
     state.contentBundle = { headline: { main: `${MODEL} headline` }, sections: [] };
