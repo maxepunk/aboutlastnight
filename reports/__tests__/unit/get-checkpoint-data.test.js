@@ -162,6 +162,34 @@ describe('getCheckpointData — enrichment counts (H25)', () => {
   });
 });
 
+describe('getCheckpointData — the ledger at the input review (phase 3, brief 3.5)', () => {
+  const { ledgerReviewOf } = require('../../lib/session-ledger');
+
+  it('carries the clock, the adjustments, the accounts and the totals check, from the one pure function', async () => {
+    const state = {
+      sessionConfig: {
+        sessionClock: { decided: true, evening: true, firstTime: '07:37 PM' },
+        adjustments: [{ time: '07:50 PM', kind: 'bonus', amount: 50000, toAccount: 'Ember' }],
+        ledgerCheck: { adjustmentsParsed: true, mismatches: [], unclassified: [] }
+      },
+      shellAccounts: [{ name: 'Ember', total: 925000, tokenCount: 2, rank: 1 }]
+    };
+    const data = await getCheckpointData(CHECKPOINT_TYPES.INPUT_REVIEW, state);
+    expect(data.ledger).toEqual(ledgerReviewOf(state));
+    expect(data.ledger.clock.evening).toBe(true);
+    expect(data.ledger.adjustmentsParsed).toBe(true);
+  });
+
+  it('says a thread from before phase 3 has no adjustments parsed, and decides its clock from its exposures', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.INPUT_REVIEW, {
+      sessionConfig: { exposures: [{ tokenId: 'nat002', time: '02:25 PM' }] },
+      shellAccounts: []
+    });
+    expect(data.ledger.adjustmentsParsed).toBe(false);
+    expect(data.ledger.clock).toEqual({ decided: true, evening: false, firstTime: '02:25 PM' });
+  });
+});
+
 describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
   const NOTES = [{ gate: 'outline', kind: 'rejection', round: 1, text: 'x', at: 't' }];
 

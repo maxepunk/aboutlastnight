@@ -364,7 +364,11 @@ function buildEvidenceIndex(evidenceBundle) {
  */
 async function getCheckpointData(checkpointType, state) {
     switch (checkpointType) {
-        case CHECKPOINT_TYPES.INPUT_REVIEW:
+        case CHECKPOINT_TYPES.INPUT_REVIEW: {
+            // Phase 3 (brief 3.5): the ledger as the director checks it: which clock
+            // rule applied, the adjustments beside each account's total and sale
+            // count, and a totals mismatch or "adjustments not parsed".
+            const { ledgerReviewOf } = require('./lib/session-ledger');
             return {
                 // `_parsedInput` is deliberately absent: it was never an Annotation
                 // channel, so LangGraph dropped every write and this key was always
@@ -372,8 +376,10 @@ async function getCheckpointData(checkpointType, state) {
                 sessionConfig: state.sessionConfig,
                 directorNotes: state.directorNotes,
                 playerFocus: state.playerFocus,
-                enrichment: summarizeEnrichment(state.directorNotes)
+                enrichment: summarizeEnrichment(state.directorNotes),
+                ledger: ledgerReviewOf(state)
             };
+        }
         case CHECKPOINT_TYPES.PAPER_EVIDENCE_SELECTION:
             return { paperEvidence: state.paperEvidence };
         case CHECKPOINT_TYPES.CHARACTER_IDS:

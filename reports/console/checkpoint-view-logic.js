@@ -347,23 +347,34 @@
   }
 
   /**
-   * Display shape for the whiteboard analysis: the six fields
-   * input-nodes.js WHITEBOARD_SCHEMA actually emits.
+   * Display shape for the whiteboard analysis: the fields input-nodes.js
+   * WHITEBOARD_SCHEMA emits.
    *
    * `ambiguities` is first in the returned object AND first on the screen: it is
    * the parser's own list of what it could not read, which is exactly what the
    * director can correct and nothing else can.
    *
+   * Phase 3 (brief 3.5): `regions`, each under the heading the players wrote, in
+   * place of groups under a model-written label. An older parse's `groups`
+   * ({label, members}) show as regions.
+   *
    * @param {object|null} wb
-   * @returns {{ambiguities: any[], names: any[], groups: any[], connections: any[],
-   *            notes: any[], structureType: string}}
+   * @returns {{ambiguities: any[], names: any[], regions: Array<{label: string, location: string, entries: any[]}>,
+   *            connections: any[], notes: any[], structureType: string}}
    */
   function whiteboardView(wb) {
     var w = wb || {};
+    var regions = Array.isArray(w.regions)
+      ? w.regions.filter(function (r) { return r && typeof r === 'object'; }).map(function (r) {
+        return { label: asString(r.label), location: asString(r.location), entries: asArray(r.entries) };
+      })
+      : asArray(w.groups).filter(function (g) { return g && typeof g === 'object'; }).map(function (g) {
+        return { label: asString(g.label), location: '', entries: asArray(g.members) };
+      });
     return {
       ambiguities: asArray(w.ambiguities),
       names: asArray(w.names),
-      groups: asArray(w.groups),
+      regions: regions,
       connections: asArray(w.connections),
       notes: asArray(w.notes),
       structureType: asString(w.structureType)
@@ -770,35 +781,69 @@
     other: 'a verdict that names no one'
   };
 
+  /** How the input review names a culprit verdict that blames no character (phase 3, brief 3.5). */
+  var BLAMES_NO_CHARACTER_LABEL = 'the room blamed an institution or an unnamed person';
+
   /**
    * The verdict kind the parse returned, for the input review.
    *
    * A verdict with no culprit leaves `accused` empty on purpose, and the screen
    * used to read an empty `accused` as "not parsed" and show it in red. `noCulprit`
-   * is what lets it say what the room decided instead.
+   * is what lets it say what the room decided instead. Phase 3 (brief 3.5): so does
+   * `blamesNoCharacter`, for a culprit verdict that blames an institution or an
+   * unnamed person (lib/accusation-verdict.js blamesNoCharacter), whose charge holds
+   * the room's words for who.
    *
    * @param {object|null} accusation - sessionConfig.accusation
-   * @returns {{verdictKind: string, noCulprit: boolean, label: string}}
+   * @returns {{verdictKind: string, noCulprit: boolean, blamesNoCharacter: boolean, label: string}}
    */
   function verdictView(accusation) {
-    var kind = asString((accusation || {}).verdictKind);
+    var a = accusation || {};
+    var kind = asString(a.verdictKind);
     var known = Object.prototype.hasOwnProperty.call(VERDICT_KIND_LABELS, kind);
+    var namesNoOne = kind === 'culprit' && accusationView(a).accused === '';
     return {
       verdictKind: known ? kind : '',
       noCulprit: known && kind !== 'culprit',
-      label: known ? VERDICT_KIND_LABELS[kind] : ''
+      blamesNoCharacter: namesNoOne,
+      label: namesNoOne ? BLAMES_NO_CHARACTER_LABEL : (known ? VERDICT_KIND_LABELS[kind] : '')
     };
+  }
+
+  /**
+   * The split final vote, for the input review (phase 3, brief 3.5): every option
+   * with its count, the one the group statement adopted marked, or a note that it
+   * adopted none. `split` is false when the parse recorded no split vote.
+   *
+   * @param {object|null} accusation - sessionConfig.accusation
+   * @returns {{split: boolean, line: string}}
+   */
+  function votesView(accusation) {
+    var votes = asArray((accusation || {}).votes).filter(function (v) {
+      return v && asString(v.option).trim() && typeof v.count === 'number';
+    });
+    if (votes.length < 2) return { split: false, line: '' };
+    var anyAdopted = votes.some(function (v) { return v.adopted === true; });
+    var line = votes.map(function (v) {
+      return asString(v.option).trim() + ' ' + v.count + (v.adopted === true ? ' (adopted by the group statement)' : '');
+    }).join(', ');
+    return { split: true, line: anyAdopted ? line : line + ' (the group statement adopted none of these)' };
   }
 
   /**
    * Each exposed memory's exposer, exposure time and owner, as the parse kept them
    * from the session report's Detective Evidence Log (sessionConfig.exposures).
    *
-   * Held: shown to the director here and nowhere in a writer's prompt until
-   * phase 3 rules on naming exposers.
+   * Since phase 3 (brief 3.5) the writers see each one's time and the name on its
+   * turn-in on the morning timeline, for memories the bundle holds as exposed; the
+   * owner column is shown here only.
+   *
+   * `parsedEmpty` (phase 3, brief 3.5) is true when the parse kept the list and it is
+   * empty: every memory then counts as buried, so the screen says so. A thread whose
+   * parse predates the list has none to judge.
    *
    * @param {Array|null} exposures
-   * @returns {{rows: Array<{tokenId: string, exposer: string, time: string, owner: string}>, count: number}}
+   * @returns {{rows: Array<{tokenId: string, exposer: string, time: string, owner: string}>, count: number, parsedEmpty: boolean}}
    */
   function exposuresView(exposures) {
     var rows = asArray(exposures)
@@ -811,7 +856,7 @@
           owner: asString(e.owner).trim()
         };
       });
-    return { rows: rows, count: rows.length };
+    return { rows: rows, count: rows.length, parsedEmpty: Array.isArray(exposures) && rows.length === 0 };
   }
 
   /** The basename of a path, for the photo join. */
@@ -1040,6 +1085,8 @@
     noteSlotKey: noteSlotKey,
     // Phase 2, brief 2.2: the director's words
     verdictView: verdictView,
+    // Phase 3, brief 3.5: the split final vote at the input review
+    votesView: votesView,
     exposuresView: exposuresView,
     characterIdCards: characterIdCards,
     characterIdsPayload: characterIdsPayload,

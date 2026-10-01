@@ -279,28 +279,33 @@ describe('accusationView', () => {
 });
 
 describe('whiteboardView', () => {
-  it('returns the six real whiteboard fields with arrays defaulted', () => {
+  it('returns the real whiteboard fields with arrays defaulted, each region under the players\' heading (phase 3, 3.5)', () => {
     expect(whiteboardView({
       names: ['Vic'],
-      groups: [],
+      regions: [{ label: 'WHO?', location: 'left column', entries: ['Vic', 'Randy'] }],
       connections: [{ from: 'Vic', to: 'Alex' }],
       notes: ['x'],
       ambiguities: ['left column unreadable']
     })).toEqual({
       ambiguities: ['left column unreadable'],
       names: ['Vic'],
-      groups: [],
+      regions: [{ label: 'WHO?', location: 'left column', entries: ['Vic', 'Randy'] }],
       connections: [{ from: 'Vic', to: 'Alex' }],
       notes: ['x'],
       structureType: ''
     });
   });
 
+  it('shows an older parse\'s groups as regions', () => {
+    expect(whiteboardView({ groups: [{ label: 'SUSPECTS', members: ['Vic'] }] }).regions)
+      .toEqual([{ label: 'SUSPECTS', location: '', entries: ['Vic'] }]);
+  });
+
   it('defaults everything for a missing whiteboard', () => {
     expect(whiteboardView(null)).toEqual({
       ambiguities: [],
       names: [],
-      groups: [],
+      regions: [],
       connections: [],
       notes: [],
       structureType: ''

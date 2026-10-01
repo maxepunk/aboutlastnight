@@ -3,9 +3,11 @@
  * Displays parsed session input for approval: session info, roster,
  * accusation (accused + charge + the full notes, and the verdict kind: a verdict
  * with no culprit is shown as that, not as a missing parse), each exposed memory's
- * exposer, time and owner (phase 2, brief 2.2), player focus, director
- * observations, the whiteboard analysis, and what the director-notes enricher
- * actually indexed. Approve, or reject with written corrections that re-parse.
+ * exposer, time and owner (phase 2, brief 2.2), the ledger (phase 3, brief 3.5:
+ * the clock rule, the adjustments beside each account, a totals mismatch or
+ * "adjustments not parsed"), the split vote, player focus, director observations,
+ * the whiteboard analysis, and what the director-notes enricher actually indexed.
+ * Approve, or reject with written corrections that re-parse.
  * Exports to window.Console.checkpoints.InputReview
  */
 
@@ -13,7 +15,7 @@ window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, safeStringify } = window.Console.utils;
-const { resolveRosterPronoun } = window.Console.inputReviewLogic;
+const { resolveRosterPronoun, ledgerView } = window.Console.inputReviewLogic;
 const { validateRosterEntry } = window.Console.awaitRosterLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
 
@@ -47,6 +49,50 @@ function EnrichmentPanel({ enrichment }) {
       ' dropped: not found verbatim in the prose. Anything a player actually said ' +
       'has to be in the notes word for word to reach the article.'
     )
+  );
+}
+
+/**
+ * The ledger (phase 3, brief 3.5), built to be skimmed: the clock rule and anything
+ * that needs the director first, the accounts and adjustments folded away.
+ */
+function LedgerPanel({ ledger }) {
+  const view = ledgerView(ledger);
+  return React.createElement('div', { className: 'checkpoint-section' },
+    React.createElement('h4', { className: 'checkpoint-section__title' }, 'Ledger'),
+    React.createElement('p', { className: 'text-sm text-secondary' }, view.clockLine),
+    view.warnings.map(function (w, i) {
+      return React.createElement('p', { key: 'lw-' + i, className: 'enrichment__warning', role: 'alert' }, w);
+    }),
+    (view.accounts.length > 0 || view.adjustments.length > 0) &&
+      React.createElement(window.Console.utils.CollapsibleSection, {
+        title: 'Accounts (' + view.accounts.length + ') and adjustments (' + view.adjustments.length + ')',
+        defaultOpen: false
+      },
+        React.createElement('table', { className: 'exposure-table text-sm' },
+          React.createElement('thead', null,
+            React.createElement('tr', null,
+              React.createElement('th', null, 'Account'),
+              React.createElement('th', null, 'Total'),
+              React.createElement('th', null, 'Sales')
+            )
+          ),
+          React.createElement('tbody', null,
+            view.accounts.map(function (a, i) {
+              return React.createElement('tr', { key: a.name + '-' + i },
+                React.createElement('td', null, a.name),
+                React.createElement('td', null, a.total),
+                React.createElement('td', null, a.sales)
+              );
+            })
+          )
+        ),
+        view.adjustments.length > 0 && React.createElement('ul', { className: 'checkpoint-section__list' },
+          view.adjustments.map(function (line, i) {
+            return React.createElement('li', { key: 'adj-' + i, className: 'text-sm' }, line);
+          })
+        )
+      )
   );
 }
 
@@ -107,11 +153,13 @@ function InputReview({ data, onApprove, onReject, theme }) {
   // Brief 2.2: an overdose, an accident or self-harm names no culprit, so an empty
   // accused is the parse being right, not the parse missing it.
   const verdict = ViewLogic.verdictView(sessionConfig.accusation);
+  // Brief 3.5: a split final vote, every option with its count.
+  const votes = ViewLogic.votesView(sessionConfig.accusation);
   // Brief 2.2: the Detective Evidence Log's exposer / time / owner, kept by the parse.
   const exposures = ViewLogic.exposuresView(sessionConfig.exposures);
   // The panel used to read connectionsMade / questionsRaised / votingResults;
-  // WHITEBOARD_SCHEMA emits names/connections/groups/notes/structureType/
-  // ambiguities, so the whole panel was permanently absent.
+  // WHITEBOARD_SCHEMA emits names/regions/connections/notes/structureType/
+  // ambiguities (regions since brief 3.5), so the whole panel was permanently absent.
   const whiteboard = ViewLogic.whiteboardView(directorNotes.whiteboard);
   const roster = sessionConfig.roster || [];
   const rosterPronouns = sessionConfig.rosterPronouns || {};
@@ -200,10 +248,16 @@ function InputReview({ data, onApprove, onReject, theme }) {
               React.createElement('span', { className: 'text-sm text-muted' }, 'Accused: '),
               React.createElement('span', { className: 'text-sm' }, 'no one (the room named no culprit)')
             )
-          : React.createElement('p', { className: 'validation-error', role: 'alert' },
-              'Accusation: not parsed. Reject with corrections naming who the room ' +
-              'accused and of what, or the article has no verdict to write against.'
-            ),
+          : verdict.blamesNoCharacter
+            // Brief 3.5: an institution or an unnamed person, in the room's words in the charge.
+            ? React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
+                React.createElement('span', { className: 'text-sm text-muted' }, 'Accused: '),
+                React.createElement('span', { className: 'text-sm' }, 'no character (the charge names who the room blamed)')
+              )
+            : React.createElement('p', { className: 'validation-error', role: 'alert' },
+                'Accusation: not parsed. Reject with corrections naming who the room ' +
+                'accused and of what, or the article has no verdict to write against.'
+              ),
       verdict.label && React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
         React.createElement('span', { className: 'text-sm text-muted' }, 'Verdict: '),
         React.createElement('span', { className: 'text-sm' }, verdict.label)
@@ -212,14 +266,29 @@ function InputReview({ data, onApprove, onReject, theme }) {
         React.createElement('span', { className: 'text-sm text-muted' }, 'Charge: '),
         React.createElement('span', { className: 'text-sm' }, accusation.charge)
       ),
+      votes.split && React.createElement('div', { className: 'flex gap-sm items-center mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Final vote (split): '),
+        React.createElement('span', { className: 'text-sm' }, votes.line)
+      ),
       accusation.notes && React.createElement('p', { className: 'text-sm text-secondary accusation__notes' },
         accusation.notes
       )
     ),
 
+    // The ledger (brief 3.5): the clock rule, then anything wrong with the account
+    // totals, then the accounts and adjustments folded away.
+    React.createElement(LedgerPanel, { ledger: data && data.ledger }),
+
+    // Brief 3.5: an evidence log the parse read as empty makes every memory count as
+    // buried, so it is said in red rather than left as a missing section.
+    exposures.parsedEmpty && React.createElement('p', { className: 'validation-error', role: 'alert' },
+      'Exposed memories: none parsed from the session report, so every memory will count ' +
+      'as buried. Reject with corrections if the evidence log had rows.'
+    ),
+
     // Exposed memories (brief 2.2): who turned each one in, when, and whose it is,
-    // as the parse kept them from the session report. Held from the writers until
-    // phase 3 rules on naming exposers; shown here so the director can check them.
+    // as the parse kept them from the session report. Since brief 3.5 the writers
+    // see each one's time and the name on its turn-in on the morning timeline.
     exposures.count > 0 && React.createElement('div', { className: 'checkpoint-section' },
       React.createElement(window.Console.utils.CollapsibleSection, {
         title: 'Exposed Memories (' + exposures.count + ')',
@@ -437,14 +506,16 @@ function InputReview({ data, onApprove, onReject, theme }) {
         )
       ),
 
-      whiteboard.groups.length > 0 && React.createElement('div', { className: 'mb-sm' },
-        React.createElement('span', { className: 'text-sm text-muted' }, 'Groups:'),
+      // Brief 3.5: each region under the heading the players wrote, or none.
+      whiteboard.regions.length > 0 && React.createElement('div', { className: 'mb-sm' },
+        React.createElement('span', { className: 'text-sm text-muted' }, 'Regions (under the players’ own headings):'),
         React.createElement('ul', { className: 'checkpoint-section__list' },
-          whiteboard.groups.map(function (group, i) {
+          whiteboard.regions.map(function (region, i) {
             return React.createElement('li', { key: 'wbg-' + i, className: 'text-sm' },
-              React.createElement('strong', null, (group && group.label) || 'Group ' + (i + 1)),
+              React.createElement('strong', null, region.label ? '“' + region.label + '”' : 'no heading'),
+              region.location && React.createElement('span', { className: 'text-muted' }, ' (' + region.location + ')'),
               React.createElement('span', { className: 'text-secondary' },
-                ': ' + ((group && Array.isArray(group.members)) ? group.members.join(', ') : '')
+                ': ' + region.entries.map(function (e) { return typeof e === 'string' ? e : safeStringify(e); }).join(', ')
               )
             );
           })
@@ -481,7 +552,7 @@ function InputReview({ data, onApprove, onReject, theme }) {
       ),
 
       whiteboard.ambiguities.length === 0 && whiteboard.names.length === 0 &&
-        whiteboard.groups.length === 0 && whiteboard.connections.length === 0 &&
+        whiteboard.regions.length === 0 && whiteboard.connections.length === 0 &&
         whiteboard.notes.length === 0 &&
         React.createElement('p', { className: 'enrichment__warning' },
           'No whiteboard analysis reached this checkpoint. The players\u2019 own ' +
@@ -542,7 +613,7 @@ function InputReview({ data, onApprove, onReject, theme }) {
     // Reject mode: corrections go back through the parse, not a rollback.
     mode === 'reject' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
       React.createElement('label', { className: 'form-group__label', htmlFor: 'input-corrections' },
-        'Corrections (who said what, roster fixes, accusation details)'
+        'Corrections (who said what, accusation details, the session report, the whiteboard)'
       ),
       React.createElement('textarea', {
         id: 'input-corrections',
@@ -550,13 +621,15 @@ function InputReview({ data, onApprove, onReject, theme }) {
         value: corrections,
         onChange: function (e) { setCorrections(e.target.value); },
         rows: 6,
-        placeholder: 'e.g. Blake said "he was a dead man", not Casper. Remi is on the ' +
-          'roster, Remy is not a character. The room accused Vic of the murder, 9 votes.',
+        placeholder: 'e.g. Blake said "he was a dead man", not Casper. The final vote ' +
+          'was Remi 7, Vic 4, and the statement named Remi.',
         'aria-label': 'Corrections to the parsed input'
       }),
       React.createElement('p', { className: 'text-xs text-muted' },
         'This re-runs the input parse with your corrections appended to every ' +
-        'parse prompt. It does not roll anything back.'
+        'parse prompt. It does not roll anything back. The roster, pronouns, ' +
+        'reporting mode and reporter name come from where you entered them, and a ' +
+        'correction here leaves them as they are.'
       ),
       React.createElement('button', {
         className: 'btn btn-danger',
