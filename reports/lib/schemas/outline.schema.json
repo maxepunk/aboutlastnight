@@ -84,7 +84,7 @@
                 "description": "Evidence cards to include in this arc",
                 "items": {
                   "type": "object",
-                  "required": ["tokenId", "placement", "loopFunction"],
+                  "required": ["tokenId", "placement"],
                   "additionalProperties": false,
                   "properties": {
                     "tokenId": { "type": "string", "description": "Document id" },
@@ -92,7 +92,7 @@
                     "loopFunction": {
                       "type": "string",
                       "enum": ["CLOSER", "OPENER"],
-                      "description": "CLOSER proves what was hinted, OPENER raises new question"
+                      "description": "Optional: the card's role in the arc"
                     }
                   }
                 }
@@ -104,11 +104,7 @@
                 "properties": {
                   "filename": { "type": "string", "description": "Photo filename" },
                   "afterParagraph": { "type": "integer", "description": "Place photo after this paragraph number" },
-                  "purpose": {
-                    "type": "string",
-                    "enum": ["breathing", "humanize", "bridge"],
-                    "description": "Why the photo sits here"
-                  }
+                  "purpose": { "type": "string", "description": "Why the photo sits here" }
                 }
               }
             }

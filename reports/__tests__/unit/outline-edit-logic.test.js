@@ -845,8 +845,29 @@ describe('phase 3 (3.2): the outline form (TH4)', () => {
       o.theStory.arcInterweaving.convergencePoint = '';
       o.followTheMoney.arcConnections = [{ arcName: '', financialAngle: '' }];
       return o;
+    },
+    // Fix 3.2b (finding 1): a card's loopFunction is optional, and a photo's purpose is
+    // the writer's own words, not one of the retired photo-pacing labels.
+    'a card with no loopFunction': () => {
+      const o = outlineWithSomeArcs();
+      o.theStory.arcs[0].evidenceCards = [{ tokenId: 'rfid-001', placement: 'after para 1' }];
+      return o;
+    },
+    "a photo placement whose purpose is the writer's own words": () => {
+      const o = outlineWithSomeArcs();
+      o.theStory.arcs[0].photoPlacement = { filename: 'whiteboard.jpg', afterParagraph: 2, purpose: 'The room at the vote.' };
+      return o;
     }
   };
+
+  it("a STORY card's loopFunction and a photo's purpose describe shape only (fix 3.2b, finding 1)", () => {
+    const outlineSchema = require('../../lib/schemas/outline.schema.json');
+    const arc = outlineSchema.properties.theStory.properties.arcs.items.properties;
+    const card = arc.evidenceCards.items;
+    expect(card.required).toEqual(['tokenId', 'placement']);
+    expect(card.properties.loopFunction.description).not.toMatch(/proves|hinted|raises|question/i);
+    expect(arc.photoPlacement.properties.purpose).toEqual({ type: 'string', description: 'Why the photo sits here' });
+  });
 
   it.each(Object.keys(ACCEPTED))('the schema accepts %s', (name) => {
     const r = validate('outline', ACCEPTED[name]());
