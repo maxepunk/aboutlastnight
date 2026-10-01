@@ -55,14 +55,33 @@ const REPO = path.join(__dirname, '..', '..');
  * - Integration of 3.1 and 3.5: the journalist pins compose both changes; each length
  *   is the base plus 3.1's change plus 3.5's (outline 14628 - 292 + 602; article
  *   43537 - 292 + 602; arcs 14301 - 292 + 262). The detective pins are 3.5's.
+ * - Phase 3 (3.6), the narrative tensions: their label drops the account-name
+ *   matching the code no longer does (T4). Every writer that carries the tensions:
+ *   both arc writers (the detective one too, since the arc writer is shared) and
+ *   the journalist article writer.
+ * - Phase 3 (3.6), the director's notes indexes: <QUOTE_BANK>'s intro drops "prefer
+ *   these" and its em-dash, and a quote line drops the enricher's [confidence]; the
+ *   renamed <EPILOGUE> block prints an item's director's sentence alone. Every
+ *   writer that carries the director's notes: both arc writers (the detective one
+ *   too) and the journalist outline and article writers.
+ * - Phase 3 (3.6 fix batch, item 4), the narrative tensions' label: a printed tension
+ *   is the director's own sentences naming Blake or the Valet, gathered by code, and
+ *   the label says they are record.
+ * - Phase 3 (3.6 fix batch, item 10), the fixture's epilogue item carries a `detail`
+ *   its notes hold word for word, so every writer that carries the director's notes
+ *   prints an <EPILOGUE> block.
+ * - Integration of 3.6 onto 3.1 and 3.5: each length is the base plus both sides'
+ *   changes (outline-journalist 14628 + 310 + 195; article-journalist 43537 + 310 +
+ *   221; arcs-journalist 14301 - 30 + 221; arcs-detective 14247 + 262 + 221); the
+ *   detective outline and article pins are 3.5's.
  */
 const PINNED = {
-  'outline-journalist': ['7e1a1517dcd1ae5bb2ec4e4e3aa176831405ef3555365c0d083a1fe939b93a07', 14938],
-  'article-journalist': ['fa3d3c03bcde58ec199d169a4eb7877dc248f3b53b4f1a5e067541d99ae1433a', 43847],
-  'arcs-journalist': ['70e70fdcfb39887f5846616d08767c886403536fd4f1cab27c57d6b70861c52a', 14271],
+  'outline-journalist': ['719446ac7fe4af8e12e81c6d8aec68234ab741cd2b2e4c8de0196b2065c49023', 15133],
+  'article-journalist': ['0cf4fede7778968e0639085e6a37d31efaea7d5fc117a1010e29db580c4fdc02', 44068],
+  'arcs-journalist': ['671adab390beee1a4d9dfcdf38f6c4a58565562f609c5f3bec85425e37530ba4', 14492],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
-  'arcs-detective': ['9b78874634d5b1db7cf7b119b15e9c77e7ba0e7d409f28d93f591c5e96285f0b', 14509]
+  'arcs-detective': ['41dace98218cf3f360893b995fa56031d926994f6c495a2568b217623df3df15', 14730]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {
