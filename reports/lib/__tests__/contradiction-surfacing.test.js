@@ -1,7 +1,11 @@
 describe('surfaceContradictions', () => {
   const { surfaceContradictions } = require('../workflow/nodes/contradiction-nodes')._testing;
 
-  test('flags named shell accounts matching roster members', () => {
+  test('an account named after a roster character produces no claim about its holder (phase 3, 3.6; T4)', () => {
+    // An account's name is a message its seller chose: a joke, a borrowed identity,
+    // the seller's own name or a frame. The named-account and transparency tensions
+    // read it as the character's own account ("used their own name ... a deliberate
+    // choice to be identifiable"); 26 sessions on disk have such an account.
     const state = {
       narrativeTensions: null,
       sessionConfig: { roster: ['Skyler', 'Alex', 'Mel', 'Remi'] },
@@ -17,19 +21,10 @@ describe('surfaceContradictions', () => {
       }
     };
 
-    const result = surfaceContradictions(state);
-    const tensions = result.narrativeTensions.tensions;
-
-    // Skyler gets transparency-vs-burial (NOT named-account)
-    const transparencyTensions = tensions.filter(t => t.type === 'transparency-vs-burial');
-    expect(transparencyTensions.length).toBe(1);
-    expect(transparencyTensions[0].character).toBe('Skyler');
-    expect(transparencyTensions[0].publicBehavior).toContain('nothing to hide');
-    expect(transparencyTensions[0].burialData.total).toBe(155000);
-
-    // Alex and Mel get named-account
-    const namedAccounts = tensions.filter(t => t.type === 'named-account');
-    expect(namedAccounts.length).toBe(2); // Alex and Mel only
+    const { tensions } = surfaceContradictions(state).narrativeTensions;
+    expect(tensions).toEqual([]);
+    const json = JSON.stringify(tensions);
+    ['used their own name', 'deliberate choice', 'identifiable', 'maintaining', 'transparency'].forEach((claim) => expect(json).not.toContain(claim));
   });
 
   test('does NOT flag anonymous accounts as roster matches', () => {
@@ -83,6 +78,43 @@ describe('surfaceContradictions', () => {
     const blakeProx = result.narrativeTensions.tensions.filter(t => t.type === 'blake-proximity');
     expect(blakeProx.length).toBe(1);
     expect(blakeProx[0].observations[0]).toContain('Blake');
+  });
+
+  test("the Valet tension prints the director's own sentences, not a generic claim (phase 3, 3.6)", () => {
+    // One sentence about Blake became "Director observed multiple characters
+    // interacting with Blake", a claim the notes never made.
+    const state = {
+      narrativeTensions: null,
+      sessionConfig: { roster: ['Remi', 'Jamie'] },
+      shellAccounts: [],
+      directorNotes: {
+        rawProse: 'Jamie read quietly. Blake to Remi: "Remi, I hope that we can work together. I may have acquired something for you." The Valet kept moving.',
+        transactionReferences: []
+      }
+    };
+
+    const [tension] = surfaceContradictions(state).narrativeTensions.tensions;
+    expect(tension.type).toBe('blake-proximity');
+    // A sentence that ends inside the director's quotation marks is not where the
+    // director's sentence ends.
+    expect(tension.observations).toEqual([
+      'Blake to Remi: "Remi, I hope that we can work together. I may have acquired something for you."',
+      'The Valet kept moving.'
+    ]);
+    expect(tension.narrativeNote).toContain('- Blake to Remi: "Remi, I hope that we can work together. I may have acquired something for you."');
+    expect(tension.narrativeNote).toContain('- The Valet kept moving.');
+    expect(tension.narrativeNote).not.toMatch(/multiple characters/);
+    expect(tension.narrativeNote).not.toContain('Jamie read quietly.');
+    expect(tension.narrativeNote).not.toContain('\u2014');
+  });
+
+  test("splits the notes into the director's sentences: a wrapped line stays whole, a paragraph break ends an open quote", () => {
+    const { proseSentences } = require('../workflow/nodes/contradiction-nodes')._testing;
+    expect(proseSentences('Blake told Vic that the room\nwas running out of time. Vic said "wait.\n\nThe Valet left.')).toEqual([
+      'Blake told Vic that the room\nwas running out of time.',
+      'Vic said "wait.',
+      'The Valet left.'
+    ]);
   });
 
   test('handles missing state fields gracefully', () => {

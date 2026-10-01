@@ -26,6 +26,16 @@ describe('derived-material labels', () => {
     expect(DERIVED_LABELS.narrativeTensions).toMatch(/pipeline's code/);
   });
 
+  it('labels the remaining machine-made material for what it is now (phase 3, 3.6)', () => {
+    // The tensions no longer match account names to roster names (T4). The label
+    // claims only what is true of a new note and of one stored before 3.6: code
+    // found it in the director's notes, and it is a lead the record overrules.
+    expect(DERIVED_LABELS.narrativeTensions).not.toMatch(/account names/);
+    expect(DERIVED_LABELS.narrativeTensions).toMatch(/director's notes/);
+    expect(DERIVED_LABELS.narrativeTensions).toMatch(/leads, not the record/);
+    for (const label of Object.values(DERIVED_LABELS)) expect(label).not.toContain('\u2014');
+  });
+
   it('the outline judge is told the Haiku photo descriptions are derived, not ground truth', () => {
     const prompt = buildEvaluationSystemPrompt('outline', getOutlineCriteria('journalist'), 'journalist');
     expect(prompt).toContain(`- photoAnalyses: The photo descriptions are fixed upstream. ${DERIVED_LABELS.photoDescriptions}`);

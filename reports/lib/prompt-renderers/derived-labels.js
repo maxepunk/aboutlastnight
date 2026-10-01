@@ -16,11 +16,17 @@ const DERIVED_LABELS = {
     'A model (Haiku) extracted this from the documents. It is derived, not the record: ' +
     'where it differs from the record, the record decides.',
 
-  /** narrativeTensions, from surfaceContradictions (code, no model). */
+  /**
+   * narrativeTensions, from surfaceContradictions (code, no model). Since phase 3
+   * (3.6) the code no longer matches account names to roster names (T4): its one
+   * note lists the director's own sentences about Blake and the Valet, and says so
+   * itself. A thread surfaced before 3.6 keeps its stored notes (092026 and 092626
+   * carry "Director observed multiple characters interacting with Blake"), so this
+   * label claims only what holds for both.
+   */
   narrativeTensions:
-    'The pipeline\'s code found these by matching account names to roster names and scanning ' +
-    'the director\'s notes for keywords. They are leads, not verified facts: where one differs ' +
-    'from the record, the record decides.',
+    'The pipeline\'s code found these by searching the director\'s notes. They are leads, ' +
+    'not the record: where one differs from the notes or the rest of the record, the record decides.',
 
   /** photoAnalyses, from analyzePhotos and finalizePhotoAnalyses (Haiku). */
   photoDescriptions:
