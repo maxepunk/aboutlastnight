@@ -54,6 +54,8 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // hero it used, and the PromptBuilder (whose roster method gives the roster section).
 const { hasInterweavingPlan, extractEvidenceSummary } = require('./arc-specialist-nodes');
 const { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } = require('./ai-nodes');
+// The page's own rule for which money tracker prints (printedWriterTracker).
+const { TemplateAssembler } = require('../../template-assembler');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -1399,18 +1401,22 @@ function pickFields(source, keys) {
  * Kept: the headline, kicker and deck; the byline's author, title and guest reporter;
  * the hero's filename and caption; each section's id and heading and each block's
  * printed fields (a block type the template does not know prints as a paragraph);
- * each sidebar entry's headline, summary and significance badge. Ids and filenames
- * stay as the names of what prints. Left out: `voice_self_check`, `pullQuotes`, the
- * top-level `photos`, `financialTracker` (the tracker prints from the ledger, not from
- * the writer's entries), `metadata`, `_revisionHistory`, a sidebar entry's `content`
- * and `owner`, the characters on a photo or the hero, and the byline's location and date.
+ * each sidebar entry's headline, summary and significance badge; and the writer's
+ * `financialTracker` when the page prints it (printedWriterTracker: no ledger account
+ * has a positive total). Ids and filenames stay as the names of what prints. Left out:
+ * `voice_self_check`, `pullQuotes`, the top-level `photos`, the writer's tracker when
+ * the page prints the ledger's in its place, `metadata`, `_revisionHistory`, a sidebar
+ * entry's `content` and `owner`, the characters on a photo or the hero, and the byline's
+ * location and date.
  *
  * @param {Object|null} bundle
+ * @param {Array|null} [shellAccounts] - state.shellAccounts, the ledger the page prints from
  * @returns {Object}
  */
-function printedBundle(bundle) {
+function printedBundle(bundle, shellAccounts) {
   if (!bundle || typeof bundle !== 'object') return {};
   const out = {};
+  const tracker = printedWriterTracker(bundle.financialTracker, shellAccounts);
   if (bundle.headline && typeof bundle.headline === 'object') out.headline = pickFields(bundle.headline, ['main', 'kicker', 'deck']);
   if (bundle.byline && typeof bundle.byline === 'object') out.byline = pickFields(bundle.byline, ['author', 'title', 'guestReporter']);
   if (bundle.heroImage && typeof bundle.heroImage === 'object') out.heroImage = pickFields(bundle.heroImage, ['filename', 'caption']);
@@ -1429,7 +1435,29 @@ function printedBundle(bundle) {
       .filter(entry => entry && typeof entry === 'object')
       .map(entry => pickFields(entry, ['tokenId', 'headline', 'summary', 'significance']));
   }
+  if (tracker) out.financialTracker = tracker;
   return out;
+}
+
+/**
+ * The writer's financial tracker as the page prints it: each entry's description and
+ * amount, and the total. The page prints it only when TemplateAssembler's own rule
+ * (overrideFinancialTracker) passes it through, which it does when no ledger account
+ * has a positive total, and only when it has an entry (hasFinancialTracker). Otherwise
+ * the page prints the ledger's tracker, or none, and this returns null.
+ *
+ * @param {Object|undefined} tracker - the bundle's financialTracker
+ * @param {Array|null} shellAccounts - state.shellAccounts
+ * @returns {{entries: Object[], totalExposed?: string}|null}
+ */
+function printedWriterTracker(tracker, shellAccounts) {
+  if (!tracker || typeof tracker !== 'object') return null;
+  if (TemplateAssembler.prototype.overrideFinancialTracker(tracker, shellAccounts || []) !== tracker) return null;
+  const entries = (Array.isArray(tracker.entries) ? tracker.entries : [])
+    .filter(entry => entry && typeof entry === 'object')
+    .map(entry => pickFields(entry, ['description', 'amount']));
+  if (entries.length === 0) return null;
+  return { entries, ...pickFields(tracker, ['totalExposed']) };
 }
 
 /** The outline judge's momentum questions as the detective judge reads them (parked, spec D13). */
@@ -1685,7 +1713,7 @@ ${renderArticleJudgePhotos(state)}
 
 The content bundle below holds only the fields the published page prints.
 CONTENT BUNDLE:
-${JSON.stringify(printedBundle(state.contentBundle), null, 2)}
+${JSON.stringify(printedBundle(state.contentBundle, state.shellAccounts), null, 2)}
 
 OUTLINE:
 ${JSON.stringify(state.outline || {}, null, 2)}

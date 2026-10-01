@@ -2423,6 +2423,28 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       ]);
     });
 
+    // Fix 3.4b (review finding 5): with no ledger account above zero, the page prints the
+    // writer's tracker (TemplateAssembler.overrideFinancialTracker passes it through), so
+    // the judge reads its printed fields: each entry's description and amount, and the total.
+    it('keeps the writer\'s tracker when no ledger account has a positive total, as the page prints it', () => {
+      const bundle = clone(PRINTED_BUNDLE);
+      bundle.financialTracker = {
+        entries: [{ date: 'NOT PRINTED DATE', description: 'TRACKER ENTRY', amount: '$1', category: 'shell-account' }],
+        totalExposed: '$1'
+      };
+      const printed = { entries: [{ description: 'TRACKER ENTRY', amount: '$1' }], totalExposed: '$1' };
+      for (const shellAccounts of [[], [{ name: 'Melanie', total: 0, tokenCount: 0 }], undefined]) {
+        const shown = bundleIn(userFor('article', stateFor('journalist', { contentBundle: clone(bundle), shellAccounts })));
+        expect([shellAccounts, shown.financialTracker]).toEqual([shellAccounts, printed]);
+      }
+      // A ledger account above zero: the page prints the ledger, so the writer's tracker stays out.
+      const ledger = bundleIn(userFor('article', stateFor('journalist', { contentBundle: clone(bundle) })));
+      expect(ledger.financialTracker).toBeUndefined();
+      // A writer's tracker with no entry: the page prints no tracker at all.
+      const empty = { ...clone(bundle), financialTracker: { entries: [], totalExposed: '$0' } };
+      expect(bundleIn(userFor('article', stateFor('journalist', { contentBundle: empty, shellAccounts: [] }))).financialTracker).toBeUndefined();
+    });
+
     it('the detective article judge keeps today\'s bundle', () => {
       const prompt = userFor('article', stateFor('detective', { contentBundle: clone(PRINTED_BUNDLE) }));
       expect(prompt).toContain(JSON.stringify(PRINTED_BUNDLE, null, 2));
