@@ -27,14 +27,7 @@ Roster: `Vic, Jess, Taylor`. Morgan is a character no one played this session.
 
 ## Regions
 
-Players divide the whiteboard into regions: columns, boxes, circled clusters, lists. Report each region as its own entry:
-- its heading, copied exactly as the players wrote it, or empty when they wrote none;
-- where it sits (left column, top right, centre), so a region with no heading can still be told apart;
-- what it holds, item by item, as written.
-
-The heading is the players' label for the region, so it is the only label a region carries. Describe a region with no heading by where it sits.
-
-Report lines and arrows between items as connections, with any words written on the line. Writing that sits in no region and on no line goes in notes.
+Players divide the whiteboard into regions: columns, boxes, circled clusters, lists. Report each one as its own region. The heading the players wrote is the only label a region carries, because the writers need the room's own words; a region with no heading is told apart by where it sits.
 
 ### Example
 
@@ -47,13 +40,3 @@ Copy the writing word for word, and describe how it is laid out. The writers dra
 > Below Vic's name, handwritten text reads: "Talked to Morgan at bar - suspicious"
 
 That line reports the whiteboard. "Vic must have conspired with Morgan" would be a conclusion the whiteboard does not state.
-
-## Output Format
-
-Return structured JSON with:
-- `names`: every name written on the whiteboard
-- `regions`: array of `{label, location, entries}`, one per region, under the heading the players wrote
-- `connections`: array of `{from, to, label}` for lines and arrows, with any words written on them
-- `notes`: writing in no region and on no line
-- `structureType`: how the whiteboard is laid out, described plainly
-- `ambiguities`: writing you could not read with confidence

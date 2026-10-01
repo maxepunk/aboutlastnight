@@ -241,6 +241,10 @@ const SESSION_REPORT_SCHEMA = {
  * "SUSPECTS" led the model to label clusters itself, and code read the first group
  * so labelled as the room's suspects). Names are matched against every character and
  * the NPCs, and kept as written when unsure.
+ *
+ * Each rule is stated once (fix batch, finding 7): the reading rules, name matching
+ * included, are whiteboard-analysis.md's; these descriptions define the fields; the
+ * user prompt carries the photo, the session's lists and the corrections.
  */
 const WHITEBOARD_SCHEMA = {
   type: 'object',
@@ -249,7 +253,7 @@ const WHITEBOARD_SCHEMA = {
     names: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Every name written on the whiteboard. A name whose handwriting clearly matches a character or an NPC takes that spelling; any other name, and any you are unsure of, is copied as written.'
+      description: 'Every name written on the whiteboard, spelled as the matching rules decide.'
     },
     regions: {
       type: 'array',
@@ -262,7 +266,7 @@ const WHITEBOARD_SCHEMA = {
           entries: { type: 'array', items: { type: 'string' }, description: 'The writing inside the region, item by item, copied as written, with names spelled as in names.' }
         }
       },
-      description: 'Each area of the whiteboard the players set apart (a column, a box, a circled cluster, a list), one entry per region, under the players\' own heading.'
+      description: 'One entry per region of the whiteboard.'
     },
     connections: {
       type: 'array',

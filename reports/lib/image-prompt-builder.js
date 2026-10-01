@@ -50,27 +50,20 @@ class ImagePromptBuilder {
 
     const systemPrompt = prompts['whiteboard-analysis'];
 
+    // The reading rules (name matching included) are the system file's, and the output
+    // fields are WHITEBOARD_SCHEMA's (fix batch, finding 7): the user prompt carries the
+    // photo, the session's lists and the corrections, so each rule is stated once.
     const userPrompt = `First, use the Read tool to view the whiteboard photograph at:
 ${sessionData.whiteboardPhotoPath}
 
-THE ROSTER (the characters played this session):
+THE ROSTER:
 ${listOf(sessionData.roster)}
 
-EVERY CHARACTER IN THE GAME (the whiteboard can name one no one played this session):
+EVERY CHARACTER IN THE GAME:
 ${listOf(sessionData.characters)}
 
 THE NPCS:
-${listOf(sessionData.npcs)}
-
-Read the whiteboard and extract all visible writing. Match each handwritten name against the three lists above: when the handwriting clearly matches one of those names, use that spelling; when you are unsure, keep the text as written and add it to ambiguities.
-
-Return structured JSON with:
-- names: every name written on the whiteboard
-- regions: each area the players set apart, under the heading they wrote (empty when they wrote none), with where it sits and what it holds
-- connections: lines and arrows, with any words written on them
-- notes: writing in no region and on no line
-- structureType: how the whiteboard is laid out
-- ambiguities: writing you could not read with confidence${buildParseCorrectionsBlock(sessionData.corrections)}`;
+${listOf(sessionData.npcs)}${buildParseCorrectionsBlock(sessionData.corrections)}`;
 
     return { systemPrompt, userPrompt };
   }

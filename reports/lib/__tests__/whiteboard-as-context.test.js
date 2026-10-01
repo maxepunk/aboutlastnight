@@ -72,7 +72,6 @@ describe('the whiteboard prompt matches names against every character and the NP
     expect(userPrompt).toContain('Vic, Alex');
     expect(userPrompt).toContain('Vic Kingsley, Alex Reeves, Morgan Reed');
     expect(userPrompt).toContain('Marcus Blackwood, Blake, Nova');
-    expect(userPrompt).toMatch(/keep the text as written/);
     expect(userPrompt).not.toMatch(/roster-corrected|use the roster above to correct/);
   });
 
@@ -84,6 +83,41 @@ describe('the whiteboard prompt matches names against every character and the NP
     expect(text).toMatch(/copy the text as written/i);
     expect(text).toMatch(/region/i);
     expect(text).not.toMatch(/—/);
+  });
+});
+
+describe('each whiteboard rule is stated once (fix batch, finding 7; coverage W12)', () => {
+  const FIELDS = ['names', 'regions', 'connections', 'notes', 'structureType', 'ambiguities'];
+  const systemFile = fs.readFileSync(WHITEBOARD_FILE, 'utf8');
+  const schemaText = JSON.stringify(WHITEBOARD_SCHEMA);
+  let userPrompt;
+
+  beforeAll(async () => {
+    ({ userPrompt } = await new ImagePromptBuilder({ loadPhasePrompts: async () => ({ 'whiteboard-analysis': systemFile }) })
+      .buildWhiteboardPrompt({
+        roster: ['Vic'], characters: ['Vic Kingsley', 'Morgan Reed'], npcs: ['Blake'],
+        whiteboardPhotoPath: '/p/whiteboard.jpg', corrections: ['The arrow reads "paid?".']
+      }));
+  });
+
+  it('the user prompt carries only the photo path, the session\'s lists and the corrections', () => {
+    expect(userPrompt).toContain('/p/whiteboard.jpg');
+    expect(userPrompt).toContain('Vic Kingsley, Morgan Reed');
+    expect(userPrompt).toContain('<DIRECTOR_CORRECTIONS>');
+    expect(userPrompt).not.toMatch(/clearly match|as written|ambiguities|Return structured JSON/i);
+    FIELDS.forEach((field) => expect(userPrompt).not.toMatch(new RegExp(`- ${field}:`)));
+  });
+
+  it('the name-matching rule lives in the system file alone', () => {
+    expect(systemFile).toMatch(/clearly matches a name on those lists/);
+    expect(schemaText).not.toMatch(/clearly matches|unsure/);
+  });
+
+  it('the output fields live in the schema alone', () => {
+    expect(systemFile).not.toMatch(/## Output Format/);
+    FIELDS.forEach((field) => expect(systemFile).not.toMatch(new RegExp('`' + field + '`:')));
+    expect(systemFile).not.toMatch(/`structureType`/);
+    FIELDS.forEach((field) => expect(WHITEBOARD_SCHEMA.properties[field].description).toBeTruthy());
   });
 });
 
