@@ -127,75 +127,125 @@ const QUALITY_CRITERIA = {
 // readiness alone (createEvaluator holds a failed one to not-ready, whatever the
 // judge's own structuralPassed says).
 //
-// `printedOnly` groups score what the article prints (photos, the fiction's words).
-// Arcs place no photos and print nothing, so the arc judge leaves them out: there a
-// criterion could only misfire, at the cost of an automatic arc rework.
+// So each criterion asks only what its judge can check against its own prompts, and
+// only what the judged output can hold (3.4 fix round 1): a clause the judge cannot
+// check scores low and sends the draft to a rework that has nothing to fix. A group
+// is worded per judge, and `reads` names the material each judge's criterion checks
+// against (TRUTH_MATERIAL); the tests find every one in that judge's prompts.
+//
+// `phases` limits a group to the judges whose output it scores. Arcs place no photos
+// and print nothing, so the arc judge leaves out photos and the fiction's words: there
+// a criterion could only misfire, at the cost of an automatic arc rework.
 
 /** What each judge scores, as the truth criteria name it. */
 const TRUTH_SUBJECTS = { arcs: 'the arcs', outline: 'the outline', article: 'the article' };
+
+/**
+ * The material a truth criterion reads, by the heading or tag its judge's prompts print
+ * it under. The first ten are the judge's inputs; the last two are the judged output's
+ * own text, which only the article holds (an outline places cards by id and photos by
+ * filename, and arcs place neither).
+ */
+const TRUTH_MATERIAL = Object.freeze({
+  record: '<RECORD>',                       // the exposed documents (renderRecordView)
+  timeline: '<morning-timeline>',           // the ledger and the evidence log, on the morning clock
+  notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
+  epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
+  verdict: '<DIRECTOR_ACCUSATION>',         // the room's verdict, in the director's words
+  roster: 'CANONICAL CHARACTER ROSTER:',    // each player with the roster's pronoun
+  whiteboard: '### The Whiteboard',         // the whiteboard, as context (renderWhiteboardConnections)
+  photos: '\nPHOTOS (',                     // the photos the judged writer was given, with the director's descriptions
+  modeBlock: '<mode-',                      // the session's reporting-mode block (system prompt)
+  truthRules: '<truth-rules>',              // the truth rules, T14's production words among them (system prompt)
+  printedCards: '"type": "evidence-card"',  // the article's cards, as CONTENT BUNDLE prints them
+  printedCaptions: '"caption": '            // the article's captions, as CONTENT BUNDLE prints them
+});
 
 const TRUTH_GROUPS = [
   {
     key: 'evidenceTruth',
     rules: ['T1', 'T3', 'T4', 'T6'],
+    reads: () => ['record', 'timeline', 'notes'],
     describe: (s) => `Is every claim in ${s} written as its evidence allows (T1), with no buried memory's content or owner stated as fact (T3), no account's name read as proof of who holds it (T4), and no exposer named that neither the evidence log nor the director's notes name (T6)?`
   },
   {
     key: 'moneyTruth',
     rules: ['T5'],
+    reads: () => ['timeline'],
     describe: (s) => `Does the money in ${s} run from NeurAI's board to the seller's chosen account, with each figure as the ledger records it and nothing read as anyone's other wealth (T5)?`
   },
   {
     key: 'verdictTruth',
     rules: ['T2'],
+    reads: () => ['verdict', 'notes'],
     describe: (s) => `Is the verdict in ${s} told as the room's official story, with the alternative theories the room debated reported, and left ungraded against any hidden answer (T2)?`
   },
   {
     key: 'stagesTruth',
     rules: ['T7'],
+    reads: () => ['record', 'modeBlock', 'epilogue', 'timeline'],
     describe: (s) => `In ${s}, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)?`
   },
   {
     key: 'novaPositionTruth',
     rules: ['T8'],
+    reads: () => ['modeBlock'],
     describe: (s) => `In ${s}, is Nova the uninterested third party: outside the room's votes, accusations and exposures, and witnessing only what this session's mode block allows (T8)?`
   },
   {
     key: 'playersTruth',
     rules: ['T9', 'T11'],
+    reads: () => ['roster'],
     describe: (s) => `Does every player in ${s} take the pronoun the roster gives (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
   },
   {
     key: 'wordsTruth',
     rules: ['T12'],
-    describe: (s) => `Is every quoted line in ${s} word for word from the record or the director's notes and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?`
+    // Only the article prints a card's text; the arcs and the outline name cards by id.
+    reads: (phase) => (phase === 'article' ? ['record', 'notes', 'printedCards'] : ['record', 'notes']),
+    describe: (s, phase) => (phase === 'article'
+      ? 'Is every quoted line in the article word for word from the record or the director\'s notes and in its real speaker\'s mouth, and does every card copy the record with no id or timestamp in its text (T12)?'
+      : `Is every quoted line in ${s} word for word from the record or the director's notes, and in its real speaker's mouth (T12)?`)
   },
   {
     key: 'photosTruth',
     rules: ['T13'],
-    printedOnly: true,
-    describe: (s) => `Does ${s} place every photo the director kept and the whiteboard photo nowhere, cite nothing from the whiteboard, and caption each photo with the subject and action of the director's description (T13)?`
+    phases: ['outline', 'article'],
+    // The outline has one photo slot per arc and one in FOLLOW THE MONEY, and no
+    // caption: placing every photo, and captioning it, is the article's work. The
+    // article judge reads the photos its writer was given (renderArticleJudgePhotos).
+    reads: (phase) => (phase === 'article' ? ['photos', 'whiteboard', 'printedCaptions'] : ['photos', 'whiteboard']),
+    describe: (s, phase) => (phase === 'article'
+      ? 'Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director\'s description wherever PHOTOS gives one (T13)?'
+      : 'Does every photo the outline places come from PHOTOS, which leaves the whiteboard photo out, and does the outline cite nothing from the whiteboard (T13)? The outline has one photo slot for each arc and one in FOLLOW THE MONEY, and the article places the photos the outline has no slot for.')
   },
   {
     key: 'fictionTruth',
     rules: ['T14'],
-    printedOnly: true,
+    phases: ['outline', 'article'],
+    reads: () => ['truthRules'],
     describe: (s) => `Does every line of ${s} that reaches print speak the fiction's own words, with no production word in it (T14)?`
   }
 ];
 
 /**
- * The truth criteria one journalist judge scores.
+ * The truth criteria one journalist judge scores, each worded for that judge.
  *
  * @param {'arcs'|'outline'|'article'} phase
- * @returns {Object<string, {description: string, rules: string[], type: 'structural', truth: true}>}
+ * @returns {Object<string, {description: string, rules: string[], reads: string[], type: 'structural', truth: true}>}
  */
 function truthCriteria(phase) {
   const subject = TRUTH_SUBJECTS[phase];
   if (!subject) throw new Error(`Unknown evaluation phase: ${phase}`);
   return Object.fromEntries(TRUTH_GROUPS
-    .filter((group) => phase !== 'arcs' || !group.printedOnly)
-    .map((group) => [group.key, { description: group.describe(subject), rules: group.rules, type: 'structural', truth: true }]));
+    .filter((group) => !group.phases || group.phases.includes(phase))
+    .map((group) => [group.key, {
+      description: group.describe(subject, phase),
+      rules: group.rules,
+      reads: group.reads(phase),
+      type: 'structural',
+      truth: true
+    }]));
 }
 
 /**
@@ -1155,6 +1205,52 @@ ${entries.join('\n\n')}`;
 }
 
 /**
+ * The article judge's photos (phase 3, 3.4 fix round 1): the photos the article writer
+ * was given, so photosTruth asks a rework only for photos it can see. The article
+ * writer's inputs (ai-nodes.js articleWriterInputs) carry them as state.heroImage, the
+ * arc evidence packages' photos (its ARC PHOTOS) and state.photoDescriptions.
+ *
+ * That is the hero image (the stored hero, else the one generateOutline would select,
+ * as the outline judge reads it), then each photo the packages list, once, with the
+ * whiteboard photo left out. Each is the writer's renderPhotoEntry line: the names
+ * identified in it and the director's description, joined by filename. A hero no
+ * package lists takes its names from its photo analysis, as the outline judge's does.
+ *
+ * @param {Object} state
+ * @returns {string}
+ */
+function renderArticleJudgePhotos(state) {
+  const heroImage = reworkHeroImage(state);
+  const heroKey = heroImage ? photoKey(heroImage) : null;
+  const whiteboardKey = state.whiteboardPhotoPath ? photoKey(state.whiteboardPhotoPath) : null;
+  const packagePhotos = new Map();
+  for (const pkg of state.arcEvidencePackages || []) {
+    for (const photo of (Array.isArray(pkg?.photos) ? pkg.photos : [])) {
+      const key = photo?.filename ? photoKey(photo.filename) : null;
+      if (!key || key === whiteboardKey || packagePhotos.has(key)) continue;
+      packagePhotos.set(key, { filename: photo.filename, names: photo.characters });
+    }
+  }
+  const heroAnalysis = heroKey
+    ? (state.photoAnalyses?.analyses || []).find(analysis => analysis?.filename && photoKey(analysis.filename) === heroKey)
+    : null;
+  const photos = [
+    ...(heroImage ? [{ filename: heroImage, names: packagePhotos.get(heroKey)?.names || heroAnalysis?.identifiedCharacters || [], hero: true }] : []),
+    ...[...packagePhotos].filter(([key]) => key !== heroKey).map(([, photo]) => photo)
+  ];
+  if (photos.length === 0) return 'PHOTOS (the article writer was given none)';
+
+  const entries = photos.map((photo, i) => `${i + 1}. ${photo.hero ? '[hero image] ' : ''}${renderPhotoEntry(
+    { filename: photo.filename, names: photo.names },
+    state.photoDescriptions || null,
+    '   '
+  )}`);
+  return `PHOTOS (the ${photos.length} photos the article writer was given: the hero image, then each photo the arc evidence packages list, without the whiteboard photo; each gives the names identified in it and the director's description, joined by filename):
+
+${entries.join('\n\n')}`;
+}
+
+/**
  * The session roster for the outline and article judges: the players present, by
  * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts).
  *
@@ -1568,6 +1664,8 @@ REPORTING MODE FOR THIS SESSION: ${reportingMode} (the mode block in your instru
 ${renderJudgeSessionContext(state)}
 
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
+
+${renderArticleJudgePhotos(state)}
 
 The content bundle below holds only the fields the published page prints.
 CONTENT BUNDLE:
@@ -2175,6 +2273,7 @@ module.exports = {
     getArticleCriteria,
     getPhaseCriteria,
     truthCriteria,
+    TRUTH_MATERIAL,
     printedBundle,
     buildFactCheckArgs,
     getNpcDescriptions,

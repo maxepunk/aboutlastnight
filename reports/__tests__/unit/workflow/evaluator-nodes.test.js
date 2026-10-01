@@ -2037,6 +2037,107 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     });
   });
 
+  // Fix round 1: a truth criterion scored below 0.8 holds the output to not-ready, so a
+  // clause the judge cannot check against its own prompt sends the draft back for a
+  // rework that cannot fix it. Each criterion names the material it reads, and each
+  // judge's prompts must print every one.
+  describe('each truth criterion reads only what its judge\'s prompt holds', () => {
+    const { _testing: { TRUTH_MATERIAL } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+    const { renderPhotoEntry } = require('../../../lib/prompt-renderers/director-words-renderer');
+    const outlineSchema = require('../../../lib/schemas/outline.schema.json');
+
+    /** The fixture, with a bundle that prints a hero image and a captioned photo beside its cards. */
+    const fullState = () => {
+      const state = stateFor('journalist');
+      state.heroImage = 'hero.jpg';
+      state.contentBundle.heroImage = { filename: 'hero.jpg', caption: 'The room before the vote.' };
+      state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
+      return state;
+    };
+    const truthOf = (phase) => Object.entries(getPhaseCriteria(phase, 'journalist')).filter(([, c]) => c.truth);
+    /** Every property name anywhere in a JSON schema. */
+    const propertyNames = (schema) => {
+      const names = new Set();
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return;
+        if (node.properties) Object.keys(node.properties).forEach((name) => names.add(name));
+        Object.values(node).forEach(walk);
+      };
+      walk(schema);
+      return names;
+    };
+
+    it.each(['arcs', 'outline', 'article'])('every material a %s truth criterion reads is printed in that judge\'s prompts', (phase) => {
+      const state = fullState();
+      const prompts = `${systemFor(phase, state)}\n${userFor(phase, state)}`;
+      const missing = [];
+      for (const [key, criterion] of truthOf(phase)) {
+        expect(Array.isArray(criterion.reads) && criterion.reads.length > 0).toBe(true);
+        for (const material of criterion.reads) {
+          expect(Object.keys(TRUTH_MATERIAL)).toContain(material);
+          if (!prompts.includes(TRUTH_MATERIAL[material])) missing.push(`${key} reads ${material}`);
+        }
+      }
+      expect(missing).toEqual([]);
+    });
+
+    it('only the article judge reads printed card text and captions: the arcs and the outline hold neither', () => {
+      // An outline places cards by id and photos by filename: no caption, no card text.
+      const outlineFields = propertyNames(outlineSchema);
+      for (const field of ['caption', 'content', 'text', 'headline']) expect(outlineFields.has(field)).toBe(false);
+      for (const phase of ['arcs', 'outline']) {
+        for (const [key, criterion] of truthOf(phase)) {
+          expect([key, criterion.reads.filter((m) => m === 'printedCards' || m === 'printedCaptions')]).toEqual([key, []]);
+          expect([key, criterion.description]).not.toEqual([key, expect.stringMatching(/\bcaption|\bcards?\b/i)]);
+        }
+      }
+      const article = getPhaseCriteria('article', 'journalist');
+      expect(article.wordsTruth.reads).toContain('printedCards');
+      expect(article.wordsTruth.description).toMatch(/does every card copy the record/);
+      expect(article.photosTruth.reads).toContain('printedCaptions');
+      expect(article.photosTruth.description).toMatch(/caption/);
+    });
+
+    it('the outline judge holds the outline to its photo slots: photos from PHOTOS only, the rest left to the article', () => {
+      // The outline has one photoPlacement per arc and one in FOLLOW THE MONEY, so it
+      // cannot place every photo of a session with more photos than slots (092026: 8).
+      const { photosTruth } = getPhaseCriteria('outline', 'journalist');
+      expect(photosTruth.description).toMatch(/every photo the outline places come from PHOTOS/);
+      expect(photosTruth.description).toMatch(/the article places the photos the outline has no slot for/);
+      expect(photosTruth.description).not.toMatch(/every photo the director kept/);
+    });
+
+    it('the article judge holds the article to PHOTOS, the photos its writer was given', () => {
+      const { photosTruth } = getPhaseCriteria('article', 'journalist');
+      expect(photosTruth.description).toMatch(/every photo in PHOTOS/);
+      expect(photosTruth.description).toMatch(/director's description/);
+    });
+
+    it('the article judge gets the article writer\'s photos: the hero, then each package photo once with the director\'s description, never the whiteboard', () => {
+      const state = fullState();
+      state.arcEvidencePackages[1].photos = [
+        { filename: 'p2.jpg', characters: ['Alex'] },  // given twice: listed once
+        { filename: 'whiteboard.jpg', characters: ['Riley'] }  // the whiteboard photo: left out
+      ];
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];  // no package gives it to the writer
+      const prompt = userFor('article', state);
+      const start = prompt.indexOf('\nPHOTOS (');
+      expect(start).toBeGreaterThan(prompt.indexOf('</RECORD>'));
+      const section = prompt.slice(start, prompt.indexOf('CONTENT BUNDLE:'));
+      expect(section).toContain(`1. [hero image] ${renderPhotoEntry({ filename: 'hero.jpg', names: ['Alex', 'Morgan', 'Sarah'] }, state.photoDescriptions, '   ')}`);
+      expect(section).toContain(`2. ${renderPhotoEntry({ filename: 'p2.jpg', names: ['Alex'] }, state.photoDescriptions, '   ')}`);
+      expect(section).toContain("The director's description, word for word: Alex leans over the ledger and points at a line.");
+      expect(count(section, 'p2.jpg')).toBe(1);
+      expect(section).not.toContain('whiteboard.jpg');
+      expect(section).not.toContain('p9.jpg');
+    });
+
+    it('the detective article judge gets no PHOTOS section', () => {
+      const prompt = userFor('article', { ...fullState(), theme: 'detective' });
+      expect(prompt).not.toContain('\nPHOTOS (');
+    });
+  });
+
   describe('a truth breach goes back automatically', () => {
     const judgeWith = (verdict) => jest.fn().mockResolvedValue(verdict);
 
