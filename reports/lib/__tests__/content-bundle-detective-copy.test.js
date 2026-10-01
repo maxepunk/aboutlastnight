@@ -8,6 +8,10 @@
  * The copy carries no $id, so it can never be registered as the live schema (whose
  * $id is "content-bundle"); the detective's <SCHEMA> still prints the id line it
  * printed before (spec D13: detective prompts do not change).
+ *
+ * Phase 3 (3.7): the live schema gained the optional `writerQuestions`, so the copy
+ * carries it too, to keep the shape; the detective's print leaves it out
+ * (DETECTIVE_PRINTED_SCHEMA), so its <SCHEMA> is the text it was.
  */
 const liveSchema = require('../schemas/content-bundle.schema.json');
 const detectiveCopy = require('../schemas/content-bundle.detective-prompt.json');
@@ -49,6 +53,9 @@ describe("the detective's frozen copy of the content-bundle schema", () => {
       '  "$id": "content-bundle",',
       '  "title": "ContentBundle",'
     ]);
-    expect(JSON.parse(printed)).toEqual({ ...detectiveCopy, $id: 'content-bundle' });
+    const { writerQuestions, ...printedProperties } = detectiveCopy.properties;
+    expect(writerQuestions).toBeDefined();
+    expect(JSON.parse(printed)).toEqual({ ...detectiveCopy, $id: 'content-bundle', properties: printedProperties });
+    expect(printed).not.toContain('writerQuestions');
   });
 });

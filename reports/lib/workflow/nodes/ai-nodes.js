@@ -51,6 +51,9 @@ const {
 } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { directorAccusationText } = require('../../accusation-verdict');
+// Phase 3 (3.7): the writers' questions for the director (C15), kept through a rework
+// (R5) and out of every later prompt.
+const { withCarriedWriterQuestions, schemaWithoutWriterQuestions } = require('../../writer-questions');
 
 /**
  * Get PromptBuilder from config or create default
@@ -1043,8 +1046,9 @@ function outlineWriterInputs(state, heroImage) {
   // fallback never fired and <arc-metadata> rendered [] in every real session.
   // `timing`, `architecture` and `interweavingFromPreviousRound` (reviseArcs's note
   // that it kept the previous plan) are our own bookkeeping and are not the model's
-  // business (<arc-analysis> dumped them verbatim).
-  const { timing, architecture, interweavingFromPreviousRound, ...cache } = state._arcAnalysisCache || {};
+  // business (<arc-analysis> dumped them verbatim). Phase 3 (3.7): nor are the arc
+  // writer's questions, which are the director's to answer at the arc stop.
+  const { timing, architecture, interweavingFromPreviousRound, writerQuestions, ...cache } = state._arcAnalysisCache || {};
   const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
 
   // Build available photos list for outline generation (Commit 8.24)
@@ -1229,7 +1233,8 @@ async function reviseOutline(state, config) {
     console.log(`[reviseOutline] Complete: ${arcCount} ${outlineTheme === 'detective' ? 'evidence groups' : 'arcs'} in ${duration}s`);
 
     return {
-      outline: result || {},
+      // Phase 3 (3.7; R5): a rework that returned no questions keeps the previous ones.
+      outline: withCarriedWriterQuestions(result || {}, previousOutline),
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
       // Spec §4.4 (C3): verify on EVERY pass and rewrite the report; never clear
@@ -1509,9 +1514,13 @@ async function generateContentBundle(state, config) {
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(...articleWriterInputs(state));
 
-  // Get JSON schema for structured output
-  const contentBundleSchema = config?.configurable?.contentBundleSchema ||
+  // Get JSON schema for structured output. Phase 3 (3.7): the detective's leaves out
+  // the writer's questions (D13).
+  const writerSchema = config?.configurable?.contentBundleSchema ||
     require('../../schemas/content-bundle.schema.json');
+  const contentBundleSchema = (config?.configurable?.theme || state.theme) === 'detective'
+    ? schemaWithoutWriterQuestions(writerSchema)
+    : writerSchema;
 
   // SDK returns parsed object directly when jsonSchema is provided
   // Commit 8.23: disableTools prevents tool use during pure generation
@@ -1694,15 +1703,17 @@ async function reviseContentBundle(state, config) {
       systemPrompt,
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
-      jsonSchema: contentBundleSchema,  // Use full schema (Fix 3)
+      // Use full schema (Fix 3); the detective's leaves out the writer's questions (3.7, D13)
+      jsonSchema: theme === 'detective' ? schemaWithoutWriterQuestions(contentBundleSchema) : contentBundleSchema,
       label: `Article revision ${revisionCount}`
     });
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseContentBundle] Complete in ${duration}s`);
 
-    // Update contentBundle with revision history
-    const updatedBundle = revised || previousContentBundle;
+    // Update contentBundle with revision history. Phase 3 (3.7; R5): a rework that
+    // returned no questions keeps the previous ones.
+    const updatedBundle = withCarriedWriterQuestions(revised || previousContentBundle, previousContentBundle);
 
     return {
       contentBundle: {

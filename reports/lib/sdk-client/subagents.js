@@ -9,6 +9,11 @@
  *               PLAYER_FOCUS_GUIDED_SCHEMA, and the detective's parked copies
  *               (DETECTIVE_*)
  *
+ * Phase 3 (brief 3.7): the journalist arc writer's and arc reworker's schemas carry
+ * the optional `writerQuestions` (lib/writer-questions.js), the questions the writer
+ * raises to the director (C15). The interweaving call has none (spec section 8), and
+ * the detective's copies leave it out (D13).
+ *
  * Phase 3 (brief 3.3): the journalist's two system prompts hold only what the rule
  * set does not say. The arc composers in arc-specialist-nodes.js put the world, the
  * truth rules and the mode block after the identity line (loadRuleSet), and the craft
@@ -18,6 +23,8 @@
  *
  * See ARCHITECTURE_DECISIONS.md 8.8-8.28 for full history.
  */
+
+const { WRITER_QUESTIONS_KEY, WRITER_QUESTIONS_PROPERTY } = require('../writer-questions');
 
 /**
  * The journalist's wording for the three schema fields that place the arcs in the
@@ -147,7 +154,9 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
           description: 'Key callback opportunities across arcs for recontextualization'
         }
       }
-    }
+    },
+    // Phase 3 (3.7): the questions the rework keeps or raises for the director (C15, R5)
+    writerQuestions: WRITER_QUESTIONS_PROPERTY
   },
   required: ['narrativeArcs', 'synthesisNotes']
 };
@@ -192,7 +201,7 @@ The director reads every arc at the arc stop and chooses which ones the article 
 OUTPUT:
 Generate 3-5 narrative arcs. Ensure:
 - One arc with arcSource="accusation" (required)
-- Every roster member has at least one placement
+- Each roster member has a placement the record shows, or a writerQuestions entry about them (C7, C15)
 - All keyEvidence IDs are from the valid ID list
 - Each arc has caveats and unansweredQuestions (even if minimal)`;
 
@@ -300,10 +309,19 @@ const CORE_ARC_SCHEMA = {
         ]
       }
     },
-    synthesisNotes: { type: 'string' }
+    synthesisNotes: { type: 'string' },
+    // Phase 3 (3.7): the questions the writer raises for the director (C15)
+    writerQuestions: WRITER_QUESTIONS_PROPERTY
   },
   required: ['narrativeArcs', 'synthesisNotes']
 };
+
+/**
+ * The detective's core arc schema: CORE_ARC_SCHEMA without the writer's questions,
+ * parked with its theme (spec D13). A deep copy, so a change to the journalist's
+ * schema object never reaches it at run time.
+ */
+const DETECTIVE_CORE_ARC_SCHEMA = withoutQuestionsField(CORE_ARC_SCHEMA);
 
 /**
  * System prompt for interweaving enrichment (Call 2), the journalist's.
@@ -469,11 +487,24 @@ const INTERWEAVING_SCHEMA = {
  * @returns {Object}
  */
 function withDetectiveWording(schema) {
-  const copy = JSON.parse(JSON.stringify(schema));
+  const copy = withoutQuestionsField(schema);
   const arcItems = (copy.properties.narrativeArcs || copy.properties.arcInterweaving).items;
   arcItems.properties.interweaving.properties.convergenceRole.description = DETECTIVE_SCHEMA_WORDING.convergenceRole;
   copy.properties.interweavingPlan.properties.suggestedOrder.description = DETECTIVE_SCHEMA_WORDING.suggestedOrder;
   copy.properties.interweavingPlan.properties.convergencePoint.description = DETECTIVE_SCHEMA_WORDING.convergencePoint;
+  return copy;
+}
+
+/**
+ * A deep copy of a schema without the writer's questions (phase 3, 3.7): the detective
+ * asks for none (D13).
+ *
+ * @param {Object} schema
+ * @returns {Object}
+ */
+function withoutQuestionsField(schema) {
+  const copy = JSON.parse(JSON.stringify(schema));
+  delete copy.properties[WRITER_QUESTIONS_KEY];
   return copy;
 }
 
@@ -493,6 +524,7 @@ module.exports = {
 
   // Phase 3 (3.3): the detective's prompts and schemas, parked with its theme (D13)
   DETECTIVE_CORE_ARC_SYSTEM_PROMPT,
+  DETECTIVE_CORE_ARC_SCHEMA,
   DETECTIVE_INTERWEAVING_SYSTEM_PROMPT,
   DETECTIVE_INTERWEAVING_SCHEMA,
   DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA,

@@ -22,8 +22,11 @@ const outlineSchema = require('./schemas/outline.schema.json');
 // lib/__tests__/content-bundle-detective-copy.test.js holds the copy to the live
 // schema's shape. The copy carries no $id, so it can never be registered as the live
 // schema (fix 3.2b); the printed text puts back the id line it printed before (D13).
+// Phase 3 (3.7): the copy carries the live schema's writerQuestions, to keep its
+// shape, and the detective's print leaves it out, so its <SCHEMA> stays as it was.
 const detectivePromptSchema = require('./schemas/content-bundle.detective-prompt.json');
-const DETECTIVE_PRINTED_SCHEMA = (({ $schema, ...rest }) => ({ $schema, $id: 'content-bundle', ...rest }))(detectivePromptSchema);
+const { withoutWriterQuestions, schemaWithoutWriterQuestions } = require('./writer-questions');
+const DETECTIVE_PRINTED_SCHEMA = (({ $schema, ...rest }) => ({ $schema, $id: 'content-bundle', ...rest }))(schemaWithoutWriterQuestions(detectivePromptSchema));
 const { getThemeNPCEntries } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -1213,6 +1216,9 @@ ${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
    * evidence reference is described as the template prints it, a caption naming a
    * document (M1).
    *
+   * Phase 3 (3.7): APPROVED OUTLINE leaves out the outline writer's questions, which
+   * were the director's to answer at the outline stop.
+   *
    * @returns {string}
    */
   _journalistArticleUserSections(outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
@@ -1256,7 +1262,7 @@ ${tensions.map(sentence => `- ${sentence}`).join('\n')}
 
     return `<DATA_CONTEXT>
 APPROVED OUTLINE:
-${JSON.stringify(outline, null, 2)}
+${JSON.stringify(withoutWriterQuestions(outline), null, 2)}
 
 HERO IMAGE: ${heroImage || 'none chosen: use the first photo the outline places'}
 It prints at the top of the article, as "heroImage". The inline photo blocks use the session's other photos.

@@ -124,11 +124,20 @@ const REPO = path.join(__dirname, '..', '..');
  *   that shape, then the file printed), after SESSION_FACTS and before the craft
  *   files, as the article writer embeds the content-bundle schema. outline-journalist
  *   only (8718 -> 19876); the detective outline keeps its own JSON shape.
+ * - Phase 3 (3.7), the writers' questions for the director (C15): outline.schema.json
+ *   and content-bundle.schema.json gain the optional top-level `writerQuestions`, so
+ *   the journalist outline and article writers' <SCHEMA> blocks print it (19876 ->
+ *   20471, 27155 -> 27750). The journalist arc writer's OUTPUT FORMAT lists the field,
+ *   and its three roster lines (the output list in the system prompt, the Session
+ *   Roster heading, the ROSTER PCs label) count a player covered by a placement the
+ *   record shows or by a question about them (10347 -> 10614). The detective pins do
+ *   not move: its arc schemas and roster lines are unchanged, and its <SCHEMA> prints
+ *   the frozen copy without the field.
  */
 const PINNED = {
-  'outline-journalist': ['b529c752f46deaebd7cd9a0975c33539b7054437b184afae07bf9f02c72d14ae', 19876],
-  'article-journalist': ['7c308f56061c5871a136673923fe2ef33bcc3825289cf71c27f451ce702cf5eb', 27155],
-  'arcs-journalist': ['24af24d2959a487bb4af99ca2381b773d7fec4d790ce079deabfd7a2abbb9b60', 10347],
+  'outline-journalist': ['22fb0f2f807933db7784a16528860a77dd04c7ee94a2d391b4ac27c5203f0c88', 20471],
+  'article-journalist': ['c61fe26d275940b43ec3240c01fcbc992bf08e859001662c0eef79f2941537d9', 27750],
+  'arcs-journalist': ['e13f9d8ac9f3877094d0a641395c7f62f424cf569c3c74395c5728162f9483cb', 10614],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
   'arcs-detective': ['41dace98218cf3f360893b995fa56031d926994f6c495a2568b217623df3df15', 14730]

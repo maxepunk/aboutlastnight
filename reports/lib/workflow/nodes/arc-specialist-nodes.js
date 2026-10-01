@@ -59,6 +59,7 @@ const {
   PLAYER_FOCUS_GUIDED_SCHEMA,
   // Phase 3 (3.3): the detective's prompts and schemas, parked with its theme (D13)
   DETECTIVE_CORE_ARC_SYSTEM_PROMPT,
+  DETECTIVE_CORE_ARC_SCHEMA,
   DETECTIVE_INTERWEAVING_SYSTEM_PROMPT,
   DETECTIVE_INTERWEAVING_SCHEMA,
   DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA
@@ -74,6 +75,7 @@ const { renderArcAccusation, renderWhiteboardConnections } = require('../../prom
 const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = require('../../accusation-verdict');
 const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
 const { loadRuleSet } = require('../../rule-set');
+const { writerQuestionsOf, carriedWriterQuestions, questionedRosterNames } = require('../../writer-questions');
 
 /**
  * Whether a call keeps the detective's parked text (spec D13). The journalist reads
@@ -250,6 +252,10 @@ function createDefaultInterweavingPlan() {
  * roster PC from a legitimately-absent NPC or non-roster PC, and "fixes" invented
  * placements for characters who were never in the session.
  *
+ * Phase 3 (3.7; C7, C15): the journalist's ROSTER PCs line counts a player covered by
+ * a placement the record shows or by a question to the director about them, as the
+ * arc check does. The detective keeps "MUST have placements" (D13).
+ *
  * @param {string[]} roster - session roster (first names)
  * @param {string} theme - 'journalist' | 'detective'
  * @param {string[]} allCharacters - every known game character (Notion-derived)
@@ -261,7 +267,7 @@ function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCha
 
   return `### Character Categories for characterPlacements
 
-**ROSTER PCs** (MUST have placements - ${theme === 'journalist' ? 'they were in the room; how Nova learned of them is set by the reporting mode' : 'present at the investigation'}):
+**ROSTER PCs** (${theme === 'journalist' ? 'each has a placement the record shows, or a writerQuestions entry about them - they were in the room; how Nova learned of them is set by the reporting mode' : 'MUST have placements - present at the investigation'}):
 ${JSON.stringify(roster)}
 
 **NPCs** (valid in placements, don't count for coverage):
@@ -329,6 +335,10 @@ Backstory in the notes, what the director knows about the characters beyond what
  * the three lenses in analysisNotes; and the rule set's craft files, last, by the
  * placement ruling.
  *
+ * Phase 3 (3.7): the output format carries `writerQuestions`, the questions C15 has
+ * the writer raise to the director, and the roster lines count a player covered by a
+ * placement the record shows or by a question about them (C7).
+ *
  * The truth rules (in the system prompt) state what the old SECTION 4 and 4.5 said
  * about evidence and time, and contradicted parts of them: they named each memory's
  * exposer, read an account's name for involvement, dated the party "the murder night"
@@ -369,7 +379,10 @@ function buildJournalistCoreArcSections(state) {
       }
     }
   ],
-  "synthesisNotes": "How you addressed player conclusions and what patterns emerged"
+  "synthesisNotes": "How you addressed player conclusions and what patterns emerged",
+  "writerQuestions": [
+    { "about": "A player by name, a player's pronoun, or a ledger line", "question": "The question C15 raises for the director" }
+  ]
 }`);
 
   const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
@@ -426,7 +439,7 @@ ${blakeSection}
 ### Primary Investigation Focus
 ${context.primaryInvestigation}
 
-### Session Roster (ALL characters who need placement)
+### Session Roster (the players at the investigation)
 ${JSON.stringify(context.roster)}
 
 ${buildCharacterCategoriesBlock(context.roster, 'journalist', allCharacters).trimEnd()}
@@ -916,7 +929,8 @@ async function generateCoreArcs(state, config) {
       prompt,
       systemPrompt: coreArcSystemPrompt(state.sessionConfig, state.theme),
       model: 'opus',
-      jsonSchema: CORE_ARC_SCHEMA,
+      // Phase 3 (3.7): the detective's copy leaves out the writer's questions (D13).
+      jsonSchema: isParkedDetective(state.theme) ? DETECTIVE_CORE_ARC_SCHEMA : CORE_ARC_SCHEMA,
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
       label: 'Core arc generation (Call 1)'
     });
@@ -1002,7 +1016,8 @@ async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, e
  *   - narrativeArcs: Array of arc objects with id, title, summary, etc.
  *   - synthesisNotes: String describing synthesis approach
  * @param {Object|null} interweavingResult - Result from enrichWithInterweaving ({_failed, _error} or null on failure)
- * @returns {Object} Merged result with all arc fields including interweaving metadata
+ * @returns {Object} Merged result with all arc fields including interweaving metadata,
+ *   and the arc writer's `writerQuestions` (phase 3, 3.7; the interweaving call has none)
  * @throws {Error} If coreResult is invalid or narrativeArcs is not an array
  */
 function mergeArcsWithInterweaving(coreResult, interweavingResult) {
@@ -1013,6 +1028,8 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
   }
 
   const { narrativeArcs, synthesisNotes } = coreResult;
+  // Phase 3 (3.7): the arc writer's questions for the director (C15) survive the merge.
+  const writerQuestions = writerQuestionsOf(coreResult.writerQuestions);
 
   // H1: Validate narrativeArcs is an array before calling .map()
   if (!Array.isArray(narrativeArcs)) {
@@ -1030,6 +1047,7 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
       })),
       synthesisNotes,
       interweavingPlan: createDefaultInterweavingPlan(),
+      writerQuestions,
       _interweavingFailed: true,
       _interweavingError: interweavingResult?._error || null
     };
@@ -1062,7 +1080,8 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
   return {
     narrativeArcs: mergedArcs,
     synthesisNotes,
-    interweavingPlan: interweavingResult.interweavingPlan || createDefaultInterweavingPlan()
+    interweavingPlan: interweavingResult.interweavingPlan || createDefaultInterweavingPlan(),
+    writerQuestions
   };
 }
 
@@ -1223,7 +1242,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // MERGE: Combine results from both calls
     // ═══════════════════════════════════════════════════════════════════════
     const mergedResult = mergeArcsWithInterweaving(coreResult, interweavingResult);
-    const { narrativeArcs, synthesisNotes, interweavingPlan } = mergedResult;
+    const { narrativeArcs, synthesisNotes, interweavingPlan, writerQuestions } = mergedResult;
 
     const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[analyzeArcsPlayerFocusGuided] Complete: ${narrativeArcs?.length || 0} arcs in ${totalDuration}s (Call1: ${call1Duration}s, Call2: ${call2Duration}s)`);
@@ -1249,6 +1268,8 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
         interweavingPlan: interweavingPlan || {},
+        // Phase 3 (3.7): the arc stop shows them; no later prompt prints them
+        writerQuestions: writerQuestions || [],
         arcCount: narrativeArcs?.length || 0,
         architecture: 'split-call',
         interweavingFailed: mergedResult._interweavingFailed || false,
@@ -1357,7 +1378,7 @@ async function reviseArcs(state, config) {
       label: `Arc revision ${revisionCount}`
     });
 
-    const { narrativeArcs, synthesisNotes, interweavingPlan: revisedPlan } = result || {};
+    const { narrativeArcs, synthesisNotes, interweavingPlan: revisedPlan, writerQuestions: returnedQuestions } = result || {};
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseArcs] Complete: ${narrativeArcs?.length || 0} arcs in ${duration}s`);
@@ -1391,6 +1412,9 @@ async function reviseArcs(state, config) {
         synthesisNotes: synthesisNotes || '',
         interweavingPlan: planReturned ? revisedPlan : (keptPrevious ? previousPlan : createDefaultInterweavingPlan()),
         ...(keptPrevious && { interweavingFromPreviousRound: true }),
+        // Phase 3 (3.7; R5): the questions the rework returned, or, when it returned
+        // none, the previous ones, so an automatic pass never drops one unseen.
+        writerQuestions: carriedWriterQuestions(returnedQuestions, state._arcAnalysisCache?.writerQuestions),
         arcCount: narrativeArcs?.length || 0,
         architecture: 'player-focus-guided-revision',
         revisionNumber: revisionCount,
@@ -1420,6 +1444,8 @@ async function reviseArcs(state, config) {
           synthesizedAt: new Date().toISOString(),
           // Brief 2.2: the previous arcs are kept, so their plan is kept with them.
           ...(state._arcAnalysisCache?.interweavingPlan && { interweavingPlan: state._arcAnalysisCache.interweavingPlan }),
+          // Phase 3 (3.7): and their questions.
+          writerQuestions: writerQuestionsOf(state._arcAnalysisCache?.writerQuestions),
           _revisionTimedOut: true,
           _revisionAttempt: revisionCount,
           _consecutiveTimeouts: consecutiveTimeouts,
@@ -1675,6 +1701,13 @@ function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
   const keepPlan = hasPlan
     ? ' Keep the PREVIOUS INTERWEAVING PLAN where the arcs it names still stand, and change it only where the revision changed those arcs.'
     : '';
+  // Phase 3 (3.7; R5): the questions the previous arcs raised to the director, so the
+  // rework sees them in the version it starts from and returns those it did not
+  // answer (C15). Left out when there are none; the detective has none (D13).
+  const previousQuestions = isParkedDetective(state.theme) ? [] : writerQuestionsOf(state._arcAnalysisCache?.writerQuestions);
+  const questionsSection = previousQuestions.length > 0
+    ? `\n\n### PREVIOUS QUESTIONS FOR THE DIRECTOR (writerQuestions)\n${JSON.stringify(previousQuestions, null, 2)}`
+    : '';
 
   return `${buildCoreArcSections(state)}
 ---
@@ -1685,7 +1718,7 @@ ${contextSection}
 
 ---
 
-${previousOutputSection}${planSection}
+${previousOutputSection}${planSection}${questionsSection}
 
 ---
 
@@ -1823,21 +1856,31 @@ const VALID_EVIDENCE_STRENGTHS = ['strong', 'moderate', 'weak', 'speculative'];
  * Build revision guidance string for programmatic validation failures
  * Commit 8.27: Short-circuit expensive evaluator for obvious structural issues
  *
+ * Phase 3 (3.7; C7, C15): the journalist's fix line offers both ways a player is
+ * covered: a placement through what the record shows, or, where the record holds
+ * nothing about them, a question to the director. It used to demand a placement,
+ * which pushed the rework to invent one. The detective keeps its line (D13).
+ *
  * @param {Array} issues - Array of structural issues with type/message/severity
  * @param {Array} missingRoster - Array of roster member names not covered in arcs
+ * @param {string} [theme='journalist']
  * @returns {string} Formatted guidance for revision node
  */
-function buildValidationRevisionGuidance(issues, missingRoster) {
+function buildValidationRevisionGuidance(issues, missingRoster, theme = 'journalist') {
   const lines = ['PROGRAMMATIC VALIDATION FAILED - Fix these structural issues:'];
 
   issues.forEach(issue => {
     lines.push(`\n• ${issue.message}`);
   });
 
-  if (missingRoster.length > 0) {
+  if (missingRoster.length > 0 && isParkedDetective(theme)) {
     lines.push(`\nMissing roster members that MUST appear in characterPlacements:`);
     missingRoster.forEach(name => lines.push(`  - ${name}`));
     lines.push(`\nEnsure each missing member appears in at least one arc's characterPlacements.`);
+  } else if (missingRoster.length > 0) {
+    lines.push(`\nRoster members with no placement and no writerQuestions entry about them:`);
+    missingRoster.forEach(name => lines.push(`  - ${name}`));
+    lines.push(`\nGive each one a placement in an arc's characterPlacements through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry about them for the director (C15).`);
   }
 
   return lines.join('\n');
@@ -2126,6 +2169,16 @@ function validateArcStructure(state, config) {
     });
   });
 
+  // Phase 3 (3.7; C7, C15): a roster member a question to the director names counts
+  // as covered, by first name or full name (questionedRosterNames). A player the
+  // record says nothing about is asked about, not placed by invention. Journalist
+  // only: the detective's writer raises no questions (D13).
+  const questionedRoster = isParkedDetective(theme)
+    ? []
+    : questionedRosterNames(state._arcAnalysisCache?.writerQuestions, roster, canonicalCharsForCoverage);
+  const rosterCoveredByQuestion = questionedRoster.filter(name => !coveredRoster.has(name.toLowerCase()));
+  rosterCoveredByQuestion.forEach(name => coveredRoster.add(name.toLowerCase()));
+
   const missingRoster = roster.filter(name => !coveredRoster.has(name.toLowerCase()));
   const rosterCoverage = roster.length > 0 ? coveredRoster.size / roster.length : 1;
 
@@ -2178,7 +2231,7 @@ function validateArcStructure(state, config) {
     ready: false,
     structuralPassed: false,
     issues: structuralIssues,
-    revisionGuidance: buildValidationRevisionGuidance(structuralIssues, missingRoster),
+    revisionGuidance: buildValidationRevisionGuidance(structuralIssues, missingRoster, theme),
     criteriaScores: {
       rosterCoverage: rosterCoverage,
       accusationArcPresent: hasAccusationArc ? 1.0 : 0.0
@@ -2211,7 +2264,7 @@ function validateArcStructure(state, config) {
   console.log(`  - Arc sources: ${JSON.stringify(arcSourceCounts)}`);
   console.log(`  - Evidence strengths: ${JSON.stringify(evidenceStrengthCounts)}`);
   console.log(`  - Accusation arc present: ${hasAccusationArc}`);
-  console.log(`  - Roster coverage: ${(rosterCoverage * 100).toFixed(0)}% (${missingRoster.length} missing)`);
+  console.log(`  - Roster coverage: ${(rosterCoverage * 100).toFixed(0)}% (${missingRoster.length} missing, ${rosterCoveredByQuestion.length} by a question)`);
   console.log(`  - Non-roster PCs in arcs: ${nonRosterPCs.length > 0 ? nonRosterPCs.join(', ') : '(none)'}`);
   console.log(`  - Structural passed: ${structuralPassed}`);
 
@@ -2228,6 +2281,7 @@ function validateArcStructure(state, config) {
       hasAccusationArc,
       rosterCoverage,
       missingRoster,
+      rosterCoveredByQuestion,  // Phase 3 (3.7): covered by a question to the director, not a placement
       nonRosterPCs,  // Commit 8.xx: Valid game characters not in roster (evidence-based mentions)
       structuralPassed,  // Commit 8.27: gates routing to evaluator vs revision
       validatedAt: new Date().toISOString()

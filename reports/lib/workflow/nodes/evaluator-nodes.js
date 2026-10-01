@@ -56,6 +56,9 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // judge's directorNotes line prints (one source, fix 3.4b).
 const { hasInterweavingPlan, extractEvidenceSummary, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } = require('./ai-nodes');
+// Phase 3 (3.7): the writers' questions for the director. The arc judge reads the arc
+// writer's, for rosterCoverage; every judge's JSON of an output leaves them out.
+const { writerQuestionsOf, withoutWriterQuestions } = require('../../writer-questions');
 // The page's own rule for which money tracker prints (printedWriterTracker).
 const { TemplateAssembler } = require('../../template-assembler');
 
@@ -253,12 +256,21 @@ function truthCriteria(phase) {
 }
 
 /**
+ * The heading under which the journalist arc judge reads the arc writer's questions
+ * for the director (phase 3, 3.7), which its rosterCoverage criterion names.
+ */
+const ARC_JUDGE_QUESTIONS_LABEL = 'QUESTIONS FOR THE DIRECTOR (writerQuestions):';
+
+/**
  * The journalist arc judge's weighted criteria: QUALITY_CRITERIA.arcs, each reworded to
  * name the rule or craft item it scores, with the same weight and type.
+ *
+ * Phase 3 (3.7; C7, C15): rosterCoverage counts a player covered by a placement or by
+ * a question to the director about them, as the arc check does. It stays structural.
  */
 const JOURNALIST_ARC_CRITERIA = {
   rosterCoverage: {
-    description: 'Does every roster member have a placement in at least one arc (C7)?',
+    description: 'Does every roster member have a placement in at least one arc, or a question about them in QUESTIONS FOR THE DIRECTOR (C7, C15)?',
     weight: 0.30,
     type: 'structural'
   },
@@ -1067,7 +1079,7 @@ ${judging}
 CRITICAL DISTINCTION:
 - accusationArcPresent: Check if any arc has arcSource="accusation"
 - evidenceIdValidity: Check if keyEvidence IDs exist in the evidence bundle
-- rosterCoverage: Check if every roster member appears in characterPlacements of at least one arc
+- rosterCoverage: Check that every roster member appears in characterPlacements of at least one arc, or has a question about them in QUESTIONS FOR THE DIRECTOR
 
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC names (characters missing from roster coverage)
@@ -1579,7 +1591,7 @@ ${JSON.stringify(buriedEvidence, null, 2)}`;
       }
 
       const checklist = journalist
-        ? `1. ROSTER COVERAGE: Every name in SESSION ROSTER needs a role in characterPlacements of at least one arc
+        ? `1. ROSTER COVERAGE: Every name in SESSION ROSTER has a role in characterPlacements of at least one arc, or a question about them in QUESTIONS FOR THE DIRECTOR
 2. EVIDENCE ID VALIDITY: Every keyEvidence ID should exist in ALL VALID EVIDENCE IDS list
 3. ACCUSATION ARC PRESENT: At least one arc should have arcSource="accusation"
 4. TRUTH RULES: Every truth criterion in your instructions, each breach written under its rule ids
@@ -1599,12 +1611,21 @@ ADVISORY CHECKS (Warn but don't block)
 4. COHERENCE: Do arcs tell a consistent story without contradictions?
 5. EVIDENCE CONFIDENCE BALANCE: Are there arcs with evidenceStrength="strong" or "moderate" (not all speculative)?`;
 
+      // Phase 3 (3.7; C7, C15): the arc writer's questions for the director, which the
+      // journalist rosterCoverage criterion counts. The detective's writer raises none.
+      const questionsSection = journalist
+        ? `${ARC_JUDGE_QUESTIONS_LABEL}
+${JSON.stringify(writerQuestionsOf(state._arcAnalysisCache?.writerQuestions), null, 2)}
+
+`
+        : '';
+
       return `Evaluate these narrative arcs:
 
 ARCS:
 ${JSON.stringify(state.narrativeArcs || [], null, 2)}
 
-SESSION ROSTER (${roster.length} players who were PRESENT this session):
+${questionsSection}SESSION ROSTER (${roster.length} players who were PRESENT this session):
 ${JSON.stringify(roster, null, 2)}
 
 CRITICAL ROSTER vs EVIDENCE DISTINCTION:
@@ -1678,7 +1699,7 @@ ${JOURNALIST_MOMENTUM_EVALUATION}`
       return `Evaluate this article outline:
 
 OUTLINE:
-${JSON.stringify(state.outline || {}, null, 2)}
+${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
 
 SELECTED ARCS (with interweaving metadata):
 ${JSON.stringify(selectedArcsWithInterweaving, null, 2)}
@@ -1718,7 +1739,7 @@ CONTENT BUNDLE:
 ${JSON.stringify(printedBundle(state.contentBundle, state.shellAccounts), null, 2)}
 
 OUTLINE:
-${JSON.stringify(state.outline || {}, null, 2)}
+${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
 
 ${renderJudgeFactCheck(options.factCheck || null)}
 
@@ -1745,10 +1766,10 @@ ${renderJudgeSessionContext(state)}
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 CONTENT BUNDLE:
-${JSON.stringify(state.contentBundle || {}, null, 2)}
+${JSON.stringify(withoutWriterQuestions(state.contentBundle || {}), null, 2)}
 
 OUTLINE:
-${JSON.stringify(state.outline || {}, null, 2)}
+${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
 
 ${renderJudgeFactCheck(options.factCheck || null)}
 
