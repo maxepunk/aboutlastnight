@@ -27,7 +27,9 @@ const { DERIVED_LABELS } = require('./derived-labels');
  *
  * @param {Object} tx - a linked transaction ({timestamp, amount, sellingTeam})
  * @param {Object|null} [sessionConfig] - the session's parse, whose clock decision
- *   (session-clock.js sessionClockOf) the time prints on; without it, as logged
+ *   (session-clock.js sessionClockOf) the time prints on; without it, as logged. The
+ *   callers pass it through withSessionClock with the bundle, so a thread with no
+ *   stamped clock reads the decision the record view's timeline reads
  * @returns {string}
  */
 function linkedTransactionLine(tx, sessionConfig = null) {

@@ -63,6 +63,7 @@ const {
 
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
 const { renderRecordView, recordIdOf, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
+const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { isNoCulpritVerdict, directorAccusationText } = require('../../accusation-verdict');
@@ -328,7 +329,7 @@ ${renderDirectorEnrichmentBlock({
   transactionReferences: context.directorTransactionLinks,
   postInvestigationDevelopments: context.directorPostInvestigation,
   corrections: state.inputReviewCorrections || [],
-  sessionConfig: state.sessionConfig
+  sessionConfig: withSessionClock(state.sessionConfig, state.evidenceBundle)
 })}
 
 ### Primary Investigation Focus

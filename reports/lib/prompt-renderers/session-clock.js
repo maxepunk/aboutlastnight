@@ -17,8 +17,10 @@
  *   afternoon (12:15 AM shows as 12:15 PM), so the morning clock never runs backward.
  * - The parse stamps the decision on the session config (sessionConfig.sessionClock),
  *   so every reader takes the same one. A thread parsed before phase 3 has no stamp;
- *   its clock is decided from what it holds (its exposures, and the bundle's sales
- *   when the caller has the bundle).
+ *   its clock is decided from what it holds: its exposures and the bundle's sales.
+ *   A printer that has no bundle of its own (the transaction links) is handed the
+ *   session config through withSessionClock, so it reads the decision the timeline
+ *   reads.
  *
  * Every logged time a prompt prints goes through printLoggedTime (the morning
  * timeline in the record view and the transaction links), or printClockMinute for
@@ -157,6 +159,22 @@ function sessionClockOf(sessionConfig, evidenceBundle = null) {
   ]);
 }
 
+/**
+ * The session config with its one clock decision stamped on it (sessionClock): the
+ * parse's own stamp, else the decision sessionClockOf makes from the exposures and
+ * the bundle's sales. A caller hands this to a printer that reads the session config
+ * without the bundle (the transaction links), so a thread parsed before phase 3 with
+ * no stamp and no exposures (092026's shape) prints its links on the clock its
+ * timeline prints. The input is never changed.
+ *
+ * @param {Object|null} sessionConfig
+ * @param {Object|null} [evidenceBundle] - the curated bundle, for its sales
+ * @returns {Object} a copy of the session config, with `sessionClock`
+ */
+function withSessionClock(sessionConfig, evidenceBundle = null) {
+  return { ...(sessionConfig || {}), sessionClock: sessionClockOf(sessionConfig, evidenceBundle) };
+}
+
 /** The letter of the other half of the day, in the same case. */
 function swapMeridiem(letter) {
   const swapped = letter.toLowerCase() === 'p' ? 'a' : 'p';
@@ -232,6 +250,7 @@ module.exports = {
   parseLoggedTime,
   decideSessionClock,
   sessionClockOf,
+  withSessionClock,
   firstEventTime,
   printLoggedTime,
   printClockMinute,

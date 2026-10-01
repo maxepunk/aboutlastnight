@@ -70,6 +70,53 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     }, cfg(articleJudge, theme));
     expect(promptOf(articleJudge)).toContain(SALE_LINE);
   });
+
+  it('prints the transaction links on the clock the timeline reads (fix batch, finding 8)', async () => {
+    // No stamp and no exposures (092026's shape): the timeline decides the evening
+    // clock from the bundle's sales, and the links must read that one decision.
+    const withLink = () => {
+      const state = oldShapeState(theme);
+      state.directorNotes = {
+        ...state.directorNotes,
+        transactionReferences: [{
+          excerpt: 'Riley watched the ledger all morning.',
+          linkedTransactions: [{ timestamp: '07:50 PM', amount: '$75,000', sellingTeam: 'Melanie' }],
+          confidence: 'high'
+        }]
+      };
+      return state;
+    };
+    const LINK_LINE = '[account: Melanie | amount: $75,000 | time: 07:50 AM]';
+
+    const arcSdk = recordingSdk((options) => (options.label && options.label.startsWith('Interweaving')
+      ? { arcInterweaving: [], interweavingPlan: { suggestedOrder: ['arc-sale'], convergencePoint: 'The vote', keyCallbacks: [] } }
+      : { narrativeArcs: withLink().narrativeArcs, synthesisNotes: 's' }));
+    await analyzeArcsPlayerFocusGuided({ ...withLink(), narrativeArcs: null }, cfg(arcSdk, theme));
+    const outlineSdk = recordingSdk(() => OUTLINE);
+    await generateOutline({ ...withLink(), outline: null }, cfg(outlineSdk, theme));
+    const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
+    await generateContentBundle({ ...withLink(), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
+    const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
+    const outlineJudge = recordingSdk(verdict);
+    await evaluateOutline({ ...withLink(), heroImage: 'hero.jpg', evaluationHistory: [], outlineApproved: false }, cfg(outlineJudge, theme));
+
+    const prompts = {
+      arcWriter: promptOf(arcSdk, 0),
+      outlineWriter: promptOf(outlineSdk),
+      articleWriter: promptOf(articleSdk),
+      outlineJudge: promptOf(outlineJudge)
+    };
+    const withLinks = Object.entries(prompts).filter(([, prompt]) => prompt.includes('<TRANSACTION_LINKS>'));
+    // The detective writers print no director-notes block of their own.
+    expect(withLinks.map(([name]) => name)).toEqual(theme === 'journalist'
+      ? ['arcWriter', 'outlineWriter', 'articleWriter', 'outlineJudge']
+      : ['arcWriter', 'outlineJudge']);
+    withLinks.forEach(([, prompt]) => {
+      // The timeline prints this sale at 07:50 AM (the test above); the link agrees.
+      expect(prompt).toContain(LINK_LINE);
+      expect(prompt).not.toContain('time: 07:50 PM]');
+    });
+  });
 });
 
 describe('the input review of a thread from before phase 3', () => {

@@ -41,6 +41,7 @@ const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 // Phase 2, brief 2.4: the judges read the record and the director's words through
 // the same renderers and builders the writers use, so a judge sees what it judges.
 const { renderRecordView, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
+const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
 const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
@@ -787,7 +788,7 @@ ${renderDirectorEnrichmentBlock({
   transactionReferences: listOf(notes.transactionReferences),
   postInvestigationDevelopments: listOf(notes.postInvestigationDevelopments),
   corrections: state.inputReviewCorrections || [],
-  sessionConfig: state.sessionConfig
+  sessionConfig: withSessionClock(state.sessionConfig, state.evidenceBundle)
 })}`;
 }
 

@@ -8,6 +8,7 @@
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
 const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
+const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
 const { renderSessionFactsVerdict, renderPhotoEntry } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
@@ -480,9 +481,12 @@ class PromptBuilder {
    * @param {Object|null} directorNotes - enriched director notes
    * @param {string[]|null} [corrections] - the director's input-review corrections, in
    *   order (brief 2.2): rendered right after the notes, which are never rewritten
+   * @param {Object|null} [evidenceBundle] - the curated bundle, whose sales decide the
+   *   session clock of a thread with no stamp, as the record view's timeline does
+   *   (brief 3.5): the transaction links print their times on that one decision
    * @returns {string} the XML section, or '' when the director wrote no prose
    */
-  _buildInvestigationObservations(directorNotes, corrections = null) {
+  _buildInvestigationObservations(directorNotes, corrections = null, evidenceBundle = null) {
     if (!directorNotes?.rawProse) return '';
     return `<INVESTIGATION_OBSERVATIONS>
 What happened during the investigation this morning. How it reached you is set by the reporting mode in your system prompt.
@@ -495,7 +499,7 @@ ${renderDirectorEnrichmentBlock({
   transactionReferences: directorNotes.transactionReferences,
   postInvestigationDevelopments: directorNotes.postInvestigationDevelopments,
   corrections,
-  sessionConfig: this.sessionConfig
+  sessionConfig: withSessionClock(this.sessionConfig, evidenceBundle)
 })}
 </INVESTIGATION_OBSERVATIONS>`;
   }
@@ -666,7 +670,7 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
       analysisNotes: arc.analysisNotes || {}  // Financial/behavioral/victimization insights
     }));
 
-    const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections);
+    const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections, options.evidenceBundle);
 
     // Brief 2.1: every usable document in full, once, ahead of the per-arc lists that
     // name them by id. The planner used to read the text of at most five documents
@@ -1248,7 +1252,7 @@ TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
 ${recordSection}
 ${arcEvidenceSection}
 ${this._buildFinancialSummary(shellAccounts)}
-${this._buildInvestigationObservations(directorNotes, options.directorCorrections)}
+${this._buildInvestigationObservations(directorNotes, options.directorCorrections, options.evidenceBundle)}
 ${(narrativeTensions?.tensions?.length > 0) ? `
 <NARRATIVE_TENSIONS>
 These possible contradictions between public behavior and Black Market activity are

@@ -12,6 +12,7 @@ const {
   parseLoggedTime,
   decideSessionClock,
   sessionClockOf,
+  withSessionClock,
   printLoggedTime,
   printClockMinute,
   firstEventTime,
@@ -167,5 +168,23 @@ describe('sessionClockOf: one decision per session', () => {
 
   it('is undecided with nothing to read', () => {
     expect(sessionClockOf(null, null)).toEqual({ decided: false, evening: false, firstTime: null });
+  });
+});
+
+describe('withSessionClock: the decision handed to a printer with no bundle (fix batch, finding 8)', () => {
+  const bundle = { buried: { transactions: [{ shellAccount: 'Ember', amount: 100000, time: '07:50 PM' }] } };
+
+  it('stamps the decision the timeline makes from the bundle on a thread with no stamp and no exposures', () => {
+    const config = { roster: ['Vic'] };
+    const stamped = withSessionClock(config, bundle);
+    expect(stamped.sessionClock).toEqual({ decided: true, evening: true, firstTime: '07:50 PM' });
+    expect(sessionClockOf(stamped)).toEqual(sessionClockOf(config, bundle));
+    expect(stamped.roster).toEqual(['Vic']);
+    expect(config).not.toHaveProperty('sessionClock');
+  });
+
+  it('keeps the stamp the parse made', () => {
+    const stamp = { decided: true, evening: false, firstTime: '04:59 PM' };
+    expect(withSessionClock({ sessionClock: stamp }, bundle).sessionClock).toEqual(stamp);
   });
 });
