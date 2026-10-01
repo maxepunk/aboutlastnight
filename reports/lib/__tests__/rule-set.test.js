@@ -230,6 +230,25 @@ describe('the rule files', () => {
     expect(files[name]).not.toMatch(/\bDec(ember)? 21\b/);
   });
 
+  it('state when an exposure is anonymous only with both of T6\'s conditions, wherever they state it', () => {
+    // T6 lifts anonymity on either of two records: a name in the evidence log, or the
+    // director's notes recording who turned the memory in. The mode files restate the
+    // rule beside T6 (plan review I6), so a copy that carries only the first condition
+    // would tell a judge that a credit taken from the notes breaks anonymity.
+    const statements = [];
+    for (const [name, text] of Object.entries(files)) {
+      const body = text.split('\n').filter((line) => !/^#{1,6} /.test(line)).join('\n');
+      for (const sentence of body.split(/(?<=[.!?])\s+/)) {
+        if (/anonymous unless/i.test(sentence)) statements.push({ name, sentence });
+      }
+    }
+    expect(statements.map(({ name }) => name).sort()).toEqual(['mode-on-site', 'mode-remote', 'truth-rules']);
+    for (const { name, sentence } of statements) {
+      expect(`${name}: ${/\bevidence log\b/.test(sentence)}`).toBe(`${name}: true`);
+      expect(`${name}: ${/the director's notes record who turned the memory in/.test(sentence)}`).toBe(`${name}: true`);
+    }
+  });
+
   it('open the world with the purpose of the article, without its length', () => {
     expect(files.world).toMatch(/how your choices shaped the official story/);
     expect(files.world).not.toMatch(/1,500/);

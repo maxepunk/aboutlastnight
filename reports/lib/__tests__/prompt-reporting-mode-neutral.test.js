@@ -324,10 +324,11 @@ describe('the mode block reaches the arc and outline writers', () => {
  * The journalist's mode blocks are T8's mode part (phase 3, task 3.1; spec T8 and
  * section 2). Each states Nova's position as the uninterested third party Fremont PD
  * required and what Nova could witness in that mode. In both, exposed memories are
- * turned in to Nova directly, anonymous unless the evidence log names someone: the
- * old remote block sent every exposure through a tipster ("Every exposure ...
- * reached you as tips"), which pushed the article to name or invent exposers (plan
- * review I6).
+ * turned in to Nova directly, anonymous unless the evidence log carries a name or the
+ * director's notes record who turned the memory in (T6's two conditions, word for
+ * word, so the block and T6 never disagree): the old remote block sent every exposure
+ * through a tipster ("Every exposure ... reached you as tips"), which pushed the
+ * article to name or invent exposers (plan review I6).
  *
  * Phase 2 (2.6) still holds for the remote block: attribution, and the absence
  * stated at most once. 092026's remote article said "I was not there.", "I was not
@@ -346,9 +347,11 @@ describe("the journalist mode blocks state T8's mode part", () => {
     expect(blocks[mode]).toMatch(/uninterested third party Fremont PD required/);
   });
 
-  it.each(['on-site', 'remote'])('%s: exposed memories reach Nova directly, anonymous unless the evidence log names someone', (mode) => {
+  it.each(['on-site', 'remote'])("%s: exposed memories reach Nova directly, anonymous unless T6's records name who turned one in", (mode) => {
     expect(blocks[mode]).toMatch(/Exposed memories were turned in to Nova directly/);
-    expect(blocks[mode]).toMatch(/anonymous unless the evidence log names someone/);
+    expect(blocks[mode]).toMatch(
+      /anonymous unless the evidence log carries a name or the director's notes record who turned the memory in/
+    );
   });
 
   it.each(['on-site', 'remote'])('%s: carries nothing on the removed list, tips and a gendered Nova included', (mode) => {

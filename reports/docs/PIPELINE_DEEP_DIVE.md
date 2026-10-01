@@ -159,7 +159,7 @@ Nova's article is NOT just a factual record. It reflects:
 
 ### Layer 3: CONTEXT (Director Notes = the Director's Observations)
 
-**Game Reality**: Director watched everything - player dynamics, conversations. Where Nova was is set by the session's reporting mode block (the journalist's mode file, `references/rules/mode-on-site.md` or `mode-remote.md`, through `buildReportingModeBlock` in `lib/prompt-builder.js`): on site Nova saw and heard the investigation; remote, the room's events reached Nova from people in the room, shown by attribution. Either way exposed memories were turned in to Nova directly, anonymous unless the evidence log names someone, and Nova never has a buried memory's content.
+**Game Reality**: Director watched everything - player dynamics, conversations. Where Nova was is set by the session's reporting mode block (the journalist's mode file, `references/rules/mode-on-site.md` or `mode-remote.md`, through `buildReportingModeBlock` in `lib/prompt-builder.js`): on site Nova saw and heard the investigation; remote, the room's events reached Nova from people in the room, shown by attribution. Either way exposed memories were turned in to Nova directly, anonymous unless the evidence log carries a name or the director's notes record who turned the memory in (T6), and Nova never has a buried memory's content.
 
 **Director Provides**:
 - `playerFocus`: What players actually investigated
