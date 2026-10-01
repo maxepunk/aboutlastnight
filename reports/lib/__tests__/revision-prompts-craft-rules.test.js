@@ -99,15 +99,19 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
     }
   });
 
-  it('both lists stay consecutively numbered after the removal', () => {
+  it('both lists stay consecutively numbered after the removal (the detective\'s; the journalist\'s have none since phase 3)', () => {
+    const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
+    const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
     const numbered = (text) => text
       .split('\n')
       .map((line) => line.match(/^(\d+)\. /))
       .filter(Boolean)
       .map((match) => Number(match[1]));
 
-    expect(numbered(OUTLINE_REVISION_RULES)).toEqual([1, 2, 3, 4, 5]);
-    expect(numbered(ARC_REVISION_RULES.evaluator)).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(outlineRevisionRules('detective'))).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(arcRevisionRules(false, 'detective'))).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(OUTLINE_REVISION_RULES)).toEqual([]);
+    expect(numbered(ARC_REVISION_RULES.evaluator)).toEqual([]);
   });
 });
 
@@ -389,5 +393,107 @@ describe('a prompt build that throws becomes the node error contract, for the ju
     } finally {
       PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan = plan;
     }
+  });
+});
+
+/**
+ * Phase 3, brief 3.3 (TH7; coverage rows 51 to 58, 88 to 92): the rework rules.
+ *
+ * Every rework carried fixed text ("You are IMPROVING, not regenerating", "PRESERVE
+ * everything that's working well", "Make minimal, surgical fixes"), on the director's
+ * send back as on an automatic pass, so a "rethink it from scratch" came back as a
+ * relabel. The article rework fixed "Low-scoring criteria" and every flagged
+ * anti-pattern ("WHAT TO FIX") though most criteria are advisory. Now the director's
+ * note governs how much a rework keeps, a rework's first line names the task its
+ * revision context gives it, and an advisory criterion is a suggestion. The detective
+ * keeps today's rules (D13).
+ */
+describe('the rework rules (phase 3, 3.3)', () => {
+  const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
+  const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
+  const { THEME_SYSTEM_PROMPTS } = require('../prompt-builder');
+  const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
+  const promptBuilder = createMockPromptBuilder();
+  const ARC_STATE = {
+    theme: 'journalist',
+    canonicalCharacters: {},
+    sessionConfig: { roster: ['Vic'] },
+    playerFocus: { accusation: { accused: ['Vic'], charge: 'x' } },
+    directorNotes: { rawProse: 'Vic left early.' },
+    evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } }
+  };
+
+  const FIXED_PRESERVE = /preserve|not regenerat|IMPROVING|TARGETED FIX|surgical|WHAT TO FIX|Low-scoring criteria|working well/i;
+  const contextFor = (phase, humanFeedback) => buildRevisionContext({
+    phase, revisionCount: 1, previousOutput: {}, humanFeedback,
+    validationResults: { phase, passed: false, structuralIssues: ['one defect'] }
+  });
+  /** The rework part of a reworker's user prompt: everything after its writer's sections. */
+  const after = (text, marker) => text.slice(text.indexOf(marker));
+
+  it('no journalist rework carries fixed "preserve" or "do not regenerate" text, in its rules or its task', async () => {
+    const texts = {
+      'arc rules (send back)': arcRevisionRules(true, 'journalist'),
+      'arc rules (automated)': arcRevisionRules(false, 'journalist'),
+      'outline rules': outlineRevisionRules('journalist'),
+      'article rules': articleRevisionRules('journalist')
+    };
+    for (const humanFeedback of [null, 'Rethink it from scratch.']) {
+      const kind = humanFeedback ? 'send back' : 'automated';
+      const arcs = contextFor('arcs', humanFeedback);
+      const outline = contextFor('outline', humanFeedback);
+      const article = contextFor('article', humanFeedback);
+      texts[`arc task (${kind})`] = after(
+        buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: humanFeedback }, arcs.contextSection, arcs.previousOutputSection),
+        '# Arc Revision Request'
+      );
+      texts[`outline task (${kind})`] = after(
+        await buildOutlineRevisionPrompt({ selectedArcs: [] }, outline.contextSection, outline.previousOutputSection, promptBuilder),
+        '# Outline Revision Request'
+      );
+      texts[`article task (${kind})`] = after(
+        await buildArticleRevisionPrompt({}, article.contextSection, article.previousOutputSection, promptBuilder),
+        '## REVISION CONTEXT'
+      );
+    }
+    Object.entries(texts).forEach(([name, text]) => {
+      expect(`${name}: ${(text.match(FIXED_PRESERVE) || [''])[0]}`).toBe(`${name}: `);
+    });
+  });
+
+  it("a rework's first line names the task its revision context gives it", () => {
+    const firstLine = (text) => text.split('\n')[0];
+    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/reworking the arcs/);
+    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/director sent them back/);
+    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/reworking the arcs/);
+    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/automatic check or evaluation/);
+    expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/reworking the outline/);
+    expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/revision context/);
+    // The article rework's first line is the theme's revision framing (3.2's string).
+    expect(articleRevisionRules('journalist').startsWith(`${THEME_SYSTEM_PROMPTS.journalist.revision}\n`)).toBe(true);
+  });
+
+  it('the article rework rules give no advisory criterion as a defect to fix', () => {
+    const rules = articleRevisionRules('journalist');
+    expect(rules).not.toContain('WHAT TO FIX');
+    expect(rules).not.toMatch(/Low-scoring criteria/i);
+    expect(rules).not.toMatch(/anti-patterns flagged/i);
+  });
+
+  it('a send back may replace or restructure whole arcs, and a corrected mechanic reaches every arc', () => {
+    const rules = arcRevisionRules(true, 'journalist');
+    expect(rules).toMatch(/replace or restructure whole arcs/);
+    expect(rules).toMatch(/every arc/);
+  });
+
+  it('the detective keeps its rework rules and tasks (D13)', async () => {
+    expect(arcRevisionRules(true, 'detective')).toContain('Their feedback takes ABSOLUTE PRIORITY.');
+    expect(arcRevisionRules(false, 'detective')).toContain('1. You are IMPROVING existing arcs, not generating from scratch');
+    expect(outlineRevisionRules('detective')).toContain('1. You are IMPROVING an existing outline, not generating from scratch');
+    expect(articleRevisionRules('detective')).toContain('WHAT TO PRESERVE:');
+    const outline = await buildOutlineRevisionPrompt({ selectedArcs: [] }, 'c', 'p', promptBuilder, [], 'detective');
+    expect(outline).toContain('Remember: You are IMPROVING, not regenerating.');
+    const article = await buildArticleRevisionPrompt({}, 'c', 'p', promptBuilder, [], 'detective');
+    expect(article).toContain("4. PRESERVE everything that's working well");
   });
 });

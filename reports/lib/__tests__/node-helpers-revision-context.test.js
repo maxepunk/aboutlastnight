@@ -57,8 +57,12 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
     expect(section).toMatch(/SHOULD CONSIDER:\n[\s\S]*?\n  - x/);
   });
 
-  it('names the high-scoring criteria to preserve', () => {
-    expect(build()).toContain('PRESERVE THESE: coherence');
+  it('names no criterion to preserve for the journalist (phase 3, 3.3; TH7); the detective keeps the list', () => {
+    // After a pass every criterion scores 0.8 or more, so the list outranked the
+    // director's note; with one of nine players missing (0.89) it told the reworker to
+    // keep rosterCoverage directly above the issue naming the missing player (V3).
+    expect(build()).not.toContain('PRESERVE THESE');
+    expect(build({ theme: 'detective' })).toContain('PRESERVE THESE: coherence');
   });
 
   it('never renders [object Object] or the empty-issues placeholder', () => {
@@ -239,8 +243,12 @@ describe('buildRevisionContext — the evaluation state it reports (brief 1.3)',
     const section = build();
     expect(section).not.toContain('scoring well');
     expect(section).not.toMatch(/do NOT change anything related to it/);
-    // The four surviving instructions are renumbered with no gap.
-    const instructions = section.slice(section.indexOf('CRITICAL REVISION INSTRUCTIONS'));
+    // Phase 3 (3.3): the journalist's instructions are one paragraph with no fixed
+    // "preserve" text; the detective keeps the four numbered lines, with no gap.
+    expect(section).toContain('WHAT THIS REWORK DOES:');
+    expect(section).not.toContain('CRITICAL REVISION INSTRUCTIONS');
+    const parked = build({ theme: 'detective' });
+    const instructions = parked.slice(parked.indexOf('CRITICAL REVISION INSTRUCTIONS'));
     expect(instructions).toContain('1. PRESERVE EVERYTHING');
     expect(instructions).toContain('3. Output the complete revised article');
     expect(instructions).toContain('4. Maintain consistency');
@@ -324,11 +332,11 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3)', () => {
   const diff = diffOutline({ lede: { hook: 'Old' } }, { lede: { hook: 'New' } });
   const base = { phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'New' } } };
 
-  it('sits after HUMAN FEEDBACK and before CRITICAL REVISION INSTRUCTIONS', () => {
+  it('sits after HUMAN FEEDBACK and before the instructions (WHAT THIS REWORK DOES since phase 3)', () => {
     const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: diff });
     const hf = contextSection.indexOf('HUMAN FEEDBACK');
     const he = contextSection.indexOf('<HAND_EDITS>');
-    const cr = contextSection.indexOf('CRITICAL REVISION INSTRUCTIONS');
+    const cr = contextSection.indexOf('WHAT THIS REWORK DOES');
     expect(hf).toBeGreaterThan(-1);
     expect(he).toBeGreaterThan(hf);
     expect(cr).toBeGreaterThan(he);
@@ -342,12 +350,106 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3)', () => {
   it('is present even without human feedback (an evaluator-driven second pass)', () => {
     const { contextSection } = buildRevisionContext({ ...base, humanFeedback: null, handEdits: diff });
     expect(contextSection).toContain('<HAND_EDITS>');
-    expect(contextSection.indexOf('<HAND_EDITS>')).toBeLessThan(contextSection.indexOf('CRITICAL REVISION INSTRUCTIONS'));
+    expect(contextSection.indexOf('<HAND_EDITS>')).toBeLessThan(contextSection.indexOf('WHAT THIS REWORK DOES'));
+    expect(contextSection.indexOf('WHAT THIS REWORK DOES')).toBeGreaterThan(-1);
   });
 
   it('is absent when handEdits is null, empty or missing', () => {
     expect(buildRevisionContext({ ...base, handEdits: null }).contextSection).not.toContain('HAND_EDITS');
     expect(buildRevisionContext({ ...base, handEdits: diffOutline({}, {}) }).contextSection).not.toContain('HAND_EDITS');
     expect(buildRevisionContext(base).contextSection).not.toContain('HAND_EDITS');
+  });
+});
+
+/**
+ * Phase 3, brief 3.3 (TH7, and coverage rows 62 to 64, 69 and 70): the revision context
+ * every journalist rework carries.
+ *
+ * It told the reworker to PRESERVE every criterion that scored 0.8 or more, called
+ * every criterion under 0.7 one that "needs improvement" (an advisory one included),
+ * never said the scores are uncalibrated, and closed on fixed "PRESERVE EVERYTHING
+ * THAT'S WORKING - Do NOT regenerate from scratch" lines. On 091826 every criterion
+ * scored above 0.8, so the director's "rethink the closing" came back as a relabel.
+ * The director's note now sets how much a rework keeps; an advisory criterion reaches
+ * the reworker as a suggestion. The detective keeps today's text (D13).
+ */
+describe('buildRevisionContext: the director governs the rework, advisories are suggestions (phase 3, 3.3)', () => {
+  const EVALUATION = {
+    phase: 'outline',
+    passed: false,
+    criteriaScores: {
+      sectionFlow: { score: 0.4, type: 'structural', notes: 'the money section is missing', fix: 'add it' },
+      lede: { score: 0.5, type: 'advisory', notes: 'flat opening', fix: 'open on a moment' },
+      voice: { score: 0.95, type: 'advisory', notes: 'strong', fix: '' }
+    },
+    structuralIssues: ['The money section is missing.'],
+    advisoryWarnings: ['The closing could name the account.'],
+    revisionGuidance: 'Add the money section.',
+    confidence: 'medium'
+  };
+  const build = (overrides = {}) => buildRevisionContext({
+    phase: 'outline',
+    revisionCount: 1,
+    validationResults: EVALUATION,
+    previousOutput: { lede: {} },
+    ...overrides
+  });
+  const FIXED_PRESERVE = /preserve|not regenerat|IMPROVING|TARGETED FIX|minimal, surgical|need improvement|working well/i;
+
+  it('carries no fixed "preserve" or "do not regenerate" text, on a send back or an automated pass', () => {
+    for (const humanFeedback of [null, 'Rethink the closing from scratch.']) {
+      const { contextSection, previousOutputSection } = build({ humanFeedback });
+      expect(contextSection).not.toMatch(FIXED_PRESERVE);
+      expect(previousOutputSection).not.toMatch(FIXED_PRESERVE);
+    }
+  });
+
+  it("on a send back, says the director's note sets the task and how much the rework keeps", () => {
+    const { contextSection } = build({ humanFeedback: 'Rethink the closing from scratch.' });
+    const instructions = contextSection.slice(contextSection.indexOf('WHAT THIS REWORK DOES'));
+    expect(contextSection).toContain('WHAT THIS REWORK DOES');
+    expect(instructions).toMatch(/director's note above is the task/);
+    expect(instructions).toMatch(/how much of the previous outline this rework keeps/);
+    expect(instructions).toMatch(/rethink gets a rethink/);
+  });
+
+  it('on an automated pass, scopes the rework to the findings: must-fix issues, advisory suggestions', () => {
+    const { contextSection } = build({ humanFeedback: null });
+    const instructions = contextSection.slice(contextSection.indexOf('WHAT THIS REWORK DOES'));
+    expect(contextSection).toContain('WHAT THIS REWORK DOES');
+    expect(instructions).toMatch(/ISSUES TO ADDRESS/);
+    expect(instructions).toMatch(/suggestions/);
+  });
+
+  it('gives an advisory criterion that scored low as a suggestion, never as a fix or as needing improvement', () => {
+    const { contextSection } = build();
+    expect(contextSection).not.toMatch(/need(s)? improvement/i);
+    expect(contextSection).toMatch(/- lede: 0\.50 \[advisory\]\n {6}notes: flat opening\n {6}suggestion: open on a moment/);
+    expect(contextSection).not.toContain('fix: open on a moment');
+    // A structural criterion keeps its fix.
+    expect(contextSection).toMatch(/- sectionFlow: 0\.40 \[structural\]\n {6}notes: the money section is missing\n {6}fix: add it/);
+  });
+
+  it('tells the reworker the scores are uncalibrated', () => {
+    const { contextSection } = build();
+    expect(contextSection).toMatch(/uncalibrated/i);
+    expect(contextSection.indexOf('uncalibrated')).toBeLessThan(contextSection.indexOf('CRITERIA SCORES:'));
+  });
+
+  it("keeps the fixture's anchors: the send-back NOTE line, the previous version's header and its end", () => {
+    const { contextSection, previousOutputSection } = build({ humanFeedback: 'x' });
+    expect(contextSection).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nx\n\nNOTE: The human reviewer has explicitly requested these changes.');
+    expect(previousOutputSection).toMatch(/^PREVIOUS OUTLINE OUTPUT \(the version this rework starts from\):\n═+$/m);
+    expect(previousOutputSection).toMatch(/\n═+\nEND PREVIOUS OUTPUT\n═+$/);
+  });
+
+  it('the detective keeps the parked text (D13)', () => {
+    const { contextSection, previousOutputSection } = build({ theme: 'detective', humanFeedback: 'x' });
+    expect(contextSection).toContain('These aspects are working well, PRESERVE THESE: voice');
+    expect(contextSection).toContain('These aspects need improvement: sectionFlow, lede');
+    expect(contextSection).toContain("1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch");
+    expect(contextSection).toContain('      fix: open on a moment');
+    expect(contextSection).not.toMatch(/uncalibrated/i);
+    expect(previousOutputSection).toContain('PREVIOUS OUTLINE OUTPUT (to improve, not regenerate):');
   });
 });

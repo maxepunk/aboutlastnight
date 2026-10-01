@@ -70,6 +70,18 @@ const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = requir
 const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
 
 /**
+ * Whether a call keeps the detective's parked text (spec D13). The journalist reads
+ * the rule set; the detective keeps today's prompts, rules and schemas until a
+ * detective session is planned.
+ *
+ * @param {string} [theme]
+ * @returns {boolean}
+ */
+function isParkedDetective(theme) {
+  return theme === 'detective';
+}
+
+/**
  * The director's standing notes for the arc writer and the arc reworker (phase 2,
  * brief 2.2).
  *
@@ -1025,7 +1037,8 @@ async function reviseArcs(state, config) {
       round: (state.humanArcRevisionCount || 0) + 1,
       validationResults: state.validationResults,
       previousOutput: previousArcs,
-      humanFeedback: state._arcFeedback || null
+      humanFeedback: state._arcFeedback || null,
+      theme: state.theme
     });
     const revisionPrompt = buildArcRevisionPrompt(state, contextSection, previousOutputSection);
     const result = await sdkClient({
@@ -1137,13 +1150,32 @@ async function reviseArcs(state, config) {
 
 /**
  * The rules the arc reworker's system prompt adds after its writer's, one set per
- * kind of rework. Fixed text: the "preserve, do not regenerate" wording waits for
- * phase 3's ruling (X28).
+ * kind of rework: the journalist's (phase 3, brief 3.3; TH7).
+ *
+ * The first line names the task the rework's revision context gives it: the
+ * director's note on a send back, the check's or the evaluation's findings on an
+ * automatic pass. How much of the previous arcs a rework keeps is the revision
+ * context's to say (buildRevisionContext), from the director's note, so no fixed
+ * "preserve" or "do not regenerate" text is here: on 091826 that text turned the
+ * director's "rethink" into a relabel.
+ */
+const ARC_REVISION_RULES = {
+  human: `You are reworking the arcs you wrote: the director sent them back, and the director's note in the revision context is the task.
+
+The director knows the game and this session, so the note governs:
+- A note can call for a rethink: replace or restructure whole arcs when it does.
+- A note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every arc it touches, not only the one it names.`,
+
+  evaluator: `You are reworking the arcs you wrote: an automatic check or evaluation found what the revision context lists, and this rework answers it.`
+};
+
+/**
+ * The detective's arc rework rules, today's text, parked with its theme (spec D13).
  *
  * Human feedback: allows conceptual arc replacement.
  * Evaluator feedback: targeted fixes only.
  */
-const ARC_REVISION_RULES = {
+const DETECTIVE_ARC_REVISION_RULES = {
   human: `You are revising narrative arcs based on human reviewer feedback for "About Last Night."
 
 The human reviewer has domain expertise about the game mechanics. Their feedback takes ABSOLUTE PRIORITY.
@@ -1199,8 +1231,19 @@ DO:
  * @returns {string} System prompt
  */
 function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined, theme = undefined) {
-  const rules = hasHumanFeedback ? ARC_REVISION_RULES.human : ARC_REVISION_RULES.evaluator;
-  return `${coreArcSystemPrompt(sessionConfig, theme)}\n\n${rules}`;
+  return `${coreArcSystemPrompt(sessionConfig, theme)}\n\n${arcRevisionRules(hasHumanFeedback, theme)}`;
+}
+
+/**
+ * The arc rework rules for one kind of rework and theme.
+ *
+ * @param {boolean} hasHumanFeedback - a send back (true) or an automatic pass
+ * @param {string} [theme='journalist']
+ * @returns {string}
+ */
+function arcRevisionRules(hasHumanFeedback, theme = 'journalist') {
+  const rules = isParkedDetective(theme) ? DETECTIVE_ARC_REVISION_RULES : ARC_REVISION_RULES;
+  return hasHumanFeedback ? rules.human : rules.evaluator;
 }
 
 /**
@@ -1330,7 +1373,28 @@ ${buildArcReworkOutputAddendum(hasPlan)}
 
 ---
 
-## YOUR TASK
+${arcReworkTask(state.theme, keepPlan)}${buildArcStandingNotes(state)}`;
+}
+
+/**
+ * The arc rework's task, the last section before the standing notes.
+ *
+ * The journalist's (phase 3, brief 3.3; TH7) defers to the revision context for what
+ * the rework changes and how far; the detective's keeps today's fixed text (D13).
+ *
+ * @param {string} [theme]
+ * @param {string} keepPlan - the sentence about keeping a previous plan, or ''
+ * @returns {string}
+ */
+function arcReworkTask(theme, keepPlan) {
+  if (!isParkedDetective(theme)) {
+    return `## YOUR TASK
+
+1. Rework the PREVIOUS ARCS OUTPUT as the revision context above directs.
+2. Return the whole arc set in the same JSON format, every arc with all its required fields.
+3. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.${keepPlan}`;
+  }
+  return `## YOUR TASK
 
 1. Review the PREVIOUS ARCS OUTPUT above
 2. Review the ISSUES TO ADDRESS in the revision context
@@ -1339,7 +1403,7 @@ ${buildArcReworkOutputAddendum(hasPlan)}
 5. Return the complete updated arc set in the same JSON format
 6. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.${keepPlan}
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${buildArcStandingNotes(state)}`;
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1993,7 +2057,9 @@ module.exports = {
     buildCoreArcSections,
     ARC_REVISION_RULES,
     hasInterweavingPlan,
-    buildArcReworkOutputAddendum
+    buildArcReworkOutputAddendum,
+    // Phase 3 (3.3): the rework rules by theme
+    arcRevisionRules
   }
 };
 

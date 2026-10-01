@@ -1177,6 +1177,7 @@ async function reviseOutline(state, config) {
   // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
   // round. This node never clears them (C3) — the gate does, on approve.
   const handEdits = state._outlineHandEdits || null;
+  const theme = config?.configurable?.theme || 'journalist';
 
   // Build revision context using centralized helper (DRY)
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
@@ -1187,7 +1188,8 @@ async function reviseOutline(state, config) {
     validationResults: state.validationResults,
     previousOutput: previousOutline,
     humanFeedback: state._outlineFeedback || null,
-    handEdits
+    handEdits,
+    theme
   });
 
   // Get SDK client and prompt builder
@@ -1200,7 +1202,6 @@ async function reviseOutline(state, config) {
   // an approval note reusing the same sentence must survive.
   const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback, 'outline');
 
-  const theme = config?.configurable?.theme || 'journalist';
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
 
   try {
@@ -1208,8 +1209,8 @@ async function reviseOutline(state, config) {
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousOutline / _outlineFeedback and leaves the run resumable.
-    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
-    const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder);
+    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
+    const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder, theme);
 
     const result = await sdk({
       prompt: revisionPrompt,
@@ -1279,10 +1280,18 @@ function assertWriterSystemPrompt(writerSystemPrompt, caller, builder) {
 }
 
 /**
- * The rules the outline reworker's system prompt adds after its writer's. Fixed
- * text: the "preserve, do not regenerate" wording waits for phase 3's ruling (X28).
+ * The rules the outline reworker's system prompt adds after its writer's: the
+ * journalist's (phase 3, brief 3.3; TH7). Its first line names the task the
+ * revision context gives the rework; how much of the previous outline the rework
+ * keeps is the revision context's to say, from the director's note
+ * (buildRevisionContext), so no fixed "preserve" text is here.
  */
-const OUTLINE_REVISION_RULES = `You are REVISING that outline, not writing it from scratch.
+const OUTLINE_REVISION_RULES = 'You are reworking the outline you wrote, for the reason the revision context in the prompt gives: the director\'s note when the director sent it back, or what an automatic check or evaluation found.';
+
+/**
+ * The detective's outline rework rules, today's text, parked with its theme (D13).
+ */
+const DETECTIVE_OUTLINE_REVISION_RULES = `You are REVISING that outline, not writing it from scratch.
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING an existing outline, not generating from scratch
@@ -1316,21 +1325,33 @@ DO:
  * design the reworker used to go without.
  *
  * @param {string} writerSystemPrompt - PromptBuilder.buildOutlineSystemPrompt()
+ * @param {string} [theme='journalist'] - selects the rework rules (outlineRevisionRules)
  * @returns {string}
  */
-function getOutlineRevisionSystemPrompt(writerSystemPrompt) {
+function getOutlineRevisionSystemPrompt(writerSystemPrompt, theme = 'journalist') {
   assertWriterSystemPrompt(writerSystemPrompt, 'getOutlineRevisionSystemPrompt', 'buildOutlineSystemPrompt');
-  return `${writerSystemPrompt}\n\n${OUTLINE_REVISION_RULES}`;
+  return `${writerSystemPrompt}\n\n${outlineRevisionRules(theme)}`;
+}
+
+/**
+ * The outline rework rules for a theme: the detective keeps today's (D13).
+ *
+ * @param {string} [theme='journalist']
+ * @returns {string}
+ */
+function outlineRevisionRules(theme = 'journalist') {
+  return theme === 'detective' ? DETECTIVE_OUTLINE_REVISION_RULES : OUTLINE_REVISION_RULES;
 }
 
 /**
  * The outline reworker's system prompt, built from its writer's builder.
  *
  * @param {Object} promptBuilder - the PromptBuilder the writer used
+ * @param {string} [theme='journalist']
  * @returns {Promise<string>}
  */
-async function buildOutlineRevisionSystemPrompt(promptBuilder) {
-  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt());
+async function buildOutlineRevisionSystemPrompt(promptBuilder, theme = 'journalist') {
+  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt(), theme);
 }
 
 /**
@@ -1360,10 +1381,11 @@ function reworkHeroImage(state) {
  * @param {string} previousOutputSection - Formatted previous output from helper
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
+ * @param {string} [theme='journalist'] - selects the task (reworkTask)
  * @returns {Promise<string>} Complete revision prompt
  * @throws {Error} when one of the writer's craft files did not load
  */
-async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
+async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], theme = 'journalist') {
   await promptBuilder.requirePhasePrompts('outlineGeneration');
   const writerSections = await promptBuilder.buildOutlineUserSections(
     ...outlineWriterInputs(state, reworkHeroImage(state))
@@ -1384,15 +1406,36 @@ ${previousOutputSection}
 
 ---
 
-## YOUR TASK
+${reworkTask('outline', theme)}${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
+}
 
-1. Review the PREVIOUS OUTLINE OUTPUT above
+/**
+ * The outline and article reworks' task, the last section before <DIRECTOR_GUIDANCE>.
+ *
+ * The journalist's (phase 3, brief 3.3; TH7) defers to the revision context for what
+ * the rework changes and how far; the detective's keeps today's fixed text (D13).
+ *
+ * @param {'outline'|'article'} phase
+ * @param {string} [theme='journalist']
+ * @returns {string}
+ */
+function reworkTask(phase, theme = 'journalist') {
+  const PHASE = phase.toUpperCase();
+  if (theme !== 'detective') {
+    return `## YOUR TASK
+
+1. Rework the PREVIOUS ${PHASE} OUTPUT as the revision context above directs.
+2. Return the whole ${phase} in the same JSON format.`;
+  }
+  return `## YOUR TASK
+
+1. Review the PREVIOUS ${PHASE} OUTPUT above
 2. Review the ISSUES TO ADDRESS in the revision context
 3. Make TARGETED FIXES to address those specific issues
 4. PRESERVE everything that's working well
-5. Return the complete updated outline in the same JSON format
+5. Return the complete updated ${phase} in the same JSON format
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 /**
@@ -1614,6 +1657,7 @@ async function reviseContentBundle(state, config) {
   // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
   // round. This node never clears them (C3) — the gate does, on approve.
   const handEdits = state._articleHandEdits || null;
+  const theme = config?.configurable?.theme || state?.theme || 'journalist';
 
   // Build revision context using centralized helper (DRY)
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
@@ -1624,7 +1668,8 @@ async function reviseContentBundle(state, config) {
     validationResults: state.validationResults,
     previousOutput: previousContentBundle,
     humanFeedback: state._articleFeedback || null,
-    handEdits
+    handEdits,
+    theme
   });
 
   const sdk = getSdkClient(config, 'reviseContent');
@@ -1641,10 +1686,8 @@ async function reviseContentBundle(state, config) {
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousContentBundle / _articleFeedback and leaves the run resumable.
-    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
-    const systemPrompt = await buildArticleRevisionSystemPrompt(
-      promptBuilder, config?.configurable?.theme || state?.theme || 'journalist'
-    );
+    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
+    const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder, theme);
 
     const revised = await sdk({
       prompt: revisionPrompt,
@@ -1706,8 +1749,14 @@ async function reviseContentBundle(state, config) {
 
 /**
  * The rules the article reworker's system prompt adds after its writer's: the
- * theme's revision framing, its revision voice, and the rework rules. Fixed text:
- * the "preserve, do not regenerate" wording waits for phase 3's ruling (X28).
+ * theme's revision framing, its revision voice, and the rework rules.
+ *
+ * The journalist's (phase 3, brief 3.3; TH7): the framing (THEME_SYSTEM_PROMPTS
+ * revision, 3.2's string) is the rework's first line and names its task, and the
+ * voice follows it. The fixed "preserve" lists and the "WHAT TO FIX" list, which made
+ * every low-scoring criterion and every flagged anti-pattern a defect though most
+ * criteria are advisory, are gone: the revision context says what the rework changes
+ * (buildRevisionContext). The detective keeps today's rules (D13).
  *
  * @param {string} [theme]
  * @returns {string}
@@ -1715,6 +1764,11 @@ async function reviseContentBundle(state, config) {
 function articleRevisionRules(theme = 'journalist') {
   const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
   const constraints = THEME_CONSTRAINTS[theme] || THEME_CONSTRAINTS.journalist;
+  if (theme !== 'detective') {
+    return `${framing.revision || framing.articleGeneration}
+
+${constraints.revisionVoice}`;
+  }
   return `${framing.revision || framing.articleGeneration}
 
 ${constraints.revisionVoice}
@@ -1790,10 +1844,11 @@ async function buildArticleRevisionSystemPrompt(promptBuilder, theme = 'journali
  * @param {string} previousOutputSection - Formatted previous output
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
+ * @param {string} [theme='journalist'] - selects the task (reworkTask)
  * @returns {Promise<string>} Complete revision prompt
  * @throws {Error} when one of the writer's craft files did not load
  */
-async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
+async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], theme = 'journalist') {
   await promptBuilder.requirePhasePrompts('articleGeneration');
   const writerSections = await promptBuilder.buildArticleUserSections(...articleWriterInputs(state));
   const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
@@ -1813,15 +1868,7 @@ ${previousOutputSection}
 
 ---
 
-## YOUR TASK
-
-1. Review the PREVIOUS ARTICLE OUTPUT above
-2. Review the ISSUES TO ADDRESS in the revision context
-3. Make TARGETED FIXES to address those specific issues
-4. PRESERVE everything that's working well
-5. Return the complete updated article in the same JSON format
-
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${guidanceSection ? `
+${reworkTask('article', theme)}${guidanceSection ? `
 
 ${guidanceSection}` : ''}`;
 }
@@ -1945,6 +1992,8 @@ module.exports = {
     buildOutlineRevisionSystemPrompt,
     buildArticleRevisionSystemPrompt,
     OUTLINE_REVISION_RULES,
+    outlineRevisionRules,
+    reworkTask,
     articleRevisionRules,
     outlineWriterInputs,
     articleWriterInputs,

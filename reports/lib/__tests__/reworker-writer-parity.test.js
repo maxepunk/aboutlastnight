@@ -17,11 +17,11 @@
 const { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const {
   generateOutline, reviseOutline, generateContentBundle, reviseContentBundle,
-  _testing: { OUTLINE_REVISION_RULES, articleRevisionRules }
+  _testing: { outlineRevisionRules, articleRevisionRules }
 } = require('../workflow/nodes/ai-nodes');
 const {
   reviseArcs,
-  _testing: { generateCoreArcs, ARC_REVISION_RULES }
+  _testing: { generateCoreArcs, arcRevisionRules }
 } = require('../workflow/nodes/arc-specialist-nodes');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
 const { PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
@@ -128,7 +128,10 @@ describe.each(['journalist', 'detective'])('%s outline stop', (theme) => {
 
   it("the reworker's system prompt is its writer's, then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
-    expect(rework.system).toBe(`${writer.system}\n\n${OUTLINE_REVISION_RULES}`);
+    // Phase 3 (3.3): the rework rules are the theme's; the detective keeps today's.
+    expect(rework.system).toBe(`${writer.system}
+
+${outlineRevisionRules(theme)}`);
     // Phase 3 (3.2): the journalist's system prompt carries the world and the truth
     // rules; the detective is parked and keeps its craft files there.
     if (theme === 'journalist') {
@@ -298,12 +301,12 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
 
   it("the reworker's system prompt is its writer's, then the rework rules for its kind", async () => {
     const sendBack = await writerAndRework(SEND_BACK);
-    expect(sendBack.rework.system).toBe(`${sendBack.writer.system}\n\n${ARC_REVISION_RULES.human}`);
+    expect(sendBack.rework.system).toBe(`${sendBack.writer.system}\n\n${arcRevisionRules(true, theme)}`);
     const automated = await writerAndRework({
       arcRevisionCount: 1, humanArcRevisionCount: 0,
       validationResults: { phase: 'arcs', passed: false, structuralIssues: ['Riley has no placement'] }
     });
-    expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${ARC_REVISION_RULES.evaluator}`);
+    expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${arcRevisionRules(false, theme)}`);
     expect(automated.rework.user).toContain('REVISION CONTEXT: ARCS (automated pass 1)');
     // The writer's own revision hook stays the writer's: the reworker's context is
     // buildRevisionContext's, once.
@@ -354,7 +357,9 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     for (const cache of [null, { interweavingPlan: {} }, { interweavingPlan: { suggestedOrder: [], convergencePoint: '', keyCallbacks: [] } }]) {
       const { rework } = await writerAndRework({ ...SEND_BACK, _arcAnalysisCache: cache });
       expect(rework.user).not.toContain('PREVIOUS INTERWEAVING PLAN');
-      expect(rework.user).toMatch(/6\. Return the interweavingPlan \(suggestedOrder, convergencePoint, keyCallbacks\) for the revised arcs, and each arc's interweaving\.\n/);
+      // Phase 3 (3.3): the journalist's task has three steps; the detective keeps six.
+      const step = theme === 'detective' ? 6 : 3;
+      expect(rework.user).toContain(`\n${step}. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.\n`);
     }
   });
 });

@@ -839,6 +839,11 @@ function resolveArcs(arcs, availableArcs) {
  * @param {Object|null} [options.handEdits] - Hand-edit diff from lib/hand-edit-diff.js (rendered as <HAND_EDITS>)
  * @param {number} [options.round] - the director's round a send back opens (the stop's
  *   "Round N"); named in the banner of a send-back rework (brief 2.3)
+ * @param {string} [options.theme='journalist'] - the session's theme. The journalist's
+ *   context (phase 3, brief 3.3; TH7) has no fixed "preserve" text: the director's note
+ *   sets how much a send back keeps, an automatic pass changes what its findings name,
+ *   an advisory criterion is a suggestion, and the scores are said to be uncalibrated.
+ *   The detective keeps today's text (D13).
  * @returns {Object} { contextSection, previousOutputSection }
  *
  * @example
@@ -850,7 +855,8 @@ function resolveArcs(arcs, availableArcs) {
  * });
  */
 function buildRevisionContext(options) {
-  const { phase, revisionCount, validationResults, previousOutput, humanFeedback, handEdits, round } = options;
+  const { phase, revisionCount, validationResults, previousOutput, humanFeedback, handEdits, round, theme = 'journalist' } = options;
+  const parkedDetective = theme === 'detective';
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Build context section (feedback, issues, criteria)
@@ -931,7 +937,8 @@ ${advisories.map(formatIssue).join('\n')}`
     : '';
 
   // Per-criterion: score, structural/advisory label, and the evaluator's own
-  // notes + concrete fix. The notes and fix are the actionable part.
+  // notes + concrete fix. The notes and fix are the actionable part. Phase 3 (3.3):
+  // an advisory criterion's fix is a suggestion, and the journalist's line says so.
   const criteriaList = Object.keys(criteria).length > 0
     ? Object.entries(criteria)
         .map(([name, value]) => {
@@ -940,8 +947,9 @@ ${advisories.map(formatIssue).join('\n')}`
           const kind = (value && typeof value === 'object' && value.type) ? ` [${value.type}]` : '';
           const lines = [`  - ${name}: ${scoreText}${kind}`];
           if (value && typeof value === 'object') {
+            const fixLabel = (!parkedDetective && value.type === 'advisory') ? 'suggestion' : 'fix';
             if (value.notes && String(value.notes).trim()) lines.push(`      notes: ${value.notes}`);
-            if (value.fix && String(value.fix).trim()) lines.push(`      fix: ${value.fix}`);
+            if (value.fix && String(value.fix).trim()) lines.push(`      ${fixLabel}: ${value.fix}`);
           }
           return lines.join('\n');
         })
@@ -952,15 +960,26 @@ ${advisories.map(formatIssue).join('\n')}`
     .map(([name, value]) => [name, scoreOf(value)])
     .filter(([, score]) => score !== null);
 
-  const workingWell = scored.filter(([, score]) => score >= 0.8).map(([name]) => name);
-  const workingWellText = workingWell.length > 0
-    ? `These aspects are working well, PRESERVE THESE: ${workingWell.join(', ')}`
-    : 'Focus on the issues identified below.';
+  // How to read the scores. The detective keeps today's two lists (D13). The
+  // journalist's (phase 3, 3.3) drops them: "PRESERVE THESE" listed every criterion at
+  // 0.8 or more, which after a pass is every criterion, so it outranked the director's
+  // note (TH7); and "need improvement" listed every criterion under 0.7, an advisory
+  // one included, as a defect. The scores are the judge's own, uncalibrated.
+  let scoresGuide;
+  if (parkedDetective) {
+    const workingWell = scored.filter(([, score]) => score >= 0.8).map(([name]) => name);
+    const workingWellText = workingWell.length > 0
+      ? `These aspects are working well, PRESERVE THESE: ${workingWell.join(', ')}`
+      : 'Focus on the issues identified below.';
 
-  const needsWork = scored.filter(([, score]) => score < 0.7).map(([name]) => name);
-  const needsWorkText = needsWork.length > 0
-    ? `These aspects need improvement: ${needsWork.join(', ')}`
-    : '';
+    const needsWork = scored.filter(([, score]) => score < 0.7).map(([name]) => name);
+    const needsWorkText = needsWork.length > 0
+      ? `These aspects need improvement: ${needsWork.join(', ')}`
+      : '';
+    scoresGuide = `${workingWellText}\n${needsWorkText}`;
+  } else {
+    scoresGuide = "The scores below are the evaluating model's own and uncalibrated: no one has yet checked them against the director's approvals and send-backs. Only ISSUES TO ADDRESS is must-fix; a criterion marked [advisory] is a suggestion.";
+  }
 
   // Confidence is a string ('high'|'medium'|'low') in the current schema and a
   // number in the legacy one; the old code multiplied both by 100 -> "NaN%".
@@ -980,8 +999,7 @@ ${advisories.map(formatIssue).join('\n')}`
   Confidence: ${confidenceText}
   Ready: ${passed ? 'YES' : 'NO (must address issues)'}${sendBackLine}
 
-${workingWellText}
-${needsWorkText}
+${scoresGuide}
 
 CRITERIA SCORES:
 ${criteriaList}
@@ -994,9 +1012,9 @@ ${feedback || '(no specific feedback provided)'}`
     : '(no evaluator feedback for this phase)';
 
   // Spec 2026-09-19 §4.3: what the director changed by hand before sending this
-  // back. Placed after HUMAN FEEDBACK and before the instructions so "PRESERVE"
-  // covers the edits and "feedback above" is literally true. Present on EVERY pass
-  // of the round, not only the first (C3).
+  // back. Placed after HUMAN FEEDBACK and before the instructions, so the
+  // instructions cover the edits and "feedback above" is literally true. Present on
+  // EVERY pass of the round, not only the first (C3).
   const handEditsBlock = (handEdits && !isEmptyDiff(handEdits))
     ? `<HAND_EDITS>
 The director changed these parts by hand before sending this back. They are already
@@ -1021,8 +1039,30 @@ ${formatHandEditsBlock(handEdits)}
   // Brief 1.3: the instruction "if a criterion is scoring well (>=80%), do NOT
   // change anything related to it" used to sit at item 3. On session 091826 every
   // criterion scored above 0.8, so it told the writer to change nothing, and the
-  // director's "rethink the closing" came back as a relabel. A later slice derives
-  // what to preserve from the scope of the send-back instead of from the scores.
+  // director's "rethink the closing" came back as a relabel.
+  //
+  // Phase 3 (3.3, TH7): the journalist's instructions carry no fixed "preserve" or
+  // "do not regenerate" text. On a send back the director's note sets how much the
+  // rework keeps; on an automatic pass the findings do: what they do not name was not
+  // questioned (row 64: an automatic pass once reshaped what the director never had).
+  // The detective keeps today's four lines (D13).
+  const instructionsSection = parkedDetective
+    ? `═══════════════════════════════════════════════════════════════════════════════
+CRITICAL REVISION INSTRUCTIONS:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch
+2. Make TARGETED FIXES only for the specific issues identified above
+3. Output the complete revised ${phase} with all original content plus fixes
+4. Maintain consistency with the original structure and organization`
+    : `═══════════════════════════════════════════════════════════════════════════════
+WHAT THIS REWORK DOES:
+═══════════════════════════════════════════════════════════════════════════════
+
+${humanFeedback
+    ? `The director's note above is the task, and it sets how much of the previous ${phase} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was, unless an issue to address needs it changed.`
+    : `This rework answers the findings above. The ISSUES TO ADDRESS are must-fix. ${advisories.length > 0 ? 'The SHOULD CONSIDER items and the criteria' : 'The criteria'} marked [advisory] are suggestions: take one up where it makes the ${phase} truer to the record or better for the players who read it. What the findings do not name was not questioned, so it stays as it was.`}`;
+
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
 REVISION CONTEXT: ${phase.toUpperCase()} (${passLabel})
@@ -1035,14 +1075,7 @@ ${humanFeedback}
 
 NOTE: The human reviewer has explicitly requested these changes.
 Address human feedback FIRST, then address any remaining evaluator issues.
-` : ''}${handEditsBlock}═══════════════════════════════════════════════════════════════════════════════
-CRITICAL REVISION INSTRUCTIONS:
-═══════════════════════════════════════════════════════════════════════════════
-
-1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch
-2. Make TARGETED FIXES only for the specific issues identified above
-3. Output the complete revised ${phase} with all original content plus fixes
-4. Maintain consistency with the original structure and organization
+` : ''}${handEditsBlock}${instructionsSection}
 `.trim();
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1061,9 +1094,12 @@ CRITICAL REVISION INSTRUCTIONS:
     previousOutputText = String(previousOutput);
   }
 
+  // Phase 3 (3.3): the journalist's header says what the version is, not how little
+  // to change it (TH7).
+  const previousLabel = parkedDetective ? '(to improve, not regenerate)' : '(the version this rework starts from)';
   const previousOutputSection = `
 ═══════════════════════════════════════════════════════════════════════════════
-PREVIOUS ${phase.toUpperCase()} OUTPUT (to improve, not regenerate):
+PREVIOUS ${phase.toUpperCase()} OUTPUT ${previousLabel}:
 ═══════════════════════════════════════════════════════════════════════════════
 
 ${previousOutputText}
