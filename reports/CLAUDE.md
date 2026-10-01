@@ -383,7 +383,7 @@ For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration`.
 
 | Phase | Required Prompts |
 |-------|-----------------|
-| arcAnalysis | none from ThemeLoader: the journalist arc calls read the rule set (`loadRuleSet('arc')`, `loadRuleSet('interweaving')`; phase 3, 3.3), and the detective's carry their text inline |
+| arcAnalysis | journalist: the rule set's `arc` list, `loadRuleSet('arc')` (the world, the truth rules and the arc's craft files, `RULE_SET_CALLS.arc` in `lib/rule-set.js`), and `loadRuleSet('interweaving')` for the interweaving call (phase 3, 3.3); detective: none from ThemeLoader, its text is inline in `arc-specialist-nodes.js` |
 | revision | none of its own since phase 2 (2.3): each reworker carries its writer's whole prompt, craft files included, and checks its writer's phase (`requirePhasePrompts`). The three-file `<RULES>` set (character-voice, evidence-boundaries, anti-patterns) the outline and article reworkers used to carry instead is gone; see **Reworkers see what their writers saw** |
 | outlineGeneration | journalist: the rule set, `loadRuleSet('outline')`; detective: section-rules, editorial-design, narrative-structure, evidence-boundaries |
 | articleGeneration | journalist: the rule set, `loadRuleSet('article')`; detective: its 8 craft files |

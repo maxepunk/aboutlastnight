@@ -850,9 +850,9 @@ State persists via `MemorySaver` (in-memory) or `SqliteSaver` (persistent).
 **Check**:
 1. Is three-layer model enforced in prompts?
 2. Is article generation receiving buried transactions (metadata only)?
-3. Are anti-patterns detecting "token" language?
+3. Does the article writer's system prompt carry `truth-rules.md` T3 (buried memories never appear as evidence)? The world and the truth rules come from `loadRuleSet('article')`, which throws naming a missing or empty rule file.
 
-**Fix**: Check `evidence-boundaries.md` prompt is being loaded and placed LAST.
+**Fix**: Check that `<RECORD>` prints a buried memory only as its sale (`lib/__tests__/buried-memory-sentinel.test.js`), and read the judges' `evidenceTruth` criterion (T3) for the line at fault.
 
 ### "Accusation arc missing"
 
@@ -908,19 +908,18 @@ item.fullDescription || item.rawData?.fullDescription || item.content || item.su
 **Check**:
 1. Are canonical names provided in arc generation prompt?
 2. Is `validateRosterName()` preserving canonical full names?
-3. Check `anti-patterns.md` includes character name violations section
+3. Does the prompt's roster block (`generateRosterSection` in `lib/prompt-builder.js`) list each character by canonical full name?
 
 **Fix**:
 - Ensure prompts include roster with canonical names (from `theme-config.js`)
 - Validation should accept both "Victoria" AND "Victoria Kingsley"
-- Anti-patterns should list common hallucinations
 
 **Common hallucinations**:
 - "Victoria Chen" → should be "Victoria Kingsley"
 - "Alex Chen" → should be "Alex Reeves"
 - "Sarah Chen" → should be "Sarah Blackwood"
 
-### "Temporal conflation in article" (Added to writing-principles.md)
+### "Temporal conflation in article"
 
 **Symptom**: Article mixes party night events with investigation day actions in same sentence.
 
@@ -928,9 +927,9 @@ item.fullDescription || item.rawData?.fullDescription || item.content || item.su
 > "Kai searched for Ashe. At 11:49 PM, Kai ran to the Valet."
 
 **Check**:
-1. Is temporal framework section in `writing-principles.md`?
+1. Does the article writer's system prompt carry `truth-rules.md` T7 (the stages and the clock)?
 2. Are prompts loaded with recency bias (rules LAST)?
-3. Is anti-patterns checker flagging temporal mixing?
+3. Did the judges' `stagesTruth` criterion (T7) flag the line?
 
 **Fix**:
 - Party night events: "That night..." or "The memory shows..."
