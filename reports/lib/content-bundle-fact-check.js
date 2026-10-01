@@ -336,43 +336,33 @@ const GENDERED_PRONOUNS = {
 };
 
 /**
- * The gendered forms an NPC scan reads: the subject and reflexive forms, and the
- * possessives ("Blake counted his money"). The object forms ("Blake paid him") point at
- * someone else, so the Marcus and Blake scans leave them out, erring toward not
- * flagging; "her" is read only as a possessive (NPC_POSSESSIVE_PRONOUNS). The Nova scan
- * reads every form: Nova seldom appears in the third person, and a gendered pronoun
- * beside the name with no one else in the sentence is Nova's.
+ * The gendered forms an NPC scan reads: the subject and reflexive forms, "hers", and the
+ * possessive "his" ("Blake counted his money"). The object forms ("Blake paid him") and
+ * "her" point at someone else, so the Marcus and Blake scans leave them out, erring
+ * toward not flagging: on the 53 published reports a "her" after Marcus was another
+ * person's ("Marcus buried her exposé", "Marcus had cleaned out her bank account"), five
+ * false flags and no true one (fix 3.4c). The Nova scan reads every form: Nova seldom
+ * appears in the third person, and a gendered pronoun beside the name with no one else
+ * in the sentence is Nova's.
  */
 const NPC_GENDERED_PRONOUNS = {
   masculine: ['he', 'his', 'himself'],
-  feminine: ['she', 'her', 'hers', 'herself']
+  feminine: ['she', 'hers', 'herself']
 };
 
 /**
- * The possessives an NPC scan reads, and when (findPronounNear's `possessives`). A
- * possessive belongs to the clause's subject, so it is read only when the name is not
- * the object of a preposition ("The last reporter who wrote about Marcus had her exposé
- * buried": "her" is the reporter's). "her" is also an object form, so it is read only
- * when a word it can own follows it ("her money"), not punctuation, a figure, or one of
- * WORDS_AFTER_OBJECT_HER ("paid her well", "told her to sell", "hired her as").
+ * The possessives an NPC scan reads, and when (findPronounNear's `possessives`): "his"
+ * alone. A possessive belongs to the clause's subject, so it is read only when the name
+ * is not the object of a preposition ("The last buyer who sold to Blake spent his cut":
+ * "his" is the buyer's).
  */
-const NPC_POSSESSIVE_PRONOUNS = ['his', 'her'];
+const NPC_POSSESSIVE_PRONOUNS = ['his'];
 
 /** The text before a name ends in a preposition that governs it ("about Marcus", "to the Valet"). */
 const GOVERNED_BY_PREPOSITION = new RegExp(
   '\\b(?:about|against|among|around|at|behind|beside|between|by|for|from|in|into|near|of|on|onto|over|' +
   'past|through|to|toward|towards|under|upon|with|without)\\s+(?:the\\s+)?$', 'i'
 );
-
-/** Words after "her" that make it an object, not a possessive: prepositions, adverbs, conjunctions, determiners. */
-const WORDS_AFTER_OBJECT_HER = new Set([
-  'a', 'about', 'across', 'after', 'again', 'against', 'all', 'alone', 'along', 'an', 'and', 'any', 'anything',
-  'around', 'as', 'at', 'away', 'back', 'because', 'before', 'but', 'by', 'down', 'enough', 'every',
-  'everything', 'first', 'for', 'from', 'here', 'how', 'if', 'in', 'into', 'later', 'more', 'no', 'nothing',
-  'now', 'of', 'off', 'on', 'once', 'or', 'out', 'over', 'so', 'some', 'something', 'than', 'that', 'the',
-  'then', 'there', 'these', 'this', 'those', 'through', 'to', 'too', 'twice', 'until', 'up', 'well', 'what',
-  'when', 'where', 'whether', 'while', 'who', 'why', 'with'
-]);
 
 /** The genders a declared pronoun set names: 'he/him' -> ['masculine']; 'they/them' -> []. */
 function gendersOf(pronouns) {
@@ -466,18 +456,12 @@ function findPronounNear(segments, names, pronouns, others, { possessives = [] }
         let match;
         while ((match = nameRe.exec(sentence)) !== null) {
           const span = String(match[1] || '');
-          const spanStart = match.index + match[0].length - span.length;
           pronounRe.lastIndex = 0;
           let hit;
           while ((hit = pronounRe.exec(span)) !== null) {
             const before = span.slice(0, hit.index);
             if (/[A-Z][a-z]/.test(before) || /(?:\band\b|\bor\b|\bnor\b|,)\s+[A-Z]/.test(before)) break;
-            const form = hit[1].toLowerCase();
-            if (possessive.has(form)) {
-              if (GOVERNED_BY_PREPOSITION.test(sentence.slice(0, match.index))) continue;
-              const next = /^\s+([A-Za-z][A-Za-z'’-]*)/.exec(sentence.slice(spanStart + hit.index + hit[1].length));
-              if (form === 'her' && (!next || WORDS_AFTER_OBJECT_HER.has(next[1].toLowerCase()))) continue;
-            }
+            if (possessive.has(hit[1].toLowerCase()) && GOVERNED_BY_PREPOSITION.test(sentence.slice(0, match.index))) continue;
             return { name, pronoun: hit[1], excerpt: excerptOf(`${name}${before}${hit[1]}`), where: segment.where };
           }
         }

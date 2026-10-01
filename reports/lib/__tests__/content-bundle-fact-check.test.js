@@ -1185,26 +1185,50 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       expect(flagged(result, 'npcPronouns')).toEqual([]);
     });
 
-    // Fix 3.4b (review finding 3): the scans read the possessive forms (his, her), with
-    // findPronounNear's conditions, and keep the object forms (him, an object "her") out.
-    it('reads a possessive after Blake or Marcus', () => {
+    // Fix 3.4b (review finding 3): the scans read a possessive after the name, with
+    // findPronounNear's conditions, and keep the object forms (him) out. Fix 3.4c (the
+    // integrator's ruling of 2026-10-01): the possessive read is "his" alone. On the 53
+    // published reports a "her" after Marcus was someone else's ("Marcus buried her
+    // exposé"): 5 false flags in 4 reports and no true one.
+    it('reads "his" after Blake as Blake\'s, and never flags it after Marcus', () => {
       const blake = flagged(run(paragraphs('Blake counted his money.')), 'npcPronouns');
       expect(blake).toHaveLength(1);
       expect(blake[0]).toMatch(/^Pronoun error: Blake /);
       expect(blake[0]).toContain('"Blake counted his"');
-      const marcus = flagged(run(paragraphs('Marcus signed her name to the transfer.')), 'npcPronouns');
-      expect(marcus[0]).toMatch(/^Pronoun error: Marcus takes he\/him/);
-      expect(marcus[0]).toContain('"Marcus signed her"');
       expect(flagged(run(paragraphs('Marcus signed his name to the transfer.')), 'npcPronouns')).toEqual([]);
+    });
+
+    it('never reads "her" after Marcus or Blake as theirs (3.4c)', () => {
+      const sentences = [
+        'Marcus buried her exposé.',
+        'Marcus had cleaned out her bank account.',
+        'Marcus signed her name to the transfer.',
+        'The Valet bought her memory.'
+      ];
+      expect(sentences.map((s) => [s, flagged(run(paragraphs(s)), 'npcPronouns')]))
+        .toEqual(sentences.map((s) => [s, []]));
+    });
+
+    it('reads the "his" after a "her" as Blake\'s, and never the "her" (3.4c)', () => {
+      const blake = flagged(run(paragraphs('Blake showed her his ledger.')), 'npcPronouns');
+      expect(blake).toHaveLength(1);
+      expect(blake[0]).toMatch(/^Pronoun error: Blake /);
+      expect(blake[0]).toContain('"Blake showed her his"');
+    });
+
+    it('passes over the "her" in "Marcus owed her their cut" (3.4c)', () => {
+      const marcus = flagged(run(paragraphs('Marcus owed her their cut.')), 'npcPronouns');
+      expect(marcus.some((m) => m.includes('"Marcus owed her"'))).toBe(false);
     });
 
     // 092626's article: "her" belongs to the reporter, the subject of the clause; Marcus
     // is the object of "about". A possessive after a name a preposition governs is not
-    // read as that person's.
+    // read as that person's: "his" after "to Blake" is the buyer's.
     it('stays silent on 092626\'s sentence, where the possessive belongs to the clause\'s subject', () => {
       const result = run(paragraphs(
         'The last reporter who wrote about Marcus had her exposé buried.',
-        'The last reporter who tried to tell the truth about Marcus had her exposé buried and lost her job over it.'
+        'The last reporter who tried to tell the truth about Marcus had her exposé buried and lost her job over it.',
+        'The last buyer who sold to Blake spent his cut by noon.'
       ));
       expect(flagged(result, 'npcPronouns')).toEqual([]);
     });
@@ -1219,9 +1243,11 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       expect(flagged(result, 'npcPronouns')).toEqual([]);
     });
 
-    it('a skipped possessive does not hide a later pronoun in the same sentence', () => {
+    it('a pronoun passed over does not hide a later one in the same sentence', () => {
       const result = run(paragraphs('Blake paid her well, and then he left.'));
       expect(flagged(result, 'npcPronouns')[0]).toContain('"Blake paid her well, and then he"');
+      const governed = run(paragraphs('The deal with Blake cost his buyers more than he admitted.'));
+      expect(flagged(governed, 'npcPronouns')[0]).toContain('"Blake cost his buyers more than he"');
     });
 
     it('flags Marcus written she, and still flags Marcus written they', () => {
