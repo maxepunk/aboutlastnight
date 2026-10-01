@@ -1185,15 +1185,43 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       expect(flagged(result, 'npcPronouns')).toEqual([]);
     });
 
-    // The shape of a sentence a 092626 render flagged: "her" belongs to someone named
-    // before Marcus. An object or possessive pronoun often points at someone else, so
-    // the NPC scans read only the forms that cannot (he, himself; she, herself, hers).
-    it('never reads an object or possessive pronoun after Marcus or Blake as theirs', () => {
+    // Fix 3.4b (review finding 3): the scans read the possessive forms (his, her), with
+    // findPronounNear's conditions, and keep the object forms (him, an object "her") out.
+    it('reads a possessive after Blake or Marcus', () => {
+      const blake = flagged(run(paragraphs('Blake counted his money.')), 'npcPronouns');
+      expect(blake).toHaveLength(1);
+      expect(blake[0]).toMatch(/^Pronoun error: Blake /);
+      expect(blake[0]).toContain('"Blake counted his"');
+      const marcus = flagged(run(paragraphs('Marcus signed her name to the transfer.')), 'npcPronouns');
+      expect(marcus[0]).toMatch(/^Pronoun error: Marcus takes he\/him/);
+      expect(marcus[0]).toContain('"Marcus signed her"');
+      expect(flagged(run(paragraphs('Marcus signed his name to the transfer.')), 'npcPronouns')).toEqual([]);
+    });
+
+    // 092626's article: "her" belongs to the reporter, the subject of the clause; Marcus
+    // is the object of "about". A possessive after a name a preposition governs is not
+    // read as that person's.
+    it('stays silent on 092626\'s sentence, where the possessive belongs to the clause\'s subject', () => {
       const result = run(paragraphs(
-        'The last reporter who wrote about Marcus had her story buried.',
-        'Blake paid him well for the memory.'
+        'The last reporter who wrote about Marcus had her exposé buried.',
+        'The last reporter who tried to tell the truth about Marcus had her exposé buried and lost her job over it.'
       ));
       expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    it('never reads an object pronoun after Marcus or Blake as theirs', () => {
+      const result = run(paragraphs(
+        'Blake paid him well for the memory.',
+        'Blake paid her well for the memory.',
+        'Marcus hired her as his assistant.',
+        'Marcus told her to sell.'
+      ));
+      expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    it('a skipped possessive does not hide a later pronoun in the same sentence', () => {
+      const result = run(paragraphs('Blake paid her well, and then he left.'));
+      expect(flagged(result, 'npcPronouns')[0]).toContain('"Blake paid her well, and then he"');
     });
 
     it('flags Marcus written she, and still flags Marcus written they', () => {

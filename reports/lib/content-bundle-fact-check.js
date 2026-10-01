@@ -336,17 +336,43 @@ const GENDERED_PRONOUNS = {
 };
 
 /**
- * The gendered forms an NPC scan reads: the ones that can only point back at the person
- * named before them. "him", "his" and "her" often belong to someone else ("The last
- * reporter who wrote about Marcus had her story buried", "Blake paid him"), so the
- * Marcus and Blake scans leave them out, erring toward not flagging. The Nova scan
+ * The gendered forms an NPC scan reads: the subject and reflexive forms, and the
+ * possessives ("Blake counted his money"). The object forms ("Blake paid him") point at
+ * someone else, so the Marcus and Blake scans leave them out, erring toward not
+ * flagging; "her" is read only as a possessive (NPC_POSSESSIVE_PRONOUNS). The Nova scan
  * reads every form: Nova seldom appears in the third person, and a gendered pronoun
  * beside the name with no one else in the sentence is Nova's.
  */
 const NPC_GENDERED_PRONOUNS = {
-  masculine: ['he', 'himself'],
-  feminine: ['she', 'herself', 'hers']
+  masculine: ['he', 'his', 'himself'],
+  feminine: ['she', 'her', 'hers', 'herself']
 };
+
+/**
+ * The possessives an NPC scan reads, and when (findPronounNear's `possessives`). A
+ * possessive belongs to the clause's subject, so it is read only when the name is not
+ * the object of a preposition ("The last reporter who wrote about Marcus had her exposé
+ * buried": "her" is the reporter's). "her" is also an object form, so it is read only
+ * when a word it can own follows it ("her money"), not punctuation, a figure, or one of
+ * WORDS_AFTER_OBJECT_HER ("paid her well", "told her to sell", "hired her as").
+ */
+const NPC_POSSESSIVE_PRONOUNS = ['his', 'her'];
+
+/** The text before a name ends in a preposition that governs it ("about Marcus", "to the Valet"). */
+const GOVERNED_BY_PREPOSITION = new RegExp(
+  '\\b(?:about|against|among|around|at|behind|beside|between|by|for|from|in|into|near|of|on|onto|over|' +
+  'past|through|to|toward|towards|under|upon|with|without)\\s+(?:the\\s+)?$', 'i'
+);
+
+/** Words after "her" that make it an object, not a possessive: prepositions, adverbs, conjunctions, determiners. */
+const WORDS_AFTER_OBJECT_HER = new Set([
+  'a', 'about', 'across', 'after', 'again', 'against', 'all', 'alone', 'along', 'an', 'and', 'any', 'anything',
+  'around', 'as', 'at', 'away', 'back', 'because', 'before', 'but', 'by', 'down', 'enough', 'every',
+  'everything', 'first', 'for', 'from', 'here', 'how', 'if', 'in', 'into', 'later', 'more', 'no', 'nothing',
+  'now', 'of', 'off', 'on', 'once', 'or', 'out', 'over', 'so', 'some', 'something', 'than', 'that', 'the',
+  'then', 'there', 'these', 'this', 'those', 'through', 'to', 'too', 'twice', 'until', 'up', 'well', 'what',
+  'when', 'where', 'whether', 'while', 'who', 'why', 'with'
+]);
 
 /** The genders a declared pronoun set names: 'he/him' -> ['masculine']; 'they/them' -> []. */
 function gendersOf(pronouns) {
@@ -416,17 +442,21 @@ function times(n) {
  * that person. Lenient, as the module is: a hit is skipped when another known person is
  * named in the sentence, or another capitalised word stands between the name and the
  * pronoun (an antecedent nearer than the name), or a conjunction joins another name to
- * it ("Marcus and Alex ... their").
+ * it ("Marcus and Alex ... their"). A pronoun in `possessives` is read only where it is
+ * that person's possessive (NPC_POSSESSIVE_PRONOUNS); one that is not is passed over for
+ * the next pronoun in the window.
  *
  * @param {Array<{where: string, text: string}>} segments - quotes already stripped
  * @param {string[]} names - the person's names, matched case-sensitively
  * @param {string[]} pronouns - the pronouns that would be wrong
  * @param {string[]} others - every other known person
+ * @param {{possessives?: string[]}} [options] - the pronouns read only as a possessive
  * @returns {{name: string, pronoun: string, excerpt: string, where: string}|null}
  */
-function findPronounNear(segments, names, pronouns, others) {
-  const pronounRe = new RegExp(`\\b(${pronouns.map(escapeRegExp).join('|')})\\b`, 'i');
+function findPronounNear(segments, names, pronouns, others, { possessives = [] } = {}) {
+  const pronounRe = new RegExp(`\\b(${pronouns.map(escapeRegExp).join('|')})\\b`, 'gi');
   const othersRe = others.length > 0 ? new RegExp(`\\b(?:${others.map(escapeRegExp).join('|')})\\b`, 'i') : null;
+  const possessive = new Set(possessives.map(p => p.toLowerCase()));
   for (const segment of segments) {
     for (const sentence of segment.text.split(/[.?!]+/)) {
       if (othersRe && othersRe.test(sentence)) continue;
@@ -436,11 +466,20 @@ function findPronounNear(segments, names, pronouns, others) {
         let match;
         while ((match = nameRe.exec(sentence)) !== null) {
           const span = String(match[1] || '');
-          const hit = pronounRe.exec(span);
-          if (!hit) continue;
-          const before = span.slice(0, hit.index);
-          if (/[A-Z][a-z]/.test(before) || /(?:\band\b|\bor\b|\bnor\b|,)\s+[A-Z]/.test(before)) continue;
-          return { name, pronoun: hit[1], excerpt: excerptOf(`${name}${before}${hit[1]}`), where: segment.where };
+          const spanStart = match.index + match[0].length - span.length;
+          pronounRe.lastIndex = 0;
+          let hit;
+          while ((hit = pronounRe.exec(span)) !== null) {
+            const before = span.slice(0, hit.index);
+            if (/[A-Z][a-z]/.test(before) || /(?:\band\b|\bor\b|\bnor\b|,)\s+[A-Z]/.test(before)) break;
+            const form = hit[1].toLowerCase();
+            if (possessive.has(form)) {
+              if (GOVERNED_BY_PREPOSITION.test(sentence.slice(0, match.index))) continue;
+              const next = /^\s+([A-Za-z][A-Za-z'’-]*)/.exec(sentence.slice(spanStart + hit.index + hit[1].length));
+              if (form === 'her' && (!next || WORDS_AFTER_OBJECT_HER.has(next[1].toLowerCase()))) continue;
+            }
+            return { name, pronoun: hit[1], excerpt: excerptOf(`${name}${before}${hit[1]}`), where: segment.where };
+          }
         }
       }
     }
@@ -1048,7 +1087,7 @@ function factCheckContentBundle({
       if (entry.pronouns) {
         if (String(entry.pronouns).toLowerCase().includes('they')) continue;
         const wrong = [...THEY_THEM, ...Object.keys(GENDERED_PRONOUNS).filter(g => !declared.includes(g)).flatMap(g => NPC_GENDERED_PRONOUNS[g])];
-        const hit = findPronounNear(segments, own, wrong, othersThan(own));
+        const hit = findPronounNear(segments, own, wrong, othersThan(own), { possessives: NPC_POSSESSIVE_PRONOUNS });
         if (hit) {
           advisoryWarnings.push(
             `Pronoun error: ${entry.name} takes ${entry.pronouns}, but the article writes "${hit.excerpt}" ` +
@@ -1061,7 +1100,7 @@ function factCheckContentBundle({
       const given = givenGenders(own, directorText, rosterPronouns);
       const wrong = Object.keys(GENDERED_PRONOUNS).filter(g => !given.has(g)).flatMap(g => NPC_GENDERED_PRONOUNS[g]);
       if (wrong.length === 0) continue;
-      const hit = findPronounNear(segments, own, wrong, othersThan(own));
+      const hit = findPronounNear(segments, own, wrong, othersThan(own), { possessives: NPC_POSSESSIVE_PRONOUNS });
       if (!hit) continue;
       advisoryWarnings.push(given.size === 0
         ? `Pronoun error: ${entry.name} has no pronoun in the record (neither the director's notes nor the ` +
