@@ -221,7 +221,7 @@ lib/workflow/
     └── template-nodes.js           # HTML assembly
 lib/schemas/
 ├── content-bundle.schema.json      # Final article content structure (descriptions shape only, phase 3)
-├── content-bundle.detective-prompt.json # The schema as the parked detective's <SCHEMA> prints it (pre-3.2 text); printed, never validated against
+├── content-bundle.detective-prompt.json # The schema as the parked detective's <SCHEMA> prints it (pre-3.2 text); printed, never validated against; no $id, its shape held to the live schema's (content-bundle-detective-copy.test.js)
 ├── preprocessed-evidence.schema.json # Batch-summarized evidence items
 └── outline.schema.json             # Article outline: six optional slots (TH4, phase 3)
 ```

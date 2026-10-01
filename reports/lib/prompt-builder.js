@@ -16,7 +16,11 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // it embeds included. Phase 3 (3.2) cut the schema's descriptions down to shape only,
 // so the detective prints this copy of the schema as it was before that cut. It is
 // printed, never validated against: the schema above is the one every check uses.
+// lib/__tests__/content-bundle-detective-copy.test.js holds the copy to the live
+// schema's shape. The copy carries no $id, so it can never be registered as the live
+// schema (fix 3.2b); the printed text puts back the id line it printed before (D13).
 const detectivePromptSchema = require('./schemas/content-bundle.detective-prompt.json');
+const DETECTIVE_PRINTED_SCHEMA = (({ $schema, ...rest }) => ({ $schema, $id: 'content-bundle', ...rest }))(detectivePromptSchema);
 const { getThemeNPCEntries } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -1159,7 +1163,7 @@ TARGET LENGTH: ~750 words (+-50 words acceptable). Be economical. Every sentence
 Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields. Note: the schema permits pullQuotes/evidenceCards/financialTracker as optional properties, but the detective theme excludes them per the rule above; if anything else contradicts the schema, the schema wins.
 
 \`\`\`json
-${JSON.stringify(detectivePromptSchema, null, 2)}
+${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
 \`\`\`
 </SCHEMA>
 </GENERATION_INSTRUCTION>`;
