@@ -86,8 +86,12 @@
     }
     const unclassified = list(l.unclassified);
     if (unclassified.length > 0) {
+      // A row code could not read carries what the parse copied: a missing account or
+      // amount is named as missing.
       warnings.push(unclassified.length + ' adjustment row' + (unclassified.length === 1 ? '' : 's') + ' not classified: ' +
-        unclassified.map(function (u) { return (u.time ? u.time + ', ' : '') + dollars(u.amount) + ' on ' + u.account; }).join('; '));
+        unclassified.map(function (u) {
+          return (u.time ? u.time + ', ' : '') + (dollars(u.amount) || 'no amount') + ' on ' + (u.account || 'no account');
+        }).join('; '));
     }
     return {
       clockLine: clockLine(l.clock),

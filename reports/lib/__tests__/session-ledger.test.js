@@ -75,6 +75,24 @@ describe('classifyAdjustments', () => {
     expect(adjustments).toEqual([]);
     expect(unclassified).toEqual([{ time: '09:00 PM', account: 'Ember', amount: 10000 }]);
   });
+
+  it('reports a row it cannot read (no account, a zero or unreadable amount) as unclassified, with what it carries (fix batch, finding 5)', () => {
+    const { adjustments, unclassified } = classifyAdjustments([
+      ...BONUS_ROWS,
+      { time: '08:10 PM', detail: 'Ember (GM_Station_1)', team: '', amount: 20000 },
+      { time: '08:11 PM', detail: 'Ember (GM_Station_1)', team: 'Vic', amount: 0 },
+      { time: '08:12 PM', detail: 'Ember (GM_Station_1)', team: 'Vic', amount: 'twenty grand' },
+      { detail: 'Ember (GM_Station_1)' }
+    ]);
+    expect(adjustments).toEqual([{ time: '07:50 PM', kind: 'bonus', amount: 50000, toAccount: 'Ember' }]);
+    expect(unclassified).toEqual([
+      { time: '08:10 PM', account: '', amount: 20000 },
+      { time: '08:11 PM', account: 'Vic', amount: 0 },
+      { time: '08:12 PM', account: 'Vic', amount: 'twenty grand' },
+      { time: '', account: '', amount: '' }
+    ]);
+    expect(JSON.stringify(unclassified)).not.toMatch(/GM|Station/i);
+  });
 });
 
 describe('buildLedger: each account\'s total and sale count, checked against the Final Standings', () => {

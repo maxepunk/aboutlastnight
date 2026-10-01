@@ -65,14 +65,32 @@ function readRow(row, index) {
 }
 
 /**
+ * What an unreadable row carries, for the input review: its time, account and amount
+ * as the parse copied them (a number, or the text), never its Detail.
+ */
+function unreadableRow(row, index) {
+  const amount = typeof row.amount === 'number' ? row.amount : String(row.amount == null ? '' : row.amount).trim();
+  return { index, time: String(row.time || '').trim(), account: String(row.team || '').trim(), amount };
+}
+
+/**
  * The session report's Adjustment rows as events.
  *
  * @param {Array<{time, detail, team, amount}>} rows - every Adjustment row, as the parse copied it
  * @returns {{adjustments: Array<{time, kind, amount, toAccount, fromAccount?}>,
- *            unclassified: Array<{time, account, amount}>}}
+ *            unclassified: Array<{time, account, amount}>}} unclassified holds every row
+ *            code could not read or classify, in row order
  */
 function classifyAdjustments(rows) {
-  const read = (Array.isArray(rows) ? rows : []).map(readRow).filter(Boolean);
+  const read = [];
+  const unclassified = [];
+  // A row with no account, or a zero or unreadable amount, is reported, never dropped:
+  // the totals check would then disagree with the Final Standings and name no row.
+  (Array.isArray(rows) ? rows : []).forEach((row, index) => {
+    const normalized = readRow(row, index);
+    if (normalized) read.push(normalized);
+    else if (row && typeof row === 'object') unclassified.push(unreadableRow(row, index));
+  });
   const credits = read.filter((r) => r.amount > 0);
   const debits = read.filter((r) => r.amount < 0);
 
@@ -90,7 +108,6 @@ function classifyAdjustments(rows) {
   });
 
   const events = [];
-  const unclassified = [];
   credits.forEach((credit) => {
     if (keyOf(credit.account) === BONUS_HOLDING_KEY) return; // setup: funds the holding account
     const source = sourceOf.get(credit.index) || stripStationLabel(credit.detail);
@@ -100,7 +117,7 @@ function classifyAdjustments(rows) {
     } else if (sourceKey && sourceKey !== SETUP_SOURCE_KEY && sourceKey !== keyOf(credit.account)) {
       events.push({ index: credit.index, event: { time: credit.time, kind: 'transfer', amount: credit.amount, fromAccount: source, toAccount: credit.account } });
     } else {
-      unclassified.push({ time: credit.time, account: credit.account, amount: credit.amount });
+      unclassified.push({ index: credit.index, time: credit.time, account: credit.account, amount: credit.amount });
     }
   });
   debits.forEach((debit) => {
@@ -111,13 +128,13 @@ function classifyAdjustments(rows) {
     if (destinationKey && destinationKey !== BONUS_HOLDING_KEY && destinationKey !== keyOf(debit.account)) {
       events.push({ index: debit.index, event: { time: debit.time, kind: 'transfer', amount: -debit.amount, fromAccount: debit.account, toAccount: destination } });
     } else {
-      unclassified.push({ time: debit.time, account: debit.account, amount: debit.amount });
+      unclassified.push({ index: debit.index, time: debit.time, account: debit.account, amount: debit.amount });
     }
   });
 
   return {
     adjustments: events.sort((a, b) => a.index - b.index).map(({ event }) => event),
-    unclassified
+    unclassified: unclassified.sort((a, b) => a.index - b.index).map(({ index, ...row }) => row)
   };
 }
 

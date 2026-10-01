@@ -97,6 +97,17 @@ describe('ledgerView: the adjustments beside the sales', () => {
     expect(view.warnings).toEqual(['1 adjustment row not classified: 09:00 PM, $10,000 on Ember']);
   });
 
+  it('names what an unreadable row carries, and what it lacks (fix batch, finding 5)', () => {
+    const view = ledgerView({ ...ledger, unclassified: [
+      { time: '08:10 PM', account: '', amount: 20000 },
+      { time: '08:12 PM', account: 'Vic', amount: 'twenty grand' },
+      { time: '', account: '', amount: '' }
+    ] });
+    expect(view.warnings).toEqual([
+      '3 adjustment rows not classified: 08:10 PM, $20,000 on no account; 08:12 PM, twenty grand on Vic; no amount on no account'
+    ]);
+  });
+
   it('says when no sale or account total was parsed at all', () => {
     const view = ledgerView({ ...ledger, accounts: [], adjustments: [] });
     expect(view.warnings).toEqual(['No sales or account totals parsed from the session report: the writers get no ledger']);
