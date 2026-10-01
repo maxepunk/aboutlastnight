@@ -1412,9 +1412,11 @@ async function reviseArcs(state, config) {
         synthesisNotes: synthesisNotes || '',
         interweavingPlan: planReturned ? revisedPlan : (keptPrevious ? previousPlan : createDefaultInterweavingPlan()),
         ...(keptPrevious && { interweavingFromPreviousRound: true }),
-        // Phase 3 (3.7; R5): the questions the rework returned, or, when it returned
-        // none, the previous ones, so an automatic pass never drops one unseen.
-        writerQuestions: carriedWriterQuestions(returnedQuestions, state._arcAnalysisCache?.writerQuestions),
+        // Phase 3 (3.7; R5): only the director's note answers a question, so an
+        // automatic pass keeps every previous one beside the rework's own.
+        writerQuestions: carriedWriterQuestions(returnedQuestions, state._arcAnalysisCache?.writerQuestions, {
+          afterDirectorNote: Boolean(state._arcFeedback)
+        }),
         arcCount: narrativeArcs?.length || 0,
         architecture: 'player-focus-guided-revision',
         revisionNumber: revisionCount,

@@ -54,34 +54,69 @@ function writerQuestionsOf(value) {
     .filter((q) => q.about && q.question);
 }
 
-/**
- * A rework's questions (R5). A rework sees its previous questions in the version it is
- * shown, and returns the ones it did not answer beside its own: a returned list is
- * the new list, an empty one included. A rework that returns no list keeps the
- * previous one, so an automatic pass never drops a question before the director sees it.
- *
- * @param {*} returned - the rework's writerQuestions (undefined when it returned none)
- * @param {*} previous - the previous output's writerQuestions
- * @returns {Array<{about: string, question: string}>}
- */
-function carriedWriterQuestions(returned, previous) {
-  return writerQuestionsOf(Array.isArray(returned) ? returned : previous);
+/** One question's identity for de-duplication: `about` and `question`, any case and spacing. */
+function questionKey(q) {
+  const fold = (text) => text.replace(/\s+/g, ' ').toLowerCase();
+  return `${fold(q.about)}\n${fold(q.question)}`;
+}
+
+/** The list with each question once, the first wording kept. */
+function distinctQuestions(questions) {
+  const seen = new Set();
+  return questions.filter((q) => {
+    const key = questionKey(q);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
- * An outline or article from a rework, with the questions R5 keeps: when the rework
- * returned no list, the previous version's questions go on it (carriedWriterQuestions).
- * A returned list, an empty one included, stands as the rework wrote it.
+ * A rework's questions (R5): a rework keeps every question it did not answer, and only
+ * the director answers one, with the stop's note.
+ * - An automatic pass (no note: an evaluation or a check sent it) keeps every previous
+ *   question, in order, then adds the ones it returned. So an automatic pass never
+ *   drops a question before the director sees it, whatever list the model returns.
+ * - A rework after the director's note returns the questions the note left open
+ *   beside its own: its list replaces the old one, an empty list included.
+ * - A rework that returns no list keeps the previous one, on either kind of pass.
+ * Each question is listed once (questionKey).
+ *
+ * @param {*} returned - the rework's writerQuestions (undefined when it returned none)
+ * @param {*} previous - the previous output's writerQuestions
+ * @param {{afterDirectorNote: boolean}} options - true when the rework acts on the
+ *   director's note for this stop (`_arcFeedback`, `_outlineFeedback`, `_articleFeedback`);
+ *   required, so no caller falls back to letting a model drop a question
+ * @returns {Array<{about: string, question: string}>}
+ */
+function carriedWriterQuestions(returned, previous, { afterDirectorNote } = {}) {
+  if (typeof afterDirectorNote !== 'boolean') {
+    throw new TypeError('carriedWriterQuestions: options.afterDirectorNote must be true or false (does this rework act on the director\'s note?)');
+  }
+  const previousQuestions = writerQuestionsOf(previous);
+  if (!Array.isArray(returned)) return previousQuestions;
+  const returnedQuestions = writerQuestionsOf(returned);
+  return distinctQuestions(afterDirectorNote ? returnedQuestions : [...previousQuestions, ...returnedQuestions]);
+}
+
+/**
+ * An outline or article from a rework, carrying the questions carriedWriterQuestions
+ * keeps.
  *
  * @param {Object|null} output - the rework's outline or content bundle
  * @param {Object|null} previous - the version the rework started from
- * @returns {Object|null} the same object when there is nothing to carry
+ * @param {{afterDirectorNote: boolean}} options - as carriedWriterQuestions
+ * @returns {Object|null} the same object when it has no field and there is nothing to carry
  */
-function withCarriedWriterQuestions(output, previous) {
-  if (!output || typeof output !== 'object' || Array.isArray(output[WRITER_QUESTIONS_KEY])) return output;
-  const previousQuestions = writerQuestionsOf(previous && previous[WRITER_QUESTIONS_KEY]);
-  if (previousQuestions.length === 0) return output;
-  return { ...output, [WRITER_QUESTIONS_KEY]: previousQuestions };
+function withCarriedWriterQuestions(output, previous, options) {
+  const questions = carriedWriterQuestions(
+    output && output[WRITER_QUESTIONS_KEY],
+    previous && previous[WRITER_QUESTIONS_KEY],
+    options
+  );
+  if (!output || typeof output !== 'object') return output;
+  if (!Array.isArray(output[WRITER_QUESTIONS_KEY]) && questions.length === 0) return output;
+  return { ...output, [WRITER_QUESTIONS_KEY]: questions };
 }
 
 /**

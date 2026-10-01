@@ -1233,8 +1233,9 @@ async function reviseOutline(state, config) {
     console.log(`[reviseOutline] Complete: ${arcCount} ${outlineTheme === 'detective' ? 'evidence groups' : 'arcs'} in ${duration}s`);
 
     return {
-      // Phase 3 (3.7; R5): a rework that returned no questions keeps the previous ones.
-      outline: withCarriedWriterQuestions(result || {}, previousOutline),
+      // Phase 3 (3.7; R5): only the director's note answers a question, so an automatic
+      // pass keeps every previous one beside the rework's own.
+      outline: withCarriedWriterQuestions(result || {}, previousOutline, { afterDirectorNote: Boolean(state._outlineFeedback) }),
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
       // Spec §4.4 (C3): verify on EVERY pass and rewrite the report; never clear
@@ -1711,9 +1712,12 @@ async function reviseContentBundle(state, config) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseContentBundle] Complete in ${duration}s`);
 
-    // Update contentBundle with revision history. Phase 3 (3.7; R5): a rework that
-    // returned no questions keeps the previous ones.
-    const updatedBundle = withCarriedWriterQuestions(revised || previousContentBundle, previousContentBundle);
+    // Update contentBundle with revision history. Phase 3 (3.7; R5): only the director's
+    // note answers a question, so an automatic pass keeps every previous one beside the
+    // rework's own.
+    const updatedBundle = withCarriedWriterQuestions(revised || previousContentBundle, previousContentBundle, {
+      afterDirectorNote: Boolean(state._articleFeedback)
+    });
 
     return {
       contentBundle: {

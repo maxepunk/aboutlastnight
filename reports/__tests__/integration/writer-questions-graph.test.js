@@ -5,7 +5,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
  *
  * The brief's verification, without a model call: a thread with planted questions in
  * each output shows them at its stop, and they survive an automatic pass and a send
- * back. Each run seeds a thread as if the writer had just produced its output
+ * back; only a rework after the director's note drops one. Each run seeds a thread as if the writer had just produced its output
  * (`updateState(..., asNode)`), invokes the real graph, and lets the real check,
  * evaluator, increment, reworker and router run until the real stop interrupts. The
  * model calls go to a scripted mock routed by call label; the checkpointer is a
@@ -188,6 +188,46 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
     expect(next.next).toEqual(['checkpointOutline']);
     data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, next.values);
     expect(data.writerQuestions).toEqual([Q_LEDGER]);
+  });
+
+  it('the outline stop: an automatic pass whose rework returns a shorter list drops nothing; only the director\'s note clears one', async () => {
+    const base = require('../fixtures/mock-responses/outline.json');
+    const Q_VIC = { about: 'Vic', question: 'Did Vic leave the room before the vote?' };
+    const withQuestions = { ...clone(base), writerQuestions: [Q_ZIA, Q_LEDGER] };
+    const sdk = scriptedSdk({
+      reworks: [
+        { ...clone(base), writerQuestions: [Q_LEDGER, Q_VIC] },  // automatic: leaves Q_ZIA out, adds Q_VIC
+        { ...clone(base), writerQuestions: [Q_LEDGER, Q_VIC] },  // the send back, after the note answers Zia
+        { ...clone(base), writerQuestions: [] }                  // automatic, in the send back's round
+      ],
+      evaluations: [FAILING_EVALUATION, PASSING_EVALUATION, FAILING_EVALUATION, PASSING_EVALUATION]
+    });
+
+    const { graph, thread, snapshot } = await runToStop({
+      sdk,
+      asNode: 'generateOutline',
+      values: {
+        sessionConfig: { roster: ['Vic', 'Zia'] },
+        outline: withQuestions,
+        selectedArcs: ['a1'],
+        evaluationHistory: [{ phase: 'arcs', ready: true }]
+      }
+    });
+
+    // No note yet: the director has seen no question, so the pass keeps Q_ZIA.
+    expect(snapshot.next).toEqual(['checkpointOutline']);
+    expect(sdk.calls).toEqual(['evaluation', 'Outline revision 1', 'evaluation']);
+    let data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, snapshot.values);
+    expect(data.writerQuestions).toEqual([Q_ZIA, Q_LEDGER, Q_VIC]);
+
+    // The note answers Zia and the send back's rework drops Q_ZIA. The automatic pass
+    // after it returns an empty list and keeps the two the director has not seen answered.
+    const next = await sendBack(graph, thread, snapshot.values, { outline: false, outlineFeedback: 'Zia sold the first memory at 10:02 AM.' });
+    expect(next.next).toEqual(['checkpointOutline']);
+    // A send back opens a new round, so the round's pass count starts again.
+    expect(sdk.calls.slice(3)).toEqual(['Outline revision 0', 'evaluation', 'Outline revision 1', 'evaluation']);
+    data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, next.values);
+    expect(data.writerQuestions).toEqual([Q_LEDGER, Q_VIC]);
   });
 
   it('the article stop: the questions survive a send back whose rework returns no field', async () => {

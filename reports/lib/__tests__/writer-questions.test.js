@@ -8,8 +8,10 @@
  * no field), the outline and the article, at the top level. The director reads them
  * at the stop and answers with the stop's note.
  *
- * - A rework carries forward every question it did not answer (R5): a rework that
- *   returns no field keeps the previous list; a rework that returns a list replaces it.
+ * - A rework carries forward every question it did not answer (R5): only the director
+ *   answers one. An automatic pass keeps every previous question beside the ones it
+ *   returns; after the director's note the rework's list replaces the old one; a
+ *   rework that returns no field keeps the previous list.
  * - The field never prints, and never reaches the template, the fact check's printed
  *   text or a later writer's prompt.
  * - At the arc stage a roster member a question names counts as covered, by first
@@ -189,6 +191,45 @@ describe('the arc questions survive the merge and reach the cache', () => {
   });
 });
 
+describe('the rework rule: only the director answers a question (R5)', () => {
+  const { carriedWriterQuestions, withCarriedWriterQuestions } = require('../writer-questions');
+  const Q_NEW = { about: 'Melanie', question: 'Did Melanie leave before the vote?' };
+
+  it('throws unless the caller says whether the rework followed the director\'s note', () => {
+    expect(() => carriedWriterQuestions([Q_LEDGER], [Q_SARAH])).toThrow(/afterDirectorNote/);
+    expect(() => carriedWriterQuestions([Q_LEDGER], [Q_SARAH], {})).toThrow(/afterDirectorNote/);
+    expect(() => carriedWriterQuestions([Q_LEDGER], [Q_SARAH], { afterDirectorNote: 'yes' })).toThrow(/afterDirectorNote/);
+    expect(() => withCarriedWriterQuestions({ writerQuestions: [] }, { writerQuestions: [Q_SARAH] })).toThrow(/afterDirectorNote/);
+  });
+
+  it('an automatic pass keeps every previous question, in order, then the new ones', () => {
+    expect(carriedWriterQuestions([Q_NEW], [Q_SARAH, Q_LEDGER], { afterDirectorNote: false })).toEqual([Q_SARAH, Q_LEDGER, Q_NEW]);
+    expect(carriedWriterQuestions([], [Q_SARAH, Q_LEDGER], { afterDirectorNote: false })).toEqual([Q_SARAH, Q_LEDGER]);
+  });
+
+  it('an automatic pass that returns a kept question lists it once, whatever its case and spacing', () => {
+    const restated = { about: '  sarah ', question: Q_SARAH.question.toUpperCase().replace(/ /g, '  ') };
+    expect(carriedWriterQuestions([restated, Q_NEW, Q_NEW], [Q_SARAH], { afterDirectorNote: false })).toEqual([Q_SARAH, Q_NEW]);
+  });
+
+  it('after the director\'s note the rework\'s list replaces the old one, an empty list included', () => {
+    expect(carriedWriterQuestions([Q_LEDGER], [Q_SARAH, Q_LEDGER], { afterDirectorNote: true })).toEqual([Q_LEDGER]);
+    expect(carriedWriterQuestions([], [Q_SARAH], { afterDirectorNote: true })).toEqual([]);
+  });
+
+  it('a rework that returns no field keeps the previous list, on either kind of pass', () => {
+    for (const afterDirectorNote of [false, true]) {
+      expect(carriedWriterQuestions(undefined, [Q_SARAH], { afterDirectorNote })).toEqual([Q_SARAH]);
+      expect(withCarriedWriterQuestions({ lede: {} }, { writerQuestions: [Q_SARAH] }, { afterDirectorNote })).toEqual({ lede: {}, writerQuestions: [Q_SARAH] });
+    }
+  });
+
+  it('an output with no field and nothing to carry comes back as it was', () => {
+    const output = { lede: {} };
+    expect(withCarriedWriterQuestions(output, { lede: {} }, { afterDirectorNote: false })).toBe(output);
+  });
+});
+
 describe('an arc rework carries forward the questions it did not answer (R5)', () => {
   function reworkState(previousQuestions, feedback = null) {
     const state = reworkFixtureState('journalist');
@@ -232,6 +273,20 @@ describe('an arc rework carries forward the questions it did not answer (R5)', (
     expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_LEDGER, Q_PRONOUN]);
   });
 
+  it('an automatic pass keeps a question its rework left out, beside the rework\'s own', async () => {
+    const state = reworkState([Q_SARAH, Q_LEDGER]);
+    const sdk = sdkReturning({ narrativeArcs: state._previousArcs, synthesisNotes: 's', writerQuestions: [Q_LEDGER, Q_PRONOUN] });
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
+    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_SARAH, Q_LEDGER, Q_PRONOUN]);
+  });
+
+  it('an automatic pass whose rework returns an empty list keeps every previous question', async () => {
+    const state = reworkState([Q_SARAH, Q_LEDGER]);
+    const sdk = sdkReturning({ narrativeArcs: state._previousArcs, synthesisNotes: 's', writerQuestions: [] });
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
+    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_SARAH, Q_LEDGER]);
+  });
+
   it('keeps the questions with the previous arcs on the free timeout retry', async () => {
     const state = reworkState([Q_SARAH]);
     const sdk = jest.fn().mockRejectedValueOnce(new Error('SDK timeout after 300.0s (limit: 300s)'));
@@ -254,7 +309,7 @@ describe('an outline or article rework carries forward the questions it did not 
     expect(result.outline.writerQuestions).toEqual([Q_SARAH]);
   });
 
-  it('reviseOutline takes the rework\'s list when it returns one, an empty list included', async () => {
+  it('reviseOutline takes the rework\'s list after the director\'s note, an empty list included', async () => {
     const previous = { ...clone(OUTLINE), writerQuestions: [Q_SARAH] };
     const result = await aiNodes.reviseOutline(
       { _previousOutline: previous, _outlineFeedback: 'Sarah sold at 07:50 AM.', outlineRevisionCount: 1 },
@@ -263,16 +318,43 @@ describe('an outline or article rework carries forward the questions it did not 
     expect(result.outline.writerQuestions).toEqual([]);
   });
 
+  it('reviseOutline on an automatic pass keeps a question its rework left out, beside the rework\'s own', async () => {
+    const previous = { ...clone(OUTLINE), writerQuestions: [Q_SARAH, Q_LEDGER] };
+    const result = await aiNodes.reviseOutline(
+      { _previousOutline: previous, outlineRevisionCount: 1 },
+      cfg(sdkReturning({ ...clone(OUTLINE), writerQuestions: [Q_PRONOUN] }))
+    );
+    expect(result.outline.writerQuestions).toEqual([Q_SARAH, Q_LEDGER, Q_PRONOUN]);
+  });
+
+  it('reviseOutline on an automatic pass keeps every previous question when its rework returns an empty list', async () => {
+    const previous = { ...clone(OUTLINE), writerQuestions: [Q_SARAH, Q_LEDGER] };
+    const result = await aiNodes.reviseOutline(
+      { _previousOutline: previous, outlineRevisionCount: 1 },
+      cfg(sdkReturning({ ...clone(OUTLINE), writerQuestions: [] }))
+    );
+    expect(result.outline.writerQuestions).toEqual([Q_SARAH, Q_LEDGER]);
+  });
+
   it('reviseContentBundle keeps the previous article\'s questions when the rework returns no field', async () => {
     const previous = { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_LEDGER] };
     const result = await aiNodes.reviseContentBundle({ _previousContentBundle: previous, articleRevisionCount: 1 }, cfg(sdkReturning(PREVIOUS_BUNDLE)));
     expect(result.contentBundle.writerQuestions).toEqual([Q_LEDGER]);
   });
 
-  it('reviseContentBundle takes the rework\'s list when it returns one', async () => {
+  it('reviseContentBundle on an automatic pass keeps a question its rework left out, beside the rework\'s own', async () => {
     const previous = { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_LEDGER] };
     const result = await aiNodes.reviseContentBundle(
       { _previousContentBundle: previous, articleRevisionCount: 1 },
+      cfg(sdkReturning({ ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_PRONOUN] }))
+    );
+    expect(result.contentBundle.writerQuestions).toEqual([Q_LEDGER, Q_PRONOUN]);
+  });
+
+  it('reviseContentBundle takes the rework\'s list after the director\'s note, dropping the answered question', async () => {
+    const previous = { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_LEDGER, Q_PRONOUN] };
+    const result = await aiNodes.reviseContentBundle(
+      { _previousContentBundle: previous, _articleFeedback: 'The 07:50 AM sale is not a duplicate.', articleRevisionCount: 1 },
       cfg(sdkReturning({ ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_PRONOUN] }))
     );
     expect(result.contentBundle.writerQuestions).toEqual([Q_PRONOUN]);
