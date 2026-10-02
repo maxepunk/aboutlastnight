@@ -149,7 +149,8 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
     expect(snapshot.values._arcValidation.rosterCoveredByQuestion).toEqual(['Zia']);
     let data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, snapshot.values);
     expect(data.writerQuestions).toEqual([Q_ZIA, Q_LEDGER]);
-    expect(writerQuestionsView(data.writerQuestions).items.map((i) => i.about)).toEqual(['Zia', Q_LEDGER.about]);
+    // Task 3.11: the view names its stop, for the hint it shows there.
+    expect(writerQuestionsView(data.writerQuestions, 'arc-selection').items.map((i) => i.about)).toEqual(['Zia', Q_LEDGER.about]);
 
     const next = await sendBack(graph, thread, snapshot.values, { selectedArcs: false, arcFeedback: 'Lead with the ledger.' });
     expect(next.next).toEqual(['checkpointArcSelection']);

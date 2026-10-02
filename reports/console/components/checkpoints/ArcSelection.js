@@ -44,8 +44,9 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, revisio
   // phases, and this screen looked for a per-arc `arc.evaluationHistory` that
   // nothing populates, so the Opus arc verdict rendered nowhere.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'arcs'));
-  // Brief 3.7: the arc writer's questions for the director, answered in the note box.
-  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions);
+  // Brief 3.7: the arc writer's questions for the director, answered in the note box;
+  // task 3.11: the stop's hint says what an answer does here.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'arc-selection');
 
   // Selected arc IDs. H15: every arc used to arrive checked, which pushed the
   // director to approve all five; 5+ arcs routinely costs an outline revision.

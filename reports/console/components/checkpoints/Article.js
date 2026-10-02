@@ -679,8 +679,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace);
-  // Brief 3.7: the article writer's questions for the director, answered in the note box.
-  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions);
+  // Brief 3.7: the article writer's questions for the director; task 3.11: the stop's
+  // hint says answers go with a send back, since Approve publishes the article as it is.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'article');
   // Absolute paths of this session's photos, for photoUrl (H13/F9).
   const sessionPhotos = (data && data.sessionPhotos) || [];
   // Task 3.6's programmatic fact-check of THIS bundle (baseline §5).

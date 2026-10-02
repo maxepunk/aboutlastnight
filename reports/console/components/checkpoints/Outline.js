@@ -545,8 +545,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'outline'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace);
-  // Brief 3.7: the outline writer's questions for the director, answered in the note box.
-  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions);
+  // Brief 3.7: the outline writer's questions for the director, answered in the note box;
+  // task 3.11: the stop's hint says what an answer does here.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'outline');
   const previousOutline = (revisionCache && revisionCache.outline) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;

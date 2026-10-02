@@ -18,22 +18,24 @@ function body(signature) {
 }
 
 describe('e2e-walkthrough prints the writer\'s questions', () => {
-  it('prints them through writerQuestionsView', () => {
+  it('prints them through writerQuestionsView, with the stop\'s hint (task 3.11)', () => {
     const fn = body('function displayWriterQuestions(');
-    expect(fn).toMatch(/ViewLogic\.writerQuestionsView\(questions\)/);
+    expect(fn).toMatch(/^function displayWriterQuestions\(questions, stop\)/);
+    expect(fn).toMatch(/ViewLogic\.writerQuestionsView\(questions, stop\)/);
     expect(fn).toMatch(/if \(!view\.any\) return;/);
     expect(fn).toMatch(/item\.about/);
     expect(fn).toMatch(/item\.question/);
+    expect(fn).toMatch(/view\.hint/);
     // Fix 3.7b (finding 1): the kind, when the question has one, before the subject.
     expect(fn).toMatch(/item\.kindLabel \? `\[\$\{item\.kindLabel\}\] ` : ''/);
   });
 
-  it.each(['arc-selection', 'outline', 'article'])('step mode prints them at the %s stop', (stop) => {
+  it.each(['arc-selection', 'outline', 'article'])('step mode prints them at the %s stop, naming the stop', (stop) => {
     const fn = body('function displayCheckpointData(');
     const at = fn.indexOf(`case '${stop}':`);
     expect(at).toBeGreaterThan(-1);
     const nextCase = fn.indexOf('\n    case ', at + 1);
     const caseBody = fn.slice(at, nextCase === -1 ? undefined : nextCase);
-    expect(caseBody).toMatch(/displayWriterQuestions\(checkpoint\.writerQuestions\)/);
+    expect(caseBody).toMatch(/displayWriterQuestions\(checkpoint\.writerQuestions, checkpointType\)/);
   });
 });

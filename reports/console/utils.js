@@ -213,11 +213,11 @@ function TracePanel({ view }) {
 /**
  * The writer's questions for the director (phase 3, brief 3.7; spec C15, D8), above
  * the output at the arc, outline and article stops: one line per question, its kind
- * (fix 3.7b) and what it is about first, folded away on a click. The director answers in the stop's note
- * box. Nothing renders when the writer raised none.
+ * (fix 3.7b) and what it is about first, folded away on a click, then the stop's hint for
+ * answering them in the note box (task 3.11). Nothing renders when the writer raised none.
  *
  * Takes an already-computed view, like EvalBar: callers pass
- * `checkpointViewLogic.writerQuestionsView(data.writerQuestions)`.
+ * `checkpointViewLogic.writerQuestionsView(data.writerQuestions, '<their stop>')`.
  *
  * @param {{view: object|null}} props
  */

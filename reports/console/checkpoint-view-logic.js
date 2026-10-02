@@ -1117,17 +1117,36 @@
   var WRITER_QUESTION_KIND_LABELS = { player: 'Player', pronoun: 'Pronoun', ledger: 'Ledger' };
 
   /**
+   * What the panel tells the director an answer does at each stop (task 3.11; final
+   * review, questions-console-docs finding 3). At the arc and outline stops the note
+   * reaches the next writer whichever button is pressed, as guidance or a standing
+   * note, but that writer never sees the questions, so each answer says what it is
+   * about. At the article stop Approve goes straight to assembly and nothing reads
+   * its note, so the answers go with a send back.
+   */
+  var WRITER_QUESTIONS_HINTS = {
+    'arc-selection': 'Answer them in the note below, saying what each answer is about.',
+    outline: 'Answer them in the note below, saying what each answer is about.',
+    article: 'Send back with your answers in the note below to have the writer apply them. Approve publishes the article as it is.'
+  };
+
+  /**
    * The writer's questions panel at the arc, outline and article stops (spec C15,
    * D8): one line per question, its kind and what it is about first, skimmed in a
-   * glance. The director answers with the stop's note box. An entry without both
-   * strings is left out, and an empty list shows no panel. A question with no kind,
-   * or an unknown one (a list from before the field had a kind), renders with none.
+   * glance, then the stop's hint for answering them. An entry without both strings is
+   * left out, and an empty list shows no panel. A question with no kind, or an unknown
+   * one (a list from before the field had a kind), renders with none.
    *
    * @param {Array|null} questions - data.writerQuestions
+   * @param {string} stop - 'arc-selection', 'outline' or 'article': the stop showing
+   *   the panel, whose hint says what an answer does there; any other value throws
    * @returns {{any: boolean, title: string, hint: string,
    *            items: Array<{key: string, kind: (string|null), kindLabel: string, about: string, question: string}>}}
    */
-  function writerQuestionsView(questions) {
+  function writerQuestionsView(questions, stop) {
+    if (!Object.prototype.hasOwnProperty.call(WRITER_QUESTIONS_HINTS, stop)) {
+      throw new Error("writerQuestionsView: stop must be 'arc-selection', 'outline' or 'article', got " + String(stop));
+    }
     var items = asArray(questions)
       .filter(function (q) { return q && typeof q === 'object'; })
       .map(function (q) {
@@ -1147,7 +1166,7 @@
     return {
       any: items.length > 0,
       title: 'Questions from the writer (' + items.length + ')',
-      hint: 'Answer them in the note below.',
+      hint: WRITER_QUESTIONS_HINTS[stop],
       items: items
     };
   }

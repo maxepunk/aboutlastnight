@@ -1022,13 +1022,13 @@ describe('writerQuestionsView (phase 3, brief 3.7)', () => {
     ['an empty list', []],
     ['a list of nothing usable', [null, 'loose', { about: 'Sarah' }, { about: ' ', question: ' ' }]]
   ])('shows no panel for %s', (_name, value) => {
-    const view = writerQuestionsView(value);
+    const view = writerQuestionsView(value, 'outline');
     expect(view.any).toBe(false);
     expect(view.items).toEqual([]);
   });
 
   it('lists each question with what it is about first, in the writer\'s order', () => {
-    const view = writerQuestionsView([Q1, Q2]);
+    const view = writerQuestionsView([Q1, Q2], 'outline');
     expect(view.any).toBe(true);
     expect(view.items.map((item) => [item.about, item.question])).toEqual([
       ['Sarah', Q1.question],
@@ -1037,10 +1037,32 @@ describe('writerQuestionsView (phase 3, brief 3.7)', () => {
     expect(new Set(view.items.map((item) => item.key)).size).toBe(2);
   });
 
-  it('counts the questions in its title and points at the note box', () => {
-    expect(writerQuestionsView([Q1]).title).toBe('Questions from the writer (1)');
-    expect(writerQuestionsView([Q1, Q2]).title).toBe('Questions from the writer (2)');
-    expect(writerQuestionsView([Q1]).hint).toBe('Answer them in the note below.');
+  it('counts the questions in its title', () => {
+    expect(writerQuestionsView([Q1], 'arc-selection').title).toBe('Questions from the writer (1)');
+    expect(writerQuestionsView([Q1, Q2], 'arc-selection').title).toBe('Questions from the writer (2)');
+  });
+
+  // Task 3.11 (final review, questions-console-docs finding 3): each stop's hint says
+  // what an answer does there. At the arc and outline stops the note reaches the next
+  // writer whichever button is pressed, but that writer never sees the questions, so
+  // each answer says what it is about. At the article stop Approve goes straight to
+  // assembly and nothing reads its note, so answers go with a send back.
+  it.each(['arc-selection', 'outline'])('at the %s stop, asks for the answers in the note, each saying what it is about', (stop) => {
+    expect(writerQuestionsView([Q1], stop).hint).toBe('Answer them in the note below, saying what each answer is about.');
+  });
+
+  it('at the article stop, says the answers go with a send back, and that Approve publishes the article as it is', () => {
+    expect(writerQuestionsView([Q1], 'article').hint)
+      .toBe('Send back with your answers in the note below to have the writer apply them. Approve publishes the article as it is.');
+  });
+
+  it.each([
+    ['no stop', undefined],
+    ['a stop with no questions panel', 'input-review'],
+    ['the phase name for the arcs', 'arcs']
+  ])('throws on %s, naming the three stops', (_name, stop) => {
+    expect(() => writerQuestionsView([Q1], stop)).toThrow(/'arc-selection', 'outline' or 'article'/);
+    expect(() => writerQuestionsView([], stop)).toThrow(/'arc-selection', 'outline' or 'article'/);
   });
 
   // Fix 3.7b (finding 1): each line shows the question's kind; a question with no kind,
@@ -1052,20 +1074,20 @@ describe('writerQuestionsView (phase 3, brief 3.7)', () => {
   });
 
   it('shows each question\'s kind', () => {
-    const view = writerQuestionsView([Q1, Q2, { kind: 'pronoun', about: 'Riley', question: 'Which pronoun?' }]);
+    const view = writerQuestionsView([Q1, Q2, { kind: 'pronoun', about: 'Riley', question: 'Which pronoun?' }], 'article');
     expect(view.items.map((item) => [item.kind, item.kindLabel])).toEqual([
       ['player', 'Player'], ['ledger', 'Ledger'], ['pronoun', 'Pronoun']
     ]);
   });
 
   it('renders a question with no kind, or an unknown one, with no kind shown', () => {
-    const view = writerQuestionsView([{ about: 'Sarah', question: 'Where?' }, { kind: 'other', about: 'Alex', question: 'Who?' }]);
+    const view = writerQuestionsView([{ about: 'Sarah', question: 'Where?' }, { kind: 'other', about: 'Alex', question: 'Who?' }], 'article');
     expect(view.any).toBe(true);
     expect(view.items.map((item) => [item.kind, item.kindLabel, item.about])).toEqual([[null, '', 'Sarah'], [null, '', 'Alex']]);
   });
 
   it('trims the ends of each string and skips an entry missing either one', () => {
-    const view = writerQuestionsView([{ about: '  Sarah ', question: ' Where? ' }, { question: 'No subject?' }]);
+    const view = writerQuestionsView([{ about: '  Sarah ', question: ' Where? ' }, { question: 'No subject?' }], 'arc-selection');
     expect(view.items.map((item) => [item.about, item.question])).toEqual([['Sarah', 'Where?']]);
   });
 });

@@ -1218,13 +1218,14 @@ function displayTrace(trace) {
 /**
  * The writer's questions for the director (phase 3, brief 3.7), from the SAME view
  * model as the console's panel (console/checkpoint-view-logic.js#writerQuestionsView):
- * one line per question, its kind (fix 3.7b) and what it is about first. Nothing is
- * shown when there are none.
+ * one line per question, its kind (fix 3.7b) and what it is about first, then the
+ * stop's hint (task 3.11). Nothing is shown when there are none.
  *
  * @param {Array|null} questions - checkpoint.writerQuestions at the arc, outline or article stop
+ * @param {string} stop - 'arc-selection', 'outline' or 'article'
  */
-function displayWriterQuestions(questions) {
-  const view = ViewLogic.writerQuestionsView(questions);
+function displayWriterQuestions(questions, stop) {
+  const view = ViewLogic.writerQuestionsView(questions, stop);
   if (!view.any) return;
   sectionBox(view.title, 'cyan');
   view.items.forEach(item => console.log(`  ${item.kindLabel ? `[${item.kindLabel}] ` : ''}${color(item.about, 'bright')}: ${item.question}`));
@@ -3271,7 +3272,7 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
         if (arc.hook) console.log(`     Hook: ${arc.hook.substring(0, 80)}...`);
         if (arc.evidence) console.log(color(`     Evidence: ${arc.evidence.length} items`, 'dim'));
       });
-      displayWriterQuestions(checkpoint.writerQuestions);
+      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
       break;
 
     case 'outline':
@@ -3343,7 +3344,7 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
         console.log(color(`┌─ CLOSING: ${outline.closing.theme || 'N/A'}`, 'yellow'));
       }
       console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
-      displayWriterQuestions(checkpoint.writerQuestions);
+      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
       break;
 
     case 'article':
@@ -3406,7 +3407,7 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
       if (htmlContent) {
         console.log(color(`HTML length: ${htmlContent.length} characters`, 'dim'));
       }
-      displayWriterQuestions(checkpoint.writerQuestions);
+      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
       break;
 
     default:

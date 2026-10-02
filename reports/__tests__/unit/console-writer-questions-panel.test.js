@@ -59,11 +59,13 @@ describe('RevisionDiff skips the questions in its key walk', () => {
   });
 });
 
+// Task 3.11: each stop names itself, so the panel's hint says what an answer does there
+// (checkpoint-view-logic.test.js pins the three hints).
 describe.each([
-  ['ArcSelection', 'components/checkpoints/ArcSelection.js', /React\.createElement\('div', \{ className: 'arc-grid' \}/],
-  ['Outline', 'components/checkpoints/Outline.js', /\.\.\.renderOutlineSections\(\)/],
-  ['Article', 'components/checkpoints/Article.js', /React\.createElement\(FactCheckPanel, /]
-])('the %s stop renders the panel', (_name, rel, output) => {
+  ['ArcSelection', 'components/checkpoints/ArcSelection.js', 'arc-selection', /React\.createElement\('div', \{ className: 'arc-grid' \}/],
+  ['Outline', 'components/checkpoints/Outline.js', 'outline', /\.\.\.renderOutlineSections\(\)/],
+  ['Article', 'components/checkpoints/Article.js', 'article', /React\.createElement\(FactCheckPanel, /]
+])('the %s stop renders the panel', (_name, rel, stop, output) => {
   const src = read(rel);
 
   it('destructures WriterQuestionsPanel from utils at load time', () => {
@@ -71,8 +73,9 @@ describe.each([
     expect(line).toMatch(/\bWriterQuestionsPanel\b/);
   });
 
-  it('builds the panel model from the payload key through the view logic', () => {
-    expect(count(src, 'ViewLogic.writerQuestionsView(data && data.writerQuestions)')).toBe(1);
+  it('builds the panel model from the payload key through the view logic, naming its stop', () => {
+    expect(count(src, `ViewLogic.writerQuestionsView(data && data.writerQuestions, '${stop}')`)).toBe(1);
+    expect(count(src, 'ViewLogic.writerQuestionsView(')).toBe(1);
   });
 
   it('renders the panel once, above the output', () => {
