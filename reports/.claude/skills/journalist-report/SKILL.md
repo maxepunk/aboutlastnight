@@ -33,6 +33,8 @@ A send-back runs the step's agent again, starting from the files it wrote last t
 
 ## Steps
 
+Before step 1, look in `data/<session-id>/`. The console writes its own files there under the names this skill uses, in its own shapes, and reads them back when it resumes or rolls back the session. When the folder holds `llm-log/` or `inputs/session-config.json`, the console or an earlier run has worked on this session: tell the director what is there, and ask whether to go on before writing anything in it.
+
 ### 1. Gather the session's inputs
 
 Ask for each input that is missing, and have every required one before step 2.
