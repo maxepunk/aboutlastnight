@@ -862,7 +862,7 @@ ${advisoryCriteria}
 
 EVALUATION RULES:
 1. Score each criterion as: pass (1.0), partial (0.5), fail (0.0)
-2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)
+2. STRUCTURAL criteria MUST score >= ${STRUCTURAL_PASS_SCORE} to pass (these are hard requirements)
 3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
 4. Content is READY if ALL structural criteria pass
 5. Content is NOT READY only if a STRUCTURAL criterion fails`;
@@ -1019,7 +1019,7 @@ const TRUTH_FINDING_QUOTE = {
 /** The journalist judges' scoring rules (M30: they say how the score is made). */
 const JOURNALIST_EVALUATION_RULES = `EVALUATION RULES:
 1. Score each criterion from 0.0 to 1.0.
-2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements); a truth criterion with any breach fails.
+2. STRUCTURAL criteria MUST score >= ${STRUCTURAL_PASS_SCORE} to pass (these are hard requirements); a truth criterion with any breach fails.
 3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
 4. Content is READY if ALL structural criteria pass, the truth criteria among them
 5. overallScore is the weighted average of the weighted criteria's scores, by the percentages above. The truth criteria carry no percentage: they decide readiness alone.`;
@@ -1037,7 +1037,7 @@ function truthCriteriaSection(phase, criteria) {
     .map(([key, { rules, description }]) => `- ${key} (${rules.join(', ')}; must pass): ${description}`);
   if (lines.length === 0) return '';
   return `${boxedHeading('TRUTH RULES (MUST PASS: a breach is a definite error, so the output goes back for a rework)')}
-Each criterion below scores the truth rules it names, against the record and the director's words in the evaluation prompt. One breach fails it: score it below 0.8.
+Each criterion below scores the truth rules it names, against the record and the director's words in the evaluation prompt. One breach fails it: score it below ${STRUCTURAL_PASS_SCORE}.
 ${lines.join('\n')}
 
 Write each breach as its own structuralIssues entry, so the rework can fix it. The entry opens with the rule ids and a colon, ${TRUTH_FINDING_QUOTE[phase]}, names the record it contradicts, and gives the fix:
@@ -1062,6 +1062,11 @@ The evaluation prompt ends with the craft guidance the ${JUDGED_WRITERS[phase]} 
 /**
  * A journalist judge's system prompt: the identity line, the session's mode block, the
  * world and the truth rules (loadRuleSet), then the judge's own instructions.
+ *
+ * The 4b fix batch (3.9 review minor 4): each judge's "MUST be actionable" block asks
+ * for concrete fixes for the criteria scored below the bar and the structural issues,
+ * the two places the OUTPUT FORMAT asks for them; it used to ask for them in general.
+ * Judge text writes the bar as STRUCTURAL_PASS_SCORE, the detective's included.
  *
  * @param {'arcs'|'outline'|'article'} phase
  * @param {Object} criteria - getPhaseCriteria(phase, 'journalist'), or any criteria to render
@@ -1136,7 +1141,7 @@ CRITICAL DISTINCTION:
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC names (characters missing from roster coverage)
 - SPECIFIC evidence IDs (which IDs are invalid)
-- CONCRETE fixes (not "improve grounding" but "Arc 2 should reference evidence ID xyz123")
+- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "improve grounding" but "Arc 2 should reference evidence ID xyz123")
 
 ${outputFormat('specific explanation with names/evidence')}
 
@@ -1161,7 +1166,7 @@ ${judging}
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC arc titles that are missing coverage
 - SPECIFIC sections, by name
-- CONCRETE fixes (not "add more detail" but "add section X with Y content")
+- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "add more detail" but "add section X with Y content")
 
 ${outputFormat('specific explanation')}
 
@@ -1191,7 +1196,7 @@ ${judging}
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC lines with voice issues
 - SPECIFIC anti-patterns found with line locations
-- CONCRETE fixes (not "improve voice" but "change 'The investigation revealed' to 'I discovered'")
+- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "improve voice" but "change 'The investigation revealed' to 'I discovered'")
 
 ${outputFormat('specific explanation with line references')}
 

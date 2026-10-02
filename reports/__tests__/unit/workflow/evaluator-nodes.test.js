@@ -2782,6 +2782,37 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     });
   });
 
+  // The 4b fix batch (3.9 review minor 4): each journalist judge's "MUST be actionable"
+  // block asked for "CONCRETE fixes" in general, a few lines above the OUTPUT FORMAT that
+  // asks for a fix only below the bar and one step per structural issue, so it could pull
+  // fix work back into the notes and the advisories. Its fixes are now the contract's.
+  // The detective's blocks are unchanged (pinned by hash in "the detective judges are
+  // unchanged").
+  describe('the judges ask for fixes the way the contract does (the 4b fix batch)', () => {
+    const { STRUCTURAL_PASS_SCORE } = require('../../../lib/workflow/nodes/node-helpers');
+    const fixesLine = (prompt) => prompt.split('\n').find((line) => line.startsWith('- CONCRETE fixes'));
+
+    it.each(['arcs', 'outline', 'article'])('the journalist %s judge asks for concrete fixes for the criteria below the bar and the structural issues', (phase) => {
+      const prompt = systemFor(phase, stateFor());
+      const block = prompt.slice(prompt.indexOf('CRITICAL: Your feedback MUST be actionable'), prompt.indexOf('OUTPUT FORMAT (JSON):'));
+      expect(fixesLine(block)).toContain(`- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "`);
+    });
+
+    it('the detective judges keep their blocks', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        expect([phase, fixesLine(systemFor(phase, stateFor('detective'))).startsWith('- CONCRETE fixes (not "')]).toEqual([phase, true]);
+      }
+    });
+
+    it('judge prompt text writes the bar through STRUCTURAL_PASS_SCORE, never as a number; the prompts read the same', () => {
+      const source = require('fs').readFileSync(require.resolve('../../../lib/workflow/nodes/evaluator-nodes'), 'utf8');
+      expect(source).not.toMatch(/MUST score >= 0\.8|score it below 0\.8/);
+      expect(systemFor('arcs', stateFor())).toContain('STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements); a truth criterion with any breach fails.');
+      expect(systemFor('arcs', stateFor())).toContain('One breach fails it: score it below 0.8.');
+      expect(systemFor('arcs', stateFor('detective'))).toContain('2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)\n');
+    });
+  });
+
   // The ledger's Gate 3 finding: a replay from START at a stop escalated at the cap paid
   // for its evaluation again, because the skip read only a ready entry.
   describe('a replay does not re-pay an escalated evaluation', () => {
