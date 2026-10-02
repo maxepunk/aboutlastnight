@@ -938,6 +938,10 @@ Return JSON with the following structure:
       // Task 4c-fix (T13): when the director kept no photo but the whiteboard there is no
       // hero (ai-nodes.js selectHeroImage), and HERO IMAGE says none, as the article
       // writer's line does.
+      //
+      // Task 4c-fix (4b-fix review minor 4): <available-photos> builds each entry with
+      // renderPhotoListEntry, the builder the outline judge lists the same photos with.
+      // The list never holds the hero, so no entry carries the hero mark.
       const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
       userPrompt = `Plan the outline of the article from these selected arcs. Write the plan in the third person: the article writer gives it Nova's voice.
 
@@ -954,7 +958,7 @@ Each arc above is one thread of the story, as the arc writer found it. Its arcSo
 
 <available-photos>
 
-${availablePhotos.length > 0 ? availablePhotos.map((p, i) => `${i + 1}. ${renderPhotoEntry({ filename: p.filename, names: p.identifiedCharacters }, options.photoDescriptions, '   ')}`).join('\n\n') : 'No session photos available'}
+${availablePhotos.length > 0 ? availablePhotos.map((p, i) => renderPhotoListEntry(p, i, options.photoDescriptions)).join('\n\n') : 'No session photos available'}
 
 A photo placement names its photo by the exact filename above.
 </available-photos>
