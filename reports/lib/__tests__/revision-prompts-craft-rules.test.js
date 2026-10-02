@@ -25,6 +25,7 @@ const {
     buildOutlineRevisionPrompt,
     buildArticleRevisionPrompt,
     OUTLINE_REVISION_RULES,
+    ARTICLE_REVISION_RULES,
     articleRevisionRules
   },
   createMockPromptBuilder
@@ -411,7 +412,6 @@ describe('a prompt build that throws becomes the node error contract, for the ju
 describe('the rework rules (phase 3, 3.3)', () => {
   const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
   const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
-  const { THEME_SYSTEM_PROMPTS } = require('../prompt-builder');
   const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
   const promptBuilder = createMockPromptBuilder();
   const ARC_STATE = {
@@ -469,18 +469,42 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/automatic check or evaluation/);
     expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/reworking the outline/);
     expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/revision context/);
-    // The article rework's first line is the theme's revision framing (3.2's string).
-    expect(articleRevisionRules('journalist').startsWith(`${THEME_SYSTEM_PROMPTS.journalist.revision}\n`)).toBe(true);
+    // The article rework's first line is its own (3.10, fix round 1). It was the
+    // theme's revision framing (3.2's string), which named the automatic task "the
+    // evaluation's findings": every finding the context lists, the SHOULD CONSIDER items
+    // and the suggestions among them. R23 makes that task the must-fix items, and the
+    // revision context's WHAT THIS REWORK DOES states it once, so the line points there.
+    expect(articleRevisionRules('journalist').startsWith(`${ARTICLE_REVISION_RULES}\n`)).toBe(true);
     // 3.3's finding 4 (fix 3.2b): that line, the first of the rework rules, right
-    // after the writer's system prompt, names the task the revision context gives:
-    // the director's note on a send back, or the findings on an automatic pass.
+    // after the writer's system prompt, names the task the revision context gives.
     const articleLine = firstLine(articleRevisionRules('journalist'));
+    expect(articleLine).toBe(ARTICLE_REVISION_RULES);
     expect(articleLine).toMatch(/reworking your article/);
     expect(articleLine).toMatch(/REVISION CONTEXT/);
     expect(articleLine).toMatch(/the director's note on a send back/);
-    expect(articleLine).toMatch(/the evaluation's findings on an automatic pass/);
+    expect(articleLine).toMatch(/automatic check or evaluation/);
+    expect(articleLine).toMatch(/under WHAT THIS REWORK DOES/);
+    expect(articleLine).not.toMatch(/findings/);
     expect(articleLine).not.toMatch(/voice issues|you identified/);
     expect(getArticleRevisionSystemPrompt('W1\nW2', 'journalist').split('\n')[3]).toBe(articleLine);
+  });
+
+  // 3.10, fix round 1 (R23): an automatic rework fixes the must-fix items, and the
+  // revision context's WHAT THIS REWORK DOES states that once. A rework rule that
+  // called the automatic task "the evaluation's findings" handed it every finding the
+  // context lists, the suggestions among them, from the system prompt. Each rule names
+  // the revision context as the task's source and states no scope of its own.
+  it('no journalist rework rule names the findings as the automatic task: each points at the revision context', () => {
+    const rules = {
+      'arc rules (send back)': arcRevisionRules(true, 'journalist'),
+      'arc rules (automatic)': arcRevisionRules(false, 'journalist'),
+      'outline rules': outlineRevisionRules('journalist'),
+      'article rules': articleRevisionRules('journalist')
+    };
+    Object.entries(rules).forEach(([name, text]) => {
+      expect(`${name}: ${(text.match(/[^.\n]*\bfindings?\b[^.\n]*/i) || [''])[0]}`).toBe(`${name}: `);
+      expect(`${name}: ${/revision context/i.test(text)}`).toBe(`${name}: true`);
+    });
   });
 
   it('the article rework rules give no advisory criterion as a defect to fix', () => {

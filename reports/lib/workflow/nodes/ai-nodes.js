@@ -1796,15 +1796,31 @@ async function reviseContentBundle(state, config) {
 }
 
 /**
- * The rules the article reworker's system prompt adds after its writer's: the
- * theme's revision framing, its revision voice, and the rework rules.
+ * The journalist article rework's first line, the first of the rules its system
+ * prompt adds after its writer's (phase 3; TH7). It names the task the revision
+ * context gives the rework and points at WHAT THIS REWORK DOES, the one section of
+ * that context that states the task (R23), so it states no scope of its own.
  *
- * The journalist's (phase 3, brief 3.3; TH7): the framing (THEME_SYSTEM_PROMPTS
- * revision, 3.2's string) is the rework's first line and names its task, and the
- * voice follows it. The fixed "preserve" lists and the "WHAT TO FIX" list, which made
- * every low-scoring criterion and every flagged anti-pattern a defect though most
- * criteria are advisory, are gone: the revision context says what the rework changes
- * (buildRevisionContext). The detective keeps today's rules (D13).
+ * Phase 3 (3.10, fix round 1): the line used to be the theme's revision framing
+ * (THEME_SYSTEM_PROMPTS.journalist.revision, 3.2's string), which named the automatic
+ * task "the evaluation's findings": every finding the context lists, the SHOULD
+ * CONSIDER items and the suggestions among them. At the gate an automatic article
+ * rework changed 20 of 27 paragraphs to fix one pronoun. Nothing prints that string
+ * now.
+ */
+const ARTICLE_REVISION_RULES = "You are Nova, reworking your article after the director's note on a send back, or after an automatic check or evaluation. The task is the one the REVISION CONTEXT in the user prompt gives, under WHAT THIS REWORK DOES.";
+
+/**
+ * The rules the article reworker's system prompt adds after its writer's: the
+ * rework's first line, the theme's revision voice, and the rework rules.
+ *
+ * The journalist's (phase 3, brief 3.3; TH7): the first line (ARTICLE_REVISION_RULES
+ * since 3.10's fix round 1, the theme's revision framing before it) names the task,
+ * and the voice follows it. The fixed "preserve" lists and the "WHAT TO FIX" list,
+ * which made every low-scoring criterion and every flagged anti-pattern a defect
+ * though most criteria are advisory, are gone: the revision context says what the
+ * rework changes (buildRevisionContext). The detective keeps today's rules, its
+ * framing first (D13).
  *
  * @param {string} [theme]
  * @returns {string}
@@ -1813,7 +1829,7 @@ function articleRevisionRules(theme = 'journalist') {
   const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
   const constraints = THEME_CONSTRAINTS[theme] || THEME_CONSTRAINTS.journalist;
   if (theme !== 'detective') {
-    return `${framing.revision || framing.articleGeneration}
+    return `${ARTICLE_REVISION_RULES}
 
 ${constraints.revisionVoice}`;
   }
@@ -2043,6 +2059,7 @@ module.exports = {
     OUTLINE_REVISION_RULES,
     outlineRevisionRules,
     reworkTask,
+    ARTICLE_REVISION_RULES,
     articleRevisionRules,
     outlineWriterInputs,
     articleWriterInputs,

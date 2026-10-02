@@ -713,6 +713,10 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
  * Phase 3, brief 3.10: the shared context states R23 once, and the rework rules each
  * reworker adds after its writer's system prompt state no scope of their own. Each
  * whole rework (system prompt and user prompt) carries the scope sentence once.
+ *
+ * Fix round 1: the article rework's system prompt called the automatic task "the
+ * evaluation's findings", every finding the context lists, until its first line was
+ * pointed at WHAT THIS REWORK DOES, the one section that states the task.
  */
 describe('each automatic rework states its scope once, in the revision context (phase 3, 3.10)', () => {
   const { reworkFixtureState } = require('./fixtures/rework-state');
@@ -748,6 +752,7 @@ describe('each automatic rework states its scope once, in the revision context (
     }
     expect(count(whole, SCOPE)).toBe(1);
     expect(count(whole, 'stays word for word')).toBe(1);
-    expect(whole).not.toMatch(/this rework answers|truer to the record|serve the piece|was not questioned/);
+    expect(count(whole, 'WHAT THIS REWORK DOES:')).toBe(1);
+    expect(whole).not.toMatch(/this rework answers|truer to the record|serve the piece|was not questioned|evaluation's findings/);
   });
 });
