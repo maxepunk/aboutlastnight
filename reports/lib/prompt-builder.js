@@ -584,6 +584,12 @@ ${notes}
    * buried memory and that each total was its holder's pay for their own secrets,
    * both against the world and T3, T4 and T5, which now say how the money moves.
    *
+   * Phase 3 (3.9; T5, R11): the total is what the buyer paid out. Who the buyer is,
+   * NeurAI and its board, is Nova's suspicion, so the figures the writers copy name no
+   * payer. The outline and article judges print this same block (evaluator-nodes.js
+   * renderJudgeFinancialSummary), so a judge checks a writer's money against the
+   * figures that writer was given.
+   *
    * @param {Array} shellAccounts - Array of {name, total, tokenCount} objects
    * @returns {string} XML section or empty string
    */
@@ -602,7 +608,7 @@ ${notes}
 <FINANCIAL_SUMMARY>
 The ledger's accounts, with figures code computed from the session report. Each account's total is its sales, plus the first-burial bonus and the transfers it received, less the transfers it sent; beside it, how many sales it took.
 ${nonZero.map(a => `- ${a.name}: $${a.total.toLocaleString('en-US')} (${sales(a.tokenCount)})`).join('\n')}
-All accounts together: $${total.toLocaleString('en-US')}. That is what NeurAI's board paid out this morning, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.
+All accounts together: $${total.toLocaleString('en-US')}. That is what the buyer paid out this morning, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.
 </FINANCIAL_SUMMARY>`;
   }
 

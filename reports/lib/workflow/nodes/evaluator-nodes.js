@@ -149,13 +149,14 @@ const TRUTH_SUBJECTS = { arcs: 'the arcs', outline: 'the outline', article: 'the
 
 /**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
- * it under. The first ten are the judge's inputs; the last two are the judged output's
+ * it under. The first eleven are the judge's inputs; the last two are the judged output's
  * own text, which only the article holds (an outline places cards by id and photos by
  * filename, and arcs place neither).
  */
 const TRUTH_MATERIAL = Object.freeze({
   record: '<RECORD>',                       // the exposed documents (renderRecordView)
   timeline: '<morning-timeline>',           // the ledger and the evidence log, on the morning clock
+  financialSummary: '<FINANCIAL_SUMMARY>',  // the account totals the outline and article writers copy (3.9)
   notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
   epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
   verdict: '<DIRECTOR_ACCUSATION>',         // the room's verdict, in the director's words
@@ -178,8 +179,12 @@ const TRUTH_GROUPS = [
   {
     key: 'moneyTruth',
     rules: ['T5'],
-    reads: () => ['timeline'],
-    describe: (s) => `Does the money in ${s} run from NeurAI's board to the seller's chosen account, with each figure as the ledger records it and nothing read as anyone's other wealth (T5)?`
+    // Phase 3 (3.9; the integrator's ruling): the outline and article judges read the
+    // FINANCIAL_SUMMARY their writers copy, so a correct code-made total is never taken
+    // for a sum the writer made up. The arc writer has no summary, so its judge has the
+    // timeline alone. The buyer is Nova's suspicion (T5, R11).
+    reads: (phase) => (phase === 'arcs' ? ['timeline'] : ['timeline', 'financialSummary']),
+    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, each figure as ${phase === 'arcs' ? 'the ledger gives it' : 'the ledger or FINANCIAL_SUMMARY gives it'}, and the ledger's money taken as the morning's payments for erasure (T5)?`
   },
   {
     key: 'verdictTruth',
@@ -1299,6 +1304,20 @@ ${entries.join('\n\n')}`;
 }
 
 /**
+ * The account totals the outline and article writers copy (phase 3, 3.9; the
+ * integrator's ruling): the writers' own FINANCIAL_SUMMARY, from the same builder and
+ * the same input (PromptBuilder#_buildFinancialSummary over state.shellAccounts), so
+ * moneyTruth checks a writer's figures against the figures it was given. At the gate
+ * five of eight verdicts took the correct code-made total for a sum the writer made.
+ *
+ * @param {Object} state
+ * @returns {string} the block, or '' when no account has a positive total
+ */
+function renderJudgeFinancialSummary(state) {
+  return getPromptBuilder(null, state)._buildFinancialSummary(state.shellAccounts || []).trim();
+}
+
+/**
  * The session roster for the outline and article judges: the players present, by
  * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts).
  *
@@ -1711,6 +1730,8 @@ ${JSON.stringify(interweavingPlan, null, 2)}
 
 ${JOURNALIST_MOMENTUM_EVALUATION}`
         : DETECTIVE_MOMENTUM_EVALUATION;
+      // Phase 3 (3.9): the account totals the outline writer copied, after the record.
+      const outlineMoney = journalist ? renderJudgeFinancialSummary(state) : '';
 
       return `Evaluate this article outline:
 
@@ -1724,7 +1745,7 @@ ${interweavingSection}${renderJudgePhotos(state)}
 
 ${renderJudgeSessionContext(state)}
 
-${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}${outlineMoney ? `\n\n${outlineMoney}` : ''}
 
 ${momentum}
 
@@ -1740,13 +1761,15 @@ Is this outline ready for human review?`;
         // Phase 3 (3.4): the mode block in the system prompt states T8 for this mode
         // (exposed memories reach Nova by turn-in, the room's events by attribution),
         // and reporterMode scores it; this line names the mode, once.
+        // Phase 3 (3.9): the account totals the article writer copied, after the record.
+        const articleMoney = renderJudgeFinancialSummary(state);
         return `Evaluate this article content:
 
 REPORTING MODE FOR THIS SESSION: ${reportingMode} (the mode block in your instructions says what Nova could witness; reporterMode scores it)
 
 ${renderJudgeSessionContext(state)}
 
-${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}${articleMoney ? `\n\n${articleMoney}` : ''}
 
 ${renderArticleJudgePhotos(state)}
 

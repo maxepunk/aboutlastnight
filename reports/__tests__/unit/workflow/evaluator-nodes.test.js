@@ -2593,6 +2593,55 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
   );
   const userFor = (phase, state) => buildEvaluationUserPrompt(phase, state, { factCheck: null });
 
+  describe('the money line (T5)', () => {
+    // At the gate five of eight outline and article verdicts flagged the code-made
+    // $7,495,000 as a figure the writer computed, and the writers asked the director to
+    // confirm it at two stops: no judge saw the summary the writers were given.
+    it.each(['outline', 'article'])('the %s judge reads the writers\' FINANCIAL_SUMMARY, from the same builder and input, once, after the record', (phase) => {
+      const state = stateFor();
+      const prompt = userFor(phase, state);
+      const block = getPromptBuilder(null, state)._buildFinancialSummary(state.shellAccounts).trim();
+      expect(block.startsWith('<FINANCIAL_SUMMARY>')).toBe(true);
+      expect(count(prompt, block)).toBe(1);
+      expect(count(prompt, '<FINANCIAL_SUMMARY>')).toBe(1);
+      expect(prompt.indexOf(block)).toBeGreaterThan(prompt.indexOf('</RECORD>'));
+    });
+
+    it('the arc judge, whose writer is given no summary, and the detective judges read none', () => {
+      expect(userFor('arcs', stateFor())).not.toContain('FINANCIAL_SUMMARY');
+      for (const phase of ['arcs', 'outline', 'article']) {
+        expect([phase, userFor(phase, stateFor('detective')).includes('FINANCIAL_SUMMARY')]).toEqual([phase, false]);
+      }
+    });
+
+    it('a session with no account above zero gives the judges no summary, as it gives the writers none', () => {
+      const state = stateFor('journalist', { shellAccounts: [{ name: 'Melanie', total: 0, tokenCount: 0 }] });
+      for (const phase of ['outline', 'article']) expect(userFor(phase, state)).not.toContain('FINANCIAL_SUMMARY');
+    });
+
+    it('moneyTruth asks whether the money runs from the buyer, with NeurAI and its board Nova\'s suspicion', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
+        expect(description).toContain("run from the buyer to the seller's chosen account");
+        expect(description).toContain("NeurAI and its board written as Nova's suspicion");
+        expect(description).toContain('the morning\'s payments for erasure');
+        expect(description).toMatch(/\bT5\b/);
+        expect(description).not.toContain("run from NeurAI's board");
+        expect(description).not.toContain('other wealth');
+      }
+    });
+
+    it('moneyTruth reads the timeline at every judge, and FINANCIAL_SUMMARY where its writer had it', () => {
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline']);
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
+      for (const phase of ['outline', 'article']) {
+        const { reads, description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
+        expect(reads).toEqual(['timeline', 'financialSummary']);
+        expect(description).toContain('as the ledger or FINANCIAL_SUMMARY gives it');
+      }
+    });
+  });
+
   // Final review judges-factcheck[1]: every passing criterion carried a fix and the
   // guidance carried optional steps, and the reworks acted on them. The contract is
   // shared by both themes, so the detective's judges change with it (the ruling).

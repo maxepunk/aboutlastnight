@@ -161,10 +161,16 @@ const REPO = path.join(__dirname, '..', '..');
  * - Integration of 3.11 onto 3.8: the journalist pins carry both changes, the new
  *   craft stubs and the quote-bank line (20622 -> 20639, 27901 -> 27918, 10755 ->
  *   10772); arcs-detective is 3.11’s (14747), and the other detective pins do not move.
+ * - Phase 3 (task 3.9), the money line. FINANCIAL_SUMMARY's last sentence says the
+ *   total is what the buyer paid out this morning, where it said NeurAI's board (T5,
+ *   R11): the journalist outline and article writers. The outline writer's <SCHEMA>
+ *   describes an account's inference as "What the section infers from the account", no
+ *   longer "the section's reading" (spec section 7). outline-journalist 20639 -> 20638,
+ *   article-journalist 27918 -> 27913; the detective and arc pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['53d4bba04c2c868b04feac54493da59e993b506b860af38e0508606e05261693', 20639],
-  'article-journalist': ['acfdfb9acce53e14e5e8131eda96095f64c166ce0c0e756dd5959b2d00ee9f15', 27918],
+  'outline-journalist': ['43090a0768e66a909fbc417d637d33392a6912dc683f0a434d3daa6a8c046ed6', 20638],
+  'article-journalist': ['24aee4605eea7242a7823fe92f0dc3b22c36efa7cd2188b40d2a937e8b52daf1', 27913],
   'arcs-journalist': ['84a3d0bda40156b8cd638c43f1e031d1666da2670839b5ea070031a770f1374b', 10772],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],

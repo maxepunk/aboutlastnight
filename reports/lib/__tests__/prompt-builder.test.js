@@ -1749,6 +1749,15 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       expect(summary).toMatch(/first-burial bonus/);
       expect(summary).not.toMatch(/\btokens?\b|Total buried|Black Market|Blake/);
     });
+
+    // Phase 3 (3.9; spec section 7, R12): "a reading" is retired as the word for Nova's
+    // inference, and the outline writer prints this description in its <SCHEMA>.
+    it("the outline writer's <SCHEMA> describes an account's inference by what it holds, not as a reading", async () => {
+      const { userPrompt } = await outlineOf(journalist());
+      const schema = between(userPrompt, '<SCHEMA>', '</SCHEMA>');
+      expect(schema).toContain('"description": "What the section infers from the account"');
+      expect(schema).not.toMatch(/\breading\b/i);
+    });
   });
 
   describe('the article rework framing (TH7)', () => {

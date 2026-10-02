@@ -140,7 +140,7 @@
             "properties": {
               "name": { "type": "string", "description": "Account name" },
               "total": { "type": ["number", "string"], "description": "The account's total" },
-              "inference": { "type": "string", "description": "The section's reading of the account" },
+              "inference": { "type": "string", "description": "What the section infers from the account" },
               "relatedArc": { "type": "string", "description": "The arc the account bears on" }
             }
           }
