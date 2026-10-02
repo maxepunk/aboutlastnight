@@ -577,6 +577,9 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     return scores.slice(at, next < 0 ? scores.length : next).trimEnd();
   };
   const SCOPE = 'only where it touches a line this rework is already changing for a must-fix item';
+  /** R23's reason (the 4b fix batch), as WHAT THIS REWORK DOES gives it on an automatic pass. */
+  const SCOPE_REASON = 'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.';
+  const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   it('the bar is one constant: node-helpers.js exports it and the evaluator imports it', () => {
     expect(STRUCTURAL_PASS_SCORE).toBe(0.8);
@@ -602,12 +605,21 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     }
   });
 
-  it("a failing criterion's fix is present as must-fix: scored below the bar, or named in the structural issues", () => {
+  // The 4b fix batch (the integrator's ruling; 3.10 review minor 1): a criterion failed
+  // only when it scored below the bar. "Named in the structural issues" went: it matched
+  // a key as a whole word anywhere in an issue, so a plain-English key (convergence,
+  // coherence) read as failing whenever an issue used the word. A judge that scores a
+  // criterion as passing but lists its breach has the breach in ISSUES TO ADDRESS, with
+  // its own fix, so nothing is lost.
+  it("a failing criterion's fix is present as must-fix: scored below the bar; a criterion an issue names but scored at or above the bar prints its score alone", () => {
     for (const kind of [AUTOMATIC, SEND_BACK]) {
       const section = build(kind);
       expect(criterionLines(section, 'wordsTruth')).toBe('  - wordsTruth: 0.50 [structural]\n      notes: A misquote.\n      fix: FAILING-FIX give the text to its speaker.');
-      // Scored above the bar, but a structural issue names it: it failed.
-      expect(criterionLines(section, 'accusationArcPresent')).toBe('  - accusationArcPresent: 0.90 [structural]\n      notes: NAMED-NOTES mislabelled.\n      fix: NAMED-FIX label the verdict arc.');
+      // Scored above the bar: it passed, whatever the issues say. The issue that names
+      // it is in ISSUES TO ADDRESS.
+      expect(criterionLines(section, 'accusationArcPresent')).toBe('  - accusationArcPresent: 0.90 [structural]');
+      expect(section).not.toContain('NAMED-FIX');
+      expect(section).toContain('  - accusationArcPresent: the verdict arc is labelled "observation".');
     }
     // The automatic pass names its fix lines among the must-fix items.
     const instructions = build().slice(build().indexOf('WHAT THIS REWORK DOES'));
@@ -634,6 +646,29 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     expect(criterionLines(section, 'evidenceTruth')).toBe('  - evidenceTruth: 0.90 [structural]');
   });
 
+  // The 4b fix batch (3.10 review minor 1): at the outline, "convergence" is a common
+  // word in findings (C16), and the passing convergence advisory's notes and suggestion
+  // reached the rework whenever an issue used it.
+  it('a passing convergence criterion beside an issue that uses the word "convergence" prints its score alone', () => {
+    for (const kind of [AUTOMATIC, SEND_BACK]) {
+      const section = build({
+        ...kind,
+        phase: 'outline',
+        validationResults: {
+          phase: 'outline', passed: false,
+          structuralIssues: ['T1: the convergence paragraph states the buyer as fact.'],
+          criteriaScores: {
+            convergence: { score: 0.95, type: 'advisory', notes: 'PASSING-NOTES the threads meet late.', fix: 'PASSING-FIX none needed.' },
+            evidenceTruth: { score: 0.4, type: 'structural', notes: 'The buyer as fact.', fix: "FAILING-FIX write it as Nova's suspicion." }
+          }
+        }
+      });
+      expect(criterionLines(section, 'convergence')).toBe('  - convergence: 0.95 [advisory]');
+      expect(section).not.toMatch(/PASSING-(NOTES|FIX)/);
+      expect(section).toContain("      fix: FAILING-FIX write it as Nova's suspicion.");
+    }
+  });
+
   it("an advisory criterion's line is a suggestion; a passing one prints its score alone", () => {
     for (const kind of [AUTOMATIC, SEND_BACK]) {
       const section = build(kind);
@@ -658,14 +693,26 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     expect(count(section, 'Everything else in the previous arcs stays word for word.')).toBe(1);
     expect(section).not.toMatch(/truer to the record|serve the piece|was not questioned|not requirements/);
     expect(section).toContain('SHOULD CONSIDER:\nThese came from the evaluation that ran before this pass.\n\n  - T2: relabel');
-    // Each part names only lists the context carries.
+    // Each part names only lists the context carries. The 4b fix batch: the scope's
+    // reason follows it (R23 carries its reason).
     const plain = build({
       validationResults: { phase: 'article', passed: false, structuralIssues: ['A card misquotes its document.'], advisoryWarnings: [] },
       phase: 'article'
     });
     expect(plain.slice(plain.indexOf('WHAT THIS REWORK DOES'))).toMatch(
-      /This rework fixes the must-fix items: the ISSUES TO ADDRESS\. Everything else in the previous article stays word for word\.\s*$/
+      new RegExp(`This rework fixes the must-fix items: the ISSUES TO ADDRESS\\. Everything else in the previous article stays word for word\\. ${escapeRegExp(SCOPE_REASON)}\\s*$`)
     );
+  });
+
+  // The 4b fix batch (3.10 review minor 3; the plan's rule for model-facing text: each
+  // rule once, with its reason). The removed "What the findings do not name was not
+  // questioned" was the only reason the old text gave. The reason lets a rework decide
+  // the edge case, such as a suggestion that half-touches a line it is fixing.
+  it('the scope sentence carries its reason, once, right after it', () => {
+    const section = build();
+    expect(count(section, SCOPE_REASON)).toBe(1);
+    expect(section).toContain(`Everything else in the previous arcs stays word for word. ${SCOPE_REASON}`);
+    expect(build(SEND_BACK)).not.toContain(SCOPE_REASON);
   });
 
   it("the send back keeps its scope: the director's note is the task", () => {
@@ -754,5 +801,75 @@ describe('each automatic rework states its scope once, in the revision context (
     expect(count(whole, 'stays word for word')).toBe(1);
     expect(count(whole, 'WHAT THIS REWORK DOES:')).toBe(1);
     expect(whole).not.toMatch(/this rework answers|truer to the record|serve the piece|was not questioned|evaluation's findings/);
+  });
+});
+
+/**
+ * The 4b fix batch (the integrator's ruling; 3.10 review minor 2): a code check's own
+ * guidance still reaches an automatic rework, under a label that says it is the
+ * check's. The arc check (validateArcStructure, source "programmatic-validation") writes
+ * its guidance in code, must-fix steps only, and fix 3.7b's coverage line reaches a
+ * rework only through it: "Give each one a placement ... or ... a writerQuestions entry
+ * of kind "player"". Only a judge's revisionGuidance is left out of an automatic pass:
+ * its must-fix steps repeat ISSUES TO ADDRESS and its optional steps read as
+ * instructions.
+ */
+describe("a code check's guidance reaches an automatic rework (the 4b fix batch)", () => {
+  const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
+  const { reworkFixtureState } = require('./fixtures/rework-state');
+  const COVERAGE_LINE = /Give each one a placement in an arc's characterPlacements through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry of kind "player" about them for the director \(C15\)\./;
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+
+  beforeAll(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterAll(() => jest.restoreAllMocks());
+
+  /** The fixture's arcs with Riley's placements taken out, so the arc check finds Riley missing. */
+  function stateMissingRiley() {
+    const state = clone(reworkFixtureState('journalist'));
+    state.narrativeArcs = state.narrativeArcs.map((arc) => {
+      const { Riley, ...placements } = arc.characterPlacements || {};
+      return { ...arc, characterPlacements: placements };
+    });
+    return state;
+  }
+
+  it("an automatic pass after the arc check carries its coverage line, under the check's label", async () => {
+    const state = stateMissingRiley();
+    const { validationResults } = arcNodes.validateArcStructure(state, {});
+    expect(validationResults.source).toBe('programmatic-validation');
+    const { contextSection } = buildRevisionContext({
+      phase: 'arcs', revisionCount: 1, validationResults, previousOutput: state.narrativeArcs, humanFeedback: null, theme: 'journalist'
+    });
+    expect(contextSection).toMatch(COVERAGE_LINE);
+    expect(contextSection).toContain(`ARC CHECK GUIDANCE:\n${validationResults.revisionGuidance}`);
+    expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
+
+    // The rework the graph runs next sends it to the model.
+    let sent;
+    await arcNodes.reviseArcs(
+      { ...state, narrativeArcs: null, _previousArcs: clone(state.narrativeArcs), arcRevisionCount: 1, validationResults },
+      { configurable: { sdkClient: async (options) => { sent = options; return { narrativeArcs: clone(state.narrativeArcs), synthesisNotes: 's' }; }, theme: 'journalist' } }
+    );
+    expect(sent.prompt).toMatch(COVERAGE_LINE);
+    expect(sent.prompt).toContain('ARC CHECK GUIDANCE:\n');
+  });
+
+  it("an automatic pass after a judge's verdict carries no EVALUATOR FEEDBACK", () => {
+    const verdict = {
+      phase: 'arcs', passed: false,
+      criteriaScores: { rosterCoverage: { score: 0.75, type: 'structural', notes: 'Riley missing.', fix: 'Place Riley.' } },
+      structuralIssues: ['rosterCoverage: Riley has no placement.'],
+      revisionGuidance: 'JUDGE-GUIDANCE Step 1: place Riley. Step 2 (optional): tighten the bridges.',
+      confidence: 'high'
+    };
+    const { contextSection } = buildRevisionContext({
+      phase: 'arcs', revisionCount: 1, validationResults: verdict, previousOutput: [], humanFeedback: null, theme: 'journalist'
+    });
+    expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
+    expect(contextSection).not.toContain('JUDGE-GUIDANCE');
+    expect(contextSection).not.toContain('ARC CHECK GUIDANCE');
   });
 });

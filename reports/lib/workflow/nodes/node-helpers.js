@@ -834,14 +834,34 @@ const REWORK_SHOULD_CONSIDER_LINE = 'These came from the evaluation that ran bef
 /**
  * The journalist revision context's line above CRITERIA SCORES: who computed the
  * scores. A model evaluation's scores are the judge's own and uncalibrated (phase 7
- * calibrates them); a check that computes its scores in code names itself instead,
- * keyed by the `source` it stamps on validationResults.
+ * calibrates them).
  */
 const MODEL_SCORES_LINE = "The scores below are the evaluating model's own and uncalibrated: no one has yet checked them against the director's approvals and send-backs.";
-const CODE_COMPUTED_SCORES_LINES = {
+
+/**
+ * The code checks that write validationResults, keyed by the `source` each stamps on
+ * it, with what the journalist revision context says of each: who computed its scores
+ * (in place of MODEL_SCORES_LINE), and the label its revision guidance prints under.
+ *
+ * The 4b fix batch (the integrator's ruling): a code check's guidance reaches an
+ * automatic rework too. It is written in code with must-fix steps only, and the arc
+ * check's carries fix 3.7b's coverage line ("Give each one a placement ... or ... a
+ * writerQuestions entry of kind "player""), which reaches a rework only through it. Only
+ * a judge's revisionGuidance is left out of an automatic pass.
+ */
+const CODE_CHECKS = {
   // validateArcStructure (arc-specialist-nodes.js): rosterCoverage and accusationArcPresent
-  'programmatic-validation': "The scores below are the arc check's, computed in code from the arcs."
+  'programmatic-validation': {
+    scoresLine: "The scores below are the arc check's, computed in code from the arcs.",
+    guidanceLabel: 'ARC CHECK GUIDANCE'
+  }
 };
+
+/** The code check that wrote these results, by its own `source` key, or null for a judge. */
+function codeCheckOf(validationResults) {
+  const source = validationResults?.source;
+  return typeof source === 'string' && Object.prototype.hasOwnProperty.call(CODE_CHECKS, source) ? CODE_CHECKS[source] : null;
+}
 
 /**
  * Build revision context for any phase (DRY helper)
@@ -875,10 +895,11 @@ const CODE_COMPUTED_SCORES_LINES = {
  *   evaluation's scores are said to be uncalibrated (a code check's are named as the
  *   check's). Phase 3 (3.10; R23): an automatic pass fixes the must-fix items and takes
  *   up a suggestion only where it touches a line it is already changing for one;
- *   everything else stays word for word. Only a criterion that failed (scored below
- *   STRUCTURAL_PASS_SCORE, or named in the must-fix issues) prints its notes and fix,
- *   on either kind of rework, and an automatic pass carries no EVALUATOR FEEDBACK.
- *   The detective keeps today's text (D13).
+ *   everything else stays word for word, for the reason the context gives with it (the
+ *   4b fix batch). Only a criterion that failed (scored below STRUCTURAL_PASS_SCORE)
+ *   prints its notes and fix, on either kind of rework. An automatic pass carries no
+ *   EVALUATOR FEEDBACK, the judge's guidance; a code check's guidance prints under the
+ *   check's own label (CODE_CHECKS) on either kind. The detective keeps today's text (D13).
  * @returns {Object} { contextSection, previousOutputSection }
  *
  * @example
@@ -973,23 +994,18 @@ ${parkedDetective ? SHOULD_CONSIDER_PREAMBLE : REWORK_SHOULD_CONSIDER_LINE}
 ${advisories.map(formatIssue).join('\n')}`
     : '';
 
-  // Phase 3 (3.10; R23, final review rules-writers[0]): which criteria failed. A
-  // criterion failed when it scored below the bar or a must-fix issue names it by its
-  // key. A stored verdict carries a fix on a passing criterion too (the gate's first
-  // arc rework had four, "Optionally ..." among them), and a "fix:" line reads as
-  // must-fix, so only a failed criterion's notes and fix reach a journalist rework;
-  // a passing criterion prints its score alone, whatever the judge wrote.
+  // Phase 3 (3.10; R23, final review rules-writers[0]): which criteria failed. A stored
+  // verdict carries a fix on a passing criterion too (the gate's first arc rework had
+  // four, "Optionally ..." among them), and a "fix:" line reads as must-fix, so only a
+  // failed criterion's notes and fix reach a journalist rework; a passing criterion
+  // prints its score alone, whatever the judge wrote.
   //
-  // A criterion is named by its key, never by a rule id: an issue opens with every
-  // rule it cites ("T7, T1: ..."), and at the gate one sat beside a passing
-  // evidenceTruth (T1) whose fix was the judge's own optional step about another line.
-  const issueTexts = rawIssues.map((i) => (typeof i === 'string' ? i : String((i && i.message) || '')));
-  const namedInIssues = (name) => {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const key = new RegExp(`(?<![A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`);
-    return issueTexts.some((text) => key.test(text));
-  };
-  const failed = (name, score) => (score !== null && score < STRUCTURAL_PASS_SCORE) || namedInIssues(name);
+  // The 4b fix batch (the integrator's ruling): a criterion failed only when it scored
+  // below the bar. Counting a criterion as failed when a must-fix issue named its key
+  // matched the key as a whole word anywhere, so a plain-English key (convergence,
+  // coherence) read as failing whenever an issue used the word. A breach the judge lists
+  // under a criterion it scored as passing is in ISSUES TO ADDRESS, with its own fix.
+  const failed = (score) => score !== null && score < STRUCTURAL_PASS_SCORE;
 
   // Per-criterion: score, structural/advisory label, and the evaluator's own
   // notes + concrete fix. The notes and fix are the actionable part. Phase 3 (3.3):
@@ -1003,7 +1019,7 @@ ${advisories.map(formatIssue).join('\n')}`
           const scoreText = score === null ? 'unscored' : score.toFixed(2);
           const kind = (value && typeof value === 'object' && value.type) ? ` [${value.type}]` : '';
           const lines = [`  - ${name}: ${scoreText}${kind}`];
-          if (value && typeof value === 'object' && (parkedDetective || failed(name, score))) {
+          if (value && typeof value === 'object' && (parkedDetective || failed(score))) {
             const fixLabel = (!parkedDetective && value.type === 'advisory') ? 'suggestion' : 'fix';
             if (value.notes && String(value.notes).trim()) lines.push(`      notes: ${value.notes}`);
             if (value.fix && String(value.fix).trim()) {
@@ -1046,7 +1062,7 @@ ${advisories.map(formatIssue).join('\n')}`
   } else if (scored.length === 0) {
     scoresGuide = '';
   } else {
-    scoresGuide = CODE_COMPUTED_SCORES_LINES[validationResults.source] || MODEL_SCORES_LINE;
+    scoresGuide = codeCheckOf(validationResults)?.scoresLine || MODEL_SCORES_LINE;
   }
   const scoresGuideBlock = scoresGuide ? `${scoresGuide}\n\n` : '';
 
@@ -1068,12 +1084,23 @@ ${advisories.map(formatIssue).join('\n')}`
   // steps, and its optional steps read as instructions; a stored verdict keeps its old
   // guidance, so it is left out whole rather than filtered by its wording. A send back
   // keeps it, and the detective keeps it on both (D13).
-  const feedbackBlock = (parkedDetective || humanFeedback)
-    ? `
+  //
+  // The 4b fix batch (the integrator's ruling): a code check's guidance is not a
+  // judge's. It prints on every journalist pass under the check's own label
+  // (CODE_CHECKS), so the arc check's coverage line still reaches an automatic rework.
+  const codeCheck = parkedDetective ? null : codeCheckOf(validationResults);
+  let feedbackBlock = '';
+  if (codeCheck) {
+    feedbackBlock = feedback ? `
+
+${codeCheck.guidanceLabel}:
+${feedback}` : '';
+  } else if (parkedDetective || humanFeedback) {
+    feedbackBlock = `
 
 EVALUATOR FEEDBACK:
-${feedback || '(no specific feedback provided)'}`
-    : '';
+${feedback || '(no specific feedback provided)'}`;
+  }
 
   const evaluationBlock = hasEvaluation
     ? `EVALUATION SUMMARY:
@@ -1130,6 +1157,14 @@ ${formatHandEditsBlock(handEdits)}
   // automatic arc reworks kept 53% and 62% of their sentences, and one article rework
   // changed 20 of 27 paragraphs to fix one pronoun. Each part names only the lists
   // this context carries.
+  //
+  // The 4b fix batch (3.10 review minor 3; the plan's rule for model-facing text: each
+  // rule once, with its reason): the scope carries its reason, which lets a rework decide
+  // the edge case, such as a suggestion that half-touches a line it is fixing. The lines
+  // no finding names passed what ran before the pass, and at the gate the new errors that
+  // reached the director were in lines rewritten with no finding behind them. Every
+  // automatic rework is evaluated again (graph.js), so the reason says where the errors
+  // came from, not that the next evaluation never reads the line.
   const suggestionSources = [
     advisories.length > 0 && 'a SHOULD CONSIDER item',
     hasSuggestionLines && 'a suggestion in CRITERIA SCORES'
@@ -1137,7 +1172,8 @@ ${formatHandEditsBlock(handEdits)}
   const automaticScope = [
     `This rework fixes the must-fix items: the ISSUES TO ADDRESS${hasFixLines ? ' and the fixes in CRITERIA SCORES' : ''}.`,
     suggestionSources && `Take up ${suggestionSources} only where it touches a line this rework is already changing for a must-fix item.`,
-    `Everything else in the previous ${phase} stays word for word.`
+    `Everything else in the previous ${phase} stays word for word.`,
+    'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.'
   ].filter(Boolean).join(' ');
   const instructionsSection = parkedDetective
     ? `═══════════════════════════════════════════════════════════════════════════════
