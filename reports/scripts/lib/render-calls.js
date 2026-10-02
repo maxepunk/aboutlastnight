@@ -66,6 +66,10 @@ async function renderInterweaving({ arcNodes }, state) {
  * both through the evaluator's own functions, and its system prompt takes the session
  * config (the mode block). An older tree (a baseline render through --repo) gets the
  * argument lists its evaluator used, below.
+ *
+ * F1 (before phase 4): the outline and article judges' user prompts take the director's
+ * edits the judged output carries, through the evaluator's own judgedEdits. An older tree
+ * exports none, and its builder ignores the option.
  * @param {string} phase - one of JUDGE_PHASES
  * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
  */
@@ -88,9 +92,10 @@ async function renderJudge({ evalNodes, factCheckContentBundle, getThemeNPCProno
   const factCheck = phase === 'article' && state.contentBundle
     ? await factCheckContentBundle(factCheckArgs)
     : null;
+  const directorEdits = evalNodes.judgedEdits ? evalNodes.judgedEdits(phase, state) : undefined;
   return {
     systemPrompt: await evalNodes.buildEvaluationSystemPrompt(phase, criteria, theme, { sessionConfig: state.sessionConfig || null }),
-    userPrompt: await evalNodes.buildEvaluationUserPrompt(phase, state, { factCheck })
+    userPrompt: await evalNodes.buildEvaluationUserPrompt(phase, state, { factCheck, directorEdits })
   };
 }
 

@@ -92,3 +92,39 @@ describe('loadCallModules', () => {
     expect(() => loadCallModules(req)).toThrow('evaluator-nodes.js _testing does not export buildEvaluationUserPrompt');
   });
 });
+
+// F1: the outline and article judges now receive the director's standing edits
+// (evaluator-nodes.js judgedEdits), and render-calls.js passes them as the node does.
+describe.each(['journalist', 'detective'])('%s: a judge with the director\'s edits sends what the script renders (F1)', (theme) => {
+  const { standingAfterSendBack } = require('../../../lib/hand-edit-diff');
+  const { OUTLINE } = require('../../../lib/__tests__/fixtures/rework-state');
+
+  test('the outline judge', async () => {
+    const edited = clone(OUTLINE);
+    edited.lede.hook = 'Marcus died the morning his company sold.';
+    const state = {
+      ...reworkFixtureState(theme), outline: edited, evaluationHistory: [], outlineApproved: false,
+      _outlineHandEdits: standingAfterSendBack(null, OUTLINE, edited, 'outline')
+    };
+    const sdk = recordingSdk(() => VERDICT);
+    await evaluateOutline(clone(state), cfg(sdk, theme));
+    const rendered = await renderJudge(calls, state, 'outline');
+    expect(rendered.userPrompt).toContain('E1 (lede, hook): "Marcus died the morning his company sold."');
+    expectSent(sdk.mock.calls[0][0], rendered);
+  });
+
+  test('the article judge', async () => {
+    const edited = clone(PREVIOUS_BUNDLE);
+    edited.sections[0].content[2] = { type: 'paragraph', text: 'Then the paternity test came back, and the room went quiet.' };
+    const state = {
+      ...reworkFixtureState(theme), contentBundle: edited, evaluationHistory: [], articleApproved: false,
+      articleRevisionCount: REVISION_CAPS.ARTICLE,
+      _articleHandEdits: standingAfterSendBack(null, PREVIOUS_BUNDLE, edited, 'bundle')
+    };
+    const sdk = recordingSdk(() => VERDICT);
+    await evaluateArticle(clone(state), cfg(sdk, theme));
+    const rendered = await renderJudge(calls, state, 'article');
+    expect(rendered.userPrompt).toContain('E1 (section "the-story", paragraph): "Then the paternity test came back, and the room went quiet."');
+    expectSent(sdk.mock.calls[0][0], rendered);
+  });
+});

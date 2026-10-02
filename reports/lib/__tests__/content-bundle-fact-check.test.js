@@ -1565,3 +1565,85 @@ describe('the fix lines follow the rules (phase 3, 3.4)', () => {
     messages.forEach((m) => expect([m, m.includes('—')]).toEqual([m, false]));
   });
 });
+
+// F1 (spec 2026-10-02 section 7): a structural hit located in the director's text, or
+// caused by the director's cut, is the director's to weigh: an advisory under the one
+// prefix and the edit's id. The same defect in the writer's text stays structural, and
+// every existing message keeps its prefix.
+describe('the director\'s edits are final (F1)', () => {
+  const { standingAfterSendBack, carriedEdits, DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
+  const paragraph = (text) => ({ type: 'paragraph', text });
+  const NOT_VERBATIM = 'A sentence the director typed that appears nowhere in the memory itself.';
+
+  /** The director's edits from `writers` to `directors`, as the bundle carries them. */
+  const editsFor = (writers, directors) => carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+  const run = (writers, directors, extra = {}) => factCheckContentBundle(baseArgs({
+    contentBundle: directors, directorEdits: editsFor(writers, directors), ...extra
+  }));
+
+  it('an inline card whose block is one of the director\'s edits is an advisory; the writer\'s is structural', () => {
+    const writers = storyWith(paragraph('Vic leaned in at the bar.'));
+    const directors = storyWith(paragraph('Vic leaned in at the bar.'), inlineCard({ content: NOT_VERBATIM }));
+    const result = run(writers, directors);
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.advisoryWarnings).toEqual([
+      `${DIRECTOR_EDIT_PREFIX}E1: Evidence card "vic001" (in section "the-story") is not verbatim: its content does not appear in that document's text. Keep the card, and replace its content with sentences copied exactly from the document with that id in <RECORD>.`
+    ]);
+    expect(result.cardFidelity).toEqual([{ tokenId: 'vic001', ok: false, reason: 'not verbatim', locations: IN_STORY, directorEdit: 'E1' }]);
+
+    const writersCard = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits: [] }));
+    expect(writersCard.structuralIssues).toEqual([expect.stringMatching(/^Evidence card "vic001" \(in section "the-story"\) is not verbatim/)]);
+    expect(writersCard.cardFidelity[0]).not.toHaveProperty('directorEdit');
+  });
+
+  it('a reporter-mode phrase inside a block the director wrote is an advisory; in the writer\'s, structural', () => {
+    const writers = storyWith(paragraph('The room voted at noon.'));
+    const directors = storyWith(paragraph('The room voted at noon, and I voted with them.'));
+    const result = run(writers, directors, { roster: [] });
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.reporterMode.violations).toEqual([]);
+    expect(result.advisoryWarnings).toEqual([expect.stringMatching(new RegExp(`^${DIRECTOR_EDIT_PREFIX}E1: Reporter-mode violation: "i voted"\\.`))]);
+
+    const writersPhrase = run(storyWith(paragraph('x')), storyWith(paragraph('x'), paragraph('Then I voted with the room.')), {
+      directorEdits: []
+    });
+    expect(writersPhrase.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\./)]);
+    expect(writersPhrase.reporterMode.violations).toEqual(['i voted']);
+  });
+
+  it('a photo reference in a block the director placed is an advisory; in the writer\'s, structural', () => {
+    const photo = { type: 'photo', filename: 'not-ours.jpg', caption: 'The huddle' };
+    const writers = storyWith(paragraph('Vic leaned in at the bar.'));
+    const directors = storyWith(paragraph('Vic leaned in at the bar.'), photo);
+    const result = run(writers, directors, { sessionPhotos: ['/photos/a.jpg'] });
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.photoReferences.invalid).toEqual([]);
+    expect(result.advisoryWarnings).toEqual([
+      `${DIRECTOR_EDIT_PREFIX}E1: Invalid photo reference "not-ours.jpg": not one of this session's photos. Use one of [a.jpg] or remove the reference.`
+    ]);
+
+    const writersPhoto = factCheckContentBundle(baseArgs({ contentBundle: directors, sessionPhotos: ['/photos/a.jpg'], directorEdits: [] }));
+    expect(writersPhoto.photoReferences.invalid).toEqual(['not-ours.jpg']);
+    expect(writersPhoto.structuralIssues).toEqual([expect.stringMatching(/^Invalid photo reference "not-ours.jpg"/)]);
+  });
+
+  it('a roster player whose only mention the director cut is an advisory; a player the writer never named is structural', () => {
+    const writers = storyWith(paragraph('Vic leaned in at the bar.'), paragraph('Kai said nothing all night.'));
+    const directors = storyWith(paragraph('Vic leaned in at the bar.'));
+    const result = run(writers, directors, { roster: ['Vic', 'Kai', 'Ashe'] });
+    expect(result.rosterCoverage.missing).toEqual(['Ashe']);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Roster coverage gap: Ashe is on the session roster/)]);
+    expect(result.advisoryWarnings).toEqual([
+      `${DIRECTOR_EDIT_PREFIX}E1: Roster coverage gap: Kai is on the session roster, and the director's cut removed the only place the article named Kai.`
+    ]);
+  });
+
+  it('with no edits every hit keeps its status and its message', () => {
+    const bundle = storyWith(paragraph('Then I voted with the room.'), inlineCard({ content: NOT_VERBATIM }));
+    const withNone = factCheckContentBundle(baseArgs({ contentBundle: bundle }));
+    const withEmpty = factCheckContentBundle(baseArgs({ contentBundle: bundle, directorEdits: [] }));
+    expect(withEmpty).toEqual(withNone);
+    expect(withNone.structuralIssues).toHaveLength(2);
+    expect(withNone.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
+  });
+});

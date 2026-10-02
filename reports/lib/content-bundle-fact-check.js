@@ -27,6 +27,9 @@
 // The one wording that points a writer at a document's text (R1); the fix lines
 // below use it so they name the document the way every prompt does.
 const { DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
+// F1 (spec 2026-10-02 section 7): which printed piece is one of the director's edits,
+// and the one prefix a concern about an edit opens with.
+const { editLocator, directorEditConcern } = require('./hand-edit-diff');
 
 /**
  * Normalise for substring comparison: every single and double quotation mark,
@@ -395,10 +398,10 @@ function narratorSegments(contentBundle) {
   const headline = bundle.headline || {};
   const segments = [];
   for (const [key, where] of [['main', 'the headline'], ['kicker', 'the kicker'], ['deck', 'the deck']]) {
-    if (typeof headline[key] === 'string') segments.push({ where, section: null, text: headline[key] });
+    if (typeof headline[key] === 'string') segments.push({ where, section: null, text: headline[key], field: `headline.${key}` });
   }
-  for (const section of asArray(bundle.sections)) {
-    if (!section || typeof section !== 'object') continue;
+  asArray(bundle.sections).forEach((section, index) => {
+    if (!section || typeof section !== 'object') return;
     const sectionId = typeof section.id === 'string' && section.id.trim() ? section.id.trim() : null;
     let paragraph = 0;
     for (const block of asArray(section.content)) {
@@ -406,10 +409,15 @@ function narratorSegments(contentBundle) {
       paragraph += 1;
       if (typeof block.text !== 'string') continue;
       const place = sectionId ? `section "${sectionId}"` : 'a section with no id';
-      segments.push({ where: `${place}, paragraph ${paragraph}`, section: sectionId || '(no id)', text: block.text });
+      segments.push({ where: `${place}, paragraph ${paragraph}`, section: sectionId || '(no id)', text: block.text, sectionKey: sectionKeyOf(section, index), block });
     }
-  }
+  });
   return segments;
+}
+
+/** A section's key as the director's edits address it (lib/hand-edit-diff.js: its id, else its index). */
+function sectionKeyOf(section, index) {
+  return section && section.id != null ? String(section.id) : `index-${index}`;
 }
 
 /** A short span of text for a message, with any em-dash spelled out (no message carries one). */
@@ -561,6 +569,17 @@ function basename(p) {
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+/** `items` grouped by `keyOf`, in the order each key is first seen. */
+function groupBy(items, keyOf) {
+  const out = new Map();
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!out.has(key)) out.set(key, []);
+    out.get(key).push(item);
+  }
+  return out;
 }
 
 /** Roster entries arrive as plain names or as {name} objects. */
@@ -747,19 +766,20 @@ function findAbsenceStatements(text) {
  * no `content` field), so the card check never reads it.
  *
  * @param {Object} bundle
- * @returns {Array<{card: Object, location: {placement: 'inline'|'sidebar', section: string|null}}>}
+ * @returns {Array<{card: Object, location: {placement: 'inline'|'sidebar', section: string|null}, sectionKey?: string}>}
+ *   an inline card's sectionKey is its section as the director's edits address it
  */
 function cardOccurrences(bundle) {
   const out = [];
-  for (const section of asArray(bundle.sections)) {
-    if (!section || typeof section !== 'object') continue;
+  asArray(bundle.sections).forEach((section, index) => {
+    if (!section || typeof section !== 'object') return;
     const sectionId = typeof section.id === 'string' && section.id.trim() ? section.id.trim() : null;
     for (const block of asArray(section.content)) {
       if (block && typeof block === 'object' && block.type === 'evidence-card') {
-        out.push({ card: block, location: { placement: 'inline', section: sectionId } });
+        out.push({ card: block, location: { placement: 'inline', section: sectionId }, sectionKey: sectionKeyOf(section, index) });
       }
     }
-  }
+  });
   for (const entry of asArray(bundle.evidenceCards)) {
     if (entry && typeof entry === 'object') {
       out.push({ card: entry, location: { placement: 'sidebar', section: null } });
@@ -831,13 +851,24 @@ function describeLocations(locations) {
  * @param {string}   [args.theme]              - 'journalist' (default) | 'detective': which
  *                                               page's printed text roster coverage reads; the
  *                                               phase 3 checks run for the journalist only
+ * @param {Array}    [args.directorEdits]      - the director's edits the bundle carries
+ *                                               (F1; the evaluator's judgedEdits). A structural
+ *                                               hit in one of them, or caused by a cut, is an
+ *                                               advisory under its id: an inline card whose
+ *                                               block is an edit, a reporter-mode phrase in a
+ *                                               block the director wrote, a photo reference in
+ *                                               a block the director placed, a player whose
+ *                                               only mention the director cut
  * @see BASELINE.md §4 for the measured failure classes each check addresses
  * @returns {{structuralIssues: string[], advisoryWarnings: string[],
  *            cardFidelity: Array<{tokenId: string, ok: boolean, reason: string|null,
- *                                 locations: Array<{placement: 'inline'|'sidebar', section: string|null}>}>,
+ *                                 locations: Array<{placement: 'inline'|'sidebar', section: string|null}>,
+ *                                 directorEdit?: string}>,
  *            rosterCoverage: {missing: string[]},
  *            photoReferences: {invalid: string[]},
  *            reporterMode: {violations: string[]}}}
+ *   A cardFidelity item in one of the director's edits carries that edit's id
+ *   (`directorEdit`); `missing`, `invalid` and `violations` list the structural hits only.
  */
 function factCheckContentBundle({
   contentBundle,
@@ -853,10 +884,15 @@ function factCheckContentBundle({
   rosterPronouns,
   directorText,
   guestReporter,
-  theme
+  theme,
+  directorEdits
 } = {}) {
   const structuralIssues = [];
   const journalist = theme !== 'detective';
+  // F1: which printed piece is one of the director's edits, and which cut named a player.
+  const edits = editLocator(contentBundle || {}, directorEdits);
+  /** A hit in the director's text is the director's to weigh: an advisory under the edit's id. */
+  const directorHit = (editId, message) => advisoryWarnings.push(directorEditConcern([editId], message));
   const npcEntries = (Array.isArray(npcs)
     ? npcs
     : Object.entries(npcPronouns && typeof npcPronouns === 'object' ? npcPronouns : {}).map(([name, pronouns]) => ({ name, pronouns })))
@@ -881,23 +917,27 @@ function factCheckContentBundle({
   // in the sidebar, or twice inline) is ONE `cardFidelity` item carrying every
   // location, and one message. The console counts the messages and lists the
   // items, so the two numbers agree.
-  const verdicts = new Map();   // tokenId + outcome -> its cardFidelity item
+  //
+  // F1: an inline card whose block is one of the director's edits is its own item, with
+  // the edit's id (`directorEdit`), and its message is an advisory under that id.
+  const verdicts = new Map();   // tokenId + outcome + edit -> its cardFidelity item
   const leaks = new Set();      // tokenId + leaked string, reported once
-  const note = (tokenId, reason, location) => {
-    const key = `${tokenId}\u0000${reason || ''}`;
+  const note = (tokenId, reason, location, editId) => {
+    const key = `${tokenId}\u0000${reason || ''}\u0000${editId || ''}`;
     let item = verdicts.get(key);
     if (!item) {
-      item = { tokenId, ok: reason === null, reason, locations: [] };
+      item = { tokenId, ok: reason === null, reason, locations: [], ...(editId && { directorEdit: editId }) };
       verdicts.set(key, item);
       cardFidelity.push(item);
     }
     item.locations.push(location);
   };
 
-  for (const { card, location } of cardOccurrences(bundle)) {
+  for (const { card, location, sectionKey } of cardOccurrences(bundle)) {
     const tokenId = String(card.tokenId == null ? '' : card.tokenId);
     const inline = location.placement === 'inline';
     const content = inline ? String(card.content == null ? '' : card.content) : '';
+    const editId = inline ? edits.block(sectionKey, card) : null;
 
     // 'leakedExample' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): a two-word substring
     // match, on strings the prompt files no longer ship. Printed content only.
@@ -912,17 +952,18 @@ function factCheckContentBundle({
     }
 
     const source = sources.get(tokenId);
-    if (!source) note(tokenId, 'unknown source', location);
-    else if (!inline || isVerbatim(content, source)) note(tokenId, null, location);
-    else note(tokenId, 'not verbatim', location);
+    if (!source) note(tokenId, 'unknown source', location, editId);
+    else if (!inline || isVerbatim(content, source)) note(tokenId, null, location, editId);
+    else note(tokenId, 'not verbatim', location, editId);
   }
 
   for (const item of cardFidelity) {
     if (item.ok) continue;
     const where = describeLocations(item.locations);
+    const report = (message) => (item.directorEdit ? directorHit(item.directorEdit, message) : structuralIssues.push(message));
     if (item.reason === 'unknown source') {
       // A card with no real document behind it: removal stays on offer.
-      structuralIssues.push(
+      report(
         `Evidence card "${item.tokenId}" (${where}) has an unknown source: no memory or paper ` +
         `document in this session's record carries that id. Use the id of a document in <RECORD>, ` +
         `or drop the card.`
@@ -931,7 +972,7 @@ function factCheckContentBundle({
       // The document is real and the choice of it stands; only the text is wrong.
       // Never offer removal here: on 092026 a reworker that could not see the
       // documents took "or drop the card" and stripped correct cards.
-      structuralIssues.push(
+      report(
         `Evidence card "${item.tokenId}" (${where}) is not verbatim: its content does not appear ` +
         `in that document's text. Keep the card, and replace its content with sentences copied ` +
         `exactly from ${DOCUMENT_POINTER}.`
@@ -954,9 +995,19 @@ function factCheckContentBundle({
   }
 
   // ── 2. Roster coverage (BASELINE class 2) ─────────────────────────────────
+  // F1: a player whose only mention the director cut is the director's call: an
+  // advisory under the cut's id. `missing` lists the writer's gaps alone.
   const names = rosterNames(roster);
   const prose = visibleText(bundle, theme);
-  const missing = names.filter(name => !new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(prose));
+  const unnamed = names.filter(name => !new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(prose));
+  const cutBy = new Map(unnamed.map(name => [name, edits.cutNaming(name)]));
+  const missing = unnamed.filter(name => !cutBy.get(name));
+  for (const [cutId, cutNames] of groupBy(unnamed.filter(name => cutBy.get(name)), name => cutBy.get(name))) {
+    directorHit(cutId,
+      `Roster coverage gap: ${cutNames.join(', ')} ${cutNames.length === 1 ? 'is' : 'are'} on the session roster, and the ` +
+      `director's cut removed the only place the article named ${cutNames.length === 1 ? cutNames[0] : 'each of them'}.`
+    );
+  }
   if (missing.length > 0) {
     structuralIssues.push(
       `Roster coverage gap: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} on the ` +
@@ -981,23 +1032,35 @@ function factCheckContentBundle({
   const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
   const kept = Array.from(available).filter(filename => !excluded.has(filename) && !isWhiteboard(filename));
   const useKept = kept.length > 0 ? `Use one of [${kept.join(', ')}] or remove the reference.` : 'Remove the reference.';
+  // F1: each reference with the director's edit it sits in, if any (a photo block the
+  // director placed, or the hero the director set).
   const referenced = [];
   if (bundle.heroImage && typeof bundle.heroImage === 'object' && bundle.heroImage.filename) {
-    referenced.push(String(bundle.heroImage.filename));
+    referenced.push({ filename: String(bundle.heroImage.filename), editId: edits.field('heroImage') });
   }
-  for (const block of contentBlocks(bundle)) {
-    if (block.type === 'photo' && block.filename) referenced.push(String(block.filename));
-  }
+  asArray(bundle.sections).forEach((section, index) => {
+    if (!section || typeof section !== 'object') return;
+    for (const block of asArray(section.content)) {
+      if (block && typeof block === 'object' && block.type === 'photo' && block.filename) {
+        referenced.push({ filename: String(block.filename), editId: edits.block(sectionKeyOf(section, index), block) });
+      }
+    }
+  });
   // The top-level `photos` list never prints, so it is not read (phase 3, 3.4; HY1).
 
   const invalidPhotos = [];
+  const invalidInEdits = [];   // [filename, editId]: a reference the director placed
   const unverified = [];
-  for (const filename of referenced) {
+  for (const { filename, editId } of referenced) {
     const name = basename(filename);
     if (!isWhiteboard(name) && available.size === 0) {
       unverified.push(filename);
-    } else if ((isWhiteboard(name) || !available.has(name) || excluded.has(name)) && !invalidPhotos.includes(filename)) {
-      invalidPhotos.push(filename);
+    } else if (isWhiteboard(name) || !available.has(name) || excluded.has(name)) {
+      if (editId) {
+        if (!invalidInEdits.some(([f]) => f === filename)) invalidInEdits.push([filename, editId]);
+      } else if (!invalidPhotos.includes(filename)) {
+        invalidPhotos.push(filename);
+      }
     }
   }
   if (unverified.length > 0) {
@@ -1006,15 +1069,17 @@ function factCheckContentBundle({
       `empty in state, so there is nothing to check the filenames against.`
     );
   }
-  for (const filename of invalidPhotos) {
+  const photoMessage = (filename) => {
     const name = basename(filename);
     const reason = isWhiteboard(name)
       ? "this is the whiteboard, the room's working notes, and its photo stays out of the article."
       : excluded.has(name)
         ? 'the director excluded this photo.'
         : "not one of this session's photos.";
-    structuralIssues.push(`Invalid photo reference "${filename}": ${reason} ${useKept}`);
-  }
+    return `Invalid photo reference "${filename}": ${reason} ${useKept}`;
+  };
+  for (const filename of invalidPhotos) structuralIssues.push(photoMessage(filename));
+  for (const [filename, editId] of invalidInEdits.filter(([f]) => !invalidPhotos.includes(f))) directorHit(editId, photoMessage(filename));
 
   // ── 4. Reporter mode (BASELINE class 6) ──────────────────────────────────
   // NARRATOR text only (I2a): a player quote, an evidence card or a caption may
@@ -1022,15 +1087,35 @@ function factCheckContentBundle({
   const mode = reportingMode === 'remote' ? 'remote' : 'on-site';
   const normProse = normalize(narratorText(bundle));
   const violations = [];
+  // F1: the director's edit a phrase sits in, when every narrator piece that holds it
+  // is one (a paragraph the director wrote, or a headline field the director set). A
+  // phrase in the writer's prose, or across two pieces, is the writer's.
+  const segmentEdits = narratorSegments(bundle).map(segment => ({
+    text: normalize(segment.text),
+    editId: segment.field ? edits.field(segment.field) : edits.block(segment.sectionKey, segment.block)
+  }));
+  const directorsPhrase = (phrase) => {
+    const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
+    return holding.length > 0 && holding.every(segment => segment.editId) ? holding[0].editId : null;
+  };
+  /** A reporter-mode hit: a concern when the phrase is the director's, else structural. */
+  const reporterHit = (phrase, message) => {
+    const editId = directorsPhrase(phrase);
+    if (editId) {
+      directorHit(editId, message);
+    } else {
+      violations.push(phrase);
+      structuralIssues.push(message);
+    }
+  };
 
   for (const phrase of NEVER_VOTES) {
     if (normProse.includes(phrase)) {
-      violations.push(phrase);
       // Phase 3 (3.4): the fix never sends the rework to name who acted; an exposure
       // stays anonymous unless the record names who turned it in (spec T6, T8).
       // Phase 3 (3.9): T8's first sentence as round 7 words it (R21): "accuses" is
       // joining the room's accusation. A rework reads this line as must-fix.
-      structuralIssues.push(journalist
+      reporterHit(phrase, journalist
         ? `Reporter-mode violation: "${phrase}". Nova reports on the room from outside its choices: Nova never ` +
           `votes, joins the room's accusation or exposes a memory, and is never one of the room (T8). Rewrite the ` +
           `sentence without Nova in the vote or the exposure: the vote is the room's, and an exposure stays ` +
@@ -1043,12 +1128,11 @@ function factCheckContentBundle({
   if (mode === 'remote') {
     for (const phrase of PRESENCE_CLAIMS) {
       if (normProse.includes(phrase)) {
-        violations.push(phrase);
         // Phase 3 (3.4): exposed memories reach Nova by turn-in, never as tips (spec T6, T8).
         // Phase 3 (3.9): the remote mode block of round 7 (R13): Nova never claims to have
         // seen or heard the room, and the event is told as a scene, attributed where it
         // matters, not sourced sentence by sentence.
-        structuralIssues.push(journalist
+        reporterHit(phrase, journalist
           ? `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: Nova ` +
             `monitored from outside the warehouse and never claims to have seen or heard the room (T8). Tell ` +
             `the moment as a scene, with attribution where it matters: a line someone was overheard saying, a ` +

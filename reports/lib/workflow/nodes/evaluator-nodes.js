@@ -67,6 +67,12 @@ const {
 const { writerQuestionsOf, withoutWriterQuestions } = require('../../writer-questions');
 // The page's own rule for which money tracker prints (printedWriterTracker).
 const { TemplateAssembler } = require('../../template-assembler');
+// F1 (spec 2026-10-02 section 7): the director's edits are final. The outline and article
+// judges read the edits the judged output carries, and the verdict guard moves a finding
+// about one of them to advisoryWarnings under the one prefix.
+const {
+  carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, DIRECTOR_EDIT_PREFIX
+} = require('../../hand-edit-diff');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY CRITERIA DEFINITIONS
@@ -639,6 +645,79 @@ function truthIssueLines(failed, written) {
 }
 
 /**
+ * The output each judge scores: the one the director's edits are found in.
+ *
+ * @param {'arcs'|'outline'|'article'} phase
+ * @param {Object} state
+ * @returns {Object|null}
+ */
+function judgedOutput(phase, state) {
+  if (phase === 'outline') return state.outline || null;
+  if (phase === 'article') return state.contentBundle || null;
+  return null;
+}
+
+/**
+ * The director's edits the judged output carries (F1; spec 2026-10-02 section 7), in id
+ * order: the one list the judge's prompt prints, the verdict guard reads and the fact
+ * check locates (createEvaluator, buildFactCheckArgs, scripts/lib/render-calls.js). The
+ * arc stop has no edits.
+ *
+ * @param {'arcs'|'outline'|'article'} phase
+ * @param {Object} state
+ * @returns {Object[]}
+ */
+function judgedEdits(phase, state) {
+  if (phase === 'outline') return carriedEdits(state._outlineHandEdits, state.outline);
+  if (phase === 'article') return carriedEdits(state._articleHandEdits, state.contentBundle);
+  return [];
+}
+
+/**
+ * The verdict guard (F1): an edit is the final word on its text, so a structural issue
+ * about the director's text is the director's to weigh, never an automatic pass's task.
+ *
+ * An issue moves to the concerns, under DIRECTOR_EDIT_PREFIX and the edit's id, when it
+ * quotes the text of an edit the output carries, or the text a cut removed, and quotes
+ * none of the writer's text (lib/hand-edit-diff.js locateQuotedText); an issue the judge
+ * filed under the prefix and a standing id moves as it is. Every other issue stays
+ * structural. A failed truth criterion holds the output only while an issue under its
+ * rule ids is still structural, or while its own notes quote the writer's text. With no
+ * edits, nothing moves and every failed truth criterion holds, as before F1.
+ *
+ * @param {Object} args
+ * @param {string[]} args.issues - the judge's structural issues, then truthIssueLines'
+ * @param {Array} args.failedTruth - failedTruthCriteria
+ * @param {Object[]} args.edits - judgedEdits
+ * @param {Object|null} args.output - judgedOutput
+ * @returns {{kept: string[], moved: string[], holding: Array}}
+ */
+function guardDirectorEdits({ issues, failedTruth, edits, output }) {
+  if (!Array.isArray(edits) || edits.length === 0) return { kept: issues, moved: [], holding: failedTruth };
+  const standing = new Set(edits.map((edit) => edit.id));
+  const kept = [];
+  const moved = [];
+  for (const issue of issues) {
+    if (concernEditIds(issue).some((id) => standing.has(id))) {
+      moved.push(issue);
+      continue;
+    }
+    const { editIds, writer } = locateQuotedText(issue, edits, output);
+    if (editIds.length > 0 && !writer) moved.push(directorEditConcern(editIds, issue));
+    else kept.push(issue);
+  }
+  const holding = failedTruth.filter(({ rules, notes }) =>
+    kept.some((issue) => leadingRuleIds(issue).some((id) => rules.includes(id)))
+    || locateQuotedText(notes, edits, output).writer);
+  return { kept, moved, holding };
+}
+
+/** Not a concern about one of the director's edits: what a rework may read (validationResults). */
+function forTheRework(warning) {
+  return !(typeof warning === 'string' && warning.startsWith(DIRECTOR_EDIT_PREFIX));
+}
+
+/**
  * The fact check's arguments for one state: the one place they are built
  * (createEvaluator, and scripts/lib/render-calls.js for the renders).
  *
@@ -654,6 +733,10 @@ function truthIssueLines(failed, written) {
  * Task 4c-fix (T13): the whiteboard photo's filename, from where the writers get it
  * (ai-nodes.js whiteboardFilenameOf), so a printed whiteboard is an invalid reference
  * and no fix line offers it.
+ *
+ * F1 (spec 2026-10-02 section 7): the director's edits the bundle carries (judgedEdits),
+ * so a structural hit in the director's text, or caused by the director's cut, is a
+ * concern for the director.
  *
  * @param {Object} state
  * @returns {Object}
@@ -681,7 +764,8 @@ function buildFactCheckArgs(state) {
     rosterPronouns: config.rosterPronouns || null,
     directorText,
     guestReporter: config.guestReporter || null,
-    theme
+    theme,
+    directorEdits: judgedEdits('article', state)
   };
 }
 
@@ -1458,6 +1542,32 @@ ${advisory.text}`;
 }
 
 /**
+ * The director's edits in the judged output (F1; spec 2026-10-02 section 7), for the
+ * outline and article judges of both themes, right after the output they judge: each by
+ * id, with its section and the director's text, or for a cut the text removed. The text
+ * is the director's own and record, so the judge scores the writer's text, and a
+ * disagreement with an edit goes in advisoryWarnings under DIRECTOR_EDIT_PREFIX and the
+ * edit's id, where the verdict guard and the console find it. The rule is about the
+ * director's authority, not craft, so the parked detective reads it too (the
+ * integrator's ruling), with a criterion of its own in the example. '' with no edits.
+ *
+ * @param {Object[]|undefined} edits - judgedEdits
+ * @param {'outline'|'article'} phase
+ * @param {string} theme
+ * @returns {string}
+ */
+function renderJudgeDirectorEdits(edits, phase, theme) {
+  const list = Array.isArray(edits) ? edits : [];
+  if (list.length === 0) return '';
+  const output = phase === 'outline' ? 'the outline above' : 'the content bundle above';
+  const example = `${DIRECTOR_EDIT_PREFIX}E1: ${theme === 'detective' ? 'evidenceIntegration' : 'T1'}: <the concern>`;
+  return `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
+Each edit below is text the director wrote into ${output}, or cut from it (marked cut). An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${example}.
+
+${formatEditLines(list)}`;
+}
+
+/**
  * A journalist judge's craft reference: its writer's craft files (loadRuleSet), for
  * the user prompt after the material it judges (the placement ruling). A craft finding
  * is should-consider; the system prompt says where it goes.
@@ -1622,10 +1732,14 @@ Check the outline's momentum against the craft reference:
  *   for the bundle under review, as createEvaluator computed it this pass. The
  *   state's `_articleFactCheck` is not read: before this evaluation writes it, it
  *   belongs to the previous bundle.
+ * @param {Object[]} [options.directorEdits] - outline and article: the director's edits
+ *   the judged output carries (judgedEdits; F1), printed right after that output
  * @returns {string} User prompt
  */
 function buildEvaluationUserPrompt(phase, state, options = {}) {
   const journalist = (state.theme || 'journalist') !== 'detective';
+  const directorEditsSection = phase === 'arcs' ? '' : renderJudgeDirectorEdits(options.directorEdits, phase, state.theme || 'journalist');
+  const afterJudged = directorEditsSection ? `${directorEditsSection}\n\n` : '';
   switch (phase) {
     case 'arcs': {
       // Provide roster for rosterCoverage evaluation
@@ -1785,7 +1899,7 @@ ${JOURNALIST_MOMENTUM_EVALUATION}`
 OUTLINE:
 ${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
 
-SELECTED ARCS (with interweaving metadata):
+${afterJudged}SELECTED ARCS (with interweaving metadata):
 ${JSON.stringify(selectedArcsWithInterweaving, null, 2)}
 
 ${interweavingSection}${renderJudgePhotos(state)}
@@ -1824,7 +1938,7 @@ The content bundle below holds only the fields the published page prints.
 CONTENT BUNDLE:
 ${JSON.stringify(printedBundle(state.contentBundle, state.shellAccounts), null, 2)}
 
-OUTLINE:
+${afterJudged}OUTLINE:
 ${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
 
 ${renderJudgeFactCheck(options.factCheck || null)}
@@ -1854,7 +1968,7 @@ ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })
 CONTENT BUNDLE:
 ${JSON.stringify(withoutWriterQuestions(state.contentBundle || {}), null, 2)}
 
-OUTLINE:
+${afterJudged}OUTLINE:
 ${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
 
 ${renderJudgeFactCheck(options.factCheck || null)}
@@ -2084,7 +2198,9 @@ function createEvaluator(phase, options = {}) {
             phase: 'article',
             passed: false,
             structuralIssues: factCheck.structuralIssues,
-            advisoryWarnings: factCheck.advisoryWarnings,
+            // F1: a concern about the director's edits is for the director; the rework
+            // reads every other advisory.
+            advisoryWarnings: factCheck.advisoryWarnings.filter(forTheRework),
             // Each issue string already names the card/tokenId/name and says what
             // to do; buildRevisionContext prints them verbatim to the reviser.
             feedback: factCheck.structuralIssues.join('\n')
@@ -2097,6 +2213,10 @@ function createEvaluator(phase, options = {}) {
 
     const sdk = getSdkClient(config, `evaluate-${phase}`);
 
+    // F1 (spec 2026-10-02 section 7): the director's edits the judged output carries,
+    // one list for the judge's prompt and the verdict guard below.
+    const directorEdits = judgedEdits(phase, state);
+
     try {
       // The prompt is built inside the try (final fix wave): since 2.4 the build
       // creates a PromptBuilder and a ThemeLoader and calls outlineWriterInputs /
@@ -2105,7 +2225,7 @@ function createEvaluator(phase, options = {}) {
       const systemPrompt = buildEvaluationSystemPrompt(phase, criteria, theme, { sessionConfig: state.sessionConfig || null });
       // Brief 2.4: the article judge reads the fact check's result for THIS bundle
       // (computed above), never the state's _articleFactCheck from the previous one.
-      const prompt = buildEvaluationUserPrompt(phase, state, { factCheck });
+      const prompt = buildEvaluationUserPrompt(phase, state, { factCheck, directorEdits });
       const jsonSchema = EVALUATION_JSON_SCHEMA;
 
       // SDK returns parsed object directly when jsonSchema is provided
@@ -2131,13 +2251,29 @@ function createEvaluator(phase, options = {}) {
       // reaches the rework and the evaluation bar under its rule ids: the judge's own
       // sentence when it wrote one under them, else its criterion notes and fix.
       const failedTruth = failedTruthCriteria(evaluation, criteria);
-      const judgeStructuralIssues = [
-        ...(evaluation.structuralIssues || []),
-        ...truthIssueLines(failedTruth, evaluation.structuralIssues || [])
-      ];
-      const isReady = failedTruth.length > 0 ? false : judgeReady;
+      // F1 (spec 2026-10-02 section 7), the verdict guard: an issue about the director's
+      // text moves to the concerns (guardDirectorEdits), and a truth criterion holds the
+      // output only while an issue under its rules is still structural or its notes
+      // quote the writer's text. When every structural issue moved and no truth
+      // criterion holds, the output is ready. With no edits, this is the rule above.
+      const guard = guardDirectorEdits({
+        issues: [
+          ...(evaluation.structuralIssues || []),
+          ...truthIssueLines(failedTruth, evaluation.structuralIssues || [])
+        ],
+        failedTruth,
+        edits: directorEdits,
+        output: judgedOutput(phase, state)
+      });
+      const judgeStructuralIssues = guard.kept;
+      const isReady = guard.holding.length > 0
+        ? false
+        : (guard.moved.length > 0 && guard.kept.length === 0 ? true : judgeReady);
       if (failedTruth.length > 0) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Truth criteria failed: ${failedTruth.map(f => f.key).join(', ')}`);
+      }
+      if (guard.moved.length > 0) {
+        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Findings on the director's edits, moved to the concerns: ${guard.moved.length}`);
       }
       // A truth criterion the judge left out of its scores is not scored: logged by
       // name, never a hold on the output.
@@ -2152,9 +2288,10 @@ function createEvaluator(phase, options = {}) {
         timestamp: new Date().toISOString(),
         ready: isReady,
         overallScore: evaluation.overallScore,
-        // Commit 8.15: Separate structural issues from advisory warnings
+        // Commit 8.15: Separate structural issues from advisory warnings. F1: the
+        // findings the guard moved follow the judge's own advisories, for the stop.
         structuralIssues: judgeStructuralIssues,
-        advisoryWarnings: evaluation.advisoryWarnings || [],
+        advisoryWarnings: [...(evaluation.advisoryWarnings || []), ...guard.moved],
         issues: evaluation.issues || judgeStructuralIssues,  // Backward compat
         confidence: evaluation.confidence || 'medium',
         revisionNumber: currentRevisions
@@ -2187,10 +2324,12 @@ function createEvaluator(phase, options = {}) {
           ...judgeStructuralIssues,
           ...factCheckIssues
         ],
+        // F1: the concerns about the director's edits are the director's (the history
+        // entry and _articleFactCheck carry them to the stop); the rework reads the rest.
         advisoryWarnings: [
           ...(evaluation.advisoryWarnings || []),
           ...((factCheck && factCheck.advisoryWarnings) || [])
-        ],
+        ].filter(forTheRework),
         issues: evaluation.issues,
         criteriaScores: evaluation.criteriaScores,
         confidence: evaluation.confidence || 'medium',
@@ -2443,6 +2582,10 @@ module.exports = {
     TRUTH_MATERIAL,
     printedBundle,
     buildFactCheckArgs,
+    // F1: the director's edits at the judges (scripts/lib/render-calls.js repeats judgedEdits)
+    judgedEdits,
+    renderJudgeDirectorEdits,
+    guardDirectorEdits,
     getNpcDescriptions,
     getSdkClient,
     buildEvaluationSystemPrompt,
