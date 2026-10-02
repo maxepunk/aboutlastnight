@@ -35,7 +35,7 @@ From `data/<session-id>/`:
 - `analysis/arc-analysis.json`: the arcs and `userSelections`, with the hero photo;
 - `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, and the photos;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
-- on a rework, also `output/content-bundle.json` and `output/article-metadata.json`, the version the rework starts from, and the validator's findings when the rework answers them.
+- on a rework, also `output/content-bundle.json` and `output/article-metadata.json`, the version the rework starts from, and, when the validator set the rework off, its must-fix findings.
 
 And `lib/schemas/content-bundle.schema.json`, the bundle's shape.
 
@@ -63,7 +63,9 @@ Write `output/content-bundle.json` with the fields the page prints. Every object
 
 The bundle leaves out the fields nothing prints: `photos`, `pullQuotes` and `voice_self_check`; a sidebar entry's `owner`, `placement` and `content`; and the `characters` of a photo or of the hero image.
 
-On a rework, the latest send-back note for the article, or the validator's findings, decide how much of the previous version you keep.
+On a rework, start from the previous version. What set the rework off sets its scope:
+- the director's send-back: the latest send-back note for the article is the task, and it decides how much of the previous version you keep;
+- the validator's must-fix findings: fix each finding, and keep every other line word for word. Those lines passed the check that ran before this rework, and in past reworks the new errors came from lines rewritten with no finding behind them.
 
 Then render the page, from `reports/`:
 

@@ -110,7 +110,7 @@ Start `journalist-article-generator`. It writes the bundle and renders `output/a
 
 ### 11. Check the article
 
-Start `journalist-article-validator`. When it returns must-fix findings, show them and ask the director whether to send them back to the article generator as a rework or to go on to the stop. Check every rework again.
+Start `journalist-article-validator`. When its `mustFix` list holds findings, show them and ask the director whether to send them back to the article generator as a rework or to go on to the stop. That rework gets the `mustFix` list alone: the `shouldConsider` list is the editor's notes for the director, shown at step 12. Check every rework again.
 
 ### 12. Stop: the article, and publish
 
