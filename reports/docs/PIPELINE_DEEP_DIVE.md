@@ -94,7 +94,7 @@ Each player discovers their character's memories (tokens) and finds paper eviden
 ### 2. The Choice Point
 For each memory token, players choose:
 - **EXPOSE**: Turn memory over to Nova (the journalist) - makes it public, everyone can see it
-- **BURY**: Sell memory to Blake/Valet (the Black Market) - hide it for profit via shell accounts (content hidden, transaction visible)
+- **BURY**: Sell a memory to Blake or the Valet to be erased; the payment goes to an account the seller names, and the ledger shows the sale, never the memory (see `world.md`)
 
 ### 3. Collective Negotiation
 Players discuss, share (or withhold), and negotiate based on what they've individually discovered. Social dynamics emerge:
