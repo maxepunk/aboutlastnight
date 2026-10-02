@@ -545,9 +545,11 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     expect(resume).toEqual({ approved: false, feedback: 'Tighten the lede' });
     expect(stateUpdates.outline).toEqual(edits);
     expect(stateUpdates._outlineFeedback).toBe('Tighten the lede');
+    // F1: the edits stand by id at their stop (lib/hand-edit-diff.js standingAfterSendBack).
     expect(stateUpdates._outlineHandEdits).toEqual({
       kind: 'outline',
-      sections: [{ key: 'lede', changes: [{ path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }] }]
+      issued: 1,
+      edits: [{ id: 'E1', scope: 'lede', path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }]
     });
     expect(stateUpdates._outlineHandEditReport).toBeNull();
   });
@@ -569,7 +571,8 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     expect(error).toBeNull();
     expect(stateUpdates._outlineHandEdits).toEqual({
       kind: 'outline',
-      sections: [{ key: 'lede', changes: [{ path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }] }]
+      issued: 1,
+      edits: [{ id: 'E1', scope: 'lede', path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }]
     });
     expect(before.thePlayers.buried).toEqual(['the silent partner']);   // the stored outline is not changed
   });
@@ -637,7 +640,7 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     expect(error).toBeNull();
     expect(stateUpdates.contentBundle).toEqual(edits);
     expect(stateUpdates._articleHandEdits.kind).toBe('bundle');
-    expect(stateUpdates._articleHandEdits.scopes.map((s) => s.key)).toEqual(['headline']);
+    expect(stateUpdates._articleHandEdits.edits.map((e) => [e.id, e.scope])).toEqual([['E1', 'headline']]);
     expect(stateUpdates._articleHandEditReport).toBeNull();
   });
 
@@ -657,6 +660,104 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     const { stateUpdates } = buildResumePayload({ article: false, articleFeedback: 'Rework it' }, { contentBundle: bundleFixture() });
     expect(stateUpdates._articleHandEdits).toBeNull();
     expect(stateUpdates._articleHandEditReport).toBeNull();
+  });
+});
+
+// F1 (spec 2026-10-02 section 7): the director's edits stand at their stop across every
+// send-back, by id. An earlier edit stands while the version the stop showed carries
+// its text (a cut, while the text it removed stays absent); an edit a rework changed,
+// which the director saw and left, drops. The new diff joins with the next ids.
+describe('the director\'s edits stand across send-backs (F1)', () => {
+  const bundleFixture = () => JSON.parse(JSON.stringify(require('../fixtures/content-bundles/valid-journalist.json')));
+  const INTRO = 'Three months of investigation have revealed a pattern of financial irregularities that raise serious questions about how Dr. James Chen managed his company\'s research funding.';
+  const REWRITE = 'Three months of reporting found the money moving through shells, and Dr. Chen signing for it.';
+
+  /** Round 1: the director rewrites the second intro paragraph and cuts the conclusion's one paragraph. */
+  function roundOne() {
+    const shown = bundleFixture();
+    const edits = bundleFixture();
+    edits.sections[0].content[1].text = REWRITE;
+    const cut = edits.sections[3].content.splice(0, 1)[0];
+    const { stateUpdates, error } = buildResumePayload(
+      { article: false, articleFeedback: 'Move the photos.', articleEdits: edits },
+      { contentBundle: shown }
+    );
+    expect(error).toBeNull();
+    return { standing: stateUpdates._articleHandEdits, edited: edits, cut };
+  }
+
+  test('round 1 numbers the edits E1, E2 with their scopes', () => {
+    const { standing, cut } = roundOne();
+    expect(standing.issued).toBe(2);
+    expect(standing.edits.map((e) => [e.id, e.scope, e.after === null])).toEqual([['E1', 'section:intro', false], ['E2', 'section:conclusion', true]]);
+    expect(standing.edits[1].before).toEqual(cut);
+  });
+
+  test('a send-back without edits keeps an earlier edit whose text the stop showed', () => {
+    const { standing, edited } = roundOne();
+    const shown = JSON.parse(JSON.stringify(edited));   // the rework kept both edits
+    const { stateUpdates } = buildResumePayload({ article: false, articleFeedback: 'Tighten the money section.' }, { contentBundle: shown, _articleHandEdits: standing });
+    expect(stateUpdates._articleHandEdits).toEqual(standing);
+    expect(stateUpdates._articleHandEditReport).toBeNull();
+    expect(stateUpdates.contentBundle).toBeUndefined();
+  });
+
+  test('an edit the shown version changed drops; a cut whose text stayed out stands', () => {
+    const { standing, edited } = roundOne();
+    const shown = JSON.parse(JSON.stringify(edited));
+    shown.sections[0].content[1].text = INTRO;   // the rework put the writer's paragraph back
+    const { stateUpdates } = buildResumePayload({ article: false, articleFeedback: 'Again.' }, { contentBundle: shown, _articleHandEdits: standing });
+    expect(stateUpdates._articleHandEdits.edits.map((e) => e.id)).toEqual(['E2']);
+  });
+
+  test('a cut whose text came back drops', () => {
+    const { standing, edited, cut } = roundOne();
+    const shown = JSON.parse(JSON.stringify(edited));
+    shown.sections[2].content.push(cut);
+    const { stateUpdates } = buildResumePayload({ article: false, articleFeedback: 'Again.' }, { contentBundle: shown, _articleHandEdits: standing });
+    expect(stateUpdates._articleHandEdits.edits.map((e) => e.id)).toEqual(['E1']);
+  });
+
+  test('ids are stable across rounds; the new diff takes the next number', () => {
+    const { standing, edited } = roundOne();
+    const sentBack = JSON.parse(JSON.stringify(edited));
+    sentBack.headline.main = 'Nova Labs Money Ran Through Three Shells';
+    const { stateUpdates, error } = buildResumePayload(
+      { article: false, articleFeedback: 'Sharper headline.', articleEdits: sentBack },
+      { contentBundle: JSON.parse(JSON.stringify(edited)), _articleHandEdits: standing }
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates._articleHandEdits.edits.map((e) => [e.id, e.path])).toEqual([
+      ['E1', 'sections[#intro].content[1]'], ['E2', 'sections[#conclusion].content[-]'], ['E3', 'headline.main']
+    ]);
+    expect(stateUpdates._articleHandEdits.issued).toBe(3);
+  });
+
+  test('the outline\'s edits stand the same way', () => {
+    const shown = validJournalistOutline();
+    const edits = validJournalistOutline();
+    edits.closing.arcResolutions[0].resolution = 'The ledger does not settle it.';
+    const first = buildResumePayload({ outline: false, outlineFeedback: 'x', outlineEdits: edits }, { outline: shown });
+    const standing = first.stateUpdates._outlineHandEdits;
+    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'closing.arcResolutions']]);
+    const second = buildResumePayload({ outline: false, outlineFeedback: 'y' }, { outline: edits, _outlineHandEdits: standing });
+    expect(second.stateUpdates._outlineHandEdits).toEqual(standing);
+  });
+
+  test('approve and a rollback clear the standing edits', async () => {
+    const { standing, edited } = roundOne();
+    expect(standing.edits.map((e) => e.id)).toEqual(['E1', 'E2']);
+    let checkpointArticle;
+    let buildRollbackState;
+    jest.isolateModules(() => {
+      jest.doMock('../../lib/workflow/checkpoint-helpers', () => require('../mocks/checkpoint-helpers.mock'));
+      ({ _testing: { checkpointArticle } } = require('../../lib/workflow/nodes/checkpoint-nodes'));
+      ({ buildRollbackState } = require('../../lib/api-helpers'));
+    });
+    jest.dontMock('../../lib/workflow/checkpoint-helpers');
+    const approved = await checkpointArticle({ contentBundle: edited, evaluationHistory: [], _articleHandEdits: standing, _articleHandEditReport: { checked: ['E1'], changed: [] } }, {});
+    expect(approved).toMatchObject({ articleApproved: true, _articleHandEdits: null, _articleHandEditReport: null });
+    expect(buildRollbackState('article')).toMatchObject({ _articleHandEdits: null, _articleHandEditReport: null });
   });
 });
 

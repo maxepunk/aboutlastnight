@@ -30,7 +30,7 @@ const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
-const { diffOutline, diffBundle, isEmpty: isEmptyDiff, scopeKeys } = require('./lib/hand-edit-diff');
+const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditReportOf } = require('./lib/hand-edit-diff');
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // The outline editors' own list of the fields phase 3 retired (BU3), so the server
@@ -421,7 +421,10 @@ async function getCheckpointData(checkpointType, state) {
                 humanRevisionCount: state.humanOutlineRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.OUTLINE,
                 previousFeedback: state._outlineFeedback || null,
-                handEditReport: state._outlineHandEditReport || null,
+                // F1: each of the director's edits a pass of this round changed, with the
+                // director's text, what it became, the pass and the reason (one report
+                // shape, lib/hand-edit-diff.js reportAfterPass; one written before F1 is none).
+                handEditReport: handEditReportOf(state._outlineHandEditReport),
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 2.7: the automatic passes of this round, with what each changed.
                 trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1),
@@ -442,7 +445,7 @@ async function getCheckpointData(checkpointType, state) {
                 humanRevisionCount: state.humanArticleRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARTICLE,
                 previousFeedback: state._articleFeedback || null,
-                handEditReport: state._articleHandEditReport || null,
+                handEditReport: handEditReportOf(state._articleHandEditReport),   // F1, as at the outline stop
                 directorGateNotes: state.directorGateNotes || [],
                 outlineThesis: outlineThesisOf(state),
                 // Brief 2.7: the automatic passes of this round, with what each changed.
@@ -695,21 +698,25 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         resume.feedback = approvals.outlineFeedback.trim();
         stateUpdates._outlineFeedback = resume.feedback;
         appendGateNote(stateUpdates, currentState, 'outline', resume.feedback, 'rejection');
-        // Every reject resets both steering fields (C3): a second reject after a
-        // rework must not carry the previous round's diff or report.
-        stateUpdates._outlineHandEdits = null;
+        // F1 (spec 2026-10-02 section 7): the director's edits stand at this stop across
+        // every send-back, by id. An earlier edit stands while the version the stop
+        // showed (and the one sent back) carries its text, a cut while its text stays
+        // out; this send-back's diff joins them with the next ids. The survival check
+        // replaces the reset that kept a stale path from reaching the rework (steering
+        // spec C3). An outline written before phase 3 still holds thePlayers.buried and
+        // whatsMissing.buriedItems, which the editors drop before sending: the diff
+        // starts from the outline without them, so it records no removal the director
+        // never made (fix 3.2b, finding 5).
+        const shownOutline = dropRetiredOutlineFields(currentState.outline);
+        stateUpdates._outlineHandEdits = standingAfterSendBack(currentState._outlineHandEdits, shownOutline,
+            hasEdits ? approvals.outlineEdits : shownOutline, 'outline');
+        // The report holds one round: a send back opens a new one.
         stateUpdates._outlineHandEditReport = null;
         // Brief 2.7: a send back opens a new round, and the trace shows only the
         // current round's automatic passes.
         stateUpdates._outlineTrace = null;
         if (hasEdits) {
             stateUpdates.outline = approvals.outlineEdits;   // incrementOutlineRevision hands it to the reviser
-            // An outline written before phase 3 still holds thePlayers.buried and
-            // whatsMissing.buriedItems, which the editors drop before sending: the
-            // diff starts from the outline without them, so it records no removal
-            // the director never made (fix 3.2b, finding 5).
-            const diff = diffOutline(dropRetiredOutlineFields(currentState.outline), approvals.outlineEdits);
-            stateUpdates._outlineHandEdits = isEmptyDiff(diff) ? null : diff;
         }
     }
 
@@ -743,13 +750,13 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         resume.feedback = approvals.articleFeedback.trim();
         stateUpdates._articleFeedback = resume.feedback;
         appendGateNote(stateUpdates, currentState, 'article', resume.feedback, 'rejection');
-        stateUpdates._articleHandEdits = null;
+        // F1: as at the outline stop, the director's edits stand across every send-back.
+        stateUpdates._articleHandEdits = standingAfterSendBack(currentState._articleHandEdits, currentState.contentBundle,
+            hasEdits ? approvals.articleEdits : currentState.contentBundle, 'bundle');
         stateUpdates._articleHandEditReport = null;
         stateUpdates._articleTrace = null;   // brief 2.7: a new round starts an empty trace
         if (hasEdits) {
             stateUpdates.contentBundle = approvals.articleEdits;   // incrementArticleRevision hands it to the reviser
-            const diff = diffBundle(currentState.contentBundle, approvals.articleEdits);
-            stateUpdates._articleHandEdits = isEmptyDiff(diff) ? null : diff;
         }
     }
 

@@ -10,7 +10,7 @@
 const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency, pairRepliesWithBatch } = require('../../evidence-preprocessor');
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
-const { isEmpty: isEmptyDiff, formatHandEditsBlock } = require('../../hand-edit-diff');
+const { carriedEdits, formatEditLines, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
 const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -886,7 +886,9 @@ function codeCheckOf(validationResults) {
  *   skip branches return no record at all, leaving whatever the channel held.)
  * @param {Object|Array} options.previousOutput - The full previous output to improve
  * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
- * @param {Object|null} [options.handEdits] - Hand-edit diff from lib/hand-edit-diff.js (rendered as <HAND_EDITS>)
+ * @param {Object|Array|null} [options.handEdits] - the director's standing edits at this stop
+ *   (lib/hand-edit-diff.js: the state channel, a list of edits, or a diff stored before the
+ *   edits had ids); those `previousOutput` carries are rendered as <HAND_EDITS> (F1)
  * @param {number} [options.round] - the director's round a send back opens (the stop's
  *   "Round N"); named in the banner of a send-back rework (brief 2.3)
  * @param {string} [options.theme='journalist'] - the session's theme. The journalist's
@@ -1114,18 +1116,27 @@ ISSUES TO ADDRESS:
 ${issuesList}${shouldConsiderBlock}${feedbackBlock}`
     : '(no evaluator feedback for this phase)';
 
-  // Spec 2026-09-19 §4.3: what the director changed by hand before sending this
-  // back. Placed after HUMAN FEEDBACK and before the instructions, so the
-  // instructions cover the edits and "feedback above" is literally true. Present on
-  // EVERY pass of the round, not only the first (C3).
-  const handEditsBlock = (handEdits && !isEmptyDiff(handEdits))
+  // Spec 2026-09-19 §4.3: the director's edits, after HUMAN FEEDBACK and before the
+  // instructions. Present on EVERY pass of the round, not only the first.
+  //
+  // F1 (spec 2026-10-02 section 7): the edits stand at the stop by id, and the block
+  // lists those the version this rework starts from carries, each with its section and
+  // the director's text. Its rule depends on the kind of rework. An automatic pass fixes
+  // the writer's text, so every edit stays as written. A send-back may change an edit
+  // only where the structural change the note asks for means it no longer fits, and
+  // returns each one it changed, with why (CHANGED_EDITS_KEY, which the rework call's
+  // schema carries; ai-nodes.js). The old block's line that the evaluator's notes
+  // predate the edits went: the judge now reads them (evaluator-nodes.js).
+  const standingEdits = carriedEdits(handEdits, previousOutput);
+  const handEditsRule = humanFeedback
+    ? `An edit is the final word on its text, so each edit stays exactly as written and each cut stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
+    : 'This automatic pass fixes the writer\'s text. An edit is the final word on its text, so each edit stays exactly as written and each cut stays out.';
+  const handEditsBlock = standingEdits.length > 0
     ? `<HAND_EDITS>
-The director changed these parts by hand before sending this back. They are already
-in the previous version below. Keep them exactly as they are unless the director's
-feedback above asks to change them. The evaluator's notes above were written before
-these edits.
+The director's edits, by id: text the director wrote into the previous version, or cut from it (marked cut).
+${handEditsRule}
 
-${formatHandEditsBlock(handEdits)}
+${formatEditLines(standingEdits)}
 </HAND_EDITS>
 
 `

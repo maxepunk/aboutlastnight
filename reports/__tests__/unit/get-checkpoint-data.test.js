@@ -193,9 +193,17 @@ describe('getCheckpointData — the ledger at the input review (phase 3, brief 3
 describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
   const NOTES = [{ gate: 'outline', kind: 'rejection', round: 1, text: 'x', at: 't' }];
 
+  // F1: the report names each of the director's edits a pass changed, by id, with the
+  // director's text, what it became, the pass and the reason (lib/hand-edit-diff.js
+  // reportAfterPass); checked lists the ids the round's passes checked.
+  const CHANGED = {
+    id: 'E2', scope: 'section:closing', cut: false, director: 'Alex wanted Marcus out.', became: 'Alex may yet pay.',
+    pass: 'send-back', automatic: false, reason: 'The note asked for an open ending.'
+  };
+
   it('outline carries handEditReport and directorGateNotes', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], _outlineHandEditReport: { checked: ['lede'], changed: [] }, directorGateNotes: NOTES });
-    expect(data.handEditReport).toEqual({ checked: ['lede'], changed: [] });
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], _outlineHandEditReport: { checked: ['E1'], changed: [] }, directorGateNotes: NOTES });
+    expect(data.handEditReport).toEqual({ checked: ['E1'], changed: [] });
     expect(data.directorGateNotes).toEqual(NOTES);
   });
 
@@ -207,10 +215,17 @@ describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
 
   it('article carries handEditReport, directorGateNotes and the journalist outlineThesis', async () => {
     const lede = { hook: 'H', keyTension: 'T', primaryArc: 'A', selectedEvidence: ['e'] };
-    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, outline: { lede }, _articleHandEditReport: { checked: ['headline'], changed: ['headline'] }, directorGateNotes: NOTES });
-    expect(data.handEditReport).toEqual({ checked: ['headline'], changed: ['headline'] });
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, outline: { lede }, _articleHandEditReport: { checked: ['E1', 'E2'], changed: [CHANGED] }, directorGateNotes: NOTES });
+    expect(data.handEditReport).toEqual({ checked: ['E1', 'E2'], changed: [CHANGED] });
     expect(data.directorGateNotes).toEqual(NOTES);
     expect(data.outlineThesis).toEqual({ hook: 'H', keyTension: 'T', primaryArc: 'A' });
+  });
+
+  it('a report written before F1 (scope keys, no ids) reaches the stop as none', async () => {
+    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, _articleHandEditReport: { checked: ['headline'], changed: ['headline'] } });
+    expect(article.handEditReport).toBeNull();
+    const outline = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], _outlineHandEditReport: { checked: ['lede'], changed: [] } });
+    expect(outline.handEditReport).toBeNull();
   });
 
   it('article outlineThesis is null for the detective theme and when the outline has no lede', async () => {

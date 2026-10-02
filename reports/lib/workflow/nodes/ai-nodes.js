@@ -30,7 +30,7 @@ const {
   THEME_SYSTEM_PROMPTS,
   THEME_CONSTRAINTS
 } = require('../../prompt-builder');
-const { scopeKeys, changedScopes } = require('../../hand-edit-diff');
+const { carriedEdits, reportAfterPass, SEND_BACK_PASS, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
 const outlineSchema = require('../../schemas/outline.schema.json');
 const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
@@ -1236,6 +1236,63 @@ async function generateOutline(state, config) {
 // 4. Makes targeted fixes, returns new outline, clears _previousOutline
 
 /**
+ * The list a send-back's rework returns of the director's edits it changed (F1, spec
+ * 2026-10-02 section 7): each by its id in <HAND_EDITS>, with one sentence on why. The
+ * <HAND_EDITS> block asks for it by this key (node-helpers.js).
+ */
+const CHANGED_EDITS_PROPERTY = {
+  type: 'array',
+  description: "Each of the director's edits in HAND_EDITS that this rework changed or removed, and each cut it brought back, with one sentence on why the structural change the director's note asks for meant it no longer fit. Empty when every edit stays as written and every cut stays out.",
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'reason'],
+    properties: {
+      id: { type: 'string', description: "The edit's id in HAND_EDITS, such as E3" },
+      reason: { type: 'string', description: 'One sentence on why the edit no longer fit' }
+    }
+  }
+};
+
+/** The rework call's schemas, built once per stored schema. */
+const reworkSchemas = new WeakMap();
+
+/**
+ * The rework call's schema on a send-back that carries the director's edits: the stored
+ * schema with the required changed-edits list added, built in code so lib/schemas/*.json
+ * stay as they are (F1). Every other rework call takes the stored schema itself.
+ *
+ * @param {Object} schema - the writer's stored schema (the theme's)
+ * @returns {Object}
+ */
+function reworkSchemaWithChangedEdits(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  if (!reworkSchemas.has(schema)) {
+    const copy = JSON.parse(JSON.stringify(schema));
+    copy.properties = { ...(copy.properties || {}), [CHANGED_EDITS_KEY]: JSON.parse(JSON.stringify(CHANGED_EDITS_PROPERTY)) };
+    copy.required = [...(Array.isArray(copy.required) ? copy.required : []), CHANGED_EDITS_KEY];
+    reworkSchemas.set(schema, copy);
+  }
+  return reworkSchemas.get(schema);
+}
+
+/**
+ * The rework's output without its changed-edits list, and the list (F1). The node
+ * stores only the output, so no later prompt, check, console view, template or approved
+ * bundle meets the list; its reasons reach the stop through the report.
+ *
+ * @param {*} result - what the rework call returned
+ * @returns {{output: *, reasons: Array}}
+ */
+function takeChangedEdits(result) {
+  if (!result || typeof result !== 'object' || Array.isArray(result) || !(CHANGED_EDITS_KEY in result)) {
+    return { output: result, reasons: [] };
+  }
+  const { [CHANGED_EDITS_KEY]: list, ...output } = result;
+  return { output, reasons: Array.isArray(list) ? list : [] };
+}
+
+/**
  * Revise outline with previous output context for targeted fixes
  *
  * Called after incrementOutlineRevision when evaluator says outline needs work.
@@ -1273,9 +1330,11 @@ async function reviseOutline(state, config) {
     };
   }
 
-  // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
-  // round. This node never clears them (C3) — the gate does, on approve.
-  const handEdits = state._outlineHandEdits || null;
+  // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round.
+  // This node never clears them; the gate does, on approve. F1 (spec 2026-10-02
+  // section 7): the edits the version this pass starts from carries, by id.
+  const handEdits = carriedEdits(state._outlineHandEdits, previousOutline);
+  const sendBack = Boolean(state._outlineFeedback);
   const theme = config?.configurable?.theme || 'journalist';
 
   // Build revision context using centralized helper (DRY)
@@ -1311,14 +1370,16 @@ async function reviseOutline(state, config) {
     const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
     const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder, theme);
 
-    const result = await sdk({
+    // F1: a send-back that carries the director's edits returns the edits it changed,
+    // through a schema built from the stored one; the list is taken out before storing.
+    const { output: result, reasons } = takeChangedEdits(await sdk({
       prompt: revisionPrompt,
       systemPrompt,
       model: 'opus',  // Same as generateOutline
-      jsonSchema: activeOutlineSchema,
+      jsonSchema: sendBack && handEdits.length > 0 ? reworkSchemaWithChangedEdits(activeOutlineSchema) : activeOutlineSchema,
       disableTools: true,
       label: `Outline revision ${revisionCount}`
-    });
+    }));
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     const outlineTheme = config?.configurable?.theme || state?.theme || 'journalist';
@@ -1327,18 +1388,21 @@ async function reviseOutline(state, config) {
       : result?.theStory?.arcs?.length || 0;
     console.log(`[reviseOutline] Complete: ${arcCount} ${outlineTheme === 'detective' ? 'evidence groups' : 'arcs'} in ${duration}s`);
 
+    // Phase 3 (3.7; R5): only the director's note answers a question, so an automatic
+    // pass keeps every previous subject; the rework's question replaces the earlier
+    // ones of its kind and `about` (3.10).
+    const outline = withCarriedWriterQuestions(result || {}, previousOutline, { afterDirectorNote: Boolean(state._outlineFeedback) });
     return {
-      // Phase 3 (3.7; R5): only the director's note answers a question, so an automatic
-      // pass keeps every previous subject; the rework's question replaces the earlier
-      // ones of its kind and `about` (3.10).
-      outline: withCarriedWriterQuestions(result || {}, previousOutline, { afterDirectorNote: Boolean(state._outlineFeedback) }),
+      outline,
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
-      // Spec §4.4 (C3): verify on EVERY pass and rewrite the report; never clear
-      // _outlineHandEdits here — the checkpoint clears it on approve, the server on reject.
-      _outlineHandEditReport: handEdits
-        ? { checked: scopeKeys(handEdits), changed: changedScopes(handEdits, result || {}) }
-        : null,
+      // Spec §4.4: verify on EVERY pass. F1: the report adds this pass's changes to the
+      // round's (the server resets it at a send-back); the edits stay, for the gate to
+      // clear on approve.
+      _outlineHandEditReport: reportAfterPass(state._outlineHandEditReport, {
+        edits: handEdits, before: previousOutline, after: outline,
+        pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
+      }),
       currentPhase: PHASES.GENERATE_OUTLINE
     };
 
@@ -1783,9 +1847,11 @@ async function reviseContentBundle(state, config) {
     };
   }
 
-  // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
-  // round. This node never clears them (C3) — the gate does, on approve.
-  const handEdits = state._articleHandEdits || null;
+  // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round.
+  // This node never clears them; the gate does, on approve. F1 (spec 2026-10-02
+  // section 7): the edits the version this pass starts from carries, by id.
+  const handEdits = carriedEdits(state._articleHandEdits, previousContentBundle);
+  const sendBack = Boolean(state._articleFeedback);
   const theme = config?.configurable?.theme || state?.theme || 'journalist';
 
   // Build revision context using centralized helper (DRY)
@@ -1818,15 +1884,18 @@ async function reviseContentBundle(state, config) {
     const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
     const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder, theme);
 
-    const revised = await sdk({
+    // Use full schema (Fix 3); the detective's leaves out the writer's questions (3.7, D13)
+    const writerSchema = theme === 'detective' ? schemaWithoutWriterQuestions(contentBundleSchema) : contentBundleSchema;
+    // F1: a send-back that carries the director's edits returns the edits it changed,
+    // through a schema built from the stored one; the list is taken out before storing.
+    const { output: revised, reasons } = takeChangedEdits(await sdk({
       prompt: revisionPrompt,
       systemPrompt,
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
-      // Use full schema (Fix 3); the detective's leaves out the writer's questions (3.7, D13)
-      jsonSchema: theme === 'detective' ? schemaWithoutWriterQuestions(contentBundleSchema) : contentBundleSchema,
+      jsonSchema: sendBack && handEdits.length > 0 ? reworkSchemaWithChangedEdits(writerSchema) : writerSchema,
       label: `Article revision ${revisionCount}`
-    });
+    }));
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseContentBundle] Complete in ${duration}s`);
@@ -1852,11 +1921,13 @@ async function reviseContentBundle(state, config) {
       },
       _previousContentBundle: null,  // Clear temporary field after use
       _articleFeedback: null,  // Clear human feedback after consumption
-      // Spec §4.4 (C3): verify on EVERY pass and rewrite the report; never clear
-      // _articleHandEdits here — the checkpoint clears it on approve, the server on reject.
-      _articleHandEditReport: handEdits
-        ? { checked: scopeKeys(handEdits), changed: changedScopes(handEdits, updatedBundle) }
-        : null,
+      // Spec §4.4: verify on EVERY pass. F1: the report adds this pass's changes to the
+      // round's (the server resets it at a send-back); the edits stay, for the gate to
+      // clear on approve.
+      _articleHandEditReport: reportAfterPass(state._articleHandEditReport, {
+        edits: handEdits, before: previousContentBundle, after: updatedBundle,
+        pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
+      }),
       currentPhase: PHASES.GENERATE_CONTENT
     };
 

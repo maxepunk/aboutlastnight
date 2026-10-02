@@ -141,135 +141,328 @@ describe('diffBundle', () => {
   });
 });
 
-describe('formatHandEditsBlock', () => {
-  test('empty diff → empty string', () => {
-    expect(D.formatHandEditsBlock(D.diffOutline({}, {}))).toBe('');
-    expect(D.formatHandEditsBlock(null)).toBe('');
+
+// ─── The director's edits are final (before phase 4, F1; spec section 7) ─────────
+
+const paragraph = (text) => ({ type: 'paragraph', text });
+
+const CLOSING_EDIT = 'Alex wanted Marcus out of the company, and the January demand says so.';
+const CUT_THEORY = 'The room also weighed whether Vic would replace Marcus, not kill him.';
+const SARAH_LINE = 'Sarah pointed the room at the baby mama, and the vote followed.';
+
+/** An article as the stop shows it: the writer's text throughout. */
+const articleAtStop = () => ({
+  metadata: { generatedAt: '1' },
+  headline: { main: 'The Room Voted', kicker: 'NovaNews', deck: 'Nine players, one verdict' },
+  sections: [
+    { id: 'lede', type: 'narrative', content: [paragraph('Alex had Blake pull up the scoreboard at the last minute.')] },
+    {
+      id: 'the-story', type: 'narrative', heading: 'The Story',
+      content: [paragraph('Mel built the first theory around the fight and the fraud.'), paragraph(CUT_THEORY), paragraph(SARAH_LINE)]
+    },
+    { id: 'closing', type: 'narrative', heading: 'Closing', content: [paragraph('Whether the verdict costs Alex anything is still open.')] }
+  ]
+});
+
+/** The director's version: the closing rewritten, the debated theory cut. */
+const directorsVersion = () => {
+  const a = articleAtStop();
+  a.sections[2].content[0] = paragraph(CLOSING_EDIT);
+  a.sections[1].content.splice(1, 1);
+  return a;
+};
+
+const roundOne = () => D.standingAfterSendBack(null, articleAtStop(), directorsVersion(), 'bundle');
+
+describe('standing edits (F1)', () => {
+  test('a send-back with edits gives each change an id, its scope and path, the text before and the director\'s text', () => {
+    expect(roundOne()).toEqual({
+      kind: 'bundle',
+      issued: 2,
+      edits: [
+        { id: 'E1', scope: 'section:the-story', path: 'sections[#the-story].content[-]', before: paragraph(CUT_THEORY), after: null },
+        { id: 'E2', scope: 'section:closing', path: 'sections[#closing].content[0]', before: paragraph('Whether the verdict costs Alex anything is still open.'), after: paragraph(CLOSING_EDIT) }
+      ]
+    });
   });
 
-  test('one line per change; before trimmed to 300, after to 1,500', () => {
-    const long = 'x'.repeat(2000);
-    const diff = D.diffOutline({ lede: { hook: long } }, { lede: { hook: long + 'y' } });
-    const block = D.formatHandEditsBlock(diff);
-    expect(block).toBe(`- lede.hook: was "${'x'.repeat(300)}…" -> now "${'x'.repeat(1500)}…"`);
+  test('an earlier round\'s edit stands after a send-back without edits when the stop showed its text', () => {
+    const shown = directorsVersion();
+    shown.sections[0].content.push({ type: 'photo', filename: 'p1.jpg', caption: 'The huddle' });   // the rework moved a photo
+    expect(D.standingAfterSendBack(roundOne(), shown, shown, 'bundle')).toEqual(roundOne());
   });
 
-  test('added and removed values are labelled', () => {
-    const diff = D.diffBundle(bundleBefore(), (() => { const a = bundleBefore(); a.sections[0].content.pop(); a.pullQuotes.push({ text: 'Q2' }); return a; })());
-    const block = D.formatHandEditsBlock(diff);
-    expect(block).toContain('- sections[#intro].content[-]: removed "');
-    expect(block).toContain('- pullQuotes[1]: added "');
+  test('an earlier edit drops when the version the stop showed changed it', () => {
+    const shown = directorsVersion();
+    shown.sections[2].content[0] = paragraph('Alex may yet pay for the verdict.');
+    const next = D.standingAfterSendBack(roundOne(), shown, shown, 'bundle');
+    expect(next.edits.map((e) => e.id)).toEqual(['E1']);
+    expect(next.issued).toBe(2);
   });
 
-  test('the whole block is capped at 12,000 characters with a trailing count', () => {
-    const before = {}; const after = {};
-    for (let i = 0; i < 200; i++) { before[`s${i}`] = { f: 'a'.repeat(200) }; after[`s${i}`] = { f: 'b'.repeat(200) }; }
-    const block = D.formatHandEditsBlock(D.diffOutline(before, after));
-    expect(block.length).toBeLessThanOrEqual(12000 + 60);
-    expect(block).toMatch(/\(… \d+ more changes not shown\)$/);
+  test('a cut stands while its text stays absent, and drops when the text came back', () => {
+    expect(D.standingAfterSendBack(roundOne(), directorsVersion(), directorsVersion(), 'bundle').edits.map((e) => e.id)).toEqual(['E1', 'E2']);
+    const back = directorsVersion();
+    back.sections[0].content.push(paragraph(CUT_THEORY));   // a rework put it back, in another section
+    expect(D.standingAfterSendBack(roundOne(), back, back, 'bundle').edits.map((e) => e.id)).toEqual(['E2']);
+  });
+
+  test('ids are stable across rounds, and a new edit takes the next number', () => {
+    const shown = directorsVersion();
+    shown.sections[2].content[0] = paragraph('Alex may yet pay for the verdict.');   // the rework changed E2
+    const sentBack = JSON.parse(JSON.stringify(shown));
+    sentBack.headline.main = 'Alex Reeves Pointed the Room at Jess Kane';
+    const two = D.standingAfterSendBack(roundOne(), shown, sentBack, 'bundle');
+    expect(two.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#the-story].content[-]'], ['E3', 'headline.main']]);
+    expect(two.issued).toBe(3);
+
+    const thirdSentBack = JSON.parse(JSON.stringify(sentBack));
+    thirdSentBack.headline.deck = 'The room named Alex, five votes to four';
+    const three = D.standingAfterSendBack(two, sentBack, thirdSentBack, 'bundle');
+    expect(three.edits.map((e) => e.id)).toEqual(['E1', 'E3', 'E4']);
+    expect(three.issued).toBe(4);
+  });
+
+  test('a director who rewrites their own edit replaces it: the old id drops and the new text takes the next one', () => {
+    const shown = directorsVersion();
+    const sentBack = directorsVersion();
+    sentBack.sections[2].content[0] = paragraph('Alex wanted Marcus out. The January demand is in writing.');
+    const next = D.standingAfterSendBack(roundOne(), shown, sentBack, 'bundle');
+    expect(next.edits.map((e) => [e.id, e.after ? e.after.text : null])).toEqual([['E1', null], ['E3', 'Alex wanted Marcus out. The January demand is in writing.']]);
+  });
+
+  test('the outline\'s edits stand the same way', () => {
+    const shown = outlineBefore();
+    const sentBack = outlineBefore(); sentBack.lede.hook = 'A sharper hook.';
+    const one = D.standingAfterSendBack(null, shown, sentBack, 'outline');
+    expect(one).toEqual({ kind: 'outline', issued: 1, edits: [{ id: 'E1', scope: 'lede', path: 'lede.hook', before: 'Old hook', after: 'A sharper hook.' }] });
+    expect(D.standingAfterSendBack(one, sentBack, sentBack, 'outline')).toEqual(one);
+  });
+
+  test('nothing standing and nothing issued is null; earlier ids keep the counter', () => {
+    expect(D.standingAfterSendBack(null, articleAtStop(), articleAtStop(), 'bundle')).toBeNull();
+    const shown = articleAtStop();   // the rework undid both: the closing is the writer's again and the theory is back
+    expect(D.standingAfterSendBack(roundOne(), shown, shown, 'bundle')).toEqual({ kind: 'bundle', issued: 2, edits: [] });
+  });
+
+  test('a diff stored before the edits had ids reads as standing edits, numbered in order', () => {
+    expect(D.standingEditsOf(D.diffBundle(articleAtStop(), directorsVersion()))).toEqual(roundOne());
+    expect(D.standingEditsOf(D.diffOutline({}, {}))).toBeNull();
+    expect(D.standingEditsOf(null)).toBeNull();
+    expect(D.standingEditsOf('nope')).toBeNull();
   });
 });
 
-describe('changedScopes', () => {
-  const edited = (() => { const a = outlineBefore(); a.lede.hook = 'New hook'; a.closing.finalQuestion = 'Q2'; return a; })();
-  const diff = D.diffOutline(outlineBefore(), edited);
+describe('carriedEdits (F1)', () => {
+  let standing;
+  beforeEach(() => { standing = roundOne(); });
 
-  test('kept edits → nothing changed', () => {
-    expect(D.changedScopes(diff, clone(edited))).toEqual([]);
+  test('the version the director sent back carries every edit', () => {
+    expect(D.carriedEdits(standing, directorsVersion()).map((e) => e.id)).toEqual(['E1', 'E2']);
   });
 
-  test('a reverted edit names its scope', () => {
-    const reverted = clone(edited); reverted.lede.hook = 'Old hook';
-    expect(D.changedScopes(diff, reverted)).toEqual(['lede']);
+  test('a block the rework moved to another section is still the director\'s', () => {
+    const moved = directorsVersion();
+    moved.sections[2].content = [];
+    moved.sections[0].content.push(paragraph(CLOSING_EDIT));
+    expect(D.carriedEdits(standing, moved).map((e) => e.id)).toEqual(['E1', 'E2']);
   });
 
-  test('partially kept: only the reverted scope is named', () => {
-    const partly = clone(edited); partly.closing.finalQuestion = 'Something else';
-    expect(D.changedScopes(diff, partly)).toEqual(['closing']);
+  test('an edit the rework changed, and a cut the rework brought back, are not carried', () => {
+    const changed = directorsVersion();
+    changed.sections[2].content[0] = paragraph('Alex may yet pay for the verdict.');
+    changed.headline.deck = CUT_THEORY;
+    expect(D.carriedEdits(standing, changed)).toEqual([]);
   });
 
-  test('works on a later pass: compares against the diff, not against a previous output', () => {
-    const revisedTwice = clone(edited); revisedTwice.lede.keyTension = 'the reviser changed an unedited field';
-    expect(D.changedScopes(diff, revisedTwice)).toEqual([]);
+  test('takes standing edits, a list of edits or a diff stored before the edits had ids', () => {
+    expect(D.carriedEdits(standing.edits, directorsVersion()).map((e) => e.id)).toEqual(['E1', 'E2']);
+    expect(D.carriedEdits(D.diffBundle(articleAtStop(), directorsVersion()), directorsVersion()).map((e) => e.id)).toEqual(['E1', 'E2']);
+    expect(D.carriedEdits(null, directorsVersion())).toEqual([]);
+    expect(D.carriedEdits(standing, null)).toEqual([]);
   });
 
-  test('removals are not checked; an added block that survives is not a change', () => {
-    const a = bundleBefore(); a.sections[0].content.pop(); a.pullQuotes.push({ text: 'Q2' });
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    expect(D.changedScopes(bundleDiff, clone(a))).toEqual([]);
-    const lostTheQuote = clone(a); lostTheQuote.pullQuotes.pop();
-    expect(D.changedScopes(bundleDiff, lostTheQuote)).toEqual(['pullQuotes']);
+  // The survival rules of the report before F1 (changedScopes), kept for the edits.
+  test('an outline field is carried while the version keeps the director\'s value', () => {
+    const sentBack = outlineBefore(); sentBack.lede.hook = 'New hook'; sentBack.closing.finalQuestion = 'Q2';
+    const outlineStanding = D.standingAfterSendBack(null, outlineBefore(), sentBack, 'outline');
+    expect(D.carriedEdits(outlineStanding, clone(sentBack)).map((e) => e.path)).toEqual(['lede.hook', 'closing.finalQuestion']);
+    const reverted = clone(sentBack); reverted.lede.hook = 'Old hook';
+    expect(D.carriedEdits(outlineStanding, reverted).map((e) => e.path)).toEqual(['closing.finalQuestion']);
+    const elsewhere = clone(sentBack); elsewhere.lede.keyTension = 'the rework changed an unedited field';
+    expect(D.carriedEdits(outlineStanding, elsewhere)).toHaveLength(2);
   });
 
-  test('a section edit is found by id even when the reviser reordered sections', () => {
-    const a = bundleBefore(); a.sections[0].heading = 'New H';
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    const reordered = clone(a); reordered.sections.unshift({ id: 'other', type: 'narrative', heading: 'X', content: [] });
-    expect(D.changedScopes(bundleDiff, reordered)).toEqual([]);
+  test('an edited block survives a block inserted before it, a trailing newline and an optional field the rework added', () => {
+    const sentBack = bundleBefore(); sentBack.sections[0].content[1].text = 'Second paragraph, rewritten.'; sentBack.pullQuotes[0].text = 'Q1 edited';
+    const s = D.standingAfterSendBack(null, bundleBefore(), sentBack, 'bundle');
+    const shifted = clone(sentBack);
+    shifted.sections[0].content.unshift(paragraph('A new opening the rework added.'));
+    shifted.sections[0].content[2].text = 'Second paragraph, rewritten.\n';
+    shifted.pullQuotes.unshift({ text: 'Q0 the rework added' });
+    shifted.pullQuotes[1].attribution = 'Nova';
+    expect(D.carriedEdits(s, shifted)).toHaveLength(2);
   });
 
-  test('an index-addressed edit survives the reviser inserting a block before it', () => {
-    const a = bundleBefore(); a.sections[0].content[1].text = 'Second paragraph, rewritten.';
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    expect(bundleDiff.scopes[0].changes[0].path).toBe('sections[#intro].content[1]');
-    const shifted = clone(a);
-    shifted.sections[0].content.unshift({ type: 'paragraph', text: 'A new opening the reviser added.' });
-    expect(D.changedScopes(bundleDiff, shifted)).toEqual([]);
+  test('a block whose director-set field the rework removed is not carried', () => {
+    const sentBack = bundleBefore();
+    sentBack.sections[0].content[1] = { type: 'quote', text: 'Second paragraph, rewritten.', attribution: 'Vic' };
+    const s = D.standingAfterSendBack(null, bundleBefore(), sentBack, 'bundle');
+    const stripped = clone(sentBack); delete stripped.sections[0].content[1].attribution;
+    expect(D.carriedEdits(s, stripped)).toEqual([]);
   });
 
-  test('an index-addressed edit the reviser REMOVED names its scope', () => {
-    const a = bundleBefore(); a.sections[0].content[1].text = 'Second paragraph, rewritten.';
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    const dropped = clone(a); dropped.sections[0].content.splice(1, 1);
-    expect(D.changedScopes(bundleDiff, dropped)).toEqual(['section:intro']);
+  test('a nested outline value kept with surrounding whitespace is carried', () => {
+    const sentBack = outlineBefore(); sentBack.lede.selectedEvidence = ['e1', 'e2'];
+    const s = D.standingAfterSendBack(null, outlineBefore(), sentBack, 'outline');
+    const revised = clone(sentBack); revised.lede.selectedEvidence = [' e1', 'e2\n'];
+    expect(D.carriedEdits(s, revised)).toHaveLength(1);
+  });
+});
+
+describe('formatEditLines (F1): each edit by id and section, with the director\'s text as written', () => {
+  test('a paragraph prints its text, and a cut says so', () => {
+    expect(D.formatEditLines(roundOne().edits)).toBe([
+      `E1 (section "the-story", paragraph, cut): "${CUT_THEORY}"`,
+      `E2 (section "closing", paragraph): "${CLOSING_EDIT}"`
+    ].join('\n'));
   });
 
-  test('an edited pull quote survives the reviser inserting a quote before it', () => {
-    const a = bundleBefore(); a.pullQuotes[0].text = 'Q1 edited';
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    expect(bundleDiff.scopes[0].changes[0].path).toBe('pullQuotes[0]');
-    const shifted = clone(a); shifted.pullQuotes.unshift({ text: 'Q0 the reviser added' });
-    expect(D.changedScopes(bundleDiff, shifted)).toEqual([]);
+  test('a field prints its path within its scope; a structured value prints whole, as JSON', () => {
+    const sentBack = articleAtStop();
+    sentBack.headline.main = 'Alex Reeves Pointed the Room at Jess Kane';
+    sentBack.sections[1].content.push({ type: 'evidence-card', tokenId: 'jes002', headline: 'Two cards', content: 'You can have him.' });
+    const lines = D.formatEditLines(D.standingAfterSendBack(null, articleAtStop(), sentBack, 'bundle').edits).split('\n');
+    expect(lines).toEqual([
+      'E1 (headline, main): "Alex Reeves Pointed the Room at Jess Kane"',
+      'E2 (section "the-story", evidence-card): {"content":"You can have him.","headline":"Two cards","tokenId":"jes002","type":"evidence-card"}'
+    ]);
+    const outline = outlineBefore(); outline.lede.hook = 'A sharper hook.';
+    expect(D.formatEditLines(D.standingAfterSendBack(null, outlineBefore(), outline, 'outline').edits)).toBe('E1 (lede, hook): "A sharper hook."');
   });
 
-  test('a kept block re-emitted with a trailing newline is not a change', () => {
-    const a = bundleBefore(); a.sections[0].content[1].text = 'Second paragraph, rewritten.';
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    const reemitted = clone(a);
-    reemitted.sections[0].content[1].text = 'Second paragraph, rewritten.\n';
-    expect(D.changedScopes(bundleDiff, reemitted)).toEqual([]);
+  test('the director\'s text is never shortened', () => {
+    const long = `${'The room argued for an hour. '.repeat(120)}`.trim();
+    const sentBack = articleAtStop(); sentBack.sections[2].content[0] = paragraph(long);
+    expect(D.formatEditLines(D.standingAfterSendBack(null, articleAtStop(), sentBack, 'bundle').edits)).toContain(long);
+  });
+});
+
+describe('locateQuotedText (F1): whose text an issue quotes', () => {
+  const output = directorsVersion();
+  let edits;
+  beforeEach(() => { edits = D.carriedEdits(roundOne(), output); });
+
+  test('a quote of the director\'s edit names the edit', () => {
+    expect(D.locateQuotedText(`T1: "${CLOSING_EDIT}" states a motive as fact.`, edits, output)).toEqual({ editIds: ['E2'], writer: false });
   });
 
-  test('a kept pull quote the reviser gave an optional field is not a change', () => {
-    const a = bundleBefore(); a.pullQuotes[0].text = 'Q1 edited';
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    const enriched = clone(a); enriched.pullQuotes[0].attribution = 'Nova';
-    expect(D.changedScopes(bundleDiff, enriched)).toEqual([]);
+  test('a quote of the text the director cut names the cut', () => {
+    expect(D.locateQuotedText('T2: the room\'s theory "Vic would replace Marcus, not kill him" goes unreported.', edits, output))
+      .toEqual({ editIds: ['E1'], writer: false });
   });
 
-  test('a kept block whose director-set field the reviser removed names its scope', () => {
-    const a = bundleBefore();
-    a.sections[0].content[1] = { type: 'paragraph', text: 'Second paragraph, rewritten.', emphasis: 'strong' };
-    const bundleDiff = D.diffBundle(bundleBefore(), a);
-    const stripped = clone(a); delete stripped.sections[0].content[1].emphasis;
-    expect(D.changedScopes(bundleDiff, stripped)).toEqual(['section:intro']);
+  test('a quote of the writer\'s text is the writer\'s', () => {
+    expect(D.locateQuotedText(`T12: "${SARAH_LINE}" puts the line in the wrong mouth.`, edits, output)).toEqual({ editIds: [], writer: true });
   });
 
-  test('a nested outline value kept with surrounding whitespace is not a change', () => {
-    const after = outlineBefore(); after.lede.selectedEvidence = ['e1', 'e2'];
-    const nestedDiff = D.diffOutline(outlineBefore(), after);
-    expect(nestedDiff.sections[0].changes[0].path).toBe('lede.selectedEvidence');
-    const revised = clone(after); revised.lede.selectedEvidence = [' e1', 'e2\n'];
-    expect(D.changedScopes(nestedDiff, revised)).toEqual([]);
+  test('an issue that quotes both is the writer\'s too', () => {
+    expect(D.locateQuotedText(`T1: "${CLOSING_EDIT}" repeats "${SARAH_LINE}"`, edits, output)).toEqual({ editIds: ['E2'], writer: true });
   });
 
-  test('readAtPath resolves ids, indexes and missing segments', () => {
-    const b = bundleBefore();
-    expect(D.readAtPath(b, 'sections[#intro].content[1].text')).toBe('Second paragraph about the money.');
-    expect(D.readAtPath(b, 'evidenceCards[#alr001].content')).toBe('C');
-    expect(D.readAtPath(b, 'pullQuotes[0].text')).toBe('Q1');
-    expect(D.readAtPath(b, 'sections[#nope].heading')).toBeUndefined();
-    expect(D.readAtPath(b, 'sections[#intro].content[-]')).toBeUndefined();
-    expect(D.readAtPath(null, 'x')).toBeUndefined();
+  test('a passage the writer\'s text also holds is the writer\'s', () => {
+    const copied = directorsVersion();
+    copied.sections[0].content.push(paragraph(`As the closing says: ${CLOSING_EDIT}`));
+    expect(D.locateQuotedText(`T1: "${CLOSING_EDIT}"`, D.carriedEdits(roundOne(), copied), copied)).toEqual({ editIds: [], writer: true });
   });
+
+  test('a quote matches across case and an ellipsis; a passage under three words locates nothing', () => {
+    expect(D.locateQuotedText('T1: "alex wanted Marcus out ... the January demand says so"', edits, output)).toEqual({ editIds: ['E2'], writer: false });
+    expect(D.locateQuotedText('T9: "Alex" and "the vote" are named.', edits, output)).toEqual({ editIds: [], writer: false });
+    expect(D.locateQuotedText('T1: the closing states a motive.', edits, output)).toEqual({ editIds: [], writer: false });
+  });
+});
+
+describe('directorEditConcern (F1)', () => {
+  test('opens with the one prefix and the edit\'s id, then the finding', () => {
+    expect(D.DIRECTOR_EDIT_PREFIX).toBe("Director's edit ");
+    expect(D.directorEditConcern(['E2'], 'T1: the closing states a motive.')).toBe("Director's edit E2: T1: the closing states a motive.");
+    expect(D.directorEditConcern(['E1', 'E3'], 'T2: x')).toBe("Director's edit E1, E3: T2: x");
+    expect(D.directorEditConcern(['E2'], "Director's edit E2: T1: already filed")).toBe("Director's edit E2: T1: already filed");
+  });
+});
+
+describe('reportAfterPass (F1): what each pass did to the director\'s edits', () => {
+  let standing;
+  beforeEach(() => { standing = roundOne(); });
+  const sendBackOutput = () => {
+    const a = directorsVersion();
+    a.sections[2].content[0] = paragraph('Alex wanted Marcus gone, and nobody asked why.');
+    return a;
+  };
+  /** One pass: the edits the version it started from carries, and the version it returned. */
+  const pass = (before, after, extra) => ({ edits: D.carriedEdits(standing, before), before, after, ...extra });
+
+  test('accumulates across the send-back\'s rework and an automatic pass, with the pass and the reason', () => {
+    const one = D.reportAfterPass(null, pass(directorsVersion(), sendBackOutput(), {
+      pass: D.SEND_BACK_PASS,
+      reasons: [{ id: 'E2', reason: 'The note asked the closing to end on the open question.' }]
+    }));
+    expect(one).toEqual({
+      checked: ['E1', 'E2'],
+      changed: [{
+        id: 'E2', scope: 'section:closing', cut: false, director: CLOSING_EDIT,
+        became: 'Alex wanted Marcus gone, and nobody asked why.',
+        pass: 'send-back', automatic: false, reason: 'The note asked the closing to end on the open question.'
+      }]
+    });
+
+    // Automatic pass 1 starts from the send-back's output, which carries E1 alone, and
+    // brings the cut theory back: a cut that came back counts as changed, and flagged.
+    const back = sendBackOutput();
+    back.sections[1].content.splice(1, 0, paragraph(CUT_THEORY));
+    const two = D.reportAfterPass(one, pass(sendBackOutput(), back, { pass: 1 }));
+    expect(two.checked).toEqual(['E1', 'E2']);
+    expect(two.changed).toEqual([
+      one.changed[0],
+      { id: 'E1', scope: 'section:the-story', cut: true, director: CUT_THEORY, became: CUT_THEORY, pass: 1, automatic: true, reason: null }
+    ]);
+  });
+
+  test('an edit that is gone says so; a pass that keeps every edit adds nothing', () => {
+    const gone = directorsVersion(); gone.sections[2].content = [];
+    const report = D.reportAfterPass(null, pass(directorsVersion(), gone, { pass: 2 }));
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E2', became: null, automatic: true, pass: 2, reason: null })]);
+    expect(D.reportAfterPass(null, pass(directorsVersion(), directorsVersion(), { pass: 1 }))).toEqual({ checked: ['E1', 'E2'], changed: [] });
+  });
+
+  test('a reason the rework gives for an edit it kept is not a change', () => {
+    const report = D.reportAfterPass(null, pass(directorsVersion(), directorsVersion(), {
+      pass: D.SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'Kept as written.' }]
+    }));
+    expect(report.changed).toEqual([]);
+  });
+
+  test('with no edit carried, the report stays as it was', () => {
+    expect(D.reportAfterPass(null, { edits: [], before: directorsVersion(), after: directorsVersion(), pass: 1 })).toBeNull();
+    const kept = { checked: ['E1'], changed: [] };
+    expect(D.reportAfterPass(kept, { edits: [], before: directorsVersion(), after: directorsVersion(), pass: 2 })).toBe(kept);
+  });
+
+  test('handEditReportOf passes the report on and reads a report from before F1 as none', () => {
+    const report = D.reportAfterPass(null, pass(directorsVersion(), directorsVersion(), { pass: 1 }));
+    expect(D.handEditReportOf(report)).toEqual(report);
+    expect(D.handEditReportOf({ checked: ['lede'], changed: ['lede'] })).toBeNull();
+    expect(D.handEditReportOf(null)).toBeNull();
+  });
+});
+
+test('readAtPath resolves ids, indexes and missing segments', () => {
+  const b = bundleBefore();
+  expect(D.readAtPath(b, 'sections[#intro].content[1].text')).toBe('Second paragraph about the money.');
+  expect(D.readAtPath(b, 'evidenceCards[#alr001].content')).toBe('C');
+  expect(D.readAtPath(b, 'pullQuotes[0].text')).toBe('Q1');
+  expect(D.readAtPath(b, 'sections[#nope].heading')).toBeUndefined();
+  expect(D.readAtPath(b, 'sections[#intro].content[-]')).toBeUndefined();
+  expect(D.readAtPath(null, 'x')).toBeUndefined();
 });

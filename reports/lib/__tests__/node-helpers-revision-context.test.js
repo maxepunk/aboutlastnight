@@ -341,37 +341,78 @@ describe('evaluator → reviser wiring (the write side)', () => {
   });
 });
 
-describe('<HAND_EDITS> block (spec 2026-09-19 §4.3)', () => {
-  const { diffOutline } = require('../hand-edit-diff');
-  const diff = diffOutline({ lede: { hook: 'Old' } }, { lede: { hook: 'New' } });
-  const base = { phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'New' } } };
+// F1 (spec 2026-10-02 section 7): the block lists the director's standing edits by id
+// and section, each with the director's text, in one of two wordings. An automatic pass
+// fixes the writer's text, so every edit stays as written. A send-back may change an
+// edit only where the note's structural change means it no longer fits, and returns
+// each one it changed, with why. The sentence about the evaluator's notes predating the
+// edits is gone: the judge now reads the edits.
+describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
+  const { diffOutline, standingAfterSendBack } = require('../hand-edit-diff');
+  let standing;
+  beforeAll(() => {
+    standing = standingAfterSendBack(null, { lede: { hook: 'Old' }, closing: { finalLine: 'The ledger never lies.' } }, { lede: { hook: 'New' }, closing: {} }, 'outline');
+  });
+  const base = { phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'New' }, closing: {} } };
+  const SEND_BACK_RULE = "An edit is the final word on its text, so each edit stays exactly as written and each cut stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
+  const AUTOMATIC_RULE = "This automatic pass fixes the writer's text. An edit is the final word on its text, so each edit stays exactly as written and each cut stays out.";
 
   it('sits after HUMAN FEEDBACK and before the instructions (WHAT THIS REWORK DOES since phase 3)', () => {
-    const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: diff });
+    const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: standing });
     const hf = contextSection.indexOf('HUMAN FEEDBACK');
     const he = contextSection.indexOf('<HAND_EDITS>');
     const cr = contextSection.indexOf('WHAT THIS REWORK DOES');
     expect(hf).toBeGreaterThan(-1);
     expect(he).toBeGreaterThan(hf);
     expect(cr).toBeGreaterThan(he);
-    expect(contextSection).toContain('- lede.hook: was "Old" -> now "New"');
-    // The block text wraps that sentence across a line (spec 4.3), so compare reflowed.
-    expect(contextSection.replace(/\s+/g, ' ')).toContain("The evaluator's notes above were written before these edits.");
     expect(contextSection).toContain('</HAND_EDITS>');
     expect(previousOutputSection).not.toContain('HAND_EDITS');
   });
 
-  it('is present even without human feedback (an evaluator-driven second pass)', () => {
-    const { contextSection } = buildRevisionContext({ ...base, humanFeedback: null, handEdits: diff });
-    expect(contextSection).toContain('<HAND_EDITS>');
-    expect(contextSection.indexOf('<HAND_EDITS>')).toBeLessThan(contextSection.indexOf('WHAT THIS REWORK DOES'));
-    expect(contextSection.indexOf('WHAT THIS REWORK DOES')).toBeGreaterThan(-1);
+  it('on a send-back, lists each edit by id and section with the director\'s text, and asks why for any it changes', () => {
+    const { contextSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: standing });
+    const block = contextSection.slice(contextSection.indexOf('<HAND_EDITS>'), contextSection.indexOf('</HAND_EDITS>'));
+    expect(block).toContain(SEND_BACK_RULE);
+    expect(block).toContain('E1 (lede, hook): "New"');
+    expect(block).toContain('E2 (closing, finalLine, cut): "The ledger never lies."');
+    expect(block).not.toContain(AUTOMATIC_RULE);
+    expect(contextSection).not.toContain("The evaluator's notes above were written before these edits.");
   });
 
-  it('is absent when handEdits is null, empty or missing', () => {
+  it('on an automatic pass, keeps every edit as written and asks for no list', () => {
+    const { contextSection } = buildRevisionContext({ ...base, humanFeedback: null, handEdits: standing });
+    const block = contextSection.slice(contextSection.indexOf('<HAND_EDITS>'), contextSection.indexOf('</HAND_EDITS>'));
+    expect(block).toContain(AUTOMATIC_RULE);
+    expect(block).toContain('E1 (lede, hook): "New"');
+    expect(block).not.toContain('changedDirectorEdits');
+    expect(block).not.toContain('unless the structural change');
+    expect(contextSection.indexOf('<HAND_EDITS>')).toBeLessThan(contextSection.indexOf('WHAT THIS REWORK DOES'));
+  });
+
+  it('keeps each edit\'s id across rounds', () => {
+    const later = { ...standing, issued: 5, edits: standing.edits.map((e, i) => ({ ...e, id: ['E3', 'E5'][i] })) };
+    const { contextSection } = buildRevisionContext({ ...base, humanFeedback: null, handEdits: later });
+    expect(contextSection).toContain('E3 (lede, hook): "New"');
+    expect(contextSection).toContain('E5 (closing, finalLine, cut): "The ledger never lies."');
+  });
+
+  it('lists only the edits the version the rework starts from carries', () => {
+    const { contextSection } = buildRevisionContext({ ...base, previousOutput: { lede: { hook: 'Rewritten' }, closing: {} }, handEdits: standing });
+    expect(contextSection).not.toContain('E1 (lede, hook)');
+    expect(contextSection).toContain('E2 (closing, finalLine, cut)');
+  });
+
+  it('reads a diff stored before the edits had ids', () => {
+    const diff = diffOutline({ lede: { hook: 'Old' } }, { lede: { hook: 'New' } });
+    expect(buildRevisionContext({ ...base, handEdits: diff }).contextSection).toContain('E1 (lede, hook): "New"');
+  });
+
+  it('is absent when handEdits is null, empty or missing, or when no edit is carried', () => {
     expect(buildRevisionContext({ ...base, handEdits: null }).contextSection).not.toContain('HAND_EDITS');
     expect(buildRevisionContext({ ...base, handEdits: diffOutline({}, {}) }).contextSection).not.toContain('HAND_EDITS');
     expect(buildRevisionContext(base).contextSection).not.toContain('HAND_EDITS');
+    expect(buildRevisionContext({ ...base, previousOutput: { lede: { hook: 'Rewritten' }, closing: { finalLine: 'The ledger never lies.' } }, handEdits: standing }).contextSection)
+      .not.toContain('HAND_EDITS');
   });
 });
 
