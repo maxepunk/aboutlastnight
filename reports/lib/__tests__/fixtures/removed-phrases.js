@@ -214,7 +214,61 @@ const REMOVED_PHRASES = [
   'how does a lobbyist know exactly where the money is hidden',
   'Read an exposure as an act with a motive',
   // C16's old example, in any character's name.
-  /So where is [^?\n]*['’]s payday/i
+  /So where is [^?\n]*['’]s payday/i,
+
+  // Wave 4 (3.9, 3.10 and the two fix batches): the code text that had to say what the
+  // round-7 rule files say (rule-text read 2, section D). Each was absent from every
+  // journalist prompt, schema description and judge criterion when it was added. A few
+  // stay in the parked detective's own text (D13), and the scans read journalist
+  // renders only: "compulsive readability through callbacks", "recontextualized later
+  // for aha moments", "bridges for transitions", the card-count line and "state your
+  // absence at most once".
+  // The buyer stated as fact, and the money read as other wealth (T5; R11).
+  "run from NeurAI's board",
+  "what NeurAI's board paid out",
+  "anyone's other wealth",
+  // The retired craft files' tags, and "a reading" as the noun for an inference.
+  /<craft-(?:thesis|sections|arcs|room|tracing)>/,
+  "Nova's reading under T1",
+  "The section's reading of the account",
+  "the arc writer's reading of one thread",
+  // The judges' craft clauses in structural slots (R22; read section D).
+  'spent early in THE STORY',
+  'the thesis running through every section',
+  'with the thesis deciding which sections exist and their order',
+  'each placed where it pulls the reader on',
+  'with details planted early coming back changed',
+  'the house style C4 states',
+  'A tight article with 3 perfectly-placed evidence cards',
+  'a suggestion for the rework and the director',
+  // The old T4 and T8 in the judges and the fact check (R13, R21).
+  'no account\'s name read as proof of who holds it',
+  'outside the room\'s votes, accusations and exposures',
+  'on Nova voting, accusing or exposing',
+  'accuses or exposes',
+  // Attribution on every room event and the absence stated "at most once" (R13).
+  'by attribution to the people in the room',
+  "attributing the room's events to the people in it",
+  "the room's events reached Nova from people in it",
+  'state the absence at most once',
+  // The judge's output contract before the must-fix-only fixes (R23).
+  'Step 2: Optional advisory fix.',
+  'concrete action to improve this criterion',
+  // The automatic rework's old scope (R23).
+  'This rework answers the findings above',
+  'truer to the record or better for the players who read it',
+  'What the findings do not name was not questioned',
+  'and this rework answers it',
+  "the evaluation's findings on an automatic pass",
+  // Callbacks as the engine, and C16's payoff without its condition (C16; R14).
+  "comes back changed later: the reader's moment of recognition",
+  'Which details in this arc, from the record, could come back changed later?',
+  'A detail from the record that can come back changed later',
+  'recontextualized later for aha moments',
+  'Key callback opportunities across arcs for recontextualization',
+  /compulsive readability/i,
+  'bridges for transitions',
+  'What this arc brings to the convergence point'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
