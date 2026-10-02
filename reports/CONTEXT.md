@@ -29,7 +29,7 @@ A programmatic test of an output, free to run, with a definite answer.
 _Avoid_: validation, fact check (one particular check)
 
 **Record**:
-The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the director's photo descriptions and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's question, unless the director writes it into the article.
+The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the ledger and the evidence log, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the photos and the director's descriptions of them, and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's own suspicion, an allegation or a question, unless the director writes it into the article.
 _Avoid_: session data, ground truth, context
 
 **Epilogue**:
@@ -37,11 +37,11 @@ What happened after the investigation, as the director writes it into the notes:
 _Avoid_: post-investigation news, aftermath facts
 
 **Owner**:
-The character whose memory it is: the point of view the memory records. The article can always name the owner.
+The character whose memory it is: the point of view the memory records. The article names an exposed memory's owner. A buried memory's owner reaches print only as talk in the room that the director's notes record, with the speaker named.
 _Avoid_: author, source
 
 **Exposer**:
-The player who turned a memory in to Nova. Anonymous unless a name is on it at turn-in; a name there is an honest attribution, and the article may credit it. Never assumed to be the owner.
+The player who turned a memory in to Nova. Anonymous unless the evidence log carries a name or the director's notes record who turned it in. A name on a turn-in is the player taking public credit: an honest attribution, which the article may print. Never assumed to be the owner.
 _Avoid_: source, submitter
 
 **Ledger**:
@@ -51,6 +51,10 @@ _Avoid_: scoreboard, Blake's display
 **Account**:
 Where a sale's money goes. A player can give it any name, including another character's, so a name identifies no one.
 _Avoid_: shell account or personal account as proof of who holds it
+
+**Buyer**:
+Whoever pays for a buried memory, into the account the seller names. The players know who buys: the game tells them NeurAI's board wants the memories gone. Nova does not, so in print the buyer is Nova's suspicion, NeurAI and its board, and never a fact: stated as fact, it would accuse a company in print.
+_Avoid_: the Black Market (the market is the deals made with Blake, with no proper name)
 
 **Intake**:
 The start-of-session collection of everything only the director holds.
@@ -89,16 +93,24 @@ The moment a photo shows in the story, as the director describes it at the chara
 _Avoid_: narrative moment, story relevance, context
 
 **Arc**:
-One thread of the session's story: a claim about what happened, the evidence it rests on, who did what, and what is uncertain. The director selects arcs at the arc stop.
-_Avoid_: thread, storyline, angle
+One thread of the session's story: a claim about what happened, with its people, its evidence, its tension and its open questions. The arcs are the threads the article weaves toward one convergence. The director selects arcs at the arc stop.
+_Avoid_: storyline, angle
 
 **Verdict**:
-The official story: the group statement the room agrees on when the recovery window closes, before the police arrive. It is negotiated under the clock, can cite only evidence on the board, leaves out whatever the room chooses, and is a version every character can live with, so it is shaped by everything the players exposed, sold and argued. The director enters it as the accusation. The article reports it as the official story and shows how the players' choices made it, never claiming to know what really happened to Marcus.
+The official story: the group statement the room agrees on when the recovery window closes, before the police arrive. It is negotiated under the clock, can cite only what is on the Evidence Board, leaves out whatever the room chooses, and is a version every character can live with, so it is shaped by everything the players exposed, sold and argued. The director enters it as the accusation. The article reports it as the official story and shows how the players' choices made it, never claiming to know what really happened to Marcus.
 _Avoid_: the answer, the solution, the truth
 
 **Thesis**:
-The most interesting journalistic angle on what happened in the session. Usually it lies in the gap between the verdict and what happened leading up to it, and in what that gap shows about the biases the group brought to what it decided to tell the world. When the verdict agrees with everything the room found, it is the angle the players chose to explore together. Proposed by the writer and settled by the director at the arc stop; the outline is built to it.
+The answer Nova argues by the end. When the director gives one, in the notes or at a stop, that is the thesis; otherwise it is the most interesting journalistic angle on what happened in the session. Usually it lies in the gap between the verdict and what happened leading up to it, and in what that gap shows about the biases the group brought to what it decided to tell the world. When the verdict agrees with everything the room found, it is what the players' own path to the verdict shows. Proposed by the writer and settled by the director at the arc stop; the outline is built to it, and it lands at the convergence.
 _Avoid_: angle, key tension, hook, primary arc
+
+**Throughline**:
+The question that carries the thesis. It opens early and runs through every section, each section carrying it forward from its own angle and leaving it sharper, until the thesis lands at the convergence.
+_Avoid_: thread (an arc), theme
+
+**Convergence**:
+The point near the end where the threads meet and the thesis lands, said once and sharply, in this session's names and sums.
+_Avoid_: climax, resolution, payoff (a detail planted early coming back)
 
 **Whiteboard**:
 The working notes the game master and the players keep during the investigation and before the deliberation. It is context for how the room reached its verdict, not record: the article never cites it or prints it.
