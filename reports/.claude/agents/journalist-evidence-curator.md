@@ -25,6 +25,7 @@ Copy, never summarise. Every text, name and figure enters the record as its sour
 
 - **Exposed memories.** Each memory the session report lists as exposed: its `tokenId` as its id, its name and owners, and its `fullDescription` whole as its text.
 - **Paper evidence.** Each unlocked item: its `notionId` as its id, its name, `basicType` and owners, and its `description` whole as its text.
+- **Owners.** A document's owners are the characters the fetch names. The fetch writes `Unknown` for an owner it could not name: leave that entry out, so a document with no named owner has an empty `owners` list.
 - **Sales.** Each sale enters the record as its time, amount and account, and nothing more: Nova's ledger shows only the sale.
 - **Adjustments.** The first-burial bonus is one event, paid to the account that received it. A transfer is one event between two accounts.
 - **Accounts.** Every account with a positive total, largest first, each with its total and its number of sales. An account the Final Standings list takes its Final Standings total, copied. An account they leave out that a sale, the bonus or a transfer reached takes its computed total: its sales, plus the bonus and the transfers it received, less the transfers it sent. `ledger.total` is the sum of the account totals.
