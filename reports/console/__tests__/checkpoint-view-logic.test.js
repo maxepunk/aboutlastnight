@@ -547,33 +547,69 @@ describe('approveLabel', () => {
   });
 });
 
-describe('steeringView (spec 2026-09-19 §4.4, §5.5)', () => {
+describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
   const { steeringView } = require('../checkpoint-view-logic');
 
-  test('nothing → any:false with empty parts', () => {
-    expect(steeringView(null, null)).toEqual({ any: false, changedLabels: [], keptCount: 0, notes: [] });
-    expect(steeringView(null, [])).toEqual({ any: false, changedLabels: [], keptCount: 0, notes: [] });
+  // F1: the report names each of the director's edits a pass changed (server.js
+  // getCheckpointData handEditReport, lib/hand-edit-diff.js reportAfterPass).
+  const SEND_BACK_CHANGE = {
+    id: 'E2', scope: 'section:closing', cut: false,
+    director: 'Alex wanted Marcus out of the company.', became: 'Whether the verdict costs Alex anything is still open.',
+    pass: 'send-back', automatic: false, reason: 'The note asked the closing to end on the open question.'
+  };
+  const AUTOMATIC_CHANGE = {
+    id: 'E1', scope: 'headline', cut: false, director: 'Alex Reeves Pointed the Room at Jess Kane', became: 'The Room Named Alex',
+    pass: 1, automatic: true, reason: null
+  };
+  const CUT_BACK = {
+    id: 'E3', scope: 'section:the-story', cut: true, director: 'The room also weighed whether Vic would replace Marcus.',
+    became: 'The room also weighed whether Vic would replace Marcus.', pass: 2, automatic: true, reason: null
+  };
+
+  test('nothing: any is false and every list is empty', () => {
+    expect(steeringView(null, null)).toEqual({ any: false, changedEdits: [], keptCount: 0, notes: [] });
+    expect(steeringView(null, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, notes: [] });
   });
 
-  test('changed scopes are mapped to the gate labels; section ids and unknown keys are readable', () => {
-    const v = steeringView({ checked: ['lede', 'closing', 'section:intro', 'evidenceCards', 'weird'], changed: ['lede', 'section:intro', 'weird'] }, []);
+  test('each edit a rework changed is one line: its id and section, the director\'s text and what it became, the pass and the reason', () => {
+    const v = steeringView({ checked: ['E1', 'E2'], changed: [SEND_BACK_CHANGE] }, []);
     expect(v.any).toBe(true);
-    expect(v.changedLabels).toEqual(['LEDE', 'Section "intro"', 'weird']);
     expect(v.keptCount).toBe(0);
+    expect(v.changedEdits).toEqual([{
+      key: 'E2-0',
+      id: 'E2',
+      automatic: false,
+      line: 'E2, Section "closing": your "Alex wanted Marcus out of the company." became "Whether the verdict costs Alex anything is still open." (the rework of your send-back). Why: The note asked the closing to end on the open question.'
+    }]);
   });
 
-  test('a prototype key is rendered raw, not as the inherited member (M16)', () => {
-    const v = steeringView({ checked: ['constructor'], changed: ['constructor'] }, []);
-    expect(v.changedLabels).toEqual(['constructor']);
+  test('a change by an automatic pass is flagged, and a missing reason is said', () => {
+    const [line] = steeringView({ checked: ['E1'], changed: [AUTOMATIC_CHANGE] }, []).changedEdits;
+    expect(line.automatic).toBe(true);
+    expect(line.line).toBe('E1, Headline: your "Alex Reeves Pointed the Room at Jess Kane" became "The Room Named Alex" (automatic pass 1, which should have kept your edit). No reason given.');
+  });
+
+  test('a cut that came back, and an edit that is gone', () => {
+    const gone = { ...SEND_BACK_CHANGE, became: null };
+    const v = steeringView({ checked: ['E2', 'E3'], changed: [CUT_BACK, gone] }, []);
+    expect(v.changedEdits.map((c) => c.line)).toEqual([
+      'E3, Section "the-story": the text you cut came back as "The room also weighed whether Vic would replace Marcus." (automatic pass 2, which should have kept your edit). No reason given.',
+      'E2, Section "closing": your "Alex wanted Marcus out of the company." is gone (the rework of your send-back). Why: The note asked the closing to end on the open question.'
+    ]);
   });
 
   test('a report with nothing changed reports the kept count', () => {
-    const v = steeringView({ checked: ['headline', 'byline'], changed: [] }, []);
-    expect(v).toEqual({ any: true, changedLabels: [], keptCount: 2, notes: [] });
+    expect(steeringView({ checked: ['E1', 'E2'], changed: [] }, [])).toEqual({ any: true, changedEdits: [], keptCount: 2, notes: [] });
   });
 
-  test('an empty checked list is treated as no report', () => {
+  test('an empty checked list, or a report from before F1, is treated as no report', () => {
     expect(steeringView({ checked: [], changed: [] }, []).any).toBe(false);
+    expect(steeringView({ checked: ['lede'], changed: ['lede'] }, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, notes: [] });
+  });
+
+  test('a scope named after a prototype member is rendered raw (M16)', () => {
+    const [line] = steeringView({ checked: ['E1'], changed: [{ ...AUTOMATIC_CHANGE, scope: 'constructor' }] }, []).changedEdits;
+    expect(line.line.startsWith('E1, constructor: ')).toBe(true);
   });
 
   test('notes become labelled lines in order; malformed entries are skipped', () => {
@@ -587,6 +623,61 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5)', () => {
       { label: '[arc-selection, rejection 1]', text: 'Drop the vote arc.' },
       { label: '[outline, rejection 2]', text: 'Lead with the ledger.' }
     ]);
+  });
+});
+
+// F1: the judges' and the fact check's concerns about the director's edits sit under a
+// heading of their own, apart from the must-fix items and the other advisories, and never
+// count as unresolved on the approve button.
+describe('concerns about the director\'s edits (F1)', () => {
+  const {
+    evaluationView, factCheckSummary, approveLabel, DIRECTOR_EDIT_PREFIX, SEND_BACK_PASS,
+    DIRECTOR_EDIT_CONCERNS_LABEL
+  } = require('../checkpoint-view-logic');
+  const CONCERN = "Director's edit E2: T1: the closing states Alex's motive as fact.";
+
+  test('the console\'s copies of the server constants are the server\'s', () => {
+    const server = require('../../lib/hand-edit-diff');
+    expect(typeof DIRECTOR_EDIT_PREFIX === 'string' && DIRECTOR_EDIT_PREFIX.length > 0).toBe(true);
+    expect(DIRECTOR_EDIT_PREFIX).toBe(server.DIRECTOR_EDIT_PREFIX);
+    expect(typeof SEND_BACK_PASS === 'string' && SEND_BACK_PASS.length > 0).toBe(true);
+    expect(SEND_BACK_PASS).toBe(server.SEND_BACK_PASS);
+  });
+
+  test('evaluationView lists the judge\'s concerns apart from its other advisories', () => {
+    const view = evaluationView({ ready: true, overallScore: 0.9, structuralIssues: [], advisoryWarnings: [CONCERN, 'C10: the lede runs long.'] });
+    expect(view.directorEditConcerns).toEqual([CONCERN]);
+    expect(view.advisoryWarnings).toEqual(['C10: the lede runs long.']);
+    expect(view.directorEditConcernsLabel).toBe(`${DIRECTOR_EDIT_CONCERNS_LABEL} (1)`);
+  });
+
+  test('evaluationView without concerns has an empty list', () => {
+    const view = evaluationView({ ready: true, overallScore: 0.9, advisoryWarnings: ['C10: x'] });
+    expect(view.directorEditConcerns).toEqual([]);
+    expect(view.advisoryWarnings).toEqual(['C10: x']);
+  });
+
+  test('the fact check\'s concerns are a group of their own, never in the card list or the general advisories', () => {
+    const cardConcern = `${DIRECTOR_EDIT_PREFIX}E1: Evidence card "vic001" (in section "the-story") is not verbatim: its content does not appear in that document's text.`;
+    const summary = factCheckSummary({
+      structuralIssues: [],
+      advisoryWarnings: [cardConcern, 'Over length: 1,950 words.', 'Could not verify 2 photo reference(s).'],
+      cardFidelity: [{ tokenId: 'vic001', ok: false, reason: 'not verbatim', locations: [{ placement: 'inline', section: 'the-story' }], directorEdit: 'E1' }],
+      rosterCoverage: { missing: [] }, photoReferences: { invalid: [] }, reporterMode: { violations: [] }
+    });
+    expect(summary.groups.map((g) => [g.key, g.severity, g.items.map((i) => i.text)])).toEqual([
+      ['directorEdits', 'advisory', [cardConcern]],
+      ['length', 'advisory', ['Over length: 1,950 words.']],
+      ['advisory', 'advisory', ['Could not verify 2 photo reference(s).']]
+    ]);
+    expect(summary.groups[0].label).toBe(DIRECTOR_EDIT_CONCERNS_LABEL);
+    expect(summary.structural).toBe(0);
+    expect(approveLabel(summary, false).label).toBe('Approve (3 advisory)');
+  });
+
+  test('without concerns the fact check has no such group', () => {
+    const summary = factCheckSummary({ structuralIssues: [], advisoryWarnings: ['Over length: 1,950 words.'] });
+    expect(summary.groups.map((g) => g.key)).toEqual(['length']);
   });
 });
 

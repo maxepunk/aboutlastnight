@@ -127,18 +127,27 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
       React.createElement('p', { className: 'revision-diff__feedback-text' }, previousFeedback)
     ),
 
-    // Hand-edit report: what the rework did to the director's own edits (§4.4).
+    // Hand-edit report: what the reworks of this round did to the director's own edits
+    // (§4.4; F1: one line per edit changed, with its section, the director's text and
+    // what it became, the pass and the reason, from ViewLogic.steeringView).
     // Muted amber, NOT `.revision-diff__warning`: nothing here blocks anything, and
     // that red treatment (then the cap warning, now the arc timeout banner) read as
     // a failure (M15).
     // The amber lives on the `--changed` modifier so the muted "kept" line below,
     // which shares the base class, stays a plain line of text.
-    steering.changedLabels.length > 0 && React.createElement('div', {
-      className: 'revision-diff__hand-edits revision-diff__hand-edits--changed', role: 'status'
-    }, 'The rework changed sections you edited by hand: ' + steering.changedLabels.join(', ') + '.'),
+    steering.changedEdits.length > 0 && React.createElement('ul', {
+      className: 'revision-diff__notes-list', role: 'status', 'aria-label': 'Your edits a rework changed'
+    },
+      steering.changedEdits.map(function (edit) {
+        return React.createElement('li', {
+          key: edit.key,
+          className: 'revision-diff__hand-edits revision-diff__hand-edits--changed'
+        }, edit.line);
+      })
+    ),
     steering.keptCount > 0 && React.createElement('div', {
       className: 'text-xs text-muted revision-diff__hand-edits revision-diff__hand-edits--kept', role: 'status'
-    }, 'Rework kept all ' + steering.keptCount + ' hand edit' + (steering.keptCount === 1 ? '' : 's') + '.'),
+    }, 'The rework kept all ' + steering.keptCount + ' of your edit' + (steering.keptCount === 1 ? '' : 's') + '.'),
 
     // Standing notes the writer will see (§5.5)
     steering.notes.length > 0 && React.createElement('div', { className: 'revision-diff__feedback revision-diff__notes' },

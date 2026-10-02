@@ -122,6 +122,9 @@ function formatElapsed(ms) {
  * the score is the model's own, not yet checked against the director's
  * decisions. The wording comes from checkpoint-view-logic.js, not from here.
  *
+ * F1: the judge's concerns about the director's own edits (`directorEditConcerns`)
+ * render last, under their own heading and hint from the view.
+ *
  * @param {{view: object|null}} props
  */
 function EvalBar({ view }) {
@@ -158,6 +161,20 @@ function EvalBar({ view }) {
     view.advisoryWarnings.length > 0 && React.createElement('ul', { className: 'eval-bar__list eval-bar__list--advisory' },
       view.advisoryWarnings.map((warning, i) =>
         React.createElement('li', { key: 'aw-' + i }, warning)
+      )
+    ),
+
+    // F1: the judge's concerns about the director's own edits, under their own heading,
+    // apart from the must-fix items and the other advisories. Nothing sends them back.
+    view.directorEditConcerns && view.directorEditConcerns.length > 0 && React.createElement('div', {
+      className: 'eval-bar__concerns', 'aria-label': view.directorEditConcernsLabel
+    },
+      React.createElement('p', { className: 'text-xs text-muted' },
+        React.createElement('strong', null, view.directorEditConcernsLabel), ' ', view.directorEditConcernsHint),
+      React.createElement('ul', { className: 'eval-bar__list eval-bar__list--advisory' },
+        view.directorEditConcerns.map((concern, i) =>
+          React.createElement('li', { key: 'de-' + i }, concern)
+        )
       )
     ),
 

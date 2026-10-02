@@ -99,6 +99,34 @@
   var UNCALIBRATED_SCORE_LABEL =
     'Uncalibrated: the model\'s own score, not yet checked against your approvals and send-backs.';
 
+  // ── The director's edits are final (F1, spec 2026-10-02 section 7) ──────────
+
+  /**
+   * The one prefix a finding about one of the director's edits opens with, in the
+   * judge's and the fact check's advisoryWarnings: "Director's edit E3: T1: ...". A copy
+   * of lib/hand-edit-diff.js DIRECTOR_EDIT_PREFIX, which the browser cannot import; a
+   * test holds the two equal.
+   */
+  var DIRECTOR_EDIT_PREFIX = "Director's edit ";
+
+  /**
+   * The pass a hand-edit report entry names when the rework of the director's send-back
+   * made the change; any other pass is an automatic pass's number. A copy of
+   * lib/hand-edit-diff.js SEND_BACK_PASS; a test holds the two equal.
+   */
+  var SEND_BACK_PASS = 'send-back';
+
+  /** The heading the concerns about the director's edits sit under, at the evaluation bar and in the fact check. */
+  var DIRECTOR_EDIT_CONCERNS_LABEL = 'Concerns about your edits';
+
+  /** What a concern is, under that heading at the evaluation bar. */
+  var DIRECTOR_EDIT_CONCERNS_HINT =
+    'The judge disagrees with these lines you wrote or cut. Nothing was sent back for them: they are yours to decide.';
+
+  function isDirectorEditConcern(text) {
+    return typeof text === 'string' && text.indexOf(DIRECTOR_EDIT_PREFIX) === 0;
+  }
+
   /**
    * Display shape for the evaluation bar, shared by all three gates.
    *
@@ -113,9 +141,15 @@
    * the check stops a bundle before the model sees it: a check's answer is
    * definite and has nothing to calibrate.
    *
+   * F1: the advisories that open with DIRECTOR_EDIT_PREFIX are the judge's concerns
+   * about the director's own edits. They come apart from the other advisories, under
+   * their own heading (`directorEditConcerns`, `directorEditConcernsLabel`).
+   *
    * @param {object|null} evaluation
    * @returns {{score: string|null, calibration: string, passed: boolean,
    *            structuralIssues: string[], advisoryWarnings: string[],
+   *            directorEditConcerns: string[], directorEditConcernsLabel: string,
+   *            directorEditConcernsHint: string,
    *            revisionGuidance: string, confidence: string,
    *            revisionNumber: number|null, escalated: boolean,
    *            escalationReason: string, source: string}|null}
@@ -129,12 +163,17 @@
       ? evaluation.structuralPassed === true
       : evaluation.ready === true;
     var source = asString(evaluation.source);
+    var advisories = stringList(evaluation.advisoryWarnings);
+    var concerns = advisories.filter(isDirectorEditConcern);
     return {
       score: score,
       calibration: score !== null && source !== 'fact-check' ? UNCALIBRATED_SCORE_LABEL : '',
       passed: passed,
       structuralIssues: stringList(evaluation.structuralIssues),
-      advisoryWarnings: stringList(evaluation.advisoryWarnings),
+      advisoryWarnings: advisories.filter(function (text) { return !isDirectorEditConcern(text); }),
+      directorEditConcerns: concerns,
+      directorEditConcernsLabel: DIRECTOR_EDIT_CONCERNS_LABEL + ' (' + concerns.length + ')',
+      directorEditConcernsHint: DIRECTOR_EDIT_CONCERNS_HINT,
       revisionGuidance: asString(evaluation.revisionGuidance),
       confidence: asString(evaluation.confidence),
       revisionNumber: typeof evaluation.revisionNumber === 'number' ? evaluation.revisionNumber : null,
@@ -476,6 +515,12 @@
   /**
    * The article fact-check as a defect list the gate can render.
    *
+   * F1: a hit located in the director's own edit, or caused by the director's cut, is an
+   * advisory opening with DIRECTOR_EDIT_PREFIX. Those form one group of their own
+   * (`directorEdits`), after the structural groups and before the other advisories; a
+   * card item marked with its edit (`directorEdit`) is not in the card list. They count
+   * as advisories, never as unresolved (approveLabel).
+   *
    * @param {object|null} factCheck - state._articleFactCheck
    * @returns {{structural: number, advisory: number, total: number,
    *            groups: Array<{key: string, label: string, severity: string,
@@ -488,7 +533,7 @@
     var groups = [];
 
     var badCards = asArray(fc.cardFidelity)
-      .filter(function (c) { return c && c.ok === false; })
+      .filter(function (c) { return c && c.ok === false && !asString(c.directorEdit); })
       .map(function (c) {
         var tokenId = asString(c.tokenId);
         var reason = asString(c.reason) || 'failed the fidelity check';
@@ -527,6 +572,13 @@
       groups.push(group('other', 'Other structural issues', 'structural', other));
     }
 
+    var concerns = advisoryWarnings
+      .filter(isDirectorEditConcern)
+      .map(function (text) { return { text: text }; });
+    if (concerns.length > 0) {
+      groups.push(group('directorEdits', DIRECTOR_EDIT_CONCERNS_LABEL, 'advisory', concerns));
+    }
+
     ADVISORY_GROUPS.forEach(function (spec) {
       var items = advisoryWarnings
         .filter(function (text) { return advisoryGroupOf(text) === spec; })
@@ -535,7 +587,7 @@
     });
 
     var otherAdvisories = advisoryWarnings
-      .filter(function (text) { return advisoryGroupOf(text) === null; })
+      .filter(function (text) { return advisoryGroupOf(text) === null && !isDirectorEditConcern(text); })
       .map(function (text) { return { text: text }; });
     if (otherAdvisories.length > 0) {
       groups.push(group('advisory', 'Advisory', 'advisory', otherAdvisories));
@@ -606,10 +658,48 @@
     return String(key);
   }
 
+  /**
+   * A hand-edit report as the server sends it since F1 (lib/hand-edit-diff.js
+   * reportAfterPass): `checked`, the ids of the director's edits the round's passes
+   * checked, and `changed`, one entry per edit a pass changed. A report from before F1
+   * named scopes, not edits, and reads as none.
+   */
+  function editReportOf(report) {
+    if (!report || typeof report !== 'object' || !Array.isArray(report.checked) || report.checked.length === 0) return null;
+    if (!report.checked.every(function (id) { return typeof id === 'string' && /^E\d+$/.test(id); })) return null;
+    if (!Array.isArray(report.changed) || !report.changed.every(function (c) { return c && typeof c === 'object' && typeof c.id === 'string'; })) return null;
+    return report;
+  }
+
+  /**
+   * One line for an edit a rework changed (F1): its id and section, the director's text
+   * and what it became (or that it is gone, or for a cut that its text came back), which
+   * pass changed it, and the rework's reason. An automatic pass's change is flagged in
+   * the line, since an automatic pass keeps the director's edits as they are.
+   */
+  function changedEditLine(entry) {
+    var became = typeof entry.became === 'string' ? entry.became : null;
+    var what;
+    if (entry.cut === true) what = 'the text you cut came back' + (became !== null ? ' as "' + became + '"' : '');
+    else if (became !== null) what = 'your "' + asString(entry.director) + '" became "' + became + '"';
+    else what = 'your "' + asString(entry.director) + '" is gone';
+    var by = entry.pass === SEND_BACK_PASS
+      ? 'the rework of your send-back'
+      : 'automatic pass ' + entry.pass + ', which should have kept your edit';
+    var reason = asString(entry.reason).trim();
+    return entry.id + ', ' + scopeLabel(entry.scope) + ': ' + what + ' (' + by + '). ' + (reason ? 'Why: ' + reason : 'No reason given.');
+  }
+
+  /**
+   * The hand-edit report and the standing notes as RevisionDiff renders them.
+   *
+   * F1: `changedEdits` holds one line per edit a rework changed this round
+   * (changedEditLine), `automatic` marking a change an automatic pass made;
+   * `keptCount` is the edits checked when none changed.
+   */
   function steeringView(handEditReport, gateNotes) {
-    var report = handEditReport && Array.isArray(handEditReport.checked) && handEditReport.checked.length > 0
-      ? handEditReport : null;
-    var changed = report ? (Array.isArray(report.changed) ? report.changed : []) : [];
+    var report = editReportOf(handEditReport);
+    var changed = report ? report.changed : [];
     var notes = (Array.isArray(gateNotes) ? gateNotes : [])
       .filter(function (n) { return n && typeof n.text === 'string' && n.text.trim(); })
       .map(function (n) {
@@ -617,7 +707,9 @@
       });
     return {
       any: !!report || notes.length > 0,
-      changedLabels: changed.map(scopeLabel),
+      changedEdits: changed.map(function (entry, index) {
+        return { key: entry.id + '-' + index, id: entry.id, automatic: entry.pass !== SEND_BACK_PASS, line: changedEditLine(entry) };
+      }),
       keptCount: report && changed.length === 0 ? report.checked.length : 0,
       notes: notes
     };
@@ -1216,6 +1308,10 @@
     evaluationView: evaluationView,
     // Phase 2, brief 2.4: the score's label at all three stops
     UNCALIBRATED_SCORE_LABEL: UNCALIBRATED_SCORE_LABEL,
+    // F1: the director's edits are final (copies of lib/hand-edit-diff.js, held equal by a test)
+    DIRECTOR_EDIT_PREFIX: DIRECTOR_EDIT_PREFIX,
+    SEND_BACK_PASS: SEND_BACK_PASS,
+    DIRECTOR_EDIT_CONCERNS_LABEL: DIRECTOR_EDIT_CONCERNS_LABEL,
     arcCardModel: arcCardModel,
     defaultArcSelection: defaultArcSelection,
     arcSelectionNote: arcSelectionNote,
