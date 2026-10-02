@@ -4,6 +4,10 @@ module.exports = {
   // suite that requires server.js opens the production data/checkpoints.sqlite.
   setupFiles: ['<rootDir>/__tests__/setup/checkpoint-db-path.js'],
   testMatch: ['**/__tests__/**/*.test.js', '**/*.test.js'],
+  // The desktop app makes worktrees under .claude/worktrees/, each a whole copy of the
+  // repository with its own tests at another commit; a run here reads only this tree.
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/.claude/worktrees/'],
+  modulePathIgnorePatterns: ['<rootDir>/.claude/worktrees/'],
   // Mock ESM-only SDK module to avoid Jest parsing issues
   moduleNameMapper: {
     '^@anthropic-ai/claude-agent-sdk$': '<rootDir>/__tests__/mocks/anthropic-sdk.mock.js'
