@@ -387,11 +387,48 @@ function quotedPassages(value) {
 }
 
 /**
- * Whether a director's correction is about this quote (task 3.11): it shares a quoted
- * fragment with the quote's words, or with the quoted passage of the quote's context,
- * one holding the other word for word as isVerbatimIn reads them. 092026's correction
- * quotes "My company is very interesting", a sentence of the passage its context
- * quotes.
+ * The fewest words in a sentence that can name a line (task 3.11, fix round 1). A name
+ * or a vote word the line says whole ("Blake.", "No.") has fewer, and corrections quote
+ * names and vote words as often as lines.
+ */
+const MIN_LINE_SENTENCE_WORDS = 3;
+
+/**
+ * The sentences of a line that can name it: each whole sentence, normalized as
+ * isVerbatimIn reads it, without the quotation marks and brackets around it or its
+ * closing punctuation, and holding at least MIN_LINE_SENTENCE_WORDS words.
+ *
+ * @param {string} line - a quote's words, or a passage its context quotes
+ * @returns {string[]}
+ */
+function lineSentences(line) {
+  return normalizeForGrounding(line)
+    .split(/(?<=[.!?]["')\]]*)\s+/)
+    .map(sentence => sentence.replace(/^["'(\[]+/, '').replace(/[.!?,;:"')\]]+$/, ''))
+    .filter(sentence => (sentence.match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) || []).length >= MIN_LINE_SENTENCE_WORDS);
+}
+
+/**
+ * Whether `fragment` holds `sentence` word for word, starting and ending on word
+ * boundaries ("no" is not in "know").
+ *
+ * @param {string} fragment - a passage a correction quotes, normalized
+ * @param {string} sentence - one of lineSentences
+ * @returns {boolean}
+ */
+function holdsWholeSentence(fragment, sentence) {
+  const escaped = sentence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'u').test(fragment);
+}
+
+/**
+ * Whether a director's correction is about this quote (task 3.11): one of the
+ * passages it quotes holds a whole sentence of the quote's words, or of the passage
+ * the quote's context quotes. 092026's correction quotes "My company is very
+ * interesting", a sentence of the passage its context quotes. Corrections are about
+ * the roster, the accusation, names and votes as often as about quotes (fix round 1):
+ * a name, a vote word, a short phrase or a charge sits inside a sentence, or is a whole
+ * line shorter than MIN_LINE_SENTENCE_WORDS, so it never decides.
  *
  * @param {string} correction - one of the director's input-review corrections
  * @param {string} words - the quote's words
@@ -399,9 +436,9 @@ function quotedPassages(value) {
  * @returns {boolean}
  */
 function correctionQuotesTheLine(correction, words, context) {
-  const lines = [words, ...quotedPassages(context)];
+  const sentences = [words, ...quotedPassages(context)].flatMap(lineSentences);
   return quotedPassages(correction).some(fragment =>
-    lines.some(line => isVerbatimIn(fragment, line) || isVerbatimIn(line, fragment)));
+    sentences.some(sentence => holdsWholeSentence(fragment, sentence)));
 }
 
 /**

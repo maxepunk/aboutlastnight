@@ -832,10 +832,11 @@ describe("the director's notes, unguessed (phase 3, 3.6)", () => {
 // director corrected the line to Blake at the input review. A model that keeps the
 // notes' speaker and attaches no correction used to keep Vic, because the notes'
 // context names Vic and nothing else was consulted. A director's correction that puts
-// in quotation marks words the quote, or the quoted passage of its context, says is
-// about that quote: the notes' names are the ones it may have corrected away, and a
-// correction names the old speaker as well as the new, so code cannot read the new
-// one from it. The speaker and addressee are left out, as for a failed correction.
+// in quotation marks a whole sentence of the quote's words, or of the passage its
+// context quotes, is about that quote: the notes' names are the ones it may have
+// corrected away, and a correction names the old speaker as well as the new, so code
+// cannot read the new one from it. The speaker and addressee are left out, as for a
+// failed correction.
 // ═══════════════════════════════════════════════════════════════════════════════
 describe('a director\'s correction the model did not attach (task 3.11)', () => {
   const NOTES_092026 = [
@@ -879,6 +880,58 @@ describe('a director\'s correction the model did not attach (task 3.11)', () => 
     const result = await run([corrected]);
     expect(result.quotes).toEqual([corrected]);
     expect(result._enrichmentWarnings).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.11, fix round 1. Input-review corrections are about the roster, the
+// accusation, names and votes as often as about quotes, and a name or a short word in
+// quotation marks is an ordinary way to write one. Matched as a bare substring,
+// "Blake" sat inside "Blake told me to sell it before the vote." and "no" inside
+// "know", so each such correction left unrelated quotes with no speaker. A correction
+// is about a quote only when one of its quoted fragments holds a whole sentence of
+// three or more words of the line. A name, a vote word, a short phrase or a charge
+// sits inside a sentence; one that is a whole line has fewer than three words.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('a correction about something else leaves a quote\'s speaker in place (task 3.11, fix round 1)', () => {
+  const QUOTES = {
+    name: { speaker: 'Remi', text: 'Blake told me to sell it before the vote.', context: 'Remi told the room: "Blake told me to sell it before the vote."', confidence: 'high' },
+    know: { speaker: 'Sarah', addressee: 'Jess', text: 'How would you know that, Jess?', context: 'Sarah to Jess: "How would you know that, Jess?"', confidence: 'high' },
+    yes: { speaker: 'Ashe', addressee: 'Vic', text: 'Yes, I saw the ledger.', context: 'Ashe told Vic: "Yes, I saw the ledger."', confidence: 'high' },
+    intern: { speaker: 'Vic', addressee: 'Alex', text: 'You\'re just an intern.', context: 'Overheard Vic saying to Alex: "You\'re just an intern."', confidence: 'high' },
+    charge: { speaker: 'Remi', text: 'Vic is guilty of the murder of Marcus Blackwood.', context: 'Remi told the room: "Vic is guilty of the murder of Marcus Blackwood."', confidence: 'high' },
+    no: { speaker: 'Remi', text: 'No.', context: 'Asked if he sold it, Remi said: "No."', confidence: 'high' },
+    blake: { speaker: 'Ashe', text: 'Blake.', context: 'Asked who paid, Ashe said: "Blake."', confidence: 'high' },
+    trust: { speaker: 'Vic', addressee: 'Ashe', text: 'Trust no one.', context: 'Vic to Ashe: "Trust no one."', confidence: 'high' }
+  };
+  const NOTES = Object.values(QUOTES).map(quote => quote.context).join('\n');
+  const run = async (quote, correction) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: NOTES, corrections: [correction] }, jest.fn().mockResolvedValue({ quotes: [quote] }));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it.each([
+    ['a name', 'name', 'The accused should be "Blake", not Marcus.'],
+    ['a one-word answer, and a name the line says', 'know', 'At the vote Remi answered "no", and the roster name is "Jess", not Jessica.'],
+    ['a vote word', 'yes', 'Vic voted "Yes" at the end.'],
+    ['a two-word phrase', 'intern', 'Alex is "an intern", not a partner.'],
+    ['a charge, which sits inside the line\'s sentence', 'charge', 'The charge should read "the murder of Marcus Blackwood", not an accident.'],
+    ['a vote word the line says whole', 'no', 'At the vote Remi answered "No", not yes.'],
+    ['a name the line says whole', 'blake', 'The accused should be "Blake", not Marcus.']
+  ])('a correction quoting %s keeps the speaker and addressee the notes give', async (_case, key, correction) => {
+    const result = await run(QUOTES[key], correction);
+    expect(result.quotes).toEqual([QUOTES[key]]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  it('a correction quoting a whole line of three words is about that line', async () => {
+    const result = await run(QUOTES.trust, 'The line "Trust no one" was Blake to Ashe, not Vic.');
+    expect(result.quotes).toEqual([{ text: 'Trust no one.', context: 'Vic to Ashe: "Trust no one."', confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
   });
 });
 
