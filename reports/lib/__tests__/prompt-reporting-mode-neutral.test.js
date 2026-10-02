@@ -356,10 +356,12 @@ describe('the mode block reaches the arc and outline writers', () => {
  * through a tipster ("Every exposure ... reached you as tips"), which pushed the
  * article to name or invent exposers (plan review I6).
  *
- * Phase 2 (2.6) still holds for the remote block: attribution, and the absence
- * stated at most once. 092026's remote article said "I was not there.", "I was not
- * in that room." and "This is the story they told me." and the article evaluation
- * scored it as good voice.
+ * Phase 2 (2.6) still holds for the remote block: the absence is said once, and
+ * attribution where it matters. 092026's remote article said "I was not there.", "I
+ * was not in that room." and "This is the story they told me." and the article
+ * evaluation scored it as good voice. Task 3.8 (spec round 7, R13): Nova says it once,
+ * early, as the start of Nova's questions, and the room's events are then told as
+ * scenes; a source tag on every room event turned the story into a disclaimer.
  *
  * What moved out of the block in 3.1: "you did not vote" is T8's mode-independent
  * part and "you were not at the party" is T7, both in the truth rules, which every
@@ -391,13 +393,16 @@ describe("the journalist mode blocks state T8's mode part", () => {
     expect(blocks['on-site']).toMatch(/"we" may also take in the room/);
   });
 
-  it('remote: the room reached Nova from people in it, shown by attribution', () => {
-    expect(blocks.remote).toMatch(/reached Nova from people in the room/);
-    expect(blocks.remote).toMatch(/by attribution/);
+  it('remote: Nova says once, early, that Nova monitored from outside, and then tells the room in scenes (R13)', () => {
+    expect(blocks.remote).toMatch(/Nova monitored the investigation remotely, from outside the warehouse/);
+    expect(blocks.remote).toMatch(/Nova says so once, early, as the start of Nova's questions/);
+    expect(blocks.remote).toMatch(/After that the room's events are told as scenes/);
   });
 
-  it('remote: allows the absence to be stated at most once', () => {
-    expect(blocks.remote).toMatch(/states the absence at most once in the whole article/);
+  it('remote: attribution goes where it matters, and Nova never claims to have seen or heard the room (R13)', () => {
+    expect(blocks.remote).toMatch(/Attribution goes where it matters: a line someone was overheard saying, and a claim about a person/);
+    expect(blocks.remote).toMatch(/Nova never claims to have seen or heard the room/);
+    expect(blocks.remote).toMatch(/A person is named as Nova's source only where the record names them/);
   });
 });
 

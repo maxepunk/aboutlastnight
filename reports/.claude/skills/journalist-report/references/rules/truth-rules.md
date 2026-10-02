@@ -5,41 +5,36 @@ These keep the article true to the record and to how the game works. Each carrie
 ## T1. Evidence decides how a claim is written
 
 - What the record backs (an exposed memory, a document, the ledger, the evidence log, a photo), Nova states, and shows when it carries the thesis.
-- What happened or was said in the room, as the director's notes record it, Nova reports as seen or heard on site, or as reported to Nova remotely, with the speaker named.
-- What Nova knows or suspects but cannot back, Nova presents as a reading, an unproven claim or a question: background from Nova's earlier reporting on Marcus, for instance, or talk in the room about a memory that was later sold.
+- What happened or was said in the room, as the director's notes record it, Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12).
+- What Nova knows or suspects but the record cannot back (Nova's earlier reporting on Marcus, who bought, who sold, why someone acted), Nova writes as a careful reporter does: as Nova's own suspicion, an allegation or a question, worded fresh each time and grounded in what the record does show.
 
 Nothing is invented.
 
-Why: the players know what happened, and a false detail about their character breaks the gift. Receipts set against allegations are how Nova earns belief.
+Why: the players know what happened, and a false detail about their character breaks the gift. Receipts set against allegations are how Nova earns belief. NovaNews answers for what it states as fact about a person or a company, and a suspicion stated as fact is libel.
 
 ## T2. The verdict is the group's negotiated official story
 
-The article reports the verdict as the official story. It then shows how the players' choices made it: what the statement cited and left out, the possibilities that surfaced and were dropped, and whose interests it served. The article reports what the room decided happened to Marcus, never a claim to know what really happened, and never grades the verdict against a hidden answer. A verdict with no culprit (an overdose, an accident) names no one. The alternative theories the room debated are always reported.
+The article reports the verdict as the official story the room negotiated. It never claims to know what really happened to Marcus, and never grades the verdict against a hidden answer. A verdict with no culprit, such as an overdose or an accident, names no one. The alternative theories the room debated are always reported. How the room's choices made the story is craft (C3).
 
 Why: the statement is a story everyone could live with, built under the clock from what was on the Evidence Board. Showing how it was made is the article's promise.
 
 ## T3. Buried memories never appear as evidence
 
-No sentence presents what a buried memory said, or whose it was, as fact. When players talked about a memory in the room and the director's notes record it, Nova reports what was said, with the speaker named. When a memory was sold, for how much and into which account are all reportable, and a sale's size may speak to what was at stake, since NeurAI's board pays more the more sensitive the memory.
+No sentence presents what a buried memory said, or whose it was, as fact. When players talked about a memory in the room and the director's notes record it, Nova reports what was said, with the speaker named. When a memory was sold, for how much and into which account are all reportable, and a sale's size may speak to what was at stake, since the buyer pays more the more sensitive the memory.
 
 Why: the game erased those memories, and Nova's ledger cannot show what was sold.
 
 ## T4. An account is the seller's chosen destination and name
 
-An account's name is a message the seller chose: a joke, a borrowed identity, the seller's own name, or a frame. It never proves who holds the account, and several sellers can share one. Nova reads the name for what it claims, the timing for when, and the director's notes for who:
-- A person is tied to an account only by what the director saw or by an open claim, and the tie is posed as Nova's question unless confirmed.
-- A sale made openly in front of the room is a fact.
-- A reading across the counts that names no one is Nova's to make.
+An account's name is a message the seller chose: a joke, a borrowed identity, the seller's own name, or a frame. Nova reads the name for what it claims and the timing for when. A person is tied to an account as fact only when the director saw the sale, or when the sale was made openly in front of the room. Any other tie rests on something the record shows that person doing, such as being seen with Blake in the minute of a sale, and Nova poses it as a question. An account's name is never a reason to suspect its namesake. Nova's suspicion that someone sold can land on the person without naming an account, and Nova may say what the counts suggest about a player's own public claim. Totals show where the morning's money went. A transfer is a deal between players.
 
-Totals show where the morning's money went. A transfer is a deal between players.
+Why: anyone can open an account in any name, several sellers can share one, and the live ledger does not mark whose an account is.
 
-Why: anyone can open an account in any name, and the live ledger does not mark whose an account is.
+## T5. The buyer pays the seller
 
-## T5. NeurAI's board pays the seller
+Money runs from the buyer to the seller's chosen account. Nova suspects the buyer is NeurAI and its board, and writes it as a suspicion (T1). The ledger's totals are the figures: the writer copies them and computes nothing. Reportable money, when the story needs it: the first-burial bonus and transfers; each account's total; every sale's time and size; how many sales an account took; and counts of exposed memories, overall and per owner. The ledger holds the morning's payments for erasure. Money from before the party, such as an investment, a fortune or an inheritance, is the characters' motive background, from the documents. An entry that looks like a mistake goes to the director as a question.
 
-Money runs from NeurAI's board to the seller's chosen account. The ledger's totals are the figures: the writer copies them and computes nothing. Reportable money: the first-burial bonus and transfers; each account's total; every sale's time and size; how many sales an account took; the morning's bursts and lulls ("The <account> account took four sales between <time> and <time>, <sum> in all"); and counts of exposed memories, overall and per owner ("three were <character>'s"). The ledger records only what was paid to bury memories this morning, and says nothing about anyone's other wealth, such as Marcus's fortune, an inheritance or an investment. An entry that looks like a mistake goes to the director as a question, not into print.
-
-Why: money running the wrong way is the most common factual slip, and reading the ledger as proof of other wealth is a category error.
+Why: money running the wrong way is the most common factual slip, and stating the buyer as fact would accuse a company in print.
 
 ## T6. Exposers are anonymous unless named
 
@@ -51,7 +46,7 @@ Why: at turn-in the player chooses whether to go on the record, and anonymity pr
 
 - **The party** exists only as memories, never as something witnessed.
 - **The investigation** is told as the reporting mode allows. It ends in the group statement as the police come.
-- **Nova's day** comes from the epilogue alone. The writer adds no follow-up fact or outreach result the epilogue does not give. All follow-up is Nova's own reporting, and a channel the director names (a leaked email, an anonymous tip) is Nova's source for that item.
+- **Nova's day** comes from the epilogue alone. The writer adds no follow-up fact or outreach result the epilogue does not give. All follow-up is Nova's own reporting, and a channel the director names (a leaked email, an anonymous tip) is Nova's source for that item. What Nova says NovaNews is still chasing is Nova's own intent, and needs no epilogue.
 
 Logged times appear on the morning clock, as the record's timeline prints them. "Tonight" and "this afternoon" belong only to Nova's day.
 
@@ -59,7 +54,7 @@ Why: the players lived the investigation, met the party only through memories, a
 
 ## T8. Nova is the uninterested third party
 
-Nova reports on the room from outside its choices: Nova never votes, accuses or exposes, and is never one of the room. Nova's "we" is NovaNews, Nova and the reader, or Nova and a guest reporter. The reporting-mode block states what Nova could witness in this session.
+Nova reports on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and is never one of the room. Nova's "we" is NovaNews, Nova and the reader, or Nova and a guest reporter. The reporting-mode block states what Nova could witness in this session.
 
 Why: the police deal made Nova a neutral monitor.
 
@@ -97,7 +92,7 @@ Why: the players are in the photos, and the whiteboard is context for how the ro
 
 ## T14. The fiction stays whole
 
-The article speaks the fiction's own words: memories, memory tokens, burying and selling. Production words never print: director, GM, game master, tier, timer, or a bare "token" or "tokens" as a system label. Memories are turned in to Nova, and the market is the deals made with Blake around the room, not an institution with a name.
+The article speaks the fiction's own words: memories, memory tokens, burying and selling. Production words never print: director, GM, game master, tier, timer, or a bare "token" or "tokens" as a system label. Memories are turned in to Nova. In print the market is the deals made with Blake around the room, with no proper name, and who stands behind it is Nova's suspicion (T5).
 
 Why: the players read the article as part of the world they played in.
 

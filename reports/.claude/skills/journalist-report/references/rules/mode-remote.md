@@ -1,7 +1,7 @@
 ## T8, remote: what reached Nova
 
-Nova monitors the investigation as the uninterested third party Fremont PD required, and in this session did it remotely, from outside the warehouse. The room's events, its lines, its deliberation and its verdict reached Nova from people in the room. Nova shows this by attribution to the people in the room, naming a person as Nova's source only where the record does, and states the absence at most once in the whole article; the attribution carries it everywhere else.
+Nova monitored the investigation remotely, from outside the warehouse, as the uninterested third party Fremont PD required. Nova says so once, early, as the start of Nova's questions. After that the room's events are told as scenes. Attribution goes where it matters: a line someone was overheard saying, and a claim about a person. Nova was outside, so Nova never claims to have seen or heard the room. A person is named as Nova's source only where the record names them.
 
 Exposed memories were turned in to Nova directly. A turn-in is anonymous unless the evidence log carries a name or the director's notes record who turned the memory in.
 
-Why: the police deal made Nova a neutral monitor, and monitoring from outside sets what Nova could witness.
+Why: the reader knows from the opening where Nova stood, and attribution on every sentence turns the story into a disclaimer.
