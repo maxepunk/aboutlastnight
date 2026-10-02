@@ -25,11 +25,18 @@ const { registerHelpers } = require('./template-helpers');
 const { SchemaValidator } = require('./schema-validator');
 const { createThemeLoader } = require('./theme-loader');
 const { withoutWriterQuestions } = require('./writer-questions');
+const { spacePhotos } = require('./photo-spacing');
 
 /**
  * Default base directory for templates
  */
 const DEFAULT_TEMPLATE_DIR = path.join(__dirname, '..', 'templates');
+
+/**
+ * Themes whose layout prints the bundle's heroImage just above the first section
+ * (templates/journalist/layouts/article.hbs). The detective layout prints no hero.
+ */
+const THEMES_PRINTING_HERO = new Set(['journalist']);
 
 /**
  * Default CSS paths per theme (relative paths for HTML output)
@@ -224,6 +231,7 @@ class TemplateAssembler {
    * Adds computed properties and theme-specific data.
    * When inlineCss/inlineJs is enabled, loads and embeds asset content.
    * When sessionId is provided, transforms photo paths to use session-specific URLs.
+   * Spaces the sections' photos so no two print in a row (lib/photo-spacing.js).
    *
    * @private
    * @param {Object} contentBundle - ContentBundle JSON
@@ -240,6 +248,13 @@ class TemplateAssembler {
     // Calculate photos base path for session-specific photo serving
     // Use relative path (no leading /) for standalone HTML compatibility (GitHub Pages, file://)
     const photosBasePath = sessionId ? `sessionphotos/${sessionId}/` : 'photos/';
+
+    // Never two photos in a row (spec 2026-10-02 section 9): what prints is spaced, and
+    // the stored bundle keeps the writer's order. On a page that prints the hero, the
+    // hero is a photo just above the first block.
+    const sections = spacePhotos(contentBundle.sections, {
+      photoAboveFirstBlock: THEMES_PRINTING_HERO.has(this.theme) && Boolean(contentBundle.heroImage)
+    });
 
     // Load inline CSS if enabled
     let inlineCss = null;
@@ -289,9 +304,9 @@ class TemplateAssembler {
           }))
         : [],
 
-      // Transform sections to update photo content blocks with session-specific paths
-      sections: Array.isArray(contentBundle.sections)
-        ? contentBundle.sections.map(section => ({
+      // Transform the spaced sections to update photo content blocks with session-specific paths
+      sections: Array.isArray(sections)
+        ? sections.map(section => ({
             ...section,
             content: Array.isArray(section.content)
               ? section.content.map(block =>
@@ -301,7 +316,7 @@ class TemplateAssembler {
                 )
               : section.content
           }))
-        : contentBundle.sections,
+        : sections,
 
       // Inline CSS for standalone HTML (takes precedence over external)
       inlineCss,

@@ -190,6 +190,7 @@ lib/evidence-preprocessor.js        # Evidence batch preprocessing
 lib/image-preprocessor.js           # Image analysis preprocessing
 lib/image-prompt-builder.js         # Image prompt construction for Haiku
 lib/template-assembler.js           # Handlebars template compilation
+lib/photo-spacing.js                # spacePhotos: never two photos in a row on the printed page
 lib/template-helpers.js             # Handlebars helper registration
 lib/theme-config.js                 # Theme settings, NPC definitions, validation rules
 lib/prompt-builder.js               # Prompt assembly for each phase
@@ -248,6 +249,8 @@ templates/detective/
     ├── header.hbs              # Case metadata box
     └── content-blocks/         # paragraph, evidence-card, quote, list, photo
 ```
+
+**Photo spacing** (spec 2026-10-02 section 9): the page never prints two photos in a row. `TemplateAssembler.buildContext` passes the sections through `spacePhotos` (`lib/photo-spacing.js`, whose header states the whole rule) before it maps them, for both themes, so the publish step, the article stop's `htmlPreview` and `scripts/assemble-article.js` print one order. A photo that would follow a photo waits for the next paragraph: a heading separates nothing, the journalist hero counts as a photo above the first block, the photos keep their order, and no other block moves. Only what prints is spaced. The stored and approved bundles and the console's editors keep the writer's order, so the article stop's editor can show two photos together that its preview prints apart.
 
 ### Claude Agent SDK Usage
 

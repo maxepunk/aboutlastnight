@@ -7,6 +7,7 @@
 
 const path = require('path');
 const { TemplateAssembler, createTemplateAssembler, _testing } = require('../../lib/template-assembler');
+const { sectionsFrom, notationOf } = require('../../lib/__tests__/fixtures/photo-runs');
 
 // Load valid fixture for testing
 const validBundle = require('../fixtures/content-bundles/valid-journalist.json');
@@ -324,6 +325,71 @@ describe('detective theme', () => {
 
     expect(html).toContain('<script>');
     expect(html).toContain('EvidenceItems');
+  });
+});
+
+// Never two photos in a row (spec 2026-10-02 section 9; brief F3). buildContext spaces
+// the photos of what prints, for both themes, so the publish step, the article stop's
+// preview and scripts/assemble-article.js all print the spaced order. The stored
+// bundle keeps the writer's order. The rule itself is tested in
+// lib/__tests__/photo-spacing.test.js.
+describe('photo spacing in what prints', () => {
+  // 0926262's first draft from THE PLAYERS on, with the hero printed above the lede.
+  const DRAFT = '[the-players] P PH1 P P PH2 PH3 [whats-missing] PH4 P [closing] P quote PH5 P P P';
+  const SPACED = '[the-players] P PH1 P P PH2 [whats-missing] P PH3 [closing] P PH4 quote PH5 P P P';
+  const journalistDraft = () => ({
+    ...JSON.parse(JSON.stringify(validBundle)),
+    heroImage: { filename: 'hero.jpg', caption: 'The hero.' },
+    sections: sectionsFrom(DRAFT)
+  });
+
+  it('spaces the sections of the template context and leaves the bundle as the writer ordered it', async () => {
+    const assembler = new TemplateAssembler('journalist');
+    const bundle = journalistDraft();
+    const stored = JSON.parse(JSON.stringify(bundle));
+
+    const context = await assembler.buildContext(bundle, '010126');
+
+    expect(notationOf(context.sections)).toBe(SPACED);
+    expect(context.sections[1].content[1]).toEqual({
+      type: 'photo', filename: 'ph3.jpg', caption: 'Photo 3.', src: 'sessionphotos/010126/ph3.jpg'
+    });
+    expect(bundle).toEqual(stored);
+  });
+
+  it('counts the journalist hero as a photo just above the lede, when the bundle has one', async () => {
+    const assembler = new TemplateAssembler('journalist');
+    const lede = { ...JSON.parse(JSON.stringify(validBundle)), sections: sectionsFrom('[lede] PH1 P P') };
+
+    const withHero = await assembler.buildContext({ ...lede, heroImage: { filename: 'hero.jpg' } }, '010126');
+    expect(notationOf(withHero.sections)).toBe('[lede] P PH1 P');
+
+    const withoutHero = await assembler.buildContext(lede, '010126');
+    expect(notationOf(withoutHero.sections)).toBe('[lede] PH1 P P');
+  });
+
+  it('prints the spaced order on the page', async () => {
+    const assembler = new TemplateAssembler('journalist');
+    const html = await assembler.assemble(journalistDraft(), { sessionId: '010126' });
+    const printed = ['ph2.jpg', 'Paragraph whats-missing 2.', 'ph3.jpg', 'Paragraph closing 1.', 'ph4.jpg', 'Quote closing 2.', 'ph5.jpg'];
+    printed.forEach((marker) => expect(html).toContain(marker));
+    expect([...printed].sort((a, b) => html.indexOf(a) - html.indexOf(b))).toEqual(printed);
+  });
+
+  it('on the detective page, which prints no hero, leaves a photo that opens the report and still spaces a run', async () => {
+    const assembler = new TemplateAssembler('detective');
+    const bundle = {
+      headline: { main: 'Case #1221' },
+      metadata: { theme: 'detective', sessionId: '1221' },
+      heroImage: { filename: 'hero.jpg', caption: 'The hero.' },
+      sections: sectionsFrom('[case-summary] PH1 P P PH2 PH3 P')
+    };
+
+    const context = await assembler.buildContext(bundle, '1221');
+    expect(notationOf(context.sections)).toBe('[case-summary] PH1 P P PH2 P PH3');
+
+    const html = await assembler.assemble(bundle, { skipValidation: true, sessionId: '1221' });
+    expect(html).not.toContain('hero.jpg');
   });
 });
 
