@@ -2674,14 +2674,33 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       }
     });
 
-    it('moneyTruth reads the timeline at every judge, and FINANCIAL_SUMMARY where its writer had it', () => {
-      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline']);
+    it('moneyTruth reads the timeline and the notes at every judge, and FINANCIAL_SUMMARY where its writer had it', () => {
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes']);
       expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
       for (const phase of ['outline', 'article']) {
-        const { reads, description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
-        expect(reads).toEqual(['timeline', 'financialSummary']);
-        expect(description).toContain('as the ledger or FINANCIAL_SUMMARY gives it');
+        const { reads } = getPhaseCriteria(phase, 'journalist').moneyTruth;
+        expect(reads).toEqual(['timeline', 'financialSummary', 'notes']);
       }
+    });
+
+    // Final review (judges-factcheck[0]): the outline and article judges now hold
+    // FINANCIAL_SUMMARY, whose totals are each account's at the close of the morning,
+    // while the director's notes record balances said or shown in the room earlier
+    // (092026's read-out, 092626's "$4 million in the RW account"). The criterion names
+    // each source by what it gives, so a judge never "corrects" a player's line to a
+    // closing total (T1).
+    it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the room', () => {
+      const LEDGER = 'Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;';
+      const IN_THE_ROOM = "a balance the director's notes record as said or shown in the room as that moment's figure (T1).";
+      for (const phase of ['outline', 'article']) {
+        const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
+        expect(description).toContain(LEDGER);
+        expect(description).toContain('each total at the close of the morning as FINANCIAL_SUMMARY gives it;');
+        expect(description).toContain(IN_THE_ROOM);
+        expect(description).not.toContain('as the ledger or FINANCIAL_SUMMARY gives it');
+      }
+      const arcs = getPhaseCriteria('arcs', 'journalist').moneyTruth.description;
+      expect(arcs).toContain(`${LEDGER} and ${IN_THE_ROOM}`);
     });
   });
 

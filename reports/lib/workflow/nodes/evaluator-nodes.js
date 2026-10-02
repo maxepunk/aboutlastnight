@@ -190,8 +190,14 @@ const TRUTH_GROUPS = [
     // FINANCIAL_SUMMARY their writers copy, so a correct code-made total is never taken
     // for a sum the writer made up. The arc writer has no summary, so its judge has the
     // timeline alone. The buyer is Nova's suspicion (T5, R11).
-    reads: (phase) => (phase === 'arcs' ? ['timeline'] : ['timeline', 'financialSummary']),
-    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, each figure as ${phase === 'arcs' ? 'the ledger gives it' : 'the ledger or FINANCIAL_SUMMARY gives it'}, and the ledger's money taken as the morning's payments for erasure (T5)?`
+    //
+    // Final review (judges-factcheck[0]): each source is named by what it gives. The
+    // summary's totals are the close of the morning's, and the director's notes record
+    // balances said or shown in the room before then (092026's read-out of the balances,
+    // 092626's "$4 million in the RW account"), so a judge reads such a line as that
+    // moment's figure (T1) and never "corrects" it to a closing total.
+    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes'] : ['timeline', 'financialSummary', 'notes']),
+    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} and a balance the director's notes record as said or shown in the room as that moment's figure (T1).`
   },
   {
     key: 'verdictTruth',
