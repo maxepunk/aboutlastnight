@@ -10,7 +10,7 @@
  */
 
 const { formatAccused, buildParseCorrectionsBlock, normalizeCorrections } = require('./prompt-renderers/director-words-renderer');
-const { normalizeForGrounding, isVerbatimIn } = require('./grounding');
+const { normalizeForGrounding, isVerbatimIn, namedOutsideQuote } = require('./grounding');
 
 /**
  * How a quote's speaker is known: one wording for the schema and the rules
@@ -373,31 +373,35 @@ function createFallback(rawProse) {
   };
 }
 
-/** Words in a name that name no one ("the Valet" is named by "Valet"). */
-const NAME_FILLER = new Set(['the', 'a', 'an', 'and', 'of', 'to', 'mr', 'ms', 'mrs', 'dr']);
+/**
+ * The passages a piece of text puts in double quotation marks, normalized as
+ * isVerbatimIn reads them (curly marks straightened).
+ *
+ * @param {*} value
+ * @returns {string[]}
+ */
+function quotedPassages(value) {
+  return (normalizeForGrounding(value).match(/"[^"]+"/g) || [])
+    .map(passage => passage.slice(1, -1).trim())
+    .filter(Boolean);
+}
 
 /**
- * Whether one of `sources` names `name` in the director's own words: a word of the
- * name, matched whole and in any case, outside the quoted words themselves. A line
- * such as "Oh, Sam exposed everything." names Sam without saying who spoke it.
+ * Whether a director's correction is about this quote (task 3.11): it shares a quoted
+ * fragment with the quote's words, or with the quoted passage of the quote's context,
+ * one holding the other word for word as isVerbatimIn reads them. 092026's correction
+ * quotes "My company is very interesting", a sentence of the passage its context
+ * quotes.
  *
- * @param {string} name - a speaker or addressee
- * @param {string[]} sources - the quote's context and correction
- * @param {string} quoteText - the quoted words, which never count as naming
+ * @param {string} correction - one of the director's input-review corrections
+ * @param {string} words - the quote's words
+ * @param {string|null} context - the quote's context
  * @returns {boolean}
  */
-function namedOutsideQuote(name, sources, quoteText) {
-  const words = (String(name || '').match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || [])
-    .filter(word => word.length >= 2 && !NAME_FILLER.has(word.toLowerCase()));
-  if (words.length === 0) return false;
-  const quoted = normalizeForGrounding(quoteText);
-  return sources.some(source => {
-    const outside = quoted ? normalizeForGrounding(source).split(quoted).join(' ') : normalizeForGrounding(source);
-    return words.some(word => {
-      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(outside);
-    });
-  });
+function correctionQuotesTheLine(correction, words, context) {
+  const lines = [words, ...quotedPassages(context)];
+  return quotedPassages(correction).some(fragment =>
+    lines.some(line => isVerbatimIn(fragment, line) || isVerbatimIn(line, fragment)));
 }
 
 /**
@@ -409,9 +413,11 @@ function namedOutsideQuote(name, sources, quoteText) {
  *   (`droppedContexts`), and the correction only when a correction does
  *   (`droppedCorrections`).
  * - The speaker and the addressee are kept only when the kept context or
- *   correction names them outside the quoted words, and never when the quote
- *   carries a correction the corrections do not hold. A speaker left out is not
- *   recorded (`unrecordedSpeakers`), and the quote's confidence is "low".
+ *   correction names them outside the quoted words (namedOutsideQuote, which the
+ *   renderer shares), and never when the quote carries a correction the corrections
+ *   do not hold, or carries none while one of the director's corrections quotes the
+ *   line (task 3.11). A speaker left out is not recorded (`unrecordedSpeakers`), and
+ *   the quote's confidence is "low".
  *
  * @param {Array} quotes - the model's quotes
  * @param {string} rawProse - the director's notes
@@ -435,10 +441,18 @@ function groundQuotes(quotes, rawProse, corrections) {
     const correctionFailed = Boolean(text(quote.correction) && !correction);
     if (correctionFailed) counts.droppedCorrections += 1;
 
-    // A correction the director's corrections do not hold still says the director
-    // changed this quote, so the notes' own names may be the ones corrected away: the
-    // speaker and addressee are left out rather than printed in the wrong mouth (T12).
-    const witnesses = correctionFailed ? [] : [context, correction].filter(Boolean);
+    // Task 3.11: a correction of the director's that quotes this line, which the model
+    // did not attach. It decides the speaker and addressee in place of the notes, but
+    // a correction names the old speaker as well as the new one ("attributed to Vic …
+    // said by Blake"), so code cannot read the speaker from it.
+    const unattachedCorrection = !text(quote.correction)
+      && corrections.some(c => correctionQuotesTheLine(c, words, context));
+
+    // A correction the director's corrections do not hold, or one of theirs the model
+    // did not attach, says the director changed this quote, so the notes' own names may
+    // be the ones corrected away: the speaker and addressee are left out rather than
+    // printed in the wrong mouth (T12).
+    const witnesses = correctionFailed || unattachedCorrection ? [] : [context, correction].filter(Boolean);
     const speaker = text(quote.speaker) && namedOutsideQuote(quote.speaker, witnesses, words) ? quote.speaker : null;
     if (text(quote.speaker) && !speaker) counts.unrecordedSpeakers += 1;
     const addressee = text(quote.addressee) && namedOutsideQuote(quote.addressee, witnesses, words) ? quote.addressee : null;

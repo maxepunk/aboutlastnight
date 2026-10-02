@@ -827,6 +827,62 @@ describe("the director's notes, unguessed (phase 3, 3.6)", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.11 (final review, session-data finding 1): a correction the enricher did
+// not attach. 092026's notes put "If you ever want to…" in Vic's mouth, and the
+// director corrected the line to Blake at the input review. A model that keeps the
+// notes' speaker and attaches no correction used to keep Vic, because the notes'
+// context names Vic and nothing else was consulted. A director's correction that puts
+// in quotation marks words the quote, or the quoted passage of its context, says is
+// about that quote: the notes' names are the ones it may have corrected away, and a
+// correction names the old speaker as well as the new, so code cannot read the new
+// one from it. The speaker and addressee are left out, as for a failed correction.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('a director\'s correction the model did not attach (task 3.11)', () => {
+  const NOTES_092026 = [
+    'Alex and Vic had a hushed conversation in the corner as Alex showed Vic the contents of a memory token on the scanner. Overheard Vic saying to Alex: "You\'re just an intern."',
+    'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting." When it came to the information at hand, Ashe said it wasn\'t theirs; Alex said it didn\'t matter, let\'s use it.'
+  ].join('\n');
+  const CORRECTION_092026 = 'The quote attributed to Vic, speaking to Ashe ("My company is very interesting"), was actually said by Blake to Ashe, and the words were "my company would be very interested".';
+  const LINE = 'If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know.';
+  const CONTEXT = 'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting."';
+  const run = async (quotes, corrections = [CORRECTION_092026]) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: NOTES_092026, corrections }, jest.fn().mockResolvedValue({ quotes }));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it('leaves Vic and Ashe out and counts the speaker as unrecorded, when the model kept the notes\' Vic and attached nothing', async () => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: LINE, context: CONTEXT, confidence: 'high' }]);
+    expect(result.quotes).toEqual([{ text: LINE, context: CONTEXT, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it('reads the correction as about the quote when it quotes the quote\'s own words, normalized as isVerbatimIn reads them', async () => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.', context: CONTEXT, confidence: 'high' }],
+      ['The quote attributed to Vic, speaking to Ashe (“My company is very interesting”), was actually said by Blake to Ashe.']);
+    expect(result.quotes).toEqual([{ text: 'My company is very interesting.', context: CONTEXT, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it('keeps the speaker the notes give a quote no correction quotes', async () => {
+    const intern = { speaker: 'Vic', addressee: 'Alex', text: 'You\'re just an intern.', context: 'Overheard Vic saying to Alex: "You\'re just an intern."', confidence: 'high' };
+    const result = await run([intern]);
+    expect(result.quotes).toEqual([intern]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  it('keeps the speaker a correction the model attached names, as before', async () => {
+    const corrected = { speaker: 'Blake', addressee: 'Ashe', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' };
+    const result = await run([corrected]);
+    expect(result.quotes).toEqual([corrected]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Task 3.6 fix batch. Code keeps a quote's context or an epilogue detail only when
 // the notes hold it as one piece, so the rules ask for one unbroken passage (item
 // 1). Each rule is stated once per call, with its reason (item 5). A link needs the

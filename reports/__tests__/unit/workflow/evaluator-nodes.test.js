@@ -2503,10 +2503,14 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // sha256 of `${systemPrompt}\n<<USER>>\n${prompt}` as each node sends it, for the
     // detective fixture state, taken at 9286ec6 before 3.4 changed a line. The bundle
     // carries fields the page never prints, which the detective judge still reads.
+    // Task 3.11 moved all three by one line of the director's notes block they share
+    // with the writers (renderDirectorEnrichmentBlock): the fixture's stored quote has
+    // no context or correction naming Riley, so <QUOTE_BANK> prints "(speaker not
+    // recorded)" for "Riley". Restoring that line gives back the 9286ec6 hashes.
     const PINNED = {
-      arcs: 'acfc8d307614900e2d899784a38fb22c885fc4bd6843abc46f6831811d676e0c',
-      outline: 'a2853e239ba3f4333aa2670d74b481c3bfe22607c992e944edc51ee768bfe993',
-      article: '40b6589bd778b53a067483f38d375deb099d487f775c3606f389eae387dfaba0'
+      arcs: 'a41aadbdbd1e01db9b0410941c6c023f49c51712d42a1f775b8ee058784972f6',
+      outline: 'fcdacdb890c56c3d0d5eeda4849e717f948ab42ed9e4593a1eb868c92a3b8e5a',
+      article: 'a45757c839678980bcd547dc96e7387315fb8344f33fcd843d79e4aa0b3dbd9f'
     };
     const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
     const JUDGES = {

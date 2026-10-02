@@ -12,7 +12,7 @@ const { renderDirectorCorrectionsBlock, normalizeCorrections } = require('./dire
 const { buriedTransactionFields } = require('./record-view');
 const { sessionClockOf } = require('./session-clock');
 const { DERIVED_LABELS } = require('./derived-labels');
-const { isVerbatimIn } = require('../grounding');
+const { isVerbatimIn, namedOutsideQuote } = require('../grounding');
 
 /** What a quote whose speaker the notes do not record prints in the speaker's place. */
 const SPEAKER_NOT_RECORDED = '(speaker not recorded)';
@@ -24,22 +24,31 @@ const SPEAKER_NOT_RECORDED = '(speaker not recorded)';
  * for word: a thread enriched before 3.6 stored the enricher's own prose as context
  * (092026), and the line's label says it is the director's words.
  *
+ * A stored speaker or addressee prints only when that verified context or correction
+ * names them, by the enricher's own rule (namedOutsideQuote, lib/grounding.js; task
+ * 3.11). The enricher used before 3.6 required a speaker on every quote, so a thread it
+ * enriched stores speakers whose only support was a context that no longer prints
+ * (092626's "Mel" for a thought in Mel's memory).
+ *
  * @param {Object} quote - a stored quote ({speaker?, addressee?, text, context?, correction?})
  * @param {string} rawProse - the director's notes
  * @param {string[]} corrections - the director's input-review corrections
  * @returns {string}
  */
 function quoteEntry(quote, rawProse, corrections) {
-  const speaker = typeof quote.speaker === 'string' ? quote.speaker.trim() : '';
-  // An enricher from before 3.6 wrote "unknown" where it could not name the speaker.
-  const who = speaker && speaker.toLowerCase() !== 'unknown' ? speaker : SPEAKER_NOT_RECORDED;
-  const lines = [`- ${who}${quote.addressee ? ` (to ${quote.addressee})` : ''}: "${quote.text}"`];
-  if (quote.context && isVerbatimIn(quote.context, rawProse)) {
-    lines.push(`  In the notes: ${quote.context}`);
-  }
-  if (quote.correction && corrections.some(c => isVerbatimIn(quote.correction, c))) {
-    lines.push(`  The director's correction: ${quote.correction}`);
-  }
+  const context = quote.context && isVerbatimIn(quote.context, rawProse) ? quote.context : null;
+  const correction = quote.correction && corrections.some(c => isVerbatimIn(quote.correction, c)) ? quote.correction : null;
+  const witnesses = [context, correction].filter(Boolean);
+  const recorded = (name) => {
+    const value = typeof name === 'string' ? name.trim() : '';
+    // An enricher from before 3.6 wrote "unknown" where it could not name the speaker.
+    return value && value.toLowerCase() !== 'unknown' && namedOutsideQuote(value, witnesses, quote.text) ? value : '';
+  };
+  const speaker = recorded(quote.speaker);
+  const addressee = recorded(quote.addressee);
+  const lines = [`- ${speaker || SPEAKER_NOT_RECORDED}${addressee ? ` (to ${addressee})` : ''}: "${quote.text}"`];
+  if (context) lines.push(`  In the notes: ${context}`);
+  if (correction) lines.push(`  The director's correction: ${correction}`);
   return lines.join('\n');
 }
 

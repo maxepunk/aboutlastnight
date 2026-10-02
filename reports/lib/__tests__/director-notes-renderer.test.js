@@ -19,9 +19,10 @@ describe('renderDirectorEnrichmentBlock', () => {
   });
 
   it('emits <QUOTE_BANK> when quotes present', () => {
+    // Task 3.11: a stored speaker prints when the director's words around the quote name them.
     const out = renderDirectorEnrichmentBlock({
-      rawProse: 'p',
-      quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
+      rawProse: 'At the vote Alex said "we had to act".',
+      quotes: [{ speaker: 'Alex', text: 'we had to act', context: 'At the vote Alex said "we had to act".', confidence: 'high' }],
       transactionReferences: [],
       postInvestigationDevelopments: []
     });
@@ -209,13 +210,22 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
     ].join('\n'));
   });
 
-  it("prints a context only when the notes hold it word for word (a stored context was the enricher's own prose on 092026)", () => {
-    const out = renderDirectorEnrichmentBlock({
-      rawProse: PROSE,
-      quotes: [{ speaker: 'Blake', text: 'My company is very interesting.', context: "Prose attributes this to 'Vic to Ashe' but DIRECTOR_CORRECTIONS states this was Blake -> Ashe.", confidence: 'high' }]
-    });
-    expect(out).toContain('- Blake: "My company is very interesting."\n</QUOTE_BANK>');
+  // Task 3.11 (final review, session-data finding 2): 092026's stored quote keeps Blake
+  // only because the stored correction names Blake. Its stored context was the enricher's
+  // own prose, which the notes do not hold, so it neither prints nor names anyone.
+  it("prints a context only when the notes hold it word for word, and keeps 092026's Blake only because the stored correction names Blake", () => {
+    const stored = {
+      speaker: 'Blake', text: 'My company is very interesting.',
+      context: "Prose attributes this to 'Vic to Ashe' but DIRECTOR_CORRECTIONS states this was Blake -> Ashe.",
+      correction: CORRECTION, confidence: 'high'
+    };
+    const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, quotes: [stored], corrections: [CORRECTION] });
+    expect(block(out, 'QUOTE_BANK')).toContain(`- Blake: "My company is very interesting."\n  The director's correction: ${CORRECTION}\n</QUOTE_BANK>`);
     expect(out).not.toContain('Prose attributes');
+
+    const bare = renderDirectorEnrichmentBlock({ rawProse: PROSE, quotes: [{ ...stored, correction: undefined }] });
+    expect(bare).toContain('- (speaker not recorded): "My company is very interesting."\n</QUOTE_BANK>');
+    expect(bare).not.toContain('- Blake');
   });
 
   it("prints a correction only when the director's corrections hold it word for word", () => {
@@ -287,6 +297,61 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
     expect(out).not.toContain('<EPILOGUE>');
     expect(out).not.toContain('Riley left town');
     expect(out).not.toContain('Cayman');
+  });
+});
+
+/**
+ * Task 3.11 (final review, session-data finding 2): a stored speaker prints only when a
+ * verified context or correction names them, by the enricher's rule (lib/grounding.js
+ * namedOutsideQuote). The enricher used before phase 3 required a speaker on every
+ * quote, so threads it enriched (092026, 092626) store speakers whose only support was
+ * a context the renderer drops, or none at all. 092626's bank printed "Mel" for a line
+ * the notes give only as a thought in Mel's memory, which Remi exposed.
+ */
+describe("renderDirectorEnrichmentBlock: a stored speaker prints only when the director's words name them (task 3.11)", () => {
+  const PROSE = [
+    'Remi exposed a memory of Mel\'s, one in which she thinks "Marcus has no idea what\'s coming."',
+    'Jess told the room she had found a bedroom in the warehouse.',
+    'Vic to Ashe: "My company is very interesting."'
+  ].join('\n');
+  const bankOf = (quotes, corrections = []) => {
+    const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, quotes, corrections });
+    return out.slice(out.indexOf('<QUOTE_BANK>'), out.indexOf('</QUOTE_BANK>'));
+  };
+
+  it('prints "speaker not recorded" for a stored speaker with no context or correction (092626\'s Mel)', () => {
+    const bank = bankOf([{ speaker: 'Mel', text: 'Marcus has no idea what\'s coming.', confidence: 'high' }]);
+    expect(bank).toContain('- (speaker not recorded): "Marcus has no idea what\'s coming."');
+    expect(bank).not.toContain('- Mel');
+  });
+
+  it('prints "speaker not recorded" when the verified context names someone else, and keeps the addressee it names', () => {
+    const bank = bankOf([{ speaker: 'Blake', addressee: 'Ashe', text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'high' }]);
+    expect(bank).toContain('- (speaker not recorded) (to Ashe): "My company is very interesting."\n  In the notes: Vic to Ashe: "My company is very interesting."');
+  });
+
+  it('never counts the quoted words as naming the speaker or the addressee (092626\'s "How would you know that, Jess?")', () => {
+    const bank = bankOf([{ speaker: 'Sarah', addressee: 'Jess', text: 'How would you know that, Jess?', confidence: 'high' }]);
+    expect(bank).toContain('- (speaker not recorded): "How would you know that, Jess?"');
+    expect(bank).not.toMatch(/Sarah|\(to Jess\)/);
+  });
+
+  it('keeps a speaker and addressee the verified context names outside the quote', () => {
+    const bank = bankOf([{ speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'high' }]);
+    expect(bank).toContain('- Vic (to Ashe): "My company is very interesting."');
+  });
+
+  it('keeps the speaker the verified context names and leaves out an addressee only the quoted words name (092626\'s Jess)', () => {
+    const bank = bankOf([{
+      speaker: 'Jess', addressee: 'Sarah', text: 'So I assume that is not where he spent time with you, Sarah.',
+      context: 'Jess told the room she had found a bedroom in the warehouse.', confidence: 'high'
+    }]);
+    expect(bank).toContain('- Jess: "So I assume that is not where he spent time with you, Sarah."\n  In the notes: Jess told the room she had found a bedroom in the warehouse.');
+  });
+
+  it('reads the rule from the grounding module, which the enricher shares', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'prompt-renderers', 'director-notes-renderer.js'), 'utf8');
+    expect(src).toMatch(/const \{[^}]*\bnamedOutsideQuote\b[^}]*\} = require\('\.\.\/grounding'\);/);
   });
 });
 

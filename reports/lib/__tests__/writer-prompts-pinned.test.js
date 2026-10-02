@@ -151,14 +151,24 @@ const REPO = path.join(__dirname, '..', '..');
  *   (20722 -> 20622), the article writer's ten become eight (28001 -> 27901) and the
  *   arc writer's six become five (10799 -> 10755); nothing else in the renders moves.
  *   The detective pins do not move.
+ * - Phase 3 (task 3.11), a stored quote's speaker: <QUOTE_BANK> prints a stored
+ *   speaker only when a verified context or correction names them. The fixture's quote
+ *   (Riley, "I only kept the books") stores neither, so its line reads "(speaker not
+ *   recorded)" for "Riley", 17 characters more, and nothing else moves. Every writer
+ *   that carries the director's notes: the journalist outline, article and arc writers
+ *   and the detective arc writer, which shares the renderer (20722 -> 20739, 28001 ->
+ *   28018, 10799 -> 10816, 14730 -> 14747).
+ * - Integration of 3.11 onto 3.8: the journalist pins carry both changes, the new
+ *   craft stubs and the quote-bank line (20622 -> 20639, 27901 -> 27918, 10755 ->
+ *   10772); arcs-detective is 3.11’s (14747), and the other detective pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['4a847480a6c1d1bf638378f8f6f5b131cd06fa5a4545e906a6884f7340b6d873', 20622],
-  'article-journalist': ['fc76f95b4422e21b87bbd9f052fc0da3a9079ddeca121538f0cb829eb17fe82f', 27901],
-  'arcs-journalist': ['66f9d02f27e3633fa04e776b6d968da29e565175f3dd6acee646b6b1ea4965db', 10755],
+  'outline-journalist': ['53d4bba04c2c868b04feac54493da59e993b506b860af38e0508606e05261693', 20639],
+  'article-journalist': ['acfdfb9acce53e14e5e8131eda96095f64c166ce0c0e756dd5959b2d00ee9f15', 27918],
+  'arcs-journalist': ['84a3d0bda40156b8cd638c43f1e031d1666da2670839b5ea070031a770f1374b', 10772],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
-  'arcs-detective': ['41dace98218cf3f360893b995fa56031d926994f6c495a2568b217623df3df15', 14730]
+  'arcs-detective': ['57b57b954a3193cbd067cbe41bfc7ffcbbc4338430eb1af8503d2cdca16fee60', 14747]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {
