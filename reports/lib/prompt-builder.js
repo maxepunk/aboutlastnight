@@ -10,7 +10,7 @@ const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('./p
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
-const { renderSessionFactsVerdict, renderPhotoEntry } = require('./prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderPhotoEntry, photoKey } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // The journalist outline writer embeds this file as its <SCHEMA> (fix 3.2b), the one
 // the SDK channel enforces (ai-nodes.js), as the article writer embeds the schema above.
@@ -1225,11 +1225,33 @@ ${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
    * Phase 3 (3.7): APPROVED OUTLINE leaves out the outline writer's questions, which
    * were the director's to answer at the outline stop.
    *
+   * Phase 3 (3.9; T13, the integrator's ruling): the article places every photo the
+   * director has not excluded, and the outline only what its photo slots hold, so the
+   * writer is given the outline writer's whole set (options.photos, from
+   * articleWriterInputs): the hero image, then every other photo but the whiteboard.
+   * PHOTOS prints each one's entry once (renderPhotoEntry); an arc package points at its
+   * photos by filename, and only at listed ones, so the whiteboard a package names never
+   * reaches the writer. It used to see only the photos the arc packages listed.
+   *
    * @returns {string}
    */
   _journalistArticleUserSections(outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
+    const photos = Array.isArray(options.photos) ? options.photos.filter(photo => photo && photo.filename) : [];
+    const listed = new Set(photos.map(photo => photoKey(photo.filename)));
+    const photoSection = photos.length > 0
+      ? `PHOTOS (every photo the director has not excluded, without the whiteboard${photos[0].hero ? ': the hero image, then the rest' : ''}; each gives the names identified in it and the director's description):
+
+${photos.map((photo, i) => `${i + 1}. ${photo.hero ? '[hero image] ' : ''}${renderPhotoEntry(
+    { filename: photo.filename, names: photo.identifiedCharacters }, options.photoDescriptions, '   '
+  )}`).join('\n\n')}`
+      : 'PHOTOS: none';
+    /** One arc package's photos that PHOTOS lists, by filename, each once. */
+    const arcPhotoPointers = (pkg) => [...new Map((pkg.photos || [])
+      .filter(p => p && p.filename && listed.has(photoKey(p.filename)))
+      .map(p => [photoKey(p.filename), p.filename])).values()];
+
     const packages = arcEvidencePackages.length > 0 ? `
-ARC EVIDENCE PACKAGES: each selected arc's documents by id. Each one's full text is ${DOCUMENT_POINTER}. ${ARC_EXCERPTS_LABEL}
+ARC EVIDENCE PACKAGES: each selected arc's documents by id, and its photos by filename. Each document's full text is ${DOCUMENT_POINTER}, and each photo's entry is in PHOTOS above. ${ARC_EXCERPTS_LABEL}
 ${arcEvidencePackages.map(pkg => `
 ### ${pkg.arcId} - ${pkg.arcTitle}
 
@@ -1244,7 +1266,7 @@ ${(pkg.evidenceItems || []).map(item =>
 ).join('\n')}
 
 ARC PHOTOS:
-${(pkg.photos || []).map(p => `- ${renderPhotoEntry({ filename: p.filename, names: p.characters }, options.photoDescriptions)}`).join('\n') || 'None'}
+${arcPhotoPointers(pkg).map(filename => `- ${filename}`).join('\n') || 'None'}
 `).join('\n---\n')}
 ` : '';
 
@@ -1271,7 +1293,9 @@ APPROVED OUTLINE:
 ${JSON.stringify(withoutWriterQuestions(outline), null, 2)}
 
 HERO IMAGE: ${heroImage || 'none chosen: use the first photo the outline places'}
-It prints at the top of the article, as "heroImage". The inline photo blocks use the session's other photos.
+It prints at the top of the article, as "heroImage". The other photos in PHOTOS print as inline photo blocks.
+
+${photoSection}
 
 ${recordSection}
 ${packages}

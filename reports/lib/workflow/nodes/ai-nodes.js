@@ -1450,15 +1450,36 @@ Remember: You are IMPROVING, not regenerating. The previous work was valuable - 
  * session facts are computed and never stored; they are recomputed here by the
  * writer's own builder.
  *
+ * Phase 3 (3.9; T13, the integrator's ruling): `options.photos` is every photo the
+ * article places, the outline writer's whole set: the hero image first (`hero: true`,
+ * with the names identified in it), then buildAvailablePhotos, every other session
+ * photo without the whiteboard. The outline has one photo slot per arc and one in
+ * FOLLOW THE MONEY, so it places only some (092026: nine photos, six slots); the
+ * article places the rest. The article judge's PHOTOS is built from this same list
+ * (evaluator-nodes.js renderArticleJudgePhotos).
+ *
  * @param {Object} state
  * @returns {Array} [outline, arcEvidencePackages, heroImage, shellAccounts,
  *   sessionFacts, directorNotes, narrativeTensions, options]
  */
 function articleWriterInputs(state) {
+  const heroImage = state.heroImage;
+  const heroKey = heroImage ? photoFilenameOf(heroImage).toLowerCase() : null;
+  const heroAnalysis = heroKey
+    ? (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoFilenameOf(a.filename).toLowerCase() === heroKey)
+    : null;
+  const photos = [
+    ...(heroImage ? [{
+      filename: heroImage,
+      identifiedCharacters: Array.isArray(heroAnalysis?.identifiedCharacters) ? heroAnalysis.identifiedCharacters : [],
+      hero: true
+    }] : []),
+    ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))
+  ];
   return [
     state.outline || {},
     state.arcEvidencePackages || [],  // per-arc document ids, quotable excerpts and photos
-    state.heroImage,  // Hero image filename (prevents duplicate in photos array)
+    heroImage,  // Hero image filename (prevents duplicate in photos array)
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
     buildSessionFacts(state),
@@ -1466,14 +1487,16 @@ function articleWriterInputs(state) {
     state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
     // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
     // brief 1.3: the outline evaluation's advisory findings; brief 2.2: the director's
-    // input-review corrections and photo descriptions.
+    // input-review corrections and photo descriptions; phase 3 (3.9): every photo the
+    // article places.
     {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
       shouldConsider: advisoriesFromPreviousStage(state, 'outline'),
       evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
       directorCorrections: state.inputReviewCorrections || [],
-      photoDescriptions: state.photoDescriptions || null
+      photoDescriptions: state.photoDescriptions || null,
+      photos
     }
   ];
 }
@@ -1986,11 +2009,12 @@ module.exports = {
   // The writers' builders the judges share, by name (final fix wave): the
   // PromptBuilder factory (its roster section), the writers' SESSION_FACTS, the
   // outline writer's inputs and photo list, and the hero the writer and its
-  // reworker used.
+  // reworker used. Phase 3 (3.9): the article writer's inputs, its photos among them.
   getPromptBuilder,
   buildSessionFacts,
   buildAvailablePhotos,
   outlineWriterInputs,
+  articleWriterInputs,
   reworkHeroImage,
 
   // Internal functions for testing

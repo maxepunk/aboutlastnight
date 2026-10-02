@@ -174,7 +174,7 @@ async function render() {
   const { buildRevisionContext } = req('lib/workflow/nodes/node-helpers.js');
   const { _testing: { buildOutlineRevisionPrompt, buildArticleRevisionPrompt, getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt,
     buildOutlineRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
-    buildSessionFacts, buildAvailablePhotos } } = req('lib/workflow/nodes/ai-nodes.js');
+    buildSessionFacts, buildAvailablePhotos, articleWriterInputs } } = req('lib/workflow/nodes/ai-nodes.js');
   const { _testing: arcNodes } = req('lib/workflow/nodes/arc-specialist-nodes.js');
   requireExports('arc-specialist-nodes.js _testing', arcNodes, ['coreArcSystemPrompt', 'buildCoreArcPrompt',
     'getArcRevisionSystemPrompt', 'buildArcRevisionPrompt']);
@@ -267,10 +267,15 @@ async function render() {
   write(FILES[1], orSystem, orPrompt);
 
   // 3. article generation
+  // Phase 3 (3.9): the article writer's photos, as its node builds them
+  // (articleWriterInputs: the hero, then every photo the director kept). An older tree's
+  // inputs carry none, and its builder renders as it did.
+  const articleInputs = articleWriterInputs ? await articleWriterInputs(state) : null;
+  const articlePhotos = articleInputs ? (articleInputs[articleInputs.length - 1] || {}).photos : undefined;
   const ag = await promptBuilder.buildArticlePrompt(outline, state.arcEvidencePackages || [], heroImage, state.shellAccounts || [],
     sessionFacts, state.directorNotes || null, state.narrativeTensions || null,
     { directorGuidance: guidance, gateNotes: FIXED_NOTES, shouldConsider: FIXED_ADVISORIES,
-      evidenceBundle: state.evidenceBundle || null, ...directorWords });
+      evidenceBundle: state.evidenceBundle || null, ...directorWords, ...(articlePhotos && { photos: articlePhotos }) });
   write(FILES[2], ag.systemPrompt, ag.userPrompt);
 
   // 4. article revision (fixed hand edit: headline.main)

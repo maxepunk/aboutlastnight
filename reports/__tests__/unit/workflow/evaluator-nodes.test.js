@@ -2107,9 +2107,11 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     it('the outline judge holds the outline to its photo slots: photos from PHOTOS only, the rest left to the article', () => {
       // The outline has one photoPlacement per arc and one in FOLLOW THE MONEY, so it
       // cannot place every photo of a session with more photos than slots (092026: 8).
+      // Phase 3 (3.9, ruled): T13's every-photo check is the article's; the outline
+      // places what its slots hold, and the article places the rest.
       const { photosTruth } = getPhaseCriteria('outline', 'journalist');
       expect(photosTruth.description).toMatch(/every photo the outline places come from PHOTOS/);
-      expect(photosTruth.description).toMatch(/the article places the photos the outline has no slot for/);
+      expect(photosTruth.description).toMatch(/the article places the rest/);
       expect(photosTruth.description).not.toMatch(/every photo the director kept/);
     });
 
@@ -2119,13 +2121,16 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(photosTruth.description).toMatch(/director's description/);
     });
 
-    it('the article judge gets the article writer\'s photos: the hero, then each package photo once with the director\'s description, never the whiteboard', () => {
+    // Phase 3 (3.9, ruled): the article places every photo the director kept (T13), so
+    // the article writer gets the outline writer's whole set, and the judge's PHOTOS is
+    // that set. A kept photo no arc package lists (p9.jpg) used to reach neither.
+    it('the article judge gets the article writer\'s photos: the hero, then every photo the director kept, once each, never the whiteboard', () => {
       const state = fullState();
       state.arcEvidencePackages[1].photos = [
-        { filename: 'p2.jpg', characters: ['Alex'] },  // given twice: listed once
+        { filename: 'p2.jpg', characters: ['Alex'] },  // a package names it too: listed once
         { filename: 'whiteboard.jpg', characters: ['Riley'] }  // the whiteboard photo: left out
       ];
-      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];  // no package gives it to the writer
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];  // no package lists it
       const prompt = userFor('article', state);
       const start = prompt.indexOf('\nPHOTOS (');
       expect(start).toBeGreaterThan(prompt.indexOf('</RECORD>'));
@@ -2133,9 +2138,9 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(section).toContain(`1. [hero image] ${renderPhotoEntry({ filename: 'hero.jpg', names: ['Alex', 'Morgan', 'Sarah'] }, state.photoDescriptions, '   ')}`);
       expect(section).toContain(`2. ${renderPhotoEntry({ filename: 'p2.jpg', names: ['Alex'] }, state.photoDescriptions, '   ')}`);
       expect(section).toContain("The director's description, word for word: Alex leans over the ledger and points at a line.");
+      expect(section).toContain(`3. ${renderPhotoEntry({ filename: 'p9.jpg', names: [] }, state.photoDescriptions, '   ')}`);
       expect(count(section, 'p2.jpg')).toBe(1);
       expect(section).not.toContain('whiteboard.jpg');
-      expect(section).not.toContain('p9.jpg');
     });
 
     it('the detective article judge gets no PHOTOS section', () => {
@@ -2823,6 +2828,74 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       const sdk = jest.fn().mockResolvedValue(clone(VERDICT));
       await node(regenerated, { configurable: { sdkClient: sdk } });
       expect(sdk).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // The ruling of 2026-10-02: T13's every-photo check is the article's. The outline has
+  // one photo slot per arc and one in FOLLOW THE MONEY (092026: nine photos, six slots),
+  // so the article writer gets the outline writer's whole set through
+  // articleWriterInputs, and the judge's PHOTOS is built from the same input.
+  describe('every photo reaches the page (T13)', () => {
+    /** The fixture with a kept photo no arc package lists, and a stored hero. */
+    const withKeptPhoto = () => {
+      const state = stateFor('journalist', { heroImage: 'hero.jpg' });
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];
+      return state;
+    };
+    const ENTRIES = (state) => [
+      `1. [hero image] ${renderPhotoEntry({ filename: 'hero.jpg', names: ['Alex', 'Morgan', 'Sarah'] }, state.photoDescriptions, '   ')}`,
+      `2. ${renderPhotoEntry({ filename: 'p2.jpg', names: ['Alex'] }, state.photoDescriptions, '   ')}`,
+      `3. ${renderPhotoEntry({ filename: 'p9.jpg', names: [] }, state.photoDescriptions, '   ')}`
+    ];
+    /** The writer's answer: the fixture bundle with a third inline card, so the node logs no card-count warning. */
+    const answer = () => {
+      const bundle = clone(PREVIOUS_BUNDLE);
+      bundle.sections[0].content.push({ type: 'evidence-card', tokenId: 'mor001', headline: 'The envelope', content: 'Morgan hands Riley an envelope by the bar.', owner: 'Morgan Reed', significance: 'supporting' });
+      return bundle;
+    };
+    const recordingSdk = () => jest.fn(async () => answer());
+    const cfg = (sdk) => ({ configurable: { sdkClient: sdk, theme: 'journalist' } });
+
+    it('articleWriterInputs passes the hero, then every photo the outline writer could place', () => {
+      const state = withKeptPhoto();
+      const inputs = articleWriterInputs(state);
+      const { photos } = inputs[inputs.length - 1];
+      expect(photos[0]).toEqual({ filename: 'hero.jpg', identifiedCharacters: ['Alex', 'Morgan', 'Sarah'], hero: true });
+      expect(photos.slice(1)).toEqual(buildAvailablePhotos(state, 'hero.jpg', 'whiteboard.jpg'));
+      expect(photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
+    });
+
+    it('the article writer and its reworker list every photo once, under PHOTOS, and the packages point at theirs by filename', async () => {
+      const state = withKeptPhoto();
+      state.arcEvidencePackages[1].photos = [{ filename: 'whiteboard.jpg', characters: ['Riley'] }];
+      const writer = recordingSdk();
+      await generateContentBundle({ ...state, contentBundle: null }, cfg(writer));
+      const rework = recordingSdk();
+      await reviseContentBundle({ ...state, contentBundle: null, _previousContentBundle: clone(PREVIOUS_BUNDLE), articleRevisionCount: 1 }, cfg(rework));
+      for (const prompt of [writer.mock.calls[0][0].prompt, rework.mock.calls[0][0].prompt]) {
+        const photos = prompt.slice(prompt.indexOf('\nPHOTOS ('), prompt.indexOf('<RECORD>'));
+        expect(photos).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
+        expect(count(prompt, 'p2.jpg: Alex')).toBe(1);
+        expect(prompt).toContain('ARC PHOTOS:\n- p2.jpg\n');
+        // The whiteboard photo a package names is neither listed nor pointed at.
+        expect(prompt).not.toContain('whiteboard.jpg');
+      }
+    });
+
+    it('the article judge\'s PHOTOS are the same entries, built from the article writer\'s inputs', () => {
+      const state = withKeptPhoto();
+      const prompt = userFor('article', state);
+      const section = prompt.slice(prompt.indexOf('\nPHOTOS ('), prompt.indexOf('CONTENT BUNDLE:'));
+      expect(section).toContain('PHOTOS (the 3 photos the article writer was given');
+      expect(section).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
+    });
+
+    it('with no stored hero, the writer and the judge list every kept photo and mark none as the hero', () => {
+      const state = withKeptPhoto();
+      delete state.heroImage;
+      const inputs = articleWriterInputs(state);
+      expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
+      expect(userFor('article', state)).not.toContain('[hero image]');
     });
   });
 });

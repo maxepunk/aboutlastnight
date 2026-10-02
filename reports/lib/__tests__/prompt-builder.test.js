@@ -1346,8 +1346,9 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt.indexOf('</RECORD>')).toBeLessThan(userPrompt.indexOf('ARC EVIDENCE PACKAGES'));
     expect(userPrompt.indexOf('ARC EVIDENCE PACKAGES')).toBeLessThan(userPrompt.indexOf('</DATA_CONTEXT>'));
     // Phase 3 (3.2): the packages name each arc's documents and their excerpts, and
-    // the card's text is copied from the document in <RECORD>.
-    expect(userPrompt).toContain(`ARC EVIDENCE PACKAGES: each selected arc's documents by id. Each one's full text is ${DOCUMENT_POINTER}.`);
+    // the card's text is copied from the document in <RECORD>. Phase 3 (3.9): they name
+    // their photos by filename too, each photo's entry printed once, in PHOTOS.
+    expect(userPrompt).toContain(`ARC EVIDENCE PACKAGES: each selected arc's documents by id, and its photos by filename. Each document's full text is ${DOCUMENT_POINTER}, and each photo's entry is in PHOTOS above.`);
     expect(userPrompt).toContain('DOCUMENTS:\nm1 (memory)\nm2 (memory)');
     expect(userPrompt).toContain('- "quote from m1" (from m1)');
     expect(userPrompt).toContain('EXCERPTS:\nNone');
@@ -1452,6 +1453,12 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
   const CORRECTION = 'This was actually Blake -> Ashe, and what was said was my company would be very interested.';
   const PHOTO_7 = "Alex and Sam react to a memory they've just unlocked.";
   const PHOTO_DESCRIPTIONS = { 'aln092026 (7 of 9).jpg': PHOTO_7 };
+  // Phase 3 (3.9): the article writer's photos as articleWriterInputs passes them (the
+  // hero first), the filename in a different case from the description's key.
+  const ARTICLE_PHOTOS = [
+    { filename: 'hero.jpg', identifiedCharacters: ['Alex'], hero: true },
+    { filename: 'AlN092026 (7 OF 9).JPG', identifiedCharacters: ['Alex', 'Sam'] }
+  ];
 
   function builder(theme = 'journalist') {
     const themeLoader = {
@@ -1542,9 +1549,28 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
       expect(photos).not.toMatch(/Visual:|Characters:/);
     });
 
-    it("the article's arc photos carry the description, joined by filename whatever the case", async () => {
-      const { userPrompt } = await article(null, { photoDescriptions: PHOTO_DESCRIPTIONS });
-      expect(userPrompt).toContain(`- AlN092026 (7 OF 9).JPG: Alex, Sam\n  The director's description, word for word: ${PHOTO_7}`);
+    // Phase 3 (3.9; T13): the article writer lists every photo the director kept under
+    // PHOTOS, each entry once, and an arc package points at its photos by filename.
+    it("the article's photo list carries the description, joined by filename whatever the case", async () => {
+      const { userPrompt } = await article(null, { photoDescriptions: PHOTO_DESCRIPTIONS, photos: ARTICLE_PHOTOS });
+      const photos = between(userPrompt, '\nPHOTOS (', '<RECORD>');
+      expect(photos).toContain(`1. [hero image] hero.jpg: Alex\n   The director's description: none given`);
+      expect(photos).toContain(`2. AlN092026 (7 OF 9).JPG: Alex, Sam\n   The director's description, word for word: ${PHOTO_7}`);
+      expect(userPrompt.split(PHOTO_7)).toHaveLength(2);
+      expect(userPrompt).toContain('ARC PHOTOS:\n- AlN092026 (7 OF 9).JPG\n');
+    });
+
+    it('the article writer lists every photo it is given, a package\'s or not, and the packages point only at listed photos', async () => {
+      const photos = [...ARTICLE_PHOTOS, { filename: 'aln092026 (9 of 9).jpg', identifiedCharacters: [] }];
+      const { userPrompt } = await builder().buildArticlePrompt(
+        {},
+        [{ arcId: 'arc-1', arcTitle: 'The vote', evidenceItems: [], photos: [{ filename: 'AlN092026 (7 OF 9).JPG', characters: ['Alex', 'Sam'] }, { filename: 'whiteboard.jpg', characters: ['Vic'] }] }],
+        'hero.jpg', [], null, DIRECTOR_NOTES, null, { photos }
+      );
+      const list = between(userPrompt, '\nPHOTOS (', '<RECORD>');
+      expect(list).toContain('PHOTOS (every photo the director has not excluded, without the whiteboard');
+      expect(list).toContain('3. aln092026 (9 of 9).jpg: Unknown');
+      expect(userPrompt).not.toContain('whiteboard.jpg');
     });
   });
 

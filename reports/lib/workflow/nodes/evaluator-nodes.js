@@ -51,11 +51,13 @@ const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry, photoK
 const { directorAccusationText } = require('../../accusation-verdict');
 // The writers' own builders: the arc writer's valid-id list, the writers'
 // SESSION_FACTS, the outline writer's inputs (its photo list among them) with the
-// hero it used, and the PromptBuilder (whose roster method gives the roster section).
+// hero it used, the article writer's inputs (its photos, 3.9), and the PromptBuilder
+// (whose roster method gives the roster section, and whose money summary the outline
+// and article judges print, 3.9).
 // ARC_NOTES_LABEL is the arc writer's label for the director's notes, which the arc
 // judge's directorNotes line prints (one source, fix 3.4b).
 const { hasInterweavingPlan, extractEvidenceSummary, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
-const { buildSessionFacts, outlineWriterInputs, reworkHeroImage, getPromptBuilder } = require('./ai-nodes');
+const { buildSessionFacts, outlineWriterInputs, articleWriterInputs, reworkHeroImage, getPromptBuilder } = require('./ai-nodes');
 // Phase 3 (3.7): the writers' questions for the director. The arc judge reads the arc
 // writer's, for rosterCoverage; every judge's JSON of an output leaves them out.
 const { writerQuestionsOf, withoutWriterQuestions } = require('../../writer-questions');
@@ -228,11 +230,13 @@ const TRUTH_GROUPS = [
     phases: ['outline', 'article'],
     // The outline has one photo slot per arc and one in FOLLOW THE MONEY, and no
     // caption: placing every photo, and captioning it, is the article's work. The
-    // article judge reads the photos its writer was given (renderArticleJudgePhotos).
+    // article judge reads the photos its writer was given (renderArticleJudgePhotos):
+    // since 3.9, every photo the director kept, so "every photo in PHOTOS" is T13's
+    // every-photo check (the integrator's ruling).
     reads: (phase) => (phase === 'article' ? ['photos', 'whiteboard', 'printedCaptions'] : ['photos', 'whiteboard']),
     describe: (s, phase) => (phase === 'article'
       ? 'Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director\'s description wherever PHOTOS gives one (T13)?'
-      : 'Does every photo the outline places come from PHOTOS, which leaves the whiteboard photo out, and does the outline cite nothing from the whiteboard (T13)? The outline has one photo slot for each arc and one in FOLLOW THE MONEY, and the article places the photos the outline has no slot for.')
+      : 'Does every photo the outline places come from PHOTOS, which leaves the whiteboard photo out, and does the outline cite nothing from the whiteboard (T13)? The outline places what its photo slots hold, one for each arc and one in FOLLOW THE MONEY, and the article places the rest.')
   },
   {
     key: 'fictionTruth',
@@ -1279,46 +1283,30 @@ ${entries.join('\n\n')}`;
 
 /**
  * The article judge's photos (phase 3, 3.4 fix round 1): the photos the article writer
- * was given, so photosTruth asks a rework only for photos it can see. The article
- * writer's inputs (ai-nodes.js articleWriterInputs) carry them as state.heroImage, the
- * arc evidence packages' photos (its ARC PHOTOS) and state.photoDescriptions.
+ * was given, so photosTruth asks a rework only for photos it can see.
  *
- * That is the hero image (the stored hero, else the one generateOutline would select,
- * as the outline judge reads it), then each photo the packages list, once, with the
- * whiteboard photo left out. Each is the writer's renderPhotoEntry line: the names
- * identified in it and the director's description, joined by filename. A hero no
- * package lists takes its names from its photo analysis, as the outline judge's does.
+ * Phase 3 (3.9; T13, the integrator's ruling): built from the article writer's own
+ * inputs (ai-nodes.js articleWriterInputs, options.photos): the hero image, then every
+ * other photo the director kept, without the whiteboard, each once. It used to be the
+ * arc packages' photos, so a kept photo no package listed reached neither the writer
+ * nor the judge. Each is the writer's entry: the names identified in it and the
+ * director's description, joined by filename (renderPhotoEntry).
  *
  * @param {Object} state
  * @returns {string}
  */
 function renderArticleJudgePhotos(state) {
-  const heroImage = reworkHeroImage(state);
-  const heroKey = heroImage ? photoKey(heroImage) : null;
-  const whiteboardKey = state.whiteboardPhotoPath ? photoKey(state.whiteboardPhotoPath) : null;
-  const packagePhotos = new Map();
-  for (const pkg of state.arcEvidencePackages || []) {
-    for (const photo of (Array.isArray(pkg?.photos) ? pkg.photos : [])) {
-      const key = photo?.filename ? photoKey(photo.filename) : null;
-      if (!key || key === whiteboardKey || packagePhotos.has(key)) continue;
-      packagePhotos.set(key, { filename: photo.filename, names: photo.characters });
-    }
-  }
-  const heroAnalysis = heroKey
-    ? (state.photoAnalyses?.analyses || []).find(analysis => analysis?.filename && photoKey(analysis.filename) === heroKey)
-    : null;
-  const photos = [
-    ...(heroImage ? [{ filename: heroImage, names: packagePhotos.get(heroKey)?.names || heroAnalysis?.identifiedCharacters || [], hero: true }] : []),
-    ...[...packagePhotos].filter(([key]) => key !== heroKey).map(([, photo]) => photo)
-  ];
+  const writerInputs = articleWriterInputs(state);
+  const { photos = [], photoDescriptions = null } = writerInputs[writerInputs.length - 1] || {};
   if (photos.length === 0) return 'PHOTOS (the article writer was given none)';
 
   const entries = photos.map((photo, i) => `${i + 1}. ${photo.hero ? '[hero image] ' : ''}${renderPhotoEntry(
-    { filename: photo.filename, names: photo.names },
-    state.photoDescriptions || null,
+    { filename: photo.filename, names: photo.identifiedCharacters },
+    photoDescriptions,
     '   '
   )}`);
-  return `PHOTOS (the ${photos.length} photos the article writer was given: the hero image, then each photo the arc evidence packages list, without the whiteboard photo; each gives the names identified in it and the director's description, joined by filename):
+  const order = photos[0].hero ? 'the hero image, then every other photo the director has not excluded' : 'every photo the director has not excluded';
+  return `PHOTOS (the ${photos.length} photos the article writer was given: ${order}, without the whiteboard photo; each gives the names identified in it and the director's description, joined by filename):
 
 ${entries.join('\n\n')}`;
 }
@@ -1588,6 +1576,10 @@ Check for narrative momentum:
  * list of its own; the article judge reads only the bundle's printed fields, and its
  * mode line points at the mode block its system prompt carries. The detective's user
  * prompts are unchanged.
+ *
+ * Phase 3 (3.9), journalist only: the outline and article judges read the writers'
+ * FINANCIAL_SUMMARY right after the record (renderJudgeFinancialSummary), and the
+ * article judge's PHOTOS is every photo its writer was given (renderArticleJudgePhotos).
  *
  * @param {string} phase - Phase name
  * @param {Object} state - Current state with content
