@@ -184,9 +184,15 @@ const REPO = path.join(__dirname, '..', '..');
  * - Integration of 3.10 onto 3.9: outline-journalist carries both, 3.9’s money sentence and
  *   schema description and 3.10’s roster section (20638 -> 21197); article-journalist is
  *   3.9’s (28269) and arcs-journalist 3.10’s (11398). The detective pins do not move.
+ * - The 4b fix batch (item 8), one builder for the roster without the character context
+ *   (rosterWithPronounsSection): the journalist outline writer's roster section prints
+ *   under the "### Names and Pronouns" heading the arc writer and the interweaving call
+ *   give it (21197 -> 21220), outline-journalist only. The arc writer's roster lines do
+ *   not move. (Item 7: the article writer's PHOTOS entries come from one builder shared
+ *   with its judge, renderPhotoListEntry, and do not move a byte.)
  */
 const PINNED = {
-  'outline-journalist': ['100a5de2fdf02ce36f4cac5133465f953fa5140197db7f2e78aaa91322031a2f', 21197],
+  'outline-journalist': ['06d657191804562a991b44095ee64363aa3ac94f5c88d451a2bc87d6960ec1f2', 21220],
   'article-journalist': ['2cd5992037eec2f125bc6e7882e1f65688ed37a93c88235ab18ec983b6b042de', 28269],
   'arcs-journalist': ['f4838fdf6fd39ed79c8921132224439f48a519c53e4d86c54112012dfe3c25b7', 11398],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],

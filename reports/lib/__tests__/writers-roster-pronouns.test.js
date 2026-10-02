@@ -125,8 +125,27 @@ describe('the interweaving call', () => {
     const { state, interweaving } = await arcCalls('journalist');
     expect(count(interweaving, rosterSectionFor(state))).toBe(1);
     PRONOUN_LINES.forEach((line) => expect(`${line}: ${count(interweaving, line)}`).toBe(`${line}: 1`));
-    expect(interweaving).toContain(`## ROSTER (for identifying shared characters)\n\n["Alex","Morgan","Sarah","Riley"]\n\n## NAMES AND PRONOUNS\n\n${rosterSectionFor(state)}\n`);
+    // The 4b fix batch (3.10 review minor 5): under the heading the arc writer and the
+    // outline writer give it too, a subsection of the roster it bridges by.
+    expect(interweaving).toContain(`## ROSTER (for identifying shared characters)\n\n["Alex","Morgan","Sarah","Riley"]\n\n### Names and Pronouns\n${rosterSectionFor(state)}\n`);
     expect(interweaving).not.toContain('CHARACTER CONTEXT');
+  });
+});
+
+// The 4b fix batch (3.10 review minor 5): the section was built at two sites with two
+// constructions, and the outline printed it bare while the arc writer and the
+// interweaving call gave it a heading. One function builds it, heading included.
+describe('one builder for the roster without the character context', () => {
+  it('the arc writer, the interweaving call and the outline writer print its section once, under the same heading', async () => {
+    const { rosterWithPronounsSection } = require('../prompt-builder');
+    const { state, writer, interweaving } = await arcCalls('journalist');
+    const { system, user } = await outlineCall('journalist');
+    const section = rosterWithPronounsSection(state.sessionConfig, state.canonicalCharacters);
+    expect(section).toBe(`### Names and Pronouns\n${rosterSectionFor(state)}`);
+    for (const [name, text] of [['arc writer', writer], ['interweaving', interweaving], ['outline writer', `${system}\n${user}`]]) {
+      expect(`${name}: ${count(text, section)}`).toBe(`${name}: 1`);
+      expect(`${name}: ${count(text, 'Names and Pronouns')}`).toBe(`${name}: 1`);
+    }
   });
 });
 

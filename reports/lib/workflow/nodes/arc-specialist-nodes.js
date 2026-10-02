@@ -75,7 +75,11 @@ const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = require('../../accusation-verdict');
-const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes, createPromptBuilder } = require('../../prompt-builder');
+// rosterWithPronounsSection: the roster with pronouns (phase 3, 3.10; T9), the one
+// builder the arc writer, the interweaving call and the outline writer print it with
+// (the 4b fix batch). At the gate these calls had first names alone, and the arc
+// writer asked the director five pronoun questions the roster stop had answered.
+const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes, rosterWithPronounsSection } = require('../../prompt-builder');
 const { loadRuleSet } = require('../../rule-set');
 const { WRITER_QUESTIONS_PROPERTY, writerQuestionsOf, carriedWriterQuestions, questionedRosterNames } = require('../../writer-questions');
 
@@ -142,27 +146,6 @@ function coreArcSystemPrompt(sessionConfig, theme = 'journalist') {
 function interweavingSystemPrompt(sessionConfig, theme = 'journalist') {
   if (isParkedDetective(theme)) return withReportingModeBlock(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT, sessionConfig, theme);
   return withReportingModeBlock(withRuleSetCore(INTERWEAVING_SYSTEM_PROMPT, 'interweaving'), sessionConfig, theme);
-}
-
-/**
- * The roster with pronouns for the journalist arc writer and interweaving call (phase
- * 3, brief 3.10; T9): the section the article writer's system prompt and every judge
- * print, PromptBuilder#_rosterSection, from the session's roster and pronouns and the
- * canonical names. At the gate these calls had first names alone, and the arc writer
- * asked the director five pronoun questions the roster stop had already answered. The
- * builder gets no character data, so the section carries no character context: the arc
- * writer prints its own, and the interweaving call reads none.
- *
- * @param {Object|null} sessionConfig - its roster and rosterPronouns
- * @param {Object|null} canonicalCharacters - first name -> full name
- * @returns {string}
- */
-function rosterWithPronouns(sessionConfig, canonicalCharacters) {
-  return createPromptBuilder({
-    theme: 'journalist',
-    sessionConfig: sessionConfig || {},
-    canonicalCharacters: canonicalCharacters || null
-  })._rosterSection();
 }
 
 /**
@@ -383,8 +366,8 @@ function writerQuestionsFormatLine() {
  * 3.7b).
  *
  * Phase 3 (3.10; T9): after the character categories, the roster with pronouns
- * (rosterWithPronouns), so each player's pronoun reaches the writer once. The session
- * roster stays as it was: its first names decide rosterCoverage.
+ * (rosterWithPronounsSection, heading included), so each player's pronoun reaches the
+ * writer once. The session roster stays as it was: its first names decide rosterCoverage.
  *
  * The truth rules (in the system prompt) state what the old SECTION 4 and 4.5 said
  * about evidence and time, and contradicted parts of them: they named each memory's
@@ -491,8 +474,7 @@ ${JSON.stringify(context.roster)}
 
 ${buildCharacterCategoriesBlock(context.roster, 'journalist', allCharacters).trimEnd()}
 
-### Names and Pronouns
-${rosterWithPronouns(state.sessionConfig, state.canonicalCharacters)}
+${rosterWithPronounsSection(state.sessionConfig, state.canonicalCharacters)}
 ${characterContext}
 ---
 
@@ -879,9 +861,10 @@ Also provide an **interweavingPlan** with:
  * task names the fields that hold each and restates none of them (spec section 8:
  * each rule appears once).
  *
- * Phase 3 (3.10): the roster with pronouns follows the session roster
- * (rosterWithPronouns), and the task's field lines leave the principles to the system
- * prompt (INTERWEAVING_PRINCIPLES).
+ * Phase 3 (3.10): the roster with pronouns follows the session roster, and the task's
+ * field lines leave the principles to the system prompt (INTERWEAVING_PRINCIPLES). The
+ * 4b fix batch: the roster with pronouns is rosterWithPronounsSection's, under the
+ * heading the arc writer and the outline writer give it, a subsection of the roster.
  *
  * @param {Array} compactArcs - the arcs, as buildInterweavingPrompt cuts them
  * @param {Array} roster
@@ -903,9 +886,7 @@ ${JSON.stringify(compactArcs, null, 2)}
 
 ${JSON.stringify(roster)}
 
-## NAMES AND PRONOUNS
-
-${rosterWithPronouns(sessionConfig, canonicalCharacters)}
+${rosterWithPronounsSection(sessionConfig, canonicalCharacters)}
 
 ## THE RECORD (the documents the arcs rest on, and the morning timeline)
 

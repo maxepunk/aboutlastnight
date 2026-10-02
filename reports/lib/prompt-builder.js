@@ -370,6 +370,29 @@ function buildReportingModeBlock(sessionConfig, theme) {
 }
 
 /**
+ * The roster with pronouns under its heading, without the character context: the
+ * section the arc writer, the interweaving call and the outline writer print (phase 3,
+ * 3.10; T9), each player with the pronoun the roster stop gave and the NPCs' canon
+ * lines, as the article writer's system prompt and the judges print them
+ * (generateRosterSection). None of the three reads the character data with it: the arc
+ * writer prints its own character context, and the other two read none.
+ *
+ * The 4b fix batch (3.10 review minor 5): one builder, heading included. The section
+ * was built at two sites with two constructions, and the outline printed it bare while
+ * the arc writer and the interweaving call each gave it a heading of their own.
+ * Journalist only: the detective's prompts print no such section (D13).
+ *
+ * @param {Object|null} sessionConfig - its roster and rosterPronouns
+ * @param {Object|null} canonicalCharacters - first name -> full name
+ * @returns {string}
+ */
+function rosterWithPronounsSection(sessionConfig, canonicalCharacters) {
+  const config = sessionConfig || {};
+  return `### Names and Pronouns
+${generateRosterSection('journalist', canonicalCharacters || null, null, config.rosterPronouns, config.roster)}`;
+}
+
+/**
  * Put the block into a system prompt assembled somewhere else.
  *
  * Phase 1 brief 1.5: the arc writer and the outline reworker were never told the
@@ -901,12 +924,13 @@ Return JSON with the following structure:
       // writer's <SCHEMA> is.
       //
       // Phase 3 (3.10; T9): after SESSION_FACTS, the roster with pronouns, the section
-      // the article writer's system prompt and the judges print (_rosterSection), so
-      // each player's pronoun reaches this writer once: at the gate it planned from
-      // first names alone. The section is built without the character data, so it adds
-      // the roster and the NPCs' canon lines and none of the character context the
-      // article writer reads beside them.
-      const rosterSection = new PromptBuilder(this.theme, this.themeName, this.sessionConfig, this.canonicalCharacters)._rosterSection();
+      // the article writer's system prompt and the judges print, so each player's
+      // pronoun reaches this writer once: at the gate it planned from first names alone.
+      // The section is built without the character data, so it adds the roster and the
+      // NPCs' canon lines and none of the character context the article writer reads
+      // beside them. The 4b fix batch: built by rosterWithPronounsSection, under the
+      // heading the arc writer and the interweaving call print it with.
+      const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
       userPrompt = `Plan the outline of the article from these selected arcs. Write the plan in the third person: the article writer gives it Nova's voice.
 
 SELECTED ARCS:
@@ -1439,6 +1463,9 @@ module.exports = {
   PromptBuilder,
   createPromptBuilder,
   generateRosterSection,
+  // The roster with pronouns, without the character context, for the arc writer, the
+  // interweaving call and the outline writer (the 4b fix batch)
+  rosterWithPronounsSection,
   buildDirectorGuidanceSection,
   buildShouldConsiderSection,
   // Shared with buildRevisionContext (node-helpers.js) so a rework prompt and a
