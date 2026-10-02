@@ -1,1 +1,0 @@
-STUB craft-thesis

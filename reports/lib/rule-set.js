@@ -7,8 +7,11 @@
  * - `world.md`: the purpose of the article, the world (spec section 2) and how a
  *   memory moves through the game (3a);
  * - `truth-rules.md`: T1 to T15, with T8's mode-independent part;
- * - ten `craft-*.md` files, split so each call reads exactly the craft items spec
- *   section 8 gives it (RULE_SET_CALLS);
+ * - eight `craft-*.md` files, the craft items C1 to C19 grouped by the writer's job
+ *   (spec section 5; task 3.8): story (C1, C3, C16), form (C2, C5, C6, C17, C18,
+ *   C19, C14), material (C8, C7, C10, C11), voice (C12), judgement (C13), telling
+ *   (C4), cards (C9) and questions (C15). Each call reads the files spec section 8
+ *   gives it (RULE_SET_CALLS);
  * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block,
  *   which loadModeBlock hands back in its tag as loadRuleSet does each file.
  *
@@ -32,18 +35,23 @@ const DEFAULT_RULES_ROOT = path.resolve(
 const CORE_FILES = ['world', 'truth-rules'];
 
 /**
- * Each call's craft files, in the order they are given (spec section 8). A reworker
- * passes its writer's call; a judge reads its writer's list.
+ * Each call's craft files (spec section 8), every list in one order: story, form,
+ * material, voice, judgement, telling, cards, questions. The arc writer finds the
+ * threads, examines them through the lenses and finds where they can meet; the
+ * interweaving call plans how they intercut and converge, and has no output for
+ * questions, so it reads no C15; the outline writer plans the telling and reads all
+ * but the voice; the article writer reads all eight. A reworker passes its writer's
+ * call; a judge reads its writer's list.
  */
-const ARC_CRAFT = ['craft-thesis', 'craft-arcs', 'craft-room', 'craft-tracing', 'craft-judgement', 'craft-questions'];
-const INTERWEAVING_CRAFT = ['craft-thesis', 'craft-arcs', 'craft-room', 'craft-tracing', 'craft-judgement'];
+const ARC_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'];
+const INTERWEAVING_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement'];
 const OUTLINE_CRAFT = [
-  'craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing',
-  'craft-telling', 'craft-cards', 'craft-judgement', 'craft-questions'
+  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+  'craft-telling', 'craft-cards', 'craft-questions'
 ];
 const ARTICLE_CRAFT = [
-  'craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing',
-  'craft-telling', 'craft-cards', 'craft-voice', 'craft-judgement', 'craft-questions'
+  'craft-story', 'craft-form', 'craft-material', 'craft-voice',
+  'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
 ];
 
 const RULE_SET_CALLS = Object.freeze({

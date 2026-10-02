@@ -275,12 +275,13 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     // investigation focus, the character context, the rules, the record, the
     // boundaries, temporal awareness, the tensions and the three lenses. Phase 3 (3.3):
     // the journalist's sections are the rule set's (its truth rules state the old
-    // boundaries and timelines), and its craft files come last.
+    // boundaries and timelines), and its craft files come last. Task 3.8: the lenses
+    // (C16) are in craft-story, the file that opens the arc writer's craft.
     const headings = theme === 'detective'
       ? ['## SECTION 4: EVIDENCE BOUNDARIES', '## SECTION 4.5: TEMPORAL AWARENESS', '## SECTION 4.6: NARRATIVE TENSIONS',
         '## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT']
       : ['## SECTION 3: THE RECORD', '## SECTION 4: STAGES IN AN ARC SUMMARY', '## SECTION 5: THE THREE LENSES IN analysisNotes',
-        '## SECTION 6: CRAFT GUIDANCE', '<craft-arcs>'];
+        '## SECTION 6: CRAFT GUIDANCE', '<craft-story>'];
     [
       // Phase 3 (3.5): the whiteboard section's heading names it a model's reading.
       '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',

@@ -1978,11 +1978,12 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
 
     it('each judge reads exactly its writer\'s craft list', () => {
       const craftTags = (phase) => [...userFor(phase, stateFor()).matchAll(/^<(craft-[a-z]+)>$/gm)].map((m) => m[1]);
-      expect(craftTags('arcs')).toEqual(['craft-thesis', 'craft-arcs', 'craft-room', 'craft-tracing', 'craft-judgement', 'craft-questions']);
-      expect(craftTags('outline')).toEqual(['craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing',
-        'craft-telling', 'craft-cards', 'craft-judgement', 'craft-questions']);
-      expect(craftTags('article')).toEqual(['craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing',
-        'craft-telling', 'craft-cards', 'craft-voice', 'craft-judgement', 'craft-questions']);
+      // Task 3.8: the craft files grouped by the writer's job (spec section 8).
+      expect(craftTags('arcs')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions']);
+      expect(craftTags('outline')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+        'craft-telling', 'craft-cards', 'craft-questions']);
+      expect(craftTags('article')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-voice',
+        'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions']);
     });
 
     it('says a craft finding is should-consider, naming its item', () => {

@@ -196,7 +196,8 @@ describe('PromptBuilder', () => {
         mockOutline
       );
 
-      ['thesis', 'sections', 'arcs', 'room', 'tracing', 'telling', 'cards', 'voice', 'judgement', 'questions']
+      // Task 3.8: the eight craft files, grouped by the writer's job (spec section 8).
+      ['story', 'form', 'material', 'voice', 'judgement', 'telling', 'cards', 'questions']
         .forEach((name) => expect(userPrompt).toContain(`<craft-${name}>`));
       expect(userPrompt).not.toContain('Show dont tell');
     });

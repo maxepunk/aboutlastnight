@@ -144,11 +144,18 @@ const REPO = path.join(__dirname, '..', '..');
  *   kinds, and its two roster lines (the system prompt's output list, the ROSTER PCs
  *   label) say a question covers a player only when its kind is "player" (10735 ->
  *   10799). The detective pins do not move.
+ * - Phase 3 (3.8), the craft regrouped by the writer's job (spec round 7): the craft
+ *   stubs each journalist writer reads at the end of its user prompt are the new
+ *   files, in spec section 8's order (story, form, material, voice, judgement,
+ *   telling, cards, questions). The outline writer's nine stub blocks become seven
+ *   (20722 -> 20622), the article writer's ten become eight (28001 -> 27901) and the
+ *   arc writer's six become five (10799 -> 10755); nothing else in the renders moves.
+ *   The detective pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['781607793b6b0e45f3eab747c850c739c998afe6888a0d74196d4016c1fa8f72', 20722],
-  'article-journalist': ['17d1f28c4191ce5b6af8331659a4927aee0490a36e0127448cb939fc1d2ca83b', 28001],
-  'arcs-journalist': ['8586710d404921649aebfd123c65c609baec1bef457269dad6df4dd12f2b96ed', 10799],
+  'outline-journalist': ['4a847480a6c1d1bf638378f8f6f5b131cd06fa5a4545e906a6884f7340b6d873', 20622],
+  'article-journalist': ['fc76f95b4422e21b87bbd9f052fc0da3a9079ddeca121538f0cb829eb17fe82f', 27901],
+  'arcs-journalist': ['66f9d02f27e3633fa04e776b6d968da29e565175f3dd6acee646b6b1ea4965db', 10755],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
   'arcs-detective': ['41dace98218cf3f360893b995fa56031d926994f6c495a2568b217623df3df15', 14730]

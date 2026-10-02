@@ -3,8 +3,13 @@
  *
  * The rule files under .claude/skills/journalist-report/references/rules/ state the
  * world (spec sections 1, 2 and 3a), the truth rules T1 to T15 and the craft items C1
- * to C16, each once. lib/rule-set.js hands each call the files spec section 8 gives
+ * to C19, each once. lib/rule-set.js hands each call the files spec section 8 gives
  * it, and the reporting-mode block for the session's mode.
+ *
+ * Task 3.8 (spec round 7): the craft items are regrouped by the writer's job into
+ * eight files (story, form, material, voice, judgement, telling, cards, questions),
+ * C17 to C19 are new, and a body may point at another item ("(T1)", "as T5 sets
+ * out"), so the lint counts an item by its heading.
  *
  * Three parts:
  * - the loader: the map per call, the files, the throws, the stub root;
@@ -24,18 +29,43 @@ const RULES_ROOT = path.join(__dirname, '..', '..', '.claude', 'skills', 'journa
 const STUB_ROOT = path.join(__dirname, 'fixtures', 'rules');
 
 const CORE_FILES = ['world', 'truth-rules'];
+/**
+ * The eight craft files, in the order a call reads the ones it is given: story, form,
+ * material, voice, judgement, telling, cards, questions (task 3.8).
+ */
 const CRAFT_FILES = [
-  'craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing',
-  'craft-telling', 'craft-cards', 'craft-voice', 'craft-judgement', 'craft-questions'
+  'craft-story', 'craft-form', 'craft-material', 'craft-voice',
+  'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
 ];
 const MODE_FILES = ['mode-on-site', 'mode-remote'];
 const ALL_FILES = [...CORE_FILES, ...CRAFT_FILES, ...MODE_FILES];
 
-const ALL_CRAFT = Array.from({ length: 16 }, (_, i) => `C${i + 1}`);
-/** Spec section 8: the craft items each call reads. */
+const ALL_TRUTH = Array.from({ length: 15 }, (_, i) => `T${i + 1}`);
+const ALL_CRAFT = Array.from({ length: 19 }, (_, i) => `C${i + 1}`);
+
+/**
+ * Spec section 5: the craft items each file holds, grouped by the writer's job, in the
+ * order the director's read gives them (rule-text-read-2.md, section A).
+ */
+const CRAFT_ITEMS = {
+  'craft-story': ['C1', 'C3', 'C16'],
+  'craft-form': ['C2', 'C5', 'C6', 'C17', 'C18', 'C19', 'C14'],
+  'craft-material': ['C8', 'C7', 'C10', 'C11'],
+  'craft-voice': ['C12'],
+  'craft-judgement': ['C13'],
+  'craft-telling': ['C4'],
+  'craft-cards': ['C9'],
+  'craft-questions': ['C15']
+};
+
+/**
+ * Spec section 8, item by item: the arc writer reads neither the voice (C12), the
+ * telling (C4) nor the cards (C9); the interweaving call has no output for questions
+ * (C15) either; the outline writer reads all but the voice.
+ */
 const SPEC_SECTION_8 = {
-  arc: ['C1', 'C3', 'C6', 'C7', 'C8', 'C10', 'C11', 'C13', 'C15', 'C16'],
-  interweaving: ['C1', 'C3', 'C6', 'C7', 'C8', 'C10', 'C11', 'C13', 'C16'],
+  arc: ALL_CRAFT.filter((id) => !['C4', 'C9', 'C12'].includes(id)),
+  interweaving: ALL_CRAFT.filter((id) => !['C4', 'C9', 'C12', 'C15'].includes(id)),
   outline: ALL_CRAFT.filter((id) => id !== 'C12'),
   article: ALL_CRAFT
 };
@@ -43,12 +73,15 @@ SPEC_SECTION_8['judge-arc'] = SPEC_SECTION_8.arc;
 SPEC_SECTION_8['judge-outline'] = SPEC_SECTION_8.outline;
 SPEC_SECTION_8['judge-article'] = SPEC_SECTION_8.article;
 
-/** The brief's map: each call's craft files, in the map's order. */
+/** The brief's map (spec section 8; the read's section C): each call's craft files, in order. */
 const BRIEF_MAP = {
-  arc: ['craft-thesis', 'craft-arcs', 'craft-room', 'craft-tracing', 'craft-judgement', 'craft-questions'],
-  interweaving: ['craft-thesis', 'craft-arcs', 'craft-room', 'craft-tracing', 'craft-judgement'],
-  outline: CRAFT_FILES.filter((name) => name !== 'craft-voice'),
-  article: CRAFT_FILES
+  arc: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'],
+  interweaving: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement'],
+  outline: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'],
+  article: [
+    'craft-story', 'craft-form', 'craft-material', 'craft-voice',
+    'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
+  ]
 };
 BRIEF_MAP['judge-arc'] = BRIEF_MAP.arc;
 BRIEF_MAP['judge-outline'] = BRIEF_MAP.outline;
@@ -59,8 +92,13 @@ const SEND_BACK_NOTE_LINE = 'NOTE: The human reviewer has explicitly requested t
 
 /** Every rule id ("T8", "C16") in a text, in order. */
 const ruleIds = (text) => (String(text).match(/\b[TC]\d{1,2}\b/g) || []);
+/** The items a text states, in order: the rule id that opens a heading ("## C16. ...", "## T8, remote: ..."). */
+const itemIds = (text) => [...String(text).matchAll(/^#{1,6} ([TC]\d{1,2})\b/gm)].map((m) => m[1]);
+/** The rule ids a text's bodies point at ("(T1)", "as T5 sets out"): every id outside a heading. */
+const pointerIds = (text) => ruleIds(String(text).split('\n').filter((line) => !/^#{1,6} /.test(line)).join('\n'));
 /** The tag names a loaded string carries, in order. */
 const tagsOf = (text) => (String(text).match(/^<([a-z-]+)>$/gm) || []).map((t) => t.slice(1, -1));
+const count = (haystack, needle) => haystack.split(needle).length - 1;
 
 /** A temporary copy of the stub root, to break one file in. */
 function tempStubRoot() {
@@ -89,17 +127,34 @@ describe('the loader', () => {
     expect(craft).toBe(BRIEF_MAP[call].map((name) => `<${name}>\nSTUB ${name}\n</${name}>`).join('\n\n'));
   });
 
-  it.each(Object.keys(SPEC_SECTION_8))('%s: the real files give exactly the craft items spec section 8 lists', (call) => {
+  it.each(Object.keys(SPEC_SECTION_8))('%s: the real files give exactly the craft items spec section 8 lists, each once', (call) => {
     const { core, craft } = loadRuleSet(call);
-    const crafted = ruleIds(craft).filter((id) => id.startsWith('C'));
+    // An item is counted by its heading; a body may point at an item another file states.
+    const crafted = itemIds(craft).filter((id) => id.startsWith('C'));
     expect(crafted.sort()).toEqual([...SPEC_SECTION_8[call]].sort());
-    // The core carries no craft item: every call reads all of the world and the truth rules.
-    expect(ruleIds(core).filter((id) => id.startsWith('C'))).toEqual([]);
+    // The core states no craft item: every call reads all of the world and the truth rules.
+    expect(itemIds(core).filter((id) => id.startsWith('C'))).toEqual([]);
+  });
+
+  it.each(Object.keys(BRIEF_MAP))('%s: the real files are read once each, each in its own tag', (call) => {
+    const { core, craft } = loadRuleSet(call);
+    expect(tagsOf(core)).toEqual(CORE_FILES);
+    expect(tagsOf(craft)).toEqual(BRIEF_MAP[call]);
+    for (const name of [...CORE_FILES, ...BRIEF_MAP[call]]) {
+      expect(`${call}: ${name}: ${count(`${core}\n${craft}`, `</${name}>`)}`).toBe(`${call}: ${name}: 1`);
+    }
   });
 
   it.each(ALL_FILES)('the real %s.md exists and is not empty', (name) => {
-    const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8');
-    expect(text.trim().length).toBeGreaterThan(0);
+    const file = path.join(RULES_ROOT, `${name}.md`);
+    expect(`${name}.md: ${fs.existsSync(file)}`).toBe(`${name}.md: true`);
+    expect(fs.readFileSync(file, 'utf8').trim().length).toBeGreaterThan(0);
+  });
+
+  it('the rules folder holds the twelve rule files and nothing else', () => {
+    // A retired file left on disk invites a loader or a person to read it again (the
+    // integrator's ruling: deleted, not archived).
+    expect(fs.readdirSync(RULES_ROOT).sort()).toEqual(ALL_FILES.map((name) => `${name}.md`).sort());
   });
 
   it('throws on a call it does not know, naming the calls it does', () => {
@@ -108,9 +163,9 @@ describe('the loader', () => {
 
   it('throws naming every missing or empty file a call needs', () => {
     const root = tempStubRoot();
-    fs.unlinkSync(path.join(root, 'craft-arcs.md'));
+    fs.unlinkSync(path.join(root, 'craft-story.md'));
     fs.writeFileSync(path.join(root, 'truth-rules.md'), '  \n');
-    expect(() => loadRuleSet('arc', { root })).toThrow(/truth-rules\.md.*craft-arcs\.md/s);
+    expect(() => loadRuleSet('arc', { root })).toThrow(/truth-rules\.md.*craft-story\.md/s);
   });
 
   it('does not throw for a broken file the call does not read', () => {
@@ -171,49 +226,48 @@ describe('the default root, which a test can point at the stubs', () => {
  * carry placeholders, never the old examples' accounts or sums.
  */
 describe('the rule files', () => {
-  const files = Object.fromEntries(ALL_FILES.map((name) => [name, fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8')]));
+  // Read here, not in a test: a missing file fails the tests that need it, one by one.
+  const read = (name) => {
+    const file = path.join(RULES_ROOT, `${name}.md`);
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  };
+  const files = Object.fromEntries(ALL_FILES.map((name) => [name, read(name)]));
   const T8_HOMES = ['truth-rules', 'mode-on-site', 'mode-remote'];
 
-  it('carry each of T1 to T15 and C1 to C16 exactly once, T8 once in the truth rules and once in each mode file', () => {
-    const expected = [...Array.from({ length: 15 }, (_, i) => `T${i + 1}`), ...ALL_CRAFT];
+  it('state each of T1 to T15 and C1 to C19 as an item exactly once, T8 once in the truth rules and once in each mode file', () => {
     const counts = {};
     for (const [name, text] of Object.entries(files)) {
-      for (const id of ruleIds(text)) {
+      for (const id of itemIds(text)) {
         const key = id === 'T8' ? `T8@${name}` : id;
         counts[key] = (counts[key] || 0) + 1;
       }
     }
-    const want = Object.fromEntries(expected.filter((id) => id !== 'T8').map((id) => [id, 1]));
+    const want = Object.fromEntries([...ALL_TRUTH, ...ALL_CRAFT].filter((id) => id !== 'T8').map((id) => [id, 1]));
     for (const home of T8_HOMES) want[`T8@${home}`] = 1;
     expect(counts).toEqual(want);
   });
 
-  it('carry each rule id in a heading', () => {
+  it('name a rule in a body only to point at an item the set states', () => {
+    // Round 7's text points across files ("(T1)", "as T5 sets out", "(C16)"): each
+    // pointer names one of T1 to T15 or C1 to C19, never a retired or unknown id.
+    const items = new Set([...ALL_TRUTH, ...ALL_CRAFT]);
     for (const [name, text] of Object.entries(files)) {
-      const headings = (text.match(/^#{1,6} .*$/gm) || []).join('\n');
-      expect(`${name}: ${ruleIds(text).join(',')}`).toBe(`${name}: ${ruleIds(headings).join(',')}`);
+      const unknown = pointerIds(text).filter((id) => !items.has(id));
+      expect(`${name}: ${unknown.join(',')}`).toBe(`${name}: `);
     }
   });
 
-  it('put each item in its file', () => {
+  it('put each item in its file, in the order the read gives', () => {
     const where = {
-      'truth-rules': Array.from({ length: 15 }, (_, i) => `T${i + 1}`),
-      'craft-thesis': ['C1', 'C3'],
-      'craft-sections': ['C2'],
-      'craft-arcs': ['C16'],
-      'craft-room': ['C6', 'C7', 'C8'],
-      'craft-tracing': ['C10', 'C11'],
-      'craft-telling': ['C4', 'C5', 'C14'],
-      'craft-cards': ['C9'],
-      'craft-voice': ['C12'],
-      'craft-judgement': ['C13'],
-      'craft-questions': ['C15'],
+      world: [],
+      'truth-rules': ALL_TRUTH,
+      ...CRAFT_ITEMS,
       'mode-on-site': ['T8'],
-      'mode-remote': ['T8'],
-      world: []
+      'mode-remote': ['T8']
     };
+    expect(Object.keys(where).sort()).toEqual([...ALL_FILES].sort());
     for (const [name, ids] of Object.entries(where)) {
-      expect(`${name}: ${ruleIds(files[name]).sort().join(',')}`).toBe(`${name}: ${[...ids].sort().join(',')}`);
+      expect(`${name}: ${itemIds(files[name]).join(',')}`).toBe(`${name}: ${ids.join(',')}`);
     }
   });
 

@@ -12,7 +12,7 @@ const os = require('os');
 const path = require('path');
 const { createThemeLoader, PHASE_REQUIREMENTS, ALL_PROMPTS } = require('../theme-loader');
 const { createPromptBuilder, PromptBuilder } = require('../prompt-builder');
-const { setDefaultRulesRoot } = require('../rule-set');
+const { setDefaultRulesRoot, DEFAULT_RULES_ROOT, RULE_SET_CALLS } = require('../rule-set');
 
 const REPO = path.join(__dirname, '..', '..');
 const SKILLS = path.join(REPO, '.claude', 'skills');
@@ -20,6 +20,30 @@ const RETIRED = [
   'writing-principles', 'anti-patterns', 'character-voice', 'evidence-boundaries',
   'narrative-structure', 'section-rules', 'editorial-design', 'formatting'
 ];
+
+/**
+ * The five rule-set craft files task 3.8 retires (spec round 7), when the craft items
+ * were regrouped by the writer's job (spec section 5): craft-thesis's C1 and C3 and
+ * craft-arcs's C16 are in craft-story; craft-sections's C2 and craft-room's C6 in
+ * craft-form; craft-room's C7 and C8 and craft-tracing's C10 and C11 in
+ * craft-material. Deleted, not archived; git keeps them.
+ */
+const RETIRED_RULE_FILES = ['craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing'];
+const STUB_RULES = path.join(__dirname, 'fixtures', 'rules');
+
+describe('the five craft files the rule set retires (task 3.8)', () => {
+  it.each(RETIRED_RULE_FILES)('%s.md is gone from the rules folder and from the stubs', (name) => {
+    expect(fs.existsSync(path.join(DEFAULT_RULES_ROOT, `${name}.md`))).toBe(false);
+    expect(fs.existsSync(path.join(STUB_RULES, `${name}.md`))).toBe(false);
+  });
+
+  it('no call, writer or judge, reads one', () => {
+    for (const [call, files] of Object.entries(RULE_SET_CALLS)) {
+      const retired = files.filter((name) => RETIRED_RULE_FILES.includes(name));
+      expect(`${call}: ${retired.join(',')}`).toBe(`${call}: `);
+    }
+  });
+});
 
 describe('the retired journalist craft files', () => {
   it.each(RETIRED)('%s.md is gone from the journalist skill, and the detective keeps its own', (name) => {
