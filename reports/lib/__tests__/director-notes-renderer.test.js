@@ -201,10 +201,13 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
     expect(out).not.toContain('- unknown:');
   });
 
+  // Final review (data-harness-docs[1]): the correction names Ashe, but so do the notes,
+  // so code cannot tell which Ashe the correction brings in, and the addressee is left
+  // out; the correction printed under the line says "to Ashe".
   it('keeps a corrected speaker and wording, and names the correction that applied', () => {
     const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, quotes: QUOTES, corrections: [CORRECTION] });
     expect(block(out, 'QUOTE_BANK')).toContain([
-      '- Blake (to Ashe): "my company would be very interested"',
+      '- Blake: "my company would be very interested"',
       '  In the notes: Vic to Ashe: "My company is very interesting."',
       `  The director's correction: ${CORRECTION}`
     ].join('\n'));
@@ -351,7 +354,59 @@ describe("renderDirectorEnrichmentBlock: a stored speaker prints only when the d
 
   it('reads the rule from the grounding module, which the enricher shares', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'prompt-renderers', 'director-notes-renderer.js'), 'utf8');
-    expect(src).toMatch(/const \{[^}]*\bnamedOutsideQuote\b[^}]*\} = require\('\.\.\/grounding'\);/);
+    expect(src).toMatch(/const \{[^}]*\bgroundQuote\b[^}]*\} = require\('\.\.\/grounding'\);/);
+  });
+});
+
+/**
+ * Final review (data-harness-docs[1]; T12): the renderer decides a stored quote's
+ * speaker by the enricher's own rule (lib/grounding.js groundQuote). When a correction
+ * the director's corrections hold is about the line, attached to the quote or not, a
+ * speaker prints only when the correction names them and the notes' account of the line
+ * does not: the name the correction brings in. A thread enriched before the rule can
+ * store the notes' speaker beside the correction that moved the line, and the bank
+ * printed the line in that mouth with the correction right under it.
+ */
+describe("renderDirectorEnrichmentBlock: a corrected line prints in no corrected-away mouth (final review)", () => {
+  const PROSE = [
+    'Jess told the room she had found a bedroom in the warehouse.',
+    'Vic to Ashe: "My company is very interesting."'
+  ].join('\n');
+  const CORRECTION = 'The quote attributed to Vic, speaking to Ashe ("My company is very interesting"), was actually said by Blake to Ashe.';
+  const VIC = { speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'high' };
+  const bankOf = (quotes, corrections) => {
+    const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, quotes, corrections });
+    return out.slice(out.indexOf('<QUOTE_BANK>'), out.indexOf('</QUOTE_BANK>'));
+  };
+
+  it("prints \"speaker not recorded\" for the notes' Vic stored beside the correction that moved the line", () => {
+    const bank = bankOf([{ ...VIC, correction: CORRECTION }], [CORRECTION]);
+    expect(bank).toContain([
+      '- (speaker not recorded): "My company is very interesting."',
+      '  In the notes: Vic to Ashe: "My company is very interesting."',
+      `  The director's correction: ${CORRECTION}`
+    ].join('\n'));
+    expect(bank).not.toMatch(/- Vic|\(to Ashe\)/);
+  });
+
+  it.each([
+    ['double quotation marks', CORRECTION],
+    ['single quotation marks', "The quote attributed to Vic, speaking to Ashe ('My company is very interesting'), was actually said by Blake to Ashe."],
+    ['other case', 'The quote attributed to Vic, speaking to Ashe ("MY COMPANY IS VERY INTERESTING"), was actually said by Blake to Ashe.']
+  ])('prints "speaker not recorded" for a stored Vic when a correction quoting the line in %s was never attached', (_case, correction) => {
+    const bank = bankOf([VIC], [correction]);
+    expect(bank).toContain('- (speaker not recorded): "My company is very interesting."\n  In the notes: Vic to Ashe: "My company is very interesting."');
+    expect(bank).not.toMatch(/- Vic|\(to Ashe\)/);
+  });
+
+  it('prints Blake, whom the correction brings in, attached or not', () => {
+    const blake = { ...VIC, speaker: 'Blake' };
+    expect(bankOf([{ ...blake, correction: CORRECTION }], [CORRECTION])).toContain('- Blake: "My company is very interesting."');
+    expect(bankOf([blake], [CORRECTION])).toContain('- Blake: "My company is very interesting."');
+  });
+
+  it('keeps the notes\' speaker and addressee for a line no correction is about', () => {
+    expect(bankOf([VIC], ['Jess is she/her, not he/him.'])).toContain('- Vic (to Ashe): "My company is very interesting."');
   });
 });
 

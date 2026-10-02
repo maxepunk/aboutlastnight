@@ -10,7 +10,7 @@
  */
 
 const { formatAccused, buildParseCorrectionsBlock, normalizeCorrections } = require('./prompt-renderers/director-words-renderer');
-const { normalizeForGrounding, isVerbatimIn, namedOutsideQuote } = require('./grounding');
+const { isVerbatimIn, groundQuote } = require('./grounding');
 
 /**
  * How a quote's speaker is known: one wording for the schema and the rules
@@ -374,74 +374,6 @@ function createFallback(rawProse) {
 }
 
 /**
- * The passages a piece of text puts in double quotation marks, normalized as
- * isVerbatimIn reads them (curly marks straightened).
- *
- * @param {*} value
- * @returns {string[]}
- */
-function quotedPassages(value) {
-  return (normalizeForGrounding(value).match(/"[^"]+"/g) || [])
-    .map(passage => passage.slice(1, -1).trim())
-    .filter(Boolean);
-}
-
-/**
- * The fewest words in a sentence that can name a line (task 3.11, fix round 1). A name
- * or a vote word the line says whole ("Blake.", "No.") has fewer, and corrections quote
- * names and vote words as often as lines.
- */
-const MIN_LINE_SENTENCE_WORDS = 3;
-
-/**
- * The sentences of a line that can name it: each whole sentence, normalized as
- * isVerbatimIn reads it, without the quotation marks and brackets around it or its
- * closing punctuation, and holding at least MIN_LINE_SENTENCE_WORDS words.
- *
- * @param {string} line - a quote's words, or a passage its context quotes
- * @returns {string[]}
- */
-function lineSentences(line) {
-  return normalizeForGrounding(line)
-    .split(/(?<=[.!?]["')\]]*)\s+/)
-    .map(sentence => sentence.replace(/^["'(\[]+/, '').replace(/[.!?,;:"')\]]+$/, ''))
-    .filter(sentence => (sentence.match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) || []).length >= MIN_LINE_SENTENCE_WORDS);
-}
-
-/**
- * Whether `fragment` holds `sentence` word for word, starting and ending on word
- * boundaries ("no" is not in "know").
- *
- * @param {string} fragment - a passage a correction quotes, normalized
- * @param {string} sentence - one of lineSentences
- * @returns {boolean}
- */
-function holdsWholeSentence(fragment, sentence) {
-  const escaped = sentence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'u').test(fragment);
-}
-
-/**
- * Whether a director's correction is about this quote (task 3.11): one of the
- * passages it quotes holds a whole sentence of the quote's words, or of the passage
- * the quote's context quotes. 092026's correction quotes "My company is very
- * interesting", a sentence of the passage its context quotes. Corrections are about
- * the roster, the accusation, names and votes as often as about quotes (fix round 1):
- * a name, a vote word, a short phrase or a charge sits inside a sentence, or is a whole
- * line shorter than MIN_LINE_SENTENCE_WORDS, so it never decides.
- *
- * @param {string} correction - one of the director's input-review corrections
- * @param {string} words - the quote's words
- * @param {string|null} context - the quote's context
- * @returns {boolean}
- */
-function correctionQuotesTheLine(correction, words, context) {
-  const sentences = [words, ...quotedPassages(context)].flatMap(lineSentences);
-  return quotedPassages(correction).some(fragment =>
-    sentences.some(sentence => holdsWholeSentence(fragment, sentence)));
-}
-
-/**
  * Keep each quote as the director's words give it (phase 3, 3.6).
  *
  * - The words are in the notes, or in the correction that gives the wording;
@@ -449,12 +381,12 @@ function correctionQuotesTheLine(correction, words, context) {
  * - The context is kept only when the notes hold it word for word
  *   (`droppedContexts`), and the correction only when a correction does
  *   (`droppedCorrections`).
- * - The speaker and the addressee are kept only when the kept context or
- *   correction names them outside the quoted words (namedOutsideQuote, which the
- *   renderer shares), and never when the quote carries a correction the corrections
- *   do not hold, or carries none while one of the director's corrections quotes the
- *   line (task 3.11). A speaker left out is not recorded (`unrecordedSpeakers`), and
- *   the quote's confidence is "low".
+ * - The speaker and the addressee are decided by the rule the renderer shares
+ *   (lib/grounding.js groundQuote; final review, data-harness-docs[1]): a name the
+ *   context gives, or, when a correction of the director's is about the quote,
+ *   attached or not, only the name that correction brings in; none when the quote
+ *   carries a correction the corrections do not hold. A speaker left out is not
+ *   recorded (`unrecordedSpeakers`), and the quote's confidence is "low".
  *
  * @param {Array} quotes - the model's quotes
  * @param {string} rawProse - the director's notes
@@ -472,27 +404,10 @@ function groundQuotes(quotes, rawProse, corrections) {
       counts.droppedQuotes += 1;
       continue;
     }
-    const context = text(quote.context) && isVerbatimIn(quote.context, rawProse) ? quote.context : null;
+    const { context, correction, correctionFailed, speaker, addressee } = groundQuote(quote, rawProse, corrections);
     if (text(quote.context) && !context) counts.droppedContexts += 1;
-    const correction = text(quote.correction) && corrections.some(c => isVerbatimIn(quote.correction, c)) ? quote.correction : null;
-    const correctionFailed = Boolean(text(quote.correction) && !correction);
     if (correctionFailed) counts.droppedCorrections += 1;
-
-    // Task 3.11: a correction of the director's that quotes this line, which the model
-    // did not attach. It decides the speaker and addressee in place of the notes, but
-    // a correction names the old speaker as well as the new one ("attributed to Vic …
-    // said by Blake"), so code cannot read the speaker from it.
-    const unattachedCorrection = !text(quote.correction)
-      && corrections.some(c => correctionQuotesTheLine(c, words, context));
-
-    // A correction the director's corrections do not hold, or one of theirs the model
-    // did not attach, says the director changed this quote, so the notes' own names may
-    // be the ones corrected away: the speaker and addressee are left out rather than
-    // printed in the wrong mouth (T12).
-    const witnesses = correctionFailed || unattachedCorrection ? [] : [context, correction].filter(Boolean);
-    const speaker = text(quote.speaker) && namedOutsideQuote(quote.speaker, witnesses, words) ? quote.speaker : null;
     if (text(quote.speaker) && !speaker) counts.unrecordedSpeakers += 1;
-    const addressee = text(quote.addressee) && namedOutsideQuote(quote.addressee, witnesses, words) ? quote.addressee : null;
 
     kept.push({
       ...(speaker && { speaker }),

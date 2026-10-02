@@ -749,6 +749,11 @@ describe("the director's notes, unguessed (phase 3, 3.6)", () => {
     expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
   });
 
+  // Final review (data-harness-docs[1]): a correction about the quote names the old
+  // names as well as the new, so a name is kept only when the correction brings it in.
+  // Ashe is the addressee in the notes and in the correction alike, so code cannot tell
+  // the correction's Ashe from the notes', and leaves the addressee out; the correction
+  // printed under the line still says "to Ashe".
   it('keeps a corrected speaker and wording, with the notes\' words around it and the correction that applied', async () => {
     const corrected = {
       speaker: 'Blake',
@@ -759,7 +764,8 @@ describe("the director's notes, unguessed (phase 3, 3.6)", () => {
       confidence: 'high'
     };
     const result = await run({ quotes: [corrected] });
-    expect(result.quotes).toEqual([corrected]);
+    const { addressee, ...kept } = corrected;
+    expect(result.quotes).toEqual([kept]);
     expect(result._enrichmentWarnings).toBeUndefined();
   });
 
@@ -875,10 +881,87 @@ describe('a director\'s correction the model did not attach (task 3.11)', () => 
     expect(result._enrichmentWarnings).toBeUndefined();
   });
 
+  // Final review (data-harness-docs[1]): the speaker the correction brings in stays; the
+  // addressee, Ashe in the notes and in the correction alike, is left out.
   it('keeps the speaker a correction the model attached names, as before', async () => {
     const corrected = { speaker: 'Blake', addressee: 'Ashe', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' };
     const result = await run([corrected]);
-    expect(result.quotes).toEqual([corrected]);
+    const { addressee, ...kept } = corrected;
+    expect(result.quotes).toEqual([kept]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Final review (data-harness-docs[1]; T12): a corrected quote leaves the old speaker's
+// mouth, whether or not the model attached the correction. A correction names the old
+// speaker as well as the new ("attributed to Vic ... said by Blake to Ashe"), so when a
+// verified correction is about the quote, a speaker is kept only when that correction
+// names them and the notes' account of the line does not: the name the correction
+// brings in. The addressee follows the same rule. The notes' account is the context, and
+// the notes' paragraph that holds the line, so a context the notes do not hold, or one
+// that leaves out who spoke, cannot let the old speaker through. A correction's quoted
+// passage is matched in any case, and in single quotation marks as in double.
+// 092026's notes and the director's correction, as above.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe("a corrected quote leaves the old speaker's mouth, attached or not (final review)", () => {
+  const NOTES_092026 = [
+    'Alex and Vic had a hushed conversation in the corner as Alex showed Vic the contents of a memory token on the scanner. Overheard Vic saying to Alex: "You\'re just an intern."',
+    'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting." When it came to the information at hand, Ashe said it wasn\'t theirs; Alex said it didn\'t matter, let\'s use it.'
+  ].join('\n');
+  const CORRECTION_092026 = 'The quote attributed to Vic, speaking to Ashe ("My company is very interesting"), was actually said by Blake to Ashe, and the words were "my company would be very interested".';
+  const LINE = 'If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know.';
+  const CONTEXT = 'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting."';
+  const run = async (quotes, corrections = [CORRECTION_092026]) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: NOTES_092026, corrections }, jest.fn().mockResolvedValue({ quotes }));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it("leaves Vic and Ashe out when the model attached the correction and kept the notes' Vic", async () => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(result.quotes).toEqual([{ text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it('keeps Blake, the name the correction brings in, whether or not the model attached it', async () => {
+    const attached = await run([{ speaker: 'Blake', addressee: 'Ashe', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(attached.quotes).toEqual([{ speaker: 'Blake', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' }]);
+    const unattached = await run([{ speaker: 'Blake', addressee: 'Ashe', text: LINE, context: CONTEXT, confidence: 'high' }]);
+    expect(unattached.quotes).toEqual([{ speaker: 'Blake', text: LINE, context: CONTEXT, confidence: 'high' }]);
+    expect(unattached._enrichmentWarnings).toBeUndefined();
+  });
+
+  it.each([
+    ['single quotation marks', "The quote attributed to Vic, speaking to Ashe ('My company is very interesting'), was actually said by Blake to Ashe."],
+    ['curly single quotation marks', 'The quote attributed to Vic, speaking to Ashe (‘My company is very interesting’), was actually said by Blake to Ashe.'],
+    ['other case', 'The quote attributed to Vic, speaking to Ashe ("my company is very interesting"), was actually said by Blake to Ashe.']
+  ])("reads an unattached correction that quotes the line in %s as about it: the notes' Vic is left out", async (_case, correction) => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: LINE, context: CONTEXT, confidence: 'high' }], [correction]);
+    expect(result.quotes).toEqual([{ text: LINE, context: CONTEXT, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it("reads the notes' paragraph that holds the line when the context is not the notes' words: Vic is left out, Blake kept", async () => {
+    const paraphrased = 'Prose attributes this to Vic to Ashe but the correction says Blake.';
+    const asVic = await run([{ speaker: 'Vic', text: 'My company is very interesting.', context: paraphrased, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(asVic.quotes).toEqual([{ text: 'My company is very interesting.', correction: CORRECTION_092026, confidence: 'low' }]);
+    const asBlake = await run([{ speaker: 'Blake', text: 'My company is very interesting.', context: paraphrased, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(asBlake.quotes).toEqual([{ speaker: 'Blake', text: 'My company is very interesting.', correction: CORRECTION_092026, confidence: 'high' }]);
+  });
+
+  it('reads the notes\' paragraph too when the context leaves out who spoke', async () => {
+    const result = await run([{ speaker: 'Vic', text: LINE, context: 'you let me know. My company is very interesting.', correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(result.quotes).toEqual([{ text: LINE, context: 'you let me know. My company is very interesting.', correction: CORRECTION_092026, confidence: 'low' }]);
+  });
+
+  it('reads an apostrophe inside a word as no quotation mark', async () => {
+    const intern = { speaker: 'Vic', addressee: 'Alex', text: 'You\'re just an intern.', context: 'Overheard Vic saying to Alex: "You\'re just an intern."', confidence: 'high' };
+    const result = await run([intern], ["Vic's line to Alex wasn't about the intern's job; Alex's notes say so."]);
+    expect(result.quotes).toEqual([intern]);
     expect(result._enrichmentWarnings).toBeUndefined();
   });
 });
