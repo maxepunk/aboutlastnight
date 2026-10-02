@@ -276,15 +276,36 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
     }
   };
 
+  // The 4b fix batch (3.9 review minor 1): the article writer lists its photos under
+  // PHOTOS (options.photos), and a package points only at listed ones. The probe's photos
+  // come from the writer's own inputs (articleWriterInputs), as generateContentBundle's
+  // do: the hero first, then each package photo once. The hero is the group photo, so it
+  // names the roster.
+  const { articleWriterInputs } = require('../lib/workflow/nodes/ai-nodes');
+  const heroImage = 'aln0509 (10 of 10).jpg';
+  const sessionPhotos = [
+    { filename: heroImage, characters: sessionConfig.roster },
+    ...arcEvidencePackages.flatMap((pkg) => pkg.photos || [])
+  ];
+  const writerInputs = articleWriterInputs({
+    theme: 'journalist',
+    sessionConfig,
+    canonicalCharacters,
+    heroImage,
+    sessionPhotos: sessionPhotos.map((photo) => photo.filename),
+    photoAnalyses: { analyses: sessionPhotos.map((photo) => ({ filename: photo.filename, identifiedCharacters: photo.characters })) }
+  });
+  const { photos } = writerInputs[writerInputs.length - 1];
+
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     outline,
     arcEvidencePackages,
-    'aln0509 (10 of 10).jpg',
+    heroImage,
     shellAccounts,
     sessionFacts,
     directorNotes,
     null,
-    { evidenceBundle }
+    { evidenceBundle, photos }
   );
 
   return { systemPrompt, userPrompt, arcEvidencePackages };
