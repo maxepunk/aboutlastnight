@@ -2,20 +2,24 @@
  * How the harness opens its run, and whether it approves a stop the thread is already
  * paused at without a /resume (phase 3, task 3.11; the phase gate's replay finding).
  *
- * POST /api/session/:id/resume re-invokes the graph from START. A stop the automated
- * budget escalated keeps a not-ready verdict, and the judge skips only on a ready one
- * (evaluator-nodes.js, evaluatePhase), so the replay re-runs that judge, a paid Opus
- * call, before it pauses at the same stop again: at the gate, two harness approvals
- * re-paid an evaluation each. When the thread is already paused at the stop --approve
- * names, as GET /api/session/:id/checkpoint reports it, the harness approves from that
- * read and posts no /resume. The console never posts /resume to a paused thread either.
+ * POST /api/session/:id/resume re-invokes the graph from START and replays the thread to
+ * the stop it is paused at. At the gate the replay re-ran the judge of a stop the
+ * automated budget had escalated, a paid Opus call, because the judge skipped only on a
+ * ready verdict; since 3.9 it skips an escalated one too (evaluator-nodes.js,
+ * evaluatePhase). When the thread is already paused at the stop --approve names, as GET
+ * /api/session/:id/checkpoint reports it, the harness approves from that read and posts
+ * no /resume, which saves the replay. The console never posts /resume to a paused thread
+ * either.
  *
- * POST /api/session/:id/start with force, which the harness sends when it runs without
- * --resume, clears the thread and starts the session over (fix round 1). --approve
- * names a stop of a thread that exists, and the approve commands the harness prints
- * carry no --resume, so with --approve the harness never starts over: it approves the
- * paused stop, resumes when --resume asks for it, and otherwise says where the thread
- * is and stops.
+ * POST /api/session/:id/start with force clears the thread and starts the session over
+ * (fix round 1). The harness sends it only for a run on its own input that names no
+ * existing thread, without --resume and without --rollback (startsSessionOver). A
+ * rollback names an existing thread, so after it the harness continues that thread as
+ * --resume would (task 4c-fix): a /start after it wiped the thread the rollback had just
+ * rerun. --approve names a stop of a thread that exists, and the approve commands the
+ * harness prints carry no --resume, so with --approve the harness never starts over: it
+ * approves the paused stop, resumes when --resume or a rollback continues the thread,
+ * and otherwise says where the thread is and stops.
  *
  * Pure: the caller makes the GET.
  */
@@ -68,12 +72,30 @@ function pausedStopToApprove(approveType, checkpointRead, { stateOverrides = fal
 }
 
 /**
+ * Whether the harness starts the session over, with POST /start and force, which clears
+ * the thread (task 4c-fix). Only a run on its own input that names no existing thread
+ * does: one without --resume and without --rollback. A rollback names an existing thread
+ * and reruns it from the stop it names, so after it the harness continues that thread as
+ * --resume would.
+ *
+ * @param {Object} run
+ * @param {Object} [run.rawSessionInput] - the run's own input: --input's file, the
+ *   prompts, or --session's files; none with --resume
+ * @param {boolean} [run.resume] - --resume
+ * @param {string|null} [run.rollbackTo] - the stop --rollback names
+ * @returns {boolean}
+ */
+function startsSessionOver({ rawSessionInput, resume = false, rollbackTo = null } = {}) {
+  return Boolean(rawSessionInput) && !resume && !rollbackTo;
+}
+
+/**
  * How the harness opens its run (fix round 1).
  *
  * @param {Object} request
  * @param {string|null} request.approveType - the stop --approve names
  * @param {boolean} request.startsOver - true when the harness would otherwise POST
- *   /start with force (it ran without --resume)
+ *   /start with force (startsSessionOver)
  * @param {{status: number, data?: Object, error?: string}|undefined} request.checkpointRead -
  *   GET /api/session/:id/checkpoint's answer, which the harness reads whenever
  *   --approve names a stop
@@ -97,4 +119,4 @@ function openingRequest({ approveType, startsOver, checkpointRead, stateOverride
   };
 }
 
-module.exports = { pausedStopToApprove, openingRequest };
+module.exports = { pausedStopToApprove, openingRequest, startsSessionOver };

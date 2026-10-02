@@ -35,7 +35,7 @@ const http = require('http');
 const https = require('https');
 const { resolveCompletePayload } = require('./lib/sse-complete');
 const { loadPhotoDescriptionsFile, withPhotoDescriptions } = require('./lib/photo-descriptions');
-const { openingRequest } = require('./lib/paused-stop');
+const { openingRequest, startsSessionOver } = require('./lib/paused-stop');
 // The console's pure read side (dual-export), so the harness reads the stop payloads
 // the way the console does: the phase's last evaluation and the trace (brief 2.7).
 const ViewLogic = require('../console/checkpoint-view-logic');
@@ -515,7 +515,8 @@ ${color('OPTIONS:', 'cyan')}
   --resume           Continue existing session instead of starting fresh
   --input <file>     Load rawSessionInput from JSON file
   --override <file>  Load stateOverrides from JSON file (e.g., playerFocus)
-  --rollback <type>  Rollback to checkpoint before running
+  --rollback <type>  Roll the thread back to <type>, then continue it as --resume
+                     would; a rollback never starts the session over
   --auto             Auto-approve all checkpoints (for CI/testing)
   --profile <name>   Auto-approval profile (default: smart-defaults)
                      Available: smart-defaults, testing-fast, testing-full, ci-pipeline
@@ -523,10 +524,10 @@ ${color('OPTIONS:', 'cyan')}
   --approve <type>   Approve the checkpoint the thread is paused at and advance to
                      the next. A thread paused at <type> is read through
                      GET /checkpoint and approved without a /resume (a /resume
-                     replays from the start and re-runs an escalated judge).
-                     Without --resume, a thread paused elsewhere or not paused is
-                     left as it is: the harness says where it is and stops, and
-                     never starts the session over
+                     replays the thread from the start). Without --resume or
+                     --rollback, a thread paused elsewhere or not paused is left
+                     as it is: the harness says where it is and stops, and never
+                     starts the session over
   --approve-file <f> Use custom JSON payload for approval (with --approve)
   --photo-descriptions <f>
                      JSON file of {"photo filename": "the director's description"},
@@ -3431,7 +3432,8 @@ async function runWalkthrough() {
   header('E2E Walkthrough');
 
   console.log(`Mode: ${AUTO_MODE ? color('AUTO', 'yellow') : color('INTERACTIVE', 'green')}`);
-  console.log(`Resume: ${RESUME_MODE ? color('YES', 'yellow') : 'NO (new session)'}`);
+  // Task 4c-fix: a rollback continues the thread it names (startsSessionOver).
+  console.log(`Resume: ${RESUME_MODE ? color('YES', 'yellow') : ROLLBACK_TO ? 'NO (the rollback continues the thread)' : 'NO (new session)'}`);
   console.log(`Server: ${API_BASE}`);
   console.log(`Theme: ${THEME}`);
   if (VERBOSE) console.log(color('Verbose mode enabled', 'dim'));
@@ -3523,13 +3525,15 @@ async function runWalkthrough() {
 
   // Initial request (task 3.11). With --approve the harness reads GET /checkpoint first:
   // a thread already paused at that stop is approved from that read, with no /resume
-  // (it replays from START and re-runs a judge whose last verdict escalated) and no
-  // /start (forced, it starts the session over). Without --resume, an --approve never
-  // starts the session over: the harness says where the thread is and stops. Otherwise
-  // /start for a new session and /resume for an existing one (scripts/lib/paused-stop.js).
+  // (it replays the thread from START) and no /start (forced, it starts the session
+  // over). Without --resume or --rollback, an --approve never starts the session over:
+  // the harness says where the thread is and stops. Otherwise /start for a new session
+  // and /resume for an existing one. Task 4c-fix: a rollback names an existing thread,
+  // so after it the harness continues that thread as --resume would, and never posts
+  // /start (scripts/lib/paused-stop.js: startsSessionOver, openingRequest).
   const opening = openingRequest({
     approveType: APPROVE_TYPE,
-    startsOver: Boolean(inputData.rawSessionInput && !RESUME_MODE),
+    startsOver: startsSessionOver({ rawSessionInput: inputData.rawSessionInput, resume: RESUME_MODE, rollbackTo: ROLLBACK_TO }),
     checkpointRead: APPROVE_TYPE ? await apiGet(`/api/session/${sessionId}/checkpoint`) : undefined,
     stateOverrides: Boolean(stateOverrides)
   });

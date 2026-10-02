@@ -3,8 +3,8 @@
  * finding).
  *
  * POST /resume re-invokes the graph from START. A stop the automated budget
- * escalated keeps a not-ready verdict, so the replay re-runs that judge before it
- * pauses at the same stop again: at the gate, two harness approvals re-paid an Opus
+ * escalated kept a not-ready verdict, so the replay re-ran that judge before it
+ * paused at the same stop again: at the gate, two harness approvals re-paid an Opus
  * evaluation each. With `--approve <stop>` on a thread already paused at that stop,
  * the harness reads the stop through GET /api/session/:id/checkpoint and posts the
  * approval without a /resume.
@@ -16,13 +16,21 @@
  * /start, and never starts over: it approves the paused stop, resumes when --resume
  * asks for it, and otherwise says where the thread is and stops.
  *
- * The decision is scripts/lib/paused-stop.js (pausedStopToApprove, openingRequest);
- * the harness runs main() on require, so its wiring is pinned on the source, as
- * e2e-trace.test.js does.
+ * Since 3.9 the judge skips an escalated verdict on a replay, so the approval without a
+ * /resume saves a replay, not a paid judge.
+ *
+ * Task 4c-fix (3.12 review minor 0): a rollback never starts the session over. Without
+ * --resume, `--rollback <stop>` POSTed /rollback and then /start with force, which wiped
+ * the thread the rollback had just rerun. A rollback names an existing thread, so after
+ * it the harness continues that thread as --resume would.
+ *
+ * The decision is scripts/lib/paused-stop.js (pausedStopToApprove, openingRequest,
+ * startsSessionOver); the harness runs main() on require, so its wiring is pinned on the
+ * source, as e2e-trace.test.js does.
  */
 const fs = require('fs');
 const path = require('path');
-const { pausedStopToApprove, openingRequest } = require('../../../scripts/lib/paused-stop');
+const { pausedStopToApprove, openingRequest, startsSessionOver } = require('../../../scripts/lib/paused-stop');
 
 /** GET /checkpoint's answer for a thread paused at `type` (server.js, the checkpoint route). */
 function pausedAt(type, extra = {}) {
@@ -127,21 +135,57 @@ describe('openingRequest (fix round 1)', () => {
   });
 });
 
+describe('startsSessionOver (task 4c-fix): a rollback never starts the session over', () => {
+  it('starts over only on the run\'s own input, without --resume and without --rollback', () => {
+    expect(startsSessionOver({ rawSessionInput: {}, resume: false, rollbackTo: null })).toBe(true);
+    expect(startsSessionOver({ rawSessionInput: { photosPath: 'p' }, resume: false, rollbackTo: null })).toBe(true);
+    expect(startsSessionOver({ rawSessionInput: undefined, resume: true, rollbackTo: null })).toBe(false);
+    expect(startsSessionOver({ rawSessionInput: {}, resume: true, rollbackTo: null })).toBe(false);
+    expect(startsSessionOver({ rawSessionInput: {}, resume: false, rollbackTo: 'photos' })).toBe(false);
+    expect(startsSessionOver({ rawSessionInput: undefined, resume: true, rollbackTo: 'photos' })).toBe(false);
+  });
+
+  it.each([
+    ['without --approve', null, undefined],
+    ['with --approve on the stop the thread is paused at', 'outline', pausedAt('outline')],
+    ['with --approve on another stop', 'article', pausedAt('outline')],
+    ['with --approve on a thread a run holds', 'article', pausedAt('article', { inProgress: true })]
+  ])('after a rollback without --resume, the harness continues the thread as --resume would: %s', (_case, approveType, checkpointRead) => {
+    const afterRollback = openingRequest({
+      approveType, checkpointRead, startsOver: startsSessionOver({ rawSessionInput: {}, resume: false, rollbackTo: 'photos' })
+    });
+    const withResume = openingRequest({
+      approveType, checkpointRead, startsOver: startsSessionOver({ rawSessionInput: undefined, resume: true, rollbackTo: null })
+    });
+    expect(afterRollback).toEqual(withResume);
+    expect(['start', 'stop']).not.toContain(afterRollback.kind);
+  });
+});
+
 describe('e2e-walkthrough decides how to open its run before any /start or /resume', () => {
   const SRC = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'scripts', 'e2e-walkthrough.js'), 'utf8');
   const run = SRC.slice(SRC.indexOf('async function runWalkthrough('), SRC.indexOf('// Main checkpoint loop'));
   const decided = run.slice(run.indexOf('openingRequest({'));
 
   it('requires the decision from scripts/lib/paused-stop.js', () => {
-    expect(SRC).toMatch(/const \{ openingRequest \} = require\('\.\/lib\/paused-stop'\);/);
+    expect(SRC).toMatch(/const \{ openingRequest, startsSessionOver \} = require\('\.\/lib\/paused-stop'\);/);
   });
 
   it('reads GET /checkpoint whenever --approve names a stop, with or without --resume', () => {
     expect(run).toMatch(/checkpointRead: APPROVE_TYPE \? await apiGet\(`\/api\/session\/\$\{sessionId\}\/checkpoint`\) : undefined/);
   });
 
-  it('starts over only where it did before: without --resume, on its own input', () => {
-    expect(run).toMatch(/startsOver: Boolean\(inputData\.rawSessionInput && !RESUME_MODE\)/);
+  // Task 4c-fix: --rollback is part of the decision, so a rollback never starts over.
+  it('starts over only on its own input, without --resume and without --rollback', () => {
+    expect(run).toMatch(/startsOver: startsSessionOver\(\{ rawSessionInput: inputData\.rawSessionInput, resume: RESUME_MODE, rollbackTo: ROLLBACK_TO \}\)/);
+  });
+
+  it('rolls back before it decides how to open the run, and a failed rollback posts nothing more', () => {
+    const rollback = run.indexOf('/api/session/${sessionId}/rollback');
+    expect(rollback).toBeGreaterThan(-1);
+    expect(rollback).toBeLessThan(run.indexOf('openingRequest({'));
+    const failed = run.slice(rollback, run.indexOf('openingRequest({'));
+    expect(failed).toMatch(/if \(status !== 200\) \{\n\s*console\.error\(color\(`Rollback failed: [^\n]*\n\s*return;\n\s*\}/);
   });
 
   it('reads GET /checkpoint and decides before it posts /start or /resume', () => {
