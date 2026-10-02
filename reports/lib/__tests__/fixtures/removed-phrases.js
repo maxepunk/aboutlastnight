@@ -190,7 +190,31 @@ const REMOVED_PHRASES = [
   'Do arcs tell a consistent story without contradictions?',
   'Score each criterion as: pass (1.0), partial (0.5), fail (0.0)',
   'In BOTH modes the reporter never votes and owns no exposed memory.',
-  'are STRUCTURAL failures either way'
+  'are STRUCTURAL failures either way',
+
+  // 3.8: the wording the rule files retire when the craft is rebuilt around the form
+  // (spec round 7). Each was absent from every prompt text, schema description and
+  // judge criterion in the code when it was added. The bare "names no one" stays
+  // legal: T2 and the verdict labels use it.
+  // The buyer stated as fact (T5, T3; R11).
+  "NeurAI's board pays the seller",
+  "NeurAI's board pays more",
+  // "A reading" as the rules' word for Nova's inference, and the hedge menu (T1, T4,
+  // the world's timeline; R12); what an account's name proves (T4; R12).
+  'A reading across the counts that names no one',
+  'as a reading, an unproven claim or a question',
+  "present that placement as Nova's reading",
+  'never proves who holds',
+  // The remote block's attribution on every room event (T8; R13), and T1's remote point.
+  'the attribution carries it everywhere else',
+  'as reported to Nova remotely',
+  // The closing that ends on a question (C14; R17), and the old C6, C10 and C11.
+  'It ends on an open question',
+  'The deliberation is its own movement',
+  'how does a lobbyist know exactly where the money is hidden',
+  'Read an exposure as an act with a motive',
+  // C16's old example, in any character's name.
+  /So where is [^?\n]*['’]s payday/i
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

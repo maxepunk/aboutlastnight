@@ -634,6 +634,56 @@ describe('the removed-phrase fixture: the phrases waves 1 and 2 reported removin
 });
 
 /**
+ * Task 3.8 (spec round 7): the wording the rule files retire joins the list. The
+ * buyer stated as fact, "a reading" as the rules' word for Nova's inference, the
+ * absence carried by attribution, the closing that ends on a question, the old
+ * deliberation, tracing and exposure items and the payday example. Each is found as
+ * the old files worded it, and the words that stay legal are not.
+ */
+describe('the removed-phrase fixture: the wording 3.8 retires from the rule files', () => {
+  const found = (text) => `${text}: ${findRemovedPhrases(text).length > 0}`;
+
+  it.each([
+    'bury: sell it to be erased for ever. NeurAI\'s board pays the seller into an account the seller names',
+    '## T5. NeurAI\'s board pays the seller',
+    'since NeurAI\'s board pays more the more sensitive the memory',
+    '- A reading across the counts that names no one is Nova\'s to make.',
+    'It never proves who holds the account, and several sellers can share one.',
+    'Nova presents as a reading, an unproven claim or a question',
+    'states the absence at most once in the whole article; the attribution carries it everywhere else.',
+    'Nova reports as seen or heard on site, or as reported to Nova remotely, with the speaker named.',
+    'such as the exposures and sales around it, and present that placement as Nova\'s reading.',
+    'It ends on an open question, never a generic op-ed.',
+    '## C6. The deliberation is its own movement',
+    'Read an exposure as an act with a motive, such as putting a memory on the Evidence Board',
+    'ask: "how does a lobbyist know exactly where the money is hidden?"',
+    'The room accused <character>. So where is <character>\'s payday?',
+    'So where is Vic’s payday?'
+  ])('finds "%s"', (text) => {
+    expect(found(text)).toBe(`${text}: true`);
+  });
+
+  it.each([
+    // The verdict labels and T2 say a no-culprit verdict names no one.
+    'A verdict with no culprit, such as an overdose or an accident, names no one.',
+    "ACCUSATION: none (the room's verdict names no culprit: an accident)",
+    // Round 7's own lines.
+    'Money runs from the buyer to the seller\'s chosen account. Nova suspects the buyer is NeurAI and its board, and writes it as a suspicion (T1).',
+    'The game tells the players that NeurAI\'s board wants the memories gone (T5).',
+    'where the placement is Nova\'s inference, write it as T1 sets out.',
+    'Nova says so once, early, as the start of Nova\'s questions.',
+    'The closing looks ahead from the thesis: what is still at stake, who stands to profit, what Nova is chasing next.',
+    'The deliberation is usually the room\'s decisive scene: the theories debated and dropped, and how the room came to its verdict.',
+    'Why someone exposed a memory is Nova\'s to suggest where the room\'s talk or the timing points to it',
+    'where it stops, ask the question a reporter would ask of that gap.',
+    'So where is the money going?',
+    'The section raises an open question about the arc.'
+  ])('does not find "%s"', (text) => {
+    expect(found(text)).toBe(`${text}: false`);
+  });
+});
+
+/**
  * The 3.6b fix batch: instructionText also strips the data three prompts carry, built
  * here by the real builders: the arc packages' excerpts (the documents' own words, in
  * the outline writer's <arc-evidence> and the article writer's packages), the outline
