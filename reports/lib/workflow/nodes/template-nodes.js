@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { PHASES } = require('../state');
 const { createTemplateAssembler } = require('../../template-assembler');
+const { publishPhotos } = require('../../publish-photos');
 const { traceNode } = require('../../observability');
 
 /**
@@ -103,7 +104,8 @@ function createStubAssembler() {
  *
  * Takes validated ContentBundle and applies theme-specific templates
  * to produce final HTML output using Handlebars templates.
- * Also copies session photos and saves HTML to outputs directory.
+ * Also publishes the photos the page prints, at web size, and saves HTML to
+ * outputs directory.
  *
  * @param {Object} state - Current state with contentBundle, theme, sessionId
  * @param {Object} config - Graph config with optional configurable.templateAssembler
@@ -144,14 +146,19 @@ async function assembleHtml(state, config) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Copy session photos to outputs/sessionphotos/{sessionId}/
+  // Publish the photos the page prints to outputs/sessionphotos/{sessionId}/, at web
+  // size (lib/publish-photos.js), before the report: a printed photo missing from
+  // data/{sessionId}/photos throws, naming it, and no report is written.
   let photosCopied = 0;
   if (sessionId) {
     const sourcePhotosDir = path.join(baseDir, 'data', sessionId, 'photos');
     const destPhotosDir = path.join(outputDir, 'sessionphotos', sessionId);
-    photosCopied = copySessionPhotos(sourcePhotosDir, destPhotosDir);
+    const published = await publishPhotos({
+      bundle, theme, sourceDir: sourcePhotosDir, destDir: destPhotosDir
+    });
+    photosCopied = published.length;
     if (photosCopied > 0) {
-      console.log(`[assembleHtml] Copied ${photosCopied} photos to ${destPhotosDir}`);
+      console.log(`[assembleHtml] Published ${photosCopied} printed photos at web size to ${destPhotosDir}`);
     }
   }
 
@@ -185,26 +192,6 @@ function createMockTemplateAssembler(options = {}) {
   };
 }
 
-/**
- * Copy the top-level FILES of a session photos folder into the published
- * sessionphotos/<id>/ folder. Subdirectories are skipped: the 071826 photo set
- * carries a group/ subfolder, and copyFileSync on a directory throws EPERM at the
- * last node of the run, after every paid call has completed (operator gate
- * 2026-09-19). Returns the number of files copied; 0 when the source is missing.
- */
-function copySessionPhotos(sourcePhotosDir, destPhotosDir) {
-  if (!fs.existsSync(sourcePhotosDir)) return 0;
-  const files = fs.readdirSync(sourcePhotosDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name);
-  if (files.length === 0) return 0;
-  fs.mkdirSync(destPhotosDir, { recursive: true });
-  for (const name of files) {
-    fs.copyFileSync(path.join(sourcePhotosDir, name), path.join(destPhotosDir, name));
-  }
-  return files.length;
-}
-
 module.exports = {
   // Node functions (wrapped with LangSmith tracing)
   assembleHtml: traceNode(assembleHtml, 'assembleHtml', {
@@ -219,7 +206,6 @@ module.exports = {
 
   // Internal functions for testing
   _testing: {
-    copySessionPhotos,
     getTemplateAssembler,
     createStubAssembler
   }

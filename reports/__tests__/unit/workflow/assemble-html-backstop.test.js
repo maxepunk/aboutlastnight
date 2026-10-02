@@ -9,6 +9,10 @@
  * or sections with no content blocks) must THROW *before* any file write; a populated
  * bundle must assemble normally.
  *
+ * The publish step (brief F2) adds one refusal: a page that prints a photo missing from
+ * data/<id>/photos would show a broken image, so assembleHtml throws naming the photo,
+ * before it writes the report.
+ *
  * Schema note: per the real content-bundle.schema.json, the per-section body array is
  * `content` (NOT `contentBlocks`). top-level required: ["metadata","headline","sections"];
  * each section: required ["id","type","content"], type ∈ narrative/evidence-highlight/
@@ -76,5 +80,22 @@ describe('assembleHtml backstop (N8)', () => {
     const result = await assembleHtml({ contentBundle: bundle, sessionId: 'TEST' }, cfg());
     expect(result.assembledHtml).toContain('ok');
     expect(result.currentPhase).toBeDefined();
+  });
+
+  test('refuses to publish a page whose printed photo is missing: throws naming it, and writes no report', async () => {
+    const config = cfg();
+    const bundle = {
+      metadata: {},
+      headline: 'H',
+      sections: [
+        { id: 'lede', type: 'narrative', heading: 'Lede', content: [
+          { type: 'paragraph', text: 'X' },
+          { type: 'photo', filename: 'aln0926262 (1 of 11).jpg', caption: 'C' }
+        ] }
+      ]
+    };
+    await expect(assembleHtml({ contentBundle: bundle, sessionId: 'TEST' }, config))
+      .rejects.toThrow('"aln0926262 (1 of 11).jpg"');
+    expect(fs.existsSync(path.join(config.configurable.baseDir, 'outputs', 'report-TEST.html'))).toBe(false);
   });
 });

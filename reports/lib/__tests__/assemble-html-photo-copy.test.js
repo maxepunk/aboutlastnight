@@ -1,41 +1,123 @@
 /**
- * assembleHtml photo copy (operator gate, 2026-09-19)
+ * assembleHtml publishes the printed photos (brief F2; the operator gate of 2026-09-19
+ * before it).
  *
- * The copy into outputs/sessionphotos/<id>/ iterated fs.readdirSync(photosDir) and
- * copyFileSync'd every entry. A subfolder inside the photos folder (data/<id>/photos/group/,
- * which the 071826 photo set carries) made copyFileSync throw EPERM at the LAST node of
- * the run, after every paid call had completed. The copy now takes top-level files only
- * and reports how many it copied.
+ * The publish step copied every top-level file of data/<id>/photos into
+ * outputs/sessionphotos/<id>/ at full size. It took files only after a subfolder (the
+ * 071826 photo set's group/) made copyFileSync throw EPERM at the last node of the run,
+ * after every paid call had completed. It now publishes only the photos the page prints,
+ * at web size, through lib/publish-photos.js: a subfolder, the whiteboard and an
+ * unprinted photo are never read, and `photosCopied` is the count published. The HTML is
+ * the assembler's, unchanged: it names each photo verbatim, spaces and brackets included.
  */
+
+jest.mock('../observability', () => ({
+  traceNode: (fn) => fn,
+  progressEmitter: { emit: jest.fn() },
+  createTracedSdkQuery: (fn) => fn,
+  createProgressFromTrace: () => jest.fn()
+}));
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { _testing } = require('../workflow/nodes/template-nodes');
+const sharp = require('sharp');
+const { assembleHtml, createMockTemplateAssembler } = require('../workflow/nodes/template-nodes');
 
-function makePhotosDir() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-photo-copy-'));
-  const src = path.join(root, 'photos');
-  fs.mkdirSync(path.join(src, 'group'), { recursive: true });
-  fs.writeFileSync(path.join(src, 'a.jpg'), 'jpg-a');
-  fs.writeFileSync(path.join(src, 'whiteboard.jpg'), 'jpg-w');
-  fs.writeFileSync(path.join(src, 'group', 'g1.jpg'), 'jpg-g1');
-  return { root, src, dest: path.join(root, 'out', 'sessionphotos', '0919269') };
+const SESSION = '0919269';
+const roots = [];
+afterEach(() => {
+  while (roots.length > 0) fs.rmSync(roots.pop(), { recursive: true, force: true });
+});
+
+/** A repo-shaped base folder: data/<id>/photos holds `photos` ({name: [width, height]}). */
+async function baseDirWith(photos) {
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-assemble-photos-'));
+  roots.push(baseDir);
+  const photosDir = path.join(baseDir, 'data', SESSION, 'photos');
+  for (const [name, [width, height]] of Object.entries(photos)) {
+    const file = path.join(photosDir, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    await sharp({ create: { width, height, channels: 3, background: { r: 30, g: 30, b: 90 } } }).jpeg().toFile(file);
+  }
+  return { baseDir, photosDir, publishedDir: path.join(baseDir, 'outputs', 'sessionphotos', SESSION) };
 }
 
-describe('copySessionPhotos', () => {
-  test('copies the top-level files, skips subdirectories, and returns the count', () => {
-    const { src, dest } = makePhotosDir();
-    const copied = _testing.copySessionPhotos(src, dest);
-    expect(copied).toBe(2);
-    expect(fs.readdirSync(dest).sort()).toEqual(['a.jpg', 'whiteboard.jpg']);
-    expect(fs.existsSync(path.join(dest, 'group'))).toBe(false);
+function bundlePrinting(filenames) {
+  return {
+    metadata: { sessionId: SESSION, theme: 'journalist', generatedAt: '2026-10-02T00:00:00Z' },
+    headline: { main: 'A headline long enough for the schema' },
+    sections: [{
+      id: 'the-story',
+      type: 'narrative',
+      heading: 'The Story',
+      content: [
+        { type: 'paragraph', text: 'A paragraph.' },
+        ...filenames.flatMap((filename) => [
+          { type: 'photo', filename, caption: 'A caption.' },
+          { type: 'paragraph', text: 'Another paragraph.' }
+        ])
+      ]
+    }]
+  };
+}
+
+const mockConfig = (baseDir) => ({
+  configurable: { templateAssembler: createMockTemplateAssembler({ html: '<html>ok</html>' }), baseDir, theme: 'journalist' }
+});
+
+describe('assembleHtml publishes the printed photos', () => {
+  test('only the printed photo, at web size, under its own name; a subfolder and the whiteboard are never read', async () => {
+    const { baseDir, publishedDir } = await baseDirWith({
+      'aln0919269 (1 of 2).jpg': [3200, 1800],
+      'aln0919269 (2 of 2).jpg': [400, 300],
+      'whiteboard.jpg': [400, 300],
+      [path.join('group', 'g1.jpg')]: [400, 300]
+    });
+
+    const result = await assembleHtml(
+      { contentBundle: bundlePrinting(['aln0919269 (1 of 2).jpg']), sessionId: SESSION, theme: 'journalist' },
+      mockConfig(baseDir)
+    );
+
+    expect(result.photosCopied).toBe(1);
+    expect(fs.readdirSync(publishedDir)).toEqual(['aln0919269 (1 of 2).jpg']);
+    const meta = await sharp(path.join(publishedDir, 'aln0919269 (1 of 2).jpg')).metadata();
+    expect([meta.width, meta.height]).toEqual([1600, 900]);
   });
 
-  test('returns 0 and creates nothing when the source folder is missing', () => {
-    const { root } = makePhotosDir();
-    const dest = path.join(root, 'out2', 'sessionphotos', 'x');
-    expect(_testing.copySessionPhotos(path.join(root, 'nope'), dest)).toBe(0);
-    expect(fs.existsSync(dest)).toBe(false);
+  test('a page that prints no photo publishes none, though the photos folder holds some', async () => {
+    const { baseDir, publishedDir } = await baseDirWith({ 'aln0919269 (1 of 2).jpg': [400, 300], 'whiteboard.jpg': [400, 300] });
+
+    const result = await assembleHtml(
+      { contentBundle: bundlePrinting([]), sessionId: SESSION, theme: 'journalist' }, mockConfig(baseDir)
+    );
+
+    expect(result.photosCopied).toBe(0);
+    expect(fs.existsSync(publishedDir)).toBe(false);
+  });
+
+  test('a page that prints no photo needs no photos folder', async () => {
+    const { baseDir, publishedDir } = await baseDirWith({});
+
+    const result = await assembleHtml(
+      { contentBundle: bundlePrinting([]), sessionId: SESSION, theme: 'journalist' }, mockConfig(baseDir)
+    );
+
+    expect(result.photosCopied).toBe(0);
+    expect(fs.existsSync(publishedDir)).toBe(false);
+  });
+
+  test('the HTML is unchanged: the report names each photo verbatim, spaces and brackets included', async () => {
+    const { baseDir, publishedDir } = await baseDirWith({ 'aln0919269 (1 of 2).jpg': [400, 300] });
+
+    const result = await assembleHtml(
+      { contentBundle: bundlePrinting(['aln0919269 (1 of 2).jpg']), sessionId: SESSION, theme: 'journalist' },
+      { configurable: { baseDir, theme: 'journalist' } }
+    );
+
+    expect(fs.readFileSync(result.outputPath, 'utf8')).toBe(result.assembledHtml);
+    expect(result.assembledHtml).toContain(`src="sessionphotos/${SESSION}/aln0919269 (1 of 2).jpg"`);
+    expect(fs.existsSync(path.join(publishedDir, 'aln0919269 (1 of 2).jpg'))).toBe(true);
   });
 });

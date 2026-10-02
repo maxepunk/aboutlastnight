@@ -446,7 +446,9 @@ templates/journalist/
       financial-tracker.hbs
 ```
 
-**Output**: `outputs/report-{sessionId}.html` + session photos
+**Output**: `outputs/report-{sessionId}.html` + the photos it prints, in `outputs/sessionphotos/{sessionId}/`
+
+**Photos** (the fixes before phase 4, F2): `lib/publish-photos.js` publishes only the photos the page prints, each at web size under its own name; its header states the settings. A printed photo missing from `data/{sessionId}/photos` stops the publish before the report is written.
 
 ---
 
