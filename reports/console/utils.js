@@ -173,7 +173,7 @@ function EvalBar({ view }) {
  * had to fix, what it was told to consider, and what it changed. Read-only.
  *
  * Takes an already-computed view, like EvalBar: callers pass
- * `checkpointViewLogic.traceView(data.trace)`.
+ * `checkpointViewLogic.traceView(data.trace, theme)`.
  *
  * @param {{view: object|null}} props
  */

@@ -23,9 +23,12 @@ describe('e2e-walkthrough renders the trace', () => {
     expect(SRC).toMatch(/const ViewLogic = require\('\.\.\/console\/checkpoint-view-logic'\);/);
   });
 
-  it('renders the passes through traceView', () => {
+  // Final review (reworks[0]): the view labels the evaluation's guidance by whether the
+  // rework was given it, which depends on the theme, so the harness passes the theme it
+  // runs with, as the console passes the stop's.
+  it('renders the passes through traceView, with the theme the run uses', () => {
     const fn = body('function displayTrace(');
-    expect(fn).toMatch(/ViewLogic\.traceView\(trace\)/);
+    expect(fn).toMatch(/ViewLogic\.traceView\(trace, THEME\)/);
     expect(fn).toMatch(/pass\.triggerLabel/);
     expect(fn).toMatch(/pass\.mustFix/);
     expect(fn).toMatch(/pass\.shouldConsider/);

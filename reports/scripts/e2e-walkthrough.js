@@ -1200,11 +1200,13 @@ function displayEvaluationStatus(evaluation, isEscalated = false) {
  * the stop, from the SAME view model as the console's panel
  * (console/checkpoint-view-logic.js#traceView). Nothing is shown when none ran.
  * The findings print in full: each is the self-contained sentence the rework was given.
+ * The view labels the evaluation's guidance by whether the rework was given it, which the
+ * theme decides (final review, reworks[0]), so it reads the theme this run uses.
  *
  * @param {Array|null} trace - checkpoint.trace at the outline or article stop
  */
 function displayTrace(trace) {
-  const view = ViewLogic.traceView(trace);
+  const view = ViewLogic.traceView(trace, THEME);
   if (!view.any) return;
   sectionBox(view.title, 'magenta');
   view.passes.forEach((pass, i) => {

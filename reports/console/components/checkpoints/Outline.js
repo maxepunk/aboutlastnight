@@ -544,7 +544,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   // lastEvaluationFrom keeps the array fallback for an older payload.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'outline'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
-  const trace = ViewLogic.traceView(data && data.trace);
+  // Final review (reworks[0]): the theme decides whether a pass's rework was given the
+  // evaluation's guidance, which the panel's label says.
+  const trace = ViewLogic.traceView(data && data.trace, theme);
   // Brief 3.7: the outline writer's questions for the director, answered in the note box;
   // task 3.11: the stop's hint says what an answer does here.
   const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'outline');

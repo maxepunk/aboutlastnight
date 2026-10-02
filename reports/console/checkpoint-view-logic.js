@@ -1066,16 +1066,31 @@
   }
 
   /**
+   * How the trace labels a judge's revisionGuidance, by whether the automatic rework was
+   * given it (final review, reworks[0]). Since phase 3 (3.10) a journalist automatic pass
+   * carries no EVALUATOR FEEDBACK (node-helpers.js buildRevisionContext): the rework gets
+   * the must-fix items alone, so the guidance is the evaluation's, never sent. The
+   * detective's passes still print it to the rework (D13).
+   */
+  var TRACE_GUIDANCE_LABELS = {
+    journalist: 'The evaluation\'s guidance, not sent to the rework: ',
+    detective: 'Guidance to the writer: '
+  };
+
+  /**
    * The trace panel's model for one stop.
    *
    * @param {Array|null} trace - data.trace at the outline or article stop
+   * @param {string} [theme='journalist'] - the session's theme, which decides whether a
+   *   pass's rework was given the evaluation's guidance (TRACE_GUIDANCE_LABELS)
    * @returns {{any: boolean, title: string, passes: Array<{key: string, heading: string,
    *            triggerLabel: string, mustFix: {label: string, items: string[]},
    *            shouldConsider: {label: string, items: string[]}, noFindings: boolean,
    *            changed: {labels: string[], text: string}, guidance: string,
    *            criteria: Array<{key: string, text: string}>, criteriaLabel: string}>}}
    */
-  function traceView(trace) {
+  function traceView(trace, theme) {
+    var guidanceLabel = TRACE_GUIDANCE_LABELS[theme === 'detective' ? 'detective' : 'journalist'];
     var passes = asArray(trace)
       .filter(function (p) { return p && typeof p === 'object'; })
       .map(function (p, index) {
@@ -1094,7 +1109,7 @@
           shouldConsider: traceFindingList('Should consider', shouldConsider),
           noFindings: mustFix.length === 0 && shouldConsider.length === 0 && !guidance && criteria.length === 0,
           changed: traceChanged(p.changedScopes),
-          guidance: guidance ? 'Guidance to the writer: ' + guidance : '',
+          guidance: guidance ? guidanceLabel + guidance : '',
           criteria: criteria,
           criteriaLabel: 'Scores (' + criteria.length + ')'
         };

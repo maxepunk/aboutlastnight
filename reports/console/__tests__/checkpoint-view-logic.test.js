@@ -916,11 +916,11 @@ describe('traceView (phase 2, brief 2.7)', () => {
   });
 
   test('an evaluation pass carries its guidance and one line per scored criterion', () => {
-    const view = traceView([checkPass, evaluationPass]);
+    const view = traceView([checkPass, evaluationPass], 'journalist');
     expect(view.title).toBe('Trace: 2 automatic reworks ran this round before you arrived');
     const pass = view.passes[1];
     expect(pass.triggerLabel).toBe('Why it ran: the evaluation failed.');
-    expect(pass.guidance).toBe('Guidance to the writer: Put Zia in the opening.');
+    expect(pass.guidance).toBe("The evaluation's guidance, not sent to the rework: Put Zia in the opening.");
     expect(pass.criteriaLabel).toBe('Scores (2)');
     expect(pass.criteria).toEqual([
       { key: 'rosterCoverage', text: 'rosterCoverage: 0.40 (structural). Zia is missing. Fix: Name Zia.' },
@@ -928,6 +928,21 @@ describe('traceView (phase 2, brief 2.7)', () => {
     ]);
     expect(pass.mustFix.items).toEqual([]);
     expect(pass.noFindings).toBe(false);
+  });
+
+  // Final review (reworks[0]): since 3.10 a journalist automatic pass carries no
+  // EVALUATOR FEEDBACK (node-helpers.js buildRevisionContext), so the judge's
+  // revisionGuidance never reaches its rework, and "Guidance to the writer" credited the
+  // rework with an instruction it was never given. A detective pass still prints it to
+  // the rework (D13) and keeps that label. With no theme the view reads the journalist's,
+  // the pipeline's default.
+  test("labels the guidance by whether the rework was given it: the journalist's not, the detective's yes", () => {
+    expect(traceView([evaluationPass], 'journalist').passes[0].guidance)
+      .toBe("The evaluation's guidance, not sent to the rework: Put Zia in the opening.");
+    expect(traceView([evaluationPass]).passes[0].guidance)
+      .toBe("The evaluation's guidance, not sent to the rework: Put Zia in the opening.");
+    expect(traceView([evaluationPass], 'detective').passes[0].guidance)
+      .toBe('Guidance to the writer: Put Zia in the opening.');
   });
 
   test('a pass with no recorded findings says so rather than rendering empty lists', () => {

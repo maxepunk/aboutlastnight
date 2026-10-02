@@ -678,7 +678,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // off it and rendered null in every session.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
-  const trace = ViewLogic.traceView(data && data.trace);
+  // Final review (reworks[0]): the theme decides whether a pass's rework was given the
+  // evaluation's guidance, which the panel's label says.
+  const trace = ViewLogic.traceView(data && data.trace, theme);
   // Brief 3.7: the article writer's questions for the director; task 3.11: the stop's
   // hint says answers go with a send back, since Approve publishes the article as it is.
   const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'article');
