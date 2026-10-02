@@ -190,9 +190,13 @@ const REPO = path.join(__dirname, '..', '..');
  *   give it (21197 -> 21220), outline-journalist only. The arc writer's roster lines do
  *   not move. (Item 7: the article writer's PHOTOS entries come from one builder shared
  *   with its judge, renderPhotoListEntry, and do not move a byte.)
+ * - The 4b fix batch (item 10): the journalist outline writer's <arc-metadata> line says
+ *   what an arc is in C16's words, "one thread of the story, as the arc writer found it",
+ *   where it said "the arc writer's reading of one thread" ("reading" is retired, spec
+ *   section 7). 21220 -> 21233, outline-journalist only. No detective pin moves.
  */
 const PINNED = {
-  'outline-journalist': ['06d657191804562a991b44095ee64363aa3ac94f5c88d451a2bc87d6960ec1f2', 21220],
+  'outline-journalist': ['ef2d688820eca2d9585f57787d7c168d084ffb3dcc62074959b0864df63d20d1', 21233],
   'article-journalist': ['2cd5992037eec2f125bc6e7882e1f65688ed37a93c88235ab18ec983b6b042de', 28269],
   'arcs-journalist': ['f4838fdf6fd39ed79c8921132224439f48a519c53e4d86c54112012dfe3c25b7', 11398],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],

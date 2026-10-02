@@ -1786,6 +1786,19 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     });
   });
 
+  // The 4b fix batch (spec section 7, R12; 3.10's forOtherOwners): "reading" is retired
+  // as the rules' noun for an inference, the arcs' included. An arc is one thread of the
+  // story, which the arc writer found (C16).
+  describe("the outline writer's <arc-metadata> line", () => {
+    it('says what an arc is without calling it a reading', async () => {
+      const { userPrompt } = await outlineOf(journalist());
+      const metadata = between(userPrompt, '<arc-metadata>', '</arc-metadata>');
+      const line = metadata.split('\n').find((l) => l.startsWith('Each arc above is'));
+      expect(line).toMatch(/^Each arc above is one thread of the story, as the arc writer found it\. Its arcSource says where the thread came from: /);
+      expect(line).not.toMatch(/\breading\b/i);
+    });
+  });
+
   // The 4b fix batch (3.10 re-review): the journalist's revision framing was 3.2's first
   // line of the article rework. Since 3.10's fix round 1 that line is the rework rules'
   // own (ai-nodes.js ARTICLE_REVISION_RULES), and nothing read the string, which still

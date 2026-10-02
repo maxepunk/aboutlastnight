@@ -923,6 +923,10 @@ Return JSON with the following structure:
       // before the craft files, a backstop for the channel (SDK #277) as the article
       // writer's <SCHEMA> is.
       //
+      // The 4b fix batch (spec section 7, R12): <arc-metadata> says what an arc is in
+      // C16's words, one thread of the story the arc writer found. It called an arc "the
+      // arc writer's reading", and "reading" is retired as the rules' noun for an inference.
+      //
       // Phase 3 (3.10; T9): after SESSION_FACTS, the roster with pronouns, the section
       // the article writer's system prompt and the judges print, so each player's
       // pronoun reaches this writer once: at the gate it planned from first names alone.
@@ -941,7 +945,7 @@ ${observationsSection ? `\n${observationsSection}\n` : ''}
 <arc-metadata>
 ${JSON.stringify(arcsWithMetadata, null, 2)}
 
-Each arc above is the arc writer's reading of one thread. Its arcSource says where the thread came from: "accusation" (the verdict), "whiteboard" (a theory the room worked through), "observation" (the director's notes) or "discovered" (a pattern in the record the room did not take up, which C3 governs). Its evidenceStrength, caveats and unansweredQuestions say how far the record carries it; T1 says how each claim is written.
+Each arc above is one thread of the story, as the arc writer found it. Its arcSource says where the thread came from: "accusation" (the verdict), "whiteboard" (a theory the room worked through), "observation" (the director's notes) or "discovered" (a pattern in the record the room did not take up, which C3 governs). Its evidenceStrength, caveats and unansweredQuestions say how far the record carries it; T1 says how each claim is written.
 </arc-metadata>
 
 <available-photos>
