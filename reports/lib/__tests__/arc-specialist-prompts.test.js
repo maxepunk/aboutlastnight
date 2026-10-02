@@ -392,7 +392,10 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     'memory-altering drug',
     'the memory drug',
     'GROUND TRUTH',
-    'AUTHORITATIVE',
+    // The removed line called the director's prose "the AUTHORITATIVE source". Since
+    // 3.10 the arc calls print the roster section, whose NPC lines are "as
+    // authoritative as the roster's", so the entry names the removed line itself.
+    'is the AUTHORITATIVE source',
     'Sarah exposed three memories',
     'Never use "token"',
     'Black Market',

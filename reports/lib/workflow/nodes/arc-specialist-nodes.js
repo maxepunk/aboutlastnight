@@ -75,7 +75,7 @@ const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = require('../../accusation-verdict');
-const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
+const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes, createPromptBuilder } = require('../../prompt-builder');
 const { loadRuleSet } = require('../../rule-set');
 const { WRITER_QUESTIONS_PROPERTY, writerQuestionsOf, carriedWriterQuestions, questionedRosterNames } = require('../../writer-questions');
 
@@ -142,6 +142,27 @@ function coreArcSystemPrompt(sessionConfig, theme = 'journalist') {
 function interweavingSystemPrompt(sessionConfig, theme = 'journalist') {
   if (isParkedDetective(theme)) return withReportingModeBlock(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT, sessionConfig, theme);
   return withReportingModeBlock(withRuleSetCore(INTERWEAVING_SYSTEM_PROMPT, 'interweaving'), sessionConfig, theme);
+}
+
+/**
+ * The roster with pronouns for the journalist arc writer and interweaving call (phase
+ * 3, brief 3.10; T9): the section the article writer's system prompt and every judge
+ * print, PromptBuilder#_rosterSection, from the session's roster and pronouns and the
+ * canonical names. At the gate these calls had first names alone, and the arc writer
+ * asked the director five pronoun questions the roster stop had already answered. The
+ * builder gets no character data, so the section carries no character context: the arc
+ * writer prints its own, and the interweaving call reads none.
+ *
+ * @param {Object|null} sessionConfig - its roster and rosterPronouns
+ * @param {Object|null} canonicalCharacters - first name -> full name
+ * @returns {string}
+ */
+function rosterWithPronouns(sessionConfig, canonicalCharacters) {
+  return createPromptBuilder({
+    theme: 'journalist',
+    sessionConfig: sessionConfig || {},
+    canonicalCharacters: canonicalCharacters || null
+  })._rosterSection();
 }
 
 /**
@@ -361,6 +382,10 @@ function writerQuestionsFormatLine() {
  * placement the record shows or by a question of kind "player" about them (C7; fix
  * 3.7b).
  *
+ * Phase 3 (3.10; T9): after the character categories, the roster with pronouns
+ * (rosterWithPronouns), so each player's pronoun reaches the writer once. The session
+ * roster stays as it was: its first names decide rosterCoverage.
+ *
  * The truth rules (in the system prompt) state what the old SECTION 4 and 4.5 said
  * about evidence and time, and contradicted parts of them: they named each memory's
  * exposer, read an account's name for involvement, dated the party "the murder night"
@@ -465,6 +490,9 @@ ${context.primaryInvestigation}
 ${JSON.stringify(context.roster)}
 
 ${buildCharacterCategoriesBlock(context.roster, 'journalist', allCharacters).trimEnd()}
+
+### Names and Pronouns
+${rosterWithPronouns(state.sessionConfig, state.canonicalCharacters)}
 ${characterContext}
 ---
 
@@ -752,10 +780,12 @@ For each arc, analyze through all three lenses and document in analysisNotes:
  * @param {string} [theme='journalist'] - the session's theme: the journalist's prompt
  *   ends with the rule set's craft files (phase 3, brief 3.3); the detective keeps
  *   today's text (D13)
+ * @param {Object|null} [canonicalCharacters] - state.canonicalCharacters, for the
+ *   journalist's roster with pronouns (phase 3, brief 3.10)
  * @returns {string} Prompt for interweaving enrichment
  * @throws {Error} If coreArcs is not a non-empty array
  */
-function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessionConfig = null, theme = 'journalist') {
+function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessionConfig = null, theme = 'journalist', canonicalCharacters = null) {
   // M2: Input validation
   if (!Array.isArray(coreArcs) || coreArcs.length === 0) {
     throw new Error('buildInterweavingPrompt: coreArcs must be a non-empty array');
@@ -774,7 +804,7 @@ function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessio
     characterPlacements: arc.characterPlacements
   }));
 
-  if (!isParkedDetective(theme)) return journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig);
+  if (!isParkedDetective(theme)) return journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig, canonicalCharacters);
 
   return `# Interweaving Enrichment
 
@@ -849,13 +879,18 @@ Also provide an **interweavingPlan** with:
  * task names the fields that hold each and restates none of them (spec section 8:
  * each rule appears once).
  *
+ * Phase 3 (3.10): the roster with pronouns follows the session roster
+ * (rosterWithPronouns), and the task's field lines leave the principles to the system
+ * prompt (INTERWEAVING_PRINCIPLES).
+ *
  * @param {Array} compactArcs - the arcs, as buildInterweavingPrompt cuts them
  * @param {Array} roster
  * @param {Object|null} evidenceBundle
  * @param {Object|null} sessionConfig
+ * @param {Object|null} canonicalCharacters
  * @returns {string}
  */
-function journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig) {
+function journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig, canonicalCharacters) {
   return `# Interweaving Enrichment
 
 Analyze the following narrative arcs and identify how they can interweave for compulsive readability.
@@ -867,6 +902,10 @@ ${JSON.stringify(compactArcs, null, 2)}
 ## ROSTER (for identifying shared characters)
 
 ${JSON.stringify(roster)}
+
+## NAMES AND PRONOUNS
+
+${rosterWithPronouns(sessionConfig, canonicalCharacters)}
 
 ## THE RECORD (the documents the arcs rest on, and the morning timeline)
 
@@ -988,20 +1027,22 @@ async function generateCoreArcs(state, config) {
  * @param {Object} config - Graph config with SDK client
  * @param {Object} [sessionConfig] - state.sessionConfig, for the reporting-mode block
  * @param {Object|null} [evidenceBundle] - state.evidenceBundle, for the record view (brief 2.1)
+ * @param {Object|null} [canonicalCharacters] - state.canonicalCharacters, for the
+ *   journalist's roster with pronouns (phase 3, brief 3.10)
  * @returns {Promise<Object>} Interweaving result on success containing:
  *   - arcInterweaving: Array of { arcId, interweaving } objects
  *   - interweavingPlan: { suggestedOrder, convergencePoint, keyCallbacks }
  *   On failure (graceful degradation - the caller uses defaults): { _failed: true, _error }
  *   where _error is the thrown message, so a declined request stays named in state.
  */
-async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, evidenceBundle = null) {
+async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, evidenceBundle = null, canonicalCharacters = null) {
   console.log('[enrichWithInterweaving] Starting Call 2: Interweaving enrichment');
   const startTime = Date.now();
 
   const sdkClient = getSdkClient(config, 'enrichWithInterweaving');
   // No state here: the graph config carries the session's theme (createGraphAndConfig).
   const theme = config?.configurable?.theme;
-  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle, sessionConfig, theme);
+  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle, sessionConfig, theme, canonicalCharacters);
 
   console.log(`[enrichWithInterweaving] Prompt built: ${prompt.length} characters`);
 
@@ -1250,7 +1291,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // ═══════════════════════════════════════════════════════════════════════
     const call2Start = Date.now();
     const roster = state.sessionConfig?.roster || [];
-    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig, state.evidenceBundle);
+    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig, state.evidenceBundle, state.canonicalCharacters);
     const call2Duration = ((Date.now() - call2Start) / 1000).toFixed(1);
 
     if (interweavingResult && !interweavingResult._failed) {

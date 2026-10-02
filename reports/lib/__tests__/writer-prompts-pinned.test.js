@@ -176,11 +176,19 @@ const REPO = path.join(__dirname, '..', '..');
  *   backstory sentence names T1's third point in place of "Nova's reading under T1",
  *   and SECTION 5 points at C16 in <craft-story> in place of the retired <craft-arcs>
  *   (10772 -> 10816). arcs-journalist only.
+ * - Phase 3 (task 3.10), the roster with pronouns (T9): the journalist outline writer
+ *   prints the article writer's roster section (_rosterSection, without the character
+ *   context) after SESSION_FACTS, and the journalist arc writer prints it under a
+ *   "### Names and Pronouns" heading after its character categories (20639 -> 21198,
+ *   10816 -> 11398). The article writer and the detective pins do not move.
+ * - Integration of 3.10 onto 3.9: outline-journalist carries both, 3.9’s money sentence and
+ *   schema description and 3.10’s roster section (20638 -> 21197); article-journalist is
+ *   3.9’s (28269) and arcs-journalist 3.10’s (11398). The detective pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['43090a0768e66a909fbc417d637d33392a6912dc683f0a434d3daa6a8c046ed6', 20638],
+  'outline-journalist': ['100a5de2fdf02ce36f4cac5133465f953fa5140197db7f2e78aaa91322031a2f', 21197],
   'article-journalist': ['2cd5992037eec2f125bc6e7882e1f65688ed37a93c88235ab18ec983b6b042de', 28269],
-  'arcs-journalist': ['9f9ba8cd8e32677813784a2add89bdb668105ab61585eeb56851be2aac9ccfa8', 10816],
+  'arcs-journalist': ['f4838fdf6fd39ed79c8921132224439f48a519c53e4d86c54112012dfe3c25b7', 11398],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
   'arcs-detective': ['57b57b954a3193cbd067cbe41bfc7ffcbbc4338430eb1af8503d2cdca16fee60', 14747]

@@ -44,14 +44,16 @@ function loadCallModules(req) {
 /**
  * The interweaving call (call 2 of the arc analysis), as analyzeArcsPlayerFocusGuided
  * calls enrichWithInterweaving. The stored arcs stand in for call 1's: the call reads
- * only their id, title, summary, source and placements.
+ * only their id, title, summary, source and placements. Phase 3 (3.10): the canonical
+ * names follow, for the journalist's roster with pronouns (an older tree ignores them).
  * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
  */
 async function renderInterweaving({ arcNodes }, state) {
   const roster = state.sessionConfig?.roster || [];
   return {
     systemPrompt: await arcNodes.interweavingSystemPrompt(state.sessionConfig, state.theme || 'journalist'),
-    userPrompt: await arcNodes.buildInterweavingPrompt(state.narrativeArcs || [], roster, state.evidenceBundle, state.sessionConfig || null, state.theme || 'journalist')
+    userPrompt: await arcNodes.buildInterweavingPrompt(state.narrativeArcs || [], roster, state.evidenceBundle, state.sessionConfig || null,
+      state.theme || 'journalist', state.canonicalCharacters || null)
   };
 }
 

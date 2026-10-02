@@ -900,6 +900,14 @@ Return JSON with the following structure:
       // (finding 10) the prompt embeds the same file as <SCHEMA>, after the data and
       // before the craft files, a backstop for the channel (SDK #277) as the article
       // writer's <SCHEMA> is.
+      //
+      // Phase 3 (3.10; T9): after SESSION_FACTS, the roster with pronouns, the section
+      // the article writer's system prompt and the judges print (_rosterSection), so
+      // each player's pronoun reaches this writer once: at the gate it planned from
+      // first names alone. The section is built without the character data, so it adds
+      // the roster and the NPCs' canon lines and none of the character context the
+      // article writer reads beside them.
+      const rosterSection = new PromptBuilder(this.theme, this.themeName, this.sessionConfig, this.canonicalCharacters)._rosterSection();
       userPrompt = `Plan the outline of the article from these selected arcs. Write the plan in the third person: the article writer gives it Nova's voice.
 
 SELECTED ARCS:
@@ -943,6 +951,8 @@ ${JSON.stringify(arcAnalysisOnly, null, 2)}
 </arc-analysis>
 ${this._buildFinancialSummary(shellAccounts)}
 ${this._sessionFactsSection(sessionFacts)}
+
+${rosterSection}
 
 <SCHEMA>
 The outline is JSON in this shape: field names, types, enum values and required fields.
