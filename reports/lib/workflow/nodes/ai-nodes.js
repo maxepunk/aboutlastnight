@@ -724,6 +724,12 @@ function extractQuotableExcerpts(fullContent) {
  *
  * Runs after arc selection checkpoint, before outline generation.
  *
+ * The 4b fix batch, fix round 1 (T13): an arc's photos never include one the director
+ * excluded (isPhotoExcluded). The outline writer and its reworker print them in
+ * <arc-evidence>, and the parked detective article writer under ARC PHOTOS. Matching by
+ * the analyses' names alone listed such a photo again after a rollback to character-ids:
+ * finalizePhotoAnalyses skips there, so the excluded photo's analysis keeps its names.
+ *
  * @param {Object} state - Current state with selectedArcs, evidenceBundle, photoAnalyses
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update with arcEvidencePackages
@@ -799,6 +805,7 @@ async function buildArcEvidencePackages(state, config) {
     // Include enriched photo analyses for characters in this arc
     const arcCharacters = Object.keys(arc.characterPlacements || {});
     const relevantPhotos = (photoAnalyses.analyses || [])
+      .filter(p => !isPhotoExcluded(state, p.filename))  // T13: the director's exclusions
       .filter(p => {
         const photoCharacters = p.identifiedCharacters || p.characterDescriptions || [];
         return photoCharacters.some(c => {
@@ -928,9 +935,13 @@ function buildSessionFacts(state) {
 
 /**
  * Whether the director excluded a photo (T13: every photo the director has not excluded
- * appears, and an excluded photo never does). The one rule for every list a writer or
- * judge may place photos from, the hero choice and the fact check (the 4b fix batch; the
- * integrator's ruling).
+ * appears, and an excluded photo never does). The one rule (the 4b fix batch; the
+ * integrator's ruling) for every list a writer or judge may place photos from:
+ * buildAvailablePhotos (the outline writer, its reworker, the outline judge, and the
+ * article writer's and judge's PHOTOS), each arc package's photos (buildArcEvidencePackages:
+ * the outline writer's and reworker's <arc-evidence>, the detective article's ARC PHOTOS)
+ * and the hero entry (heroPhotoEntry). It also decides the hero choice (selectHeroImage)
+ * and the fact check's usable photos (evaluator-nodes.js buildFactCheckArgs).
  *
  * The director excludes a photo at the character-IDs stop, and the parse stores the
  * decision as characterIdMappings[<filename>].exclude. That decision is read first. The
@@ -984,9 +995,11 @@ function heroPhotoEntry(state, heroImage) {
  * builder joins by filename (options.photoDescriptions); Haiku's pre-identification
  * descriptions no longer go to the writer.
  *
- * The 4b fix batch (T13): a photo the director excluded is left out (isPhotoExcluded),
- * so the outline writer, its reworker, the outline judge and the article side, which
- * all build their lists here, never list one.
+ * The 4b fix batch (T13): a photo the director excluded is left out (isPhotoExcluded).
+ * The outline writer, its reworker and the outline judge build their lists here, and so
+ * do the article writer's and judge's PHOTOS (articleWriterInputs). The outline writer
+ * and its reworker also print each arc's photos, which buildArcEvidencePackages filters
+ * with the same predicate (fix round 1).
  *
  * @param {Object} state
  * @param {string} heroImage - excluded (it has its own slot)

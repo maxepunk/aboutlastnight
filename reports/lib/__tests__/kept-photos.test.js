@@ -14,20 +14,33 @@
  * place from, the hero choice and the fact check. It reads the director's own decision
  * first and the analysis's mark as the fallback: after a rollback to character-ids the
  * analyses are kept and the mappings parsed again, so the mark can be stale.
+ *
+ * Each arc package's photos are such a list (fix round 1): the outline writer and its
+ * reworker print them in <arc-evidence>, and the parked detective article writer under
+ * ARC PHOTOS. buildArcEvidencePackages built them from the analyses' names alone, so
+ * after that rollback a photo the director had just excluded was listed again.
  */
 
-const { reworkFixtureState } = require('./fixtures/rework-state');
+const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const aiNodes = require('../workflow/nodes/ai-nodes');
+const { finalizePhotoAnalyses } = require('../workflow/nodes/photo-nodes');
 const { _testing: { buildEvaluationUserPrompt, buildFactCheckArgs } } = require('../workflow/nodes/evaluator-nodes');
 const { factCheckContentBundle } = require('../content-bundle-fact-check');
 const { createPromptBuilder } = require('../prompt-builder');
 const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
 
 const { buildAvailablePhotos, articleWriterInputs, outlineWriterInputs } = aiNodes;
+const { buildArcEvidencePackages, generateOutline, reviseOutline, generateContentBundle, reviseContentBundle } = aiNodes;
 const { _testing: { selectHeroImage, buildOutlineRevisionPrompt } } = aiNodes;
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const filenames = (photos) => photos.map((p) => p.filename);
+
+/** A model stand-in that records every call and answers with a copy of `answer`. */
+const recordingSdk = (answer) => jest.fn(async () => clone(answer));
+/** Each recorded call's whole prompt: its system prompt, then its user prompt. */
+const promptsOf = (sdk) => sdk.mock.calls.map(([options]) => `${options.systemPrompt || ''}\n=====\n${options.prompt || ''}`);
+const cfg = (sdk, theme = 'journalist') => ({ configurable: { sdkClient: sdk, theme } });
 
 /**
  * The fixture with three more photos:
@@ -62,6 +75,24 @@ function photoState(theme = 'journalist') {
 }
 
 const EXCLUDED = ['p3.jpg', 'p5.jpg', 'P3-DESCRIPTION', 'P5-DESCRIPTION'];
+
+/**
+ * photoState after the nodes a rollback to character-ids replays (graph.js: the parse,
+ * finalizePhotoAnalyses, buildArcEvidencePackages, then the outline). The rollback clears
+ * the arc packages, the hero and the outline; the parse has stored the director's new
+ * decision (photoState's mappings). finalizePhotoAnalyses skips, because an analysis is
+ * already enriched (the known limitation in state.js), so p3's analysis keeps its names
+ * and gets no mark, and the packages are built again from the analyses.
+ */
+async function afterRollbackToCharacterIds(theme = 'journalist') {
+  const state = photoState(theme);
+  state.arcEvidencePackages = null;
+  state.heroImage = null;
+  state.outline = null;
+  Object.assign(state, await finalizePhotoAnalyses(state, {}));
+  Object.assign(state, await buildArcEvidencePackages(state, {}));
+  return state;
+}
 
 beforeAll(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -131,6 +162,49 @@ describe('every list a writer or judge may place from', () => {
     state.characterIdMappings['hero.jpg'] = { characterMappings: [], exclude: true };
     state.characterIdMappings['p2.jpg'] = { characterMappings: [], exclude: true };
     expect(selectHeroImage(state)).toBe('p4.jpg');
+  });
+});
+
+describe("each arc package's photos, after a rollback to character-ids excludes an enriched photo", () => {
+  it('the packages are built again without the photo the director excluded', async () => {
+    const state = await afterRollbackToCharacterIds();
+    // The case's premise: finalizePhotoAnalyses skipped, so p3's analysis names four
+    // players of the two arcs and carries no mark.
+    expect(state.photoAnalyses.analyses.find((a) => a.filename === 'p3.jpg'))
+      .toEqual({ filename: 'p3.jpg', identifiedCharacters: ['Riley', 'Alex', 'Morgan', 'Sarah'] });
+    expect(state.arcEvidencePackages.map((pkg) => [pkg.arcId, filenames(pkg.photos)])).toEqual([
+      ['arc-sale', ['hero.jpg', 'p2.jpg']],
+      ['arc-envelope', ['hero.jpg']]
+    ]);
+  });
+
+  it('the outline writer and its reworker name it nowhere in their prompts', async () => {
+    const state = await afterRollbackToCharacterIds();
+    const writer = recordingSdk(OUTLINE);
+    const { heroImage } = await generateOutline(state, cfg(writer));
+    const rework = recordingSdk(OUTLINE);
+    await reviseOutline({ ...state, heroImage, _previousOutline: OUTLINE, outlineRevisionCount: 1, _outlineFeedback: 'Rethink it.' }, cfg(rework));
+    const prompts = [...promptsOf(writer), ...promptsOf(rework)];
+    expect(prompts).toHaveLength(2);
+    for (const prompt of prompts) {
+      const arcEvidence = prompt.slice(prompt.indexOf('<arc-evidence>'), prompt.indexOf('</arc-evidence>'));
+      expect(arcEvidence).toContain('- p2.jpg: Alex');
+      EXCLUDED.forEach((text) => expect(`${text}: ${prompt.includes(text)}`).toBe(`${text}: false`));
+    }
+  });
+
+  it.each(['journalist', 'detective'])("the %s article writer and its reworker name it nowhere either (the detective prints the packages' ARC PHOTOS)", async (theme) => {
+    const state = { ...(await afterRollbackToCharacterIds(theme)), heroImage: 'hero.jpg', outline: OUTLINE };
+    const writer = recordingSdk(PREVIOUS_BUNDLE);
+    await generateContentBundle({ ...state, contentBundle: null }, cfg(writer, theme));
+    const rework = recordingSdk(PREVIOUS_BUNDLE);
+    await reviseContentBundle({ ...state, contentBundle: null, _previousContentBundle: PREVIOUS_BUNDLE, articleRevisionCount: 1 }, cfg(rework, theme));
+    const prompts = [...promptsOf(writer), ...promptsOf(rework)];
+    expect(prompts).toHaveLength(2);
+    for (const prompt of prompts) {
+      expect(prompt).toContain('ARC PHOTOS:');
+      EXCLUDED.forEach((text) => expect(`${theme} ${text}: ${prompt.includes(text)}`).toBe(`${theme} ${text}: false`));
+    }
   });
 });
 
