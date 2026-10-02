@@ -1191,7 +1191,7 @@ The subagent produces:
 - `data/20251221/output/article.html` - Rendered HTML via shared `TemplateAssembler`
 - `data/20251221/output/article-metadata.json` - Generation metadata and self-assessment
 
-**The rules the subagent follows** are the rule set above: the world, the truth rules (T1 to T15) and the craft guidance (C1 to C16). Where anything in this skill differs from them, the rule set decides.
+**The rules the subagent follows** are the rule set above: the world, the truth rules (T1 to T15) and the craft guidance (C1 to C19). Where anything in this skill differs from them, the rule set decides.
 
 **Structural consistency** is now enforced by the template system rather than by the
 LLM: evidence cards, financial trackers, pull quotes, and sidebar components are

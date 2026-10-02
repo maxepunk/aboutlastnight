@@ -4,6 +4,9 @@
  * writers, reworkers and judges read the rule set (lib/rule-set.js) instead. The
  * detective is parked (spec D13) and keeps its own files and phase lists.
  *
+ * Task 3.12: the standalone path's agent definitions and SKILL.md name neither the
+ * eight nor the five rule files task 3.8 retired.
+ *
  * Real files on disk: nothing here is mocked.
  */
 
@@ -73,6 +76,11 @@ describe('the retired journalist craft files', () => {
       const text = fs.readFileSync(file, 'utf8');
       RETIRED.forEach((name) => {
         expect(`${path.basename(file)}: ${name}: ${text.includes(`prompts/${name}.md`)}`).toBe(`${path.basename(file)}: ${name}: false`);
+      });
+      // Task 3.12: nor at the five rule files task 3.8 retired, by path or by tag. An
+      // agent told to read one finds no file, and misses the items its successor holds.
+      RETIRED_RULE_FILES.forEach((name) => {
+        expect(`${path.basename(file)}: ${name}: ${text.includes(name)}`).toBe(`${path.basename(file)}: ${name}: false`);
       });
     }
     expect(fs.readFileSync(files[0], 'utf8')).toContain('references/rules/');
