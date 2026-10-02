@@ -43,6 +43,41 @@ const STANDINGS = [
   { name: 'Ashe', total: 0 }
 ];
 
+/**
+ * The bonus as 061226's report wrote it (task 3.11; final review, session-data finding
+ * 0): the setup row's source is "Seed", the payment's Detail names the bonus only by its
+ * stem ("First buried"), and the holding account's reversal is a "Manual GM adjustment"
+ * that names no destination, logged in the payment's minute. Synthetic rows in that
+ * shape.
+ */
+const BONUS_ROWS_061226 = [
+  { time: '08:41 PM', detail: 'Seed (GM_Station_1)', team: 'First Burial Bonus', amount: 50000 },
+  { time: '09:00 PM', detail: 'First buried (GM_Station_1)', team: 'Vic', amount: 50000 },
+  { time: '09:00 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }
+];
+
+/** Two transfers in 061226's shape: the credit row's Detail "From <account>", the debit row's "To <account>". */
+const TRANSFER_ROWS_061226 = [
+  { time: '10:12 PM', detail: 'From vic (GM_Station_1)', team: 'Alex', amount: 150000 },
+  { time: '10:12 PM', detail: 'To alex (GM_Station_1)', team: 'Vic', amount: -150000 },
+  { time: '10:31 PM', detail: 'From alex (GM_Station_1)', team: 'Remi', amount: 40000 },
+  { time: '10:31 PM', detail: 'To remi (GM_Station_1)', team: 'Alex', amount: -40000 }
+];
+
+const SALES_061226 = [
+  { tokenId: 'ccc001', shellAccount: 'Vic', amount: 600000, time: '09:00 PM' },
+  { tokenId: 'ccc002', shellAccount: 'Vic', amount: 250000, time: '09:20 PM' },
+  { tokenId: 'ddd001', shellAccount: 'Alex', amount: 300000, time: '09:45 PM' }
+];
+
+/** Vic: two sales and the bonus, less the transfer to Alex; Alex: a sale and Vic's transfer, less the one to Remi. */
+const STANDINGS_061226 = [
+  { name: 'Vic', total: 750000 },
+  { name: 'Alex', total: 410000 },
+  { name: 'Remi', total: 40000 },
+  { name: 'First Burial Bonus', total: 0 }
+];
+
 describe('classifyAdjustments', () => {
   it('turns 092026\'s three bonus rows into one bonus paid to the account that received it', () => {
     const { adjustments, unclassified } = classifyAdjustments(BONUS_ROWS);
@@ -95,6 +130,121 @@ describe('classifyAdjustments', () => {
   });
 });
 
+/**
+ * Task 3.11 (final review, session-data finding 0): the first-burial bonus in the other
+ * row shapes a game master writes. 061226's report paid it as "First buried" with a
+ * holding-account reversal that names no destination, and code read the payment as a
+ * transfer from a made-up account named "First buried". 092026's shape, tested above,
+ * classifies as before.
+ */
+describe('classifyAdjustments: the first-burial bonus in 061226\'s shape', () => {
+  it('turns 061226\'s bonus rows into one bonus paid to the account that received it, and its transfers into transfers', () => {
+    const { adjustments, unclassified } = classifyAdjustments([...BONUS_ROWS_061226, ...TRANSFER_ROWS_061226]);
+    expect(adjustments).toEqual([
+      { time: '09:00 PM', kind: 'bonus', amount: 50000, toAccount: 'Vic' },
+      { time: '10:12 PM', kind: 'transfer', amount: 150000, fromAccount: 'Vic', toAccount: 'Alex' },
+      { time: '10:31 PM', kind: 'transfer', amount: 40000, fromAccount: 'Alex', toAccount: 'Remi' }
+    ]);
+    expect(unclassified).toEqual([]);
+    expect(JSON.stringify(adjustments)).not.toMatch(/First buried|Seed|Manual|GM|Station/i);
+  });
+
+  it.each([
+    ['First buried (GM_Station_1)'],
+    ['First buried bonus (GM_Station_1)'],
+    ['First burial (GM_Station_1)'],
+    ['First burial bonus (GM_Station_1)'],
+    ['FirstBurialBonus(GMStation1)']
+  ])('reads a credit whose source names the bonus by its stem as the bonus: %s', (detail) => {
+    const { adjustments, unclassified } = classifyAdjustments([{ time: '09:00 PM', detail, team: 'Vic', amount: 50000 }]);
+    expect(adjustments).toEqual([{ time: '09:00 PM', kind: 'bonus', amount: 50000, toAccount: 'Vic' }]);
+    expect(unclassified).toEqual([]);
+  });
+
+  it('pairs an unpaired holding-account debit with the credit of the same amount in the same minute: that credit is the bonus', () => {
+    const { adjustments, unclassified } = classifyAdjustments([
+      { time: '09:00 PM', detail: 'Payout (GM_Station_1)', team: 'Vic', amount: 50000 },
+      { time: '09:00PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }
+    ]);
+    expect(adjustments).toEqual([{ time: '09:00 PM', kind: 'bonus', amount: 50000, toAccount: 'Vic' }]);
+    expect(unclassified).toEqual([]);
+  });
+
+  it('pairs the holding-account debit with the credit that names the bonus, when another credit of that amount shares the minute', () => {
+    const { adjustments, unclassified } = classifyAdjustments([
+      { time: '09:00 PM', detail: 'Payout (GM_Station_1)', team: 'Alex', amount: 50000 },
+      { time: '09:00 PM', detail: 'First buried (GM_Station_1)', team: 'Vic', amount: 50000 },
+      { time: '09:00 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }
+    ], { accounts: ['Alex', 'Vic'] });
+    expect(adjustments).toEqual([{ time: '09:00 PM', kind: 'bonus', amount: 50000, toAccount: 'Vic' }]);
+    expect(unclassified).toEqual([{ time: '09:00 PM', account: 'Alex', amount: 50000 }]);
+  });
+
+  it('pairs nothing across minutes or amounts: such a credit is no bonus', () => {
+    const accounts = ['Vic'];
+    const laterMinute = classifyAdjustments([
+      { time: '09:00 PM', detail: 'Payout (GM_Station_1)', team: 'Vic', amount: 50000 },
+      { time: '09:05 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }
+    ], { accounts });
+    const otherAmount = classifyAdjustments([
+      { time: '09:00 PM', detail: 'Payout (GM_Station_1)', team: 'Vic', amount: 50000 },
+      { time: '09:00 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'First Burial Bonus', amount: -40000 }
+    ], { accounts });
+    [laterMinute, otherAmount].forEach(({ adjustments, unclassified }) => {
+      expect(adjustments).toEqual([]);
+      expect(unclassified).toEqual([{ time: '09:00 PM', account: 'Vic', amount: 50000 }]);
+    });
+  });
+});
+
+/**
+ * Task 3.11: a transfer's source is an account only when the session report shows it
+ * elsewhere, as a sale's account or a Final Standings row. A source with neither is a
+ * label the game master wrote, so its row is reported as unclassified and the source
+ * never becomes an account.
+ */
+describe('a transfer source the session report shows nowhere else', () => {
+  it('is reported as unclassified, from a credit row, and never added as an account', () => {
+    const ledger = buildLedger({
+      buriedTokens: SALES,
+      adjustmentRows: [{ time: '09:30 PM', detail: 'Payout (GM_Station_1)', team: 'Vic', amount: 20000 }],
+      finalStandings: STANDINGS
+    });
+    expect(ledger.adjustments).toEqual([]);
+    expect(ledger.ledgerCheck.unclassified).toEqual([{ time: '09:30 PM', account: 'Vic', amount: 20000 }]);
+    expect(ledger.shellAccounts.map((a) => a.name)).not.toContain('Payout');
+  });
+
+  it('is reported as unclassified, from a debit row that names a destination, and never added as an account', () => {
+    const ledger = buildLedger({
+      buriedTokens: SALES,
+      adjustmentRows: [{ time: '09:31 PM', detail: 'ToVic(GMStation1)', team: 'Ghost', amount: -10000 }],
+      finalStandings: STANDINGS
+    });
+    expect(ledger.adjustments).toEqual([]);
+    expect(ledger.ledgerCheck.unclassified).toEqual([{ time: '09:31 PM', account: 'Ghost', amount: -10000 }]);
+    expect(ledger.shellAccounts.map((a) => a.name)).not.toContain('Ghost');
+  });
+
+  it('keeps a transfer from an account the Final Standings list, though it made no sale', () => {
+    const ledger = buildLedger({
+      buriedTokens: SALES,
+      adjustmentRows: [
+        { time: '10:40 PM', detail: 'L (GM_Station_1)', team: 'Vic', amount: 5000 },
+        { time: '10:40 PM', detail: 'ToVic(GMStation1)', team: 'L', amount: -5000 }
+      ],
+      finalStandings: STANDINGS
+    });
+    expect(ledger.adjustments).toEqual([{ time: '10:40 PM', kind: 'transfer', amount: 5000, fromAccount: 'L', toAccount: 'Vic' }]);
+    expect(ledger.ledgerCheck.unclassified).toEqual([]);
+  });
+
+  it('classifyAdjustments checks no source when it is given no accounts', () => {
+    const { adjustments } = classifyAdjustments([{ time: '09:30 PM', detail: 'Payout (GM_Station_1)', team: 'Vic', amount: 20000 }]);
+    expect(adjustments).toEqual([{ time: '09:30 PM', kind: 'transfer', amount: 20000, fromAccount: 'Payout', toAccount: 'Vic' }]);
+  });
+});
+
 describe('buildLedger: each account\'s total and sale count, checked against the Final Standings', () => {
   it('totals sales, plus the bonus and transfers received, less transfers sent, and they reconcile', () => {
     const ledger = buildLedger({ buriedTokens: SALES, adjustmentRows: [...BONUS_ROWS, ...TRANSFER_ROWS], finalStandings: STANDINGS });
@@ -127,6 +277,25 @@ describe('buildLedger: each account\'s total and sale count, checked against the
       { name: 'L', total: 375000, tokenCount: 0, rank: 2 },
       { name: 'Vic', total: 25000, tokenCount: 1, rank: 3 }
     ]);
+  });
+
+  it('on 061226\'s rows, the bonus is in the account that received it, the totals reconcile, and no account is made up (task 3.11)', () => {
+    const ledger = buildLedger({
+      buriedTokens: SALES_061226,
+      adjustmentRows: [...BONUS_ROWS_061226, ...TRANSFER_ROWS_061226],
+      finalStandings: STANDINGS_061226
+    });
+    expect(ledger.adjustments).toEqual([
+      { time: '09:00 PM', kind: 'bonus', amount: 50000, toAccount: 'Vic' },
+      { time: '10:12 PM', kind: 'transfer', amount: 150000, fromAccount: 'Vic', toAccount: 'Alex' },
+      { time: '10:31 PM', kind: 'transfer', amount: 40000, fromAccount: 'Alex', toAccount: 'Remi' }
+    ]);
+    expect(ledger.shellAccounts).toEqual([
+      { name: 'Vic', total: 750000, tokenCount: 2, rank: 1 },
+      { name: 'Alex', total: 410000, tokenCount: 1, rank: 2 },
+      { name: 'Remi', total: 40000, tokenCount: 0, rank: 3 }
+    ]);
+    expect(ledger.ledgerCheck).toEqual({ adjustmentsParsed: true, mismatches: [], unclassified: [] });
   });
 
   it('counts sales in code, never 0 for an account that sold', () => {

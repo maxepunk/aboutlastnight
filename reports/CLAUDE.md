@@ -202,7 +202,7 @@ lib/prompt-renderers/
 └── director-notes-renderer.js      # The director's notes + corrections, <QUOTE_BANK>, <TRANSACTION_LINKS> (account, amount, time on the session clock), <EPILOGUE>
 lib/writer-questions.js            # The writers' questions for the director (C15): the field's shape, the normalizer, the rework carry (R5), the strip, questionedRosterNames
 lib/accusation-verdict.js           # VERDICT_KINDS, normalizeAccusation (votes, blamesNoCharacter), directorAccusationText (the director's accusation word for word)
-lib/session-ledger.js               # The ledger from the session report: Adjustment rows classified (bonus, transfer), account totals and sale counts, the Final Standings check, ledgerReviewOf (the input review)
+lib/session-ledger.js               # The ledger from the session report: Adjustment rows classified (the bonus, named by its stem or paired with a same-minute holding-account reversal; a transfer, whose source must be a sale's account or a Final Standings row, else its row is unclassified), account totals and sale counts, the Final Standings check, ledgerReviewOf (the input review)
 lib/director-enricher.js            # Opus director-notes enrichment: quote bank and epilogue checked against the director's words, transaction links by opaque row key
 lib/grounding.js                    # isVerbatimIn / normalizeForGrounding: whether a text is the director's words, word for word (the enricher and the notes renderer share it)
 lib/workflow/

@@ -14,6 +14,19 @@
  * a debit row's Detail names where it went ("To<account>") and its Team where it came
  * from. A transfer between two players' accounts takes the same two rows.
  *
+ * The game master types these labels, and other sessions write the bonus other ways
+ * (task 3.11). 061226's report:
+ *
+ *   Seed (GM_Station_1)                 | First Burial Bonus | +$50,000   setup
+ *   First buried (GM_Station_1)         | Vic                | +$50,000   the payment, named by the bonus's stem
+ *   Manual GM adjustment (GM_Station_1) | First Burial Bonus | -$50,000   the reversal, naming no destination, in the payment's minute
+ *
+ * So a credit whose source names the bonus by its stem ("first buri…") is the bonus,
+ * and a holding-account debit its Detail leaves unpaired goes with the credit of the
+ * same amount logged in the same minute. A transfer's source is an account only when
+ * the session report shows it elsewhere, as a sale's account or a Final Standings
+ * row; a source with neither is a label, and its row is reported as unclassified.
+ *
  * Code turns the rows into events: the bonus as one event paid to the account that
  * received it, a transfer as one row between two players' accounts. The setup and
  * reversal rows are bookkeeping and leave no event, and no Detail label ("GM_Station_1")
@@ -26,7 +39,7 @@
  * Pure: no I/O, no state.
  */
 
-const { sessionClockOf } = require('./prompt-renderers/session-clock');
+const { sessionClockOf, parseLoggedTime } = require('./prompt-renderers/session-clock');
 
 /** An account name for matching: letters and digits only, lower case. */
 function keyOf(name) {
@@ -37,10 +50,24 @@ function keyOf(name) {
 const BONUS_HOLDING_KEY = 'firstburialbonus';
 /** The account the setup row funds the holding account from. */
 const SETUP_SOURCE_KEY = 'holdingaccount';
+/** The bonus's stem, as keyOf reads it: "First buried", "First burial bonus", "FirstBurialBonus". */
+const BONUS_STEM_KEY = 'firstburi';
+
+/** Whether a name names the first-burial bonus by its stem. */
+function namesTheBonus(name) {
+  return keyOf(name).startsWith(BONUS_STEM_KEY);
+}
 
 /** A Detail column without its game-master station label: "Ember (GM_Station_1)" -> "Ember". */
 function stripStationLabel(detail) {
   return String(detail || '').replace(/\(\s*GM[\s_]*Station[\s_]*\d*\s*\)/gi, '').trim();
+}
+
+/** Whether two logged times fall in the same minute ("09:00 PM" and "09:00PM" do); false when either is not a time. */
+function sameMinute(a, b) {
+  const first = parseLoggedTime(a);
+  const second = parseLoggedTime(b);
+  return Boolean(first && second) && first.minutes === second.minutes;
 }
 
 /** The account a debit row's Detail names as its destination: "ToL(GMStation1)" -> "L". */
@@ -77,11 +104,18 @@ function unreadableRow(row, index) {
  * The session report's Adjustment rows as events.
  *
  * @param {Array<{time, detail, team, amount}>} rows - every Adjustment row, as the parse copied it
+ * @param {Object} [options]
+ * @param {Iterable<string>} [options.accounts] - the accounts the session report shows
+ *   elsewhere: every sale's account and every Final Standings row. A transfer whose
+ *   source is none of them is reported as unclassified, so a label such as "Payout" never
+ *   becomes an account. Without it, no source is checked.
  * @returns {{adjustments: Array<{time, kind, amount, toAccount, fromAccount?}>,
  *            unclassified: Array<{time, account, amount}>}} unclassified holds every row
  *            code could not read or classify, in row order
  */
-function classifyAdjustments(rows) {
+function classifyAdjustments(rows, { accounts } = {}) {
+  const known = accounts ? new Set([...accounts].map(keyOf)) : null;
+  const isAccount = (name) => !known || known.has(keyOf(name));
   const read = [];
   const unclassified = [];
   // A row with no account, or a zero or unreadable amount, is reported, never dropped:
@@ -106,15 +140,28 @@ function classifyAdjustments(rows) {
     sourceOf.set(credit.index, debit.account);
     pairedDebits.add(debit.index);
   });
+  // A holding-account debit left unpaired is the bonus's reversal (061226's "Manual GM
+  // adjustment" names no destination): it pairs with an unpaired credit of the same
+  // amount logged in the same minute, one whose source names the bonus first, which
+  // makes that credit the bonus.
+  debits.forEach((debit) => {
+    if (pairedDebits.has(debit.index) || keyOf(debit.account) !== BONUS_HOLDING_KEY) return;
+    const candidates = credits.filter((c) => !sourceOf.has(c.index) && keyOf(c.account) !== BONUS_HOLDING_KEY
+      && c.amount === -debit.amount && sameMinute(c.time, debit.time));
+    const credit = candidates.find((c) => namesTheBonus(stripStationLabel(c.detail))) || candidates[0];
+    if (!credit) return;
+    sourceOf.set(credit.index, debit.account);
+    pairedDebits.add(debit.index);
+  });
 
   const events = [];
   credits.forEach((credit) => {
     if (keyOf(credit.account) === BONUS_HOLDING_KEY) return; // setup: funds the holding account
     const source = sourceOf.get(credit.index) || stripStationLabel(credit.detail);
     const sourceKey = keyOf(source);
-    if (sourceKey === BONUS_HOLDING_KEY) {
+    if (namesTheBonus(source)) {
       events.push({ index: credit.index, event: { time: credit.time, kind: 'bonus', amount: credit.amount, toAccount: credit.account } });
-    } else if (sourceKey && sourceKey !== SETUP_SOURCE_KEY && sourceKey !== keyOf(credit.account)) {
+    } else if (sourceKey && sourceKey !== SETUP_SOURCE_KEY && sourceKey !== keyOf(credit.account) && isAccount(source)) {
       events.push({ index: credit.index, event: { time: credit.time, kind: 'transfer', amount: credit.amount, fromAccount: source, toAccount: credit.account } });
     } else {
       unclassified.push({ index: credit.index, time: credit.time, account: credit.account, amount: credit.amount });
@@ -125,7 +172,7 @@ function classifyAdjustments(rows) {
     if (keyOf(debit.account) === BONUS_HOLDING_KEY) return; // the holding account's own bookkeeping
     const destination = debitDestination(debit.detail);
     const destinationKey = keyOf(destination);
-    if (destinationKey && destinationKey !== BONUS_HOLDING_KEY && destinationKey !== keyOf(debit.account)) {
+    if (destinationKey && destinationKey !== BONUS_HOLDING_KEY && destinationKey !== keyOf(debit.account) && isAccount(debit.account)) {
       events.push({ index: debit.index, event: { time: debit.time, kind: 'transfer', amount: -debit.amount, fromAccount: debit.account, toAccount: destination } });
     } else {
       unclassified.push({ index: debit.index, time: debit.time, account: debit.account, amount: debit.amount });
@@ -169,7 +216,12 @@ function accountBook() {
  */
 function buildLedger({ buriedTokens, adjustmentRows, finalStandings } = {}) {
   const adjustmentsParsed = Array.isArray(adjustmentRows) && adjustmentRows.length > 0;
-  const { adjustments, unclassified } = classifyAdjustments(adjustmentRows);
+  // A transfer's source is an account only when the session report shows it here too.
+  const shown = [
+    ...(Array.isArray(buriedTokens) ? buriedTokens : []).map((sale) => sale && sale.shellAccount),
+    ...(Array.isArray(finalStandings) ? finalStandings : []).map((row) => row && row.name)
+  ].filter((name) => String(name || '').trim());
+  const { adjustments, unclassified } = classifyAdjustments(adjustmentRows, { accounts: shown });
   const { accounts, get } = accountBook();
 
   (Array.isArray(buriedTokens) ? buriedTokens : []).forEach((sale) => {
