@@ -421,15 +421,16 @@ function getOutlineCriteria(theme = 'journalist') {
       weight: 0.05,
       type: 'advisory'
     },
-    // MOMENTUM CRITERIA - Compulsive Readability (Commit 8.24)
+    // MOMENTUM CRITERIA (Commit 8.24; round 7: C16, C17, C19).
     // Phase 3 (3.9; C16): a planted detail scores only when its payoff moves the throughline.
+    // Wave 4 integration: the threads are intercut (C16); callbacks are no longer the joint.
     loopArchitecture: {
       description: 'Do the arcs open questions that pull the reader forward and pay them off later, and does each detail planted early come back changed in a payoff that moves the throughline (C16, C4)?',
       weight: 0.025,
       type: 'advisory'
     },
     arcInterweaving: {
-      description: 'Are the threads intercut across the sections, joined by callbacks and recontextualization rather than told one after another (C16)?',
+      description: 'Are the threads intercut across the sections rather than told one after another (C16)?',
       weight: 0.025,
       type: 'advisory'
     },
@@ -1571,28 +1572,23 @@ Check for narrative momentum:
  * The journalist outline judge's momentum questions (phase 3, 3.4): cards and photos,
  * each photo at the moment it shows, and the convergence as C16 states it. Phase 3
  * (3.9): question 4 no longer repeats the convergence clause C16 of round 7 dropped.
+ * Wave 4 integration: the questions point at C16, C17 and C19 as round 7 states them;
+ * the callbacks, "wait, so THAT'S why" moments and loop mechanics they used to reward
+ * are gone (rule-text read 2, section D: no unconditional reward for a planted detail).
  */
 const JOURNALIST_MOMENTUM_EVALUATION = `═══════════════════════════════════════════════════════════════════════════
-MOMENTUM EVALUATION (Commit 8.24 - Compulsive Readability)
+MOMENTUM EVALUATION
 ═══════════════════════════════════════════════════════════════════════════
 
-Check for narrative momentum:
+Check the outline's momentum against the craft reference:
 
-1. LOOP ARCHITECTURE: Does each arc section open cognitive gaps (questions) and close them?
-   - Are there unanswered questions that pull readers forward?
-   - Do answers open NEW questions before fully closing?
+1. LOOP ARCHITECTURE: Does each section raise the stakes or complicate the question the thesis carries (C19)? A detail planted early counts only where its payoff moves the throughline (C16).
 
-2. ARC INTERWEAVING: Are arcs connected through callbacks, not just sequential chapters?
-   - Do later sections reference and recontextualize earlier ones?
-   - Are there "wait, so THAT'S why..." moments planned?
-   - Does the outline use shared characters as bridges between arcs?
+2. ARC INTERWEAVING: Are the threads intercut across the sections rather than told one after another (C16)?
 
-3. VISUAL MOMENTUM: Do the evidence cards and photos serve loop mechanics?
-   - Is each card or photo a CLOSER (proves what was hinted) or OPENER (raises new question)?
-   - Is each photo placed where the story reaches the moment it shows?
+3. VISUAL MOMENTUM: Is each card a receipt set against the scene or claim it confirms or complicates (C17, C9), and is each photo placed where the story reaches the moment it shows?
 
-4. CONVERGENCE: Do the threads converge at a culmination near the end, where the thesis lands (C16)?
-   - Is the convergence given its weight?`;
+4. CONVERGENCE: Do the threads converge at a culmination near the end, where the thesis lands, said once (C16)?`;
 
 /**
  * Build user prompt with content to evaluate

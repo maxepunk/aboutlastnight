@@ -2376,6 +2376,13 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       // Phase 3 (3.9): question 4 repeated the convergence clause C16 no longer carries.
       expect(momentum).not.toContain('spent early in THE STORY');
       expect(momentum).not.toContain('kept for the end');
+      // Wave 4 integration (rule-text read 2, section D): no unconditional reward for a
+      // planted detail; the questions point at C16, C17 and C19.
+      expect(momentum).not.toMatch(/compulsive|callbacks|THAT'S why|loop mechanics|CLOSER|OPENER|recontextuali/i);
+      expect(momentum).toContain('(C19)');
+      expect(momentum).toContain('(C17, C9)');
+      expect(momentum).toContain('where its payoff moves the throughline (C16)');
+      expect(getOutlineCriteria('journalist').arcInterweaving.description).not.toMatch(/callbacks|recontextuali/i);
     });
 
     it('the journalist scoring rule says how the score is made (M30)', () => {
