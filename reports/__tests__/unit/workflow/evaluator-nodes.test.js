@@ -2254,9 +2254,15 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       }).toEqual(EXISTING[phase]);
     });
 
+    // Final review (judges-factcheck[1]): visualDistributionPlan scores R8 (photos spread
+    // through the article, with no count), which the spec alone states: no rule file says
+    // it, and C4, which the criterion cited, says nothing about photos. It names no item.
+    const NAMES_NO_ITEM = { outline: ['visualDistributionPlan'] };
+
     it.each(['arcs', 'outline', 'article'])('every journalist %s criterion names the rule or craft item it scores', (phase) => {
       const criteria = getPhaseCriteria(phase, 'journalist');
       for (const [key, { description }] of Object.entries(criteria)) {
+        if ((NAMES_NO_ITEM[phase] || []).includes(key)) continue;
         expect([key, description]).toEqual([key, expect.stringMatching(/\b[TC]\d{1,2}\b|<world>/)]);
       }
     });
@@ -2310,11 +2316,13 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       }
     });
 
-    it('visualDistributionPlan: photos spread through the article, with no count', () => {
+    // Final review (judges-factcheck[1]): it cited C4, which says nothing about photos.
+    it('visualDistributionPlan: photos spread through the article, with no count, citing no item that does not state it', () => {
       const { description } = outline().visualDistributionPlan;
       expect(description).toMatch(/photos spread through the article/);
       expect(description).not.toMatch(/every (?:two|three|\d)|\d+ (?:visuals|photos|cards|paragraphs)/);
       expect(description).not.toContain('pulls the reader on');
+      expect(description).not.toMatch(/\bC4\b/);
     });
 
     it('requiredSections: each printed section earns its place (C2), with no fixed list', () => {
@@ -2359,12 +2367,22 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(description).not.toMatch(/pull quote/i);
     });
 
-    it('coherence: faults only incompatible facts, never arcs that pull against the verdict (C3)', () => {
+    // Final review (judges-factcheck[1]): round 7 made C3 "How the official story was
+    // made", so neither the criterion nor the arc checklist cites it for the facts the
+    // arcs must agree on. The tension the arcs may carry is C16's.
+    it('coherence: faults only incompatible facts, never arcs that pull against the verdict (C16), and cites no C3', () => {
       const { description } = getArcCriteria('journalist').coherence;
-      expect(description).toMatch(/\bC3\b/);
+      expect(description).not.toMatch(/\bC3\b/);
+      expect(description).toMatch(/\bC16\b/);
       expect(description).toContain('cannot both be true');
       expect(description).toContain('pull against');
       expect(description).not.toContain('without contradictions');
+    });
+
+    it("the arc judge's checklist asks for coherence without citing C3", () => {
+      const prompt = userFor('arcs', stateFor());
+      expect(prompt).toContain("5. COHERENCE: Do the arcs agree on the record's facts? Arcs that pull against each other or against the room's verdict are the tension the article uses.");
+      expect(prompt).not.toMatch(/\(C3\)/);
     });
 
     it('the outline judge\'s momentum questions name no murder and no pull quotes', () => {

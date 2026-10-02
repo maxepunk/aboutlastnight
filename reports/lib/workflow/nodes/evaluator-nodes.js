@@ -308,8 +308,11 @@ const JOURNALIST_ARC_CRITERIA = {
     type: 'structural'
   },
   // Phase 3 (3.9): the tension it describes is C16's, and named so (round 7's craft).
+  // Final review (judges-factcheck[1]): round 7 made C3 "How the official story was
+  // made", which says nothing of facts that cannot both be true, so that clause cites
+  // no item.
   coherence: {
-    description: 'Do the arcs agree on the record\'s facts, with no two claims that cannot both be true (C3)? Arcs that pull against each other or against the room\'s verdict are the tension the article uses (C16).',
+    description: 'Do the arcs agree on the record\'s facts, with no two claims that cannot both be true? Arcs that pull against each other or against the room\'s verdict are the tension the article uses (C16).',
     weight: 0.15,
     type: 'advisory'
   },
@@ -401,8 +404,11 @@ function getOutlineCriteria(theme = 'journalist') {
       weight: 0.20,
       type: 'structural'
     },
+    // Final review (judges-factcheck[1]): it scores R8 (photos spread through the
+    // article, with no count), which no rule file states; C4, which it cited, says
+    // nothing about photos.
     visualDistributionPlan: {
-      description: 'Do the photos spread through the article (C4)?',
+      description: 'Do the photos spread through the article?',
       weight: 0.10,
       type: 'structural'
     },
@@ -1675,7 +1681,7 @@ ${JSON.stringify(buriedEvidence, null, 2)}`;
 ═══════════════════════════════════════════════════════════════════════════
 ADVISORY CHECKS (Warn but don't block)
 ═══════════════════════════════════════════════════════════════════════════
-5. COHERENCE: Do the arcs agree on the record's facts (C3)? Arcs that pull against each other or against the room's verdict are the tension the article uses.
+5. COHERENCE: Do the arcs agree on the record's facts? Arcs that pull against each other or against the room's verdict are the tension the article uses.
 6. EVIDENCE CONFIDENCE BALANCE: Are there arcs with evidenceStrength="strong" or "moderate" (not all speculative)?`
         : `1. ROSTER COVERAGE: Every name in SESSION ROSTER needs a role in characterPlacements of at least one arc
 2. EVIDENCE ID VALIDITY: Every keyEvidence ID should exist in ALL VALID EVIDENCE IDS list
