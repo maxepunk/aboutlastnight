@@ -21,7 +21,7 @@ When one is missing, stop and name it.
 
 ## Job
 
-Copy, never summarise. Every text, name and figure enters the record as its source gives it, and every logged time goes on the session clock.
+Copy, never summarise. The record copies every text, name and figure its source gives, and computes only the totals and counts the Accounts bullet names. Every logged time goes on the session clock.
 
 - **Exposed memories.** Each memory the session report lists as exposed: its `tokenId` as its id, its name and owners, and its `fullDescription` whole as its text.
 - **Paper evidence.** Each unlocked item: its `notionId` as its id, its name, `basicType` and owners, and its `description` whole as its text.
