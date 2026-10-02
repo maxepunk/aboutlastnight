@@ -1227,8 +1227,9 @@ ${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
    *
    * Phase 3 (3.9; T13, the integrator's ruling): the article places every photo the
    * director has not excluded, and the outline only what its photo slots hold, so the
-   * writer is given the outline writer's whole set (options.photos, from
-   * articleWriterInputs): the hero image, then every other photo but the whiteboard.
+   * writer is given the outline writer's whole set less the excluded photos
+   * (options.photos, from articleWriterInputs): the hero image, then every other photo
+   * the director kept but the whiteboard. A hero the director excluded comes as none.
    * PHOTOS prints each one's entry once (renderPhotoEntry); an arc package points at its
    * photos by filename, and only at listed ones, so the whiteboard a package names never
    * reaches the writer. It used to see only the photos the arc packages listed.

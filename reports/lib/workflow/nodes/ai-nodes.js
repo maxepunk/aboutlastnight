@@ -1451,30 +1451,39 @@ Remember: You are IMPROVING, not regenerating. The previous work was valuable - 
  * writer's own builder.
  *
  * Phase 3 (3.9; T13, the integrator's ruling): `options.photos` is every photo the
- * article places, the outline writer's whole set: the hero image first (`hero: true`,
- * with the names identified in it), then buildAvailablePhotos, every other session
- * photo without the whiteboard. The outline has one photo slot per arc and one in
- * FOLLOW THE MONEY, so it places only some (092026: nine photos, six slots); the
- * article places the rest. The article judge's PHOTOS is built from this same list
- * (evaluator-nodes.js renderArticleJudgePhotos).
+ * article places, the outline writer's whole set less the photos the director
+ * excluded: the hero image first (`hero: true`, with the names identified in it), then
+ * buildAvailablePhotos, every other session photo without the whiteboard. The outline
+ * has one photo slot per arc and one in FOLLOW THE MONEY, so it places only some
+ * (092026: nine photos, six slots); the article places the rest. The article judge's
+ * PHOTOS is built from this same list (evaluator-nodes.js renderArticleJudgePhotos).
+ *
+ * T13 (3.9 fix round 1): an excluded photo never appears. The director excludes a
+ * photo at the character-IDs stop, and finalizePhotoAnalyses marks its analysis
+ * `excluded: true`; buildAvailablePhotos does not read the mark, so the list leaves
+ * those photos out here. A stored hero the director excluded is no hero: the writer
+ * is told none was chosen. The detective is parked (spec D13) and keeps its stored hero.
  *
  * @param {Object} state
  * @returns {Array} [outline, arcEvidencePackages, heroImage, shellAccounts,
  *   sessionFacts, directorNotes, narrativeTensions, options]
  */
 function articleWriterInputs(state) {
-  const heroImage = state.heroImage;
-  const heroKey = heroImage ? photoFilenameOf(heroImage).toLowerCase() : null;
-  const heroAnalysis = heroKey
-    ? (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoFilenameOf(a.filename).toLowerCase() === heroKey)
-    : null;
+  const analyses = state.photoAnalyses?.analyses || [];
+  const keyOf = (filename) => photoFilenameOf(filename).toLowerCase();
+  const excludedKeys = new Set(analyses.filter(a => a?.excluded && a.filename).map(a => keyOf(a.filename)));
+  const kept = (filename) => !excludedKeys.has(keyOf(filename));
+  const parked = (state.theme || 'journalist') !== 'journalist';
+  const heroImage = state.heroImage && !kept(state.heroImage) && !parked ? null : state.heroImage;
+  const heroKey = heroImage ? keyOf(heroImage) : null;
+  const heroAnalysis = heroKey ? analyses.find(a => a?.filename && keyOf(a.filename) === heroKey) : null;
   const photos = [
-    ...(heroImage ? [{
+    ...(heroImage && kept(heroImage) ? [{
       filename: heroImage,
       identifiedCharacters: Array.isArray(heroAnalysis?.identifiedCharacters) ? heroAnalysis.identifiedCharacters : [],
       hero: true
     }] : []),
-    ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))
+    ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state)).filter(photo => kept(photo.filename))
   ];
   return [
     state.outline || {},

@@ -269,10 +269,12 @@ async function render() {
   // 3. article generation
   // Phase 3 (3.9): the article writer's photos, as its node builds them
   // (articleWriterInputs: the hero, then every photo the director kept). An older tree's
-  // inputs carry none, and its builder renders as it did.
+  // inputs carry none, and its builder renders as it did. The hero is the node's too:
+  // a stored hero the director excluded is none (3.9 fix round 1).
   const articleInputs = articleWriterInputs ? await articleWriterInputs(state) : null;
   const articlePhotos = articleInputs ? (articleInputs[articleInputs.length - 1] || {}).photos : undefined;
-  const ag = await promptBuilder.buildArticlePrompt(outline, state.arcEvidencePackages || [], heroImage, state.shellAccounts || [],
+  const articleHero = articleInputs ? (articleInputs[2] || null) : heroImage;
+  const ag = await promptBuilder.buildArticlePrompt(outline, state.arcEvidencePackages || [], articleHero, state.shellAccounts || [],
     sessionFacts, state.directorNotes || null, state.narrativeTensions || null,
     { directorGuidance: guidance, gateNotes: FIXED_NOTES, shouldConsider: FIXED_ADVISORIES,
       evidenceBundle: state.evidenceBundle || null, ...directorWords, ...(articlePhotos && { photos: articlePhotos }) });

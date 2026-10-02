@@ -2897,5 +2897,60 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
       expect(userFor('article', state)).not.toContain('[hero image]');
     });
+
+    // T13: "an excluded photo never does" appear. The director excludes a photo at the
+    // character-IDs stop, and finalizePhotoAnalyses (photo-nodes.js) marks its analysis
+    // `excluded: true` with no names. buildAvailablePhotos does not read the mark, so the
+    // article's set listed the photo under a header that calls it kept, and photosTruth
+    // then asked for it in print (3.9 fix round 1).
+    const markExcluded = (state, filename) => {
+      state.photoAnalyses.analyses = [
+        ...state.photoAnalyses.analyses.filter((a) => a.filename !== filename),
+        { filename, excluded: true, identifiedCharacters: [], characterDescriptions: [{ description: 'a player mid-sentence' }] }
+      ];
+      return state;
+    };
+    /** The writer's and the reworker's user prompts, and the article judge's, for one state. */
+    const articlePrompts = async (state) => {
+      const writer = recordingSdk();
+      await generateContentBundle({ ...state, contentBundle: null }, cfg(writer));
+      const rework = recordingSdk();
+      await reviseContentBundle({ ...state, contentBundle: null, _previousContentBundle: clone(PREVIOUS_BUNDLE), articleRevisionCount: 1 }, cfg(rework));
+      return { writer: writer.mock.calls[0][0].prompt, rework: rework.mock.calls[0][0].prompt, judge: userFor('article', state) };
+    };
+
+    it('a photo the director excluded reaches neither the writer, its reworker nor the judge', async () => {
+      const state = markExcluded(withKeptPhoto(), 'p3-excluded.jpg');
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p3-excluded.jpg'];
+      state.photoDescriptions = { ...state.photoDescriptions, 'p3-excluded.jpg': 'Morgan mid-sentence, eyes half shut.' };
+      const inputs = articleWriterInputs(state);
+      expect(inputs[2]).toBe('hero.jpg');
+      expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
+      const prompts = await articlePrompts(state);
+      expect(prompts.judge).toContain('PHOTOS (the 3 photos the article writer was given');
+      for (const prompt of Object.values(prompts)) {
+        expect(prompt).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
+        expect(prompt).not.toContain('p3-excluded.jpg');
+        expect(prompt).not.toContain('Morgan mid-sentence, eyes half shut.');
+      }
+    });
+
+    it('a stored hero the director excluded is no hero: the writer is told none was chosen, and nothing lists it', async () => {
+      const state = markExcluded(withKeptPhoto(), 'hero.jpg');
+      const inputs = articleWriterInputs(state);
+      expect(inputs[2]).toBeNull();
+      expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['p2.jpg', 'p9.jpg']);
+      const prompts = await articlePrompts(state);
+      expect(prompts.writer).toContain('HERO IMAGE: none chosen: use the first photo the outline places');
+      expect(prompts.rework).toContain('HERO IMAGE: none chosen: use the first photo the outline places');
+      expect(prompts.judge).toContain('PHOTOS (the 2 photos the article writer was given: every photo the director has not excluded');
+      for (const prompt of Object.values(prompts)) {
+        expect(prompt).not.toContain('hero.jpg');
+        expect(prompt).not.toContain('[hero image]');
+      }
+      // The detective is parked (spec D13): its writer keeps the hero it was given.
+      const detective = markExcluded(stateFor('detective', { heroImage: 'hero.jpg' }), 'hero.jpg');
+      expect(articleWriterInputs(detective)[2]).toBe('hero.jpg');
+    });
   });
 });
