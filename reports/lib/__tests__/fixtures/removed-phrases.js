@@ -223,8 +223,11 @@ const REMOVED_PHRASES = [
   // renders only: "compulsive readability through callbacks", "recontextualized later
   // for aha moments", "bridges for transitions", the card-count line and "state your
   // absence at most once".
-  // The buyer stated as fact, and the money read as other wealth (T5; R11).
+  // The buyer stated as fact, and the money read as other wealth (T5; R11). The final
+  // fix: SESSION_FACTS said Blake worked the room "for NeurAI", whom the deals served.
   "run from NeurAI's board",
+  'working it for NeurAI',
+  'working the room for NeurAI',
   "what NeurAI's board paid out",
   "anyone's other wealth",
   // The retired craft files' tags, and "a reading" as the noun for an inference.
