@@ -180,7 +180,12 @@ describe('standing edits (F1)', () => {
       kind: 'bundle',
       issued: 2,
       edits: [
-        { id: 'E1', scope: 'section:the-story', path: 'sections[#the-story].content[-]', before: paragraph(CUT_THEORY), after: null },
+        // A cut records its pieces: each sentence of the text it removed that the
+        // director's version no longer held (fix round 1, finding 3).
+        {
+          id: 'E1', scope: 'section:the-story', path: 'sections[#the-story].content[-]', before: paragraph(CUT_THEORY), after: null,
+          pieces: ['The room also weighed whether Vic would replace Marcus, not kill him']
+        },
         { id: 'E2', scope: 'section:closing', path: 'sections[#closing].content[0]', before: paragraph('Whether the verdict costs Alex anything is still open.'), after: paragraph(CLOSING_EDIT) }
       ]
     });
@@ -246,10 +251,92 @@ describe('standing edits (F1)', () => {
   });
 
   test('a diff stored before the edits had ids reads as standing edits, numbered in order', () => {
-    expect(D.standingEditsOf(D.diffBundle(articleAtStop(), directorsVersion()))).toEqual(roundOne());
+    // A diff from before F1 recorded no pieces for its cuts: every sentence of a cut's
+    // text then locates its return.
+    const withoutPieces = (standing) => ({ ...standing, edits: standing.edits.map(({ pieces, ...edit }) => edit) });
+    const legacy = D.standingEditsOf(D.diffBundle(articleAtStop(), directorsVersion()));
+    expect(legacy).toEqual(withoutPieces(roundOne()));
+    expect(D.carriedEdits(legacy, directorsVersion()).map((e) => e.id)).toEqual(['E1', 'E2']);
+    const back = directorsVersion();
+    back.sections[0].content.push(paragraph(CUT_THEORY));
+    expect(D.carriedEdits(legacy, back).map((e) => e.id)).toEqual(['E2']);
     expect(D.standingEditsOf(D.diffOutline({}, {}))).toBeNull();
     expect(D.standingEditsOf(null)).toBeNull();
     expect(D.standingEditsOf('nope')).toBeNull();
+  });
+});
+
+// Fix round 1, finding 3: a cut comes back when any sentence of it does, word for word,
+// counting only the sentences the director's version no longer held.
+describe('a cut that partly came back (F1, fix round 1)', () => {
+  const OPEN_QUESTIONS = 'Some in the room thought Vic would replace Marcus. Others thought Phil had done it. Nobody settled it before the vote.';
+  const writers = () => ({
+    headline: { main: 'H', kicker: 'K', deck: 'D' },
+    sections: [
+      { id: 'lede', type: 'narrative', content: [paragraph('Mel built the first theory.')] },
+      { id: 'story', type: 'narrative', content: [paragraph('Mel kept the count.'), paragraph(OPEN_QUESTIONS), paragraph('Sarah pointed the room at Jess.')] }
+    ]
+  });
+  const cutFrom = (article) => { const a = clone(article); a.sections[1].content.splice(1, 1); return a; };
+  const withParagraph = (article, text) => { const a = clone(article); a.sections[1].content.splice(1, 0, paragraph(text)); return a; };
+
+  test('the cut records each sentence of the text it removed', () => {
+    const standing = D.standingAfterSendBack(null, writers(), cutFrom(writers()), 'bundle');
+    expect(standing.edits).toHaveLength(1);
+    expect(standing.edits[0].pieces).toEqual([
+      'Some in the room thought Vic would replace Marcus',
+      'Others thought Phil had done it',
+      'Nobody settled it before the vote'
+    ]);
+  });
+
+  test('a rework that brings back one sentence word for word voids the cut at the next send-back', () => {
+    const directors = cutFrom(writers());
+    const standing = D.standingAfterSendBack(null, writers(), directors, 'bundle');
+    const shown = withParagraph(directors, 'Others thought Phil had done it.');
+    expect(D.carriedEdits(standing, shown)).toEqual([]);
+    expect(D.standingAfterSendBack(standing, shown, shown, 'bundle')).toEqual({ kind: 'bundle', issued: 1, edits: [] });
+  });
+
+  test('a sentence brought back inside a longer one, in any case, counts; a sentence cut short does not', () => {
+    const directors = cutFrom(writers());
+    const standing = D.standingAfterSendBack(null, writers(), directors, 'bundle');
+    expect(D.carriedEdits(standing, withParagraph(directors, 'By noon, others thought Phil had done it, and Mel agreed.'))).toEqual([]);
+    expect(D.carriedEdits(standing, withParagraph(directors, 'NOBODY SETTLED IT BEFORE THE VOTE!'))).toEqual([]);
+    expect(D.carriedEdits(standing, withParagraph(directors, 'Nobody settled it before the voters left.')).map((e) => e.id)).toEqual(['E1']);
+  });
+
+  test('a sentence the director\'s version still held elsewhere is not a piece, so it does not void the cut', () => {
+    const article = writers();
+    article.sections[0].content.push(paragraph('Others thought Phil had done it.'));
+    const directors = cutFrom(article);
+    const standing = D.standingAfterSendBack(null, article, directors, 'bundle');
+    expect(standing.edits[0].pieces).toEqual(['Some in the room thought Vic would replace Marcus', 'Nobody settled it before the vote']);
+    expect(D.standingAfterSendBack(standing, directors, directors, 'bundle').edits.map((e) => e.id)).toEqual(['E1']);
+    expect(D.carriedEdits(standing, withParagraph(directors, 'Nobody settled it before the vote.'))).toEqual([]);
+  });
+
+  test('a cut of a paragraph the director\'s version still prints elsewhere stands', () => {
+    const article = writers();
+    article.sections[0].content.push(paragraph(OPEN_QUESTIONS));   // the writer printed it twice
+    const directors = cutFrom(article);
+    const standing = D.standingAfterSendBack(null, article, directors, 'bundle');
+    expect(standing.edits[0].pieces).toEqual([]);
+    expect(D.standingAfterSendBack(standing, directors, directors, 'bundle').edits.map((e) => e.id)).toEqual(['E1']);
+  });
+
+  test('the report counts a partial return as a change, with the text where it came back', () => {
+    const directors = cutFrom(writers());
+    const standing = D.standingAfterSendBack(null, writers(), directors, 'bundle');
+    const after = withParagraph(directors, 'Others thought Phil had done it.');
+    const report = D.reportAfterPass(null, { edits: D.carriedEdits(standing, directors), before: directors, after, pass: 1 });
+    expect(report).toEqual({
+      checked: ['E1'],
+      changed: [{
+        id: 'E1', scope: 'section:story', cut: true, director: OPEN_QUESTIONS,
+        became: 'Others thought Phil had done it.', pass: 1, automatic: true, reason: null
+      }]
+    });
   });
 });
 

@@ -14,13 +14,16 @@
  * THE DIRECTOR'S EDITS (F1). Each change a send-back's diff holds becomes an edit with an
  * id that is stable within its stop: `{id: 'E3', scope, path, before, after}`, where
  * `after` is the director's text and a null `after` marks a cut (`before` is then the
- * text the director removed). The edits stand at their stop across every send-back
- * (standingAfterSendBack): an earlier edit stands while the version the stop showed, and
- * the version the director sent back, carry its text, and a cut stands while the text
- * it removed stays absent, so an edit a rework changed, which the director saw and
- * left, drops. A new edit takes the next number after every id issued at the stop. The
- * approve branch, a rollback and a fresh start clear them (checkpoint-nodes.js,
- * state.js ROLLBACK_CLEARS, FRESH_START_CLEARS).
+ * text the director removed). A cut also records its `pieces`: each sentence of the text
+ * it removed, of three words or more, that the version the director sent back no longer
+ * held (fix round 1, finding 3). A sentence the director's version still printed
+ * elsewhere is no piece, so text repeated elsewhere never voids the cut. The edits stand
+ * at their stop across every send-back (standingAfterSendBack): an earlier edit stands
+ * while the version the stop showed, and the version the director sent back, carry its
+ * text, and a cut stands while its pieces stay absent, so an edit a rework changed,
+ * which the director saw and left, drops. A new edit takes the next number after every
+ * id issued at the stop. The approve branch, a rollback and a fresh start clear them
+ * (checkpoint-nodes.js, state.js ROLLBACK_CLEARS, FRESH_START_CLEARS).
  *
  * Carried (editCarried). An edit addressed by id or by a plain field path
  * (`sections[#intro].heading`, `evidenceCards[#alr001]`, `headline.main`) is read
@@ -30,8 +33,11 @@
  * index is only where the block sat in the director's own object, and a rework that
  * inserts or removes a block ahead of it shifts it. Such an edit is carried while a
  * MATCHING element exists ANYWHERE in the addressed collection, and a section's block
- * anywhere in the sections, since a rework may move it. A cut is carried while none of
- * its text of three words or more is in the version's text.
+ * anywhere in the sections, since a rework may move it. A cut is carried while the
+ * version's text holds none of its pieces, each matched whole, in any case, as
+ * grounding.js normalizes text: a rework that brings back one sentence of a cut
+ * paragraph, word for word, brings the cut back. A cut stored without pieces (a diff
+ * from before F1) is read by every sentence of its text.
  *
  * Equality everywhere in this module is trimmed canonical JSON: keys sorted, every
  * string trimmed at whatever depth it sits. MATCHING an `after` value adds subset
@@ -326,16 +332,65 @@ function wordsIn(text) { return (String(text).match(/[\p{L}\p{N}][\p{L}\p{N}'-]*
 /** Does `leaf` hold `piece` word for word (grounding.js isVerbatimIn), in any case? */
 function holds(leaf, piece) { return isVerbatimIn(String(piece).toLowerCase(), String(leaf).toLowerCase()); }
 
-/** The pieces of a cut's text long enough to recognise where they reappear. */
-function locatingPieces(value) {
-  return stringLeaves(value).map((leaf) => leaf.trim()).filter((leaf) => wordsIn(leaf) >= MIN_LOCATING_WORDS);
+/** A letter or a digit: what a word is made of. */
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+/**
+ * Does folded `text` hold folded `piece` as whole words: starting and ending on a word
+ * boundary, so "the vote" is not in "the voters"?
+ */
+function holdsWhole(text, piece) {
+  if (!piece) return false;
+  const startsWord = WORD_CHAR.test(piece[0]);
+  const endsWord = WORD_CHAR.test(piece[piece.length - 1]);
+  for (let at = text.indexOf(piece); at !== -1; at = text.indexOf(piece, at + 1)) {
+    const end = at + piece.length;
+    if ((!startsWord || at === 0 || !WORD_CHAR.test(text[at - 1]))
+      && (!endsWord || end >= text.length || !WORD_CHAR.test(text[end]))) return true;
+  }
+  return false;
 }
 
-/** The first piece of text in `obj` that holds part of the text a cut removed, or null. */
+/** Where a sentence ends, in text normalized as grounding.js does: . ! ? or an ellipsis, any closing quotation marks or brackets, then a space. */
+const SENTENCE_BREAK = /(?<=[.!?…]["')\]]*)\s+/;
+
+/**
+ * The sentences of a text, normalized as grounding.js does (case kept), each without the
+ * quotation marks and brackets around it or its closing punctuation, and each of
+ * MIN_LOCATING_WORDS words or more.
+ */
+function sentencesOf(text) {
+  return normalizeForGrounding(text)
+    .split(SENTENCE_BREAK)
+    .map((sentence) => sentence.replace(/^["'(\[]+/, '').replace(/[.!?,;:"')\]…]+$/, '').trim())
+    .filter((sentence) => wordsIn(sentence) >= MIN_LOCATING_WORDS);
+}
+
+/** Every sentence of the text a cut removed. */
+function cutSentences(edit) { return stringLeaves(edit.before).flatMap(sentencesOf); }
+
+/**
+ * The sentences whose return brings a cut back: the pieces the cut recorded when the
+ * director made it, or, for a cut stored without them, every sentence of its text.
+ */
+function cutPieces(edit) {
+  return Array.isArray(edit.pieces) ? edit.pieces.filter((piece) => typeof piece === 'string') : cutSentences(edit);
+}
+
+/** The sentences of a cut's text that `obj` holds none of: the cut's pieces, at its birth. */
+function piecesAbsentFrom(obj, edit) {
+  const leaves = stringLeaves(obj).map(fold);
+  return cutSentences(edit).filter((sentence) => !leaves.some((leaf) => holdsWhole(leaf, fold(sentence))));
+}
+
+/** The first piece of text in `obj` that holds one of a cut's pieces, or null. */
 function cutReturnedIn(obj, edit) {
-  const pieces = locatingPieces(edit.before);
+  const pieces = cutPieces(edit).map(fold).filter(Boolean);
   if (pieces.length === 0) return null;
-  const leaf = stringLeaves(obj).find((text) => pieces.some((piece) => holds(text, piece)));
+  const leaf = stringLeaves(obj).find((text) => {
+    const folded = fold(text);
+    return pieces.some((piece) => holdsWhole(folded, piece));
+  });
   return leaf === undefined ? null : leaf.trim();
 }
 
@@ -399,9 +454,10 @@ function standingEditsOf(value) {
 /**
  * The edits that stand after a send-back: each earlier edit that both the version the
  * stop showed and the version the director sent back carry, then the send-back's own
- * diff, numbered on from every id issued at the stop. Null when no edit stands and none
- * was ever issued; with earlier ids and none standing, the count is kept, so no id is
- * given twice at a stop.
+ * diff, numbered on from every id issued at the stop. Each new cut records its pieces:
+ * the sentences of its text the director's version no longer held. Null when no edit
+ * stands and none was ever issued; with earlier ids and none standing, the count is
+ * kept, so no id is given twice at a stop.
  *
  * @param {*} previous - the stop's standing edits before this send-back
  * @param {Object} shown - the version the stop showed (the outline without the retired fields)
@@ -413,7 +469,8 @@ function standingAfterSendBack(previous, shown, sentBack, kind) {
   const prior = standingEditsOf(previous);
   const issued = prior ? prior.issued : 0;
   const kept = prior ? prior.edits.filter((e) => editCarried(shown, e) && editCarried(sentBack, e)) : [];
-  const added = editsFromDiff(kind === 'outline' ? diffOutline(shown, sentBack) : diffBundle(shown, sentBack), issued + 1);
+  const added = editsFromDiff(kind === 'outline' ? diffOutline(shown, sentBack) : diffBundle(shown, sentBack), issued + 1)
+    .map((edit) => (isCut(edit) ? { ...edit, pieces: piecesAbsentFrom(sentBack, edit) } : edit));
   if (kept.length === 0 && added.length === 0 && issued === 0) return null;
   return { kind: kind === 'outline' ? 'outline' : 'bundle', issued: issued + added.length, edits: [...kept, ...added] };
 }
@@ -666,5 +723,5 @@ module.exports = {
   DIRECTOR_EDIT_PREFIX, SEND_BACK_PASS, CHANGED_EDITS_KEY,
   standingEditsOf, standingAfterSendBack, carriedEdits, formatEditLines, editValueText,
   locateQuotedText, directorEditConcern, concernEditIds, editLocator, reportAfterPass, handEditReportOf,
-  _testing: { matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS }
+  _testing: { matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole, OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS }
 };
