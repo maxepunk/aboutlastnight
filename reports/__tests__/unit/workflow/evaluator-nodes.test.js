@@ -1247,14 +1247,17 @@ describe('reporterMode: a remote article states its absence at most once (phase 
   // criterion's evaluation praised it as voice. Attribution shows the absence;
   // announcing it again is a defect.
   // Phase 3 (3.4): the criterion scores T8 as this session's mode block states it, and
-  // the room's events reach Nova by attribution while exposed memories reach Nova by
-  // turn-in (spec T6, T8). The mode rule no longer lives in the user prompt: the judge's
-  // system prompt carries the mode block, as every writer's does.
-  it('the journalist criterion asks for attribution and names repetition a failure', () => {
+  // exposed memories reach Nova by turn-in (spec T6, T8). The mode rule no longer lives in
+  // the user prompt: the judge's system prompt carries the mode block, as every writer's does.
+  // Phase 3 (3.9): it follows the remote mode block of round 7 (R13): the room's events
+  // are told as scenes, with attribution where it matters, and the line that sent every
+  // room event through "attribution to the people in the room" is gone.
+  it('the journalist criterion tells the room in scenes and names repetition a failure', () => {
     const { description } = getArticleCriteria('journalist').reporterMode;
-    expect(description).toContain('by attribution to the people in the room');
+    expect(description).toContain('told as scenes, with attribution where it matters');
     expect(description).toContain('the absence stated more than once');
-    expect(description).toContain('a first-person claim to have been in the warehouse in a remote session');
+    expect(description).toContain('a claim to have seen or heard the room');
+    expect(description).not.toContain('by attribution to the people in the room');
   });
 
   it('the remote judge reads the remote mode block, and its user prompt names the mode once', () => {
@@ -2266,11 +2269,17 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(description).toMatch(/\bC12\b/);
     });
 
-    it('antiPatterns: T14 and C4', () => {
+    // Phase 3 (3.9; R4, R22; final review judges-factcheck[2]): the structural slot
+    // scores C4's em-dash house rule in Nova's prose and T14's production words only. It
+    // read the whole of C4 and nearly held the gate's article for its length.
+    it('antiPatterns: T14 and C4\'s em-dash house rule only; length and C4\'s other craft are craft findings', () => {
       const { description } = article().antiPatterns;
       expect(description).toMatch(/\bT14\b/);
       expect(description).toMatch(/\bC4\b/);
       expect(description).toMatch(/em-dash/);
+      expect(description).toContain("Nova's own prose");
+      expect(description).toContain("C4's length and its other craft are craft findings");
+      expect(description).not.toContain('house style C4 states');
     });
 
     it('reporterMode: T8, exposures by turn-in and the room\'s events by attribution, never every exposure a tip', () => {
@@ -2282,6 +2291,8 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(description).toContain('more than once');
     });
 
+    // Phase 3 (3.9; final review judges-factcheck[5]): the structural criteria hold to
+    // the plan's wording, with no new craft judgement in a must-fix slot (R2, R22).
     it('arcSectionFlow and arcThreading: C2, every section essential, nothing front-loaded, not every arc in every section', () => {
       for (const { description } of [outline().arcSectionFlow, article().arcThreading]) {
         expect(description).toMatch(/\bC2\b/);
@@ -2290,27 +2301,44 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
         expect(description).toContain('Not every arc appears in every section');
         expect(description).not.toContain('arcConnections');
         expect(description).not.toContain('→');
+        expect(description).not.toContain('the thesis running through every section');
       }
     });
 
     it('visualDistributionPlan: photos spread through the article, with no count', () => {
       const { description } = outline().visualDistributionPlan;
-      expect(description).toMatch(/spread through the article/);
+      expect(description).toMatch(/photos spread through the article/);
       expect(description).not.toMatch(/every (?:two|three|\d)|\d+ (?:visuals|photos|cards|paragraphs)/);
+      expect(description).not.toContain('pulls the reader on');
     });
 
     it('requiredSections: each printed section earns its place (C2), with no fixed list', () => {
       const { description } = outline().requiredSections;
       expect(description).toContain('earn its place');
       expect(description).not.toContain('lede, theStory, thePlayers, closing');
+      expect(description).not.toContain('the thesis deciding which sections exist');
       expect(buildEvaluationSystemPrompt('outline', outline(), 'journalist')).not.toContain('MUST exist');
     });
 
-    it('convergence: C16, a culmination near the end where the thesis lands', () => {
+    // Phase 3 (3.9): C16 of round 7: one convergence near the end, the thesis said once.
+    it('convergence: C16, one convergence near the end where the thesis lands, said once', () => {
       const { description } = outline().convergence;
       expect(description).toMatch(/\bC16\b/);
       expect(description).toContain('near the end');
       expect(description).toContain('where the thesis lands');
+      expect(description).toContain('said once');
+      expect(description).not.toContain('spent early in THE STORY');
+      expect(description).not.toContain('kept for the end');
+    });
+
+    // Phase 3 (3.9; C16): a planted detail scores only when its payoff moves the
+    // throughline. The old text rewarded every plant, and the gate's outline planted
+    // details the director cut for not tying into the story.
+    it('loopArchitecture: a planted detail scores only when its payoff moves the throughline (C16)', () => {
+      const { description } = outline().loopArchitecture;
+      expect(description).toMatch(/\bC16\b/);
+      expect(description).toContain('moves the throughline');
+      expect(description).not.toContain('with details planted early coming back changed');
     });
 
     it('sectionBalance and wordBudget: about 1,500 words, with no per-section ranges', () => {
@@ -2340,6 +2368,9 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(momentum).not.toMatch(/murder/i);
       expect(momentum).not.toMatch(/pull quote/i);
       expect(momentum).toMatch(/near the end/);
+      // Phase 3 (3.9): question 4 repeated the convergence clause C16 no longer carries.
+      expect(momentum).not.toContain('spent early in THE STORY');
+      expect(momentum).not.toContain('kept for the end');
     });
 
     it('the journalist scoring rule says how the score is made (M30)', () => {
@@ -2639,6 +2670,86 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
         expect(reads).toEqual(['timeline', 'financialSummary']);
         expect(description).toContain('as the ledger or FINANCIAL_SUMMARY gives it');
       }
+    });
+  });
+
+  describe('the truth criteria follow the truth lines of round 7', () => {
+    const truthOf = (phase, key) => getPhaseCriteria(phase, 'journalist')[key].description;
+
+    it('evidenceTruth (T4): a person is tied to an account as fact only on the director\'s sight of the sale or an open sale, never by its name', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const description = truthOf(phase, 'evidenceTruth');
+        expect(description).toContain('only where the director saw the sale or it was made openly in front of the room');
+        expect(description).toContain('never a reason to suspect its namesake (T4)');
+        expect(description).not.toContain('read as proof of who holds it');
+      }
+    });
+
+    it('stagesTruth (T7): what NovaNews is still chasing is Nova\'s intent and needs no epilogue', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        expect(truthOf(phase, 'stagesTruth')).toContain("What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue");
+      }
+    });
+
+    it('novaPositionTruth (T8): Nova never votes, joins the room\'s accusation or exposes a memory', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const description = truthOf(phase, 'novaPositionTruth');
+        expect(description).toContain("never votes, joins the room's accusation or exposes a memory");
+        expect(description).not.toContain('accusations and exposures');
+      }
+    });
+
+    it('reporterMode follows the remote mode block and T8', () => {
+      const { description } = getArticleCriteria('journalist').reporterMode;
+      expect(description).toMatch(/\bT8\b/);
+      expect(description).toContain("Nova voting, joining the room's accusation or exposing a memory");
+      expect(description).toContain('a claim to have seen or heard the room');
+      expect(description).toContain('told as scenes, with attribution where it matters: a line someone was overheard saying, a claim about a person');
+      expect(description).not.toContain('by attribution to the people in the room');
+      expect(description).not.toContain('first-person claim to have been in the warehouse');
+    });
+
+    it('the comment beside the article judge\'s mode line no longer says the room reaches Nova by attribution', () => {
+      const source = require('fs').readFileSync(require.resolve('../../../lib/workflow/nodes/evaluator-nodes'), 'utf8');
+      expect(source).not.toContain('the room\'s events by attribution)');
+    });
+
+    it('two criteria that restated a craft item name it instead', () => {
+      const coherence = getPhaseCriteria('arcs', 'journalist').coherence.description;
+      expect(coherence).toMatch(/\bC16\b/);
+      const visual = getArticleCriteria('journalist').visualDistribution.description;
+      expect(visual).toMatch(/\bC9\b/);
+      expect(visual).not.toContain('a budget and never a quota');
+    });
+  });
+
+  // Gate 2: the article judge still told every judge that three cards beat ten, against
+  // C9's budget of three to five. The detective is parked (D13) and keeps it.
+  it('the journalist article judge has no card-count line; the detective\'s keeps it', () => {
+    const LINE = 'A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.';
+    expect(systemFor('article', stateFor())).not.toContain(LINE);
+    expect(systemFor('article', stateFor('detective'))).toContain(LINE);
+  });
+
+  describe('craft findings are the editor\'s notes for the director (R22)', () => {
+    it.each(['arcs', 'outline', 'article'])('the %s judge files a craft finding as an editor\'s note for the director, never a blocker', (phase) => {
+      const prompt = systemFor(phase, stateFor());
+      const section = prompt.slice(prompt.indexOf('CRAFT FINDINGS'), prompt.indexOf('EVALUATION RULES'));
+      expect(section).toContain("an editor's note for the director, never a blocker");
+      expect(section).not.toContain('for the rework');
+    });
+
+    it('a truth-labelled advisory stays an advisory: nothing holds the draft on it', async () => {
+      const advisory = 'T1: "Remi watched the money go" says more than the emails; the director may want it softened.';
+      const mockClient = jest.fn().mockResolvedValue({
+        ready: true, structuralPassed: true, overallScore: 0.9,
+        criteriaScores: { evidenceTruth: { score: 0.9 } }, structuralIssues: [], advisoryWarnings: [advisory]
+      });
+      const result = await evaluateOutline(stateFor('journalist', { outlineApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+      expect(result.evaluationHistory.ready).toBe(true);
+      expect(result.evaluationHistory.structuralIssues).toEqual([]);
+      expect(result.evaluationHistory.advisoryWarnings).toEqual([advisory]);
+      expect(result.validationResults.passed).toBe(true);
     });
   });
 

@@ -174,7 +174,8 @@ const TRUTH_GROUPS = [
     key: 'evidenceTruth',
     rules: ['T1', 'T3', 'T4', 'T6'],
     reads: () => ['record', 'timeline', 'notes'],
-    describe: (s) => `Is every claim in ${s} written as its evidence allows (T1), with no buried memory's content or owner stated as fact (T3), no account's name read as proof of who holds it (T4), and no exposer named that neither the evidence log nor the director's notes name (T6)?`
+    // Phase 3 (3.9): T4 as round 7 words it (R21).
+    describe: (s) => `Is every claim in ${s} written as its evidence allows (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
   },
   {
     key: 'moneyTruth',
@@ -196,13 +197,15 @@ const TRUTH_GROUPS = [
     key: 'stagesTruth',
     rules: ['T7'],
     reads: () => ['record', 'modeBlock', 'epilogue', 'timeline'],
-    describe: (s) => `In ${s}, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)?`
+    // Phase 3 (3.9): T7's point on Nova's intent (R21).
+    describe: (s) => `In ${s}, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.`
   },
   {
     key: 'novaPositionTruth',
     rules: ['T8'],
     reads: () => ['modeBlock'],
-    describe: (s) => `In ${s}, is Nova the uninterested third party: outside the room's votes, accusations and exposures, and witnessing only what this session's mode block allows (T8)?`
+    // Phase 3 (3.9): T8's first sentence as round 7 words it (R21).
+    describe: (s) => `In ${s}, is Nova the uninterested third party, reporting on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and witnesses only what this session's mode block allows (T8)?`
   },
   {
     key: 'playersTruth',
@@ -290,8 +293,9 @@ const JOURNALIST_ARC_CRITERIA = {
     weight: 0.20,
     type: 'structural'
   },
+  // Phase 3 (3.9): the tension it describes is C16's, and named so (round 7's craft).
   coherence: {
-    description: 'Do the arcs agree on the record\'s facts, with no two claims that cannot both be true (C3)? Arcs that pull against each other or against the room\'s verdict are the tension the article uses.',
+    description: 'Do the arcs agree on the record\'s facts, with no two claims that cannot both be true (C3)? Arcs that pull against each other or against the room\'s verdict are the tension the article uses (C16).',
     weight: 0.15,
     type: 'advisory'
   },
@@ -363,7 +367,9 @@ function getOutlineCriteria(theme = 'journalist') {
   }
 
   // Journalist outline criteria. Phase 3 (3.4): each names the rule or craft item it
-  // scores, and keeps its type and weight; the truth criteria follow.
+  // scores, and keeps its type and weight; the truth criteria follow. Phase 3 (3.9; R2,
+  // R22): a structural criterion holds to the plan's wording, with no craft clause of
+  // its own; the craft reference and craft findings carry the rest.
   return {
     // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.70)
     arcCoverage: {
@@ -372,7 +378,7 @@ function getOutlineCriteria(theme = 'journalist') {
       type: 'structural'
     },
     requiredSections: {
-      description: 'Does each section the outline prints earn its place in the narrative, with the thesis deciding which sections exist and their order (C2)?',
+      description: 'Does each section the outline prints earn its place in the narrative (C2)?',
       weight: 0.20,
       type: 'structural'
     },
@@ -382,7 +388,7 @@ function getOutlineCriteria(theme = 'journalist') {
       type: 'structural'
     },
     visualDistributionPlan: {
-      description: 'Do the cards and photos spread through the article, each placed where it pulls the reader on (C4, C9)?',
+      description: 'Do the photos spread through the article (C4)?',
       weight: 0.10,
       type: 'structural'
     },
@@ -408,8 +414,9 @@ function getOutlineCriteria(theme = 'journalist') {
       type: 'advisory'
     },
     // MOMENTUM CRITERIA - Compulsive Readability (Commit 8.24)
+    // Phase 3 (3.9; C16): a planted detail scores only when its payoff moves the throughline.
     loopArchitecture: {
-      description: 'Do the arcs open questions that pull the reader forward and pay them off later, with details planted early coming back changed (C16, C4)?',
+      description: 'Do the arcs open questions that pull the reader forward and pay them off later, and does each detail planted early come back changed in a payoff that moves the throughline (C16, C4)?',
       weight: 0.025,
       type: 'advisory'
     },
@@ -423,8 +430,9 @@ function getOutlineCriteria(theme = 'journalist') {
       weight: 0.025,
       type: 'advisory'
     },
+    // Phase 3 (3.9): C16 of round 7: one convergence near the end, the thesis said once.
     convergence: {
-      description: 'Do the threads converge at a culmination near the end, where the thesis lands, kept for the end rather than spent early in THE STORY (C16)?',
+      description: 'Do the threads meet at one convergence near the end, where the thesis lands, said once (C16)?',
       weight: 0.025,
       type: 'advisory'
     },
@@ -479,7 +487,8 @@ function getArticleCriteria(theme = 'journalist') {
   }
 
   // Journalist. Phase 3 (3.4): each criterion names the rule or craft item it scores
-  // and keeps its type and weight; the truth criteria follow.
+  // and keeps its type and weight; the truth criteria follow. Phase 3 (3.9; R2, R22): a
+  // structural criterion holds to the plan's wording, with no craft clause of its own.
   return {
     // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.55)
     voiceConsistency: {
@@ -487,8 +496,11 @@ function getArticleCriteria(theme = 'journalist') {
       weight: 0.20,
       type: 'structural'
     },
+    // Phase 3 (3.9; R4; final review judges-factcheck[2]): C4's em-dash house rule and
+    // T14's production words only. It read the whole of C4 into a must-fix slot and
+    // docked the gate's article for its length, which R4 makes an advisory flag.
     antiPatterns: {
-      description: 'Does the printed text keep the house style C4 states, with no em-dashes, and the fiction\'s own words, with no production word (T14)? "Memory token" is the fiction\'s own word.',
+      description: 'Does Nova\'s own prose keep C4\'s house rule, with no em-dash, and does every printed line speak the fiction\'s own words, with no production word (T14)? "Memory token" is the fiction\'s own word. C4\'s length and its other craft are craft findings, outside this criterion.',
       weight: 0.15,
       type: 'structural'
     },
@@ -496,18 +508,20 @@ function getArticleCriteria(theme = 'journalist') {
     // on-site, and there was no criterion for it at all. Phase 2 (2.6): a remote
     // article that announced its absence five times was praised for it. Phase 3
     // (3.4): exposed memories reach Nova by turn-in, never as tips (spec T6, T8).
+    // Phase 3 (3.9): the remote mode block and T8 of round 7 (R13, R21): the room's
+    // events are told as scenes, attributed where it matters, not each one sourced.
     reporterMode: {
-      description: 'Does the article keep T8 as this session\'s mode block states it? It fails on a first-person claim to have been in the warehouse in a remote session, on Nova voting, accusing or exposing, or on the absence stated more than once. Remotely, the room\'s events reach Nova by attribution to the people in the room, and exposed memories by turn-in, anonymous unless the evidence log or the director\'s notes name who turned one in.',
+      description: 'Does the article keep T8 as this session\'s mode block states it? It fails on Nova voting, joining the room\'s accusation or exposing a memory; and, in a remote session, on a claim to have seen or heard the room, or on the absence stated more than once. Remotely, the room\'s events are told as scenes, with attribution where it matters: a line someone was overheard saying, a claim about a person. Exposed memories reach Nova by turn-in, anonymous unless the evidence log or the director\'s notes name who turned one in.',
       weight: 0.10,
       type: 'structural'
     },
     visualDistribution: {
-      description: 'Do the cards and photos spread through the article, each where it serves the flow, with the card counts a budget and never a quota (C9, C4)?',
+      description: 'Do the cards and photos spread through the article, each where it serves the flow (C9, C4)?',
       weight: 0.05,
       type: 'advisory'
     },
     arcThreading: {
-      description: 'Is every section an essential part of one narrative, carrying the threads forward from its own angle, with nothing front-loaded into THE STORY and the thesis running through every section (C2)? Not every arc appears in every section.',
+      description: 'Is every section an essential part of one narrative, carrying the threads forward from its own angle, with nothing front-loaded into THE STORY (C2)? Not every arc appears in every section.',
       weight: 0.10,
       type: 'structural'
     },
@@ -1022,10 +1036,17 @@ T3: "<the text at fault>" states what a buried memory said; the record holds onl
 `;
 }
 
-/** Where a craft finding goes: should-consider, naming its item. */
+/**
+ * Where a craft finding goes: should-consider, naming its item.
+ *
+ * Phase 3 (3.9; R22): a craft finding is an editor's note for the director, never a
+ * blocker and never the rework's task. Nothing in code holds a draft on an advisory,
+ * a truth-labelled one included (R22): only a truth criterion below the bar holds it
+ * (failedTruthCriteria).
+ */
 function craftFindingsSection(phase) {
   return `${boxedHeading('CRAFT FINDINGS (should-consider)')}
-The evaluation prompt ends with the craft guidance the ${JUDGED_WRITERS[phase]} followed, as your reference for craft. A craft finding that no criterion above scores goes in advisoryWarnings and opens with its item's id, such as C10: a suggestion for the rework and the director, never a blocker.`;
+The evaluation prompt ends with the craft guidance the ${JUDGED_WRITERS[phase]} followed, as your reference for craft. A craft finding that no criterion above scores goes in advisoryWarnings and opens with its item's id, such as C10: an editor's note for the director, never a blocker.`;
 }
 
 /**
@@ -1154,7 +1175,6 @@ Your feedback should focus on how the ARTICLE EXECUTES the outline, not changing
 ${boxedHeading('EVALUATION GOAL: COMPELLING GIFT FOR PLAYERS')}
 The article should feel like a real investigative piece that celebrates the players' gameplay experience.
 Visual distribution serves narrative flow, NOT quota compliance.
-A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
 
 ${judging}
 
@@ -1535,7 +1555,8 @@ Check for narrative momentum:
 
 /**
  * The journalist outline judge's momentum questions (phase 3, 3.4): cards and photos,
- * each photo at the moment it shows, and the convergence as C16 states it.
+ * each photo at the moment it shows, and the convergence as C16 states it. Phase 3
+ * (3.9): question 4 no longer repeats the convergence clause C16 of round 7 dropped.
  */
 const JOURNALIST_MOMENTUM_EVALUATION = `═══════════════════════════════════════════════════════════════════════════
 MOMENTUM EVALUATION (Commit 8.24 - Compulsive Readability)
@@ -1557,7 +1578,7 @@ Check for narrative momentum:
    - Is each photo placed where the story reaches the moment it shows?
 
 4. CONVERGENCE: Do the threads converge at a culmination near the end, where the thesis lands (C16)?
-   - Is the convergence given its weight, and kept for the end rather than spent early in THE STORY?`;
+   - Is the convergence given its weight?`;
 
 /**
  * Build user prompt with content to evaluate
@@ -1759,8 +1780,8 @@ Is this outline ready for human review?`;
 
       if (journalist) {
         // Phase 3 (3.4): the mode block in the system prompt states T8 for this mode
-        // (exposed memories reach Nova by turn-in, the room's events by attribution),
-        // and reporterMode scores it; this line names the mode, once.
+        // (exposed memories reach Nova by turn-in; since 3.9, remote, the room's events
+        // are told as scenes), and reporterMode scores it; this line names the mode, once.
         // Phase 3 (3.9): the account totals the article writer copied, after the record.
         const articleMoney = renderJudgeFinancialSummary(state);
         return `Evaluate this article content:
