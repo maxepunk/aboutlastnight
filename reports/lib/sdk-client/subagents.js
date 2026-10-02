@@ -47,7 +47,8 @@ const { WRITER_QUESTIONS_KEY, WRITER_QUESTIONS_PROPERTY } = require('../writer-q
  * holds, each callback's detail with the arc that plants it and the arc where it pays
  * off, and points at C16 for the payoff. It said "Key callback opportunities across arcs
  * for recontextualization", C16's plant and payoff in words of its own, printed beside
- * the principles in the arc rework.
+ * the principles in the arc rework. The interweaving call's task line prints it too
+ * (journalistInterweavingPrompt), so that call gives the field one description.
  */
 const SHARED_CHARACTERS_DESCRIPTION = 'The characters in this arc who also appear in other arcs';
 const CALLBACK_SEEDS_DESCRIPTION = 'The details in this arc that are callback seeds';
@@ -573,6 +574,8 @@ module.exports = {
   INTERWEAVING_SCHEMA,
   // Phase 3 (3.10): the interweaving principles, which the arc reworker reads too
   INTERWEAVING_PRINCIPLES,
+  // Task 4c-fix: keyCallbacks' one description, which the interweaving call's task line prints
+  KEY_CALLBACKS_DESCRIPTION,
 
   // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SCHEMA,

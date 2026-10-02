@@ -57,6 +57,8 @@ const {
   INTERWEAVING_SCHEMA,
   // Phase 3 (3.10): the interweaving principles, which the arc reworker reads too
   INTERWEAVING_PRINCIPLES,
+  // Task 4c-fix: keyCallbacks' description, printed in the interweaving call's task
+  KEY_CALLBACKS_DESCRIPTION,
   // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SCHEMA,
   // Phase 3 (3.3): the detective's prompts and schemas, parked with its theme (D13)
@@ -870,6 +872,14 @@ Also provide an **interweavingPlan** with:
  * the field holds and points at C16. It said "A detail from the record that can come back
  * changed later", C16's payoff restated without the condition C16 puts on it.
  *
+ * Its fix round: the prompt opens on the arcs, because the system prompt's task line is
+ * the call's one statement of its task; the prompt used to open by asking how the arcs
+ * "can interweave for compulsive readability". keyCallbacks' task line prints
+ * KEY_CALLBACKS_DESCRIPTION, the description the call's schema gives the field, where it
+ * asked for "Specific [plant → payoff] opportunities", C16's payoff without its
+ * condition. The placeholder's detail, "Specific callback opportunity", is "The planted
+ * detail".
+ *
  * @param {Array} compactArcs - the arcs, as buildInterweavingPrompt cuts them
  * @param {Array} roster
  * @param {Object|null} evidenceBundle
@@ -879,8 +889,6 @@ Also provide an **interweavingPlan** with:
  */
 function journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig, canonicalCharacters) {
   return `# Interweaving Enrichment
-
-Analyze the following narrative arcs and identify how they can interweave for compulsive readability.
 
 ## GENERATED ARCS
 
@@ -911,7 +919,7 @@ For each arc, provide:
 Also provide an **interweavingPlan** with:
 - suggestedOrder: the arc ids, in the order C16 (<craft-story>) gives the arcs
 - convergencePoint: this session's convergence point, as C16 (<craft-story>) describes the convergence
-- keyCallbacks: Specific [plant → payoff] opportunities
+- keyCallbacks: ${KEY_CALLBACKS_DESCRIPTION}
 
 ## OUTPUT FORMAT
 
@@ -933,7 +941,7 @@ Also provide an **interweavingPlan** with:
     "suggestedOrder": ["arc-id-1", "arc-id-2", ...],
     "convergencePoint": "Where this session's threads converge",
     "keyCallbacks": [
-      { "plantIn": "arc-id-1", "payoffIn": "arc-id-3", "detail": "Specific callback opportunity" }
+      { "plantIn": "arc-id-1", "payoffIn": "arc-id-3", "detail": "The planted detail" }
     ]
   }
 }

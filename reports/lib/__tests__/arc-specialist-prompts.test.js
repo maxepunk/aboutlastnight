@@ -778,6 +778,11 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
    * the two field texts say what the field holds and point at C16. The director's edits
    * cut planted details that did not move the throughline. The detective keeps its text
    * (D13).
+   *
+   * Fix round 1 (the 4c-fix review): the first three tests read the system prompt's task
+   * and two field texts, and passed while the user prompt still opened on "compulsive
+   * readability" and asked for "Specific [plant → payoff] opportunities", with "Specific
+   * callback opportunity" as the placeholder. The last two read the whole call.
    */
   describe('the interweaving call follows C16 in its own text (task 4c-fix)', () => {
     const {
@@ -825,6 +830,37 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       for (const schema of [DETECTIVE_INTERWEAVING_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA]) {
         expect(schema.properties.interweavingPlan.properties.keyCallbacks.description).toBe('Key callback opportunities across arcs for recontextualization');
       }
+    });
+
+    // "opportunit" framed a callback as an opportunity: C16's payoff without its
+    // condition. The bridges' field (bridgeOpportunities) and the principle that names it
+    // ("for bridge opportunities") are the bridges, not a payoff, so the scan leaves them out.
+    it('no instruction in the journalist call, system or user, frames it as compulsive readability or a callback as an opportunity', () => {
+      const state = journalistState();
+      const call = (theme) => `${interweavingSystemPrompt(state.sessionConfig, theme)}\n=====\n${
+        buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, theme)}`;
+      const text = instructionText(call('journalist')).replace(/bridge ?opportunit\w*/gi, '');
+      expect(text.match(/^.*(?:compulsive|readability|opportunit).*$/gim) || []).toEqual([]);
+      const detective = call('detective');
+      [
+        'Analyze the following narrative arcs and identify how they can interweave for compulsive readability.',
+        '- keyCallbacks: Specific [plant → payoff] opportunities',
+        '"detail": "Specific callback opportunity"'
+      ].forEach((line) => expect(detective).toContain(line));
+    });
+
+    it("states its task once and gives keyCallbacks one description: the user prompt opens on the arcs, its keyCallbacks line is the schema's, and the placeholder's detail says what it holds", () => {
+      const state = journalistState();
+      const journalist = buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist');
+      // The system prompt's task line states the task.
+      expect(journalist.slice(0, journalist.indexOf('## GENERATED ARCS'))).toBe('# Interweaving Enrichment\n\n');
+      const { description } = INTERWEAVING_SCHEMA.properties.interweavingPlan.properties.keyCallbacks;
+      const task = journalist.slice(journalist.indexOf('## YOUR TASK'), journalist.indexOf('## OUTPUT FORMAT'));
+      expect(task.match(/^- keyCallbacks: .*$/gm)).toEqual([`- keyCallbacks: ${description}`]);
+      const format = journalist.slice(journalist.indexOf('## OUTPUT FORMAT'), journalist.indexOf('## CRAFT GUIDANCE'));
+      const [, detail] = format.match(/\{ "plantIn": "arc-id-1", "payoffIn": "arc-id-3", "detail": "([^"]*)" \}/);
+      expect(detail).toMatch(/planted detail/);
+      expect(detail).not.toMatch(PAYOFF_WORDS);
     });
   });
 
