@@ -89,19 +89,35 @@ The model pass that produces the arcs, the outline or the article.
 _Avoid_: generator, agent, model, Nova (the reporter persona, not the pass)
 
 **Beat**:
-The moment a photo shows in the story, as the director describes it at the character-IDs stop. It decides where the photo is placed, and the caption must keep it: the writer may add context from the article or the record, never a different subject or action.
-_Avoid_: narrative moment, story relevance, context
+One item on the story map: a scene, a receipt, a line or a figure, named by the material it uses. The article writer writes the prose for every beat and adds none.
+_Avoid_: point, item, paragraph plan
+
+**Photo description**:
+What the director says a photo shows, given at the character-IDs stop: who is in it and what moment it catches. The caption keeps its subject and action, and may add context from the article or the record.
+_Avoid_: beat (a map item), narrative moment, story relevance
 
 **Arc**:
-One thread of the session's story: a claim about what happened, with its people, its evidence, its tension and its open questions. The arcs are the threads the article weaves toward one convergence. The director selects arcs at the arc stop.
+One thread of the session's story: a claim about what happened, with its people, its evidence, its tension and its open questions. The arcs are the threads the article weaves toward one convergence; at the story meeting each arc gets its role in the weave.
 _Avoid_: storyline, angle
+
+**Weave**:
+How the threads make one story: a main thread, the other threads each in a role toward it, the connections where they touch, and the convergence near the end. The same threads woven around a different main thread make a different story.
+_Avoid_: interweaving plan, angle, structure
+
+**Main thread**:
+The thread the story follows from the lede to the convergence. The other threads ground it, complicate it, mirror it or carry it forward.
+_Avoid_: spine, primary arc
+
+**Connection**:
+A point where two threads touch, named exactly: a shared person, a moment, a document or a line. A cause counts as a connection only when the record shows it.
+_Avoid_: bridge, link, callback
 
 **Verdict**:
 The official story: the group statement the room agrees on when the recovery window closes, before the police arrive. It is negotiated under the clock, can cite only what is on the Evidence Board, leaves out whatever the room chooses, and is a version every character can live with, so it is shaped by everything the players exposed, sold and argued. The director enters it as the accusation. The article reports it as the official story and shows how the players' choices made it, never claiming to know what really happened to Marcus.
 _Avoid_: the answer, the solution, the truth
 
 **Thesis**:
-The answer Nova argues by the end. When the director gives one, in the notes or at a stop, that is the thesis; otherwise it is the most interesting journalistic angle on what happened in the session. Usually it lies in the gap between the verdict and what happened leading up to it, and in what that gap shows about the biases the group brought to what it decided to tell the world. When the verdict agrees with everything the room found, it is what the players' own path to the verdict shows. Proposed by the writer and settled by the director at the arc stop; the outline is built to it, and it lands at the convergence.
+The answer Nova argues by the end. When the director gives one, in the notes or at a stop, that is the thesis; otherwise it is the most interesting journalistic angle on what happened in the session. Usually it lies in the gap between the verdict and what happened leading up to it, and in what that gap shows about the biases the group brought to what it decided to tell the world. When the verdict agrees with everything the room found, it is what the players' own path to the verdict shows. Settled by the director at the story meeting; the outline is built to it, and it lands at the convergence.
 _Avoid_: angle, key tension, hook, primary arc
 
 **Throughline**:
@@ -116,13 +132,17 @@ _Avoid_: climax, resolution, payoff (a detail planted early coming back)
 The working notes the game master and the players keep during the investigation and before the deliberation. It is context for how the room reached its verdict, not record: the article never cites it or prints it.
 _Avoid_: evidence board (the Evidence Board is where exposed memories' summaries go up), source
 
-**Story memo**:
-What the arc stop shows: the arcs as plain claims with named evidence, roles, strength and open questions, the thesis, and how the arcs pull against each other.
-_Avoid_: arc cards, arc analysis
+**Story meeting**:
+The arc stop, where the director settles the weave the article will tell before anything is planned. What the director leaves there is the task every later writer works from.
+_Avoid_: story memo, arc cards, arc analysis, pitch
 
 **Story map**:
-The outline. For each section: what it does for the reader, the material it uses by name, how the thesis appears through that section, and how it hands off to the next. Under the thesis, the headline, the deck and the length.
-_Avoid_: outline structure, allocation, section plan
+The outline: the weave laid across the article's sections. Under the headline, the deck and the settled story, each section has its job, its beats and its photos; sections the story does not need are dropped, and the material left out is listed. Length comes from what is on the map, not from a budget per section.
+_Avoid_: outline structure, allocation, section plan, script
+
+**Reweave**:
+The rework of the story meeting after the director changes a thread's role, adds a thread or picks another main thread. The writer fits the change into the weave and keeps everything else.
+_Avoid_: rebuild, regenerate
 
 **Evidence card**:
 A printed card that quotes one memory, or one passage of a document, from the record word for word. Memories are the main cited evidence: a memory card prints the whole memory, and a document card prints only the passage that matters. The writer chooses the memory or the document and passage; the text itself is copied from the record.
