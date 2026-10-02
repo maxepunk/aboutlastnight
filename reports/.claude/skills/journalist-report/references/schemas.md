@@ -94,7 +94,7 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
   "exposedMemories": [{"id": "<tokenId>", "name": "<name>", "owners": ["<character>"], "text": "<fullDescription, whole>"}],
   "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched>", "owners": ["<character>"], "text": "<description, whole>"}],
   "ledger": {
-    "clock": "as logged | evening session: PM times shown as AM",
+    "clock": "as logged | evening session: times moved twelve hours",
     "accounts": [{"name": "<account>", "total": <number>, "sales": <number>}],
     "total": <number>
   },
