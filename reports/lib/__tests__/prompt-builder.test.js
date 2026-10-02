@@ -1756,6 +1756,18 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       expect(facts).not.toMatch(/NEVER give non-roster characters/);
     });
 
+    // Final review (rules-writers[0]; R11, T5, T14): the line said Blake worked the room
+    // "for NeurAI", a fact about whom the deals were for, which round 7 made Nova's
+    // suspicion; the gate's outline echoed it into FOLLOW THE MONEY. It now says what
+    // world.md says Blake does: in the room, making deals, acting and speaking as the
+    // record shows, with nothing about whom the deals serve.
+    it.each(['outline', 'article'])('the %s SESSION_FACTS puts Blake in the room making deals, and names no one the deals serve', async (which) => {
+      const { userPrompt } = which === 'outline' ? await outlineOf(journalist()) : await articleOf(journalist());
+      const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
+      expect(facts).toContain('Blake was in the room too, making deals, and acts and speaks there as the record shows.');
+      expect(facts).not.toMatch(/for NeurAI|NeurAI/);
+    });
+
     it('the detective keeps its own lines', async () => {
       const detective = new PromptBuilder({ loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() }, 'detective', SESSION, CANONICAL, null);
       const { userPrompt } = await detective.buildOutlinePrompt({ narrativeArcs: [] }, [], 'hero.jpg', [], [], [], FACTS, {});

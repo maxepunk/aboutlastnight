@@ -194,10 +194,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   what an arc is in C16's words, "one thread of the story, as the arc writer found it",
  *   where it said "the arc writer's reading of one thread" ("reading" is retired, spec
  *   section 7). 21220 -> 21233, outline-journalist only. No detective pin moves.
+ * - The final fix (final review rules-writers[0]; R11, T5, T14): SESSION_FACTS's agency
+ *   line says Blake "was in the room too, making deals", as world.md words Blake, where it
+ *   said "working it for NeurAI", a fact about whom the deals were for, which is Nova's
+ *   suspicion. The journalist outline and article writers (21233 -> 21224, 28269 ->
+ *   28260); restoring the phrase gives back the previous hashes. The arc and detective
+ *   pins do not move: the fixture's one correction quotes no line, so the shared quote
+ *   rule (lib/grounding.js groundQuote) prints its quote bank as before.
  */
 const PINNED = {
-  'outline-journalist': ['ef2d688820eca2d9585f57787d7c168d084ffb3dcc62074959b0864df63d20d1', 21233],
-  'article-journalist': ['2cd5992037eec2f125bc6e7882e1f65688ed37a93c88235ab18ec983b6b042de', 28269],
+  'outline-journalist': ['d0e96e6c2dc630ed4182df08f152e8377bd4e8b6379bb1227c016169db2f881c', 21224],
+  'article-journalist': ['4fe0b2b38714a8c0dd7bc72efaa43e382abbb3fd9ce1edf7d6f95846b1c7edb1', 28260],
   'arcs-journalist': ['f4838fdf6fd39ed79c8921132224439f48a519c53e4d86c54112012dfe3c25b7', 11398],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],

@@ -666,6 +666,11 @@ All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is wh
    * Blake among the absent and then in the room, and the count is in T10's words,
    * of the people at the investigation (Blake, and Nova on site, were in the room).
    *
+   * Final review (rules-writers[0]; R11, T5, T14): Blake's line says what world.md says
+   * Blake does in the room, making deals, and nothing about whom the deals serve. "Working
+   * it for NeurAI" stated as fact who stands behind the market, which is Nova's
+   * suspicion, and the gate's outline carried it into FOLLOW THE MONEY.
+   *
    * @param {Object|null} sessionFacts - ai-nodes.js buildSessionFacts
    * @returns {string} the XML section, or '' without facts
    */
@@ -679,7 +684,7 @@ ${sessionFacts.roster.join('\n')}
 
 ${renderSessionFactsVerdict(sessionFacts)}
 
-Only the ${n} players above were at the investigation. Every other character except Blake appears only through the memories and documents. Blake was in the room too, working it for NeurAI, and acts and speaks there as the record shows. Nova is not one of the players. When the article counts the people at the investigation, it counts these ${n} players.
+Only the ${n} players above were at the investigation. Every other character except Blake appears only through the memories and documents. Blake was in the room too, making deals, and acts and speaks there as the record shows. Nova is not one of the players. When the article counts the people at the investigation, it counts these ${n} players.
 </SESSION_FACTS>`;
   }
 
