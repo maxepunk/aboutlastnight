@@ -1901,11 +1901,19 @@ function createEvaluator(phase, options = {}) {
 
     // Skip logic 2: Check MOST RECENT evaluation for this phase
     // (not first ready=true — that persists across revisions and blocks re-evaluation)
+    //
+    // Phase 3 (3.9; the ledger's Gate 3 finding): an entry escalated to the director is
+    // the verdict on the output at the stop, so a replay from START skips it as it skips
+    // a ready one; the route then takes the cap to the stop. At the gate each replay at
+    // an escalated stop paid for its evaluation again. Every rework and every rollback
+    // appends a not-ready stub first (graph.js increment*Revision, api-helpers.js
+    // buildRollbackState), so a changed output is always evaluated.
     const existingEvals = state.evaluationHistory || [];
     const phaseEvals = existingEvals.filter(e => e.phase === phase);
     const mostRecent = phaseEvals[phaseEvals.length - 1];
-    if (mostRecent?.ready === true) {
-      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - most recent ${phase} evaluation is ready=true`);
+    if (mostRecent?.ready === true || mostRecent?.escalatedToHuman === true) {
+      const why = mostRecent.ready === true ? 'is ready=true' : 'escalated to the director';
+      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - most recent ${phase} evaluation ${why}`);
       return {
         currentPhase: phaseConstant
       };

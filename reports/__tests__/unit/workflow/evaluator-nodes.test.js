@@ -2562,3 +2562,78 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3, brief 3.9: the judges are the newsroom's editors. They hold a draft for a
+// definite error only (R22), check the money against the figures the writers were
+// given, ask for the must-fix work alone, and see every photo the article places
+// (spec round 7; the ledger's rulings of 2026-10-02).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('the judges and the money line (phase 3, 3.9)', () => {
+  const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
+  const { renderPhotoEntry } = require('../../../lib/prompt-renderers/director-words-renderer');
+  const { _testing: { getPhaseCriteria, EVALUATION_JSON_SCHEMA } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+  const {
+    generateContentBundle, reviseContentBundle, getPromptBuilder,
+    _testing: { articleWriterInputs, buildAvailablePhotos }
+  } = require('../../../lib/workflow/nodes/ai-nodes');
+  const { _testing: graph } = require('../../../lib/workflow/graph');
+  const { buildRollbackState } = require('../../../lib/api-helpers');
+
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const count = (text, part) => text.split(part).length - 1;
+  const stateFor = (theme = 'journalist', extra = {}) => ({ ...reworkFixtureState(theme), contentBundle: clone(PREVIOUS_BUNDLE), ...extra });
+  const systemFor = (phase, state) => buildEvaluationSystemPrompt(
+    phase, getPhaseCriteria(phase, state.theme), state.theme, { sessionConfig: state.sessionConfig }
+  );
+  const userFor = (phase, state) => buildEvaluationUserPrompt(phase, state, { factCheck: null });
+
+  // The ledger's Gate 3 finding: a replay from START at a stop escalated at the cap paid
+  // for its evaluation again, because the skip read only a ready entry.
+  describe('a replay does not re-pay an escalated evaluation', () => {
+    const escalated = (phase) => ({ phase, ready: false, escalatedToHuman: true, escalationReason: 'Reached revision cap (2)', timestamp: 't' });
+    /** The state after an update, as the graph's reducers apply it (evaluationHistory appends). */
+    const apply = (state, update) => ({
+      ...state, ...update,
+      evaluationHistory: [...(state.evaluationHistory || []), ...[].concat(update.evaluationHistory || [])]
+    });
+    const STOPS = {
+      arcs: { node: evaluateArcs, route: 'routeArcEvaluation', increment: 'incrementArcRevision', counter: 'arcRevisionCount', cap: REVISION_CAPS.ARCS, feedback: '_arcFeedback', output: 'narrativeArcs', open: { selectedArcs: [] } },
+      outline: { node: evaluateOutline, route: 'routeOutlineEvaluation', increment: 'incrementOutlineRevision', counter: 'outlineRevisionCount', cap: REVISION_CAPS.OUTLINE, feedback: '_outlineFeedback', output: 'outline', open: { outlineApproved: false } },
+      article: { node: evaluateArticle, route: 'routeArticleEvaluation', increment: 'incrementArticleRevision', counter: 'articleRevisionCount', cap: REVISION_CAPS.ARTICLE, feedback: '_articleFeedback', output: 'contentBundle', open: { articleApproved: false } }
+    };
+    const atStop = (phase) => stateFor('journalist', { ...STOPS[phase].open, [STOPS[phase].counter]: STOPS[phase].cap, evaluationHistory: [escalated(phase)] });
+    const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [] };
+
+    it.each(Object.keys(STOPS))('a replay at the escalated %s stop makes no model call and routes to the stop', async (phase) => {
+      const { node, route } = STOPS[phase];
+      const state = atStop(phase);
+      const sdk = jest.fn();
+      const update = await node(clone(state), { configurable: { sdkClient: sdk } });
+      expect(sdk).not.toHaveBeenCalled();
+      expect(update.evaluationHistory).toBeUndefined();
+      expect(graph[route](apply(state, update))).toBe('checkpoint');
+    });
+
+    it.each(Object.keys(STOPS))('the director\'s send back at the escalated %s stop: the rework is evaluated', async (phase) => {
+      const { node, increment, feedback, output } = STOPS[phase];
+      const state = atStop(phase);
+      // The send back's increment appends the not-ready stub; the rework writes the output.
+      const stubbed = apply(state, await graph[increment]({ ...state, [feedback]: 'Lead with the vote.' }));
+      const reworked = { ...stubbed, [output]: clone(state[output]), [feedback]: null };
+      const sdk = jest.fn().mockResolvedValue(clone(VERDICT));
+      await node(reworked, { configurable: { sdkClient: sdk } });
+      expect(sdk).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['outline', 'article'])('a rollback to %s after the escalation appends the stub, so the regenerated output is evaluated', async (phase) => {
+      const { node, output, open } = STOPS[phase];
+      const state = atStop(phase);
+      const rolled = apply(state, buildRollbackState(phase));
+      const regenerated = { ...rolled, ...open, [output]: clone(state[output]) };
+      const sdk = jest.fn().mockResolvedValue(clone(VERDICT));
+      await node(regenerated, { configurable: { sdkClient: sdk } });
+      expect(sdk).toHaveBeenCalledTimes(1);
+    });
+  });
+});
