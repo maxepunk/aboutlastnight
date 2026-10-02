@@ -1234,7 +1234,8 @@ async function reviseOutline(state, config) {
 
     return {
       // Phase 3 (3.7; R5): only the director's note answers a question, so an automatic
-      // pass keeps every previous one beside the rework's own.
+      // pass keeps every previous subject; the rework's question replaces the earlier
+      // ones of its kind and `about` (3.10).
       outline: withCarriedWriterQuestions(result || {}, previousOutline, { afterDirectorNote: Boolean(state._outlineFeedback) }),
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
@@ -1745,8 +1746,8 @@ async function reviseContentBundle(state, config) {
     console.log(`[reviseContentBundle] Complete in ${duration}s`);
 
     // Update contentBundle with revision history. Phase 3 (3.7; R5): only the director's
-    // note answers a question, so an automatic pass keeps every previous one beside the
-    // rework's own.
+    // note answers a question, so an automatic pass keeps every previous subject; the
+    // rework's question replaces the earlier ones of its kind and `about` (3.10).
     const updatedBundle = withCarriedWriterQuestions(revised || previousContentBundle, previousContentBundle, {
       afterDirectorNote: Boolean(state._articleFeedback)
     });

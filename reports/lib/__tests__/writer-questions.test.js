@@ -9,9 +9,11 @@
  * at the stop and answers with the stop's note.
  *
  * - A rework carries forward every question it did not answer (R5): only the director
- *   answers one. An automatic pass keeps every previous question beside the ones it
- *   returns; after the director's note the rework's list replaces the old one; a
- *   rework that returns no field keeps the previous list.
+ *   answers one. On an automatic pass a question the rework returns replaces each
+ *   earlier question of the same kind and `about` (case and spacing folded), in its
+ *   place, and an earlier question whose kind and `about` the rework returned nothing
+ *   for is kept (phase 3, 3.10); after the director's note the rework's list replaces
+ *   the old one; a rework that returns no field keeps the previous list.
  * - The field never prints, and never reaches the template, the fact check's printed
  *   text or a later writer's prompt.
  * - At the arc stage a roster member a question of kind "player" names counts as
@@ -255,6 +257,108 @@ describe('the rework rule: only the director answers a question (R5)', () => {
   it('an output with no field and nothing to carry comes back as it was', () => {
     const output = { lede: {} };
     expect(withCarriedWriterQuestions(output, { lede: {} }, { afterDirectorNote: false })).toBe(output);
+  });
+});
+
+/**
+ * Phase 3, brief 3.10 (the ledger's ruling on 3.7 finding 6, after the gate): on an
+ * automatic pass a rework's question replaces the earlier ones on its subject. The union
+ * kept a question and its reworded copy, so the gate's arc and outline stops showed 16
+ * questions with one pronoun asked two or three times, in a list built to be skimmed
+ * (D8). Every unanswered subject is still kept (R5): an earlier question stays whenever
+ * the rework returned nothing of its kind and `about`.
+ *
+ * The gate's call log (092026, every arc, outline and article write and rework) worded a
+ * repeated question's `about` the same across passes when it named one player ("Mel",
+ * "Remi"), and differently when the writer regrouped its subjects: "Kai", "Remi" and
+ * "Mel" became "Kai, Remi, Mel" and "Alex, Jess, Kai, Mel, Sam, Sarah, Vic"; a ledger
+ * question's time and amount were reworded between the arcs and the outline; the article
+ * names a player in full ("Ashe Motoko") where the arcs used the first name. Only case
+ * and spacing are folded, so a regrouped subject is a new subject, and its earlier
+ * questions stay.
+ */
+describe('an automatic pass replaces each earlier question on the subject the rework asks about (phase 3, 3.10)', () => {
+  const { carriedWriterQuestions } = require('../writer-questions');
+  const AUTOMATIC = { afterDirectorNote: false };
+  const pronoun = (about, question) => ({ kind: 'pronoun', about, question });
+
+  it("the gate's case: one pronoun question asked three times across passes ends as one", () => {
+    const asked = [
+      pronoun('Remi', "Neither the roster nor the notes give Remi's pronouns. Which should print?"),
+      pronoun('Remi', 'The evaluation reports the roster gives Remi she/her. Confirm for print?'),
+      pronoun(' REMI ', 'The arcs use she/her for Remi, as the evaluation reports. Confirm?')
+    ];
+    let questions = [Q_SARAH, asked[0]];
+    questions = carriedWriterQuestions([Q_SARAH, asked[1]], questions, AUTOMATIC);
+    questions = carriedWriterQuestions([Q_SARAH, asked[2]], questions, AUTOMATIC);
+    expect(questions.filter((q) => q.kind === 'pronoun')).toEqual([{ ...asked[2], about: 'REMI' }]);
+    expect(questions).toHaveLength(2);
+  });
+
+  it('a replacement takes the place of the question it replaces, and new questions follow', () => {
+    const reworded = { ...Q_LEDGER, question: 'Is the 07:50 AM sale entered twice?' };
+    expect(carriedWriterQuestions([Q_PRONOUN, reworded], [Q_SARAH, Q_LEDGER, Q_FULL], AUTOMATIC))
+      .toEqual([Q_SARAH, reworded, Q_FULL, Q_PRONOUN]);
+  });
+
+  it('each earlier question of the subject goes, and every question the rework asks on it takes the first one\'s place', () => {
+    const second = { ...Q_SARAH, question: 'Did Sarah vote?' };
+    const restated = { ...Q_SARAH, question: 'What did Sarah do this morning?' };
+    const followUp = { ...Q_SARAH, question: 'Who saw Sarah with Blake?' };
+    expect(carriedWriterQuestions([restated, followUp], [Q_SARAH, Q_LEDGER, second], AUTOMATIC))
+      .toEqual([restated, followUp, Q_LEDGER]);
+  });
+
+  it('`about` is compared with case and spacing folded, and nothing looser', () => {
+    const spaced = { kind: 'player', about: '  sarah ', question: 'Where was Sarah at the check-in?' };
+    expect(carriedWriterQuestions([spaced], [Q_SARAH], AUTOMATIC)).toEqual([{ ...spaced, about: 'sarah' }]);
+    // A full name, or a group of names, is another subject: the earlier question stays.
+    expect(carriedWriterQuestions([Q_FULL], [Q_SARAH], AUTOMATIC)).toEqual([Q_SARAH, Q_FULL]);
+    const group = pronoun('Kai, Riley', 'The roster gives Kai and Riley no pronoun: which ones?');
+    expect(carriedWriterQuestions([group], [Q_PRONOUN], AUTOMATIC)).toEqual([Q_PRONOUN, group]);
+  });
+
+  it('the kind must match too, and an absent kind matches only an absent kind', () => {
+    const ledgerOnSarah = { kind: 'ledger', about: 'Sarah', question: 'Is the Sarah account entered twice?' };
+    expect(carriedWriterQuestions([ledgerOnSarah], [Q_SARAH], AUTOMATIC)).toEqual([Q_SARAH, ledgerOnSarah]);
+    const oldNoKind = { about: 'Sarah', question: 'Where was Sarah?' };
+    const newNoKind = { about: 'Sarah', question: 'Where was Sarah during the vote?' };
+    expect(carriedWriterQuestions([newNoKind], [oldNoKind, Q_SARAH], AUTOMATIC)).toEqual([newNoKind, Q_SARAH]);
+    expect(carriedWriterQuestions([newNoKind], [Q_SARAH], AUTOMATIC)).toEqual([Q_SARAH, newNoKind]);
+  });
+
+  it('an earlier question is kept when the rework returns nothing of its kind and about', () => {
+    expect(carriedWriterQuestions([Q_PRONOUN], [Q_SARAH, Q_LEDGER], AUTOMATIC)).toEqual([Q_SARAH, Q_LEDGER, Q_PRONOUN]);
+    expect(carriedWriterQuestions([], [Q_SARAH, Q_LEDGER], AUTOMATIC)).toEqual([Q_SARAH, Q_LEDGER]);
+  });
+
+  it('after the director\'s note the rework\'s list still replaces the old one, and no list keeps it', () => {
+    const reworded = { ...Q_SARAH, question: 'Where was Sarah at the vote?' };
+    expect(carriedWriterQuestions([reworded], [Q_SARAH, Q_LEDGER], { afterDirectorNote: true })).toEqual([reworded]);
+    expect(carriedWriterQuestions(undefined, [Q_SARAH, Q_LEDGER], AUTOMATIC)).toEqual([Q_SARAH, Q_LEDGER]);
+  });
+
+  it('the three reworks replace in place on an automatic pass', async () => {
+    const reworded = { ...Q_SARAH, question: 'What did Sarah do at the check-in?' };
+    const arcState = reworkFixtureState('journalist');
+    const arcResult = await arcNodes.reviseArcs(
+      { ...arcState, narrativeArcs: null, _previousArcs: arcState.narrativeArcs, _arcAnalysisCache: { ...arcState._arcAnalysisCache, writerQuestions: [Q_SARAH, Q_LEDGER] } },
+      { configurable: { sdkClient: sdkReturning({ narrativeArcs: arcState.narrativeArcs, synthesisNotes: 's', writerQuestions: [reworded] }) } }
+    );
+    expect(arcResult._arcAnalysisCache.writerQuestions).toEqual([reworded, Q_LEDGER]);
+
+    const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: aiNodes.createMockPromptBuilder(), theme: 'journalist' } });
+    const outlineResult = await aiNodes.reviseOutline(
+      { _previousOutline: { ...clone(OUTLINE), writerQuestions: [Q_SARAH, Q_LEDGER] }, outlineRevisionCount: 1 },
+      cfg(sdkReturning({ ...clone(OUTLINE), writerQuestions: [reworded] }))
+    );
+    expect(outlineResult.outline.writerQuestions).toEqual([reworded, Q_LEDGER]);
+
+    const articleResult = await aiNodes.reviseContentBundle(
+      { _previousContentBundle: { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_SARAH, Q_LEDGER] }, articleRevisionCount: 1 },
+      cfg(sdkReturning({ ...clone(PREVIOUS_BUNDLE), writerQuestions: [reworded] }))
+    );
+    expect(articleResult.contentBundle.writerQuestions).toEqual([reworded, Q_LEDGER]);
   });
 });
 

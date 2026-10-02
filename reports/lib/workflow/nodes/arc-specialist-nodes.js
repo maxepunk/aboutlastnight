@@ -1434,7 +1434,8 @@ async function reviseArcs(state, config) {
         interweavingPlan: planReturned ? revisedPlan : (keptPrevious ? previousPlan : createDefaultInterweavingPlan()),
         ...(keptPrevious && { interweavingFromPreviousRound: true }),
         // Phase 3 (3.7; R5): only the director's note answers a question, so an
-        // automatic pass keeps every previous one beside the rework's own.
+        // automatic pass keeps every previous subject; the rework's question replaces
+        // the earlier ones of its kind and `about` (3.10).
         writerQuestions: carriedWriterQuestions(returnedQuestions, state._arcAnalysisCache?.writerQuestions, {
           afterDirectorNote: Boolean(state._arcFeedback)
         }),

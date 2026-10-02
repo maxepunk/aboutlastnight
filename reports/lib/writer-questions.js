@@ -72,10 +72,24 @@ function writerQuestionsOf(value) {
     .filter((q) => q.about && q.question);
 }
 
+/** A text with its case and spacing folded: lower case, each run of whitespace one space. */
+function fold(text) {
+  return text.replace(/\s+/g, ' ').toLowerCase();
+}
+
 /** One question's identity for de-duplication: `about` and `question`, any case and spacing. */
 function questionKey(q) {
-  const fold = (text) => text.replace(/\s+/g, ' ').toLowerCase();
   return `${fold(q.about)}\n${fold(q.question)}`;
+}
+
+/**
+ * One question's subject (phase 3, 3.10): its kind and its `about`, the `about` with
+ * case and spacing folded and nothing looser. A question with no kind (a list from
+ * before the field had one) has the empty kind, which only another kindless question
+ * shares.
+ */
+function subjectKey(q) {
+  return `${q.kind || ''}\n${fold(q.about)}`;
 }
 
 /** The list with each question once, the first wording kept. */
@@ -90,11 +104,48 @@ function distinctQuestions(questions) {
 }
 
 /**
+ * The previous questions with each subject the rework asks about replaced by the
+ * rework's questions on it (phase 3, 3.10): they take the place of the first earlier
+ * question on that subject, and every other earlier question on it goes. An earlier
+ * question on a subject the rework asked nothing about stays where it was. The
+ * rework's questions on new subjects follow, in its order.
+ *
+ * @param {Array} previousQuestions - writerQuestionsOf the previous list
+ * @param {Array} returnedQuestions - writerQuestionsOf the rework's list
+ * @returns {Array}
+ */
+function replacedBySubject(previousQuestions, returnedQuestions) {
+  const returnedBySubject = new Map();
+  for (const q of returnedQuestions) {
+    const key = subjectKey(q);
+    if (!returnedBySubject.has(key)) returnedBySubject.set(key, []);
+    returnedBySubject.get(key).push(q);
+  }
+  const placed = new Set();
+  const merged = [];
+  for (const q of previousQuestions) {
+    const key = subjectKey(q);
+    if (!returnedBySubject.has(key)) {
+      merged.push(q);
+    } else if (!placed.has(key)) {
+      merged.push(...returnedBySubject.get(key));
+      placed.add(key);
+    }
+  }
+  merged.push(...returnedQuestions.filter((q) => !placed.has(subjectKey(q))));
+  return merged;
+}
+
+/**
  * A rework's questions (R5): a rework keeps every question it did not answer, and only
  * the director answers one, with the stop's note.
  * - An automatic pass (no note: an evaluation or a check sent it) keeps every previous
- *   question, in order, then adds the ones it returned. So an automatic pass never
- *   drops a question before the director sees it, whatever list the model returns.
+ *   subject. A question it returns replaces each earlier question of the same kind and
+ *   `about` (subjectKey), in the place of the first one; an earlier question on a
+ *   subject it returned nothing for is kept; its questions on new subjects follow
+ *   (phase 3, 3.10, the ledger's ruling on 3.7 finding 6). The plain union this
+ *   replaces kept a question and its reworded copy: at the gate the arc and outline
+ *   stops showed 16 questions, one pronoun asked two or three times.
  * - A rework after the director's note returns the questions the note left open
  *   beside its own: its list replaces the old one, an empty list included.
  * - A rework that returns no list keeps the previous one, on either kind of pass.
@@ -105,7 +156,7 @@ function distinctQuestions(questions) {
  * @param {{afterDirectorNote: boolean}} options - true when the rework acts on the
  *   director's note for this stop (`_arcFeedback`, `_outlineFeedback`, `_articleFeedback`);
  *   required, so no caller falls back to letting a model drop a question
- * @returns {Array<{about: string, question: string}>}
+ * @returns {Array<{kind?: string, about: string, question: string}>}
  */
 function carriedWriterQuestions(returned, previous, { afterDirectorNote } = {}) {
   if (typeof afterDirectorNote !== 'boolean') {
@@ -114,7 +165,7 @@ function carriedWriterQuestions(returned, previous, { afterDirectorNote } = {}) 
   const previousQuestions = writerQuestionsOf(previous);
   if (!Array.isArray(returned)) return previousQuestions;
   const returnedQuestions = writerQuestionsOf(returned);
-  return distinctQuestions(afterDirectorNote ? returnedQuestions : [...previousQuestions, ...returnedQuestions]);
+  return distinctQuestions(afterDirectorNote ? returnedQuestions : replacedBySubject(previousQuestions, returnedQuestions));
 }
 
 /**
