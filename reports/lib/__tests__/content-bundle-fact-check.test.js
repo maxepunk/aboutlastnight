@@ -325,6 +325,61 @@ describe('photo references (class 7)', () => {
       ]);
     });
   });
+
+  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays
+  // out of the article): the whiteboard photo is never a usable reference. A printed one
+  // is an invalid reference whose message says what it is, and no fix line offers it.
+  // The evaluator passes its filename from where the writers get it (buildFactCheckArgs,
+  // whiteboardFilenameOf). It used to be offered as a photo to use.
+  describe('the whiteboard photo', () => {
+    const PHOTOS = ['/data/071126/photos/aln0711-1.jpg', '/data/071126/photos/aln0711-2.jpg', '/data/071126/photos/whiteboard.jpg'];
+    const placing = (...filenames) => ({
+      sections: [{ id: 'lede', type: 'narrative', content: filenames.map((filename) => ({ type: 'photo', filename, caption: 'x' })) }],
+      evidenceCards: [],
+      heroImage: { filename: 'aln0711-1.jpg' }
+    });
+    const WORKING_NOTES = "this is the whiteboard, the room's working notes, and its photo stays out of the article.";
+
+    it("is an invalid reference when printed, with a message that says it is the room's working notes", () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, whiteboardPhoto: 'whiteboard.jpg', contentBundle: placing('aln0711-2.jpg', 'whiteboard.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+      expect(result.structuralIssues).toEqual([
+        `Invalid photo reference "whiteboard.jpg": ${WORKING_NOTES} Use one of [aln0711-1.jpg, aln0711-2.jpg] or remove the reference.`
+      ]);
+    });
+
+    it('is an invalid reference as the hero too, matched by its basename from a path', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS,
+        whiteboardPhoto: '/data/071126/photos/whiteboard.jpg',
+        contentBundle: { sections: [], evidenceCards: [], heroImage: { filename: 'whiteboard.jpg' } }
+      }));
+      expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+      expect(result.structuralIssues[0]).toContain(WORKING_NOTES);
+    });
+
+    it('is offered by no fix line', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, whiteboardPhoto: 'whiteboard.jpg', excludedPhotos: ['aln0711-2.jpg'], contentBundle: placing('ghost.jpg')
+      }));
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "ghost.jpg": not one of this session\'s photos. Use one of [aln0711-1.jpg] or remove the reference.'
+      ]);
+    });
+
+    it("is an invalid reference even when the session's photo list is empty, which leaves the other references unverified", () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: [], whiteboardPhoto: 'whiteboard.jpg', contentBundle: placing('whiteboard.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+      expect(result.structuralIssues).toEqual([`Invalid photo reference "whiteboard.jpg": ${WORKING_NOTES} Remove the reference.`]);
+      expect(result.advisoryWarnings.filter((text) => /could not verify/i.test(text))).toEqual([
+        "Could not verify 1 photo reference(s): this session's photo list is empty in state, so there is nothing to check the filenames against."
+      ]);
+    });
+  });
 });
 
 describe('reporter mode (class 6)', () => {

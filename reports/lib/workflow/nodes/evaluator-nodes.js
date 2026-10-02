@@ -54,12 +54,13 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // hero it used, the article writer's inputs (its photos, 3.9), the PromptBuilder
 // (whose roster method gives the roster section, and whose money summary the outline
 // and article judges print, 3.9), and the one rule for a kept photo with the one hero
-// entry (the 4b fix batch).
+// entry (the 4b fix batch), and the whiteboard's filename (task 4c-fix).
 // ARC_NOTES_LABEL is the arc writer's label for the director's notes, which the arc
 // judge's directorNotes line prints (one source, fix 3.4b).
 const { hasInterweavingPlan, extractEvidenceSummary, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const {
-  buildSessionFacts, outlineWriterInputs, articleWriterInputs, reworkHeroImage, getPromptBuilder, isPhotoExcluded, heroPhotoEntry
+  buildSessionFacts, outlineWriterInputs, articleWriterInputs, reworkHeroImage, getPromptBuilder, isPhotoExcluded, heroPhotoEntry,
+  whiteboardFilenameOf
 } = require('./ai-nodes');
 // Phase 3 (3.7): the writers' questions for the director. The arc judge reads the arc
 // writer's, for rosterCoverage; every judge's JSON of an output leaves them out.
@@ -637,6 +638,10 @@ function truthIssueLines(failed, written) {
  * (ai-nodes.js isPhotoExcluded), so the photo check reads an excluded photo as no
  * usable reference and its fix lines offer only the kept photos.
  *
+ * Task 4c-fix (T13): the whiteboard photo's filename, from where the writers get it
+ * (ai-nodes.js whiteboardFilenameOf), so a printed whiteboard is an invalid reference
+ * and no fix line offers it.
+ *
  * @param {Object} state
  * @returns {Object}
  */
@@ -657,6 +662,7 @@ function buildFactCheckArgs(state) {
     sessionPhotos: state.sessionPhotos,
     excludedPhotos: (Array.isArray(state.sessionPhotos) ? state.sessionPhotos : [])
       .filter(photo => typeof photo === 'string' && isPhotoExcluded(state, photo)),
+    whiteboardPhoto: whiteboardFilenameOf(state),
     reportingMode: config.reportingMode,
     npcs: getThemeNPCEntries(theme),
     rosterPronouns: config.rosterPronouns || null,

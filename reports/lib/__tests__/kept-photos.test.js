@@ -225,20 +225,37 @@ describe('the fact check reads an excluded photo as not a usable reference', () 
     heroImage: { filename: 'hero.jpg', caption: 'h' }
   });
 
+  // Task 4c-fix (T13): the fix lines offer the kept photos without the whiteboard, which
+  // these pins used to list among them.
   it('an excluded photo in print is an invalid reference, and the fix line lists only kept photos', () => {
     const state = { ...photoState(), contentBundle: bundleWith('p2.jpg', 'p3.jpg') };
     const result = factCheckContentBundle(buildFactCheckArgs(state));
     expect(result.photoReferences.invalid).toEqual(['p3.jpg']);
     const issue = result.structuralIssues.find((text) => text.startsWith('Invalid photo reference "p3.jpg"'));
     expect(issue).toMatch(/the director excluded this photo/);
-    expect(issue).toContain('Use one of [hero.jpg, p2.jpg, whiteboard.jpg, p4.jpg]');
+    expect(issue).toContain('Use one of [hero.jpg, p2.jpg, p4.jpg] or remove the reference.');
   });
 
   it("a reference to no session photo is offered the kept photos only", () => {
     const state = { ...photoState(), contentBundle: bundleWith('ghost.jpg') };
     const result = factCheckContentBundle(buildFactCheckArgs(state));
     const issue = result.structuralIssues.find((text) => text.startsWith('Invalid photo reference "ghost.jpg"'));
-    expect(issue).toContain("not one of this session's photos. Use one of [hero.jpg, p2.jpg, whiteboard.jpg, p4.jpg]");
-    expect(issue).not.toMatch(/p3\.jpg|p5\.jpg/);
+    expect(issue).toContain("not one of this session's photos. Use one of [hero.jpg, p2.jpg, p4.jpg] or remove the reference.");
+    expect(issue).not.toMatch(/p3\.jpg|p5\.jpg|whiteboard\.jpg/);
+  });
+
+  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays
+  // out of the article). The writers never list the whiteboard (whiteboardFilenameOf),
+  // but the fact check offered it in its fix lines and accepted it in print.
+  it("reads the whiteboard's filename where the writers get it, and a printed whiteboard is an invalid reference", () => {
+    const state = { ...photoState(), contentBundle: bundleWith('p2.jpg', 'whiteboard.jpg') };
+    const args = buildFactCheckArgs(state);
+    expect(args.whiteboardPhoto).toBe(aiNodes.whiteboardFilenameOf(state));
+    expect(args.whiteboardPhoto).toBe('whiteboard.jpg');
+    const result = factCheckContentBundle(args);
+    expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+    expect(result.structuralIssues.filter((text) => text.startsWith('Invalid photo reference'))).toEqual([
+      "Invalid photo reference \"whiteboard.jpg\": this is the whiteboard, the room's working notes, and its photo stays out of the article. Use one of [hero.jpg, p2.jpg, p4.jpg] or remove the reference."
+    ]);
   });
 });

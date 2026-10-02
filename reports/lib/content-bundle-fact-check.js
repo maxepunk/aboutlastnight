@@ -815,6 +815,10 @@ function describeLocations(locations) {
  * @param {Array}    [args.excludedPhotos]     - the session photos the director excluded
  *                                               (T13; the evaluator's isPhotoExcluded): no
  *                                               usable reference, and never offered in a fix
+ * @param {?string}  [args.whiteboardPhoto]    - the whiteboard photo's filename or path (T13;
+ *                                               the writers' whiteboardFilenameOf): the room's
+ *                                               working notes, so no usable reference, and
+ *                                               never offered in a fix
  * @param {string}   args.reportingMode        - 'on-site' | 'remote' (default 'on-site')
  * @param {Array}    [args.npcs]               - the theme's NPC entries (theme-config
  *                                               getThemeNPCEntries): {name, pronouns?, aliasOf?}
@@ -842,6 +846,7 @@ function factCheckContentBundle({
   roster,
   sessionPhotos,
   excludedPhotos,
+  whiteboardPhoto,
   reportingMode,
   npcs,
   npcPronouns,
@@ -965,9 +970,16 @@ function factCheckContentBundle({
   // excluded is no usable reference, and a fix line offers only the kept photos. It used
   // to offer every session photo, so a rework could be told to place one the director
   // pulled. The message keeps its prefix: the console groups by it.
+  //
+  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays out
+  // of the article): the whiteboard photo is no usable reference either, and no fix line
+  // offers it; a printed one says what it is. Its filename is known whatever the
+  // session's photo list holds, so it is checked even when that list is empty.
+  const whiteboard = basename(whiteboardPhoto);
+  const isWhiteboard = (name) => whiteboard !== '' && name === whiteboard;
   const available = new Set(asArray(sessionPhotos).map(basename).filter(Boolean));
   const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
-  const kept = Array.from(available).filter(filename => !excluded.has(filename));
+  const kept = Array.from(available).filter(filename => !excluded.has(filename) && !isWhiteboard(filename));
   const useKept = kept.length > 0 ? `Use one of [${kept.join(', ')}] or remove the reference.` : 'Remove the reference.';
   const referenced = [];
   if (bundle.heroImage && typeof bundle.heroImage === 'object' && bundle.heroImage.filename) {
@@ -979,26 +991,29 @@ function factCheckContentBundle({
   // The top-level `photos` list never prints, so it is not read (phase 3, 3.4; HY1).
 
   const invalidPhotos = [];
-  if (available.size === 0) {
-    if (referenced.length > 0) {
-      advisoryWarnings.push(
-        `Could not verify ${referenced.length} photo reference(s): this session's photo list is ` +
-        `empty in state, so there is nothing to check the filenames against.`
-      );
+  const unverified = [];
+  for (const filename of referenced) {
+    const name = basename(filename);
+    if (!isWhiteboard(name) && available.size === 0) {
+      unverified.push(filename);
+    } else if ((isWhiteboard(name) || !available.has(name) || excluded.has(name)) && !invalidPhotos.includes(filename)) {
+      invalidPhotos.push(filename);
     }
-  } else {
-    for (const filename of referenced) {
-      const name = basename(filename);
-      if ((!available.has(name) || excluded.has(name)) && !invalidPhotos.includes(filename)) {
-        invalidPhotos.push(filename);
-      }
-    }
-    for (const filename of invalidPhotos) {
-      const reason = excluded.has(basename(filename))
+  }
+  if (unverified.length > 0) {
+    advisoryWarnings.push(
+      `Could not verify ${unverified.length} photo reference(s): this session's photo list is ` +
+      `empty in state, so there is nothing to check the filenames against.`
+    );
+  }
+  for (const filename of invalidPhotos) {
+    const name = basename(filename);
+    const reason = isWhiteboard(name)
+      ? "this is the whiteboard, the room's working notes, and its photo stays out of the article."
+      : excluded.has(name)
         ? 'the director excluded this photo.'
         : "not one of this session's photos.";
-      structuralIssues.push(`Invalid photo reference "${filename}": ${reason} ${useKept}`);
-    }
+    structuralIssues.push(`Invalid photo reference "${filename}": ${reason} ${useKept}`);
   }
 
   // ── 4. Reporter mode (BASELINE class 6) ──────────────────────────────────

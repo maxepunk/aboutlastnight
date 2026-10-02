@@ -1042,6 +1042,10 @@ function photoFilenameOf(photo) {
  * The whiteboard photo's filename, or null. The whiteboard is Layer 3 (director)
  * data and is excluded from the article photos entirely.
  *
+ * Task 4c-fix (T13): the fact check reads the same filename (evaluator-nodes.js
+ * buildFactCheckArgs), so a printed whiteboard is an invalid reference and no fix line
+ * offers it.
+ *
  * @param {Object} state
  * @returns {string|null}
  */
@@ -2102,7 +2106,8 @@ module.exports = {
   // outline writer's inputs and photo list, and the hero the writer and its
   // reworker used. Phase 3 (3.9): the article writer's inputs, its photos among them.
   // The 4b fix batch: the one rule for a kept photo (the fact check's arguments read
-  // it) and the one hero entry (the outline judge prints it).
+  // it) and the one hero entry (the outline judge prints it). Task 4c-fix: the
+  // whiteboard's filename, which the fact check's arguments read too.
   getPromptBuilder,
   buildSessionFacts,
   buildAvailablePhotos,
@@ -2111,6 +2116,7 @@ module.exports = {
   reworkHeroImage,
   isPhotoExcluded,
   heroPhotoEntry,
+  whiteboardFilenameOf,
 
   // Internal functions for testing
   _testing: {
