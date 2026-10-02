@@ -866,6 +866,10 @@ Also provide an **interweavingPlan** with:
  * 4b fix batch: the roster with pronouns is rosterWithPronounsSection's, under the
  * heading the arc writer and the outline writer give it, a subsection of the roster.
  *
+ * Task 4c-fix (4b-fix concern 2): the OUTPUT FORMAT's callbackSeeds placeholder says what
+ * the field holds and points at C16. It said "A detail from the record that can come back
+ * changed later", C16's payoff restated without the condition C16 puts on it.
+ *
  * @param {Array} compactArcs - the arcs, as buildInterweavingPrompt cuts them
  * @param {Array} roster
  * @param {Object|null} evidenceBundle
@@ -920,7 +924,7 @@ Also provide an **interweavingPlan** with:
         "bridgeOpportunities": [
           { "toArc": "other-arc-id", "bridgeType": "shared_character", "bridgeDetail": "..." }
         ],
-        "callbackSeeds": ["A detail from the record that can come back changed later"],
+        "callbackSeeds": ["A detail in this arc that is a callback seed (C16)"],
         "convergenceRole": "What this arc brings to the convergence"
       }
     }

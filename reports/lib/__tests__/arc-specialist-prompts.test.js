@@ -768,6 +768,66 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     });
   });
 
+  /**
+   * Task 4c-fix (4b-fix concern 2 and review minor 3): the interweaving call follows C16
+   * in its own text. C16 makes the thesis and the convergence the engine, and a planted
+   * detail comes back only when its payoff moves the throughline. The call's task line
+   * made callbacks the engine ("to create compulsive readability through callbacks and
+   * bridges"), and the callbackSeeds placeholder and keyCallbacks' description restated
+   * C16's plant and payoff in words of their own. The task now says what the call finds;
+   * the two field texts say what the field holds and point at C16. The director's edits
+   * cut planted details that did not move the throughline. The detective keeps its text
+   * (D13).
+   */
+  describe('the interweaving call follows C16 in its own text (task 4c-fix)', () => {
+    const {
+      INTERWEAVING_SYSTEM_PROMPT, DETECTIVE_INTERWEAVING_SYSTEM_PROMPT, INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA,
+      DETECTIVE_INTERWEAVING_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA
+    } = require('../sdk-client/subagents');
+    /** C16's plant and payoff, in the words the call's own text used for them. */
+    const PAYOFF_WORDS = /come back|changed later|pays? off|payoff|recontextuali[sz]|aha moment|opportunit|throughline/i;
+
+    it('the task says what the call finds: the shared characters, the bridges, and where the threads can meet (C16)', () => {
+      const task = INTERWEAVING_SYSTEM_PROMPT.slice(
+        INTERWEAVING_SYSTEM_PROMPT.indexOf('YOUR TASK:'), INTERWEAVING_SYSTEM_PROMPT.indexOf('INTERWEAVING PRINCIPLES:')
+      );
+      expect(task).not.toMatch(/compulsive|readability|callbacks?/i);
+      expect(task).toMatch(/shared characters/);
+      expect(task).toMatch(/bridges/);
+      expect(task).toMatch(/where the threads can meet \(C16\)/);
+      expect(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT).toContain(
+        'For each arc provided, identify how it connects to other arcs to create compulsive readability through callbacks and bridges.'
+      );
+    });
+
+    it('the callbackSeeds placeholder says what the field holds and points at C16, restating none of it', () => {
+      const state = journalistState();
+      const prompt = (theme) => buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, theme);
+      const journalist = prompt('journalist');
+      const format = journalist.slice(journalist.indexOf('## OUTPUT FORMAT'), journalist.indexOf('## CRAFT GUIDANCE'));
+      const [, placeholder] = format.match(/"callbackSeeds": \["([^"]*)"\]/);
+      expect(placeholder).toMatch(/callback seed/);
+      expect(placeholder).toMatch(/\bC16\b/);
+      expect(placeholder).not.toMatch(PAYOFF_WORDS);
+      expect(prompt('detective')).toContain('"callbackSeeds": ["Detail that can pay off later"]');
+    });
+
+    it("keyCallbacks' description says what the field holds and points at C16, in both journalist schemas and the arc rework", async () => {
+      const descriptions = [INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA]
+        .map((schema) => schema.properties.interweavingPlan.properties.keyCallbacks.description);
+      expect(descriptions[0]).toBe(descriptions[1]);
+      expect(descriptions[0]).toMatch(/plants/);
+      expect(descriptions[0]).toMatch(/C16 \(<craft-story>\)/);
+      // It may name where a callback pays off (payoffIn); C16's rule for it stays in C16.
+      expect(descriptions[0]).not.toMatch(/come back|changed later|recontextuali[sz]|aha moment|opportunit|throughline/i);
+      const { prompt } = await arcRework(journalistState(), AUTOMATED);
+      expect(prompt).toContain(`- "keyCallbacks" (a list of {"plantIn", "payoffIn", "detail"}): ${descriptions[0]}\n`);
+      for (const schema of [DETECTIVE_INTERWEAVING_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA]) {
+        expect(schema.properties.interweavingPlan.properties.keyCallbacks.description).toBe('Key callback opportunities across arcs for recontextualization');
+      }
+    });
+  });
+
   describe("the record: the morning timeline in place of the writer's own buried list", () => {
     it('carries the whole view once, with the session config, and no Buried Transactions list', () => {
       const prompt = buildCoreArcSections(journalistState());

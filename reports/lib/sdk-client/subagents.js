@@ -42,12 +42,19 @@ const { WRITER_QUESTIONS_KEY, WRITER_QUESTIONS_PROPERTY } = require('../writer-q
  * as bridges, the convergence role, and C16's plant and payoff ("recontextualized later
  * for aha moments"). Each description now says what its field holds, and the principles
  * carry the meaning.
+ *
+ * Task 4c-fix (4b-fix review minor 3): keyCallbacks' description says what the field
+ * holds, each callback's detail with the arc that plants it and the arc where it pays
+ * off, and points at C16 for the payoff. It said "Key callback opportunities across arcs
+ * for recontextualization", C16's plant and payoff in words of its own, printed beside
+ * the principles in the arc rework.
  */
 const SHARED_CHARACTERS_DESCRIPTION = 'The characters in this arc who also appear in other arcs';
 const CALLBACK_SEEDS_DESCRIPTION = 'The details in this arc that are callback seeds';
 const CONVERGENCE_ROLE_DESCRIPTION = "This arc's convergence role";
 const SUGGESTED_ORDER_DESCRIPTION = 'Arc ids, in the order C16 (<craft-story>) gives the arcs';
 const CONVERGENCE_POINT_DESCRIPTION = "This session's convergence point, as C16 (<craft-story>) describes the convergence";
+const KEY_CALLBACKS_DESCRIPTION = 'The callbacks across arcs, each with its detail, the arc that plants it and the arc where it pays off, as C16 (<craft-story>) describes the payoff';
 
 /**
  * The interweaving principles, the journalist's one text for the fields that bridge the
@@ -84,16 +91,17 @@ const INTERWEAVING_PRINCIPLES = `INTERWEAVING PRINCIPLES:
    - What this arc brings to where the threads can meet (C16)`;
 
 /**
- * The detective's wording for the same five fields, parked with its theme (spec D13).
+ * The detective's wording for the same six fields, parked with its theme (spec D13).
  * The 4b fix batch keeps the two it shared with the journalist, sharedCharacters and
- * callbackSeeds, as they were.
+ * callbackSeeds, as they were, and task 4c-fix keeps keyCallbacks.
  */
 const DETECTIVE_SCHEMA_WORDING = {
   sharedCharacters: 'Characters that appear in this AND other arcs - bridges for transitions',
   callbackSeeds: 'Details in this arc that can be recontextualized later for aha moments',
   convergenceRole: 'How this arc contributes to the convergence point (murder/accusation)',
   suggestedOrder: 'Suggested arc order for maximum interweaving potential',
-  convergencePoint: 'Where all arcs meet (the murder, the accusation, etc.)'
+  convergencePoint: 'Where all arcs meet (the murder, the accusation, etc.)',
+  keyCallbacks: 'Key callback opportunities across arcs for recontextualization'
 };
 
 /**
@@ -198,7 +206,7 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
               detail: { type: 'string' }
             }
           },
-          description: 'Key callback opportunities across arcs for recontextualization'
+          description: KEY_CALLBACKS_DESCRIPTION
         }
       }
     },
@@ -387,11 +395,17 @@ const DETECTIVE_CORE_ARC_SCHEMA = withoutQuestionsField(CORE_ARC_SCHEMA);
  * Phase 3 (brief 3.10): the principles are INTERWEAVING_PRINCIPLES, the one text the arc
  * reworker reads too, and the identity line follows C16 as it now reads: this call
  * finds where the threads can meet, and the outline decides how the thesis lands there.
+ *
+ * Task 4c-fix (4b-fix concern 2): the task says what the call finds, the shared
+ * characters, the bridges and where the threads can meet (C16). It said the arcs connect
+ * "to create compulsive readability through callbacks and bridges", which made callbacks
+ * the engine, where C16 makes the thesis and the convergence the engine and a planted
+ * detail pays off only when it moves the throughline.
  */
 const INTERWEAVING_SYSTEM_PROMPT = `You plan how the arcs of one "About Last Night" session intercut in a NovaNews investigative article, and find where they can meet.
 
 YOUR TASK:
-For each arc provided, identify how it connects to other arcs to create compulsive readability through callbacks and bridges.
+For each arc provided, find its shared characters and its bridges to the other arcs. Across the arcs, find where the threads can meet (C16).
 
 ${INTERWEAVING_PRINCIPLES}
 
@@ -504,7 +518,7 @@ const INTERWEAVING_SCHEMA = {
               detail: { type: 'string' }
             }
           },
-          description: 'Key callback opportunities across arcs for recontextualization'
+          description: KEY_CALLBACKS_DESCRIPTION
         }
       }
     }
@@ -514,9 +528,9 @@ const INTERWEAVING_SCHEMA = {
 
 /**
  * A schema's detective copy: the same schema with the detective's wording for the
- * three fields that place the arcs and the two the interweaving principles cover
- * (DETECTIVE_SCHEMA_WORDING). A deep copy, so a change to the journalist's schema
- * object never reaches it at run time.
+ * three fields that place the arcs, the two the interweaving principles cover and
+ * keyCallbacks (DETECTIVE_SCHEMA_WORDING). A deep copy, so a change to the journalist's
+ * schema object never reaches it at run time.
  *
  * @param {Object} schema - INTERWEAVING_SCHEMA or PLAYER_FOCUS_GUIDED_SCHEMA
  * @returns {Object}
@@ -530,6 +544,7 @@ function withDetectiveWording(schema) {
   interweaving.convergenceRole.description = DETECTIVE_SCHEMA_WORDING.convergenceRole;
   copy.properties.interweavingPlan.properties.suggestedOrder.description = DETECTIVE_SCHEMA_WORDING.suggestedOrder;
   copy.properties.interweavingPlan.properties.convergencePoint.description = DETECTIVE_SCHEMA_WORDING.convergencePoint;
+  copy.properties.interweavingPlan.properties.keyCallbacks.description = DETECTIVE_SCHEMA_WORDING.keyCallbacks;
   return copy;
 }
 
