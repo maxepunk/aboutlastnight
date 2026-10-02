@@ -565,7 +565,7 @@ ${content.trim()}
 - Truth criteria (journalist, phase 3): one per group of truth rules (`TRUTH_GROUPS` in `evaluator-nodes.js`), no weight; one scored below `STRUCTURAL_PASS_SCORE` (0.8) sends the output back. `moneyTruth` (T5) asks whether the money runs from the buyer, and reads the timeline and, at the outline and article judges, the writers' FINANCIAL_SUMMARY; the article's `photosTruth` (T13) checks every photo the director kept
 
 **ADVISORY** (warnings only, don't block):
-- `coherence`: journalist, facts that cannot both be true (C3), never arcs that pull against the verdict; detective, a consistent story without contradictions
+- `coherence`: journalist, facts that cannot both be true (no craft item since round 7 rewrote C3), never arcs that pull against the verdict; detective, a consistent story without contradictions
 - `evidenceConfidenceBalance`: Not all speculative
 - `sectionBalance`: an article of about 1,500 words (C4)
 - `convergence` (outline): one convergence near the end, where the thesis lands (C16)
