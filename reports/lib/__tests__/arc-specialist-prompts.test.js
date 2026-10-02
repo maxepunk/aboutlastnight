@@ -731,6 +731,33 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       expect(buildCoreArcPrompt(state)).not.toContain('INTERWEAVING PRINCIPLES');
     });
 
+    // The 4b fix batch (3.10 review minor 4): each point once. The rework's WHAT THIS
+    // REWORK RETURNS printed the schema's field descriptions and then the principles, so
+    // shared characters as bridges and the convergence role were stated twice a few lines
+    // apart, and callbackSeeds' "recontextualized later for aha moments" restated C16's
+    // plant and payoff. The principles carry the meaning; a field's description says what
+    // the field holds.
+    it('the arc rework states each point once: the principles carry the meaning, the field lines say what each field holds', async () => {
+      const { prompt } = await arcRework(journalistState(), AUTOMATED);
+      const addendum = prompt.slice(prompt.indexOf('## WHAT THIS REWORK RETURNS'), prompt.indexOf('## YOUR TASK'));
+      const fields = addendum.slice(0, addendum.indexOf('INTERWEAVING PRINCIPLES:'));
+      expect(fields).toContain('- "sharedCharacters" (a list): The characters in this arc who also appear in other arcs\n');
+      expect(fields).toContain('- "callbackSeeds" (a list): The details in this arc that are callback seeds\n');
+      expect(fields).toContain('- "convergenceRole": This arc\'s convergence role\n');
+      expect(fields).not.toMatch(/bridges? for transitions|recontextuali[sz]ed later|aha moments|brings to the convergence/);
+      expect(count(addendum, 'brings to')).toBe(1);
+    });
+
+    it("the detective's schemas keep today's descriptions for the same fields (D13)", () => {
+      const { DETECTIVE_INTERWEAVING_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
+      for (const schema of [DETECTIVE_INTERWEAVING_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA]) {
+        const fields = (schema.properties.narrativeArcs || schema.properties.arcInterweaving).items.properties.interweaving.properties;
+        expect(fields.sharedCharacters.description).toBe('Characters that appear in this AND other arcs - bridges for transitions');
+        expect(fields.callbackSeeds.description).toBe('Details in this arc that can be recontextualized later for aha moments');
+        expect(fields.convergenceRole.description).toBe('How this arc contributes to the convergence point (murder/accusation)');
+      }
+    });
+
     it("the detective keeps its interweaving prompt and its rework's addendum (D13)", async () => {
       expect(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT).not.toContain(INTERWEAVING_PRINCIPLES);
       expect(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT).toContain('Example: "Vic\'s confident smile" planted early');

@@ -35,8 +35,17 @@ const { WRITER_QUESTIONS_KEY, WRITER_QUESTIONS_PROPERTY } = require('../writer-q
  * C16, in <craft-story> since task 3.8, states the order (TH2) and the convergence with
  * their reason, and both calls that fill these fields read it, so a description names
  * the rule and restates none of it (spec section 8: each rule appears once).
+ *
+ * The 4b fix batch (3.10 review minor 4): the same for the fields the interweaving
+ * principles cover. The arc rework prints the field descriptions and then
+ * INTERWEAVING_PRINCIPLES, and the descriptions restated three points: shared characters
+ * as bridges, the convergence role, and C16's plant and payoff ("recontextualized later
+ * for aha moments"). Each description now says what its field holds, and the principles
+ * carry the meaning.
  */
-const CONVERGENCE_ROLE_DESCRIPTION = 'What this arc brings to the convergence point';
+const SHARED_CHARACTERS_DESCRIPTION = 'The characters in this arc who also appear in other arcs';
+const CALLBACK_SEEDS_DESCRIPTION = 'The details in this arc that are callback seeds';
+const CONVERGENCE_ROLE_DESCRIPTION = "This arc's convergence role";
 const SUGGESTED_ORDER_DESCRIPTION = 'Arc ids, in the order C16 (<craft-story>) gives the arcs';
 const CONVERGENCE_POINT_DESCRIPTION = "This session's convergence point, as C16 (<craft-story>) describes the convergence";
 
@@ -75,9 +84,13 @@ const INTERWEAVING_PRINCIPLES = `INTERWEAVING PRINCIPLES:
    - What this arc brings to where the threads can meet (C16)`;
 
 /**
- * The detective's wording for the same three fields, parked with its theme (spec D13).
+ * The detective's wording for the same five fields, parked with its theme (spec D13).
+ * The 4b fix batch keeps the two it shared with the journalist, sharedCharacters and
+ * callbackSeeds, as they were.
  */
 const DETECTIVE_SCHEMA_WORDING = {
+  sharedCharacters: 'Characters that appear in this AND other arcs - bridges for transitions',
+  callbackSeeds: 'Details in this arc that can be recontextualized later for aha moments',
   convergenceRole: 'How this arc contributes to the convergence point (murder/accusation)',
   suggestedOrder: 'Suggested arc order for maximum interweaving potential',
   convergencePoint: 'Where all arcs meet (the murder, the accusation, etc.)'
@@ -129,7 +142,7 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
               sharedCharacters: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Characters that appear in this AND other arcs - bridges for transitions'
+                description: SHARED_CHARACTERS_DESCRIPTION
               },
               bridgeOpportunities: {
                 type: 'array',
@@ -146,7 +159,7 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
               callbackSeeds: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Details in this arc that can be recontextualized later for aha moments'
+                description: CALLBACK_SEEDS_DESCRIPTION
               },
               convergenceRole: {
                 type: 'string',
@@ -440,7 +453,7 @@ const INTERWEAVING_SCHEMA = {
               sharedCharacters: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Characters that appear in this AND other arcs - bridges for transitions'
+                description: SHARED_CHARACTERS_DESCRIPTION
               },
               bridgeOpportunities: {
                 type: 'array',
@@ -457,7 +470,7 @@ const INTERWEAVING_SCHEMA = {
               callbackSeeds: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Details in this arc that can be recontextualized later for aha moments'
+                description: CALLBACK_SEEDS_DESCRIPTION
               },
               convergenceRole: {
                 type: 'string',
@@ -501,8 +514,9 @@ const INTERWEAVING_SCHEMA = {
 
 /**
  * A schema's detective copy: the same schema with the detective's wording for the
- * three fields that place the arcs (DETECTIVE_SCHEMA_WORDING). A deep copy, so a
- * change to the journalist's schema object never reaches it at run time.
+ * three fields that place the arcs and the two the interweaving principles cover
+ * (DETECTIVE_SCHEMA_WORDING). A deep copy, so a change to the journalist's schema
+ * object never reaches it at run time.
  *
  * @param {Object} schema - INTERWEAVING_SCHEMA or PLAYER_FOCUS_GUIDED_SCHEMA
  * @returns {Object}
@@ -510,7 +524,10 @@ const INTERWEAVING_SCHEMA = {
 function withDetectiveWording(schema) {
   const copy = withoutQuestionsField(schema);
   const arcItems = (copy.properties.narrativeArcs || copy.properties.arcInterweaving).items;
-  arcItems.properties.interweaving.properties.convergenceRole.description = DETECTIVE_SCHEMA_WORDING.convergenceRole;
+  const interweaving = arcItems.properties.interweaving.properties;
+  interweaving.sharedCharacters.description = DETECTIVE_SCHEMA_WORDING.sharedCharacters;
+  interweaving.callbackSeeds.description = DETECTIVE_SCHEMA_WORDING.callbackSeeds;
+  interweaving.convergenceRole.description = DETECTIVE_SCHEMA_WORDING.convergenceRole;
   copy.properties.interweavingPlan.properties.suggestedOrder.description = DETECTIVE_SCHEMA_WORDING.suggestedOrder;
   copy.properties.interweavingPlan.properties.convergencePoint.description = DETECTIVE_SCHEMA_WORDING.convergencePoint;
   return copy;
