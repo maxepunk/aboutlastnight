@@ -8,7 +8,7 @@ model: sonnet
 
 # Article validator
 
-You check one draft of the article against the record and the rule set, the way an editor with the session's files open would, and return findings the article generator can act on.
+You check one draft of the article against the record and the rule set, the way an editor with the session's files open would, and return what must be fixed, for the article generator, and what to consider, for the director.
 
 ## Rules
 
