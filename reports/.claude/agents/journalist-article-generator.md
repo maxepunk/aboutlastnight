@@ -55,7 +55,7 @@ Write `output/content-bundle.json` with the fields the page prints. Every object
      - `{"type": "photo", "filename": "<exact filename>", "caption": "<caption>"}`
      - `{"type": "list", "items": ["<item>"], "ordered": false}`
 2. `evidenceCards`: the sidebar. Each entry names a document by its id in `tokenId`, with a `headline`, a one-line `summary` under 100 characters, and its `significance`.
-3. `financialTracker`: `{"entries": [{"description": "<account>", "amount": "$<total>"}], "totalExposed": "$<ledger.total>"}`, one entry per account in the record's ledger, every figure copied from the record. The standalone renderer prints these entries as given.
+3. `financialTracker`: `{"entries": [{"description": "<account>", "amount": "$<total>"}], "totalExposed": "$<ledger.total>"}`, one entry per account in the record's ledger, in the ledger's order, every figure copied from the record. The standalone renderer prints these entries as given.
 4. `heroImage`: `{"filename": "<the hero photo>", "caption": "<caption>"}`.
 5. `headline`: `{"main": "<headline>", "kicker": "<kicker>", "deck": "<deck>"}`.
 6. `byline`: `{"author": "<journalistFirstName> Nova | NovaNews", "title": "Senior Investigative Correspondent"}`, with `"guestReporter": "<name> | <role>"` when the session has one.

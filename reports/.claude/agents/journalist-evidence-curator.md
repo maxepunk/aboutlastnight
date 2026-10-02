@@ -27,13 +27,13 @@ Copy, never summarise. Every text, name and figure enters the record as its sour
 - **Paper evidence.** Each unlocked item: its `notionId` as its id, its name, `basicType` and owners, and its `description` whole as its text.
 - **Sales.** Each sale enters the record as its time, amount and account, and nothing more: Nova's ledger shows only the sale.
 - **Adjustments.** The first-burial bonus is one event, paid to the account that received it. A transfer is one event between two accounts.
-- **Accounts.** The accounts in the Final Standings, each with its Final Standings total, copied, and its number of sales. `ledger.total` is the sum of the account totals.
+- **Accounts.** Every account with a positive total, largest first, each with its total and its number of sales. An account the Final Standings list takes its Final Standings total, copied. An account they leave out that a sale, the bonus or a transfer reached takes its computed total: its sales, plus the bonus and the transfers it received, less the transfers it sent. `ledger.total` is the sum of the account totals.
 - **The clock.** When the session's first exposure or sale was logged at 5 PM or later, every logged time shows AM for PM, same hour and minute; otherwise every time stays as logged. Only exposures and sales decide this. Record which rule applied in `ledger.clock`.
 - **The timeline.** Every exposure, with the name on its turn-in, and every sale, bonus and transfer, in time order on that clock. Events logged in the same minute sit together under that minute, in no claimed order.
 - **Photos.** Each session photo with the director's names, description and exclusion, and its analysis. The photo `session-config.json` names as the whiteboard stays out of the photo list; its analysis's legible text becomes `whiteboardReading`, labelled as the schema shows.
 - **The session.** The roster with its pronouns, the reporting mode, the guest reporter, the byline's first name and the group statement, from `session-config.json`.
 
-The summary's `questions` carry every question from `orchestrator-parsed.json`, and add these, leaving the figures as the source gives them: a Final Standings total that disagrees with its account's sales, bonus and transfers; an account with a sale that the Final Standings leave out; a roster player with no pronoun.
+The summary's `questions` carry every question from `orchestrator-parsed.json`, and add these, leaving the figures as the source gives them: a Final Standings total that disagrees with its account's sales, bonus and transfers; an account the Final Standings leave out that a sale, the bonus or a transfer reached; a roster player with no pronoun.
 
 ## Output
 
