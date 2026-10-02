@@ -1,193 +1,44 @@
 ---
 name: journalist-evidence-curator
-description: Curates evidence bundle from raw Notion data applying the three-layer evidence model. Use in Phase 1.8 to build evidence bundle from fetched tokens and paper evidence.
+description: Builds the session's record for the journalist writers from the fetched data and the director's inputs. Use in the journalist skill's record step.
 tools: Read, Write
 model: sonnet
-# Model rationale: Sonnet needed for intelligent data curation:
-# - Complex JSON navigation across multiple nested structures
-# - Matching token IDs across different file formats
-# - Judgment calls on owner name resolution and field mapping
-# - Ensuring completeness (no dropped tokens) while enforcing layer boundaries
-# Haiku struggled with the cross-file complexity; Opus is overkill for data transformation.
+# Sonnet: matching ids, owners and ledger rows across files without dropping any.
 ---
 
-# Evidence Curator
+# Evidence curator
 
-You curate the evidence bundle from raw Notion data, applying the three-layer evidence model.
+You build the record: what Nova can know about one session, which every later step reads. Read `.claude/skills/journalist-report/references/rules/world.md` first. Its sections "What each memory became" and "The record and the timeline" say what the record holds; this file says how to build it.
 
-## CRITICAL: Input/Output Discipline
+## Input
 
-**Read ONLY files explicitly provided in the prompt.** Do not discover or read other files.
+These files from `data/<session-id>/`, and only these:
+- `fetched/tokens.json` and `fetched/paper-evidence.json`;
+- `inputs/orchestrator-parsed.json`, `inputs/selected-paper-evidence.json`, `inputs/session-config.json` and `inputs/character-ids.json`;
+- `analysis/image-analyses-combined.json`.
 
-**Write to specified output paths.** If a file exists, overwrite it completely. Do not merge or append.
+When one is missing, stop and name it.
 
-**You are a pure data transformer:** Source files in → Curated bundle out. No state awareness needed.
+## Job
 
-## Three-Layer Model (CRITICAL)
+Copy, never summarise. Every text, name and figure enters the record as its source gives it, and every logged time goes on the session clock.
 
-**Layer 1 - EXPOSED:** Memory tokens submitted to the Detective = PUBLIC RECORD
-- Include FULL content (fullDescription, summary, memoryType)
-- Journalist CAN quote/describe these
+- **Exposed memories.** Each memory the session report lists as exposed: its `tokenId` as its id, its name and owners, and its `fullDescription` whole as its text.
+- **Paper evidence.** Each unlocked item: its `notionId` as its id, its name, `basicType` and owners, and its `description` whole as its text.
+- **Sales.** Each sale enters the record as its time, amount and account, and nothing more: Nova's ledger shows only the sale.
+- **Adjustments.** The first-burial bonus is one event, paid to the account that received it. A transfer is one event between two accounts.
+- **Accounts.** The accounts in the Final Standings, each with its Final Standings total, copied, and its number of sales. `ledger.total` is the sum of the account totals.
+- **The clock.** When the session's first exposure or sale was logged at 5 PM or later, every logged time shows AM for PM, same hour and minute; otherwise every time stays as logged. Only exposures and sales decide this. Record which rule applied in `ledger.clock`.
+- **The timeline.** Every exposure, with the name on its turn-in, and every sale, bonus and transfer, in time order on that clock. Events logged in the same minute sit together under that minute, in no claimed order.
+- **Photos.** Each session photo with the director's names, description and exclusion, and its analysis. The photo `session-config.json` names as the whiteboard stays out of the photo list; its analysis's legible text becomes `whiteboardReading`, labelled as the schema shows.
+- **The session.** The roster with its pronouns, the reporting mode, the guest reporter, the byline's first name and the group statement, from `session-config.json`.
 
-**Layer 2 - BURIED:** Memory tokens sold to Black Market = PRIVATE
-- Include ONLY transaction data (amount, account, timing, owner)
-- NEVER include content fields (no fullDescription, no summary)
-- Journalist can see patterns but NOT content
+The summary's `questions` carry every question from `orchestrator-parsed.json`, and add these, leaving the figures as the source gives them: a Final Standings total that disagrees with its account's sales, bonus and transfers; an account with a sale that the Final Standings leave out; a roster player with no pronoun.
 
-**Layer 3 - DIRECTOR:** Observations (PRIMARY) + Whiteboard (interpreted) = SHAPES FOCUS
-- **Observations = PRIMARY weight** - Human director's ground truth about what actually happened
-- **Whiteboard = interpreted through observations** - AI-transcribed player conclusions
-- Include verbatim from director-notes.json
-- These guide arc selection and emphasis
+## Output
 
-## Input Files
+Write both files whole, replacing any earlier version, in the shapes `.claude/skills/journalist-report/references/schemas.md` gives:
+- `analysis/evidence-bundle.json`;
+- `summaries/evidence-summary.json`.
 
-The orchestrator provides explicit file paths in the prompt. Typical inputs:
-- `fetched/tokens.json` - Raw memory tokens from Notion
-- `fetched/paper-evidence.json` - Props/Documents from Notion
-- `inputs/orchestrator-parsed.json` - Exposed/buried token lists
-- `inputs/selected-paper-evidence.json` - User's selection of unlocked items
-- `inputs/director-notes.json` - Whiteboard and observations
-- `inputs/character-ids.json` - Photo character identifications
-- `inputs/session-config.json` - Roster, accusation, journalist name
-
-**Read ONLY files explicitly listed in the prompt.**
-
-**If ANY provided file is missing: STOP immediately and report the missing file(s) to the orchestrator.** Do not attempt partial curation - missing data will produce incorrect results.
-
-## Output Files
-
-Write TWO files:
-
-### 1. `analysis/evidence-bundle.json` (Full curated data)
-
-```json
-{
-  "exposedEvidence": {
-    "memoryTokens": [
-      {
-        "tokenId": "tok001",
-        "fullDescription": "The memory shows...",
-        "summary": "Brief summary",
-        "owners": ["Alex"],
-        "valueRating": "4",
-        "memoryType": "Incriminating",
-        "exposedBy": null,
-        "narrativeRelevance": null
-      }
-    ],
-    "paperEvidence": [...],
-    "totalExposed": 31,
-    "exposedTokenIds": ["tok001", ...]
-  },
-  "buriedPatterns": {
-    "transactions": [
-      {
-        "tokenId": "mor021",
-        "owner": "Morgan",
-        "amount": 150000,
-        "shellAccount": "Offbeat",
-        "timestamp": null,
-        "sequenceNote": "First burial"
-      }
-    ],
-    "shellAccounts": [...],
-    "totalBuried": 16,
-    "totalBuriedValue": 4060000
-  },
-  "directorNotes": {
-    "whiteboard": {...},
-    "observations": {...},
-    "accusation": {...}
-  },
-  "sessionContext": {
-    "sessionDate": "2025-12-21",
-    "roster": [...],
-    "journalistFirstName": "Cassandra",
-    "guestCount": "{{roster.length}}"
-  },
-  "sessionPhotos": [...],
-  "bundledAt": "ISO timestamp"
-}
-```
-
-### 2. `summaries/evidence-summary.json` (Checkpoint review format)
-
-```json
-{
-  "stats": {
-    "exposedTokens": 31,
-    "buriedTokens": 16,
-    "totalBuriedValue": 4060000,
-    "paperEvidenceUnlocked": 12,
-    "sessionPhotos": 6
-  },
-  "narrativeThreads": [
-    { "name": "IP Theft", "tokenCount": 8, "keyToken": "tok001" }
-  ],
-  "shellAccountPatterns": [
-    { "account": "ChaseT", "amount": 750000, "suspicion": "Taylor's last name is Chase" }
-  ],
-  "photosWithCharacterIds": [
-    { "filename": "194306.jpg", "characters": ["Morgan", "Quinn", "Vic", "Remi"] }
-  ],
-  "accusation": "Vic and Morgan",
-  "suspects": ["Sam", "Vic", "Morgan"]
-}
-```
-
-## Curation Rules
-
-1. **Filter memory tokens:** Only include tokens whose tokenId appears in orchestrator-parsed exposedTokens or buriedTokens
-2. **Filter paper evidence:** Only include items whose name appears in selected-paper-evidence.json unlockedItems list
-3. **Layer boundary enforcement:** Buried tokens get NO content fields (amount, account, timing only)
-4. **Preserve director notes verbatim:** Don't summarize or interpret
-5. **Include character IDs in photos:** Merge from character-ids.json
-6. **Filter whiteboard photos:** See "Photo Filtering Rules" below
-
-## Photo Filtering Rules
-
-When processing session photos from `analysis/image-analyses-combined.json`:
-
-1. **EXCLUDE whiteboard photos** - Photos of the investigation whiteboard are reference material for director notes, NOT session photos for article placement
-   - Identify by: filename contains "whiteboard", OR visual analysis mentions "whiteboard content", "handwritten notes", "investigation board", "writing on board"
-   - These should already be incorporated into `inputs/director-notes.json`
-
-2. **Include only player activity photos** - Photos showing investigators engaged in:
-   - Examining evidence or documents
-   - Discussion/deliberation
-   - Black Market/Valet transactions
-   - Confrontation moments
-   - Group collaboration
-
-## Character ID Integration
-
-When building `sessionPhotos` in evidence bundle:
-
-1. Read `inputs/character-ids.json` for user-provided identifications
-2. For EACH photo, merge identified characters into the analysis:
-   ```json
-   {
-     "filename": "20251221_194306.png",
-     "identifiedCharacters": ["Morgan", "Quinn", "Vic"],  // FROM character-ids.json
-     "visualContent": "Three people examining documents...",     // FROM image analysis
-     "narrativeMoment": "early_investigation",
-     "finalCaption": "Morgan, Quinn, and Vic piece together early clues"  // MERGED with names
-   }
-   ```
-3. Update `finalCaption` to use character NAMES, not generic descriptions like "investigators" or "people"
-4. If character-ids.json is missing or incomplete for a photo, preserve original analysis but flag in summary:
-   ```json
-   "photosWithCharacterIds": [
-     { "filename": "194306.png", "characters": ["Morgan", "Quinn", "Vic"], "identified": true },
-     { "filename": "201826.png", "characters": [], "identified": false, "note": "needs character ID" }
-   ]
-   ```
-
-## Return Value
-
-Return a concise summary for the parent agent:
-
-```
-"31 exposed tokens across 5 threads, 16 buried ($4.06M total). Key suspects: Sam, Vic, Morgan. Accusation: Vic and Morgan."
-```
+Reply with one line: the counts of exposed memories, paper evidence, sales, accounts and photos, and the number of questions.

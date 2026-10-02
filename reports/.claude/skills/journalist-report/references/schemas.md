@@ -1,691 +1,209 @@
-# Data Schemas
+# File shapes
 
-JSON structure definitions for all intermediate pipeline outputs.
+The shapes of the files the journalist skill's steps pass to one another, under `data/<session-id>/`. Angle brackets hold placeholders, and `a | b` lists the allowed values. The inputs and the record keep every text, name and figure as their source gives it; the record puts logged times on the session clock.
 
-> **Note:** These schemas show example data structures. For JSON Schema validation definitions, see `lib/schemas/*.schema.json`.
+What the article says, and how, is the rule set's (`references/rules/`). Two files take their shape from JSON schemas instead of this page:
+- `analysis/article-outline.json`: `lib/schemas/outline.schema.json`;
+- `output/content-bundle.json`: `lib/schemas/content-bundle.schema.json`, which `scripts/assemble-article.js` validates.
 
-## Phase 1: Data Gathering Outputs
+A **document** is any item of the record, an exposed memory or a piece of paper evidence, named by its `id`.
 
-### 1.2 Orchestrator Parsed Data
+A **question** for the director, wherever a file carries one:
 
-```javascript
+```
+{"about": "<a player, a pronoun or a ledger line>", "question": "<the question>"}
+```
+
+## Inputs
+
+### inputs/session-config.json
+
+```
 {
-  exposed_tokens: ["jam001", "tok001", ...],  // Token IDs brought to Detective
-  buried_tokens: [
-    { token_id: "mor021", amount: 150000, shell_account: "Offbeat" },
-    ...
-  ],
-  shell_accounts: [
-    { name: "Gorlan", total: 1125000, token_count: 5, includes_bonus: true },
-    ...
-  ],
-  session_timestamps: {
-    first_exposure: "...",
-    first_burial: "...",
-    final_call: "..."
-  }
+  "sessionId": "<MMDDYY>",
+  "roster": [{"name": "<the character's first name>", "pronouns": "<as the director gives them>"}],
+  "reportingMode": "on-site | remote",
+  "journalistFirstName": "<first name>",
+  "guestReporter": {"name": "<name>", "role": "<role>"} | null,
+  "accusationRaw": "<the group statement>",
+  "whiteboardPhoto": "<filename> | null"
 }
 ```
 
-**Shell Account Calculation:**
-- Base amount = sum of individual token sale prices
-- First-token bonus = +$50,000 for FIRST token to each account
-- Total = base + bonus
+### inputs/director-notes.json
 
-### 1.6 Image Analysis Output (Per Image)
+The director's words, in one place: the notes given at intake, and every note given at a stop.
 
-```javascript
+```
 {
-  filename: "20251221_194306.jpg",
-  source: "session_photo",  // or "notion_document"
-  visual_content: "Group of 4-5 people huddled on couch examining documents...",
-  narrative_moment: "early_investigation",  // early_investigation|mid_session|transaction|deliberation|accusation
-  suggested_caption: "The investigation begins: partygoers piece together the first clues",
-  relevant_arcs: ["collaborative_investigation"],
-  placement_notes: "Would work well in THE STORY opening or LEDE"
+  "notes": "<the director's notes, the epilogue included>",
+  "stopNotes": [{"stop": "record | arcs | outline | article", "kind": "approval | send-back", "text": "<the director's note>"}]
 }
 ```
 
-### 1.7 Preprocessed Evidence Bundle
+### inputs/orchestrator-parsed.json
 
-Universal schema for batch-summarized evidence items before curation. See `lib/schemas/preprocessed-evidence.schema.json` for validation schema.
+The session report's rows, figures and times as written.
 
-```javascript
+```
 {
-  items: [{
-    id: "notion-page-id",
-    sourceType: "memory-token",  // or "paper-evidence"
-    originalType: "Memory Token Video",  // or "Prop", "Document"
-    summary: "Alex's algorithm presentation to NeurAI board",  // max 150 chars
-    significance: "critical",  // critical|supporting|contextual|background
-    characterRefs: ["Alex", "Remi"],
-    ownerLogline: "Tech genius whose algorithm was stolen",
-    timelineRef: "2009-2010",
-    timelineContext: {
-      name: "Stanford Years",
-      year: "2009",
-      period: "Algorithm Development"
-    },
-    narrativeRelevance: true,
-    tags: ["financial", "relationship", "ip-theft"],
-    groupCluster: "Marcus-Vic dealings",
-    sfFields: { /* structured data from SF_ fields */ }
+  "exposures": [{"memoryId": "<id>", "time": "<as logged>", "turnedIn": "anonymous | named: <name>"}],
+  "sales": [{"time": "<as logged>", "amount": <number>, "account": "<account>"}],
+  "adjustments": [{"kind": "bonus | transfer", "time": "<as logged>", "amount": <number>, "from": "<account> | null", "to": "<account>"}],
+  "finalStandings": [{"account": "<account>", "total": <number>}],
+  "questions": [<question>]
+}
+```
+
+### inputs/selected-paper-evidence.json
+
+```
+{"unlockedItems": ["<item name>"]}
+```
+
+### inputs/character-ids.json
+
+```
+{"photos": [{"filename": "<file>", "characters": ["<name>"], "description": "<the director's description>", "excluded": false}]}
+```
+
+## Photo analysis
+
+One per session photo, the image analyzer's reply; `analysis/image-analyses-combined.json` is the list of them.
+
+```
+{
+  "filename": "<file>",
+  "visualContent": "<the setting, the objects and what is happening>",
+  "people": [{"description": "<what tells this person apart in the frame>", "action": "<what they are doing>"}],
+  "legibleText": "<text readable in the photo, as written> | null",
+  "quality": "<blur, lighting or obstruction that limits use> | null"
+}
+```
+
+## The record
+
+### analysis/evidence-bundle.json
+
+```
+{
+  "sessionContext": {"sessionId", "roster", "reportingMode", "journalistFirstName", "guestReporter"},
+  "verdict": "<the group statement>",
+  "exposedMemories": [{"id": "<tokenId>", "name": "<name>", "owners": ["<character>"], "text": "<fullDescription, whole>"}],
+  "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched>", "owners": ["<character>"], "text": "<description, whole>"}],
+  "ledger": {
+    "clock": "as logged | evening session: PM times shown as AM",
+    "accounts": [{"name": "<account>", "total": <number>, "sales": <number>}],
+    "total": <number>
+  },
+  "timeline": [
+    {"minute": "<hh:mm AM|PM>", "events": [
+      {"kind": "exposure", "memoryId": "<id>", "turnedIn": "anonymous | named: <name>"},
+      {"kind": "sale", "amount": <number>, "account": "<account>"},
+      {"kind": "bonus", "amount": <number>, "account": "<account>"},
+      {"kind": "transfer", "amount": <number>, "from": "<account>", "to": "<account>"}
+    ]}
+  ],
+  "whiteboardReading": {"label": "A model's reading of the whiteboard photo: the room's working notes, context only", "text": "<legible text>"} | null,
+  "photos": [{"filename": "<file>", "path": "<local path>", "characters": ["<name>"], "description": "<the director's description>", "excluded": false, "analysis": "<the photo analysis's visualContent>"}],
+  "bundledAt": "<ISO timestamp>"
+}
+```
+
+`ledger.total` is the sum of the account totals.
+
+### summaries/evidence-summary.json
+
+```
+{
+  "counts": {"exposedMemories": <n>, "paperEvidence": <n>, "sales": <n>, "accounts": <n>, "photos": <n>, "photosExcluded": <n>},
+  "exposed": [{"id": "<id>", "owners": ["<character>"], "firstLine": "<the memory's first line>"}],
+  "paperEvidence": [{"id": "<id>", "name": "<name>"}],
+  "accounts": [{"name": "<account>", "total": <number>, "sales": <number>}],
+  "clock": "<as in the ledger>",
+  "verdict": "<the group statement>",
+  "questions": [<question>]
+}
+```
+
+## The arcs
+
+### analysis/arc-analysis.json
+
+```
+{
+  "thesis": "<the proposed thesis>",
+  "narrativeArcs": [{
+    "id": "<arc id>",
+    "title": "<title>",
+    "summary": "<the storyline>",
+    "arcSource": "accusation | whiteboard | observation | discovered",
+    "keyEvidence": ["<document id>"],
+    "characterPlacements": {"<player>": "<what the record shows they did in this arc>"},
+    "evidenceStrength": "strong | moderate | weak | speculative",
+    "caveats": ["<what complicates the arc>"],
+    "unansweredQuestions": ["<what the record leaves open>"],
+    "analysisNotes": {"financial": "<the money lens>", "behavioral": "<the behaviour lens>", "victimization": "<the victimization lens>"},
+    "interweaving": {"sharedCharacters": ["<character>"], "callbackSeeds": ["<a detail to plant early>"], "convergenceRole": "<what this arc brings to the convergence>"}
   }],
-  preprocessedAt: "2025-12-21T20:30:00Z",
-  sessionId: "1221",
-  playerFocus: {
-    primaryInvestigation: "Who killed Marcus?",
-    emotionalHook: "Betrayal among friends",
-    openQuestions: ["What did Vic know?", "Why did Morgan bury those memories?"]
+  "interweavingPlan": {
+    "suggestedOrder": ["<arc id>"],
+    "convergencePoint": "<where the threads meet>",
+    "keyCallbacks": [{"plantIn": "<arc id>", "payoffIn": "<arc id>", "detail": "<the detail>"}]
   },
-  stats: {
-    totalItems: 47,
-    memoryTokenCount: 31,
-    paperEvidenceCount: 16,
-    batchesProcessed: 5,
-    processingTimeMs: 12500,
-    significanceCounts: {
-      critical: 5,
-      supporting: 20,
-      contextual: 15,
-      background: 7
-    }
-  }
+  "heroSuggestion": {"filename": "<file>", "reason": "<why>"},
+  "writerQuestions": [<question>],
+  "userSelections": null | {"selectedArcs": ["<arc id>"], "heroImage": "<filename>"}
 }
 ```
 
-### 1.8 Evidence Bundle (THREE-LAYER MODEL)
+### summaries/arc-summary.json
 
-The master data structure enforcing privacy boundaries through structure.
-
-**CRITICAL:** The bundle structure ENFORCES privacy. Buried token CONTENTS are never included.
-
-```javascript
+```
 {
-  // ═══════════════════════════════════════════════════════════════
-  // LAYER 1: EXPOSED EVIDENCE (Full content reportable)
-  // Memories submitted to Detective = PUBLIC RECORD
-  // Journalist CAN: quote, describe, draw conclusions from content
-  // ═══════════════════════════════════════════════════════════════
-  "exposedEvidence": {
-    "memoryTokens": [
-      {
-        "tokenId": "tok001",
-        "fullDescription": "The memory shows Alex presenting his algorithm...",
-        "summary": "Alex's algorithm presentation",
-        "owners": ["Alex"],
-        "valueRating": "4",
-        "memoryType": "Incriminating",
-        "exposedBy": "Remi",           // WHO brought this to Detective
-        "narrativeRelevance": "IP theft origin story"
-      }
-    ],
-    "paperEvidence": [
-      {
-        "name": "Cease & Desist Letter",
-        "description": "Legal letter from Patchwork Law Firm...",
-        "owners": ["Alex"],
-        "documentImage": {
-          "localPath": "images/notion/patchworklawfirm.png",
-          "analysis": { ... }
-        },
-        "narrativeRelevance": "Legal documentation of IP dispute"
-      }
-    ],
-    "totalExposed": 31,
-    "exposedTokenIds": ["tok001", "tok002", "tok003", ...]
-  },
-
-  // ═══════════════════════════════════════════════════════════════
-  // LAYER 2: BURIED PATTERNS (Observable transactions only)
-  // Memories sold to Black Market = PRIVATE
-  // Journalist CAN: report amounts, timing, accounts, WHO buried
-  // Journalist CANNOT: report what those memories contained
-  // ═══════════════════════════════════════════════════════════════
-  "buriedPatterns": {
-    "transactions": [
-      {
-        "tokenId": "mor021",           // For tracking only, NOT content lookup
-        "owner": "Morgan",             // WHO chose to bury (observable)
-        "amount": 150000,              // $$ paid (observable)
-        "shellAccount": "Offbeat",     // Account name (observable)
-        "timestamp": "10:30 PM",       // When (observable)
-        "sequenceNote": "First burial of the night"
-      }
-      // NOTE: No fullDescription, no summary, no content fields
-    ],
-    "shellAccounts": [
-      {
-        "name": "Gorlan",
-        "total": 1125000,
-        "tokenCount": 5,
-        "includesBonus": true,
-        "suspiciousPattern": null
-      },
-      {
-        "name": "ChaseT",
-        "total": 750000,
-        "tokenCount": 3,
-        "includesBonus": true,
-        "suspiciousPattern": "Taylor's last name is Chase"
-      }
-    ],
-    "totalBuried": 16,
-    "totalBuriedValue": 4060000,
-    "firstBurial": { "timestamp": "10:30 PM", "account": "Offbeat" },
-    "lastBurial": { "timestamp": "11:45 PM", "account": "ChaseT" }
-  },
-
-  // ═══════════════════════════════════════════════════════════════
-  // LAYER 3: DIRECTOR NOTES (Session canon - shapes article focus)
-  // What the group discovered, concluded, and accused
-  // ═══════════════════════════════════════════════════════════════
-  "directorNotes": {
-    "whiteboard": {
-      "knownAttendees": ["Remi", "Taylor", "Sarah", ...],
-      "evidenceConnections": [
-        "Vic + Morgan → 'permanent solution to Marcus's criminal liability'",
-        "NeurAI founded by Stanford Four on stolen IP"
-      ],
-      "factsEstablished": [
-        "Memory tokens return to owners if not purchased",
-        "Stanford Four: Marcus, Quinn, Vic, Morgan"
-      ],
-      "suspects": ["Sam (emphasized)", "Vic", "Morgan"]
-    },
-    "observations": {
-      "behaviorPatterns": [
-        "Taylor and Mel REFUSED to purchase buried memories back",
-        "Kai waited until final minutes, then buried multiple memories"
-      ],
-      "suspiciousCorrelations": ["ChaseT = Taylor Chase?"],
-      "notableMoments": ["Remi NEVER spoke with Blake"]
-    },
-    "accusation": {
-      "accused": "Vic and Morgan",
-      "reasoning": "Group concluded they colluded on 'permanent solution'"
-    }
-  },
-
-  // ═══════════════════════════════════════════════════════════════
-  // SESSION CONTEXT
-  // ═══════════════════════════════════════════════════════════════
-  "sessionContext": {
-    "sessionDate": "2025-12-21",
-    "roster": ["Remi", "Taylor", "Sarah", ...],
-    "journalistFirstName": "Cassandra",
-    "guestCount": "{{roster.length}}"
-  },
-
-  // ═══════════════════════════════════════════════════════════════
-  // VISUAL ASSETS
-  // ═══════════════════════════════════════════════════════════════
-  "sessionPhotos": [
-    {
-      "filename": "20251221_194306.jpg",
-      "localPath": "images/photos/...",
-      "timestamp": "7:43 PM",
-      "identifiedCharacters": ["Morgan", "Quinn", "Vic", "Remi"],
-      "location": "Room 1 Party Space",
-      "narrativeMoment": "early_investigation",
-      "finalCaption": "Morgan, Quinn, Vic, and Remi piece together the first clues"
-    }
-  ],
-
-  "bundledAt": "ISO timestamp"
+  "thesis": "<the proposed thesis>",
+  "arcs": [{"id": "<arc id>", "title": "<title>", "arcSource": "<source>", "evidenceStrength": "<strength>", "summary": "<one line>"}],
+  "heroSuggestion": {"filename": "<file>", "reason": "<why>"},
+  "writerQuestions": [<question>]
 }
 ```
 
-### 1.8.1 Evidence Summary (Checkpoint Review Format)
+`arcs` follows `interweavingPlan.suggestedOrder`.
 
-Written alongside evidence-bundle.json for parent agent checkpoint presentation.
+## The outline
 
-```javascript
+### summaries/outline-summary.json
+
+```
 {
-  "stats": {
-    "exposedTokens": 31,
-    "buriedTokens": 16,
-    "totalBuriedValue": 4060000,
-    "paperEvidenceUnlocked": 12,
-    "sessionPhotos": 6
-  },
-  "narrativeThreads": [
-    { "name": "IP Theft", "tokenCount": 8, "keyToken": "tok001" },
-    { "name": "Funding Conspiracy", "tokenCount": 5, "keyToken": "tok002" }
-  ],
-  "shellAccountPatterns": [
-    { "account": "ChaseT", "amount": 750000, "suspicion": "Taylor's last name is Chase" }
-  ],
-  "photosWithCharacterIds": [
-    { "filename": "194306.jpg", "characters": ["Morgan", "Quinn", "Vic", "Remi"] }
-  ],
-  "accusation": "Vic and Morgan",
-  "suspects": ["Sam", "Vic", "Morgan"]
+  "sections": [{"slot": "lede | theStory | followTheMoney | thePlayers | whatsMissing | closing", "plan": "<one line>"}],
+  "cards": [{"documentId": "<id>", "slot": "<slot>"}],
+  "photos": [{"filename": "<file>", "slot": "<slot>"}],
+  "writerQuestions": [<question>]
 }
 ```
 
----
+`sections` lists the slots the outline fills, in reading order.
 
-## Phase 2: Arc Analysis Output
+## The article
 
-```javascript
+### output/article-metadata.json
+
+```
+{"narratorWords": <n>, "cards": <n>, "photos": <n>, "writerQuestions": [<question>], "generatedAt": "<ISO timestamp>"}
+```
+
+`narratorWords` counts the headline, the deck and the paragraphs.
+
+### Validation result
+
+The article validator's reply.
+
+```
 {
-  narrative_arcs: [
-    {
-      name: "IP Theft Trail",
-      description: "Alex's stolen algorithm forms the foundation of NeurAI",
-      evidence: ["tok001", "Cease & Desist Letter", "Remi <> Alex emails"],
-      strength: 5,                                    // 1-5 scale
-      systemic_angle: "Tech companies built on stolen labor",
-      key_quote: "I'm the one who got screwed over in that deal",
-      supporting_images: [
-        { filename: "patchworklawfirm.png", relevance: "Legal documentation of IP dispute" }
-      ]
-    },
-    {
-      name: "Vic's Double Game",
-      description: "VC playing both sides of competing companies",
-      evidence: ["tok003", "Silicon Valley Business Journal", "tok002"],
-      strength: 4,
-      systemic_angle: "Investor interests over innovation",
-      key_quote: null,
-      supporting_images: []
-    }
-    // ... 5-7 total arcs
-  ],
-
-  image_analysis: {
-    hero_image: {
-      filename: "20251221_205807.jpg",
-      reason: "Captures climactic deliberation at 'BLACKWOOD IS DEAD' whiteboard"
-    },
-    session_photo_placements: [
-      {
-        filename: "20251221_194306.jpg",
-        suggested_section: "the_story",
-        suggested_placement: "opening",
-        caption: "The investigation begins"
-      },
-      {
-        filename: "20251221_202238.jpg",
-        suggested_section: "follow_the_money",
-        suggested_placement: "near financial tracker",
-        caption: "The Valet's Black Market station"
-      }
-    ],
-    document_image_placements: [
-      {
-        filename: "neuraionepager.png",
-        suggested_section: "the_story",
-        use_as: "evidence_card_image"
-      }
-    ]
-  },
-
-  financial_summary: {
-    total_buried: 4060000,
-    largest_account: { name: "Gorlan", amount: 1125000 },
-    suspicious_patterns: ["ChaseT matches Taylor's last name"],
-    first_burial_context: "Offbeat received $150K early in session"
-  },
-
-  buried_analysis: {
-    by_thread: {
-      "Funding": { count: 3, total_value: 900000 },
-      "Lab Experiments": { count: 2, total_value: 575000 }
-    },
-    inference_opportunities: [
-      "Vic's buried memories cost $900K combined - she knew something",
-      "Sam buried 2 memories worth $575K - lab connections?"
-    ]
-  },
-
-  roster_coverage: {
-    featured: ["Alex", "Remi", "Vic", "Morgan"],
-    mentioned: ["Jamie", "Riley", "Sarah"],
-    needs_placement: ["Kai", "Cass", "Quinn", "Mel"]
-  },
-
-  // User selections (saved after checkpoint)
-  user_selections: {
-    selected_arcs: ["IP Theft Trail", "Vic's Double Game", "Morgan's Secret"],
-    excluded_arcs: ["Minor Arc Name"],
-    hero_image_confirmed: "20251221_205807.jpg",
-    photo_preferences: { exclude: [], feature: ["20251221_205807.jpg"] },
-    selected_at: "ISO timestamp"
-  }
+  "passed": <true when mustFix is empty>,
+  "mustFix": [{"rule": "<T1 to T15, or C7 for a missing player>", "text": "<the printed words at fault>", "record": "<what the record shows>", "fix": "<the change>"}],
+  "shouldConsider": [{"rule": "<C1 to C19>", "text": "<the printed words>", "suggestion": "<the change>"}],
+  "narratorWords": {"total": <n>, "bySection": {"<section id>": <n>}}
 }
 ```
-
-### 2.1 Arc Summary (Checkpoint Review Format)
-
-Written alongside arc-analysis.json for parent agent checkpoint presentation.
-
-**CRITICAL:** Arc recommendations must be ordered by PLAYER EMPHASIS (Layer 3), not evidence volume.
-
-```javascript
-{
-  "arcsIdentified": 5,
-  "playerFocusedArcs": [
-    {
-      "name": "Vic + Morgan Collusion",
-      "playerEmphasis": "HIGH",           // HIGH = on whiteboard, tied to accusation
-      "whiteboardMention": true,
-      "evidenceCount": 3
-    },
-    {
-      "name": "IP Theft Trail",
-      "playerEmphasis": "MEDIUM",         // MEDIUM = discussed but not central
-      "whiteboardMention": false,
-      "evidenceCount": 4
-    }
-  ],
-  "recommendedArcs": [
-    "Vic + Morgan Collusion",        // Order by player emphasis, NOT evidence volume
-    "IP Theft Trail",
-    "Burial Conspiracy"
-  ],
-  "heroImageRecommendation": {
-    "filename": "205807.jpg",
-    "reason": "Deliberation at whiteboard"
-  },
-  "rosterGaps": ["Kai", "Cass", "Mel"]
-}
-```
-
----
-
-## Phase 3: Article Outline
-
-The approved structure that Phase 4 generates from.
-
-```javascript
-{
-  lede: {
-    hook: "Marcus is dead. Vic and Morgan accused. [N] people's memories extracted.",
-    key_tension: "Murder mystery + systemic critique",
-    evidence_to_reference: []  // Lede is pure prose, no evidence cards
-  },
-
-  the_story: {
-    arc_sequence: [
-      {
-        name: "IP Theft Trail",
-        paragraphs: 3,
-        evidence_cards: [
-          { token: "tok001", placement: "after paragraph 1" },
-          { paper: "Cease & Desist Letter", placement: "after paragraph 2" }
-        ],
-        inline_photo: {
-          filename: "20251221_194306.jpg",
-          after_paragraph: 2,
-          caption: "Morgan, Quinn, Vic, and Remi piece together clues"
-        },
-        timeline_marker: { text: "As the investigation deepened", placement: "after paragraph 3" }
-      },
-      {
-        name: "Vic's Double Game",
-        paragraphs: 2,
-        evidence_cards: [
-          { token: "tok003", placement: "after paragraph 1" }
-        ],
-        inline_photo: null,
-        timeline_marker: null
-      }
-    ],
-    transitions: ["The money tells the rest of the story."]
-  },
-
-  follow_the_money: {
-    intro_paragraphs: 1,
-    financial_tracker: {
-      accounts: [
-        { name: "Gorlan", amount: 1125000, tokens: 5, annotation: "The largest recipient" },
-        { name: "Dominic", amount: 960000, tokens: 4, annotation: null },
-        { name: "ChaseT", amount: 750000, tokens: 3, annotation: "Taylor's last name is Chase" }
-      ],
-      total: 4060000
-    },
-    inline_photo: {
-      filename: "20251221_202238.jpg",
-      placement: "near financial tracker",
-      caption: "The Valet's table: where memories became currency"
-    },
-    commentary_paragraphs: 1,
-    suspicious_note: "ChaseT - Taylor's last name is Chase"
-  },
-
-  the_players: {
-    who_exposed: {
-      heroes: ["Alex", "Remi", "Jamie"],
-      evaluation_angle: "Why they chose transparency"
-    },
-    who_buried: {
-      names: ["Taylor", "Mel", "Sam"],
-      evaluation_angle: "Understand, don't judge"
-    },
-    pull_quote: {
-      text: "I don't know what was in those gaps. But I know how much someone was willing to pay.",
-      attribution: "Nova"
-    }
-  },
-
-  whats_missing: {
-    buried_categories: [
-      { thread: "Vic's knowledge", count: 2, value: 900000 },
-      { thread: "Lab experiments", count: 2, value: 575000 }
-    ],
-    buried_markers: [
-      { description: "Vic's memories", shell_account: "Gorlan", amount: 900000 },
-      { description: "Sam's lab access", shell_account: "Dominic", amount: 575000 }
-    ],
-    inference_text: "I can tell you the shape of the silence. I can't tell you what's inside it."
-  },
-
-  closing: {
-    systemic_angle: "Memory as commodity - from clicks to conversations to memories",
-    accusation_handling: "Vic and Morgan - the group decided",
-    final_tone: "Urgent, consequential, participatory",
-    optional_pull_quote: "First they wanted your clicks. Then your conversations. Now they want what it felt like to be you."
-  },
-
-  image_placements: {
-    hero_image: {
-      filename: "20251221_205807.jpg",
-      location: "above headline or in lede",
-      caption: "Partygoers gather at the investigation board as the final accusation looms",
-      full_width: true
-    },
-    inline_photos: [
-      {
-        filename: "20251221_194306.jpg",
-        section: "the_story",
-        after_paragraph: 2,
-        caption: "The investigation begins: guests piece together the first clues",
-        size: "medium"  // small, medium, large
-      }
-    ],
-    evidence_card_images: [
-      {
-        filename: "patchworklawfirm.png",
-        evidence_card: "Cease & Desist Letter",
-        treatment: "thumbnail with expand"
-      }
-    ],
-    photo_gallery: null  // or { photos: [...], location: "end of article" }
-  },
-
-  visual_component_count: {
-    evidence_cards: 4,
-    timeline_markers: 2,
-    pull_quotes: 2,
-    buried_markers: 2,
-    financial_tracker: 1,
-    session_photos: 3,
-    document_images: 1
-  },
-
-  // User approval (saved after checkpoint)
-  user_approval: {
-    approved: true,
-    revision_notes: [],
-    approved_at: "ISO timestamp"
-  }
-}
-```
-
-### 3.1 Outline Summary (Checkpoint Review Format)
-
-Written alongside article-outline.json for parent agent checkpoint presentation.
-
-```javascript
-{
-  "sectionSummary": {
-    "lede": "Hook: Marcus dead, Vic+Morgan accused",
-    "theStory": "2 arcs, 5 paragraphs, 3 evidence cards",
-    "followTheMoney": "$4.06M across 6 accounts",
-    "thePlayers": "3 exposed, 3 buried",
-    "whatsMissing": "2 buried markers",
-    "closing": "Systemic critique on memory as commodity"
-  },
-  "visualPlacements": {
-    "heroImage": "205807.jpg (deliberation)",
-    "inlinePhotos": ["194306.jpg (THE STORY)", "202238.jpg (FOLLOW THE MONEY)"],
-    "evidenceCards": 4,
-    "pullQuotes": 2
-  },
-  "arcOrder": ["Vic + Morgan Collusion", "IP Theft Trail"],
-  "rosterCoverage": {
-    "featured": ["Alex", "Remi", "Vic", "Morgan"],
-    "mentioned": ["Taylor", "Mel", "Sam", "Jamie"],
-    "unmentioned": ["Kai", "Cass"]
-  }
-}
-```
-
----
-
-## Phase 5: Validation Results
-
-```javascript
-{
-  passed: true,  // or false if issues exist
-  issues: [
-    {
-      type: "em_dash",           // Issue type
-      line: 47,                  // Line number in HTML
-      text: "Marcus—the founder", // Offending text
-      fix: "Use period: 'Marcus. The founder.'"
-    },
-    {
-      type: "missing_character",
-      character: "Kai",
-      fix: "Add mention in THE PLAYERS section"
-    }
-  ],
-  voice_score: 4,               // 1-5 scale
-  voice_notes: "Strong participatory voice throughout. One passive construction at line 89.",
-  roster_coverage: {
-    featured: ["Alex", "Remi", "Vic"],
-    mentioned: ["Jamie", "Riley"],
-    missing: ["Kai"]
-  },
-  systemic_critique_present: true,
-  blake_handled_correctly: true,
-  validated_at: "ISO timestamp"
-}
-```
-
-**Issue Types:**
-
-| Type | Description |
-|------|-------------|
-| `em_dash` | Em-dash (`—` or `--`) found |
-| `token_language` | "token/tokens" instead of "extracted memory" |
-| `game_mechanics` | Game terms: "Act 3 unlock", "final call", etc. |
-| `vague_attribution` | "from my notes", "sources say" |
-| `missing_character` | Roster member not mentioned anywhere |
-| `passive_voice` | Neutral/detached narration breaking voice |
-| `blake_condemned` | Blake treated as villain (should be suspicious but not condemned) |
-
-**Voice Score Scale:**
-
-| Score | Meaning |
-|-------|---------|
-| 5 | Perfect Nova voice throughout |
-| 4 | Strong with minor lapses |
-| 3 | Acceptable but inconsistent |
-| 2 | Frequent voice breaks |
-| 1 | Wrong voice entirely |
-
-**Passing Criteria:** `passed: true` only if zero critical issues AND voice_score >= 4
-
----
-
-## ContentBundle (Phase 4 Output)
-
-**Authoritative schema:** `lib/schemas/content-bundle.schema.json`
-
-Always read the schema file directly before generating — this document is a
-human-readable summary; the JSON schema is what `TemplateAssembler` validates
-against. The content-block shapes the article prints are listed in the article
-writer's generation instruction (`lib/prompt-builder.js`); what goes in them is the
-rule set's, in `references/rules/`.
-
-**Top-level shape:**
-
-```json
-{
-  "metadata": {
-    "sessionId": "20251221",
-    "theme": "journalist",
-    "generatedAt": "2026-04-20T18:30:00.000Z",
-    "version": "1.0.0",
-    "storyDate": "2027-02-22"
-  },
-  "headline": {
-    "main": "Required primary headline (10-200 chars)",
-    "kicker": "Optional small text above",
-    "deck": "Optional subheadline"
-  },
-  "byline": {
-    "author": "Cassandra Nova",
-    "title": "Senior Investigative Correspondent",
-    "location": "Fremont, CA",
-    "date": "December 21, 2025"
-  },
-  "sections": [ /* see Section shape */ ],
-  "pullQuotes": [ /* verbatim or crystallization */ ],
-  "evidenceCards": [ /* sidebar + inline evidence */ ],
-  "financialTracker": { "entries": [...], "totalExposed": "$4.06M" },
-  "photos": [ /* inline photos */ ],
-  "heroImage": { "filename": "...", "caption": "...", "characters": [...] }
-}
-```
-
-**Section shape (`sections[]`):**
-
-- `id` — unique section identifier (e.g., `"lede"`, `"the-story"`)
-- `type` — one of `narrative`, `evidence-highlight`, `investigation-notes`, `conclusion`, `case-summary`
-- `heading` — optional section heading
-- `content[]` — array of content blocks, each one of:
-  - `paragraph` — `{ type, text }`
-  - `quote` — `{ type, text, attribution }`
-  - `evidence-reference` — `{ type, tokenId, caption }`
-  - `list` — `{ type, ordered, items[] }`
-  - `photo` — `{ type, filename, caption, characters[] }`
-  - `evidence-card` — `{ type, tokenId, headline, content, owner, significance }`
-
-**Pull quote shape (`pullQuotes[]`):**
-
-- `verbatim` — exact quote from evidence, requires `attribution` and `sourceTokenId`
-- `crystallization` — journalist insight, `attribution` MUST be `null`
-
-**Evidence card shape (`evidenceCards[]`):**
-
-- Required: `tokenId`, `headline`
-- Optional: `content` (full quotable text), `summary`, `owner`, `significance` (`critical`/`supporting`/`contextual`), `placement` (`sidebar`/`inline`)
-
-**Validation:** `scripts/assemble-article.js` invokes `TemplateAssembler.assemble()`
-which validates against the schema. Errors name the offending JSON path. Fix the
-bundle and re-run the script.

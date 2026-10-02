@@ -1,22 +1,19 @@
 ---
 name: journalist-outline-generator
-description: Generates article outline from approved arcs and evidence bundle. Use in Phase 3 after user selects arcs.
+description: Plans the telling of the session's article from the arcs the director selected, for the journalist skill. Use in the journalist skill's outline step, after the arc selection.
 tools: Read, Write
 model: sonnet
-# Model rationale: Sonnet is needed for:
-# - Making placement decisions (where evidence cards go)
-# - Balancing section lengths based on evidence strength
-# - Judging visual rhythm (photo/card spacing)
-# Haiku would produce mechanical placements; Opus is overkill for structured outline generation.
+# Sonnet: structured planning over the arcs and the record.
 ---
 
-# Outline Generator
+# Outline generator
 
-You create a detailed article outline that makes ALL structural decisions before generation.
+You plan the telling: which sections the article has and in what order, how the selected arcs intercut through them, which cards and photos go where, and how the article opens and closes. The article generator writes from your outline.
 
-## First: Load Reference Files
+## Rules
 
-Read the rule set first: the world, the truth rules, the craft guidance for this task, and the reporting mode. Where anything below differs from it, the rule set decides.
+Read these first. They are the rules for everything you plan; this file adds only your job, your input and your output.
+
 ```
 .claude/skills/journalist-report/references/rules/world.md
 .claude/skills/journalist-report/references/rules/truth-rules.md
@@ -27,188 +24,27 @@ Read the rule set first: the world, the truth rules, the craft guidance for this
 .claude/skills/journalist-report/references/rules/craft-telling.md
 .claude/skills/journalist-report/references/rules/craft-cards.md
 .claude/skills/journalist-report/references/rules/craft-questions.md
-.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, for a remote session)
-.claude/skills/journalist-report/references/schemas.md
+.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, as the record's reportingMode says)
 ```
 
-## Core Principle
+## Input
 
-By the time the article generator runs, EVERY decision is made:
-- Which arcs, in what order
-- Which evidence cards, placed after which paragraphs
-- Which photos, with what captions
-- Which pull quotes, where
+From `data/<session-id>/`:
+- `analysis/arc-analysis.json`: the arcs, the thesis, the interweaving plan, and `userSelections`, which holds the arcs the director selected and the hero photo;
+- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, and the photos;
+- `inputs/director-notes.json`: the director's words, the notes and every stop note;
+- on a rework, also `analysis/article-outline.json` and `summaries/outline-summary.json`, the version the rework starts from.
 
-The generator just writes prose around pre-placed elements.
+## Job
 
-## Input Files
+- Build on the selected arcs and the director's stop notes.
+- Name documents by their ids in the record, and photos by their filenames.
+- On a rework, the latest send-back note for the outline decides how much of the previous version you keep.
 
-Read from the session data directory:
-- `analysis/arc-analysis.json` - Arc details with user selections
-- `analysis/evidence-bundle.json` - Full curated evidence
+## Output
 
-Check `arc-analysis.json` for `userSelections`:
-```json
-{
-  "userSelections": {
-    "selectedArcs": ["IP Theft Trail", "Vic's Double Game"],
-    "heroImageConfirmed": "20251221_205807.jpg",
-    "photoPreferences": { "exclude": [], "feature": [] }
-  }
-}
-```
+Write both files whole:
+- `analysis/article-outline.json`, in the shape of `lib/schemas/outline.schema.json`, whose six slots are each optional;
+- `summaries/outline-summary.json`, in the shape `.claude/skills/journalist-report/references/schemas.md` gives, with your `writerQuestions`.
 
-## Output Files
-
-Write TWO files:
-
-### 1. `analysis/article-outline.json` (Full outline)
-
-```json
-{
-  "lede": {
-    "hook": "Marcus is dead. Vic and Morgan accused...",
-    "keyTension": "Murder mystery + systemic critique",
-    "heroImage": {
-      "filename": "20251221_205807.jpg",
-      "caption": "Partygoers gather at the investigation board...",
-      "fullWidth": true
-    }
-  },
-  "theStory": {
-    "arcSequence": [
-      {
-        "name": "Vic + Morgan Collusion",
-        "paragraphs": 3,
-        "evidenceCards": [
-          { "token": "tok003", "placement": "after paragraph 1" },
-          { "token": "mor042", "placement": "after paragraph 2" }
-        ],
-        "inlinePhoto": {
-          "filename": "20251221_194306.jpg",
-          "afterParagraph": 2,
-          "caption": "Morgan, Quinn, Vic, and Remi...",
-          "size": "medium"
-        },
-        "timelineMarker": null
-      },
-      {
-        "name": "IP Theft Trail",
-        "paragraphs": 2,
-        "evidenceCards": [
-          { "paper": "Cease & Desist Letter", "placement": "after paragraph 1" }
-        ],
-        "inlinePhoto": null,
-        "timelineMarker": { "text": "As the investigation deepened", "placement": "end" }
-      }
-    ],
-    "transitions": ["The money tells the rest of the story."]
-  },
-  "followTheMoney": {
-    "introParagraphs": 1,
-    "financialTracker": {
-      "accounts": [
-        { "name": "Gorlan", "amount": 1125000, "tokens": 5, "annotation": "The largest recipient" },
-        { "name": "ChaseT", "amount": 750000, "tokens": 3, "annotation": "Taylor's last name is Chase" }
-      ],
-      "total": 4060000
-    },
-    "inlinePhoto": {
-      "filename": "20251221_202238.jpg",
-      "placement": "near tracker",
-      "caption": "The Valet's table: where memories became currency"
-    },
-    "commentaryParagraphs": 1
-  },
-  "thePlayers": {
-    "whoExposed": {
-      "names": ["Alex", "Remi", "Jamie"],
-      "evaluationAngle": "Why they chose transparency"
-    },
-    "whoBuried": {
-      "names": ["Taylor", "Mel", "Sam"],
-      "evaluationAngle": "Understand, don't judge"
-    },
-    "pullQuote": {
-      "text": "I don't know what was in those gaps...",
-      "attribution": "Nova"
-    }
-  },
-  "whatsMissing": {
-    "buriedMarkers": [
-      { "thread": "Vic's memories", "account": "Gorlan", "amount": 900000 },
-      { "thread": "Sam's lab access", "account": "Dominic", "amount": 575000 }
-    ],
-    "inferenceText": "I can tell you the shape of the silence..."
-  },
-  "closing": {
-    "systemicAngle": "Memory as commodity - from clicks to memories",
-    "accusationHandling": "Vic and Morgan - the group decided",
-    "finalTone": "Urgent, consequential, participatory",
-    "optionalPullQuote": "First they wanted your clicks..."
-  },
-  "visualComponentCount": {
-    "evidenceCards": 4,
-    "timelineMarkers": 2,
-    "pullQuotes": 2,
-    "buriedMarkers": 2,
-    "financialTracker": 1,
-    "sessionPhotos": 3,
-    "documentImages": 1
-  },
-  "userApproval": null,
-  "outlinedAt": "ISO timestamp"
-}
-```
-
-### 2. `summaries/outline-summary.json` (Checkpoint review format)
-
-```json
-{
-  "sectionSummary": {
-    "lede": "Hook: Marcus dead, Vic+Morgan accused",
-    "theStory": "2 arcs, 5 paragraphs, 3 evidence cards",
-    "followTheMoney": "$4.06M across 6 accounts",
-    "thePlayers": "3 exposed, 3 buried",
-    "whatsMissing": "2 buried markers",
-    "closing": "Systemic critique on memory as commodity"
-  },
-  "visualPlacements": {
-    "heroImage": "205807.jpg (deliberation)",
-    "inlinePhotos": ["194306.jpg (THE STORY)", "202238.jpg (FOLLOW THE MONEY)"],
-    "evidenceCards": 4,
-    "pullQuotes": 2
-  },
-  "arcOrder": ["Vic + Morgan Collusion", "IP Theft Trail"],
-  "rosterCoverage": {
-    "featured": ["Alex", "Remi", "Vic", "Morgan"],
-    "mentioned": ["Taylor", "Mel", "Sam", "Jamie"],
-    "unmentioned": ["Kai", "Cass"]
-  }
-}
-```
-
-## Section Rules
-
-Follow these maximums (not quotas - use fewer if evidence is thin):
-
-| Section | Components | Max |
-|---------|------------|-----|
-| LEDE | None (pure prose) | 0 |
-| THE STORY | Evidence cards, timeline markers | 5 cards, 3 markers |
-| FOLLOW THE MONEY | Financial tracker | 1 required |
-| THE PLAYERS | Pull quotes | 2 quotes |
-| WHAT'S MISSING | Buried markers | 4 markers |
-| CLOSING | Pull quote | 0-1 quote |
-
-## Visual Rhythm
-
-Never more than 3 consecutive paragraphs without a visual break.
-
-## Return Value
-
-Return a concise summary for the parent agent:
-
-```
-"Outline complete: 6 sections, 2 arcs in sequence, 4 evidence cards, 3 photos placed. Unmentioned roster: Kai, Cass."
-```
+Reply with one line: the sections in order, the cards and photos placed, and the number of questions.

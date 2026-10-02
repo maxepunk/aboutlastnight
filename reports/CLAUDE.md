@@ -672,10 +672,8 @@ See `PIPELINE_DEEP_DIVE.md#common-debugging-scenarios` for detailed debugging gu
 **Location:** `.claude/skills/journalist-report/`
 **Purpose:** Article generation via Claude Code without server
 
-**Custom Subagents:** image-analyzer, evidence-curator, arc-analyzer, outline-generator, article-generator, article-validator
-**Reference Files:** the rule set in `references/rules/` (`world.md`, `truth-rules.md`, the `craft-*.md` files and the two mode files), and schemas.md
-
-See `.claude/agents/` directory for complete subagent definitions.
+**Custom Subagents:** image-analyzer, evidence-curator, arc-analyzer, outline-generator, article-generator, article-validator (`.claude/agents/journalist-*.md`), exactly the six SKILL.md starts. Each definition holds its job, inputs and outputs and lists the rule files it reads; every writing rule is the rule set's. The three specialists (financial, behavioral, victimization), which nothing started, were retired in phase 3.
+**Reference Files:** the rule set in `references/rules/` (`world.md`, `truth-rules.md`, the `craft-*.md` files and the two mode files), and `references/schemas.md`, the shapes of the files the steps pass to one another (the outline and the bundle take theirs from `lib/schemas/`). `__tests__/unit/journalist-skill-path.test.js` holds SKILL.md, schemas.md and the agents to the rule files' lint, and the agents folder to the agents SKILL.md starts.
 
 **Rendering:** Article generation emits a `ContentBundle` JSON and renders HTML via
 `scripts/assemble-article.js`, which uses the shared `TemplateAssembler` (same as

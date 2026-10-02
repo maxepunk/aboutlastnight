@@ -92,13 +92,13 @@ describe('the retired journalist craft files', () => {
    * its pipeline counterpart reads, so an agent's list cannot fall behind a change to
    * RULE_SET_CALLS. Every call reads the world and the truth rules, then its craft files
    * in RULE_SET_CALLS order, then the reporting-mode block (spec section 8). The evidence
-   * curator and the image analyzer have counterparts that read no rule file.
+   * curator and the image analyzer write no story text, so they read the world file
+   * alone, for the game's facts: what each memory became, and what the photos show.
+   * The three specialists left the skill path when the standalone path was rewritten
+   * (57a73c2): nothing started them.
    */
   const AGENT_CALLS = {
     'journalist-arc-analyzer.md': 'arc',
-    'journalist-financial-specialist.md': 'arc',
-    'journalist-behavioral-specialist.md': 'arc',
-    'journalist-victimization-specialist.md': 'arc',
     'journalist-outline-generator.md': 'outline',
     'journalist-article-generator.md': 'article',
     'journalist-article-validator.md': 'article',
@@ -113,7 +113,7 @@ describe('the retired journalist craft files', () => {
   it.each(Object.entries(AGENT_CALLS))('%s lists exactly the rule files the %s call reads', (agent, call) => {
     const text = fs.readFileSync(path.join(REPO, '.claude', 'agents', agent), 'utf8');
     const listed = [...text.matchAll(/references\/rules\/([a-z-]+)\.md/g)].map((match) => match[1]);
-    expect(listed).toEqual(call ? ['world', 'truth-rules', ...RULE_SET_CALLS[call], 'mode-on-site'] : []);
+    expect(listed).toEqual(call ? ['world', 'truth-rules', ...RULE_SET_CALLS[call], 'mode-on-site'] : ['world']);
     if (call) expect(text).toContain('mode-remote.md');
   });
 });
