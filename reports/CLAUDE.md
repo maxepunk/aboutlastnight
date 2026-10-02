@@ -47,6 +47,7 @@ node scripts/e2e-walkthrough.js --help                   # Full CLI options
 node scripts/e2e-walkthrough.js --session 1225 --step    # View current checkpoint
 node scripts/e2e-walkthrough.js --session 1225 --approve input-review --step
 node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --photo-descriptions descriptions.json --step   # {"photo.jpg": "the director's description"}, sent as photoDescriptions with every character-IDs approval
+node scripts/e2e-walkthrough.js --session 1225 --resume --approve outline --step   # a thread already paused at that stop is read through GET /checkpoint and approved without a /resume, which replays from START and re-runs a judge whose verdict escalated (scripts/lib/paused-stop.js)
 
 # Remote access
 start-everything.bat   # Windows: Start server + Cloudflare tunnel
