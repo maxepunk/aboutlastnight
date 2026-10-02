@@ -1512,13 +1512,17 @@ async function reviseArcs(state, config) {
  * director's "rethink" into a relabel. The rethink rule is the revision context's too,
  * the one place every reworker shares, so the send back's rules add only what it
  * does not say: a corrected game mechanic reaches every arc (3.3 review, finding 2).
+ *
+ * Phase 3 (3.10; R23): the automatic pass's line names its task and leaves the scope
+ * to the revision context, which states it once. It used to end "and this rework
+ * answers it", every finding the context lists, the suggestions among them.
  */
 const ARC_REVISION_RULES = {
   human: `You are reworking the arcs you wrote: the director sent them back, and the director's note in the revision context is the task.
 
 The director knows the game, so a note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every arc it touches, not only the one it names.`,
 
-  evaluator: `You are reworking the arcs you wrote: an automatic check or evaluation found what the revision context lists, and this rework answers it.`
+  evaluator: `You are reworking the arcs you wrote after an automatic check or evaluation; the revision context lists what it found and what this rework fixes.`
 };
 
 /**

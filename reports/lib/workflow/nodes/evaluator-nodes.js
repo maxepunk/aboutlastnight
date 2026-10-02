@@ -33,7 +33,7 @@ const { PHASES, REVISION_CAPS } = require('../state');
 // checkpointInterrupt removed in Commit 8.26 (SRP - moved to checkpoint-nodes.js)
 const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
-const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs } = require('./node-helpers');
+const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs, STRUCTURAL_PASS_SCORE } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCs, getThemeNPCEntries } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
@@ -565,9 +565,6 @@ function getPhaseCriteria(phase, theme = 'journalist') {
     default: throw new Error(`No quality criteria defined for phase: ${phase}`);
   }
 }
-
-/** The bar a structural criterion must reach, as every judge prompt states it. */
-const STRUCTURAL_PASS_SCORE = 0.8;
 
 /**
  * The truth criteria a judge scored below the structural bar.
