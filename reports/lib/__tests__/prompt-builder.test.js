@@ -1786,10 +1786,14 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     });
   });
 
+  // The 4b fix batch (3.10 re-review): the journalist's revision framing was 3.2's first
+  // line of the article rework. Since 3.10's fix round 1 that line is the rework rules'
+  // own (ai-nodes.js ARTICLE_REVISION_RULES), and nothing read the string, which still
+  // held the old wording ("the evaluation's findings on an automatic pass"). It is gone,
+  // so nothing can wire it back; the detective keeps its framing (D13).
   describe('the article rework framing (TH7)', () => {
-    it('names the task the revision context gives it, not voice fixes', () => {
-      expect(THEME_SYSTEM_PROMPTS.journalist.revision).toMatch(/REVISION CONTEXT/);
-      expect(THEME_SYSTEM_PROMPTS.journalist.revision).not.toMatch(/voice/);
+    it('the journalist has none of its own (the article rework rules carry the first line); the detective keeps its framing', () => {
+      expect(THEME_SYSTEM_PROMPTS.journalist).not.toHaveProperty('revision');
       expect(THEME_SYSTEM_PROMPTS.detective.revision).toBe('You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only. Keep the third-person investigative case-report voice.');
     });
   });

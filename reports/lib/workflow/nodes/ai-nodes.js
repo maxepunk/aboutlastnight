@@ -1857,8 +1857,8 @@ async function reviseContentBundle(state, config) {
  * (THEME_SYSTEM_PROMPTS.journalist.revision, 3.2's string), which named the automatic
  * task "the evaluation's findings": every finding the context lists, the SHOULD
  * CONSIDER items and the suggestions among them. At the gate an automatic article
- * rework changed 20 of 27 paragraphs to fix one pronoun. Nothing prints that string
- * now.
+ * rework changed 20 of 27 paragraphs to fix one pronoun. The 4b fix batch removed that
+ * string, which nothing read.
  */
 const ARTICLE_REVISION_RULES = "You are Nova, reworking your article after the director's note on a send back, or after an automatic check or evaluation. The task is the one the REVISION CONTEXT in the user prompt gives, under WHAT THIS REWORK DOES.";
 

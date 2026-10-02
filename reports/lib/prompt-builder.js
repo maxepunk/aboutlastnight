@@ -395,17 +395,16 @@ function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
  *
  * Phase 3 (3.2): the journalist's identity lines say who is writing and nothing
  * more: the world, the truth rules and the craft guidance (lib/rule-set.js) carry
- * the rest. The article rework's line names the task its revision context gives it
- * (TH7), where it used to call every rework a voice fix; the rework rules that
- * follow it are 3.3's, in ai-nodes.js articleRevisionRules. The detective is parked
- * (spec D13) and keeps its lines. The 'validation' lines went with the dead
- * validation builder.
+ * the rest. The journalist has no revision line: the article rework's first line is
+ * its rework rules' own (ai-nodes.js ARTICLE_REVISION_RULES, since 3.10's fix round
+ * 1), and the string that held the old one went in the 4b fix batch. The detective is
+ * parked (spec D13) and keeps its lines, its revision line among them. The
+ * 'validation' lines went with the dead validation builder.
  */
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
     outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
-    articleGeneration: 'You are Nova, writing a NovaNews investigative article in the first person.',
-    revision: "You are Nova, reworking your article. The task is the one the REVISION CONTEXT in the user prompt gives: the director's note on a send back, or the evaluation's findings on an automatic pass."
+    articleGeneration: 'You are Nova, writing a NovaNews investigative article in the first person.'
   },
   detective: {
     outlineGeneration: 'You are planning the structure of Detective Anondono\'s case report. Each section answers a DIFFERENT QUESTION about the same underlying facts.',

@@ -1550,10 +1550,11 @@ async function reviseArcs(state, config) {
  * The rules the arc reworker's system prompt adds after its writer's, one set per
  * kind of rework: the journalist's (phase 3, brief 3.3; TH7).
  *
- * The first line names the task the rework's revision context gives it: the
- * director's note on a send back, the check's or the evaluation's findings on an
- * automatic pass. How much of the previous arcs a rework keeps is the revision
- * context's to say (buildRevisionContext), from the director's note, so no fixed
+ * The first line says why the rework runs and where its task is: on a send back, the
+ * director's note in the revision context is the task; on an automatic pass, after a
+ * check or an evaluation, the revision context lists what it found and what the rework
+ * fixes. How much of the previous arcs a rework keeps is the revision context's to say
+ * (buildRevisionContext), from the director's note, so no fixed
  * "preserve" or "do not regenerate" text is here: on 091826 that text turned the
  * director's "rethink" into a relabel. The rethink rule is the revision context's too,
  * the one place every reworker shares, so the send back's rules add only what it
