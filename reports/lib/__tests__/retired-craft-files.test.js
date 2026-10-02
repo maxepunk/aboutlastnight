@@ -5,7 +5,8 @@
  * detective is parked (spec D13) and keeps its own files and phase lists.
  *
  * Task 3.12: the standalone path's agent definitions and SKILL.md name neither the
- * eight nor the five rule files task 3.8 retired.
+ * eight nor the five rule files task 3.8 retired. Task 4c-fix: each agent definition
+ * lists exactly the rule files its pipeline counterpart reads.
  *
  * Real files on disk: nothing here is mocked.
  */
@@ -84,6 +85,36 @@ describe('the retired journalist craft files', () => {
       });
     }
     expect(fs.readFileSync(files[0], 'utf8')).toContain('references/rules/');
+  });
+
+  /**
+   * Task 4c-fix (3.12 review minor 5): each standalone agent lists exactly the rule files
+   * its pipeline counterpart reads, so an agent's list cannot fall behind a change to
+   * RULE_SET_CALLS. Every call reads the world and the truth rules, then its craft files
+   * in RULE_SET_CALLS order, then the reporting-mode block (spec section 8). The evidence
+   * curator and the image analyzer have counterparts that read no rule file.
+   */
+  const AGENT_CALLS = {
+    'journalist-arc-analyzer.md': 'arc',
+    'journalist-financial-specialist.md': 'arc',
+    'journalist-behavioral-specialist.md': 'arc',
+    'journalist-victimization-specialist.md': 'arc',
+    'journalist-outline-generator.md': 'outline',
+    'journalist-article-generator.md': 'article',
+    'journalist-article-validator.md': 'article',
+    'journalist-evidence-curator.md': null,
+    'journalist-image-analyzer.md': null
+  };
+
+  it('maps every agent definition to its pipeline counterpart', () => {
+    expect(fs.readdirSync(path.join(REPO, '.claude', 'agents')).sort()).toEqual(Object.keys(AGENT_CALLS).sort());
+  });
+
+  it.each(Object.entries(AGENT_CALLS))('%s lists exactly the rule files the %s call reads', (agent, call) => {
+    const text = fs.readFileSync(path.join(REPO, '.claude', 'agents', agent), 'utf8');
+    const listed = [...text.matchAll(/references\/rules\/([a-z-]+)\.md/g)].map((match) => match[1]);
+    expect(listed).toEqual(call ? ['world', 'truth-rules', ...RULE_SET_CALLS[call], 'mode-on-site'] : []);
+    if (call) expect(text).toContain('mode-remote.md');
   });
 });
 
