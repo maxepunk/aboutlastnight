@@ -307,6 +307,104 @@ describe('buildLedger: each account\'s total and sale count, checked against the
   });
 });
 
+/**
+ * Final review (data-harness-docs[0]): the money story keeps every account the session
+ * report names. 053126's game master moved money between players' accounts on "Manual
+ * GM adjustment" rows that name neither a destination nor a source, keyed one credit
+ * wrong (+350,000 for the 375,000 taken from Vic), and paid Zoe on a "Gift" row. The
+ * account L received the money and made no sale. The Final Standings show L at
+ * $1,100,000, Zoe at $30,000, and Vic and Phil at $0. Since 3.11 those label rows are
+ * unclassified, so with the rows parsed the book lost L and Zoe and kept Vic's and
+ * Phil's sales, a money list the session report contradicts.
+ *
+ * Where the computed book lacks an account the Final Standings list with a non-zero
+ * total, or disagrees with one, the account's total is the standings' figure, as
+ * without the rows, and `computedTotal` keeps what the sales, bonus and transfers add
+ * up to. Synthetic rows in 053126's shape.
+ */
+describe("buildLedger: an account the Final Standings name and the rows cannot explain (053126's shape)", () => {
+  const SALES_053126 = [
+    { tokenId: 'eee001', shellAccount: 'Ft', amount: 655000, time: '07:41 PM' },
+    { tokenId: 'eee002', shellAccount: 'Ft', amount: 450000, time: '07:58 PM' },
+    { tokenId: 'fff001', shellAccount: 'Vic', amount: 375000, time: '08:05 PM' },
+    { tokenId: 'ggg001', shellAccount: 'Phil', amount: 750000, time: '08:20 PM' }
+  ];
+  const ADJUSTMENTS_053126 = [
+    { time: '07:41 PM', detail: 'First burial bonus (GM_Station_1)', team: 'Ft', amount: 50000 },
+    { time: '08:45 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'Vic', amount: -375000 },
+    { time: '08:45 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'Phil', amount: -750000 },
+    { time: '08:46 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'L', amount: 350000 },
+    { time: '08:46 PM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'L', amount: 750000 },
+    { time: '08:50 PM', detail: 'Gift (GM_Station_1)', team: 'Zoe', amount: 30000 }
+  ];
+  const STANDINGS_053126 = [
+    { name: 'Ft', total: 1155000 },
+    { name: 'L', total: 1100000 },
+    { name: 'Zoe', total: 30000 },
+    { name: 'Vic', total: 0 },
+    { name: 'Phil', total: 0 },
+    { name: 'First Burial Bonus', total: 0 }
+  ];
+  const ledger053126 = () => buildLedger({ buriedTokens: SALES_053126, adjustmentRows: ADJUSTMENTS_053126, finalStandings: STANDINGS_053126 });
+
+  it('keeps L and Zoe at the standings\' figures, and Vic and Phil at theirs, with what the rows add up to beside each', () => {
+    expect(ledger053126().shellAccounts).toEqual([
+      { name: 'Ft', total: 1155000, tokenCount: 2, rank: 1 },
+      { name: 'L', total: 1100000, tokenCount: 0, rank: 2, computedTotal: 0 },
+      { name: 'Zoe', total: 30000, tokenCount: 0, rank: 3, computedTotal: 0 },
+      { name: 'Vic', total: 0, tokenCount: 1, rank: 4, computedTotal: 375000 },
+      { name: 'Phil', total: 0, tokenCount: 1, rank: 5, computedTotal: 750000 }
+    ]);
+  });
+
+  it('names every disagreement for the input review, and reports the label rows as unclassified', () => {
+    const { ledgerCheck, adjustments } = ledger053126();
+    expect(ledgerCheck.mismatches).toEqual([
+      { account: 'L', computed: 0, standings: 1100000 },
+      { account: 'Zoe', computed: 0, standings: 30000 },
+      { account: 'Vic', computed: 375000, standings: 0 },
+      { account: 'Phil', computed: 750000, standings: 0 }
+    ]);
+    expect(ledgerCheck.unclassified).toEqual([
+      { time: '08:45 PM', account: 'Vic', amount: -375000 },
+      { time: '08:45 PM', account: 'Phil', amount: -750000 },
+      { time: '08:46 PM', account: 'L', amount: 350000 },
+      { time: '08:46 PM', account: 'L', amount: 750000 },
+      { time: '08:50 PM', account: 'Zoe', amount: 30000 }
+    ]);
+    expect(adjustments).toEqual([{ time: '07:41 PM', kind: 'bonus', amount: 50000, toAccount: 'Ft' }]);
+  });
+
+  it('never makes a label an account or a timeline source', () => {
+    const { shellAccounts, adjustments } = ledger053126();
+    expect(shellAccounts.map((a) => a.name)).toEqual(['Ft', 'L', 'Zoe', 'Vic', 'Phil']);
+    expect(JSON.stringify({ shellAccounts, adjustments })).not.toMatch(/Manual|Gift|GM|Station/i);
+  });
+
+  it('the sum of what the rows add up to is still the sales and the bonus', () => {
+    const rowsTotal = ledger053126().shellAccounts
+      .reduce((sum, a) => sum + (a.computedTotal === undefined ? a.total : a.computedTotal), 0);
+    expect(rowsTotal).toBe(655000 + 450000 + 375000 + 750000 + 50000);
+  });
+
+  it('a total the rows give and the standings do not list stays the rows\' figure', () => {
+    const ledger = buildLedger({ buriedTokens: SALES, adjustmentRows: [...BONUS_ROWS, ...TRANSFER_ROWS], finalStandings: [] });
+    expect(ledger.shellAccounts.every((a) => a.computedTotal === undefined)).toBe(true);
+    expect(ledger.shellAccounts.find((a) => a.name === 'Ember')).toEqual({ name: 'Ember', total: 925000, tokenCount: 2, rank: 1 });
+  });
+
+  it("leaves 092026's and 061226's reconciling shapes as they were: every total computed, none from the standings", () => {
+    const shapes = [
+      buildLedger({ buriedTokens: SALES, adjustmentRows: [...BONUS_ROWS, ...TRANSFER_ROWS], finalStandings: STANDINGS }),
+      buildLedger({ buriedTokens: SALES_061226, adjustmentRows: [...BONUS_ROWS_061226, ...TRANSFER_ROWS_061226], finalStandings: STANDINGS_061226 })
+    ];
+    shapes.forEach(({ shellAccounts, ledgerCheck }) => {
+      expect(ledgerCheck.mismatches).toEqual([]);
+      shellAccounts.forEach((a) => expect(Object.keys(a).sort()).toEqual(['name', 'rank', 'tokenCount', 'total']));
+    });
+  });
+});
+
 describe('ledgerReviewOf: what the input review shows', () => {
   it('on a fresh parse: the clock, the adjustments, the accounts and the check', () => {
     const ledger = buildLedger({ buriedTokens: SALES, adjustmentRows: [...BONUS_ROWS, ...TRANSFER_ROWS], finalStandings: STANDINGS });

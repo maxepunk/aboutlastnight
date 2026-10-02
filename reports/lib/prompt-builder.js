@@ -616,7 +616,15 @@ ${notes}
    * renderJudgeFinancialSummary), so a judge checks a writer's money against the
    * figures that writer was given.
    *
-   * @param {Array} shellAccounts - Array of {name, total, tokenCount} objects
+   * Final review (data-harness-docs[0]): where the session report's Final Standings
+   * disagree with an account's rows, or credit an account no row reached, its total is
+   * the standings' figure and buildLedger keeps the rows' sum as `computedTotal`. That
+   * account's line says its figure is the session report's final total, so a writer or
+   * a judge never reads it as sales plus transfers, and the grand total adds up the
+   * rows, so it stays the sales and the bonus, and says so. A ledger whose standings
+   * agree prints as before.
+   *
+   * @param {Array} shellAccounts - Array of {name, total, tokenCount, computedTotal?} objects
    * @returns {string} XML section or empty string
    */
   _buildFinancialSummary(shellAccounts) {
@@ -624,17 +632,22 @@ ${notes}
     const nonZero = shellAccounts.filter(a => a.total > 0);
     if (nonZero.length === 0) return '';
 
-    const total = shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0);
+    const isFinalFigure = (a) => Number.isFinite(a.computedTotal);
+    const total = shellAccounts.reduce((sum, a) => sum + ((isFinalFigure(a) ? a.computedTotal : a.total) || 0), 0);
     const sales = (count) => {
       const n = Number.isFinite(count) ? count : 0;
       return `${n} sale${n === 1 ? '' : 's'}`;
     };
+    const finalFigure = (a) => (isFinalFigure(a)
+      ? "; the session report's final total for this account, which the ledger's sales, bonus and transfers do not add up to"
+      : '');
+    const sumSource = shellAccounts.some(isFinalFigure) ? ", by the ledger's sales, bonus and transfers" : '';
 
     return `
 <FINANCIAL_SUMMARY>
 The ledger's accounts, with figures code computed from the session report. Each account's total is its sales, plus the first-burial bonus and the transfers it received, less the transfers it sent; beside it, how many sales it took.
-${nonZero.map(a => `- ${a.name}: $${a.total.toLocaleString('en-US')} (${sales(a.tokenCount)})`).join('\n')}
-All accounts together: $${total.toLocaleString('en-US')}. That is what the buyer paid out this morning, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.
+${nonZero.map(a => `- ${a.name}: $${a.total.toLocaleString('en-US')} (${sales(a.tokenCount)}${finalFigure(a)})`).join('\n')}
+All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is what the buyer paid out this morning, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.
 </FINANCIAL_SUMMARY>`;
   }
 

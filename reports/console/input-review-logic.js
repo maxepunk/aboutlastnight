@@ -56,15 +56,41 @@
     return when + 'transfer of ' + dollars(a.amount) + ' from ' + a.fromAccount + ' to ' + a.toAccount;
   }
 
+  /** An account name for matching, as lib/session-ledger.js keys it: letters and digits, lower case. */
+  function accountKey(name) {
+    return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  /**
+   * Which figure the writers got for an account whose total the Final Standings
+   * dispute (final review, data-harness-docs[0]), read from the accounts the writers
+   * were given (state.shellAccounts): since that fix, the standings' figure wherever the
+   * standings list one. A thread parsed before it kept the sales and adjustments'
+   * figure, and no account at all for one the rows never reached.
+   *
+   * @param {{account: string, standings: number|null}} mismatch
+   * @param {Array} accounts - data.ledger.accounts
+   * @returns {string}
+   */
+  function writersFigure(mismatch, accounts) {
+    const key = accountKey(mismatch.account);
+    const account = accounts.find(function (a) { return a && accountKey(a.name) === key; });
+    if (!account) return 'The writers get no figure for it';
+    if (mismatch.standings != null && Math.abs(Number(account.total) - mismatch.standings) < 0.5) {
+      return 'The writers get the Final Standings\' figure';
+    }
+    return 'The writers get the sales and adjustments\' figure';
+  }
+
   /**
    * The ledger at the input review (data.ledger, from lib/session-ledger.js
    * ledgerReviewOf): what needs the director first, then each account and each
    * adjustment.
    *
    * `warnings` leads: the adjustment rows not parsed, a total that disagrees with
-   * the session report's Final Standings, no sale or account parsed at all, a row the
-   * code could not classify. The accounts and adjustments are the detail, folded away
-   * on the screen.
+   * the session report's Final Standings (and which figure the writers got), no sale or
+   * account parsed at all, a row the code could not classify. The accounts and
+   * adjustments are the detail, folded away on the screen.
    *
    * @param {Object|null} ledger
    * @returns {{clockLine: string, warnings: string[], accounts: Array<{name: string, total: string, sales: string}>, adjustments: string[]}}
@@ -79,7 +105,8 @@
     }
     list(l.mismatches).forEach(function (m) {
       warnings.push(m.account + ': the sales and adjustments add up to ' + dollars(m.computed) + '; ' +
-        (m.standings == null ? 'the Final Standings do not list it' : 'the Final Standings say ' + dollars(m.standings)));
+        (m.standings == null ? 'the Final Standings do not list it' : 'the Final Standings say ' + dollars(m.standings)) +
+        '. ' + writersFigure(m, list(l.accounts)));
     });
     if (list(l.accounts).length === 0) {
       warnings.push('No sales or account totals parsed from the session report: the writers get no ledger');

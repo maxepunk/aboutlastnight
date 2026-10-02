@@ -36,6 +36,14 @@
  * that received it ($925,000 against $875,000 of sales on 092026) and list the holding
  * account at 0. The model only copies rows; it counts nothing.
  *
+ * Where the Final Standings disagree with a computed total, or list with a non-zero
+ * total an account no sale, bonus or transfer reached, the account's total is the
+ * standings' figure, as it is when no row was parsed, and `computedTotal` keeps what the
+ * rows add up to (final review, data-harness-docs[0]). 053126's game master moved money
+ * on "Manual GM adjustment" rows that name no account and paid a "Gift"; those rows are
+ * unclassified, so the computed book had no account L though the standings show it at
+ * $1,100,000, and the writers' money list left it out.
+ *
  * Pure: no I/O, no state.
  */
 
@@ -204,15 +212,23 @@ function accountBook() {
  *
  * With no Adjustment row parsed, the totals are the Final Standings' (they count the
  * bonus the rows would have shown) and the check is skipped: ledgerCheck says the
- * rows were not parsed. An account with no sale, bonus or transfer is left out, as is
- * the bonus's holding account.
+ * rows were not parsed. An account with no sale, bonus or transfer is left out unless
+ * the Final Standings credit it, and the bonus's holding account is always left out.
+ *
+ * With the rows parsed, an account's total is what its rows add up to wherever the
+ * Final Standings agree or do not list it. Where they list it with another figure, or
+ * credit an account no row reached, the total is the standings' figure, as without the
+ * rows, and `computedTotal` keeps what the rows add up to (final review,
+ * data-harness-docs[0]): the writers' money list never leaves out or contradicts an
+ * account the session report names. The check names each such account.
  *
  * @param {Object} parse
  * @param {Array} [parse.buriedTokens] - the sales: {shellAccount, amount, time}
  * @param {Array} [parse.adjustmentRows] - every Adjustment row, as the parse copied it
  * @param {Array} [parse.finalStandings] - every Final Standings row: {name, total}
- * @returns {{adjustments: Array, shellAccounts: Array<{name, total, tokenCount, rank}>,
+ * @returns {{adjustments: Array, shellAccounts: Array<{name, total, tokenCount, rank, computedTotal?}>,
  *            ledgerCheck: {adjustmentsParsed: boolean, mismatches: Array, unclassified: Array}}}
+ *            computedTotal is present only on an account whose total is the standings'
  */
 function buildLedger({ buriedTokens, adjustmentRows, finalStandings } = {}) {
   const adjustmentsParsed = Array.isArray(adjustmentRows) && adjustmentRows.length > 0;
@@ -245,23 +261,27 @@ function buildLedger({ buriedTokens, adjustmentRows, finalStandings } = {}) {
   });
 
   const mismatches = [];
-  standings.forEach((row) => {
-    if (row.total === 0) return;
-    // Without the rows, an account the standings credit but no sale reached (a
-    // transfer's receiver) is kept at its standing total.
-    if (!adjustmentsParsed) get(row.name);
-    else if (!accounts.has(keyOf(row.name))) mismatches.push({ account: row.name, computed: 0, standings: row.total });
+  // An account the standings credit and no sale, bonus or transfer reached is kept at its
+  // standing total: without the rows, a transfer's receiver; with them, an account whose
+  // money came in on rows code could not classify (053126's L), which the check names.
+  const standingOnly = new Set();
+  standings.forEach((row, key) => {
+    if (row.total === 0 || accounts.has(key)) return;
+    get(row.name);
+    if (adjustmentsParsed) {
+      standingOnly.add(key);
+      mismatches.push({ account: row.name, computed: 0, standings: row.total });
+    }
   });
 
   const totals = [...accounts.entries()].map(([key, a]) => {
     const computed = a.sales + a.received - a.sent;
     const standing = standings.get(key);
-    if (!adjustmentsParsed) {
-      return { name: a.name, total: standing ? standing.total : computed, tokenCount: a.saleCount };
-    }
-    const agrees = standing ? Math.abs(standing.total - computed) < 0.5 : computed === 0;
-    if (!agrees) mismatches.push({ account: a.name, computed, standings: standing ? standing.total : null });
-    return { name: a.name, total: computed, tokenCount: a.saleCount };
+    const account = { name: a.name, total: computed, tokenCount: a.saleCount };
+    if (!adjustmentsParsed) return standing ? { ...account, total: standing.total } : account;
+    if (standing ? Math.abs(standing.total - computed) < 0.5 : computed === 0) return account;
+    if (!standingOnly.has(key)) mismatches.push({ account: a.name, computed, standings: standing ? standing.total : null });
+    return standing ? { ...account, total: standing.total, computedTotal: computed } : account;
   });
 
   const shellAccounts = totals

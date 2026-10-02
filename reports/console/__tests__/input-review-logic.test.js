@@ -80,9 +80,43 @@ describe('ledgerView: the adjustments beside the sales', () => {
     expect(view.warnings).toEqual([]);
   });
 
-  it('puts a totals mismatch first, in words the director can check against the session report', () => {
-    const view = ledgerView({ ...ledger, mismatches: [{ account: 'Ember', computed: 925000, standings: 900000 }] });
-    expect(view.warnings).toEqual(['Ember: the sales and adjustments add up to $925,000; the Final Standings say $900,000']);
+  // Final review (data-harness-docs[0]): each disagreement says which figure the writers
+  // got. The writers get the Final Standings' figure wherever the standings list one
+  // (lib/session-ledger.js buildLedger). A thread parsed before that kept the sales and
+  // adjustments' figure, and had no account for one the rows never reached, so the line
+  // reads the figure from the accounts the writers were given.
+  it('puts a totals mismatch first, in words the director can check against the session report, with the figure the writers get', () => {
+    const view = ledgerView({
+      ...ledger,
+      accounts: [{ name: 'Ember', total: 900000, tokenCount: 2, rank: 1, computedTotal: 925000 }, ledger.accounts[1]],
+      mismatches: [{ account: 'Ember', computed: 925000, standings: 900000 }]
+    });
+    expect(view.warnings).toEqual(["Ember: the sales and adjustments add up to $925,000; the Final Standings say $900,000. The writers get the Final Standings' figure"]);
+  });
+
+  it("says when the writers get the sales and adjustments' figure, or no figure, for a disagreement", () => {
+    const view = ledgerView({
+      ...ledger,
+      mismatches: [
+        { account: 'Ember', computed: 925000, standings: 900000 },
+        { account: 'Zoe', computed: 0, standings: 30000 },
+        { account: 'L', computed: 375000, standings: null }
+      ]
+    });
+    expect(view.warnings).toEqual([
+      "Ember: the sales and adjustments add up to $925,000; the Final Standings say $900,000. The writers get the sales and adjustments' figure",
+      'Zoe: the sales and adjustments add up to $0; the Final Standings say $30,000. The writers get no figure for it',
+      "L: the sales and adjustments add up to $375,000; the Final Standings do not list it. The writers get the sales and adjustments' figure"
+    ]);
+  });
+
+  it("reads 053126's accounts as buildLedger gives them: L at the standings' figure, matched whatever the case", () => {
+    const view = ledgerView({
+      ...ledger,
+      accounts: [{ name: 'l', total: 1100000, tokenCount: 0, rank: 1, computedTotal: 0 }],
+      mismatches: [{ account: 'L', computed: 0, standings: 1100000 }]
+    });
+    expect(view.warnings).toEqual(["L: the sales and adjustments add up to $0; the Final Standings say $1,100,000. The writers get the Final Standings' figure"]);
   });
 
   it('says so when the adjustment rows were not parsed', () => {
