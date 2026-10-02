@@ -77,3 +77,5 @@ reports/emailer/recipients_*.csv
 
 # Git worktrees (superpowers skill)
 .worktrees/
+# Git worktrees the Claude desktop app makes for the reports project
+reports/.claude/worktrees/
