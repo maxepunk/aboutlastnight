@@ -35,7 +35,7 @@ const http = require('http');
 const https = require('https');
 const { resolveCompletePayload } = require('./lib/sse-complete');
 const { loadPhotoDescriptionsFile, withPhotoDescriptions } = require('./lib/photo-descriptions');
-const { openingRequest, startsSessionOver } = require('./lib/paused-stop');
+const { openingRequest, startsSessionOver, keepThreadCommands } = require('./lib/paused-stop');
 // The console's pure read side (dual-export), so the harness reads the stop payloads
 // the way the console does: the phase's last evaluation and the trace (brief 2.7).
 const ViewLogic = require('../console/checkpoint-view-logic');
@@ -3495,10 +3495,9 @@ async function runWalkthrough() {
     return;
   }
 
-  // Warn if overrides won't be applied (only work with --rollback or resume mode)
-  if (stateOverrides && !ROLLBACK_TO && inputData.rawSessionInput && !inputData.fromFiles) {
-    console.log(color('WARNING: --override only applies with --rollback or when resuming existing session', 'yellow'));
-  }
+  // Final review (data-harness-docs[2]): an --override run with neither --rollback nor
+  // --resume stops with its warning when the run opens (openingRequest), before anything
+  // is posted. It used to warn here and then start the session over, clearing the thread.
 
   console.log(color(`\nSession ID: ${sessionId}`, 'bright'));
 
@@ -3659,7 +3658,12 @@ async function runWalkthrough() {
         if (APPROVE_TYPE) {
           if (APPROVE_TYPE !== checkpointType) {
             console.log(color(`\nError: --approve ${APPROVE_TYPE} does not match current checkpoint: ${checkpointType}`, 'red'));
-            console.log(color('Use --step without --approve to view current checkpoint', 'dim'));
+            // Final review (data-harness-docs[2]): only a run with --resume or --rollback
+            // gets here, so each printed command keeps the thread.
+            keepThreadCommands(sessionId, checkpointType).forEach(({ label, command }) => {
+              console.log(color(label, 'dim'));
+              console.log(color(`  ${command}`, 'cyan'));
+            });
             break;
           }
 

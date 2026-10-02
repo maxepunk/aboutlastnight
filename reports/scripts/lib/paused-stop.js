@@ -21,6 +21,11 @@
  * approves the paused stop, resumes when --resume or a rollback continues the thread,
  * and otherwise says where the thread is and stops.
  *
+ * Final review (data-harness-docs[2]): --override names state overrides for a thread
+ * that exists, which only a run that continues it applies, so an --override run without
+ * --resume or --rollback stops with that warning instead of starting the session over.
+ * The step-mode mismatch prints commands that keep the thread (keepThreadCommands).
+ *
  * Pure: the caller makes the GET.
  */
 
@@ -90,6 +95,26 @@ function startsSessionOver({ rawSessionInput, resume = false, rollbackTo = null 
 }
 
 /**
+ * The commands the step-mode mismatch prints (final review, data-harness-docs[2]): the
+ * run's --approve names a stop other than the one the thread is paused at. Only a run
+ * with --resume or --rollback reaches that branch, one that means to keep the thread, so
+ * each command keeps it: the first views the paused stop through /resume, the second
+ * approves it from GET /checkpoint (openingRequest). Neither repeats --rollback, which
+ * would run the rollback again, and neither lacks both --resume and --approve, which
+ * would POST /start with force and clear the thread.
+ *
+ * @param {string} sessionId
+ * @param {string} pausedAt - the stop the thread is paused at
+ * @returns {Array<{label: string, command: string}>}
+ */
+function keepThreadCommands(sessionId, pausedAt) {
+  return [
+    { label: 'To view the stop the thread is paused at, run:', command: `node scripts/e2e-walkthrough.js --session ${sessionId} --resume --step` },
+    { label: 'To approve it, run:', command: `node scripts/e2e-walkthrough.js --session ${sessionId} --approve ${pausedAt} --step` }
+  ];
+}
+
+/**
  * How the harness opens its run (fix round 1).
  *
  * @param {Object} request
@@ -109,7 +134,13 @@ function openingRequest({ approveType, startsOver, checkpointRead, stateOverride
   const pausedStop = pausedStopToApprove(approveType, checkpointRead, { stateOverrides });
   if (pausedStop) return { kind: 'approve', currentData: pausedStop };
   if (!startsOver) return { kind: 'resume' };
-  if (typeof approveType !== 'string' || !approveType) return { kind: 'start' };
+  if (typeof approveType !== 'string' || !approveType) {
+    if (!stateOverrides) return { kind: 'start' };
+    return {
+      kind: 'stop',
+      reason: '--override applies only with --rollback or --resume. Without either the harness would start the session over, so it stops here.'
+    };
+  }
   const where = stateOverrides
     ? '--override gives state overrides, which only /resume applies'
     : threadState(checkpointRead).where;
@@ -119,4 +150,4 @@ function openingRequest({ approveType, startsOver, checkpointRead, stateOverride
   };
 }
 
-module.exports = { pausedStopToApprove, openingRequest, startsSessionOver };
+module.exports = { pausedStopToApprove, openingRequest, startsSessionOver, keepThreadCommands };

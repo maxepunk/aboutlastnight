@@ -30,7 +30,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { pausedStopToApprove, openingRequest, startsSessionOver } = require('../../../scripts/lib/paused-stop');
+const { pausedStopToApprove, openingRequest, startsSessionOver, keepThreadCommands } = require('../../../scripts/lib/paused-stop');
 
 /** GET /checkpoint's answer for a thread paused at `type` (server.js, the checkpoint route). */
 function pausedAt(type, extra = {}) {
@@ -133,6 +133,60 @@ describe('openingRequest (fix round 1)', () => {
       reason: `--approve outline: --override gives state overrides, which only /resume applies. ${REFUSAL}`
     });
   });
+
+  // Final review (data-harness-docs[2]): an --override run with neither --resume nor
+  // --rollback printed a warning that its overrides apply only to a run that continues a
+  // thread, then POSTed /start with force, which clears the thread. It stops with that
+  // warning instead.
+  it('without --resume or --rollback, an --override never starts the session over: it stops with its warning', () => {
+    expect(opening({ startsOver: true, stateOverrides: true })).toEqual({
+      kind: 'stop',
+      reason: '--override applies only with --rollback or --resume. Without either the harness would start the session over, so it stops here.'
+    });
+  });
+
+  it('an --override with --resume, or after a rollback, resumes as before', () => {
+    expect(opening({ startsOver: false, stateOverrides: true })).toEqual({ kind: 'resume' });
+  });
+});
+
+/**
+ * Final review (data-harness-docs[2]): the step-mode mismatch (--approve names a stop the
+ * thread is not paused at) is reached only by a run with --resume or --rollback, one
+ * that means to keep the thread. Its hint said "Use --step without --approve to view
+ * current checkpoint", and `--session <id> --step` without --resume POSTs /start with
+ * force, which clears the thread. Each command it prints now keeps the thread, and none
+ * repeats --rollback, which would run the rollback again.
+ */
+describe('keepThreadCommands: the step-mode mismatch hint', () => {
+  /** The harness's opening for a printed command, read from its flags as the harness reads them. */
+  const openingFor = (command, read) => {
+    const flags = command.split(/\s+/);
+    const approveAt = flags.indexOf('--approve');
+    const resume = flags.includes('--resume');
+    return openingRequest({
+      approveType: approveAt === -1 ? null : flags[approveAt + 1],
+      // --session's files give the run its own input unless --resume reads none
+      startsOver: startsSessionOver({ rawSessionInput: resume ? undefined : {}, resume, rollbackTo: null }),
+      checkpointRead: approveAt === -1 ? undefined : read
+    });
+  };
+
+  it('prints a command that views the stop the thread is paused at, and one that approves it', () => {
+    expect(keepThreadCommands('092026', 'arc-selection')).toEqual([
+      { label: 'To view the stop the thread is paused at, run:', command: 'node scripts/e2e-walkthrough.js --session 092026 --resume --step' },
+      { label: 'To approve it, run:', command: 'node scripts/e2e-walkthrough.js --session 092026 --approve arc-selection --step' }
+    ]);
+  });
+
+  it('every command keeps the thread: the harness resumes it or approves the paused stop from the read, and never starts over', () => {
+    const read = pausedAt('arc-selection');
+    const kinds = keepThreadCommands('092026', 'arc-selection').map(({ command }) => {
+      expect(command).not.toMatch(/--rollback/);
+      return openingFor(command, read).kind;
+    });
+    expect(kinds).toEqual(['resume', 'approve']);
+  });
 });
 
 describe('startsSessionOver (task 4c-fix): a rollback never starts the session over', () => {
@@ -168,7 +222,20 @@ describe('e2e-walkthrough decides how to open its run before any /start or /resu
   const decided = run.slice(run.indexOf('openingRequest({'));
 
   it('requires the decision from scripts/lib/paused-stop.js', () => {
-    expect(SRC).toMatch(/const \{ openingRequest, startsSessionOver \} = require\('\.\/lib\/paused-stop'\);/);
+    expect(SRC).toMatch(/const \{ openingRequest, startsSessionOver, keepThreadCommands \} = require\('\.\/lib\/paused-stop'\);/);
+  });
+
+  // Final review (data-harness-docs[2]): the decision on --override is the opening's, so
+  // the run stops with the warning before any post; no separate warning precedes a start.
+  it('passes --override to the opening decision, and keeps no warning that then starts the session over', () => {
+    expect(run).toMatch(/stateOverrides: Boolean\(stateOverrides\)/);
+    expect(SRC).not.toContain('WARNING: --override only applies');
+  });
+
+  it('the step-mode mismatch prints the commands that keep the thread, and none that clears it', () => {
+    const mismatch = SRC.slice(SRC.indexOf('does not match current checkpoint'), SRC.indexOf('// Approve this checkpoint'));
+    expect(mismatch).toMatch(/keepThreadCommands\(sessionId, checkpointType\)/);
+    expect(SRC).not.toContain('Use --step without --approve');
   });
 
   it('reads GET /checkpoint whenever --approve names a stop, with or without --resume', () => {
