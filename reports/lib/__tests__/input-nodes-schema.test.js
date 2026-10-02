@@ -53,8 +53,12 @@ describe('Step-1 parse prompt does not invite a derived sessionId (Task 1 Minor)
     path.join(__dirname, '..', 'workflow', 'nodes', 'input-nodes.js'), 'utf8'
   );
 
-  it('tells the model to copy the provided sessionId verbatim', () => {
-    expect(src).toContain('Use the provided sessionId verbatim');
+  it('asks the model for no session id at all (phase 3, brief 3.5: code stamps it)', () => {
+    // The step-1 prompt used to tell the model to copy the id verbatim, and offered a
+    // "Derive sessionId from" branch when no caller gave one (coverage-upstream #10).
+    expect(src).not.toContain('Use the provided sessionId verbatim');
+    expect(src).not.toContain('Derive sessionId from:');
+    expect(src).toContain('result.sessionId = configSessionId || state.sessionId || null;');
   });
 
   it('no longer offers the MMDD derivation that produced data/0711 for session 071126', () => {

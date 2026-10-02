@@ -17,14 +17,14 @@
 const { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const {
   generateOutline, reviseOutline, generateContentBundle, reviseContentBundle,
-  _testing: { OUTLINE_REVISION_RULES, articleRevisionRules }
+  _testing: { outlineRevisionRules, articleRevisionRules }
 } = require('../workflow/nodes/ai-nodes');
 const {
   reviseArcs,
-  _testing: { generateCoreArcs, ARC_REVISION_RULES }
+  _testing: { generateCoreArcs, arcRevisionRules, arcReworkSchema }
 } = require('../workflow/nodes/arc-specialist-nodes');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
-const { PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
+const { PLAYER_FOCUS_GUIDED_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
 const { PromptBuilder } = require('../prompt-builder');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -128,9 +128,17 @@ describe.each(['journalist', 'detective'])('%s outline stop', (theme) => {
 
   it("the reworker's system prompt is its writer's, then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
-    expect(rework.system).toBe(`${writer.system}\n\n${OUTLINE_REVISION_RULES}`);
-    expect(writer.system).toContain('<section-rules>');
-    expect(writer.system).toContain('<editorial-design>');
+    // Phase 3 (3.3): the rework rules are the theme's; the detective keeps today's.
+    expect(rework.system).toBe(`${writer.system}\n\n${outlineRevisionRules(theme)}`);
+    // Phase 3 (3.2): the journalist's system prompt carries the world and the truth
+    // rules; the detective is parked and keeps its craft files there.
+    if (theme === 'journalist') {
+      expect(writer.system).toContain('<world>');
+      expect(writer.system).toContain('<truth-rules>');
+    } else {
+      expect(writer.system).toContain('<section-rules>');
+      expect(writer.system).toContain('<editorial-design>');
+    }
   });
 
   it("the guidance keeps phase 1's note filtering: every note but the one being acted on", async () => {
@@ -185,7 +193,14 @@ describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
     expectOneRecordAndGuidanceLast(rework.user);
 
     // The writer's rules and schema replace the reworker's own smaller copies.
-    expect(count(rework.user, '<RULES>')).toBe(1);
+    // Phase 3 (3.2): the journalist's rules are its craft files, once; the detective's
+    // are its <RULES> block.
+    if (theme === 'journalist') {
+      expect(count(rework.user, '<RULES>')).toBe(0);
+      expect(count(rework.user, '<craft-voice>')).toBe(1);
+    } else {
+      expect(count(rework.user, '<RULES>')).toBe(1);
+    }
     expect(count(rework.user, '<SCHEMA>')).toBe(1);
     expect(rework.user).not.toContain('## OUTPUT SCHEMA');
     expect(rework.user).toContain('APPROVED OUTLINE:');
@@ -216,7 +231,7 @@ describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
     expect(rework.system).toBe(`${writer.system}\n\n${articleRevisionRules(theme)}`);
     expect(writer.system).toContain('CANONICAL CHARACTER ROSTER');
     expect(writer.system).toContain('Morgan → Morgan Reed');
-    expect(writer.system).toContain('<evidence-boundaries>');
+    expect(writer.system).toContain(theme === 'journalist' ? '<truth-rules>' : '<evidence-boundaries>');
   });
 
   it("the guidance keeps phase 1's note filtering", async () => {
@@ -258,12 +273,19 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
 
     // What the reworker used to lack (rework-inputs.md Step 2): the whiteboard, the
     // investigation focus, the character context, the rules, the record, the
-    // boundaries, temporal awareness, the tensions and the three lenses.
+    // boundaries, temporal awareness, the tensions and the three lenses. Phase 3 (3.3):
+    // the journalist's sections are the rule set's (its truth rules state the old
+    // boundaries and timelines), and its craft files come last. Task 3.8: the lenses
+    // (C16) are in craft-story, the file that opens the arc writer's craft.
+    const headings = theme === 'detective'
+      ? ['## SECTION 4: EVIDENCE BOUNDARIES', '## SECTION 4.5: TEMPORAL AWARENESS', '## SECTION 4.6: NARRATIVE TENSIONS',
+        '## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT']
+      : ['## SECTION 3: THE RECORD', '## SECTION 4: STAGES IN AN ARC SUMMARY', '## SECTION 5: THE THREE LENSES IN analysisNotes',
+        '## SECTION 6: CRAFT GUIDANCE', '<craft-story>'];
     [
-      '### Whiteboard Connections', '### Primary Investigation Focus', '### Character Context',
-      '## SECTION 2: ARC GENERATION RULES', '## SECTION 4: EVIDENCE BOUNDARIES',
-      '## SECTION 4.5: TEMPORAL AWARENESS', '## SECTION 4.6: NARRATIVE TENSIONS',
-      '## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT'
+      // Phase 3 (3.5): the whiteboard section's heading names it a model's reading.
+      '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',
+      '## SECTION 2: ARC GENERATION RULES', ...headings
     ].forEach((heading) => expect(rework.user).toContain(heading));
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user).toContain(text));
 
@@ -283,12 +305,12 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
 
   it("the reworker's system prompt is its writer's, then the rework rules for its kind", async () => {
     const sendBack = await writerAndRework(SEND_BACK);
-    expect(sendBack.rework.system).toBe(`${sendBack.writer.system}\n\n${ARC_REVISION_RULES.human}`);
+    expect(sendBack.rework.system).toBe(`${sendBack.writer.system}\n\n${arcRevisionRules(true, theme)}`);
     const automated = await writerAndRework({
       arcRevisionCount: 1, humanArcRevisionCount: 0,
       validationResults: { phase: 'arcs', passed: false, structuralIssues: ['Riley has no placement'] }
     });
-    expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${ARC_REVISION_RULES.evaluator}`);
+    expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${arcRevisionRules(false, theme)}`);
     expect(automated.rework.user).toContain('REVISION CONTEXT: ARCS (automated pass 1)');
     // The writer's own revision hook stays the writer's: the reworker's context is
     // buildRevisionContext's, once.
@@ -313,9 +335,12 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     expect(rework.user.indexOf('## WHAT THIS REWORK RETURNS')).toBeGreaterThan(rework.user.indexOf('### PREVIOUS INTERWEAVING PLAN'));
     expect(addendum).toContain('A PREVIOUS INTERWEAVING PLAN is shown above: keep it, or update it for the revised arcs. Do not drop it.');
 
-    // One wording: every field and every description comes from the schema.
-    const arcFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties.narrativeArcs.items.properties.interweaving.properties;
-    const planFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan.properties;
+    // One wording: every field and every description comes from the schema (the
+    // theme's: the detective keeps today's wording, phase 3, 3.3).
+    const schema = arcReworkSchema(theme);
+    expect(schema).toBe(theme === 'detective' ? DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA : PLAYER_FOCUS_GUIDED_SCHEMA);
+    const arcFields = schema.properties.narrativeArcs.items.properties.interweaving.properties;
+    const planFields = schema.properties.interweavingPlan.properties;
     Object.entries({ ...arcFields, ...planFields }).forEach(([name, spec]) => {
       expect(addendum).toContain(`- "${name}"`);
       expect(addendum).toContain(spec.description);
@@ -339,7 +364,9 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     for (const cache of [null, { interweavingPlan: {} }, { interweavingPlan: { suggestedOrder: [], convergencePoint: '', keyCallbacks: [] } }]) {
       const { rework } = await writerAndRework({ ...SEND_BACK, _arcAnalysisCache: cache });
       expect(rework.user).not.toContain('PREVIOUS INTERWEAVING PLAN');
-      expect(rework.user).toMatch(/6\. Return the interweavingPlan \(suggestedOrder, convergencePoint, keyCallbacks\) for the revised arcs, and each arc's interweaving\.\n/);
+      // Phase 3 (3.3): the journalist's task has three steps; the detective keeps six.
+      const step = theme === 'detective' ? 6 : 3;
+      expect(rework.user).toContain(`\n${step}. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.\n`);
     }
   });
 });

@@ -279,28 +279,33 @@ describe('accusationView', () => {
 });
 
 describe('whiteboardView', () => {
-  it('returns the six real whiteboard fields with arrays defaulted', () => {
+  it('returns the real whiteboard fields with arrays defaulted, each region under the players\' heading (phase 3, 3.5)', () => {
     expect(whiteboardView({
       names: ['Vic'],
-      groups: [],
+      regions: [{ label: 'WHO?', location: 'left column', entries: ['Vic', 'Randy'] }],
       connections: [{ from: 'Vic', to: 'Alex' }],
       notes: ['x'],
       ambiguities: ['left column unreadable']
     })).toEqual({
       ambiguities: ['left column unreadable'],
       names: ['Vic'],
-      groups: [],
+      regions: [{ label: 'WHO?', location: 'left column', entries: ['Vic', 'Randy'] }],
       connections: [{ from: 'Vic', to: 'Alex' }],
       notes: ['x'],
       structureType: ''
     });
   });
 
+  it('shows an older parse\'s groups as regions', () => {
+    expect(whiteboardView({ groups: [{ label: 'SUSPECTS', members: ['Vic'] }] }).regions)
+      .toEqual([{ label: 'SUSPECTS', location: '', entries: ['Vic'] }]);
+  });
+
   it('defaults everything for a missing whiteboard', () => {
     expect(whiteboardView(null)).toEqual({
       ambiguities: [],
       names: [],
-      groups: [],
+      regions: [],
       connections: [],
       notes: [],
       structureType: ''
@@ -911,11 +916,11 @@ describe('traceView (phase 2, brief 2.7)', () => {
   });
 
   test('an evaluation pass carries its guidance and one line per scored criterion', () => {
-    const view = traceView([checkPass, evaluationPass]);
+    const view = traceView([checkPass, evaluationPass], 'journalist');
     expect(view.title).toBe('Trace: 2 automatic reworks ran this round before you arrived');
     const pass = view.passes[1];
     expect(pass.triggerLabel).toBe('Why it ran: the evaluation failed.');
-    expect(pass.guidance).toBe('Guidance to the writer: Put Zia in the opening.');
+    expect(pass.guidance).toBe("The evaluation's guidance, not sent to the rework: Put Zia in the opening.");
     expect(pass.criteriaLabel).toBe('Scores (2)');
     expect(pass.criteria).toEqual([
       { key: 'rosterCoverage', text: 'rosterCoverage: 0.40 (structural). Zia is missing. Fix: Name Zia.' },
@@ -923,6 +928,21 @@ describe('traceView (phase 2, brief 2.7)', () => {
     ]);
     expect(pass.mustFix.items).toEqual([]);
     expect(pass.noFindings).toBe(false);
+  });
+
+  // Final review (reworks[0]): since 3.10 a journalist automatic pass carries no
+  // EVALUATOR FEEDBACK (node-helpers.js buildRevisionContext), so the judge's
+  // revisionGuidance never reaches its rework, and "Guidance to the writer" credited the
+  // rework with an instruction it was never given. A detective pass still prints it to
+  // the rework (D13) and keeps that label. With no theme the view reads the journalist's,
+  // the pipeline's default.
+  test("labels the guidance by whether the rework was given it: the journalist's not, the detective's yes", () => {
+    expect(traceView([evaluationPass], 'journalist').passes[0].guidance)
+      .toBe("The evaluation's guidance, not sent to the rework: Put Zia in the opening.");
+    expect(traceView([evaluationPass]).passes[0].guidance)
+      .toBe("The evaluation's guidance, not sent to the rework: Put Zia in the opening.");
+    expect(traceView([evaluationPass], 'detective').passes[0].guidance)
+      .toBe('Guidance to the writer: Put Zia in the opening.');
   });
 
   test('a pass with no recorded findings says so rather than rendering empty lists', () => {
@@ -942,5 +962,176 @@ describe('traceView (phase 2, brief 2.7)', () => {
     const view = traceView([checkPass, evaluationPass]);
     expect(view.passes.map((p) => p.heading.split(',')[0])).toEqual(['Automatic pass 1', 'Automatic pass 2']);
     expect(new Set(view.passes.map((p) => p.key)).size).toBe(2);
+  });
+});
+
+// Phase 3, brief 3.4: the fact check's new code checks are advisories, each with its
+// own message prefix. Each lands in a group of its own, so the director sees what kind
+// of finding it is, and none counts toward the approve button's unresolved count.
+describe('the fact check\'s new advisory groups (phase 3, 3.4)', () => {
+  const { factCheckSummary, approveLabel } = require('../checkpoint-view-logic');
+  const ADVISORIES = [
+    'Em-dash in the narrator\'s prose: 2 em-dashes, in section "the-story", paragraph 1.',
+    'Production word in print: "token" in section "lede", paragraph 2.',
+    'Gendered pronoun for Nova: "Nova filed her" in the deck.',
+    'Pronoun error: Blake has no pronoun in the record, but the article writes "Blake said he".',
+    'Pronoun error: Marcus takes he/him, but the article writes "Marcus said she".',
+    'Over length: the narrator\'s prose runs 1,950 words.',
+    'Head count: "ten people in the room" in section "lede", paragraph 1, but the roster lists 9 players.',
+    'Absence stated 2 times (remote): "I was not there", "I was not in that room".',
+    'Could not verify 2 photo reference(s): the photo list is empty.'
+  ];
+  const summary = () => factCheckSummary({
+    structuralIssues: ['Roster coverage gap: Remi is on the session roster but never named.'],
+    advisoryWarnings: ADVISORIES,
+    cardFidelity: [],
+    rosterCoverage: { missing: ['Remi'] },
+    photoReferences: { invalid: [] },
+    reporterMode: { violations: [] }
+  });
+
+  it('puts each new check in its own advisory group, and the rest under Advisory', () => {
+    const { groups } = summary();
+    expect(groups.map((g) => [g.key, g.severity, g.items.length])).toEqual([
+      ['roster', 'structural', 1],
+      ['emDash', 'advisory', 1],
+      ['productionWords', 'advisory', 1],
+      ['novaPronoun', 'advisory', 1],
+      ['npcPronouns', 'advisory', 2],
+      ['length', 'advisory', 1],
+      ['headCount', 'advisory', 1],
+      ['advisory', 'advisory', 2]
+    ]);
+    const byKey = Object.fromEntries(groups.map((g) => [g.key, g]));
+    expect(byKey.headCount.items[0].text).toBe(ADVISORIES[6]);
+    expect(byKey.advisory.items.map((i) => i.text)).toEqual([ADVISORIES[7], ADVISORIES[8]]);
+    groups.forEach((g) => expect(typeof g.label === 'string' && g.label.length > 0).toBe(true));
+  });
+
+  it('counts every advisory once, and none of them as unresolved on the approve button', () => {
+    const s = summary();
+    expect(s.structural).toBe(1);
+    expect(s.advisory).toBe(ADVISORIES.length);
+    expect(approveLabel(s, false).label).toBe(`Approve anyway (1 unresolved, ${ADVISORIES.length} advisory)`);
+    const advisoryOnly = factCheckSummary({ structuralIssues: [], advisoryWarnings: ADVISORIES.slice(0, 7) });
+    expect(approveLabel(advisoryOnly, false).label).toBe('Approve (7 advisory)');
+  });
+
+  it('leaves a structural message with a new prefix in Other, where a promotion would land it', () => {
+    const { groups } = factCheckSummary({ structuralIssues: ['Head count: promoted'], advisoryWarnings: [] });
+    expect(groups.map((g) => g.key)).toEqual(['other']);
+  });
+});
+
+// Phase 3, brief 3.7 (spec C15, D8): the writer's questions for the director, one line
+// per question with what it is about first, at the arc, outline and article stops. The
+// director answers with the stop's note box. An empty list shows no panel.
+describe('writerQuestionsView (phase 3, brief 3.7)', () => {
+  const { writerQuestionsView } = require('../checkpoint-view-logic');
+  const Q1 = { kind: 'player', about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
+  const Q2 = { kind: 'ledger', about: 'The 10:02 AM sale of $250,000', question: 'Is this sale a duplicate?' };
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty list', []],
+    ['a list of nothing usable', [null, 'loose', { about: 'Sarah' }, { about: ' ', question: ' ' }]]
+  ])('shows no panel for %s', (_name, value) => {
+    const view = writerQuestionsView(value, 'outline');
+    expect(view.any).toBe(false);
+    expect(view.items).toEqual([]);
+  });
+
+  it('lists each question with what it is about first, in the writer\'s order', () => {
+    const view = writerQuestionsView([Q1, Q2], 'outline');
+    expect(view.any).toBe(true);
+    expect(view.items.map((item) => [item.about, item.question])).toEqual([
+      ['Sarah', Q1.question],
+      ['The 10:02 AM sale of $250,000', 'Is this sale a duplicate?']
+    ]);
+    expect(new Set(view.items.map((item) => item.key)).size).toBe(2);
+  });
+
+  it('counts the questions in its title', () => {
+    expect(writerQuestionsView([Q1], 'arc-selection').title).toBe('Questions from the writer (1)');
+    expect(writerQuestionsView([Q1, Q2], 'arc-selection').title).toBe('Questions from the writer (2)');
+  });
+
+  // Task 3.11 (final review, questions-console-docs finding 3): each stop's hint says
+  // what an answer does there. At the arc and outline stops the note reaches the next
+  // writer whichever button is pressed, but that writer never sees the questions, so
+  // each answer says what it is about. At the article stop Approve goes straight to
+  // assembly and nothing reads its note, so answers go with a send back.
+  it.each(['arc-selection', 'outline'])('at the %s stop, asks for the answers in the note, each saying what it is about', (stop) => {
+    expect(writerQuestionsView([Q1], stop).hint).toBe('Answer them in the note below, saying what each answer is about.');
+  });
+
+  it('at the article stop, says the answers go with a send back, and that Approve publishes the article as it is', () => {
+    expect(writerQuestionsView([Q1], 'article').hint)
+      .toBe('Send back with your answers in the note below to have the writer apply them. Approve publishes the article as it is.');
+  });
+
+  it.each([
+    ['no stop', undefined],
+    ['a stop with no questions panel', 'input-review'],
+    ['the phase name for the arcs', 'arcs']
+  ])('throws on %s, naming the three stops', (_name, stop) => {
+    expect(() => writerQuestionsView([Q1], stop)).toThrow(/'arc-selection', 'outline' or 'article'/);
+    expect(() => writerQuestionsView([], stop)).toThrow(/'arc-selection', 'outline' or 'article'/);
+  });
+
+  // Fix 3.7b (finding 1): each line shows the question's kind; a question with no kind,
+  // or an unknown one, from a list made before the field had one, still renders.
+  it('labels exactly the schema\'s kinds (lib/writer-questions.js)', () => {
+    const { WRITER_QUESTION_KIND_LABELS } = require('../checkpoint-view-logic');
+    const { WRITER_QUESTION_KINDS } = require('../../lib/writer-questions');
+    expect(Object.keys(WRITER_QUESTION_KIND_LABELS)).toEqual([...WRITER_QUESTION_KINDS]);
+  });
+
+  it('shows each question\'s kind', () => {
+    const view = writerQuestionsView([Q1, Q2, { kind: 'pronoun', about: 'Riley', question: 'Which pronoun?' }], 'article');
+    expect(view.items.map((item) => [item.kind, item.kindLabel])).toEqual([
+      ['player', 'Player'], ['ledger', 'Ledger'], ['pronoun', 'Pronoun']
+    ]);
+  });
+
+  it('renders a question with no kind, or an unknown one, with no kind shown', () => {
+    const view = writerQuestionsView([{ about: 'Sarah', question: 'Where?' }, { kind: 'other', about: 'Alex', question: 'Who?' }], 'article');
+    expect(view.any).toBe(true);
+    expect(view.items.map((item) => [item.kind, item.kindLabel, item.about])).toEqual([[null, '', 'Sarah'], [null, '', 'Alex']]);
+  });
+
+  it('trims the ends of each string and skips an entry missing either one', () => {
+    const view = writerQuestionsView([{ about: '  Sarah ', question: ' Where? ' }, { question: 'No subject?' }], 'arc-selection');
+    expect(view.items.map((item) => [item.about, item.question])).toEqual([['Sarah', 'Where?']]);
+  });
+});
+
+// Fix 3.7b (finding 4): RevisionDiff's client-side shallow diff walks the keys this
+// returns, so a round whose questions changed does not list `writerQuestions` as a
+// changed key, as the server's diffOutline skips it (lib/hand-edit-diff.js).
+describe('revisionDiffKeys (fix 3.7b)', () => {
+  const { revisionDiffKeys, REVISION_DIFF_IGNORED_KEYS } = require('../checkpoint-view-logic');
+  const Q = { kind: 'player', about: 'Sarah', question: 'Where was Sarah?' };
+
+  it('walks every top-level key of both versions, sorted', () => {
+    expect(revisionDiffKeys({ lede: {}, closing: {} }, { lede: {}, theStory: {} })).toEqual(['closing', 'lede', 'theStory']);
+  });
+
+  it('skips writerQuestions, whether added, removed or changed', () => {
+    expect(revisionDiffKeys({ lede: {} }, { lede: {}, writerQuestions: [Q] })).toEqual(['lede']);
+    expect(revisionDiffKeys({ lede: {}, writerQuestions: [Q] }, { lede: {} })).toEqual(['lede']);
+    expect(revisionDiffKeys({ headline: {}, writerQuestions: [Q] }, { headline: {}, writerQuestions: [] })).toEqual(['headline']);
+  });
+
+  it('reads a missing version as empty', () => {
+    expect(revisionDiffKeys(null, { lede: {}, writerQuestions: [] })).toEqual(['lede']);
+    expect(revisionDiffKeys(undefined, undefined)).toEqual([]);
+  });
+
+  it('skips exactly the keys the server\'s outline diff skips', () => {
+    const { _testing: { OUTLINE_IGNORED_KEYS } } = require('../../lib/hand-edit-diff');
+    expect(OUTLINE_IGNORED_KEYS).toContain('writerQuestions');
+    expect(REVISION_DIFF_IGNORED_KEYS).toEqual(OUTLINE_IGNORED_KEYS);
   });
 });

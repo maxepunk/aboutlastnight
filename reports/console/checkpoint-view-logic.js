@@ -347,23 +347,34 @@
   }
 
   /**
-   * Display shape for the whiteboard analysis: the six fields
-   * input-nodes.js WHITEBOARD_SCHEMA actually emits.
+   * Display shape for the whiteboard analysis: the fields input-nodes.js
+   * WHITEBOARD_SCHEMA emits.
    *
    * `ambiguities` is first in the returned object AND first on the screen: it is
    * the parser's own list of what it could not read, which is exactly what the
    * director can correct and nothing else can.
    *
+   * Phase 3 (brief 3.5): `regions`, each under the heading the players wrote, in
+   * place of groups under a model-written label. An older parse's `groups`
+   * ({label, members}) show as regions.
+   *
    * @param {object|null} wb
-   * @returns {{ambiguities: any[], names: any[], groups: any[], connections: any[],
-   *            notes: any[], structureType: string}}
+   * @returns {{ambiguities: any[], names: any[], regions: Array<{label: string, location: string, entries: any[]}>,
+   *            connections: any[], notes: any[], structureType: string}}
    */
   function whiteboardView(wb) {
     var w = wb || {};
+    var regions = Array.isArray(w.regions)
+      ? w.regions.filter(function (r) { return r && typeof r === 'object'; }).map(function (r) {
+        return { label: asString(r.label), location: asString(r.location), entries: asArray(r.entries) };
+      })
+      : asArray(w.groups).filter(function (g) { return g && typeof g === 'object'; }).map(function (g) {
+        return { label: asString(g.label), location: '', entries: asArray(g.members) };
+      });
     return {
       ambiguities: asArray(w.ambiguities),
       names: asArray(w.names),
-      groups: asArray(w.groups),
+      regions: regions,
       connections: asArray(w.connections),
       notes: asArray(w.notes),
       structureType: asString(w.structureType)
@@ -380,9 +391,9 @@
    * Anything else it can emit has no structured counterpart, so it would be
    * invisible if the screen showed only the four groups. Those land in the `other`
    * group. (I2b: the two messages that used to arrive this way — a leaked prompt
-   * example and an NPC pronoun error — are advisories now and render in the
-   * `advisory` group. Their prefixes were left unchanged so that promoting one back
-   * to structural needs no change here.)
+   * example and an NPC pronoun error — are advisories now; the pronoun error has
+   * its own advisory group since phase 3, see ADVISORY_GROUPS. Their prefixes were
+   * left unchanged so that promoting one back to structural needs no change here.)
    *
    * Prefix matching is deliberate and fails safe: if a message is reworded, its
    * issue moves INTO `other` (still on screen, just ungrouped) rather than out
@@ -397,6 +408,31 @@
 
   function isGroupedIssue(text) {
     return GROUPED_ISSUE_PREFIXES.some(function (prefix) { return text.indexOf(prefix) === 0; });
+  }
+
+  /**
+   * The advisory checks that get a group of their own (phase 3, 3.4), by the message
+   * prefix lib/content-bundle-fact-check.js gives each. Every advisory none of them
+   * claims (a leaked prompt example, a repeated absence, an unverifiable photo list)
+   * stays in the general `advisory` group. Only advisories are grouped here: a
+   * structural message with one of these prefixes, which a promotion would produce,
+   * lands in `other` as before. None of them counts toward the approve button's
+   * unresolved count (approveLabel), which is structural only.
+   */
+  var ADVISORY_GROUPS = [
+    { key: 'emDash', prefix: 'Em-dash in the narrator\'s prose:', label: 'Em-dashes in Nova\'s prose' },
+    { key: 'productionWords', prefix: 'Production word in print:', label: 'Production words in print' },
+    { key: 'novaPronoun', prefix: 'Gendered pronoun for Nova:', label: 'Nova written with a gendered pronoun' },
+    { key: 'npcPronouns', prefix: 'Pronoun error:', label: 'Pronouns for Marcus and Blake' },
+    { key: 'length', prefix: 'Over length:', label: 'Length' },
+    { key: 'headCount', prefix: 'Head count:', label: 'Head count' }
+  ];
+
+  function advisoryGroupOf(text) {
+    for (var i = 0; i < ADVISORY_GROUPS.length; i += 1) {
+      if (text.indexOf(ADVISORY_GROUPS[i].prefix) === 0) return ADVISORY_GROUPS[i];
+    }
+    return null;
   }
 
   function group(key, label, severity, items) {
@@ -491,9 +527,18 @@
       groups.push(group('other', 'Other structural issues', 'structural', other));
     }
 
-    if (advisoryWarnings.length > 0) {
-      groups.push(group('advisory', 'Advisory', 'advisory',
-        advisoryWarnings.map(function (text) { return { text: text }; })));
+    ADVISORY_GROUPS.forEach(function (spec) {
+      var items = advisoryWarnings
+        .filter(function (text) { return advisoryGroupOf(text) === spec; })
+        .map(function (text) { return { text: text }; });
+      if (items.length > 0) groups.push(group(spec.key, spec.label, 'advisory', items));
+    });
+
+    var otherAdvisories = advisoryWarnings
+      .filter(function (text) { return advisoryGroupOf(text) === null; })
+      .map(function (text) { return { text: text }; });
+    if (otherAdvisories.length > 0) {
+      groups.push(group('advisory', 'Advisory', 'advisory', otherAdvisories));
     }
 
     return {
@@ -770,37 +815,78 @@
     other: 'a verdict that names no one'
   };
 
+  /** How the input review names a culprit verdict that blames no character (phase 3, brief 3.5). */
+  var BLAMES_NO_CHARACTER_LABEL = 'the room blamed an institution or an unnamed person';
+
   /**
    * The verdict kind the parse returned, for the input review.
    *
    * A verdict with no culprit leaves `accused` empty on purpose, and the screen
    * used to read an empty `accused` as "not parsed" and show it in red. `noCulprit`
-   * is what lets it say what the room decided instead.
+   * is what lets it say what the room decided instead. Phase 3 (brief 3.5): so does
+   * `blamesNoCharacter`, for a culprit verdict that blames an institution or an
+   * unnamed person (lib/accusation-verdict.js blamesNoCharacter), whose charge holds
+   * the room's words for who. A culprit verdict with neither an accused nor a charge
+   * is a failed parse, and keeps the red "not parsed" line.
    *
    * @param {object|null} accusation - sessionConfig.accusation
-   * @returns {{verdictKind: string, noCulprit: boolean, label: string}}
+   * @returns {{verdictKind: string, noCulprit: boolean, blamesNoCharacter: boolean, label: string}}
    */
   function verdictView(accusation) {
-    var kind = asString((accusation || {}).verdictKind);
+    var a = accusation || {};
+    var kind = asString(a.verdictKind);
     var known = Object.prototype.hasOwnProperty.call(VERDICT_KIND_LABELS, kind);
+    var parsed = accusationView(a);
+    var namesNoOne = kind === 'culprit' && parsed.accused === '' && parsed.charge.trim() !== '';
     return {
       verdictKind: known ? kind : '',
       noCulprit: known && kind !== 'culprit',
-      label: known ? VERDICT_KIND_LABELS[kind] : ''
+      blamesNoCharacter: namesNoOne,
+      label: namesNoOne ? BLAMES_NO_CHARACTER_LABEL : (known ? VERDICT_KIND_LABELS[kind] : '')
     };
+  }
+
+  /**
+   * The split final vote, for the input review (phase 3, brief 3.5): every option
+   * with its count, the one the group statement adopted marked, or a note that it
+   * adopted none. `split` is false when the parse recorded no split vote.
+   *
+   * @param {object|null} accusation - sessionConfig.accusation
+   * @returns {{split: boolean, line: string}}
+   */
+  function votesView(accusation) {
+    var votes = asArray((accusation || {}).votes).filter(function (v) {
+      return v && asString(v.option).trim() && typeof v.count === 'number';
+    });
+    if (votes.length < 2) return { split: false, line: '' };
+    var anyAdopted = votes.some(function (v) { return v.adopted === true; });
+    var line = votes.map(function (v) {
+      return asString(v.option).trim() + ' ' + v.count + (v.adopted === true ? ' (adopted by the group statement)' : '');
+    }).join(', ');
+    return { split: true, line: anyAdopted ? line : line + ' (the group statement adopted none of these)' };
   }
 
   /**
    * Each exposed memory's exposer, exposure time and owner, as the parse kept them
    * from the session report's Detective Evidence Log (sessionConfig.exposures).
    *
-   * Held: shown to the director here and nowhere in a writer's prompt until
-   * phase 3 rules on naming exposers.
+   * Since phase 3 (brief 3.5) the writers see each one's time and the name on its
+   * turn-in on the morning timeline, for memories the bundle holds as exposed; the
+   * owner column is shown here only.
    *
-   * @param {Array|null} exposures
-   * @returns {{rows: Array<{tokenId: string, exposer: string, time: string, owner: string}>, count: number}}
+   * Two alarms (phase 3, brief 3.5), from two lists the parse keeps apart:
+   * - `noneExposed`: the parse's list of exposed memory ids (exposedTokens, counted as
+   *   sessionConfig.exposedTokenCount) is empty. Disposition reads that list alone,
+   *   so every memory then counts as buried, whatever the per-row log holds.
+   * - `logEmpty`: the per-row log is empty while memories were exposed (or the count
+   *   predates the field): no exposure times or turn-in names reach the writers.
+   * A thread whose parse predates either list has nothing to judge.
+   *
+   * @param {Array|null} exposures - sessionConfig.exposures
+   * @param {number|undefined} exposedTokenCount - sessionConfig.exposedTokenCount
+   * @returns {{rows: Array<{tokenId: string, exposer: string, time: string, owner: string}>, count: number, noneExposed: boolean, logEmpty: boolean}}
    */
-  function exposuresView(exposures) {
+  function exposuresView(exposures, exposedTokenCount) {
     var rows = asArray(exposures)
       .filter(function (e) { return e && typeof e === 'object' && asString(e.tokenId).trim(); })
       .map(function (e) {
@@ -811,7 +897,13 @@
           owner: asString(e.owner).trim()
         };
       });
-    return { rows: rows, count: rows.length };
+    var noneExposed = exposedTokenCount === 0;
+    return {
+      rows: rows,
+      count: rows.length,
+      noneExposed: noneExposed,
+      logEmpty: !noneExposed && Array.isArray(exposures) && rows.length === 0
+    };
   }
 
   /** The basename of a path, for the photo join. */
@@ -974,16 +1066,31 @@
   }
 
   /**
+   * How the trace labels a judge's revisionGuidance, by whether the automatic rework was
+   * given it (final review, reworks[0]). Since phase 3 (3.10) a journalist automatic pass
+   * carries no EVALUATOR FEEDBACK (node-helpers.js buildRevisionContext): the rework gets
+   * the must-fix items alone, so the guidance is the evaluation's, never sent. The
+   * detective's passes still print it to the rework (D13).
+   */
+  var TRACE_GUIDANCE_LABELS = {
+    journalist: 'The evaluation\'s guidance, not sent to the rework: ',
+    detective: 'Guidance to the writer: '
+  };
+
+  /**
    * The trace panel's model for one stop.
    *
    * @param {Array|null} trace - data.trace at the outline or article stop
+   * @param {string} [theme='journalist'] - the session's theme, which decides whether a
+   *   pass's rework was given the evaluation's guidance (TRACE_GUIDANCE_LABELS)
    * @returns {{any: boolean, title: string, passes: Array<{key: string, heading: string,
    *            triggerLabel: string, mustFix: {label: string, items: string[]},
    *            shouldConsider: {label: string, items: string[]}, noFindings: boolean,
    *            changed: {labels: string[], text: string}, guidance: string,
    *            criteria: Array<{key: string, text: string}>, criteriaLabel: string}>}}
    */
-  function traceView(trace) {
+  function traceView(trace, theme) {
+    var guidanceLabel = TRACE_GUIDANCE_LABELS[theme === 'detective' ? 'detective' : 'journalist'];
     var passes = asArray(trace)
       .filter(function (p) { return p && typeof p === 'object'; })
       .map(function (p, index) {
@@ -1002,7 +1109,7 @@
           shouldConsider: traceFindingList('Should consider', shouldConsider),
           noFindings: mustFix.length === 0 && shouldConsider.length === 0 && !guidance && criteria.length === 0,
           changed: traceChanged(p.changedScopes),
-          guidance: guidance ? 'Guidance to the writer: ' + guidance : '',
+          guidance: guidance ? guidanceLabel + guidance : '',
           criteria: criteria,
           criteriaLabel: 'Scores (' + criteria.length + ')'
         };
@@ -1013,6 +1120,95 @@
       title: 'Trace: ' + n + ' automatic rework' + (n === 1 ? '' : 's') + ' ran this round before you arrived',
       passes: passes
     };
+  }
+
+  // ── The writer's questions (phase 3, brief 3.7) ────────────────────────────
+
+  /**
+   * Each kind a question can have and the word the panel shows for it (fix 3.7b): the
+   * schema's three, lib/writer-questions.js WRITER_QUESTION_KINDS (a test holds the
+   * keys equal to that list).
+   */
+  var WRITER_QUESTION_KIND_LABELS = { player: 'Player', pronoun: 'Pronoun', ledger: 'Ledger' };
+
+  /**
+   * What the panel tells the director an answer does at each stop (task 3.11; final
+   * review, questions-console-docs finding 3). At the arc and outline stops the note
+   * reaches the next writer whichever button is pressed, as guidance or a standing
+   * note, but that writer never sees the questions, so each answer says what it is
+   * about. At the article stop Approve goes straight to assembly and nothing reads
+   * its note, so the answers go with a send back.
+   */
+  var WRITER_QUESTIONS_HINTS = {
+    'arc-selection': 'Answer them in the note below, saying what each answer is about.',
+    outline: 'Answer them in the note below, saying what each answer is about.',
+    article: 'Send back with your answers in the note below to have the writer apply them. Approve publishes the article as it is.'
+  };
+
+  /**
+   * The writer's questions panel at the arc, outline and article stops (spec C15,
+   * D8): one line per question, its kind and what it is about first, skimmed in a
+   * glance, then the stop's hint for answering them. An entry without both strings is
+   * left out, and an empty list shows no panel. A question with no kind, or an unknown
+   * one (a list from before the field had a kind), renders with none.
+   *
+   * @param {Array|null} questions - data.writerQuestions
+   * @param {string} stop - 'arc-selection', 'outline' or 'article': the stop showing
+   *   the panel, whose hint says what an answer does there; any other value throws
+   * @returns {{any: boolean, title: string, hint: string,
+   *            items: Array<{key: string, kind: (string|null), kindLabel: string, about: string, question: string}>}}
+   */
+  function writerQuestionsView(questions, stop) {
+    if (!Object.prototype.hasOwnProperty.call(WRITER_QUESTIONS_HINTS, stop)) {
+      throw new Error("writerQuestionsView: stop must be 'arc-selection', 'outline' or 'article', got " + String(stop));
+    }
+    var items = asArray(questions)
+      .filter(function (q) { return q && typeof q === 'object'; })
+      .map(function (q) {
+        var kind = Object.prototype.hasOwnProperty.call(WRITER_QUESTION_KIND_LABELS, q.kind) ? q.kind : null;
+        return { kind: kind, about: asString(q.about).trim(), question: asString(q.question).trim() };
+      })
+      .filter(function (q) { return q.about.length > 0 && q.question.length > 0; })
+      .map(function (q, index) {
+        return {
+          key: 'question-' + index,
+          kind: q.kind,
+          kindLabel: q.kind ? WRITER_QUESTION_KIND_LABELS[q.kind] : '',
+          about: q.about,
+          question: q.question
+        };
+      });
+    return {
+      any: items.length > 0,
+      title: 'Questions from the writer (' + items.length + ')',
+      hint: WRITER_QUESTIONS_HINTS[stop],
+      items: items
+    };
+  }
+
+  // ── RevisionDiff's key walk (fix 3.7b) ──────────────────────────────────────
+
+  /**
+   * The top-level keys RevisionDiff's client-side shallow diff skips: the writer's
+   * questions are not part of the output a rework changes, so a round whose questions
+   * changed lists nothing for them. The same list as the server's outline diff
+   * (lib/hand-edit-diff.js OUTLINE_IGNORED_KEYS; a test holds the two equal).
+   */
+  var REVISION_DIFF_IGNORED_KEYS = ['writerQuestions'];
+
+  /**
+   * The keys RevisionDiff compares: every top-level key of either version, each once,
+   * sorted, less REVISION_DIFF_IGNORED_KEYS. A missing version reads as empty.
+   *
+   * @param {Object|Array|null} previous
+   * @param {Object|Array|null} current
+   * @returns {string[]}
+   */
+  function revisionDiffKeys(previous, current) {
+    var keys = Object.keys(previous || {}).concat(Object.keys(current || {}));
+    return keys
+      .filter(function (key, index) { return keys.indexOf(key) === index && REVISION_DIFF_IGNORED_KEYS.indexOf(key) === -1; })
+      .sort();
   }
 
   var api = {
@@ -1040,10 +1236,18 @@
     noteSlotKey: noteSlotKey,
     // Phase 2, brief 2.2: the director's words
     verdictView: verdictView,
+    // Phase 3, brief 3.5: the split final vote at the input review
+    votesView: votesView,
     exposuresView: exposuresView,
     characterIdCards: characterIdCards,
     characterIdsPayload: characterIdsPayload,
-    arcNoteInitial: arcNoteInitial
+    arcNoteInitial: arcNoteInitial,
+    // Phase 3, brief 3.7: the writer's questions at the arc, outline and article stops
+    writerQuestionsView: writerQuestionsView,
+    WRITER_QUESTION_KIND_LABELS: WRITER_QUESTION_KIND_LABELS,
+    // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
+    revisionDiffKeys: revisionDiffKeys,
+    REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS
   };
 
   if (typeof window !== 'undefined') {

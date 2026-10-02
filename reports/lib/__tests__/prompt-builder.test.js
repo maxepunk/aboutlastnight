@@ -76,20 +76,24 @@ describe('PromptBuilder', () => {
       expect(result).toHaveProperty('userPrompt');
     });
 
-    it('should load outlineGeneration phase prompts', async () => {
+    // Phase 3 (3.2): the journalist outline writer reads the rule set, never the
+    // retired craft files.
+    it('loads no craft file: the journalist reads the rule set', async () => {
       await builder.buildOutlinePrompt(
         mockArcAnalysis, selectedArcs, heroImage
       );
 
-      expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('outlineGeneration');
+      expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
     });
 
-    it('should include section-rules in system prompt', async () => {
+    it('should carry the world and the truth rules in the system prompt', async () => {
       const { systemPrompt } = await builder.buildOutlinePrompt(
         mockArcAnalysis, selectedArcs, heroImage
       );
 
-      expect(systemPrompt).toContain('Lede must hook');
+      expect(systemPrompt).toContain('<world>');
+      expect(systemPrompt).toContain('<truth-rules>');
+      expect(systemPrompt).not.toContain('Lede must hook');
     });
 
     it('should include numbered selected arcs in user prompt', async () => {
@@ -109,16 +113,34 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('HERO IMAGE: hero.png');
     });
 
-    it('should include JSON output structure', async () => {
+    // Phase 3 (3.2; M27): the outline's shape is outline.schema.json's alone; the
+    // prompt no longer restates it in its own words. Fix 3.2b (finding 10): the
+    // prompt embeds that one schema under <SCHEMA>, as the article writer embeds the
+    // content-bundle schema, a backstop for the SDK channel (#277). It sits after
+    // the data and before the craft files.
+    it('embeds outline.schema.json under a <SCHEMA> tag, and restates the shape nowhere else', async () => {
+      const outlineSchema = require('../schemas/outline.schema.json');
       const { userPrompt } = await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage
+        mockArcAnalysis, selectedArcs, heroImage, [], [], [],
+        { roster: ['Alex Reeves'], accusation: 'Alex', playerCount: 1 }
       );
 
-      expect(userPrompt).toContain('lede');
-      expect(userPrompt).toContain('theStory');
-      expect(userPrompt).toContain('followTheMoney');
-      expect(userPrompt).toContain('thePlayers');
-      expect(userPrompt).toContain('whatsMissing');
+      const printed = JSON.stringify(outlineSchema, null, 2);
+      expect(userPrompt.split(printed).length - 1).toBe(1);
+      const schemaBlock = userPrompt.slice(userPrompt.indexOf('\n<SCHEMA>\n'), userPrompt.indexOf('\n</SCHEMA>\n'));
+      expect(schemaBlock).toContain(printed);
+      expect(userPrompt.indexOf('\n<SCHEMA>\n')).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
+      expect(userPrompt.indexOf('\n</SCHEMA>\n')).toBeLessThan(userPrompt.indexOf('<craft-'));
+      const outsideSchema = userPrompt.replace(/<SCHEMA>[\s\S]*?<\/SCHEMA>/g, '');
+      expect(outsideSchema).not.toContain('Return JSON with the following structure');
+      expect(outsideSchema).not.toContain('"followTheMoney": {');
+    });
+
+    it('the detective outline prompt embeds no <SCHEMA> (D13)', async () => {
+      const detective = new PromptBuilder(mockThemeLoader, 'detective', {});
+      const { userPrompt } = await detective.buildOutlinePrompt(mockArcAnalysis, selectedArcs, heroImage);
+      expect(userPrompt).not.toContain('<SCHEMA>');
+      expect(userPrompt).toContain('Return JSON with the following structure');
     });
   });
 
@@ -150,28 +172,34 @@ describe('PromptBuilder', () => {
       expect(result).toHaveProperty('userPrompt');
     });
 
-    it('should load articleGeneration phase prompts', async () => {
+    // Phase 3 (3.2): the journalist article writer reads the rule set, never the
+    // retired craft files.
+    it('loads no craft file: the journalist reads the rule set', async () => {
       await builder.buildArticlePrompt(
         mockOutline
       );
 
-      expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('articleGeneration');
+      expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
     });
 
-    it('should include character-voice in user prompt (VOICE_CHECKPOINT)', async () => {
+    it('should carry the voice craft file in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline
       );
 
-      expect(userPrompt).toContain('Be NovaGlade');
+      expect(userPrompt).toContain('<craft-voice>');
+      expect(userPrompt).not.toContain('Be NovaGlade');
     });
 
-    it('should include writing-principles in user prompt (VOICE_CHECKPOINT)', async () => {
+    it('should carry every article craft file in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline
       );
 
-      expect(userPrompt).toContain('Show dont tell');
+      // Task 3.8: the eight craft files, grouped by the writer's job (spec section 8).
+      ['story', 'form', 'material', 'voice', 'judgement', 'telling', 'cards', 'questions']
+        .forEach((name) => expect(userPrompt).toContain(`<craft-${name}>`));
+      expect(userPrompt).not.toContain('Show dont tell');
     });
 
     it('should include approved outline in user prompt', async () => {
@@ -198,25 +226,25 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('"evidenceCards"');
       expect(userPrompt).toContain('"financialTracker"');
       expect(userPrompt).toContain('"additionalProperties": false');
-      expect(userPrompt).toContain('anthropics/claude-agent-sdk-typescript#277');
+      // Phase 3 (3.2; M24): the SDK issue note is a code comment now, not prompt text.
+      expect(userPrompt).not.toContain('anthropics/claude-agent-sdk-typescript#277');
     });
 
-    it('should include anti-patterns in user prompt', async () => {
+    // Phase 3 (3.2): the em-dash house style is C4's, in craft-telling.
+    it('should carry the telling craft file, where the em-dash house style lives', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline
       );
 
-      expect(userPrompt).toContain('No em-dashes');
+      expect(userPrompt).toContain('<craft-telling>');
     });
 
-    it('journalist prompt includes LEDE, THE STORY, FOLLOW THE MONEY sections', async () => {
+    it('journalist prompt names the six section slots', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline
       );
 
-      expect(userPrompt).toContain('LEDE');
-      expect(userPrompt).toContain('THE STORY');
-      expect(userPrompt).toContain('FOLLOW THE MONEY');
+      expect(userPrompt).toContain('one of lede, the-story, follow-the-money, the-players, whats-missing or closing');
     });
 
     it('journalist prompt includes pullQuotes and financialTracker', async () => {
@@ -228,99 +256,34 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('financialTracker');
     });
 
-    it('journalist prompt includes VISUAL_DISTRIBUTION and ARC_FLOW', async () => {
+    // Phase 3 (3.2; spec section 7): the fixed section table and every-arc-in-every-
+    // section went; C2 and C16 say what stays.
+    it('journalist prompt carries neither VISUAL_DISTRIBUTION nor ARC_FLOW', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         mockOutline
       );
 
-      expect(userPrompt).toContain('VISUAL_DISTRIBUTION');
-      expect(userPrompt).toContain('ARC_FLOW');
+      expect(userPrompt).not.toContain('VISUAL_DISTRIBUTION');
+      expect(userPrompt).not.toContain('ARC_FLOW');
     });
 
-    it('journalist article prompt includes explicit word target in GENERATION_INSTRUCTION', async () => {
+    // Phase 3 (3.2): the length is C4's (about 1,500 words), in craft-telling.
+    it('journalist article prompt leaves the word target to C4', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         { lede: { hook: 'test' } }, [], null
       );
       const generationInstruction = userPrompt.split('<GENERATION_INSTRUCTION>')[1] || '';
-      expect(generationInstruction).toContain('1000-1500 words');
-    });
-  });
-
-  describe('buildValidationPrompt', () => {
-    const mockArticleHtml = '<article><p>The investigation reveals...</p></article>';
-    const roster = ['Alex', 'Remi', 'Vic'];
-
-    beforeEach(() => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'anti-patterns': 'No em-dashes, no tokens...',
-        'character-voice': 'NovaGlade voice...',
-        'evidence-boundaries': 'Only quote exposed...'
-      });
-    });
-
-    it('should return system and user prompts', async () => {
-      const result = await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(result).toHaveProperty('systemPrompt');
-      expect(result).toHaveProperty('userPrompt');
-    });
-
-    it('should load validation phase prompts', async () => {
-      await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(mockThemeLoader.loadPhasePrompts).toHaveBeenCalledWith('validation');
-    });
-
-    it('should include anti-patterns in system prompt', async () => {
-      const { systemPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(systemPrompt).toContain('No em-dashes');
-    });
-
-    it('should include character-voice in system prompt', async () => {
-      const { systemPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(systemPrompt).toContain('NovaGlade voice');
-    });
-
-    it('should include roster in user prompt', async () => {
-      const { userPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(userPrompt).toContain('Alex, Remi, Vic');
-    });
-
-    it('should include article HTML in user prompt', async () => {
-      const { userPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(userPrompt).toContain('The investigation reveals');
-    });
-
-    it('should specify validation checklist items', async () => {
-      const { userPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(userPrompt).toContain('Em-dashes');
-      expect(userPrompt).toContain('memory token');
-      expect(userPrompt).toContain('Game mechanics language');
-      expect(userPrompt).toContain('Vague attribution');
-      expect(userPrompt).toContain('Passive/neutral voice');
-      expect(userPrompt).toContain('Missing roster members');
-      expect(userPrompt).toContain('Blake condemned');
-    });
-
-    it('should specify JSON output structure', async () => {
-      const { userPrompt } = await builder.buildValidationPrompt(mockArticleHtml, roster);
-
-      expect(userPrompt).toContain('passed');
-      expect(userPrompt).toContain('issues');
-      expect(userPrompt).toContain('voice_score');
-      expect(userPrompt).toContain('roster_coverage');
+      expect(generationInstruction).not.toContain('1000-1500 words');
+      expect(userPrompt).toContain('<craft-telling>');
     });
   });
 
   describe('getPhaseRequirements', () => {
-    it('should return requirements for valid phase', () => {
-      const reqs = builder.getPhaseRequirements('articleGeneration');
-      expect(reqs).toEqual(PHASE_REQUIREMENTS.articleGeneration);
+    // Phase 3 (3.2): keyed by theme; the journalist's writers list no craft file.
+    it('should return the theme\'s requirements for a valid phase', () => {
+      expect(builder.getPhaseRequirements('articleGeneration')).toEqual([]);
+      const detective = new PromptBuilder(mockThemeLoader, 'detective');
+      expect(detective.getPhaseRequirements('articleGeneration')).toEqual(PHASE_REQUIREMENTS.detective.articleGeneration);
     });
 
     it('should return empty array for unknown phase', () => {
@@ -406,18 +369,6 @@ describe('PromptBuilder', () => {
       expect(systemPrompt).not.toContain('You are Nova');
       expect(systemPrompt).not.toContain('Hunter S. Thompson');
       expect(systemPrompt).toContain('Detective');
-    });
-
-    it('buildRevisionPrompt uses detective framing', async () => {
-      const { systemPrompt } = await detectiveBuilder.buildRevisionPrompt('content', 'check');
-      expect(systemPrompt).not.toContain('Nova');
-      expect(systemPrompt).toContain('Detective Anondono');
-    });
-
-    it('buildValidationPrompt uses detective framing', async () => {
-      const { systemPrompt } = await detectiveBuilder.buildValidationPrompt('<html></html>', ['Alex']);
-      expect(systemPrompt).not.toContain('NovaNews');
-      expect(systemPrompt).toContain('detective');
     });
 
     it('detective article prompt includes detective constraints', async () => {
@@ -555,79 +506,6 @@ describe('PromptBuilder', () => {
     });
   });
 
-  // Helper factory for theme-branching tests (returns a stub ThemeLoader
-  // that resolves with all prompt keys the methods might request)
-  function createStubThemeLoader() {
-    return {
-      loadPhasePrompts: jest.fn().mockResolvedValue({
-        'character-voice': 'voice stub',
-        'writing-principles': 'principles stub',
-        'evidence-boundaries': 'boundaries stub',
-        'section-rules': 'rules stub',
-        'narrative-structure': 'structure stub',
-        'formatting': 'formatting stub',
-        'anti-patterns': 'anti-patterns stub',
-        'editorial-design': 'design stub',
-      }),      validate: jest.fn()
-    };
-  }
-
-  describe('PromptBuilder.buildRevisionPrompt (theme branching)', () => {
-    it('journalist revision references Nova and em-dashes', async () => {
-      const pb = new PromptBuilder(createStubThemeLoader(), 'journalist');
-      const { userPrompt } = await pb.buildRevisionPrompt('content', 'check');
-      expect(userPrompt).toContain('Nova');
-      expect(userPrompt).toContain('em-dashes');
-    });
-
-    it('detective revision does NOT reference Nova or em-dashes', async () => {
-      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
-      const { userPrompt } = await pb.buildRevisionPrompt('content', 'check');
-      expect(userPrompt).not.toContain('Nova');
-      expect(userPrompt).not.toContain('em-dashes');
-    });
-
-    it('detective revision checks for section differentiation and formatting', async () => {
-      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
-      const { userPrompt } = await pb.buildRevisionPrompt('content', 'check');
-      expect(userPrompt).toContain('Repeated facts across sections');
-      expect(userPrompt).toContain('first-person voice that slipped in');
-      expect(userPrompt).toContain('<strong>');
-    });
-
-    it('detective revision system prompt preserves only sections and photos', async () => {
-      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
-      const { systemPrompt } = await pb.buildRevisionPrompt('content', 'check');
-      expect(systemPrompt).toContain('sections, photos');
-      expect(systemPrompt).not.toContain('pull quotes');
-      expect(systemPrompt).not.toContain('financial tracker');
-    });
-  });
-
-  describe('PromptBuilder.buildValidationPrompt (theme branching)', () => {
-    it('journalist validation checks for em-dashes and participatory voice', async () => {
-      const pb = new PromptBuilder(createStubThemeLoader(), 'journalist');
-      const { userPrompt } = await pb.buildValidationPrompt('<html></html>', ['Alex']);
-      expect(userPrompt).toContain('Em-dashes');
-      expect(userPrompt).toContain('Passive/neutral voice');
-      expect(userPrompt).toContain('blake_handled_correctly');
-    });
-
-    it('detective validation does NOT check for em-dashes', async () => {
-      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
-      const { userPrompt } = await pb.buildValidationPrompt('<html></html>', ['Alex']);
-      expect(userPrompt).not.toContain('Em-dashes');
-      expect(userPrompt).not.toContain('blake_handled_correctly');
-    });
-
-    it('detective validation checks for section differentiation', async () => {
-      const pb = new PromptBuilder(createStubThemeLoader(), 'detective');
-      const { userPrompt } = await pb.buildValidationPrompt('<html></html>', ['Alex']);
-      expect(userPrompt).toContain('section differentiation');
-      expect(userPrompt).toContain('section_differentiation');
-    });
-  });
-
   describe('resolvePromptVariables', () => {
     it('should replace {{JOURNALIST_FIRST_NAME}} with sessionConfig value', () => {
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Cassandra' });
@@ -662,6 +540,8 @@ describe('PromptBuilder', () => {
     });
   });
 
+  // Phase 3 (3.2): the journalist's writers read the rule set, which carries no
+  // template variable; the parked detective's craft files still do.
   describe('prompt variable resolution in build methods', () => {
     it('buildOutlinePrompt should resolve variables in loaded prompts', async () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
@@ -672,7 +552,7 @@ describe('PromptBuilder', () => {
         'evidence-boundaries': 'Boundaries text'
       });
 
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
+      const builder = new PromptBuilder(mockThemeLoader, 'detective', { journalistFirstName: 'Athena' });
 
       const { systemPrompt } = await builder.buildOutlinePrompt(
         { narrativeArcs: [] }, ['Arc 1'], 'hero.png'
@@ -693,7 +573,7 @@ describe('PromptBuilder', () => {
         'editorial-design': 'Design text'
       });
 
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Athena' });
+      const builder = new PromptBuilder(mockThemeLoader, 'detective', { journalistFirstName: 'Athena' });
 
       const { userPrompt } = await builder.buildArticlePrompt(
         { lede: { hook: 'Hook' } }
@@ -703,87 +583,31 @@ describe('PromptBuilder', () => {
     });
   });
 
-  describe('TEMPORAL_DISCIPLINE content', () => {
-    it('should include LAST NIGHT and THIS MORNING timeline references', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
-        'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'anti-patterns': ''
-      });
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
-      const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, [], 'hero.jpg'
-      );
+  // Phase 3 (3.2): the stages are the world's and T7's, in the system prompt, the
+  // same in both modes. The <TEMPORAL_DISCIPLINE> blocks restated them (and the
+  // article's said memories went to "the Detective"); they went.
+  describe('the stages (the world and T7)', () => {
+    const stagesFor = async (reportingMode, which) => {
+      const b = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode });
+      return which === 'outline'
+        ? b.buildOutlinePrompt({ narrativeArcs: [] }, ['Arc 1'], 'hero.png')
+        : b.buildArticlePrompt({ sections: [] }, [], 'hero.jpg');
+    };
 
-      expect(userPrompt).toContain('LAST NIGHT');
-      expect(userPrompt).toContain('THIS MORNING');
-      // Phase 2 (2.6): where Nova was is the system prompt's mode block's to say.
-      expect(userPrompt).toContain('set by the REPORTING MODE in your system prompt');
-      expect(userPrompt).not.toContain('physically present');
-    });
-
-    it('defers to the mode block in both modes instead of restating it (phase 2, 2.6)', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
-        'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'anti-patterns': ''
-      });
-      const blockFor = async (reportingMode) => {
-        const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode });
-        const { userPrompt } = await builder.buildArticlePrompt(
-          { sections: [] }, [], 'hero.jpg'
-        );
-        return userPrompt.slice(
-          userPrompt.indexOf('<TEMPORAL_DISCIPLINE>'),
-          userPrompt.indexOf('</TEMPORAL_DISCIPLINE>')
-        );
-      };
-      const remote = await blockFor('remote');
-      const onSite = await blockFor('on-site');
-
-      expect(remote.length).toBeGreaterThan(0);
-      expect(remote).toBe(onSite);
-      expect(remote).not.toContain('received real-time tips');
-      expect(remote).not.toContain('received reports and tips');
-      expect(remote).not.toContain('physically present');
-      expect(remote).not.toContain('directly witnessed');
-    });
-  });
-
-  describe('articleGeneration system prompt', () => {
-    it('should reference last night/this morning timeline', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
-        'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'anti-patterns': ''
-      });
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
-      const { systemPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, [], 'hero.jpg'
-      );
-
-      expect(systemPrompt).toContain('LAST NIGHT');
-      expect(systemPrompt).toContain('THIS MORNING');
+    it.each(['outline', 'article'])('the %s system prompt says the party was last night and the investigation this morning', async (which) => {
+      const { systemPrompt, userPrompt } = await stagesFor('on-site', which);
+      expect(systemPrompt).toContain('**The party** happened last night');
+      expect(systemPrompt).toContain('**The investigation** is the game itself, this morning');
+      expect(userPrompt).not.toContain('<TEMPORAL_DISCIPLINE>');
       expect(systemPrompt).not.toContain('the game session');
     });
-  });
 
-  describe('outline TEMPORAL_DISCIPLINE', () => {
-    it('should reference LAST NIGHT and THIS MORNING instead of past/present', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'section-rules': '', 'editorial-design': '', 'narrative-structure': '',
-        'formatting': '', 'evidence-boundaries': ''
-      });
-
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'on-site' });
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        { narrativeArcs: [] }, ['Arc 1'], 'hero.png'
-      );
-
-      expect(userPrompt).toContain('LAST NIGHT');
-      expect(userPrompt).toContain('THIS MORNING');
-      expect(userPrompt).not.toContain('(past)');
-      expect(userPrompt).not.toContain('(present)');
+    it('the world and the truth rules are the same in both modes; only the mode block differs', async () => {
+      const remote = (await stagesFor('remote', 'article')).systemPrompt;
+      const onSite = (await stagesFor('on-site', 'article')).systemPrompt;
+      const core = (text) => text.slice(text.indexOf('<world>'), text.indexOf('</truth-rules>'));
+      expect(core(remote)).toBe(core(onSite));
+      expect(core(remote)).not.toContain('physically present');
     });
   });
 
@@ -888,7 +712,8 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('Cayman');
       expect(userPrompt).toContain('$1,455,000');
       expect(userPrompt).toContain('$350,000');
-      expect(userPrompt).toContain('DETERMINISTIC');
+      // Phase 3 (3.2): the figures' provenance, in place of "DETERMINISTIC".
+      expect(userPrompt).toContain('figures code computed from the session report');
     });
 
     it('buildArticlePrompt should not include FINANCIAL_SUMMARY when shellAccounts empty', async () => {
@@ -992,8 +817,10 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('INVESTIGATION ROSTER (3 players)');
       expect(userPrompt).toContain('Alex Reeves');
       expect(userPrompt).toContain('Vic Kingsley');
-      expect(userPrompt).toContain('CHARACTER AGENCY RULE');
-      expect(userPrompt).toContain('Use exactly 3');
+      // Phase 3 (3.2): the agency rule rewritten (Blake acts in the room) and the head
+      // count in T10's words (fix 3.2b, finding 7).
+      expect(userPrompt).toContain('Only the 3 players above were at the investigation');
+      expect(userPrompt).toContain('When the article counts the people at the investigation, it counts these 3 players.');
     });
 
     it('should omit SESSION_FACTS when sessionFacts is null', async () => {
@@ -1029,10 +856,10 @@ describe('PromptBuilder', () => {
       );
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('Blake solicited Vic three times');
-      // Phase 2 (2.6): the header names what the notes are and defers to the mode
-      // block for how they reached the reporter; it no longer says "you observed".
-      expect(userPrompt).toContain('What happened during the investigation this morning');
-      expect(userPrompt).toContain('How it reached you is set by the reporting mode in your system prompt');
+      // Phase 3 (3.2): the header names what the notes are, and dates nothing to
+      // "this morning"; T1 and the mode block say how the room's events reached Nova.
+      expect(userPrompt).toContain("The director's notes on the session, as written");
+      expect(userPrompt).not.toContain('What happened during the investigation this morning');
       // Whiteboard should NOT be in this section
       expect(userPrompt).not.toContain('suspects');
     });
@@ -1149,20 +976,22 @@ describe('PromptBuilder', () => {
       expect(result).toContain('Alex Reeves: Role: CEO | Member of: Board');
     });
 
-    it('appends pronouns from rosterPronouns, defaulting a roster member to they/them', () => {
+    // Phase 3 (3.2; T9): a roster member with no captured pronoun prints "pronoun
+    // not given", which the writer raises with the director.
+    it('appends pronouns from rosterPronouns, and says when a roster member has none', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const canonical = { Vic: 'Vic Kingsley', Sam: 'Sam Rivera' };
       const pronouns = { Vic: 'she/her' };
       const result = generateRosterSection('journalist', canonical, null, pronouns, ['Vic', 'Sam']);
       expect(result).toContain('Vic Kingsley (she/her)');
-      expect(result).toContain('Sam Rivera (they/them)');
+      expect(result).toContain('Sam Rivera (pronoun not given)');
     });
 
-    it('defaults every roster member to they/them when no pronoun map is given', () => {
+    it('says "pronoun not given" for every roster member when no pronoun map is given', () => {
       const { generateRosterSection } = require('../prompt-builder');
       const canonical = { Vic: 'Vic Kingsley' };
       const result = generateRosterSection('journalist', canonical, null, null, ['Vic']);
-      expect(result).toContain('Vic Kingsley (they/them)');
+      expect(result).toContain('Vic Kingsley (pronoun not given)');
     });
 
     it('guesses no pronoun for a character off the roster (final fix wave)', () => {
@@ -1251,7 +1080,8 @@ describe('PromptBuilder', () => {
 
     it('emits <TRANSACTION_LINKS> when links present', async () => {
       const directorNotes = {
-        rawProse: 'notes',
+        // A link prints only when the notes hold its observation (3.6b fix batch).
+        rawProse: 'Kai paid Blake at the bar.',
         quotes: [],
         transactionReferences: [{
           excerpt: 'Kai paid Blake', linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }], confidence: 'high'
@@ -1265,18 +1095,19 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('tay004');
     });
 
-    it('emits <POST_INVESTIGATION_NEWS> when developments present', async () => {
+    it('emits <EPILOGUE> with the director\'s sentence when the notes carry an epilogue (phase 3, 3.6)', async () => {
+      // The block was <POST_INVESTIGATION_NEWS> and led with the enricher's headline;
+      // it now prints the director's sentence as written, under the glossary's name.
       const directorNotes = {
-        rawProse: 'notes',
+        rawProse: 'notes. It has just been announced that Sarah is interim CEO.',
         quotes: [],
         transactionReferences: [],
-        postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'Just been announced' }]
+        postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'It has just been announced that Sarah is interim CEO.' }]
       };
       const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
-      expect(userPrompt).toContain('<POST_INVESTIGATION_NEWS>');
-      expect(userPrompt).toContain('Sarah named interim CEO');
-      // This tag must be DISTINCT from general observations so Nova writes "It has just been announced..."
-      expect(userPrompt).toMatch(/<POST_INVESTIGATION_NEWS>[\s\S]*Sarah named interim CEO[\s\S]*<\/POST_INVESTIGATION_NEWS>/);
+      // The epilogue is its own block, apart from the notes, holding the director's sentence as written.
+      expect(userPrompt).toMatch(/<EPILOGUE>[\s\S]*It has just been announced that Sarah is interim CEO\.[\s\S]*<\/EPILOGUE>/);
+      expect(userPrompt).not.toContain('Sarah named interim CEO');
     });
 
     it('omits empty tags', async () => {
@@ -1289,7 +1120,7 @@ describe('PromptBuilder', () => {
       const { userPrompt } = await builder.buildArticlePrompt(outline, [], null, [], null, directorNotes, null);
       expect(userPrompt).not.toContain('<QUOTE_BANK>');
       expect(userPrompt).not.toContain('<TRANSACTION_LINKS>');
-      expect(userPrompt).not.toContain('<POST_INVESTIGATION_NEWS>');
+      expect(userPrompt).not.toContain('<EPILOGUE>');
     });
 
     it('handles null directorNotes gracefully', async () => {
@@ -1312,14 +1143,17 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
   const { PromptBuilder } = require('../prompt-builder');
 
   const DIRECTOR_NOTES = {
-    rawProse: 'Blake solicited Vic three times. Heated argument at the bar.',
+    // Phase 3 (3.6): an epilogue item prints as the director's sentence, so the
+    // sentence is in the notes.
+    // The link's observation too (3.6b fix batch: a link prints only when the notes hold it).
+    rawProse: 'Blake solicited Vic three times. Heated argument at the bar. Alex paid Blake. Sarah was named interim CEO after the investigation.',
     quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
     transactionReferences: [{
       excerpt: 'Alex paid Blake',
       linkedTransactions: [{ timestamp: '09:40 PM', tokenId: 'tay004', amount: '$450,000' }],
       confidence: 'high'
     }],
-    postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO' }],
+    postInvestigationDevelopments: [{ detail: 'Sarah was named interim CEO after the investigation.' }],
     whiteboard: { suspects: ['Vic'] }
   };
 
@@ -1346,7 +1180,8 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     expect(userPrompt).toContain('we had to act');
     expect(userPrompt).toContain('amount: $450,000 | time: 09:40 PM');
     expect(userPrompt).not.toContain('tay004');
-    expect(userPrompt).toContain('Sarah named interim CEO');
+    expect(userPrompt).toContain('<EPILOGUE>');
+    expect(userPrompt).toContain('- Sarah was named interim CEO after the investigation.');
   });
 
   it('places it before the arc metadata, and leaves the guidance last', async () => {
@@ -1372,13 +1207,14 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     expect(userPrompt).not.toContain('suspects');
   });
 
-  it('the temporal-discipline block hands the outline writer no first-person marker (integrator ruling, phase 1)', async () => {
+  // Phase 3 (3.2): the <TEMPORAL_DISCIPLINE> block went (the world and T7 state the
+  // stages); its third-person rule for the outline is the task's first line.
+  it('the outline writer plans in the third person, with no first-person marker (integrator ruling, phase 1)', async () => {
     const { userPrompt } = await render({ directorNotes: null });
-    const block = userPrompt.slice(userPrompt.indexOf('<TEMPORAL_DISCIPLINE>'), userPrompt.indexOf('</TEMPORAL_DISCIPLINE>'));
-    expect(block.length).toBeGreaterThan(0);
-    expect(block).not.toContain('"I watched"');
-    expect(block).not.toContain('Nova was there');
-    expect(block).toContain('third person');
+    const task = userPrompt.split('\n')[0];
+    expect(task).toContain('third person');
+    expect(userPrompt).not.toContain('"I watched"');
+    expect(userPrompt).not.toContain('Nova was there');
   });
 });
 
@@ -1469,9 +1305,11 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt).toContain('<document id="mar004" kind="memory" name="MAR004 - name" owner="Marcus Blackwood" layer="exposed">');
     expect(userPrompt).toContain('<document id="p1" kind="Document" name="Board minutes" layer="exposed">');
     expect(userPrompt).not.toContain('Derived Guess');
-    // Buried memories: transactions only, once, with no id, owner or text.
-    expect(count(userPrompt, '<buried-transactions>\n')).toBe(1);
-    expect(userPrompt).toContain('- account: Deez | amount: $225,000 | time: 08:00 PM');
+    // Buried memories: sales only, once, on the morning timeline (phase 3, 3.5: it
+    // replaced <buried-transactions>; 07:50 PM is the first sale, so the evening clock
+    // shows each time as morning), with no id, owner or text.
+    expect(count(userPrompt, '<morning-timeline>\n')).toBe(1);
+    expect(userPrompt).toContain('- 08:00 AM | sale | account: Deez | amount: $225,000');
     for (const secret of ['zzq001', 'Quill']) expect(userPrompt).not.toContain(secret);
     // The director's words keep the last word.
     expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
@@ -1481,10 +1319,13 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     const { userPrompt } = await outlineFor('journalist');
     expectOneRecord(userPrompt);
     expect(userPrompt.indexOf('<RECORD>')).toBeLessThan(userPrompt.indexOf('<arc-evidence>'));
-    for (const id of ARC_TOKENS) expect(userPrompt).toContain(`- ${id}: memory\n  Quotable: "quote from ${id}"`);
-    expect(userPrompt).toContain(`**Evidence Items (7 items; each one's full text is ${DOCUMENT_POINTER}):**`);
+    // Phase 3 (3.2): the excerpts' label says what they are (code-cut fragments of
+    // the document), where it used to send them to pull quotes, which never print.
+    for (const id of ARC_TOKENS) expect(userPrompt).toContain(`- ${id}: memory\n  Excerpts: "quote from ${id}"`);
+    expect(userPrompt).toContain(`**Documents (7; each one's full text is ${DOCUMENT_POINTER}):**`);
     expect(userPrompt).not.toContain('Full Content:');
-    expect(userPrompt).toContain(`2. For evidence cards, use **evidenceItems**: each item's full text is ${DOCUMENT_POINTER}`);
+    expect(userPrompt).toContain("Excerpts are fragments code cut from each document's text at its sentence breaks");
+    expect(userPrompt).not.toContain('For pull quotes');
     expect(userPrompt).not.toMatch(/with their \*\*fullContent\*\*/);
     // FINANCIAL_SUMMARY (account totals) stays beside the view's transactions (R2).
     expect(userPrompt).toContain('<FINANCIAL_SUMMARY>');
@@ -1504,13 +1345,15 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt.indexOf('<DATA_CONTEXT>')).toBeLessThan(userPrompt.indexOf('<RECORD>'));
     expect(userPrompt.indexOf('</RECORD>')).toBeLessThan(userPrompt.indexOf('ARC EVIDENCE PACKAGES'));
     expect(userPrompt.indexOf('ARC EVIDENCE PACKAGES')).toBeLessThan(userPrompt.indexOf('</DATA_CONTEXT>'));
-    expect(userPrompt).toContain(`EVIDENCE (for context and additional quoting; each one's full text is ${DOCUMENT_POINTER}):\nm1 (memory)\nm2 (memory)`);
+    // Phase 3 (3.2): the packages name each arc's documents and their excerpts, and
+    // the card's text is copied from the document in <RECORD>. Phase 3 (3.9): they name
+    // their photos by filename too, each photo's entry printed once, in PHOTOS.
+    expect(userPrompt).toContain(`ARC EVIDENCE PACKAGES: each selected arc's documents by id, and its photos by filename. Each document's full text is ${DOCUMENT_POINTER}, and each photo's entry is in PHOTOS above.`);
+    expect(userPrompt).toContain('DOCUMENTS:\nm1 (memory)\nm2 (memory)');
     expect(userPrompt).toContain('- "quote from m1" (from m1)');
-    expect(userPrompt).toContain('No extracted quotes - quote the arc\'s documents in <RECORD> directly');
+    expect(userPrompt).toContain('EXCERPTS:\nNone');
     expect(userPrompt).not.toContain('use fullContent directly');
-    // The pointer lines 1163 and 1184 (R3: 1250 and 1261-1269 are brief 2.5's).
-    expect(userPrompt).toContain(`content (VERBATIM from ${DOCUMENT_POINTER})`);
-    expect(userPrompt).toContain(`[Full verbatim text of ${DOCUMENT_POINTER} - do NOT truncate or summarize]`);
+    expect(userPrompt).toContain(`"content" is copied from ${DOCUMENT_POINTER}`);
     expect(userPrompt).not.toContain('from arcEvidencePackages.evidenceItems[].fullContent');
   });
 
@@ -1521,15 +1364,62 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt.indexOf('</DATA_CONTEXT>')).toBeLessThan(userPrompt.indexOf('<RULES>'));
   });
 
-  it('labels the contradiction notes as code-made leads that the record overrules', async () => {
+  // Phase 3 (3.2; T4): the tensions print as the director's sentences that name Blake
+  // or the Valet. A note from before 3.6 that read an account's name as its holder
+  // prints nothing, and an old blake-proximity note prints its observations, not its
+  // generic narrativeNote. The filter is the arc writer's (directorTensionSentences,
+  // fix 3.2b): only the sentences the notes hold word for word print, each once.
+  const TENSION_NOTES = { rawProse: 'Blake pulled Vic aside at the bar. The Valet read the balances.' };
+
+  it('prints the director\'s sentences about Blake, labelled, and drops the old account-name notes', async () => {
+    const tensions = {
+      tensions: [
+        { type: 'named-account', narrativeNote: 'Mel used their own name for a burial account.' },
+        { type: 'transparency-vs-burial', narrativeNote: 'Mel publicly demonstrated transparency.' },
+        {
+          type: 'blake-proximity',
+          observations: ['Blake pulled Vic aside\n  at the bar.', 'The Valet read the balances.'],
+          narrativeNote: 'Director observed multiple characters interacting with Blake.'
+        }
+      ]
+    };
+    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
+      {}, [], null, [], null, TENSION_NOTES, tensions, { evidenceBundle }
+    );
+    const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
+    expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- Blake pulled Vic aside at the bar.\n- The Valet read the balances.\n`);
+    expect(block).not.toMatch(/Black Market|verified to respect|named-account|Director observed/);
+  });
+
+  it('prints a stored sentence only when the notes hold it word for word, and each once', async () => {
+    const tensions = {
+      tensions: [{
+        type: 'blake-proximity',
+        observations: ['Blake paid Vic.', 'The Valet read the balances.', 'The Valet read the balances.']
+      }]
+    };
+    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
+      {}, [], null, [], null, TENSION_NOTES, tensions, { evidenceBundle }
+    );
+    const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
+    expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- The Valet read the balances.\n`);
+    expect(userPrompt).not.toContain('Blake paid Vic.');
+  });
+
+  it('prints no tensions block when the thread has no notes to hold the sentences', async () => {
+    const tensions = { tensions: [{ type: 'blake-proximity', observations: ['The Valet read the balances.'] }] };
+    const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
+      {}, [], null, [], null, null, tensions, { evidenceBundle }
+    );
+    expect(userPrompt).not.toContain('<NARRATIVE_TENSIONS>');
+  });
+
+  it('prints no tensions block when only old account-name notes are stored', async () => {
     const tensions = { tensions: [{ type: 'named-account', narrativeNote: 'Mel used their own name for a burial account.' }] };
     const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
       {}, [], null, [], null, null, tensions, { evidenceBundle }
     );
-    const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
-    expect(block).toContain(DERIVED_LABELS.narrativeTensions);
-    expect(block).toContain('- [named-account] Mel used their own name for a burial account.');
-    expect(block).not.toMatch(/verified to respect/);
+    expect(userPrompt).not.toContain('<NARRATIVE_TENSIONS>');
   });
 
   it('labels the character context as a model\'s extraction that the record overrules', () => {
@@ -1563,6 +1453,12 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
   const CORRECTION = 'This was actually Blake -> Ashe, and what was said was my company would be very interested.';
   const PHOTO_7 = "Alex and Sam react to a memory they've just unlocked.";
   const PHOTO_DESCRIPTIONS = { 'aln092026 (7 of 9).jpg': PHOTO_7 };
+  // Phase 3 (3.9): the article writer's photos as articleWriterInputs passes them (the
+  // hero first), the filename in a different case from the description's key.
+  const ARTICLE_PHOTOS = [
+    { filename: 'hero.jpg', identifiedCharacters: ['Alex'], hero: true },
+    { filename: 'AlN092026 (7 OF 9).JPG', identifiedCharacters: ['Alex', 'Sam'] }
+  ];
 
   function builder(theme = 'journalist') {
     const themeLoader = {
@@ -1653,26 +1549,277 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
       expect(photos).not.toMatch(/Visual:|Characters:/);
     });
 
-    it("the article's arc photos carry the description, joined by filename whatever the case", async () => {
-      const { userPrompt } = await article(null, { photoDescriptions: PHOTO_DESCRIPTIONS });
-      expect(userPrompt).toContain(`- AlN092026 (7 OF 9).JPG: Alex, Sam\n  The director's description, word for word: ${PHOTO_7}`);
+    // Phase 3 (3.9; T13): the article writer lists every photo the director kept under
+    // PHOTOS, each entry once, and an arc package points at its photos by filename.
+    it("the article's photo list carries the description, joined by filename whatever the case", async () => {
+      const { userPrompt } = await article(null, { photoDescriptions: PHOTO_DESCRIPTIONS, photos: ARTICLE_PHOTOS });
+      const photos = between(userPrompt, '\nPHOTOS (', '<RECORD>');
+      expect(photos).toContain(`1. [hero image] hero.jpg: Alex\n   The director's description: none given`);
+      expect(photos).toContain(`2. AlN092026 (7 OF 9).JPG: Alex, Sam\n   The director's description, word for word: ${PHOTO_7}`);
+      expect(userPrompt.split(PHOTO_7)).toHaveLength(2);
+      expect(userPrompt).toContain('ARC PHOTOS:\n- AlN092026 (7 OF 9).JPG\n');
+    });
+
+    it('the article writer lists every photo it is given, a package\'s or not, and the packages point only at listed photos', async () => {
+      const photos = [...ARTICLE_PHOTOS, { filename: 'aln092026 (9 of 9).jpg', identifiedCharacters: [] }];
+      const { userPrompt } = await builder().buildArticlePrompt(
+        {},
+        [{ arcId: 'arc-1', arcTitle: 'The vote', evidenceItems: [], photos: [{ filename: 'AlN092026 (7 OF 9).JPG', characters: ['Alex', 'Sam'] }, { filename: 'whiteboard.jpg', characters: ['Vic'] }] }],
+        'hero.jpg', [], null, DIRECTOR_NOTES, null, { photos }
+      );
+      const list = between(userPrompt, '\nPHOTOS (', '<RECORD>');
+      expect(list).toContain('PHOTOS (every photo the director has not excluded, without the whiteboard');
+      expect(list).toContain('3. aln092026 (9 of 9).jpg: Unknown');
+      expect(userPrompt).not.toContain('whiteboard.jpg');
     });
   });
 
   describe('the whiteboard', () => {
+    // Phase 3 (3.5): labelled as a model's reading of the photo, context for how the
+    // room reasoned, in place of "Players drew these during investigation".
     it("reaches the outline and article writers under the arc writer's label", async () => {
       for (const render of [() => outline(OVERDOSE_FACTS), () => article(OVERDOSE_FACTS)]) {
         const { userPrompt } = await render();
-        expect(userPrompt).toContain('### Whiteboard Connections (Players drew these during investigation)');
-        expect(userPrompt).toContain('**Suspects Explored:** ["Vic"]');
-        expect(userPrompt).toContain('**Names Identified:** ["Vic","Blake"]');
+        expect(userPrompt).toContain("### The Whiteboard (a model's reading of the photo)");
+        expect(userPrompt).not.toContain('Players drew these');
+        expect(userPrompt).toContain('- no heading: Vic');
+        expect(userPrompt).toContain('**Names on the whiteboard:** ["Vic","Blake"]');
       }
     });
 
-    it('is left out when the players drew nothing', async () => {
+    it('is left out when the whiteboard held nothing', async () => {
       const facts = { ...OVERDOSE_FACTS, whiteboard: { suspectsExplored: [], connections: [], notes: [], namesFound: [] } };
       const { userPrompt } = await article(facts);
-      expect(userPrompt).not.toContain('Whiteboard Connections');
+      expect(userPrompt).not.toContain('The Whiteboard');
+    });
+  });
+});
+
+/**
+ * Phase 3 (task 3.2): the outline and article writers read the rule set, and the
+ * inline text it states or contradicts goes (spec 2026-09-30-rule-set.md, sections
+ * 4, 5, 7 and 8; the integrator's placement ruling).
+ *
+ * The builder's theme loader throws if anything asks it for a file: a journalist
+ * writer reads its rules from lib/rule-set.js, never from the retired craft files.
+ */
+describe('phase 3 (3.2): the journalist writers read the rule set', () => {
+  const { loadRuleSet } = require('../rule-set');
+  const { generateRosterSection, THEME_SYSTEM_PROMPTS } = require('../prompt-builder');
+  const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
+
+  const CANONICAL = { Alex: 'Alex Reeves', Riley: 'Riley Torres', Jamie: 'Jamie Park', Marcus: 'Marcus Blackwood', Blake: 'Blake' };
+  const SESSION = {
+    roster: ['Alex', 'Riley'], rosterPronouns: { Alex: 'he/him' },
+    reportingMode: 'remote', journalistFirstName: 'Cass'
+  };
+  const FACTS = {
+    roster: ['Alex Reeves', 'Riley Torres'], playerCount: 2,
+    accusation: { accused: ['Alex Reeves'], charge: 'Murder', verdictKind: 'culprit' },
+    accusationText: 'They voted for Alex.'
+  };
+  const NOTES_NO_EPILOGUE = { rawProse: 'Alex and Riley argued by the ledger this morning.', quotes: [], transactionReferences: [], postInvestigationDevelopments: [] };
+  const NOTES_EPILOGUE = {
+    ...NOTES_NO_EPILOGUE,
+    rawProse: `${NOTES_NO_EPILOGUE.rawProse} After the investigation, Riley left town.`,
+    postInvestigationDevelopments: [{ detail: 'After the investigation, Riley left town.' }]
+  };
+  const ACCOUNTS = [
+    { name: 'Ember', total: 250000, tokenCount: 2 },
+    { name: 'Riley', total: 50000, tokenCount: 0 },
+    { name: 'Empty', total: 0, tokenCount: 0 }
+  ];
+
+  const throwingLoader = () => ({
+    loadPhasePrompts: jest.fn(async (phase) => { throw new Error(`a journalist writer asked the theme loader for ${phase}`); }),
+    validate: jest.fn()
+  });
+  const journalist = (sessionConfig = SESSION) => new PromptBuilder(throwingLoader(), 'journalist', sessionConfig, CANONICAL, null);
+  const outlineOf = (b) => b.buildOutlinePrompt(
+    { narrativeArcs: [{ id: 'arc-a', title: 'A' }] }, ['arc-a'], 'hero.jpg', [], [], ACCOUNTS, FACTS,
+    { directorNotes: NOTES_NO_EPILOGUE, directorGuidance: 'Lead with the money.' }
+  );
+  const articleOf = (b, notes = NOTES_NO_EPILOGUE) => b.buildArticlePrompt(
+    { lede: { hook: 'h' } }, [], 'hero.jpg', ACCOUNTS, FACTS, notes, null, { directorGuidance: 'Lead with the money.' }
+  );
+  const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close) + close.length);
+
+  describe('the rule sections', () => {
+    it('the outline writer: the world and the truth rules in its system prompt, its craft (no voice) in its user prompt', async () => {
+      const { core, craft } = loadRuleSet('outline');
+      const { systemPrompt, userPrompt } = await outlineOf(journalist());
+      expect(systemPrompt.split(core).length - 1).toBe(1);
+      expect(userPrompt.split(craft).length - 1).toBe(1);
+      expect(userPrompt).not.toContain('<craft-voice>');
+      expect(userPrompt.indexOf(craft)).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
+      expect(userPrompt.indexOf(craft)).toBeLessThan(userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
+    });
+
+    it('the article writer: the world and the truth rules in its system prompt, every craft file in its user prompt', async () => {
+      const { core, craft } = loadRuleSet('article');
+      const { systemPrompt, userPrompt } = await articleOf(journalist());
+      expect(systemPrompt.split(core).length - 1).toBe(1);
+      expect(userPrompt.split(craft).length - 1).toBe(1);
+      expect(userPrompt).toContain('<craft-voice>');
+      expect(userPrompt.indexOf(craft)).toBeGreaterThan(userPrompt.indexOf('</GENERATION_INSTRUCTION>'));
+      expect(userPrompt.indexOf(craft)).toBeLessThan(userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
+    });
+
+    it('the mode block keeps its place, right after the identity line, before the world', async () => {
+      for (const { systemPrompt } of [await outlineOf(journalist()), await articleOf(journalist())]) {
+        expect(systemPrompt.split('\n')[2]).toBe('<mode-remote>');
+        expect(systemPrompt.indexOf('</mode-remote>')).toBeLessThan(systemPrompt.indexOf('<world>'));
+      }
+    });
+
+    it('the roster block is in the article system prompt once (M20)', async () => {
+      const { systemPrompt, userPrompt } = await articleOf(journalist());
+      expect(systemPrompt.split('CANONICAL CHARACTER ROSTER:').length - 1).toBe(1);
+      expect(userPrompt).not.toContain('CANONICAL CHARACTER ROSTER:');
+    });
+  });
+
+  describe('the removed lines', () => {
+    const REMOVED = [
+      'HOW THE BLACK MARKET WORKS', 'Blake now possesses', 'Black Market', 'exposed to the Detective',
+      'State conclusions confidently', 'participatory', 'implicated', 'TEMPORAL CONTEXT KEY',
+      'where one arc ends and another begins', 'It has just been announced', '<TEMPORAL_DISCIPLINE>',
+      '<ARC_FLOW>', '<VISUAL_DISTRIBUTION>', '<arc-section-flow>', '<visual-rules>',
+      'Return JSON with the following structure', 'the schema wins', 'claude-agent-sdk-typescript#277'
+    ];
+
+    it.each(['outline', 'article'])("none in the %s prompts' instruction text, nor any phrase on the removed list", async (which) => {
+      const { systemPrompt, userPrompt } = which === 'outline' ? await outlineOf(journalist()) : await articleOf(journalist(), NOTES_EPILOGUE);
+      const text = instructionText(`${systemPrompt}\n${userPrompt}`);
+      expect(findRemovedPhrases(text)).toEqual([]);
+      REMOVED.forEach((phrase) => expect(`${phrase}: ${text.includes(phrase)}`).toBe(`${phrase}: false`));
+      expect(text).not.toMatch(/[—–]/);
+    });
+  });
+
+  describe('the notes block', () => {
+    it('with no epilogue in the notes, no post-investigation section appears (Review Focus 5)', async () => {
+      for (const { userPrompt } of [await outlineOf(journalist()), await articleOf(journalist())]) {
+        const block = between(userPrompt, '<INVESTIGATION_OBSERVATIONS>', '</INVESTIGATION_OBSERVATIONS>');
+        expect(block).toContain(NOTES_NO_EPILOGUE.rawProse);
+        expect(block).not.toMatch(/EPILOGUE|POST_INVESTIGATION|epilogue|announced|Following the investigation/);
+        // The header dates nothing to "this morning": the notes are dated by what they say.
+        expect(instructionText(block)).not.toMatch(/this morning/i);
+      }
+    });
+
+    it('with an epilogue, the header points at <EPILOGUE> and at T7, and prescribes no phrasing', async () => {
+      const { userPrompt } = await articleOf(journalist(), NOTES_EPILOGUE);
+      const block = between(userPrompt, '<INVESTIGATION_OBSERVATIONS>', '</INVESTIGATION_OBSERVATIONS>');
+      const header = block.slice(0, block.indexOf('<DIRECTOR_NOTES>'));
+      expect(header).toContain('<EPILOGUE>');
+      expect(header).toContain('T7');
+      expect(block).toContain('- After the investigation, Riley left town.');
+      expect(header).not.toMatch(/announced|Currently/);
+    });
+  });
+
+  describe('the roster block (T9, T15)', () => {
+    const section = generateRosterSection('journalist', CANONICAL, null, { Alex: 'he/him', Jamie: 'they/them' }, ['Alex', 'Riley', 'Jamie']);
+    const lines = section.split('\n');
+
+    it('never genders Nova', () => {
+      expect(lines.filter((l) => /\bNova\b/.test(l))).toEqual(['- Nova - the NovaNews reporter who writes the article']);
+    });
+
+    it('gives Marcus he/him and the canon line, and invents nothing for Blake', () => {
+      expect(lines.filter((l) => l.startsWith('- Marcus'))).toEqual(['- Marcus Blackwood (he/him) - the man whose death the room investigates']);
+      expect(lines.filter((l) => l.startsWith('- Blake'))).toEqual(['- Blake - manages operations at NeurAI; Marcus called Blake his Valet']);
+    });
+
+    it("prints \"pronoun not given\" for a roster character with none captured, and keeps the director's they/them", () => {
+      expect(section).toContain('- Riley → Riley Torres (pronoun not given)');
+      expect(section).toContain('- Jamie → Jamie Park (they/them)');
+      expect(section).toContain('- Alex → Alex Reeves (he/him)');
+      expect(section).not.toContain('Riley Torres (they/them)');
+    });
+  });
+
+  describe('the agency rule and the head count (rewritten, not deleted)', () => {
+    it.each(['outline', 'article'])('the %s SESSION_FACTS says who was at the investigation, that Blake acts in the room, and that Nova is not a player', async (which) => {
+      const { userPrompt } = which === 'outline' ? await outlineOf(journalist()) : await articleOf(journalist());
+      const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
+      expect(facts).toContain('Only the 2 players above were at the investigation');
+      // Fix 3.2b (finding 7): the line no longer says Marcus and every other character
+      // reach the article only through memories and then puts Blake in the room, and
+      // the count is of the players at the investigation (T10), not of the room.
+      expect(facts).toContain('Every other character except Blake appears only through the memories and documents.');
+      expect(facts).toMatch(/Blake was in the room too/);
+      expect(facts).toMatch(/Nova is not one of the players/);
+      expect(facts).toContain('When the article counts the people at the investigation, it counts these 2 players.');
+      expect(facts).not.toMatch(/Marcus included|how many people were in the room|the number is/);
+      expect(facts).not.toMatch(/NEVER give non-roster characters/);
+    });
+
+    // Final review (rules-writers[0]; R11, T5, T14): the line said Blake worked the room
+    // "for NeurAI", a fact about whom the deals were for, which round 7 made Nova's
+    // suspicion; the gate's outline echoed it into FOLLOW THE MONEY. It now says what
+    // world.md says Blake does: in the room, making deals, acting and speaking as the
+    // record shows, with nothing about whom the deals serve.
+    it.each(['outline', 'article'])('the %s SESSION_FACTS puts Blake in the room making deals, and names no one the deals serve', async (which) => {
+      const { userPrompt } = which === 'outline' ? await outlineOf(journalist()) : await articleOf(journalist());
+      const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
+      expect(facts).toContain('Blake was in the room too, making deals, and acts and speaks there as the record shows.');
+      expect(facts).not.toMatch(/for NeurAI|NeurAI/);
+    });
+
+    it('the detective keeps its own lines', async () => {
+      const detective = new PromptBuilder({ loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() }, 'detective', SESSION, CANONICAL, null);
+      const { userPrompt } = await detective.buildOutlinePrompt({ narrativeArcs: [] }, [], 'hero.jpg', [], [], [], FACTS, {});
+      expect(userPrompt).toContain('ONLY the 2 characters listed above were present at the investigation.');
+      expect(userPrompt).toContain('Use exactly 2 when referencing how many subjects were involved.');
+    });
+  });
+
+  describe('FINANCIAL_SUMMARY counts sales from the code-computed figures', () => {
+    it.each(['outline', 'article'])('in the %s prompt', async (which) => {
+      const { userPrompt } = which === 'outline' ? await outlineOf(journalist()) : await articleOf(journalist());
+      const summary = between(userPrompt, '<FINANCIAL_SUMMARY>', '</FINANCIAL_SUMMARY>');
+      expect(summary).toContain('- Ember: $250,000 (2 sales)');
+      expect(summary).toContain('- Riley: $50,000 (0 sales)');
+      expect(summary).not.toContain('Empty');
+      expect(summary).toContain('All accounts together: $300,000');
+      expect(summary).toMatch(/first-burial bonus/);
+      expect(summary).not.toMatch(/\btokens?\b|Total buried|Black Market|Blake/);
+    });
+
+    // Phase 3 (3.9; spec section 7, R12): "a reading" is retired as the word for Nova's
+    // inference, and the outline writer prints this description in its <SCHEMA>.
+    it("the outline writer's <SCHEMA> describes an account's inference by what it holds, not as a reading", async () => {
+      const { userPrompt } = await outlineOf(journalist());
+      const schema = between(userPrompt, '<SCHEMA>', '</SCHEMA>');
+      expect(schema).toContain('"description": "What the section infers from the account"');
+      expect(schema).not.toMatch(/\breading\b/i);
+    });
+  });
+
+  // The 4b fix batch (spec section 7, R12; 3.10's forOtherOwners): "reading" is retired
+  // as the rules' noun for an inference, the arcs' included. An arc is one thread of the
+  // story, which the arc writer found (C16).
+  describe("the outline writer's <arc-metadata> line", () => {
+    it('says what an arc is without calling it a reading', async () => {
+      const { userPrompt } = await outlineOf(journalist());
+      const metadata = between(userPrompt, '<arc-metadata>', '</arc-metadata>');
+      const line = metadata.split('\n').find((l) => l.startsWith('Each arc above is'));
+      expect(line).toMatch(/^Each arc above is one thread of the story, as the arc writer found it\. Its arcSource says where the thread came from: /);
+      expect(line).not.toMatch(/\breading\b/i);
+    });
+  });
+
+  // The 4b fix batch (3.10 re-review): the journalist's revision framing was 3.2's first
+  // line of the article rework. Since 3.10's fix round 1 that line is the rework rules'
+  // own (ai-nodes.js ARTICLE_REVISION_RULES), and nothing read the string, which still
+  // held the old wording ("the evaluation's findings on an automatic pass"). It is gone,
+  // so nothing can wire it back; the detective keeps its framing (D13).
+  describe('the article rework framing (TH7)', () => {
+    it('the journalist has none of its own (the article rework rules carry the first line); the detective keeps its framing', () => {
+      expect(THEME_SYSTEM_PROMPTS.journalist).not.toHaveProperty('revision');
+      expect(THEME_SYSTEM_PROMPTS.detective.revision).toBe('You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only. Keep the third-person investigative case-report voice.');
     });
   });
 });

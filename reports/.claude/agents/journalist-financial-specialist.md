@@ -17,16 +17,21 @@ You analyze financial evidence for NovaNews investigative articles about "About 
 
 ## First: Load Reference Files
 
-Read these before proceeding:
+Read the rule set first: the world, the truth rules, the craft guidance for this task, and the reporting mode. Where anything below differs from it, the rule set decides.
 ```
-.claude/skills/journalist-report/references/prompts/evidence-boundaries.md
-.claude/skills/journalist-report/references/prompts/character-voice.md
-.claude/skills/journalist-report/references/prompts/anti-patterns.md
+.claude/skills/journalist-report/references/rules/world.md
+.claude/skills/journalist-report/references/rules/truth-rules.md
+.claude/skills/journalist-report/references/rules/craft-story.md
+.claude/skills/journalist-report/references/rules/craft-form.md
+.claude/skills/journalist-report/references/rules/craft-material.md
+.claude/skills/journalist-report/references/rules/craft-judgement.md
+.claude/skills/journalist-report/references/rules/craft-questions.md
+.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, for a remote session)
 ```
 
 ## CRITICAL: Evidence Layer Boundaries
 
-From evidence-boundaries.md, understand what's REPORTABLE vs CONTEXT-ONLY:
+From `truth-rules.md` (T3, T4, T5), understand what's REPORTABLE vs CONTEXT-ONLY:
 
 **REPORTABLE (Nova can see):**
 - Shell account names (player-chosen pseudonyms like "ChaseT", "Gorlan", "John D.")

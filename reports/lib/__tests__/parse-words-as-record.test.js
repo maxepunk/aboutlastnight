@@ -51,8 +51,10 @@ describe('SESSION_CONFIG_SCHEMA: the no-culprit verdict', () => {
 
   it('lets accused be empty and tells the parser never to list the victim', () => {
     expect(acc.properties.accused.minItems).toBeUndefined();
-    expect(acc.properties.accused.description).toMatch(/EMPTY unless verdictKind is "culprit"/);
-    expect(acc.properties.accused.description).toMatch(/[Nn]ever the victim/);
+    // Phase 3 (3.5): empty for every kind but "culprit", and for a culprit verdict
+    // that blames an institution or an unnamed person; the victim is named (#5).
+    expect(acc.properties.accused.description).toMatch(/Empty when it blames an institution or an unnamed person, and for every kind but "culprit"/);
+    expect(acc.properties.accused.description).toMatch(/Marcus Blackwood is the man whose death the room investigates, so he is never listed here/);
   });
 
   it('carries no JSON-schema format keyword (SDK #277)', () => {
@@ -205,7 +207,8 @@ describe('parseRawInput: the director\'s words stored with the parse', () => {
       expect(call.prompt).toContain('2. The room accused no one.');
     }
     const whiteboard = calls.find((c) => c.jsonSchema === WHITEBOARD_SCHEMA);
-    expect(whiteboard.prompt).toMatch(/Apply these corrections; they override anything in the source text\.$/);
+    // Phase 3 (3.5, D15): the line speaks only to what the parse reads from the source text.
+    expect(whiteboard.prompt).toMatch(/Apply these corrections to what you parse from the source text; where a correction and the source text differ, the correction is right\.$/);
     // The round's correction is consumed; the kept list is not the parse's to touch.
     expect(result._inputCorrections).toBeNull();
     expect(result).not.toHaveProperty('inputReviewCorrections');
@@ -224,7 +227,8 @@ describe('parseRawInput: the director\'s words stored with the parse', () => {
     await parseRawInput(makeState(), { configurable: { sdkClient: sdk, dataDir, sessionId: '092026' } });
     const step1 = calls.find((c) => c.jsonSchema === SESSION_CONFIG_SCHEMA);
     expect(step1.prompt).toContain(RAW_ACCUSATION);
-    expect(step1.prompt).toMatch(/leave accused empty/);
-    expect(step1.prompt).toMatch(/Never list the victim as accused/);
+    // Phase 3 (3.5): the group statement's three shapes, and the victim named (#5).
+    expect(step1.prompt).toMatch(/It names no culprit \(an accident, an overdose, self-harm\): verdictKind is that kind, accused empty, and the verdict in charge\./);
+    expect(step1.prompt).toMatch(/Marcus Blackwood is the man whose death the room investigates, so accused never lists him\./);
   });
 });

@@ -32,15 +32,20 @@ const PASSING_EVALUATION = {
 
 /**
  * A scripted SDK: the reworks by their labels, the evaluations by their system
- * prompt. `evaluations` is consumed in order, then repeats its last answer.
+ * prompt. `evaluations` is consumed in order, then repeats its last answer. Each
+ * rework's prompt is kept by its label (`sdk.reworkPrompts`).
  */
 function scriptedSdk({ revised, evaluations }) {
   const calls = [];
+  const reworkPrompts = {};
   let evaluationIndex = 0;
   const sdk = async (options) => {
     const label = options.label || '';
     calls.push(label || 'evaluation');
-    if (/^(Outline|Article) revision/.test(label)) return JSON.parse(JSON.stringify(revised));
+    if (/^(Outline|Article) revision/.test(label)) {
+      reworkPrompts[label] = options.prompt || '';
+      return JSON.parse(JSON.stringify(revised));
+    }
     if (/Evaluator/.test(options.systemPrompt || '')) {
       const answer = evaluations[Math.min(evaluationIndex, evaluations.length - 1)];
       evaluationIndex += 1;
@@ -49,6 +54,7 @@ function scriptedSdk({ revised, evaluations }) {
     throw new Error(`scriptedSdk: unexpected call ${label || (options.systemPrompt || '').slice(0, 60)}`);
   };
   sdk.calls = calls;
+  sdk.reworkPrompts = reworkPrompts;
   return sdk;
 }
 
@@ -193,10 +199,17 @@ describe('the trace through the real graph (phase 2, brief 2.7)', () => {
       changedScopes: ['lede']
     }));
 
-    const [pass] = traceView(data.trace).passes;
+    // Final review (reworks[0]): the journalist automatic rework is not given the judge's
+    // revisionGuidance (node-helpers.js buildRevisionContext, since 3.10), so the trace
+    // says the guidance is the evaluation's and was not sent to the rework.
+    const reworkPrompt = sdk.reworkPrompts['Outline revision 1'];
+    expect(reworkPrompt).toContain('The LEDE names no roster member.');
+    expect(reworkPrompt).not.toContain('Put Zia in the LEDE.');
+
+    const [pass] = traceView(data.trace, 'journalist').passes;
     expect(pass.triggerLabel).toBe('Why it ran: the evaluation failed.');
     expect(pass.shouldConsider.items).toEqual(['The closing repeats the hook.']);
-    expect(pass.guidance).toBe('Guidance to the writer: Put Zia in the LEDE.');
+    expect(pass.guidance).toBe("The evaluation's guidance, not sent to the rework: Put Zia in the LEDE.");
     expect(pass.changed.text).toBe('What changed: LEDE');
   });
 

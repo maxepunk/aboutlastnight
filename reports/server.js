@@ -31,6 +31,11 @@ const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
 const { diffOutline, diffBundle, isEmpty: isEmptyDiff, scopeKeys } = require('./lib/hand-edit-diff');
+// Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
+const { writerQuestionsOf } = require('./lib/writer-questions');
+// The outline editors' own list of the fields phase 3 retired (BU3), so the server
+// diffs a hand edit against the outline the director edited (fix 3.2b).
+const { dropRetiredOutlineFields } = require('./console/outline-edit-logic');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
@@ -364,7 +369,11 @@ function buildEvidenceIndex(evidenceBundle) {
  */
 async function getCheckpointData(checkpointType, state) {
     switch (checkpointType) {
-        case CHECKPOINT_TYPES.INPUT_REVIEW:
+        case CHECKPOINT_TYPES.INPUT_REVIEW: {
+            // Phase 3 (brief 3.5): the ledger as the director checks it: which clock
+            // rule applied, the adjustments beside each account's total and sale
+            // count, and a totals mismatch or "adjustments not parsed".
+            const { ledgerReviewOf } = require('./lib/session-ledger');
             return {
                 // `_parsedInput` is deliberately absent: it was never an Annotation
                 // channel, so LangGraph dropped every write and this key was always
@@ -372,8 +381,10 @@ async function getCheckpointData(checkpointType, state) {
                 sessionConfig: state.sessionConfig,
                 directorNotes: state.directorNotes,
                 playerFocus: state.playerFocus,
-                enrichment: summarizeEnrichment(state.directorNotes)
+                enrichment: summarizeEnrichment(state.directorNotes),
+                ledger: ledgerReviewOf(state)
             };
+        }
         case CHECKPOINT_TYPES.PAPER_EVIDENCE_SELECTION:
             return { paperEvidence: state.paperEvidence };
         case CHECKPOINT_TYPES.CHARACTER_IDS:
@@ -397,7 +408,9 @@ async function getCheckpointData(checkpointType, state) {
                 _generationTimedOut: state._arcAnalysisCache?._generationTimedOut || false,
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 1.2: what each arc's keyEvidence id actually refers to.
-                evidenceIndex: buildEvidenceIndex(state.evidenceBundle)
+                evidenceIndex: buildEvidenceIndex(state.evidenceBundle),
+                // Brief 3.7: the arc writer's questions for the director (C15)
+                writerQuestions: writerQuestionsOf(state._arcAnalysisCache?.writerQuestions)
             };
         case CHECKPOINT_TYPES.OUTLINE:
             return {
@@ -411,7 +424,9 @@ async function getCheckpointData(checkpointType, state) {
                 handEditReport: state._outlineHandEditReport || null,
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 2.7: the automatic passes of this round, with what each changed.
-                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1)
+                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1),
+                // Brief 3.7: the outline writer's questions for the director (C15)
+                writerQuestions: writerQuestionsOf(state.outline?.writerQuestions)
             };
         case CHECKPOINT_TYPES.ARTICLE:
             return {
@@ -431,7 +446,9 @@ async function getCheckpointData(checkpointType, state) {
                 directorGateNotes: state.directorGateNotes || [],
                 outlineThesis: outlineThesisOf(state),
                 // Brief 2.7: the automatic passes of this round, with what each changed.
-                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1)
+                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1),
+                // Brief 3.7: the article writer's questions for the director (C15)
+                writerQuestions: writerQuestionsOf(state.contentBundle?.writerQuestions)
             };
         case CHECKPOINT_TYPES.PRE_CURATION:
             return {
@@ -687,7 +704,11 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         stateUpdates._outlineTrace = null;
         if (hasEdits) {
             stateUpdates.outline = approvals.outlineEdits;   // incrementOutlineRevision hands it to the reviser
-            const diff = diffOutline(currentState.outline, approvals.outlineEdits);
+            // An outline written before phase 3 still holds thePlayers.buried and
+            // whatsMissing.buriedItems, which the editors drop before sending: the
+            // diff starts from the outline without them, so it records no removal
+            // the director never made (fix 3.2b, finding 5).
+            const diff = diffOutline(dropRetiredOutlineFields(currentState.outline), approvals.outlineEdits);
             stateUpdates._outlineHandEdits = isEmptyDiff(diff) ? null : diff;
         }
     }

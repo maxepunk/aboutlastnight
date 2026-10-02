@@ -16,6 +16,23 @@ model: sonnet
 
 You validate NovaNews investigative articles against anti-patterns and voice requirements.
 
+## First: Load Reference Files
+
+Read the rule set first: the world, the truth rules, the craft guidance for this task, and the reporting mode. Where anything below differs from it, the rule set decides.
+```
+.claude/skills/journalist-report/references/rules/world.md
+.claude/skills/journalist-report/references/rules/truth-rules.md
+.claude/skills/journalist-report/references/rules/craft-story.md
+.claude/skills/journalist-report/references/rules/craft-form.md
+.claude/skills/journalist-report/references/rules/craft-material.md
+.claude/skills/journalist-report/references/rules/craft-voice.md
+.claude/skills/journalist-report/references/rules/craft-judgement.md
+.claude/skills/journalist-report/references/rules/craft-telling.md
+.claude/skills/journalist-report/references/rules/craft-cards.md
+.claude/skills/journalist-report/references/rules/craft-questions.md
+.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, for a remote session)
+```
+
 ## Anti-Pattern Checklist
 
 ### Language Violations (CRITICAL)

@@ -43,23 +43,25 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA', () => {
     expect(item.properties.linkReasoning.type).toBe('string');
   });
 
-  it('defines quotes with speaker, text, addressee, context, confidence', () => {
+  it('defines quotes with speaker, text, addressee, context, correction, confidence', () => {
     const item = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items;
     expect(item.properties.speaker.type).toBe('string');
     expect(item.properties.text.type).toBe('string');
     expect(item.properties.addressee.type).toBe('string');
     expect(item.properties.context.type).toBe('string');
+    expect(item.properties.correction.type).toBe('string');
     // B3: aligned with transactionReferences; 'medium' used to fail validation.
     expect(item.properties.confidence.enum).toEqual(['high', 'medium', 'low']);
-    expect(item.required).toEqual(expect.arrayContaining(['speaker', 'text']));
+    // Phase 3 (3.6): a speaker may be unknown, so only the words and the director's
+    // words around them are required.
+    expect(item.required).toEqual(['text', 'context']);
   });
 
-  it('defines postInvestigationDevelopments with headline, detail, subjects', () => {
+  it('defines an epilogue item as the director\'s sentence and an index of subjects, with no headline or reading of its own (phase 3, 3.6)', () => {
     const item = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.postInvestigationDevelopments.items;
-    expect(item.properties.headline.type).toBe('string');
-    expect(item.properties.detail.type).toBe('string');
+    expect(Object.keys(item.properties).sort()).toEqual(['detail', 'proseOffset', 'subjects']);
+    expect(item.required).toEqual(['detail']);
     expect(item.properties.subjects.type).toBe('array');
-    expect(item.properties.bearingOnNarrative.type).toBe('string');
   });
 
   it('does NOT include the legacy observations.{behaviorPatterns,...} field', () => {
@@ -86,11 +88,13 @@ describe('buildEnrichmentPrompt', () => {
     expect(out.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it('system prompt forbids summarization and requires verbatim excerpts', () => {
-    const { systemPrompt } = buildEnrichmentPrompt(sampleContext);
+  it('system prompt forbids summarization and points to the rules, where the verbatim rule is', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt(sampleContext);
     expect(systemPrompt).toMatch(/not.*summariz/i);
-    // B3: the echo-the-prose rule is gone; what remains is the grounding rule.
-    expect(systemPrompt).toMatch(/verbatim substring of the prose/i);
+    // B3: the echo-the-prose rule is gone; what remains is the grounding rule. Since
+    // the 3.6 fix batch (item 5) each rule is stated once, in <ENRICHMENT_RULES>.
+    expect(systemPrompt).toContain('<ENRICHMENT_RULES>');
+    expect(userPrompt).toMatch(/verbatim substring of the prose/i);
   });
 
   it('user prompt contains all context sections as XML tags', () => {
@@ -195,11 +199,12 @@ describe('enrichDirectorNotes', () => {
   });
 
   it('returns the SDK result on success', async () => {
+    // Phase 3 (3.6): the quote carries the director's words around it, which name its speaker.
     const expected = {
       rawProse: baseContext.rawProse,
       characterMentions: { Vic: [{ excerpt: 'Vic was working the room.' }] },
       entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
-      quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }],
+      quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', context: '"do you want to trade a little" Remi said to Mel.', confidence: 'high' }],
       transactionReferences: [],
       postInvestigationDevelopments: []
     };
@@ -362,7 +367,8 @@ describe('DIRECTOR_NOTES_ENRICHED_SCHEMA — prose is not round-tripped (B3)', (
     const ok = validate({
       characterMentions: {},
       entityNotes: { npcsReferenced: [], shellAccountsReferenced: [] },
-      quotes: [{ speaker: 'Remi', text: 'do you want to trade', confidence: 'medium' }],
+      // Phase 3 (3.6): a quote carries the director's words around it.
+      quotes: [{ speaker: 'Remi', text: 'do you want to trade', context: 'Later, Remi said "do you want to trade".', confidence: 'medium' }],
       transactionReferences: [],
       postInvestigationDevelopments: []
     });
@@ -386,10 +392,10 @@ describe('ENRICHMENT prompts — no verbatim-echo rule (B3)', () => {
     expect(userPrompt).not.toMatch(/rawProse/);
   });
 
-  it('keeps a positive verbatim requirement on excerpts and quotes', () => {
+  it('keeps a positive verbatim requirement on excerpts and quotes, stated once (3.6 fix batch, item 5)', () => {
     const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
-    expect(systemPrompt).toMatch(/verbatim substring of the prose/i);
     expect(userPrompt).toMatch(/verbatim substring of the prose/i);
+    expect(systemPrompt).not.toMatch(/verbatim substring of the prose/i);
   });
 });
 
@@ -400,7 +406,8 @@ describe('enrichDirectorNotes — keeps the payload the model produced (B3)', ()
   const modelPayload = () => ({
     characterMentions: { Vic: [{ excerpt: 'Vic was working the room.' }] },
     entityNotes: { npcsReferenced: ['Blake'], shellAccountsReferenced: [] },
-    quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }],
+    // Phase 3 (3.6): the context names the speaker, so the speaker is kept.
+    quotes: [{ speaker: 'Remi', text: 'do you want to trade a little', context: '"do you want to trade a little" Remi said to Mel.', confidence: 'high' }],
     transactionReferences: [{ excerpt: 'Vic was working the room.', linkedTransactions: [], confidence: 'low' }],
     postInvestigationDevelopments: []
   });
@@ -435,17 +442,18 @@ describe('enrichDirectorNotes — quote grounding (B3)', () => {
   const prose = 'Vic was working the room. "do you want to trade a little" Remi said to Mel.';
 
   it('drops a quote that is not in the prose and counts it, keeping the grounded one', async () => {
+    const context = '"do you want to trade a little" Remi said to Mel.';
     const sdk = jest.fn().mockResolvedValue({
       quotes: [
-        { speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' },
-        { speaker: 'Mel', text: 'I never touched the account', confidence: 'low' }  // invented
+        { speaker: 'Remi', text: 'do you want to trade a little', context, confidence: 'high' },
+        { speaker: 'Mel', text: 'I never touched the account', context, confidence: 'low' }  // invented
       ]
     });
 
     const result = await enrichDirectorNotes({ rawProse: prose, roster: ['Vic'] }, sdk);
 
     expect(result.quotes).toEqual([
-      { speaker: 'Remi', text: 'do you want to trade a little', confidence: 'high' }
+      { speaker: 'Remi', text: 'do you want to trade a little', context, confidence: 'high' }
     ]);
     expect(result._enrichmentWarnings).toEqual({ droppedQuotes: 1 });
   });
@@ -453,12 +461,14 @@ describe('enrichDirectorNotes — quote grounding (B3)', () => {
   it('keeps a quote whose curly quotes and whitespace differ from the prose', async () => {
     const curlyProse = 'Remi said “do you  want to trade” to Mel.';
     const sdk = jest.fn().mockResolvedValue({
-      quotes: [{ speaker: 'Remi', text: "do you want to trade", confidence: 'high' }]
+      // Phase 3 (3.6): the context is grounded the same way, curly quotes and all.
+      quotes: [{ speaker: 'Remi', text: "do you want to trade", context: 'Remi said "do you want to trade" to Mel.', confidence: 'high' }]
     });
 
     const result = await enrichDirectorNotes({ rawProse: curlyProse, roster: ['Remi'] }, sdk);
 
     expect(result.quotes).toHaveLength(1);
+    expect(result.quotes[0].speaker).toBe('Remi');
     expect(result._enrichmentWarnings).toBeUndefined();
   });
 
@@ -541,12 +551,14 @@ describe('normalizeForGrounding folds dashes (the JSDoc already claimed it)', ()
     const prose = 'Vic said the deal was already done - signed, filed, forgotten.';
     const sdk = jest.fn().mockResolvedValue({
       characterMentions: {}, transactionReferences: [],
-      quotes: [{ speaker: 'Vic', text: 'the deal was already done — signed, filed, forgotten.' }]
+      // Phase 3 (3.6): with the director's words around it, which name the speaker.
+      quotes: [{ speaker: 'Vic', text: 'the deal was already done — signed, filed, forgotten.', context: prose }]
     });
 
     const result = await enrichDirectorNotes({ rawProse: prose }, sdk);
 
     expect(result.quotes).toHaveLength(1);
+    expect(result.quotes[0].speaker).toBe('Vic');
     expect(result._enrichmentWarnings).toBeUndefined();
   });
 });
@@ -554,15 +566,22 @@ describe('normalizeForGrounding folds dashes (the JSDoc already claimed it)', ()
 describe('ENRICHMENT prompts define the medium confidence band (Task 1 Minor)', () => {
   const { buildEnrichmentPrompt } = require('../director-enricher');
 
-  it('the system rule and the user rules both say what medium means', () => {
+  it('the rules say what medium means (stated once, in the user rules, since the 3.6 fix batch)', () => {
+    const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'x' });
+    // "high iff speaker named adjacent; otherwise low" left medium undefined,
+    // so the enum's middle value was unreachable by instruction.
+    expect(userPrompt).toMatch(/"medium"/);
+    expect(userPrompt).toMatch(/same sentence/i);
+    expect(userPrompt).toMatch(/surrounding paragraph/i);
+  });
+
+  it('the schema states the bands in the rules\' own words (M5: "adjacent" against "same sentence")', () => {
     const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'x' });
-    [systemPrompt, userPrompt].forEach((text) => {
-      // "high iff speaker named adjacent; otherwise low" left medium undefined,
-      // so the enum's middle value was unreachable by instruction.
-      expect(text).toMatch(/"medium"/);
-      expect(text).toMatch(/same sentence/i);
-      expect(text).toMatch(/surrounding paragraph/i);
-    });
+    const bands = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.confidence.description;
+    expect(bands).toMatch(/same sentence/);
+    expect(bands).not.toMatch(/adjacent/);
+    expect(userPrompt).toContain(bands);
+    expect(systemPrompt).not.toContain(bands);
   });
 });
 
@@ -594,9 +613,11 @@ describe('the accusation block (phase 2, brief 2.2)', () => {
 });
 
 describe('the corrections block (phase 2, brief 2.2)', () => {
-  it('renders one correction exactly as before, last in the prompt', () => {
+  it('renders one correction as written, last in the prompt', () => {
+    // Phase 3 (3.5): the line after the block speaks only to what the parse reads
+    // from the source text (D15), not to "anything in the source text".
     const { userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: 'Blake said it, not Vic.' });
-    expect(userPrompt.endsWith('</ENRICHMENT_RULES>\n\n<DIRECTOR_CORRECTIONS>\nBlake said it, not Vic.\n</DIRECTOR_CORRECTIONS>\nApply these corrections; they override anything in the source text.\n')).toBe(true);
+    expect(userPrompt.endsWith('</ENRICHMENT_RULES>\n\n<DIRECTOR_CORRECTIONS>\nBlake said it, not Vic.\n</DIRECTOR_CORRECTIONS>\nApply these corrections to what you parse from the source text; where a correction and the source text differ, the correction is right.\n')).toBe(true);
   });
 
   it('takes the session\'s list and numbers the corrections in order', () => {
@@ -634,10 +655,10 @@ describe('the enricher never carries a buried memory id (phase 2 final fix wave)
     expect(`${systemPrompt}\n${userPrompt}`).not.toMatch(/tay004|Taylor/);
   });
 
-  it('asks the model to name each linked row by its key, in the system rule and the user rule', () => {
+  it('asks the model to name each linked row by its key, once, in the user rules', () => {
     const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
-    expect(systemPrompt).toContain('naming each linked row by its key');
     expect(userPrompt).toContain('naming each linked row by its key');
+    expect(systemPrompt).not.toContain('naming each linked row by its key');
   });
 
   it('maps each key back to its row as time, amount and account; an unknown key is dropped and counted', () => {
@@ -653,6 +674,27 @@ describe('the enricher never carries a buried memory id (phase 2 final fix wave)
     expect(droppedLinks).toBe(1);
   });
 
+  it("keeps a link only when the notes hold its observation word for word; one they do not is dropped and counted (fix batch, item 3)", async () => {
+    // <TRANSACTION_LINKS> prints each link's excerpt under a label that calls it the
+    // director's words, so a paraphrased observation never reaches it.
+    const sdk = jest.fn().mockResolvedValue({
+      characterMentions: {}, quotes: [], postInvestigationDevelopments: [],
+      transactionReferences: [
+        { excerpt: 'Vic was  working\nthe room.', linkedTransactions: [{ key: 'tx-1' }], confidence: 'high' },
+        { excerpt: 'Vic sold a large batch to Blake late in the evening.', linkedTransactions: [{ key: 'tx-2' }], confidence: 'medium' }
+      ]
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await enrichDirectorNotes({ rawProse: 'Vic was working the room. Blake kept to the bar.', scoringTimeline: TIMELINE }, sdk);
+    warn.mockRestore();
+    expect(result.transactionReferences).toEqual([{
+      excerpt: 'Vic was  working\nthe room.',
+      linkedTransactions: [{ timestamp: '09:26 PM', amount: '$450,000', sellingTeam: 'Elephant' }],
+      confidence: 'high'
+    }]);
+    expect(result._enrichmentWarnings).toEqual({ droppedExcerpts: 1 });
+  });
+
   it('enrichDirectorNotes resolves the links against the timeline it was given, and warns of a dropped one', async () => {
     const sdk = jest.fn().mockResolvedValue({
       characterMentions: {}, quotes: [], postInvestigationDevelopments: [],
@@ -664,5 +706,476 @@ describe('the enricher never carries a buried memory id (phase 2 final fix wave)
     expect(result.transactionReferences[0].linkedTransactions).toEqual([{ timestamp: '09:26 PM', amount: '$450,000', sellingTeam: 'Elephant' }]);
     expect(result._enrichmentWarnings).toEqual({ droppedLinks: 1 });
     expect(JSON.stringify(result)).not.toMatch(/sar004|tay004/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 3 (3.6): the director's notes, unguessed. A quote's speaker and wording come
+// from the notes as the director corrected them at the input review, its context is
+// the director's own words around it, and an epilogue item is the director's
+// sentence. On 092026 the notes say "Vic to Ashe" and the director corrected the line
+// to Blake, with different wording; an overheard line named no speaker at all.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe("the director's notes, unguessed (phase 3, 3.6)", () => {
+  const PROSE = [
+    'Early on, Sam and Sarah talked.',
+    'Overheard near the end: "Oh, Sam exposed everything."',
+    'Vic to Ashe: "My company is very interesting."',
+    'Remi was not available for comment after the investigation. According to his assistant, he is on a short vacation.'
+  ].join(' ');
+  const CORRECTION = 'The line to Ashe was Blake, not Vic, and Blake said "my company would be very interested".';
+  const run = async (payload) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: PROSE, corrections: [CORRECTION] }, jest.fn().mockResolvedValue(payload));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it('keeps a quote whose speaker the notes do not record, with no speaker', async () => {
+    const quote = { text: 'Oh, Sam exposed everything.', context: 'Overheard near the end: "Oh, Sam exposed everything."', confidence: 'low' };
+    const result = await run({ quotes: [quote] });
+    expect(result.quotes).toEqual([quote]);
+  });
+
+  it('leaves the speaker out when only the quoted words name them, never the director\'s', async () => {
+    const result = await run({
+      quotes: [{ speaker: 'Sam', text: 'Oh, Sam exposed everything.', context: 'Overheard near the end: "Oh, Sam exposed everything."', confidence: 'medium' }]
+    });
+    expect(result.quotes).toEqual([
+      { text: 'Oh, Sam exposed everything.', context: 'Overheard near the end: "Oh, Sam exposed everything."', confidence: 'low' }
+    ]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  // Final review (data-harness-docs[1]): a correction about the quote names the old
+  // names as well as the new, so a name is kept only when the correction brings it in.
+  // Ashe is the addressee in the notes and in the correction alike, so code cannot tell
+  // the correction's Ashe from the notes', and leaves the addressee out; the correction
+  // printed under the line still says "to Ashe".
+  it('keeps a corrected speaker and wording, with the notes\' words around it and the correction that applied', async () => {
+    const corrected = {
+      speaker: 'Blake',
+      addressee: 'Ashe',
+      text: 'my company would be very interested',
+      context: 'Vic to Ashe: "My company is very interesting."',
+      correction: CORRECTION,
+      confidence: 'high'
+    };
+    const result = await run({ quotes: [corrected] });
+    const { addressee, ...kept } = corrected;
+    expect(result.quotes).toEqual([kept]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  it('keeps only a context copied from the notes; the quote stays', async () => {
+    const result = await run({
+      quotes: [{
+        speaker: 'Blake', text: 'My company is very interesting.',
+        context: 'Prose attributes this to Vic but the correction says Blake.',
+        correction: CORRECTION, confidence: 'high'
+      }]
+    });
+    expect(result.quotes).toEqual([
+      { speaker: 'Blake', text: 'My company is very interesting.', correction: CORRECTION, confidence: 'high' }
+    ]);
+    expect(result._enrichmentWarnings).toEqual({ droppedContexts: 1 });
+  });
+
+  it('a correction the director\'s corrections do not hold leaves the speaker and addressee out, never the notes\' names (fix batch, item 2)', async () => {
+    // The model's correction says the director changed this quote, but the director's
+    // corrections do not hold it. Keeping the notes' names could print the line in the
+    // mouth the director corrected it away from (T12), so the bank says "speaker not
+    // recorded" instead.
+    const result = await run({
+      quotes: [{
+        speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.',
+        context: 'Vic to Ashe: "My company is very interesting."',
+        correction: 'The director said it was Blake.', confidence: 'high'
+      }]
+    });
+    expect(result.quotes).toEqual([
+      { text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'low' }
+    ]);
+    expect(result._enrichmentWarnings).toEqual({ droppedCorrections: 1, unrecordedSpeakers: 1 });
+  });
+
+  it('keeps an epilogue item as the director\'s sentences alone, and drops one the notes do not hold', async () => {
+    const result = await run({
+      postInvestigationDevelopments: [
+        {
+          headline: 'Remi unavailable for comment',
+          detail: 'Remi was not available for comment after the investigation. According to his assistant, he is on a short vacation.',
+          subjects: ['Remi'],
+          bearingOnNarrative: 'The accused left town.',
+          proseOffset: 120
+        },
+        { headline: 'Remi fled', detail: 'Remi fled to the Cayman Islands.', subjects: ['Remi'] }
+      ]
+    });
+    expect(result.postInvestigationDevelopments).toEqual([{
+      detail: 'Remi was not available for comment after the investigation. According to his assistant, he is on a short vacation.',
+      subjects: ['Remi'],
+      proseOffset: 120
+    }]);
+    expect(result._enrichmentWarnings).toEqual({ droppedEpilogueItems: 1 });
+  });
+
+  it('tells the model where a quote\'s speaker and wording come from, once, in the user rules', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: PROSE, corrections: [CORRECTION] });
+    const rules = userPrompt.slice(userPrompt.indexOf('<ENRICHMENT_RULES>'), userPrompt.indexOf('</ENRICHMENT_RULES>'));
+    expect(rules).toMatch(/take that from the correction/);
+    expect(rules).toMatch(/leave the speaker out/i);
+    expect(`${systemPrompt}\n${userPrompt}`.match(/leave the speaker out/gi)).toHaveLength(1);
+    expect(`${systemPrompt}\n${userPrompt}`).not.toMatch(/inferable/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.11 (final review, session-data finding 1): a correction the enricher did
+// not attach. 092026's notes put "If you ever want to…" in Vic's mouth, and the
+// director corrected the line to Blake at the input review. A model that keeps the
+// notes' speaker and attaches no correction used to keep Vic, because the notes'
+// context names Vic and nothing else was consulted. A director's correction that puts
+// in quotation marks a whole sentence of the quote's words, or of the passage its
+// context quotes, is about that quote: the notes' names are the ones it may have
+// corrected away, and a correction names the old speaker as well as the new, so code
+// cannot read the new one from it. The speaker and addressee are left out, as for a
+// failed correction.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('a director\'s correction the model did not attach (task 3.11)', () => {
+  const NOTES_092026 = [
+    'Alex and Vic had a hushed conversation in the corner as Alex showed Vic the contents of a memory token on the scanner. Overheard Vic saying to Alex: "You\'re just an intern."',
+    'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting." When it came to the information at hand, Ashe said it wasn\'t theirs; Alex said it didn\'t matter, let\'s use it.'
+  ].join('\n');
+  const CORRECTION_092026 = 'The quote attributed to Vic, speaking to Ashe ("My company is very interesting"), was actually said by Blake to Ashe, and the words were "my company would be very interested".';
+  const LINE = 'If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know.';
+  const CONTEXT = 'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting."';
+  const run = async (quotes, corrections = [CORRECTION_092026]) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: NOTES_092026, corrections }, jest.fn().mockResolvedValue({ quotes }));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it('leaves Vic and Ashe out and counts the speaker as unrecorded, when the model kept the notes\' Vic and attached nothing', async () => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: LINE, context: CONTEXT, confidence: 'high' }]);
+    expect(result.quotes).toEqual([{ text: LINE, context: CONTEXT, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it('reads the correction as about the quote when it quotes the quote\'s own words, normalized as isVerbatimIn reads them', async () => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: 'My company is very interesting.', context: CONTEXT, confidence: 'high' }],
+      ['The quote attributed to Vic, speaking to Ashe (“My company is very interesting”), was actually said by Blake to Ashe.']);
+    expect(result.quotes).toEqual([{ text: 'My company is very interesting.', context: CONTEXT, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it('keeps the speaker the notes give a quote no correction quotes', async () => {
+    const intern = { speaker: 'Vic', addressee: 'Alex', text: 'You\'re just an intern.', context: 'Overheard Vic saying to Alex: "You\'re just an intern."', confidence: 'high' };
+    const result = await run([intern]);
+    expect(result.quotes).toEqual([intern]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  // Final review (data-harness-docs[1]): the speaker the correction brings in stays; the
+  // addressee, Ashe in the notes and in the correction alike, is left out.
+  it('keeps the speaker a correction the model attached names, as before', async () => {
+    const corrected = { speaker: 'Blake', addressee: 'Ashe', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' };
+    const result = await run([corrected]);
+    const { addressee, ...kept } = corrected;
+    expect(result.quotes).toEqual([kept]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Final review (data-harness-docs[1]; T12): a corrected quote leaves the old speaker's
+// mouth, whether or not the model attached the correction. A correction names the old
+// speaker as well as the new ("attributed to Vic ... said by Blake to Ashe"), so when a
+// verified correction is about the quote, a speaker is kept only when that correction
+// names them and the notes' account of the line does not: the name the correction
+// brings in. The addressee follows the same rule. The notes' account is the context, and
+// the notes' paragraph that holds the line, so a context the notes do not hold, or one
+// that leaves out who spoke, cannot let the old speaker through. A correction's quoted
+// passage is matched in any case, and in single quotation marks as in double.
+// 092026's notes and the director's correction, as above.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe("a corrected quote leaves the old speaker's mouth, attached or not (final review)", () => {
+  const NOTES_092026 = [
+    'Alex and Vic had a hushed conversation in the corner as Alex showed Vic the contents of a memory token on the scanner. Overheard Vic saying to Alex: "You\'re just an intern."',
+    'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting." When it came to the information at hand, Ashe said it wasn\'t theirs; Alex said it didn\'t matter, let\'s use it.'
+  ].join('\n');
+  const CORRECTION_092026 = 'The quote attributed to Vic, speaking to Ashe ("My company is very interesting"), was actually said by Blake to Ashe, and the words were "my company would be very interested".';
+  const LINE = 'If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know.';
+  const CONTEXT = 'Vic to Ashe: "If you ever want to turn your investigative skills to something more profitable than pure journalism, you let me know. My company is very interesting."';
+  const run = async (quotes, corrections = [CORRECTION_092026]) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: NOTES_092026, corrections }, jest.fn().mockResolvedValue({ quotes }));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it("leaves Vic and Ashe out when the model attached the correction and kept the notes' Vic", async () => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(result.quotes).toEqual([{ text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it('keeps Blake, the name the correction brings in, whether or not the model attached it', async () => {
+    const attached = await run([{ speaker: 'Blake', addressee: 'Ashe', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(attached.quotes).toEqual([{ speaker: 'Blake', text: LINE, context: CONTEXT, correction: CORRECTION_092026, confidence: 'high' }]);
+    const unattached = await run([{ speaker: 'Blake', addressee: 'Ashe', text: LINE, context: CONTEXT, confidence: 'high' }]);
+    expect(unattached.quotes).toEqual([{ speaker: 'Blake', text: LINE, context: CONTEXT, confidence: 'high' }]);
+    expect(unattached._enrichmentWarnings).toBeUndefined();
+  });
+
+  it.each([
+    ['single quotation marks', "The quote attributed to Vic, speaking to Ashe ('My company is very interesting'), was actually said by Blake to Ashe."],
+    ['curly single quotation marks', 'The quote attributed to Vic, speaking to Ashe (‘My company is very interesting’), was actually said by Blake to Ashe.'],
+    ['other case', 'The quote attributed to Vic, speaking to Ashe ("my company is very interesting"), was actually said by Blake to Ashe.']
+  ])("reads an unattached correction that quotes the line in %s as about it: the notes' Vic is left out", async (_case, correction) => {
+    const result = await run([{ speaker: 'Vic', addressee: 'Ashe', text: LINE, context: CONTEXT, confidence: 'high' }], [correction]);
+    expect(result.quotes).toEqual([{ text: LINE, context: CONTEXT, confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+
+  it("reads the notes' paragraph that holds the line when the context is not the notes' words: Vic is left out, Blake kept", async () => {
+    const paraphrased = 'Prose attributes this to Vic to Ashe but the correction says Blake.';
+    const asVic = await run([{ speaker: 'Vic', text: 'My company is very interesting.', context: paraphrased, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(asVic.quotes).toEqual([{ text: 'My company is very interesting.', correction: CORRECTION_092026, confidence: 'low' }]);
+    const asBlake = await run([{ speaker: 'Blake', text: 'My company is very interesting.', context: paraphrased, correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(asBlake.quotes).toEqual([{ speaker: 'Blake', text: 'My company is very interesting.', correction: CORRECTION_092026, confidence: 'high' }]);
+  });
+
+  it('reads the notes\' paragraph too when the context leaves out who spoke', async () => {
+    const result = await run([{ speaker: 'Vic', text: LINE, context: 'you let me know. My company is very interesting.', correction: CORRECTION_092026, confidence: 'high' }]);
+    expect(result.quotes).toEqual([{ text: LINE, context: 'you let me know. My company is very interesting.', correction: CORRECTION_092026, confidence: 'low' }]);
+  });
+
+  it('reads an apostrophe inside a word as no quotation mark', async () => {
+    const intern = { speaker: 'Vic', addressee: 'Alex', text: 'You\'re just an intern.', context: 'Overheard Vic saying to Alex: "You\'re just an intern."', confidence: 'high' };
+    const result = await run([intern], ["Vic's line to Alex wasn't about the intern's job; Alex's notes say so."]);
+    expect(result.quotes).toEqual([intern]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.11, fix round 1. Input-review corrections are about the roster, the
+// accusation, names and votes as often as about quotes, and a name or a short word in
+// quotation marks is an ordinary way to write one. Matched as a bare substring,
+// "Blake" sat inside "Blake told me to sell it before the vote." and "no" inside
+// "know", so each such correction left unrelated quotes with no speaker. A correction
+// is about a quote only when one of its quoted fragments holds a whole sentence of
+// three or more words of the line. A name, a vote word, a short phrase or a charge
+// sits inside a sentence; one that is a whole line has fewer than three words.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('a correction about something else leaves a quote\'s speaker in place (task 3.11, fix round 1)', () => {
+  const QUOTES = {
+    name: { speaker: 'Remi', text: 'Blake told me to sell it before the vote.', context: 'Remi told the room: "Blake told me to sell it before the vote."', confidence: 'high' },
+    know: { speaker: 'Sarah', addressee: 'Jess', text: 'How would you know that, Jess?', context: 'Sarah to Jess: "How would you know that, Jess?"', confidence: 'high' },
+    yes: { speaker: 'Ashe', addressee: 'Vic', text: 'Yes, I saw the ledger.', context: 'Ashe told Vic: "Yes, I saw the ledger."', confidence: 'high' },
+    intern: { speaker: 'Vic', addressee: 'Alex', text: 'You\'re just an intern.', context: 'Overheard Vic saying to Alex: "You\'re just an intern."', confidence: 'high' },
+    charge: { speaker: 'Remi', text: 'Vic is guilty of the murder of Marcus Blackwood.', context: 'Remi told the room: "Vic is guilty of the murder of Marcus Blackwood."', confidence: 'high' },
+    no: { speaker: 'Remi', text: 'No.', context: 'Asked if he sold it, Remi said: "No."', confidence: 'high' },
+    blake: { speaker: 'Ashe', text: 'Blake.', context: 'Asked who paid, Ashe said: "Blake."', confidence: 'high' },
+    trust: { speaker: 'Vic', addressee: 'Ashe', text: 'Trust no one.', context: 'Vic to Ashe: "Trust no one."', confidence: 'high' }
+  };
+  const NOTES = Object.values(QUOTES).map(quote => quote.context).join('\n');
+  const run = async (quote, correction) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      return await enrichDirectorNotes({ rawProse: NOTES, corrections: [correction] }, jest.fn().mockResolvedValue({ quotes: [quote] }));
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it.each([
+    ['a name', 'name', 'The accused should be "Blake", not Marcus.'],
+    ['a one-word answer, and a name the line says', 'know', 'At the vote Remi answered "no", and the roster name is "Jess", not Jessica.'],
+    ['a vote word', 'yes', 'Vic voted "Yes" at the end.'],
+    ['a two-word phrase', 'intern', 'Alex is "an intern", not a partner.'],
+    ['a charge, which sits inside the line\'s sentence', 'charge', 'The charge should read "the murder of Marcus Blackwood", not an accident.'],
+    ['a vote word the line says whole', 'no', 'At the vote Remi answered "No", not yes.'],
+    ['a name the line says whole', 'blake', 'The accused should be "Blake", not Marcus.']
+  ])('a correction quoting %s keeps the speaker and addressee the notes give', async (_case, key, correction) => {
+    const result = await run(QUOTES[key], correction);
+    expect(result.quotes).toEqual([QUOTES[key]]);
+    expect(result._enrichmentWarnings).toBeUndefined();
+  });
+
+  it('a correction quoting a whole line of three words is about that line', async () => {
+    const result = await run(QUOTES.trust, 'The line "Trust no one" was Blake to Ashe, not Vic.');
+    expect(result.quotes).toEqual([{ text: 'Trust no one.', context: 'Vic to Ashe: "Trust no one."', confidence: 'low' }]);
+    expect(result._enrichmentWarnings).toEqual({ unrecordedSpeakers: 1 });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.6 fix batch. Code keeps a quote's context or an epilogue detail only when
+// the notes hold it as one piece, so the rules ask for one unbroken passage (item
+// 1). Each rule is stated once per call, with its reason (item 5). A link needs the
+// notes to describe the sale; an account's name never makes one (item 9, T4).
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('the enricher rules (task 3.6 fix batch)', () => {
+  const rulesOf = (userPrompt) =>
+    userPrompt.slice(userPrompt.indexOf('<ENRICHMENT_RULES>'), userPrompt.indexOf('</ENRICHMENT_RULES>'));
+  const ruleNumbered = (rules, n) => (rules.split('\n').find(line => line.startsWith(`${n}. `)) || '');
+
+  describe('one unbroken passage (item 1)', () => {
+    // The review's probe: the speaker is named two sentences before the quote.
+    const NOTES = 'Jess walked over to Sarah at the bar. The room was loud. She leaned in. "You deserve to know the truth."';
+    const run = async (quote) => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        return await enrichDirectorNotes({ rawProse: NOTES }, jest.fn().mockResolvedValue({ quotes: [quote] }));
+      } finally {
+        warn.mockRestore();
+      }
+    };
+
+    it('asks for the context as one unbroken passage from the quote\'s sentence to the sentence that names the speaker', () => {
+      const quoteRule = ruleNumbered(rulesOf(buildEnrichmentPrompt({ rawProse: NOTES }).userPrompt), 4);
+      expect(quoteRule).toMatch(/^4\. quotes:/);
+      expect(quoteRule).toContain("The context is one unbroken passage copied whole from the prose: the quote's sentence, together with the sentence that names the speaker and every sentence between them");
+    });
+
+    it('asks for each epilogue item as one unbroken passage', () => {
+      const epilogueRule = ruleNumbered(rulesOf(buildEnrichmentPrompt({ rawProse: NOTES }).userPrompt), 5);
+      expect(epilogueRule).toMatch(/^5\. postInvestigationDevelopments \(the epilogue\):/);
+      expect(epilogueRule).toContain('as one unbroken passage of the prose');
+      expect(epilogueRule).not.toMatch(/sentence or sentences/);
+    });
+
+    it('keeps the speaker of the probe when the context is the passage the rule asks for', async () => {
+      const result = await run({
+        speaker: 'Jess', addressee: 'Sarah', text: 'You deserve to know the truth.',
+        context: NOTES, confidence: 'medium'
+      });
+      expect(result.quotes).toEqual([{
+        speaker: 'Jess', addressee: 'Sarah', text: 'You deserve to know the truth.', context: NOTES, confidence: 'medium'
+      }]);
+      expect(result._enrichmentWarnings).toBeUndefined();
+    });
+
+    it('leaves the probe\'s speaker unrecorded when the context joins the two named sentences, which is why the rule asks for one passage', async () => {
+      const result = await run({
+        speaker: 'Jess', text: 'You deserve to know the truth.',
+        context: 'Jess walked over to Sarah at the bar. She leaned in. "You deserve to know the truth."', confidence: 'medium'
+      });
+      expect(result.quotes).toEqual([{ text: 'You deserve to know the truth.', confidence: 'low' }]);
+      expect(result._enrichmentWarnings).toEqual({ droppedContexts: 1, unrecordedSpeakers: 1 });
+    });
+  });
+
+  describe('each rule once per call, with its reason (item 5)', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: ['c'] });
+    const both = `${systemPrompt}\n${userPrompt}`;
+    const rules = rulesOf(userPrompt);
+
+    it('states the rules once, in <ENRICHMENT_RULES>, and the system prompt points there', () => {
+      expect(systemPrompt).toContain('<ENRICHMENT_RULES>');
+      // The roster and empty rules as the 3.6b fix batch (finding 5) words them:
+      // positively, each with its reason.
+      [
+        'verbatim substring of the prose',
+        "key each entry by the character's name as <ROSTER> gives it",
+        'naming each linked row by its key',
+        'each unambiguous direct speech',
+        'explicit post-investigation marker',
+        'return that index empty',
+        DIRECTOR_NOTES_ENRICHED_SCHEMA.properties.quotes.items.properties.confidence.description
+      ].forEach((phrase) => {
+        expect(`${phrase}: ${both.split(phrase).length - 1}`).toBe(`${phrase}: 1`);
+        expect(rules).toContain(phrase);
+      });
+    });
+
+    it('gives the verbatim, quote and epilogue rules each its reason', () => {
+      expect(ruleNumbered(rules, 1)).toContain("The writers print these as the director's own words, so code keeps only what the prose or a correction holds word for word.");
+      expect(ruleNumbered(rules, 4)).toContain("The writers print each line in its speaker's mouth, so code keeps a speaker only when the context or correction you copy names them.");
+      expect(ruleNumbered(rules, 5)).toContain("The writers take the article's follow-up news from these details alone, printed as the director's own words.");
+    });
+  });
+
+  describe('the link rule (item 9)', () => {
+    // An observation about Remi, and an account someone named Remi.
+    const probe = buildEnrichmentPrompt({
+      rawProse: 'Remi spent the evening at the bar with Sarah.',
+      roster: ['Remi', 'Sarah'],
+      shellAccounts: [{ name: 'Remi', total: 450000, tokenCount: 2 }],
+      scoringTimeline: [{ time: '09:26 PM', type: 'Sale', team: 'Remi', amount: '+$450,000' }]
+    });
+    const linkRule = ruleNumbered(rulesOf(probe.userPrompt), 3);
+
+    it('links an observation to a row only when the notes describe that sale and its time and amount converge', () => {
+      expect(linkRule).toMatch(/^3\. transactionReferences:/);
+      expect(linkRule).toContain('only when the notes describe that sale (someone seen selling, or a deal with Blake) and its time and amount converge with the row');
+      // "actor" convergence was the opening for a name match: the account's name is
+      // the only actor a timeline row carries.
+      expect(`${probe.systemPrompt}\n${probe.userPrompt}`).not.toMatch(/actor/);
+    });
+
+    it("never links an observation about a character to the account named after them on the name alone, and says why", () => {
+      expect(linkRule).toContain("An account's name matching a character never makes a link: a seller can give an account any name, another character's included, so the name says nothing about who sold.");
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Task 3.6b fix batch. The schema reaches the model through the structured-output
+// channel, so a rule restated in a field's description is stated twice per call.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('the enricher prompt (task 3.6b fix batch)', () => {
+  const rulesOf = (userPrompt) =>
+    userPrompt.slice(userPrompt.indexOf('<ENRICHMENT_RULES>'), userPrompt.indexOf('</ENRICHMENT_RULES>'));
+
+  it('describes a quote\'s context and an epilogue detail by their shape, and states the one-passage rule only in <ENRICHMENT_RULES> (finding 1)', () => {
+    const { quotes, postInvestigationDevelopments } = DIRECTOR_NOTES_ENRICHED_SCHEMA.properties;
+    expect(quotes.items.properties.context.description).toBe("The director's words around the quote");
+    expect(postInvestigationDevelopments.items.properties.detail.description)
+      .toBe("The director's sentence or sentences reporting the development");
+
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p' });
+    const everything = `${systemPrompt}\n${userPrompt}\n${JSON.stringify(DIRECTOR_NOTES_ENRICHED_SCHEMA)}`;
+    // Once in the quote rule, once in the epilogue rule.
+    expect(everything.match(/unbroken passage/g)).toHaveLength(2);
+    expect(rulesOf(userPrompt).match(/unbroken passage/g)).toHaveLength(2);
+  });
+
+  it('points the system prompt at <ENRICHMENT_RULES> by its tag alone, since the corrections block can follow it (finding 4)', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', corrections: ['c'] });
+    expect(systemPrompt).toContain('The rules for every index are in <ENRICHMENT_RULES>.');
+    expect(systemPrompt).not.toMatch(/end of the user/i);
+    expect(userPrompt.indexOf('</ENRICHMENT_RULES>')).toBeLessThan(userPrompt.indexOf('<DIRECTOR_CORRECTIONS>'));
+  });
+
+  describe('the roster and empty rules: stated positively, each with a one-sentence reason (finding 5)', () => {
+    const { systemPrompt, userPrompt } = buildEnrichmentPrompt({ rawProse: 'p', roster: ['Remi'], npcs: ['Blake'] });
+    const rules = rulesOf(userPrompt);
+    const ruleNumbered = (n) => (rules.split('\n').find(line => line.startsWith(`${n}. `)) || '');
+
+    it('keys each character mention by its roster name, says where an NPC goes, and why', () => {
+      expect(ruleNumbered(2)).toBe(
+        "2. characterMentions: key each entry by the character's name as <ROSTER> gives it, and list a known NPC from <NPCS> in entityNotes.npcsReferenced; " +
+        'a name on neither list stays in the excerpts that carry it. ' +
+        "The input review shows each character's mentions under that character's roster name, so an entry keyed by any other name never reaches the director."
+      );
+    });
+
+    it('says what to return when nothing in the notes matches an index, and why, in place of "Never fabricate"', () => {
+      expect(ruleNumbered(6)).toBe(
+        '6. When the notes hold nothing for an index, return that index empty: [] for a list, {} for characterMentions. ' +
+        'Each entry reaches the writers or the director as resting on the notes, so an empty index is a complete and correct answer.'
+      );
+      expect(`${systemPrompt}\n${userPrompt}`).not.toMatch(/fabricate|unflagged/i);
+    });
   });
 });

@@ -437,3 +437,62 @@ describe('SchemaValidator', () => {
     });
   });
 });
+
+/**
+ * Phase 3 (3.2): the schemas decide shape only (names, types, required fields); the
+ * rule set decides content. Fields that never print stay optional and unasked (HY1;
+ * the integrator's ruling: the article stop's sidebar editor writes `owner`, and the
+ * parked detective prompt asks for `photos` and `voice_self_check`).
+ */
+describe('phase 3 (3.2): shape-only schemas', () => {
+  const contentBundleSchema = require('../../lib/schemas/content-bundle.schema.json');
+  const outlineSchema = require('../../lib/schemas/outline.schema.json');
+  const validator = new SchemaValidator();
+  const minimal = () => ({
+    metadata: { sessionId: '010126', theme: 'journalist', generatedAt: '2026-01-01T00:00:00Z' },
+    headline: { main: 'NeurAI Pays to Forget' },
+    sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text: 'One.' }] }]
+  });
+
+  /** Every description string in a schema, by its path. */
+  function descriptions(node, at = '') {
+    if (!node || typeof node !== 'object') return [];
+    const own = typeof node.description === 'string' ? [[at || '/', node.description]] : [];
+    return own.concat(...Object.entries(node).map(([k, v]) => descriptions(v, `${at}/${k}`)));
+  }
+
+  it('a sidebar entry with an owner is accepted', () => {
+    const bundle = minimal();
+    bundle.evidenceCards = [{ tokenId: 'ale003', headline: 'The brag', summary: 'Marcus brags', owner: 'Alex Reeves', significance: 'critical', placement: 'sidebar' }];
+    expect(validator.validate('content-bundle', bundle).valid).toBe(true);
+  });
+
+  it('the fields nothing prints are optional: a bundle without them is valid, and one with them too', () => {
+    expect(validator.validate('content-bundle', minimal()).valid).toBe(true);
+    ['photos', 'pullQuotes', 'voice_self_check', 'financialTracker', 'evidenceCards', 'byline', 'heroImage'].forEach((field) => {
+      expect(contentBundleSchema.required).not.toContain(field);
+    });
+    const withThem = {
+      ...minimal(),
+      photos: [{ filename: 'p.jpg', caption: 'A caption' }],
+      pullQuotes: [{ type: 'verbatim', text: 'Worth it.', attribution: 'Marcus Blackwood' }],
+      voice_self_check: { overall_assessment: 'fine' },
+      financialTracker: { entries: [{ description: 'Ember', amount: '$5' }], totalExposed: '$5' }
+    };
+    expect(validator.validate('content-bundle', withThem).valid).toBe(true);
+  });
+
+  it.each([
+    ['content-bundle', contentBundleSchema],
+    ['outline', outlineSchema]
+  ])('the %s schema descriptions carry no content rule and no implementation note', (name, schema) => {
+    const CONTENT_OR_IMPLEMENTATION = /prose only|no HTML|OMIT for|crystallization|quotable|inline article placement|summarizing|mystery|central conflict|systemic|murder|#277|format:date-time|lib\/|templates\/|\.hbs|\.js\b|SDK|future compatibility|for styling|template selection|for debugging|Skyler|buried|\bNova\b|\u2014/i;
+    const offending = descriptions(schema).filter(([, text]) => CONTENT_OR_IMPLEMENTATION.test(text));
+    expect(offending).toEqual([]);
+  });
+
+  it('the outline\'s convergence point is the culmination where the threads meet and the thesis lands (C16)', () => {
+    const point = outlineSchema.properties.theStory.properties.arcInterweaving.properties.convergencePoint;
+    expect(point.description).toMatch(/culmination where the threads meet and the thesis lands/);
+  });
+});

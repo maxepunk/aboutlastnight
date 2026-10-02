@@ -23,7 +23,6 @@ const {
   generateOutline,
   generateContentBundle,
   validateContentBundle,
-  validateArticle,
   reviseContentBundle,
   createMockPromptBuilder,
   _testing
@@ -60,8 +59,10 @@ describe('ai-nodes', () => {
       expect(typeof validateContentBundle).toBe('function');
     });
 
-    it('exports validateArticle function', () => {
-      expect(typeof validateArticle).toBe('function');
+    // Phase 3 (3.2; M25): validateArticle was dead code, reached by no edge, with its
+    // own rules the rulings had changed. It is gone, with its builder.
+    it('no longer exports validateArticle', () => {
+      expect(require('../../../lib/workflow/nodes/ai-nodes').validateArticle).toBeUndefined();
     });
 
     it('exports reviseContentBundle function', () => {
@@ -174,8 +175,9 @@ describe('ai-nodes', () => {
 
       expect(typeof builder.buildOutlinePrompt).toBe('function');
       expect(typeof builder.buildArticlePrompt).toBe('function');
-      expect(typeof builder.buildValidationPrompt).toBe('function');
-      expect(typeof builder.buildRevisionPrompt).toBe('function');
+      // Phase 3 (3.2; M25): the builders' dead validation and revision prompts are gone.
+      expect(builder.buildValidationPrompt).toBeUndefined();
+      expect(builder.buildRevisionPrompt).toBeUndefined();
     });
 
     it('returns systemPrompt and userPrompt from build methods', async () => {
@@ -469,92 +471,6 @@ describe('ai-nodes', () => {
     });
   });
 
-  describe('validateArticle', () => {
-    const mockClient = createMockSdkClient({ validationResults: mockValidationPassed });
-    const mockBuilder = createMockPromptBuilder();
-    const config = {
-      configurable: {
-        sdkClient: mockClient,
-        promptBuilder: mockBuilder
-      }
-    };
-
-    it('returns validationResults in state update', async () => {
-      const result = await validateArticle({ contentBundle: mockContentBundle }, config);
-
-      expect(result.validationResults).toBeDefined();
-      expect(result.validationResults.passed).toBeDefined();
-      expect(result.validationResults.voice_score).toBeDefined();
-    });
-
-    it('sets currentPhase to COMPLETE when validation passes', async () => {
-      const result = await validateArticle({}, config);
-
-      expect(result.currentPhase).toBe(PHASES.COMPLETE);
-    });
-
-    it('sets currentPhase to REVISE_CONTENT when validation fails', async () => {
-      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
-      const failConfig = {
-        configurable: {
-          sdkClient: failingClient,
-          promptBuilder: mockBuilder
-        }
-      };
-
-      const result = await validateArticle({ voiceRevisionCount: 0 }, failConfig);
-
-      expect(result.currentPhase).toBe(PHASES.REVISE_CONTENT);
-    });
-
-    it('increments voiceRevisionCount when validation fails', async () => {
-      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
-      const failConfig = {
-        configurable: {
-          sdkClient: failingClient,
-          promptBuilder: mockBuilder
-        }
-      };
-
-      const result = await validateArticle({ voiceRevisionCount: 1 }, failConfig);
-
-      expect(result.voiceRevisionCount).toBe(2);
-    });
-
-    it('completes after max revisions even if validation fails', async () => {
-      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
-      const failConfig = {
-        configurable: {
-          sdkClient: failingClient,
-          promptBuilder: mockBuilder
-        }
-      };
-
-      const result = await validateArticle({ voiceRevisionCount: 2 }, failConfig);
-
-      expect(result.currentPhase).toBe(PHASES.COMPLETE);
-    });
-
-    it('calls SDK with opus model', async () => {
-      mockClient.clearCalls();
-      await validateArticle({}, config);
-
-      const lastCall = mockClient.getLastCall();
-      expect(lastCall.model).toBe('opus');
-    });
-
-    it('uses assembledHtml if available', async () => {
-      const state = {
-        assembledHtml: '<html>Test HTML</html>',
-        contentBundle: mockContentBundle
-      };
-
-      const result = await validateArticle(state, config);
-
-      expect(result.validationResults).toBeDefined();
-    });
-  });
-
   describe('reviseContentBundle', () => {
     const mockRevision = {
       contentBundle: mockContentBundle,
@@ -773,20 +689,6 @@ describe('ai-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.ERROR);
       expect(result.errors).toBeDefined();
     });
-
-    it('handles zero voiceRevisionCount', async () => {
-      const failingClient = createMockSdkClient({ validationResults: mockValidationFailed });
-      const failConfig = {
-        configurable: {
-          sdkClient: failingClient,
-          promptBuilder: mockBuilder
-        }
-      };
-
-      const result = await validateArticle({}, failConfig);
-
-      expect(result.voiceRevisionCount).toBe(1);
-    });
   });
 
   describe('safeParseJson (legacy utility)', () => {
@@ -867,18 +769,6 @@ describe('ai-nodes', () => {
         .rejects.toThrow(/Context length exceeded/);
     });
 
-    it('validateArticle propagates SDK errors', async () => {
-      const config = {
-        configurable: {
-          sdkClient: createErrorClient('Authentication failed'),
-          promptBuilder: createMockPromptBuilder()
-        }
-      };
-
-      await expect(validateArticle({ contentBundle: {} }, config))
-        .rejects.toThrow(/Authentication failed/);
-    });
-
     it('reviseContentBundle returns error state on SDK errors', async () => {
       const config = {
         configurable: {
@@ -929,29 +819,6 @@ describe('ai-nodes', () => {
       // Phase 4.1
       const validateResult = await validateContentBundle(contentResult, {});
       expect(validateResult.currentPhase).toBe(PHASES.VALIDATE_SCHEMA);
-    });
-
-    it('can chain validateArticle -> reviseContentBundle on failure', async () => {
-      const failingFixtures = { ...fixtures, validationResults: mockValidationFailed };
-      const failClient = createMockSdkClient(failingFixtures);
-      const failConfig = {
-        configurable: {
-          sdkClient: failClient,
-          promptBuilder: mockBuilder
-        }
-      };
-
-      // Phase 5.1 - fails
-      const validateResult = await validateArticle({ contentBundle: mockContentBundle }, failConfig);
-      expect(validateResult.currentPhase).toBe(PHASES.REVISE_CONTENT);
-
-      // Phase 4.2 - incrementArticleRevision would set _previousContentBundle in real flow
-      const reviseState = { ...validateResult, _previousContentBundle: mockContentBundle };
-      const reviseResult = await reviseContentBundle(reviseState, failConfig);
-
-      expect(reviseResult.contentBundle).toBeDefined();
-      expect(reviseResult.currentPhase).toBe(PHASES.GENERATE_CONTENT);
-      expect(reviseResult._previousContentBundle).toBeNull(); // Cleared after use
     });
   });
 });

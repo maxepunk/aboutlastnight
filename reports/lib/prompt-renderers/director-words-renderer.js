@@ -6,12 +6,15 @@
  * than one prompt, so each is built by one function that every prompt calls:
  *
  * - the accusation: the parsed accused and charge (with the no-culprit verdict
- *   said as such), then the director's account word for word. Arc writer and arc
+ *   said as such, and since phase 3 a verdict that blames no character and a split
+ *   final vote), then the director's account word for word. Arc writer and arc
  *   reworker, and the outline and article writers' SESSION_FACTS.
  * - the input-review corrections: after the director's notes wherever those are
  *   rendered (director-notes-renderer.js), and appended to every parse prompt.
- * - the whiteboard connections: the arc writer's section, reused by the outline
- *   and article writers under the same label.
+ * - the whiteboard: the arc writer's section, reused by the outline and article
+ *   writers under the same label, which since phase 3 names it a model's reading of
+ *   the photo. (The whiteboard is the parse's reading, not the director's words; it
+ *   sits here because the same writers' sections print it.)
  * - each photo's description as the director typed it at the character-IDs stop,
  *   joined to its photo by filename.
  *
@@ -19,7 +22,7 @@
  * words themselves are copied as given (trimmed at the ends, nothing else).
  */
 
-const { isNoCulpritVerdict, accusedNames } = require('../accusation-verdict');
+const { isNoCulpritVerdict, blamesNoCharacter, accusedNames, normalizeVotes } = require('../accusation-verdict');
 
 // ═══════════════════════════════════════════════════════
 // ACCUSATION
@@ -33,12 +36,17 @@ const VERDICT_KIND_PHRASES = {
   other: 'a finding that names no one'
 };
 
+/** How the accused line reads when the group statement blames someone who is not a character. */
+const BLAMES_NO_CHARACTER = 'no character (the group statement blames an institution or an unnamed person: see the charge)';
+
 /**
  * The accused, as a prompt prints them.
  *
  * A no-culprit verdict prints as "none", with its kind, so no line can print the
- * victim (or anyone) as the accused. Otherwise the names, as JSON (the arc
- * prompts' existing format) or joined with `joiner`.
+ * victim (or anyone) as the accused. A culprit verdict that blames an institution or
+ * an unnamed person prints as no character, pointing at the charge (phase 3, brief
+ * 3.5). Otherwise the names, as JSON (the arc prompts' existing format) or joined
+ * with `joiner`.
  *
  * @param {Object|null} accusation - {accused, charge, verdictKind}
  * @param {Object} [options]
@@ -51,9 +59,24 @@ function formatAccused(accusation, { json = false, joiner = ', ', empty = 'unspe
   if (isNoCulpritVerdict(accusation)) {
     return `none (the room's verdict names no culprit: ${VERDICT_KIND_PHRASES[accusation.verdictKind]})`;
   }
+  if (blamesNoCharacter(accusation)) return BLAMES_NO_CHARACTER;
   const names = accusedNames(accusation);
   if (json) return JSON.stringify(names);
   return names.length > 0 ? names.join(joiner) : empty;
+}
+
+/**
+ * A split final vote in one line: every option with its count, the one the group
+ * statement adopted marked, or a sentence saying it adopted none.
+ *
+ * @param {Array|null} votes - accusation.votes
+ * @returns {string} '' when there is no split vote
+ */
+function formatSplitVote(votes) {
+  const clean = normalizeVotes(votes);
+  if (!clean) return '';
+  const options = clean.map((v) => `${v.option} ${v.count}${v.adopted ? ', adopted by the group statement' : ''}`).join('; ');
+  return clean.some((v) => v.adopted) ? options : `${options}. The group statement adopted none of these.`;
 }
 
 /**
@@ -72,33 +95,41 @@ ${text}
 }
 
 /**
- * The one sentence a no-culprit verdict adds to the arc prompts' accusation.
+ * The one sentence a verdict that places no character adds to the arc prompts'
+ * accusation: a no-culprit verdict, or (phase 3, brief 3.5) a culprit verdict that
+ * blames an institution or an unnamed person, in the room's words as the charge
+ * (blamesNoCharacter holds only with a charge).
  *
  * @param {Object|null} accusation
- * @returns {string} '' for a verdict that names someone
+ * @returns {string} '' for a verdict that names a character, and for a culprit parse
+ *   that named no one and no charge
  */
 function noCulpritInstruction(accusation) {
+  const charge = typeof accusation?.charge === 'string' ? accusation.charge.trim() : '';
+  if (blamesNoCharacter(accusation)) {
+    return `The group statement holds no character responsible: it blames "${charge}". ` +
+      'The accusation arc is about that verdict. Place no character as the accused.';
+  }
   if (!isNoCulpritVerdict(accusation)) return '';
-  const charge = typeof accusation.charge === 'string' && accusation.charge.trim()
-    ? ` (${accusation.charge.trim()})`
-    : '';
-  return `The room named no culprit: its verdict is ${VERDICT_KIND_PHRASES[accusation.verdictKind]}${charge}. ` +
+  return `The room named no culprit: its verdict is ${VERDICT_KIND_PHRASES[accusation.verdictKind]}${charge ? ` (${charge})` : ''}. ` +
     'The accusation arc is about that verdict. Place no one as the accused, and never the victim.';
 }
 
 /**
  * The accusation block of the arc writer and the arc reworker.
  *
- * @param {Object|null} accusation - playerFocus.accusation {accused, charge, reasoning, verdictKind}
+ * @param {Object|null} accusation - playerFocus.accusation {accused, charge, reasoning, verdictKind, votes}
  * @param {string|null} directorText - the director's accusation, word for word
  * @param {string} reasoningLabel - "Players' Reasoning" (writer) or "Reasoning" (reworker)
  * @returns {string}
  */
 function renderArcAccusation(accusation, directorText, reasoningLabel) {
   const acc = accusation || {};
+  const vote = formatSplitVote(acc.votes);
   const lines = [
     `**Accused:** ${formatAccused(acc, { json: true })}`,
     `**Charge:** ${acc.charge || 'Not specified'}`,
+    ...(vote ? [`**Final Vote (split):** ${vote}`] : []),
     `**${reasoningLabel}:** ${acc.reasoning || 'Not documented'}`
   ];
   const instruction = noCulpritInstruction(acc);
@@ -115,7 +146,10 @@ function renderArcAccusation(accusation, directorText, reasoningLabel) {
  * overdose verdict reached them as `ACCUSATION: Marcus`), the director's account
  * word for word, and the whiteboard connections under the arc writer's label.
  *
- * @param {Object} sessionFacts - {accusation: {accused, charge, verdictKind}, accusationText, whiteboard}
+ * Phase 3 (brief 3.5): a split final vote prints beside them, every option with its
+ * count and the one the group statement adopted.
+ *
+ * @param {Object} sessionFacts - {accusation: {accused, charge, verdictKind, votes}, accusationText, whiteboard}
  * @returns {string}
  */
 function renderSessionFactsVerdict(sessionFacts) {
@@ -126,6 +160,8 @@ function renderSessionFactsVerdict(sessionFacts) {
   const acc = facts.accusation && typeof facts.accusation === 'object' ? facts.accusation : {};
   const lines = [`ACCUSATION: ${formatAccused(acc, { joiner: ' and ', empty: 'Unknown' })}`];
   if (typeof acc.charge === 'string' && acc.charge.trim()) lines.push(`CHARGE: ${acc.charge.trim()}`);
+  const vote = formatSplitVote(acc.votes);
+  if (vote) lines.push(`FINAL VOTE (split): ${vote}`);
   const director = renderDirectorAccusation(facts.accusationText);
   if (director) lines.push('', director);
   const whiteboard = renderWhiteboardConnections(facts.whiteboard, { omitWhenEmpty: true });
@@ -168,6 +204,11 @@ function formatCorrectionList(list) {
  * produced the bad parse. Every correction of the session goes, in order, because
  * a re-parse starts again from the source text.
  *
+ * The line after the block speaks only to what the parse reads from the source
+ * text (phase 3, brief 3.5; spec D15). The roster, its pronouns, the reporting mode
+ * and the reporter's name are stamped by code from where the director entered them,
+ * so no parse sets them and the block promises nothing about them.
+ *
  * @param {string|string[]|null} corrections
  * @returns {string} '' when there are no corrections
  */
@@ -175,7 +216,7 @@ function buildParseCorrectionsBlock(corrections) {
   const list = normalizeCorrections(corrections);
   if (list.length === 0) return '';
   return '\n\n<DIRECTOR_CORRECTIONS>\n' + formatCorrectionList(list) +
-    '\n</DIRECTOR_CORRECTIONS>\nApply these corrections; they override anything in the source text.';
+    '\n</DIRECTOR_CORRECTIONS>\nApply these corrections to what you parse from the source text; where a correction and the source text differ, the correction is right.';
 }
 
 /**
@@ -200,26 +241,58 @@ ${formatCorrectionList(list)}
 // WHITEBOARD
 // ═══════════════════════════════════════════════════════
 
+const asList = (value) => (Array.isArray(value) ? value : []);
+
 /**
- * The whiteboard connections under the arc writer's label.
+ * The whiteboard's regions, each {label, location, entries}.
+ *
+ * A thread parsed before phase 3 has no regions: its playerFocus carries the
+ * members of the one group whose model-written label held "suspect". They print as
+ * one region with no heading, since the heading the players wrote is not known.
+ */
+function whiteboardRegionsOf(wb) {
+  if (Array.isArray(wb.regions)) return wb.regions.filter((r) => r && typeof r === 'object');
+  const legacy = asList(wb.suspectsExplored);
+  return legacy.length > 0 ? [{ label: '', location: '', entries: legacy }] : [];
+}
+
+/** One region's line: the players' heading (or none), where it sits, and what it holds. */
+function whiteboardRegionLine(region) {
+  const label = typeof region.label === 'string' ? region.label.trim() : '';
+  const location = typeof region.location === 'string' ? region.location.trim() : '';
+  const heading = `${label ? `"${label}"` : 'no heading'}${location ? ` (${location})` : ''}`;
+  return `- ${heading}: ${asList(region.entries).join(', ')}`;
+}
+
+/**
+ * The whiteboard, for the arc, outline and article writers (phase 3, brief 3.5;
+ * spec T13).
+ *
+ * Labelled as what it is: a model's reading of the photo of the room's working
+ * notes, given as context for how the room reasoned, never as a source and never as
+ * what the players drew (the old label). Each region prints under the heading the
+ * players wrote, with nothing the parse added; then the lines drawn, the writing in
+ * no region, the names, and the writing the model could not read with confidence.
  *
  * @param {Object|null} whiteboard - playerFocus.whiteboardContext
  * @param {Object} [options]
- * @param {boolean} [options.omitWhenEmpty=false] - '' when all four lists are empty.
+ * @param {boolean} [options.omitWhenEmpty=false] - '' when every list is empty.
  *   The arc writer always prints the section; the outline and article writers
- *   print it only when the players drew something.
+ *   print it only when the whiteboard held something.
  * @returns {string}
  */
 function renderWhiteboardConnections(whiteboard, { omitWhenEmpty = false } = {}) {
   const wb = whiteboard || {};
-  const lists = [wb.suspectsExplored, wb.connections, wb.notes, wb.namesFound]
-    .map(v => (Array.isArray(v) ? v : []));
-  if (omitWhenEmpty && lists.every(l => l.length === 0)) return '';
-  return `### Whiteboard Connections (Players drew these during investigation)
-**Suspects Explored:** ${JSON.stringify(lists[0])}
-**Connections Found:** ${JSON.stringify(lists[1])}
-**Notes Captured:** ${JSON.stringify(lists[2])}
-**Names Identified:** ${JSON.stringify(lists[3])}`;
+  const regions = whiteboardRegionsOf(wb);
+  const lists = [wb.connections, wb.notes, wb.namesFound, wb.ambiguities].map(asList);
+  if (omitWhenEmpty && regions.length === 0 && lists.every(l => l.length === 0)) return '';
+  return `### The Whiteboard (a model's reading of the photo)
+A model's reading of the photo of the whiteboard where the room kept its working notes during the investigation: context for how the room reasoned toward its verdict, not a source.
+**Regions, each under the heading the players wrote:**${regions.length > 0 ? `\n${regions.map(whiteboardRegionLine).join('\n')}` : ' none'}
+**Lines drawn:** ${JSON.stringify(lists[0])}
+**Other writing:** ${JSON.stringify(lists[1])}
+**Names on the whiteboard:** ${JSON.stringify(lists[2])}
+**Writing the model could not read with confidence:** ${JSON.stringify(lists[3])}`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -278,9 +351,31 @@ function renderPhotoEntry({ filename, names = [] }, photoDescriptions, indent = 
   return `${entry}\n${indent}${descriptionLine}`;
 }
 
+/**
+ * One numbered entry of a PHOTOS list: its number, "[hero image]" on the hero, then the
+ * photo's entry (renderPhotoEntry). The article writer and the article and outline
+ * judges list their photos with it, each under its own header, so "every photo in
+ * PHOTOS" names the same entries at the writer and the judge (the 4b fix batch; 3.9
+ * review minor 2: the article writer and the article judge each wrote the template).
+ *
+ * @param {Object} photo
+ * @param {string} photo.filename
+ * @param {string[]} [photo.identifiedCharacters]
+ * @param {boolean} [photo.hero]
+ * @param {number} index - the photo's position in the list, from 0
+ * @param {Object|null} photoDescriptions - {filename: text}, or null when none was collected
+ * @returns {string}
+ */
+function renderPhotoListEntry(photo, index, photoDescriptions) {
+  return `${index + 1}. ${photo.hero ? '[hero image] ' : ''}${renderPhotoEntry(
+    { filename: photo.filename, names: photo.identifiedCharacters }, photoDescriptions, '   '
+  )}`;
+}
+
 module.exports = {
   VERDICT_KIND_PHRASES,
   formatAccused,
+  formatSplitVote,
   renderDirectorAccusation,
   noCulpritInstruction,
   renderArcAccusation,
@@ -292,5 +387,6 @@ module.exports = {
   renderWhiteboardConnections,
   photoKey,  // the outline judge pairs each photo with its analysis by this key (brief 2.4)
   photoDescriptionFor,
-  renderPhotoEntry
+  renderPhotoEntry,
+  renderPhotoListEntry
 };

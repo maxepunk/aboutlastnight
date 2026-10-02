@@ -36,6 +36,13 @@
 const BUNDLE_OBJECT_SCOPES = ['headline', 'byline', 'financialTracker'];
 const BUNDLE_SCALAR_SCOPES = ['heroImage'];
 const BUNDLE_INDEX_COLLECTIONS = ['pullQuotes', 'photos'];
+// Phase 3 (3.7): the writer's questions for the director are not part of the outline
+// the director edits or a rework changes, so neither diff shows them as a scope. The
+// bundle diff never visits them (its scope lists do not name them); the outline diff,
+// which walks every top-level key, skips them. The console's RevisionDiff skips the
+// same keys (console/checkpoint-view-logic.js REVISION_DIFF_IGNORED_KEYS; fix 3.7b, a
+// test holds the two lists equal).
+const OUTLINE_IGNORED_KEYS = ['writerQuestions'];
 const BEFORE_MAX = 300;
 const AFTER_MAX = 1500;
 const BLOCK_MAX = 12000;
@@ -87,6 +94,7 @@ function diffOutline(before, after) {
   if (!isObj(before) || !isObj(after)) return { kind: 'outline', sections: [] };
   const sections = [];
   for (const key of unionKeys(before, after)) {
+    if (OUTLINE_IGNORED_KEYS.includes(key)) continue;
     const b = before[key];
     const a = after[key];
     if (same(a, b)) continue;
@@ -308,5 +316,5 @@ function changedScopes(diff, revised) {
 
 module.exports = {
   diffOutline, diffBundle, isEmpty, scopeKeys, formatHandEditsBlock, changedScopes, readAtPath,
-  _testing: { matchBlocks, blockKey, canon, same, matchesAfter, changeSurvives }
+  _testing: { matchBlocks, blockKey, canon, same, matchesAfter, changeSurvives, OUTLINE_IGNORED_KEYS }
 };

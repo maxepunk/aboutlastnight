@@ -10,6 +10,13 @@
  * A verdict now carries its kind. `culprit` is the only kind that names anyone;
  * every other kind leaves `accused` empty, and the parse enforces that in code
  * (normalizeAccusation), not only in the prompt.
+ *
+ * Phase 3 (brief 3.5; spec T2, section 6) adds two shapes:
+ * - A verdict that blames an institution (NeurAI's board) or a person it does not
+ *   name is a `culprit` verdict naming no character, with the room's words as the
+ *   charge (blamesNoCharacter).
+ * - A split final vote keeps every option that drew votes, with its count, and marks
+ *   the one the group statement adopted, or none (`votes`, present only for a split).
  */
 
 /** Every verdict kind the parse may return. Order is the schema enum's order. */
@@ -47,11 +54,53 @@ function accusedNames(accusation) {
 }
 
 /**
- * The parse's accusation with the no-culprit rule applied in code.
+ * Does this verdict blame someone who is not a character: an institution such as
+ * NeurAI's board, or a person the room did not name?
+ *
+ * That is a `culprit` verdict with no character in `accused` and the room's words
+ * for who it blamed as the charge. Without a charge it is a failed parse, never this
+ * shape: a culprit verdict that names no one and no charge stays "not parsed" at the
+ * input review, and no writer is told to place no character. A parse from before
+ * verdict kinds is never read this way either: its empty `accused` means "not parsed".
+ *
+ * @param {Object|null} accusation
+ * @returns {boolean}
+ */
+function blamesNoCharacter(accusation) {
+  const charge = accusation && typeof accusation.charge === 'string' ? accusation.charge.trim() : '';
+  return !!accusation && accusation.verdictKind === 'culprit' && accusedNames(accusation).length === 0 && charge !== '';
+}
+
+/**
+ * The split final vote, cleaned: each option with a name and a count, at most one
+ * marked adopted, and at least two options (one option is not a split).
+ *
+ * @param {*} votes - the parse's votes
+ * @returns {Array<{option: string, count: number, adopted: boolean}>|null} null when there is no split
+ */
+function normalizeVotes(votes) {
+  if (!Array.isArray(votes)) return null;
+  let adoptedSeen = false;
+  const clean = votes
+    .filter((v) => v && typeof v.option === 'string' && v.option.trim() && typeof v.count === 'number' && Number.isFinite(v.count))
+    .map((v) => {
+      const adopted = v.adopted === true && !adoptedSeen;
+      if (adopted) adoptedSeen = true;
+      return { option: v.option.trim(), count: v.count, adopted };
+    });
+  if (votes.filter((v) => v && v.adopted === true).length > 1) {
+    console.warn('[normalizeAccusation] more than one vote option marked adopted; kept the first');
+  }
+  return clean.length >= 2 ? clean : null;
+}
+
+/**
+ * The parse's accusation with the verdict rules applied in code.
  *
  * A no-culprit verdict has no accused, whatever the model put there: on 092026 the
  * model listed the victim. A kind the schema does not know is dropped rather than
- * trusted.
+ * trusted. A culprit verdict with no character named (an institution, an unnamed
+ * person) is kept as it is. `votes` stays only for a split final vote.
  *
  * @param {Object|null} accusation - Step 1's parsed accusation
  * @returns {Object|null} the same object shape, never with the victim as accused
@@ -69,6 +118,11 @@ function normalizeAccusation(accusation) {
       console.warn(`[normalizeAccusation] verdict "${normalized.verdictKind}" names no culprit; dropped accused ${JSON.stringify(dropped)}`);
     }
     normalized.accused = [];
+  }
+  if ('votes' in normalized) {
+    const votes = normalizeVotes(normalized.votes);
+    if (votes) normalized.votes = votes;
+    else delete normalized.votes;
   }
   return normalized;
 }
@@ -95,7 +149,9 @@ module.exports = {
   VERDICT_KINDS,
   NO_CULPRIT_KINDS,
   isNoCulpritVerdict,
+  blamesNoCharacter,
   accusedNames,
+  normalizeVotes,
   normalizeAccusation,
   directorAccusationText
 };

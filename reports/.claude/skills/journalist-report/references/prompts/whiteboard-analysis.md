@@ -1,104 +1,42 @@
 # Whiteboard Analysis
 
-You are analyzing a photograph of the investigation whiteboard from "About Last Night" - a murder mystery investigation game.
+You are reading a photograph of the whiteboard where the players of "About Last Night" kept their working notes during the investigation: the morning a room of characters looks into the death of Marcus Blackwood and agrees a group statement. The writers read your reading as context for how the room reasoned, so it reports what is written and where, in the players' own words.
 
-## OCR Name Disambiguation
+## Names
 
-You will be provided with a ROSTER of character names from this session. When transcribing handwritten names from the whiteboard, use this roster to correct OCR errors.
+You are given three lists: the roster (the characters played this session), every character in the game, and the NPCs. The whiteboard can name anyone on them, including a character no one played this session, because a room can suspect someone who is not at the table.
 
-**Common OCR errors to watch for:**
-- Similar letters: `e` vs `o` (Jess not Joss)
-- Letter confusion: `n` vs `r`, `a` vs `o`, `k` vs `h`
-- Missing/extra letters in long names
-- First-letter capitalization issues
+**Matching rules:**
+1. When the handwriting clearly matches a name on those lists, use that name's spelling.
+2. When you are unsure, copy the text as written, and add it to `ambiguities` as `[unclear: X or Y]` with the names it might be.
+3. A name that matches no one stays exactly as written.
 
-**Disambiguation rules:**
-1. If handwritten text closely matches a roster name, use the roster spelling
-2. When in doubt, prefer roster names over literal transcription
-3. Flag truly ambiguous cases with `[unclear: X or Y]`
+**Common misreadings to check:** `e` and `o` (Jess, not Joss); `n` and `r`, `a` and `o`, `k` and `h`; a missing or extra letter in a long name; a capital read as lower case.
 
-### Correct Disambiguation Examples
+### Examples
 
-Roster: `Vic, Morgan, Jess, Kai, Taylor`
+Roster: `Vic, Jess, Taylor`. Morgan is a character no one played this session.
 
-| Handwritten | Transcribe As | Reason |
-|-------------|---------------|--------|
-| Vick | Vic | Roster match (extra k) |
-| Mona | Morgan | Roster match (partial) |
-| Joss | Jess | Roster match (o→e) |
-| Ty | Taylor | Roster match (abbreviation) |
-| Randy | Randy | No roster match - keep literal |
+| Handwritten | Transcribe as | Why |
+|-------------|---------------|-----|
+| Vick | Vic | A clear match, with one extra letter |
+| Joss | Jess | A clear match, with `o` read for `e` |
+| Morgn | Morgan | A clear match to a character not at the table |
+| Mo | Mo, and `[unclear: Mo could be Morgan]` in ambiguities | Too short to be sure |
+| Randy | Randy | Matches no one, so it stays as written |
 
-### Wrong - Never Do This
+## Regions
 
-> Transcribed: "Mona blamed Vick"
+Players divide the whiteboard into regions: columns, boxes, circled clusters, lists. Report each one as its own region. The heading the players wrote is the only label a region carries, because the writers need the room's own words; a region with no heading is told apart by where it sits.
 
-WHY THIS IS WRONG: Both names have roster matches (Morgan, Vic). Always apply roster disambiguation.
+### Example
 
-## Spatial Structure Discovery
+> Left column, headed "WHO?": Vic, Alex, Morgan. Top right, a circled cluster with no heading: "$$", "valet", "2am?". An arrow from Vic to "$$" with "paid?" written on it.
 
-The whiteboard may contain various organizational structures. Your task is to DISCOVER what structures exist, not assume any particular format.
+## Report what is written
 
-**Possible structures to look for:**
-- Connection lines between names/concepts
-- Grouping boxes or circles
-- Timeline progressions (arrows, sequences)
-- Hierarchical arrangements
-- Column/row organization
-- Color coding or highlighting patterns
-- Central vs peripheral positioning
-
-**Structure discovery rules:**
-1. Describe structures as you find them
-2. Note spatial relationships (above, left of, connected to, circled with)
-3. If no clear structure, describe as "free-form notes"
-4. Don't force interpretation if structure is ambiguous
-
-### Correct Structure Examples
-
-> The whiteboard shows Vic's name in a central box with lines radiating outward to five other names: Morgan, Remi, Kai, Sarah, and Sam. This appears to be an accusation web with Vic at the center.
-
-> Names are organized in two columns with a vertical line between them. Left column contains exposed evidence markers, right column appears to be suspicion notes.
-
-### Wrong - Never Do This
-
-> The standard investigation matrix shows...
-
-WHY THIS IS WRONG: Don't assume standard formats. Describe what you actually see.
-
-## Content Accuracy
-
-Report what is visible on the whiteboard. Do not infer or add information that isn't written.
-
-**What to extract:**
-- Names (with roster disambiguation)
-- Quoted text or phrases
-- Symbols and their apparent meaning
-- Spatial relationships
-- Visible annotations or marks
-
-**What NOT to add:**
-- Conclusions not written on the board
-- Evidence content that isn't visible
-- Relationships that aren't marked
-- Motivations or theories not written
-
-### Correct Content Reporting
+Copy the writing word for word, and describe how it is laid out. The writers draw their own conclusions from the record, and the room's own words are what they need from you.
 
 > Below Vic's name, handwritten text reads: "Talked to Morgan at bar - suspicious"
 
-### Wrong - Never Do This
-
-> Vic must have conspired with Morgan based on the connections shown.
-
-WHY THIS IS WRONG: Report observations, not conclusions. The whiteboard shows a connection; interpretation is for the article.
-
-## Output Format
-
-Return structured JSON with:
-- `names`: Array of all names found (roster-corrected)
-- `connections`: Array of `{from, to, label}` for any lines/arrows
-- `groups`: Array of `{label, members}` for boxed/circled clusters
-- `notes`: Array of text content not directly associated with connections
-- `structureType`: Brief description of overall organization observed
-- `ambiguities`: Array of any unclear elements that may need verification
+That line reports the whiteboard. "Vic must have conspired with Morgan" would be a conclusion the whiteboard does not state.

@@ -131,11 +131,12 @@ describe('evaluator-nodes', () => {
     });
 
     it('all criteria have description and weight', () => {
-      // Merge static criteria with dynamic outline/article criteria for full validation
+      // Merge static criteria with dynamic outline/article criteria for full validation.
+      // Phase 3 (3.4): a truth criterion carries rules and no weight; it decides readiness.
       const allCriteria = { ...QUALITY_CRITERIA, outline: getOutlineCriteria(), article: getArticleCriteria() };
       Object.entries(allCriteria).forEach(([phase, criteria]) => {
         if (!criteria) return; // Skip null entries
-        Object.entries(criteria).forEach(([name, criterion]) => {
+        Object.entries(criteria).filter(([, criterion]) => !criterion.truth).forEach(([name, criterion]) => {
           expect(criterion.description).toBeDefined();
           expect(typeof criterion.weight).toBe('number');
           expect(criterion.weight).toBeGreaterThan(0);
@@ -148,7 +149,8 @@ describe('evaluator-nodes', () => {
       const allCriteria = { ...QUALITY_CRITERIA, outline: getOutlineCriteria(), article: getArticleCriteria() };
       Object.entries(allCriteria).forEach(([phase, criteria]) => {
         if (!criteria) return; // Skip null entries
-        const totalWeight = Object.values(criteria).reduce((sum, c) => sum + c.weight, 0);
+        // Phase 3 (3.4): the truth criteria carry no weight.
+        const totalWeight = Object.values(criteria).filter((c) => !c.truth).reduce((sum, c) => sum + c.weight, 0);
         expect(totalWeight).toBeCloseTo(1.0, 1);
       });
     });
@@ -264,9 +266,11 @@ describe('evaluator-nodes', () => {
 
     it('does not duplicate Blake/Valet entry', () => {
       const desc = getNpcDescriptions('journalist');
-      const blakeMatches = desc.match(/Blake/g);
-      // Blake appears once in the "Blake / Valet" description
-      expect(blakeMatches.length).toBe(1);
+      // One entry line for Blake, with the Valet as its alias. The canon role names
+      // Blake too ("Marcus called Blake his Valet", T15), so count entries, not words.
+      const blakeEntries = desc.split('\n').filter((line) => /^- Blake\b/.test(line));
+      expect(blakeEntries).toHaveLength(1);
+      expect(desc.split('\n').filter((line) => /^- (?:the )?Valet\b/.test(line))).toHaveLength(0);
     });
 
     it('returns empty string for unknown theme', () => {
@@ -312,11 +316,15 @@ describe('evaluator-nodes', () => {
         const prompt = buildEvaluationUserPrompt('arcs', state);
 
         // Brief 2.4: the record view replaced EXPOSED EVIDENCE DETAILS (name
-        // summaries and 100-character excerpts).
+        // summaries and 100-character excerpts). Phase 3 (3.4): the journalist arc
+        // judge reads the sales on the record view's morning timeline, not a list of
+        // its own; the detective keeps the list.
         expect(prompt).toContain('<RECORD>');
         expect(prompt).not.toContain('EXPOSED EVIDENCE DETAILS');
-        expect(prompt).toContain('BURIED TRANSACTIONS');
+        expect(prompt).toContain('<morning-timeline>');
+        expect(prompt).not.toContain('BURIED TRANSACTIONS');
         expect(prompt).toContain('ALL VALID EVIDENCE IDS');
+        expect(buildEvaluationUserPrompt('arcs', { ...state, theme: 'detective' })).toContain('BURIED TRANSACTIONS');
       });
     });
 
@@ -1238,29 +1246,47 @@ describe('reporterMode: a remote article states its absence at most once (phase 
   // 092026's remote article said it was not there five times, and this
   // criterion's evaluation praised it as voice. Attribution shows the absence;
   // announcing it again is a defect.
-  it('the journalist criterion asks for attribution and names repetition a defect, not voice', () => {
+  // Phase 3 (3.4): the criterion scores T8 as this session's mode block states it, and
+  // exposed memories reach Nova by turn-in (spec T6, T8). The mode rule no longer lives in
+  // the user prompt: the judge's system prompt carries the mode block, as every writer's does.
+  // Phase 3 (3.9): it follows the remote mode block of round 7 (R13): the room's events
+  // are told as scenes, with attribution where it matters, and the line that sent every
+  // room event through "attribution to the people in the room" is gone.
+  it('the journalist criterion tells the room in scenes and names repetition a failure', () => {
     const { description } = getArticleCriteria('journalist').reporterMode;
-    expect(description).toContain('by attributing it to the people who were there');
-    expect(description).toContain('the article states that absence at most once');
-    expect(description).toContain('stating it more than once is a defect, not a sign of voice');
+    expect(description).toContain('told as scenes, with attribution where it matters');
+    expect(description).toContain('the absence stated more than once');
+    expect(description).toContain('a claim to have seen or heard the room');
+    expect(description).not.toContain('by attribution to the people in the room');
   });
 
-  it('the remote mode rule in the evaluation prompt says the same', () => {
-    const prompt = buildEvaluationUserPrompt('article', {
-      contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' }
-    });
-    expect(prompt).toContain('the article states it at most once');
-    expect(prompt).toContain('is a reporterMode defect, not a sign of voice');
-    // Unchanged: a presence claim is still a structural failure.
-    expect(prompt).toContain('A first-person claim to have been present is a STRUCTURAL failure.');
+  it('the remote judge reads the remote mode block, and its user prompt names the mode once', () => {
+    const { loadModeBlock } = require('../../../lib/rule-set');
+    const state = { contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' } };
+    const prompt = buildEvaluationUserPrompt('article', state);
+    expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: remote (the mode block in your instructions says what Nova could witness; reporterMode scores it)');
+    expect(prompt).not.toContain('reached them as tips');
+    const system = buildEvaluationSystemPrompt('article', getArticleCriteria('journalist'), 'journalist', { sessionConfig: state.sessionConfig });
+    expect(system).toContain(loadModeBlock('remote'));
   });
 
-  it('the on-site mode rule carries no absence limit', () => {
+  it('the on-site judge reads the on-site mode block, which carries no absence limit', () => {
+    const { loadModeBlock } = require('../../../lib/rule-set');
     const prompt = buildEvaluationUserPrompt('article', {
       contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'on-site' }
     });
     expect(prompt).not.toContain('at most once');
-    expect(prompt).toContain('The reporter watched the investigation from inside the room');
+    expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: on-site');
+    const system = buildEvaluationSystemPrompt('article', getArticleCriteria('journalist'), 'journalist', { sessionConfig: { reportingMode: 'on-site' } });
+    expect(system).toContain(loadModeBlock('on-site'));
+    expect(loadModeBlock('on-site')).not.toContain('at most once');
+  });
+
+  it('the detective judge keeps today\'s mode rule in its user prompt', () => {
+    const prompt = buildEvaluationUserPrompt('article', {
+      theme: 'detective', contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' }
+    });
+    expect(prompt).toContain('A first-person claim to have been present is a STRUCTURAL failure.');
   });
 });
 
@@ -1515,11 +1541,12 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       const state = realisticState();
       const prompt = buildEvaluationUserPrompt('arcs', state);
 
-      // The documents part, as the arc writer's SECTION 3 takes it: the judge keeps
-      // its own BURIED TRANSACTIONS list, so the buried lines appear once (R2).
-      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { buried: false }));
+      // Phase 3 (3.4): the whole view, its sales on the morning timeline, in place of the
+      // judge's own BURIED TRANSACTIONS list, so the buried lines appear once.
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }));
       expect(prompt).not.toContain('<buried-transactions>');
-      expect(prompt.match(/BURIED TRANSACTIONS \(/g)).toHaveLength(1);
+      expect(prompt).not.toContain('BURIED TRANSACTIONS (');
+      expect(prompt.match(/\| sale \|/g)).toHaveLength(2);
       expect(prompt).toContain('ALEX.1 - 11:02PM - You open the repository and every commit is his.');
       // The whole paper document, not its first 100 characters.
       expect(prompt).toContain(LONG_PAPER_TEXT);
@@ -1573,8 +1600,9 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     it('reads the whole record view', () => {
       const state = realisticState();
       const prompt = buildEvaluationUserPrompt('outline', state);
-      expect(prompt).toContain(renderRecordView(state.evidenceBundle));
-      expect(prompt).toContain('- account: Cayman | amount: $450,000 | time: 10:41 AM');
+      // Phase 3 (3.5): with the session config, so the sales sit on the morning timeline.
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }));
+      expect(prompt).toContain('- 10:41 AM | sale | account: Cayman | amount: $450,000');
     });
 
     it('sees every photo, each with the director\'s description joined by filename, and never the whiteboard', () => {
@@ -1734,7 +1762,8 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     it('reads the whole record view', () => {
       const state = realisticState();
       const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null });
-      expect(prompt).toContain(renderRecordView(state.evidenceBundle));
+      // Phase 3 (3.5): with the session config, so the sales sit on the morning timeline.
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }));
     });
 
     it('reads the fact check\'s result as two labelled lists, not the result object', () => {
@@ -1844,15 +1873,18 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     });
 
     it('the criteria and their structural or advisory status', () => {
+      // Phase 3 (3.4) adds the truth criteria (structural, journalist only); the
+      // criteria that were here keep their status.
+      const withoutTruth = (criteria) => Object.fromEntries(Object.entries(criteria).filter(([, c]) => !c.truth));
       expect(split(QUALITY_CRITERIA.arcs)).toEqual({
         structural: ['rosterCoverage', 'evidenceIdValidity', 'accusationArcPresent'],
         advisory: ['coherence', 'evidenceConfidenceBalance']
       });
-      expect(split(getOutlineCriteria('journalist'))).toEqual({
+      expect(split(withoutTruth(getOutlineCriteria('journalist')))).toEqual({
         structural: ['arcCoverage', 'requiredSections', 'arcSectionFlow', 'visualDistributionPlan'],
         advisory: ['sectionBalance', 'flowLogic', 'photoPlacement', 'wordBudget', 'loopArchitecture', 'arcInterweaving', 'visualMomentum', 'convergence']
       });
-      expect(split(getArticleCriteria('journalist'))).toEqual({
+      expect(split(withoutTruth(getArticleCriteria('journalist')))).toEqual({
         structural: ['voiceConsistency', 'antiPatterns', 'reporterMode', 'arcThreading'],
         advisory: ['visualDistribution', 'evidenceIntegration', 'characterPlacement', 'emotionalResonance']
       });
@@ -1872,6 +1904,1130 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       );
       expect(mockClient).not.toHaveBeenCalled();
       expect(result.evaluationHistory.source).toBe('fact-check');
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3, brief 3.4: the judges read the rule set the writers read, and score
+// the truth rules as must-fix (spec 2026-09-30-rule-set.md sections 4 and 8, R2).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('the judges read the rule set (phase 3, 3.4)', () => {
+  const crypto = require('crypto');
+  const { loadRuleSet, loadModeBlock } = require('../../../lib/rule-set');
+  const { getThemeNPCEntries } = require('../../../lib/theme-config');
+  const { renderRecordView } = require('../../../lib/prompt-renderers/record-view');
+  const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
+  const { _testing: { getPhaseCriteria, getArcCriteria } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const count = (text, part) => text.split(part).length - 1;
+  const JUDGE_CALLS = [['arcs', 'judge-arc'], ['outline', 'judge-outline'], ['article', 'judge-article']];
+  const stateFor = (theme = 'journalist', extra = {}) => ({ ...reworkFixtureState(theme), contentBundle: clone(PREVIOUS_BUNDLE), ...extra });
+  const systemFor = (phase, state) => buildEvaluationSystemPrompt(
+    phase, getPhaseCriteria(phase, state.theme), state.theme, { sessionConfig: state.sessionConfig }
+  );
+  const userFor = (phase, state) => buildEvaluationUserPrompt(phase, state, { factCheck: null });
+
+  /** The truth groups of brief 3.4, by criterion, with the rules each names. */
+  const TRUTH_GROUPS = {
+    evidenceTruth: ['T1', 'T3', 'T4', 'T6'],
+    moneyTruth: ['T5'],
+    verdictTruth: ['T2'],
+    stagesTruth: ['T7'],
+    novaPositionTruth: ['T8'],
+    playersTruth: ['T9', 'T11'],
+    wordsTruth: ['T12'],
+    photosTruth: ['T13'],
+    fictionTruth: ['T14']
+  };
+  // Arcs place no photos and print nothing, so T13 and T14 have nothing to score there:
+  // a criterion that could only misfire would spend an automatic arc rework.
+  const ARC_TRUTH = Object.keys(TRUTH_GROUPS).filter((k) => k !== 'photosTruth' && k !== 'fictionTruth');
+  const TRUTH_BY_PHASE = { arcs: ARC_TRUTH, outline: Object.keys(TRUTH_GROUPS), article: Object.keys(TRUTH_GROUPS) };
+
+  describe('wiring: the world, the truth rules and the mode block in the system prompt', () => {
+    it.each(JUDGE_CALLS)('the journalist %s judge reads the world and the truth rules once', (phase, call) => {
+      const prompt = systemFor(phase, stateFor());
+      const { core } = loadRuleSet(call);
+      expect(count(prompt, core)).toBe(1);
+      expect(count(prompt, '<truth-rules>')).toBe(1);
+    });
+
+    it.each(JUDGE_CALLS)('the journalist %s judge reads the session\'s mode block once, right after the identity line', (phase) => {
+      for (const mode of ['on-site', 'remote']) {
+        const state = stateFor('journalist');
+        state.sessionConfig.reportingMode = mode;
+        const prompt = systemFor(phase, state);
+        const block = loadModeBlock(mode);
+        const other = loadModeBlock(mode === 'remote' ? 'on-site' : 'remote');
+        expect(count(prompt, block)).toBe(1);
+        expect(prompt).not.toContain(other);
+        const [identity] = prompt.split('\n', 1);
+        expect(prompt.startsWith(`${identity}\n\n${block}\n\n`)).toBe(true);
+        expect(prompt.indexOf(block)).toBeLessThan(prompt.indexOf('<world>'));
+      }
+    });
+
+    it.each(JUDGE_CALLS)('the journalist %s judge reads its writer\'s craft files in the user prompt, after the record', (phase, call) => {
+      const prompt = userFor(phase, stateFor());
+      const { craft } = loadRuleSet(call);
+      expect(count(prompt, craft)).toBe(1);
+      expect(prompt.indexOf(craft)).toBeGreaterThan(prompt.indexOf('</RECORD>'));
+      // The truth rules sit in the system prompt only.
+      expect(prompt).not.toContain('<truth-rules>');
+      expect(prompt).not.toContain('<world>');
+    });
+
+    it('each judge reads exactly its writer\'s craft list', () => {
+      const craftTags = (phase) => [...userFor(phase, stateFor()).matchAll(/^<(craft-[a-z]+)>$/gm)].map((m) => m[1]);
+      // Task 3.8: the craft files grouped by the writer's job (spec section 8).
+      expect(craftTags('arcs')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions']);
+      expect(craftTags('outline')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+        'craft-telling', 'craft-cards', 'craft-questions']);
+      expect(craftTags('article')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-voice',
+        'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions']);
+    });
+
+    it('says a craft finding is should-consider, naming its item', () => {
+      for (const [phase] of JUDGE_CALLS) {
+        const prompt = systemFor(phase, stateFor());
+        expect(prompt).toContain('CRAFT FINDINGS');
+        expect(prompt).toMatch(/craft finding[^\n]*advisoryWarnings/i);
+      }
+    });
+
+    it('createEvaluator sends the judge the session\'s mode block', async () => {
+      const mockClient = jest.fn().mockResolvedValue({ ready: true, structuralPassed: true, overallScore: 0.9 });
+      await evaluateOutline(stateFor('journalist', { outlineApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+      expect(mockClient.mock.calls[0][0].systemPrompt).toContain(loadModeBlock('remote'));
+    });
+  });
+
+  describe('the truth criteria (must-fix, R2)', () => {
+    it.each(['arcs', 'outline', 'article'])('the journalist %s judge scores its truth groups, each structural and naming its rules', (phase) => {
+      const criteria = getPhaseCriteria(phase, 'journalist');
+      const truthKeys = Object.keys(criteria).filter((k) => criteria[k].truth === true);
+      expect(truthKeys).toEqual(TRUTH_BY_PHASE[phase]);
+      for (const key of truthKeys) {
+        expect(criteria[key].type).toBe('structural');
+        expect(criteria[key].rules).toEqual(TRUTH_GROUPS[key]);
+        for (const rule of TRUTH_GROUPS[key]) expect(criteria[key].description).toMatch(new RegExp(`\\b${rule}\\b`));
+      }
+    });
+
+    it.each(['arcs', 'outline', 'article'])('the %s system prompt lists each truth criterion with its rules, and asks for the sentence and the record', (phase) => {
+      const prompt = systemFor(phase, stateFor());
+      for (const key of TRUTH_BY_PHASE[phase]) {
+        expect(prompt).toContain(`- ${key} (${TRUTH_GROUPS[key].join(', ')}; must pass):`);
+      }
+      expect(prompt).toContain('TRUTH RULES (MUST PASS');
+      expect(prompt).toMatch(/opens with the rule ids/);
+      expect(prompt).toMatch(/the record it contradicts/);
+    });
+
+    it('carries no weight: the weighted criteria still make up the whole score', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const criteria = getPhaseCriteria(phase, 'journalist');
+        const weighted = Object.values(criteria).filter((c) => !c.truth);
+        expect(weighted.reduce((sum, c) => sum + c.weight, 0)).toBeCloseTo(1.0, 5);
+        Object.values(criteria).filter((c) => c.truth).forEach((c) => expect(c.weight).toBeUndefined());
+      }
+    });
+
+    it('the detective judges carry no truth criterion', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const criteria = getPhaseCriteria(phase, 'detective');
+        expect(Object.values(criteria).some((c) => c.truth)).toBe(false);
+      }
+    });
+  });
+
+  // Fix round 1: a truth criterion scored below 0.8 holds the output to not-ready, so a
+  // clause the judge cannot check against its own prompt sends the draft back for a
+  // rework that cannot fix it. Each criterion names the material it reads, and each
+  // judge's prompts must print every one.
+  describe('each truth criterion reads only what its judge\'s prompt holds', () => {
+    const { _testing: { TRUTH_MATERIAL } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+    const { renderPhotoEntry } = require('../../../lib/prompt-renderers/director-words-renderer');
+    const outlineSchema = require('../../../lib/schemas/outline.schema.json');
+
+    /** The fixture, with a bundle that prints a hero image and a captioned photo beside its cards. */
+    const fullState = () => {
+      const state = stateFor('journalist');
+      state.heroImage = 'hero.jpg';
+      state.contentBundle.heroImage = { filename: 'hero.jpg', caption: 'The room before the vote.' };
+      state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
+      return state;
+    };
+    const truthOf = (phase) => Object.entries(getPhaseCriteria(phase, 'journalist')).filter(([, c]) => c.truth);
+    /** Every property name anywhere in a JSON schema. */
+    const propertyNames = (schema) => {
+      const names = new Set();
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return;
+        if (node.properties) Object.keys(node.properties).forEach((name) => names.add(name));
+        Object.values(node).forEach(walk);
+      };
+      walk(schema);
+      return names;
+    };
+
+    it.each(['arcs', 'outline', 'article'])('every material a %s truth criterion reads is printed in that judge\'s prompts', (phase) => {
+      const state = fullState();
+      const prompts = `${systemFor(phase, state)}\n${userFor(phase, state)}`;
+      const missing = [];
+      for (const [key, criterion] of truthOf(phase)) {
+        expect(Array.isArray(criterion.reads) && criterion.reads.length > 0).toBe(true);
+        for (const material of criterion.reads) {
+          expect(Object.keys(TRUTH_MATERIAL)).toContain(material);
+          if (!prompts.includes(TRUTH_MATERIAL[material])) missing.push(`${key} reads ${material}`);
+        }
+      }
+      expect(missing).toEqual([]);
+    });
+
+    it('only the article judge reads printed card text and captions: the arcs and the outline hold neither', () => {
+      // An outline places cards by id and photos by filename: no caption, no card text.
+      const outlineFields = propertyNames(outlineSchema);
+      for (const field of ['caption', 'content', 'text', 'headline']) expect(outlineFields.has(field)).toBe(false);
+      for (const phase of ['arcs', 'outline']) {
+        for (const [key, criterion] of truthOf(phase)) {
+          expect([key, criterion.reads.filter((m) => m === 'printedCards' || m === 'printedCaptions')]).toEqual([key, []]);
+          expect([key, criterion.description]).not.toEqual([key, expect.stringMatching(/\bcaption|\bcards?\b/i)]);
+        }
+      }
+      const article = getPhaseCriteria('article', 'journalist');
+      expect(article.wordsTruth.reads).toContain('printedCards');
+      expect(article.wordsTruth.description).toMatch(/does every card copy the record/);
+      expect(article.photosTruth.reads).toContain('printedCaptions');
+      expect(article.photosTruth.description).toMatch(/caption/);
+    });
+
+    it('the outline judge holds the outline to its photo slots: photos from PHOTOS only, the rest left to the article', () => {
+      // The outline has one photoPlacement per arc and one in FOLLOW THE MONEY, so it
+      // cannot place every photo of a session with more photos than slots (092026: 8).
+      // Phase 3 (3.9, ruled): T13's every-photo check is the article's; the outline
+      // places what its slots hold, and the article places the rest.
+      const { photosTruth } = getPhaseCriteria('outline', 'journalist');
+      expect(photosTruth.description).toMatch(/every photo the outline places come from PHOTOS/);
+      expect(photosTruth.description).toMatch(/the article places the rest/);
+      expect(photosTruth.description).not.toMatch(/every photo the director kept/);
+    });
+
+    it('the article judge holds the article to PHOTOS, the photos its writer was given', () => {
+      const { photosTruth } = getPhaseCriteria('article', 'journalist');
+      expect(photosTruth.description).toMatch(/every photo in PHOTOS/);
+      expect(photosTruth.description).toMatch(/director's description/);
+    });
+
+    // Phase 3 (3.9, ruled): the article places every photo the director kept (T13), so
+    // the article writer gets the outline writer's whole set, and the judge's PHOTOS is
+    // that set. A kept photo no arc package lists (p9.jpg) used to reach neither.
+    it('the article judge gets the article writer\'s photos: the hero, then every photo the director kept, once each, never the whiteboard', () => {
+      const state = fullState();
+      state.arcEvidencePackages[1].photos = [
+        { filename: 'p2.jpg', characters: ['Alex'] },  // a package names it too: listed once
+        { filename: 'whiteboard.jpg', characters: ['Riley'] }  // the whiteboard photo: left out
+      ];
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];  // no package lists it
+      const prompt = userFor('article', state);
+      const start = prompt.indexOf('\nPHOTOS (');
+      expect(start).toBeGreaterThan(prompt.indexOf('</RECORD>'));
+      const section = prompt.slice(start, prompt.indexOf('CONTENT BUNDLE:'));
+      expect(section).toContain(`1. [hero image] ${renderPhotoEntry({ filename: 'hero.jpg', names: ['Alex', 'Morgan', 'Sarah'] }, state.photoDescriptions, '   ')}`);
+      expect(section).toContain(`2. ${renderPhotoEntry({ filename: 'p2.jpg', names: ['Alex'] }, state.photoDescriptions, '   ')}`);
+      expect(section).toContain("The director's description, word for word: Alex leans over the ledger and points at a line.");
+      expect(section).toContain(`3. ${renderPhotoEntry({ filename: 'p9.jpg', names: [] }, state.photoDescriptions, '   ')}`);
+      expect(count(section, 'p2.jpg')).toBe(1);
+      expect(section).not.toContain('whiteboard.jpg');
+    });
+
+    it('the detective article judge gets no PHOTOS section', () => {
+      const prompt = userFor('article', { ...fullState(), theme: 'detective' });
+      expect(prompt).not.toContain('\nPHOTOS (');
+    });
+  });
+
+  describe('a truth breach goes back automatically', () => {
+    const judgeWith = (verdict) => jest.fn().mockResolvedValue(verdict);
+
+    it('a truth criterion the judge failed keeps the outline from ready, whatever structuralPassed says', async () => {
+      const mockClient = judgeWith({
+        ready: true, structuralPassed: true, overallScore: 0.9,
+        criteriaScores: { evidenceTruth: { score: 0.3, notes: 'The lede names Morgan as the exposer of mor001.', fix: 'Keep the exposure anonymous.' } },
+        structuralIssues: [], advisoryWarnings: []
+      });
+      const result = await evaluateOutline(stateFor('journalist', { outlineApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+
+      expect(result.evaluationHistory.ready).toBe(false);
+      expect(result.validationResults.passed).toBe(false);
+      // Labelled with its rules, so the evaluation bar and the rework both see which rule.
+      expect(result.evaluationHistory.structuralIssues).toEqual([
+        'T1, T3, T4, T6: The lede names Morgan as the exposer of mor001. Keep the exposure anonymous.'
+      ]);
+      expect(result.validationResults.structuralIssues).toContain(result.evaluationHistory.structuralIssues[0]);
+    });
+
+    it('adds no second line when the judge already wrote the breach under its rule', async () => {
+      const issue = 'T6: "Morgan turned in mor001" names an exposer; the evidence log has the turn-in as anonymous. Keep it anonymous.';
+      const mockClient = judgeWith({
+        ready: false, structuralPassed: false, overallScore: 0.6,
+        criteriaScores: { evidenceTruth: { score: 0.0, notes: 'names an exposer', fix: 'anonymous' } },
+        structuralIssues: [issue], advisoryWarnings: []
+      });
+      const result = await evaluateArticle(stateFor('journalist', { articleApproved: false, evaluationHistory: [], articleRevisionCount: REVISION_CAPS.ARTICLE }),
+        { configurable: { sdkClient: mockClient } });
+      expect(result.evaluationHistory.structuralIssues).toEqual([issue]);
+    });
+
+    it('passes a truth criterion at the structural bar', async () => {
+      const mockClient = judgeWith({
+        ready: true, structuralPassed: true, overallScore: 0.9,
+        criteriaScores: { evidenceTruth: { score: 0.8 }, moneyTruth: { score: 1 } }, structuralIssues: [], advisoryWarnings: []
+      });
+      const result = await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+      expect(result.evaluationHistory.ready).toBe(true);
+      expect(result.evaluationHistory.structuralIssues).toEqual([]);
+    });
+
+    // Fix 3.4b (review finding 4, ruled): a truth criterion the judge leaves out of its
+    // scores counts as not scored. It is logged by name and does not hold the output.
+    it('logs each truth criterion the judge left unscored by name, and does not hold the output for it', async () => {
+      const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const mockClient = judgeWith({
+          ready: true, structuralPassed: true, overallScore: 0.9,
+          criteriaScores: {
+            evidenceTruth: { score: 0.9 }, moneyTruth: { score: 1 }, verdictTruth: { score: 1 },
+            stagesTruth: { score: 1 }, novaPositionTruth: { score: 1 },
+            wordsTruth: { notes: 'no score given' }   // present, but with no number: not scored
+          },
+          structuralIssues: [], advisoryWarnings: []
+        });
+        const result = await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+        expect(result.evaluationHistory.ready).toBe(true);
+        expect(result.evaluationHistory.structuralIssues).toEqual([]);
+        const lines = log.mock.calls.map((call) => call.join(' ')).filter((line) => line.includes('not scored'));
+        expect(lines).toEqual(['[evaluateArcs] Truth criteria not scored: playersTruth, wordsTruth']);
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it('logs nothing as unscored when the judge scored every truth criterion', async () => {
+      const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const scores = Object.fromEntries(Object.entries(getPhaseCriteria('arcs', 'journalist'))
+          .filter(([, criterion]) => criterion.truth).map(([key]) => [key, { score: 1 }]));
+        const mockClient = judgeWith({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: scores, structuralIssues: [], advisoryWarnings: [] });
+        await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+        expect(log.mock.calls.map((call) => call.join(' ')).filter((line) => line.includes('not scored'))).toEqual([]);
+      } finally {
+        log.mockRestore();
+      }
+    });
+  });
+
+  describe('the existing criteria keep their status', () => {
+    const EXISTING = {
+      arcs: {
+        structural: ['rosterCoverage', 'evidenceIdValidity', 'accusationArcPresent'],
+        advisory: ['coherence', 'evidenceConfidenceBalance']
+      },
+      outline: {
+        structural: ['arcCoverage', 'requiredSections', 'arcSectionFlow', 'visualDistributionPlan'],
+        advisory: ['sectionBalance', 'flowLogic', 'photoPlacement', 'wordBudget', 'loopArchitecture', 'arcInterweaving', 'visualMomentum', 'convergence']
+      },
+      article: {
+        structural: ['voiceConsistency', 'antiPatterns', 'reporterMode', 'arcThreading'],
+        advisory: ['visualDistribution', 'evidenceIntegration', 'characterPlacement', 'emotionalResonance']
+      }
+    };
+
+    it.each(['arcs', 'outline', 'article'])('every journalist %s criterion keeps its type, and the truth criteria are the only additions', (phase) => {
+      const criteria = getPhaseCriteria(phase, 'journalist');
+      const existing = Object.keys(criteria).filter((k) => !criteria[k].truth);
+      expect({
+        structural: existing.filter((k) => criteria[k].type === 'structural'),
+        advisory: existing.filter((k) => criteria[k].type === 'advisory')
+      }).toEqual(EXISTING[phase]);
+    });
+
+    // Final review (judges-factcheck[1]): visualDistributionPlan scores R8 (photos spread
+    // through the article, with no count), which the spec alone states: no rule file says
+    // it, and C4, which the criterion cited, says nothing about photos. It names no item.
+    const NAMES_NO_ITEM = { outline: ['visualDistributionPlan'] };
+
+    it.each(['arcs', 'outline', 'article'])('every journalist %s criterion names the rule or craft item it scores', (phase) => {
+      const criteria = getPhaseCriteria(phase, 'journalist');
+      for (const [key, { description }] of Object.entries(criteria)) {
+        if ((NAMES_NO_ITEM[phase] || []).includes(key)) continue;
+        expect([key, description]).toEqual([key, expect.stringMatching(/\b[TC]\d{1,2}\b|<world>/)]);
+      }
+    });
+  });
+
+  describe('the reworded criteria', () => {
+    const article = () => getArticleCriteria('journalist');
+    const outline = () => getOutlineCriteria('journalist');
+
+    it('voiceConsistency: first person, no "participatory", and "we" as T8 allows it', () => {
+      const { description } = article().voiceConsistency;
+      expect(description).not.toMatch(/participatory/i);
+      expect(description).toContain('"we"');
+      expect(description).toMatch(/\bT8\b/);
+      expect(description).toMatch(/\bC12\b/);
+    });
+
+    // Phase 3 (3.9; R4, R22; final review judges-factcheck[2]): the structural slot
+    // scores C4's em-dash house rule in Nova's prose and T14's production words only. It
+    // read the whole of C4 and nearly held the gate's article for its length.
+    it('antiPatterns: T14 and C4\'s em-dash house rule only; length and C4\'s other craft are craft findings', () => {
+      const { description } = article().antiPatterns;
+      expect(description).toMatch(/\bT14\b/);
+      expect(description).toMatch(/\bC4\b/);
+      expect(description).toMatch(/em-dash/);
+      expect(description).toContain("Nova's own prose");
+      expect(description).toContain("C4's length and its other craft are craft findings");
+      expect(description).not.toContain('house style C4 states');
+    });
+
+    it('reporterMode: T8, exposures by turn-in and the room\'s events by attribution, never every exposure a tip', () => {
+      const { description } = article().reporterMode;
+      expect(description).toMatch(/\bT8\b/);
+      expect(description).toMatch(/turn-in/);
+      expect(description).toMatch(/attribution/);
+      expect(description).not.toMatch(/\btips?\b/i);
+      expect(description).toContain('more than once');
+    });
+
+    // Phase 3 (3.9; final review judges-factcheck[5]): the structural criteria hold to
+    // the plan's wording, with no new craft judgement in a must-fix slot (R2, R22).
+    it('arcSectionFlow and arcThreading: C2, every section essential, nothing front-loaded, not every arc in every section', () => {
+      for (const { description } of [outline().arcSectionFlow, article().arcThreading]) {
+        expect(description).toMatch(/\bC2\b/);
+        expect(description).toContain('essential part of one narrative');
+        expect(description).toContain('nothing front-loaded into THE STORY');
+        expect(description).toContain('Not every arc appears in every section');
+        expect(description).not.toContain('arcConnections');
+        expect(description).not.toContain('→');
+        expect(description).not.toContain('the thesis running through every section');
+      }
+    });
+
+    // Final review (judges-factcheck[1]): it cited C4, which says nothing about photos.
+    it('visualDistributionPlan: photos spread through the article, with no count, citing no item that does not state it', () => {
+      const { description } = outline().visualDistributionPlan;
+      expect(description).toMatch(/photos spread through the article/);
+      expect(description).not.toMatch(/every (?:two|three|\d)|\d+ (?:visuals|photos|cards|paragraphs)/);
+      expect(description).not.toContain('pulls the reader on');
+      expect(description).not.toMatch(/\bC4\b/);
+    });
+
+    it('requiredSections: each printed section earns its place (C2), with no fixed list', () => {
+      const { description } = outline().requiredSections;
+      expect(description).toContain('earn its place');
+      expect(description).not.toContain('lede, theStory, thePlayers, closing');
+      expect(description).not.toContain('the thesis deciding which sections exist');
+      expect(buildEvaluationSystemPrompt('outline', outline(), 'journalist')).not.toContain('MUST exist');
+    });
+
+    // Phase 3 (3.9): C16 of round 7: one convergence near the end, the thesis said once.
+    it('convergence: C16, one convergence near the end where the thesis lands, said once', () => {
+      const { description } = outline().convergence;
+      expect(description).toMatch(/\bC16\b/);
+      expect(description).toContain('near the end');
+      expect(description).toContain('where the thesis lands');
+      expect(description).toContain('said once');
+      expect(description).not.toContain('spent early in THE STORY');
+      expect(description).not.toContain('kept for the end');
+    });
+
+    // Phase 3 (3.9; C16): a planted detail scores only when its payoff moves the
+    // throughline. The old text rewarded every plant, and the gate's outline planted
+    // details the director cut for not tying into the story.
+    it('loopArchitecture: a planted detail scores only when its payoff moves the throughline (C16)', () => {
+      const { description } = outline().loopArchitecture;
+      expect(description).toMatch(/\bC16\b/);
+      expect(description).toContain('moves the throughline');
+      expect(description).not.toContain('with details planted early coming back changed');
+    });
+
+    it('sectionBalance and wordBudget: about 1,500 words, with no per-section ranges', () => {
+      for (const { description } of [outline().sectionBalance, outline().wordBudget]) {
+        expect(description).toContain('about 1,500 words');
+        expect(description).not.toMatch(/1000-1500|lede 75-150/);
+      }
+    });
+
+    it('visualMomentum: cards and photos, not pull quotes', () => {
+      const { description } = outline().visualMomentum;
+      expect(description).toMatch(/cards? and photos?/i);
+      expect(description).not.toMatch(/pull quote/i);
+    });
+
+    // Final review (judges-factcheck[1]): round 7 made C3 "How the official story was
+    // made", so neither the criterion nor the arc checklist cites it for the facts the
+    // arcs must agree on. The tension the arcs may carry is C16's.
+    it('coherence: faults only incompatible facts, never arcs that pull against the verdict (C16), and cites no C3', () => {
+      const { description } = getArcCriteria('journalist').coherence;
+      expect(description).not.toMatch(/\bC3\b/);
+      expect(description).toMatch(/\bC16\b/);
+      expect(description).toContain('cannot both be true');
+      expect(description).toContain('pull against');
+      expect(description).not.toContain('without contradictions');
+    });
+
+    it("the arc judge's checklist asks for coherence without citing C3", () => {
+      const prompt = userFor('arcs', stateFor());
+      expect(prompt).toContain("5. COHERENCE: Do the arcs agree on the record's facts? Arcs that pull against each other or against the room's verdict are the tension the article uses.");
+      expect(prompt).not.toMatch(/\(C3\)/);
+    });
+
+    it('the outline judge\'s momentum questions name no murder and no pull quotes', () => {
+      const prompt = userFor('outline', stateFor());
+      const momentum = prompt.slice(prompt.indexOf('MOMENTUM EVALUATION'));
+      expect(momentum).not.toMatch(/murder/i);
+      expect(momentum).not.toMatch(/pull quote/i);
+      expect(momentum).toMatch(/near the end/);
+      // Phase 3 (3.9): question 4 repeated the convergence clause C16 no longer carries.
+      expect(momentum).not.toContain('spent early in THE STORY');
+      expect(momentum).not.toContain('kept for the end');
+      // Wave 4 integration (rule-text read 2, section D): no unconditional reward for a
+      // planted detail; the questions point at C16, C17 and C19.
+      expect(momentum).not.toMatch(/compulsive|callbacks|THAT'S why|loop mechanics|CLOSER|OPENER|recontextuali/i);
+      expect(momentum).toContain('(C19)');
+      expect(momentum).toContain('(C17, C9)');
+      expect(momentum).toContain('where its payoff moves the throughline (C16)');
+      expect(getOutlineCriteria('journalist').arcInterweaving.description).not.toMatch(/callbacks|recontextuali/i);
+    });
+
+    it('the journalist scoring rule says how the score is made (M30)', () => {
+      for (const [phase] of JUDGE_CALLS) {
+        const prompt = systemFor(phase, stateFor());
+        expect(prompt).not.toContain('pass (1.0), partial (0.5), fail (0.0)');
+        expect(prompt).toContain('weighted average');
+      }
+    });
+  });
+
+  describe('lines that contradicted the rules', () => {
+    it('the arc judge reads the director\'s notes through its writer\'s label, not as ground truth', () => {
+      const prompt = systemFor('arcs', stateFor());
+      expect(prompt).not.toMatch(/ground truth/i);
+      // The judge's own wording of the label is gone (fix 3.4b item 6): the line is the
+      // arc writer's label, below.
+      expect(prompt).not.toContain('record for what happened and was said in the room');
+    });
+
+    // Fix 3.4b item 6: one source for the notes label. The arc judge's directorNotes line
+    // prints ARC_NOTES_LABEL, which arc-specialist-nodes.js exports for the arc writer.
+    it('the arc judge\'s director-notes line prints the label arc-specialist-nodes.js exports', () => {
+      const ARC_NODES = '../../../lib/workflow/nodes/arc-specialist-nodes';
+      try {
+        jest.isolateModules(() => {
+          const actual = jest.requireActual(ARC_NODES);
+          jest.doMock(ARC_NODES, () => ({ ...actual, ARC_NOTES_LABEL: 'SENTINEL NOTES LABEL' }));
+          const isolated = require('../../../lib/workflow/nodes/evaluator-nodes')._testing;
+          const state = stateFor();
+          const prompt = isolated.buildEvaluationSystemPrompt('arcs', isolated.getPhaseCriteria('arcs', 'journalist'),
+            'journalist', { sessionConfig: state.sessionConfig });
+          expect(prompt).toContain('- directorNotes: SENTINEL NOTES LABEL\n');
+        });
+      } finally {
+        jest.dontMock(ARC_NODES);
+      }
+    });
+
+    // The connection itself: the arc judge prints the arc writer's own label, exported
+    // by arc-specialist-nodes.js (one source, fixes 3.3b and 3.4b).
+    it('the arc judge\'s prompt carries the arc writer\'s label', () => {
+      const { ARC_NOTES_LABEL } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
+      expect(typeof ARC_NOTES_LABEL).toBe('string');
+      expect(ARC_NOTES_LABEL.trim()).not.toBe('');
+      expect(systemFor('arcs', stateFor())).toContain(`- directorNotes: ${ARC_NOTES_LABEL}`);
+    });
+
+    it('the journalist NPC list reads each canon line from the theme config (M26)', () => {
+      const lines = getNpcDescriptions('journalist').split('\n');
+      const entries = getThemeNPCEntries('journalist').filter((e) => !e.aliasOf);
+      expect(lines).toHaveLength(entries.length);
+      entries.forEach((entry, i) => {
+        expect(lines[i]).toContain(entry.fullName || entry.name);
+        expect(lines[i]).toContain(entry.role);
+      });
+      expect(getNpcDescriptions('journalist')).not.toContain('should appear in most arcs');
+      expect(getNpcDescriptions('journalist')).toContain('Valet');
+    });
+
+    it('the article judge\'s mode line points at the mode block and sends no exposure through a tipster', () => {
+      const prompt = userFor('article', stateFor());
+      expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: remote');
+      expect(prompt).not.toMatch(/\btips\b/);
+    });
+  });
+
+  describe('fields the page never prints', () => {
+    const PRINTED_BUNDLE = {
+      ...clone(PREVIOUS_BUNDLE),
+      byline: { author: 'Cass Nova | NovaNews', title: 'Senior Investigative Correspondent', location: 'Fremont', date: 'Feb 22', guestReporter: 'Ashe Motoko | Contributing Reporter' },
+      heroImage: { filename: 'hero.jpg', caption: 'The room at the vote', characters: ['Alex', 'Morgan'] },
+      voice_self_check: { overall_assessment: 'SELF CHECK: every roster player is named' },
+      pullQuotes: [{ type: 'verbatim', text: 'PULL QUOTE TEXT', attribution: 'Alex' }],
+      photos: [{ filename: 'p2.jpg', caption: 'TOP LEVEL PHOTO CAPTION', characters: ['Alex'] }],
+      financialTracker: { entries: [{ description: 'TRACKER ENTRY', amount: '$1' }], totalExposed: '$1' },
+      _revisionHistory: [{ timestamp: 'REVISION HISTORY' }],
+      evidenceCards: [{ tokenId: 'mor001', headline: 'The envelope', summary: 'Morgan pays Riley', content: 'SIDEBAR CONTENT', owner: 'SIDEBAR OWNER', significance: 'supporting', placement: 'sidebar' }]
+    };
+    PRINTED_BUNDLE.sections = [{
+      id: 'the-story', type: 'narrative', heading: 'The Story',
+      content: [
+        { type: 'paragraph', text: 'Marcus bragged.' },
+        { type: 'evidence-card', tokenId: 'ale003', headline: 'The brag', content: 'ALE003 - 11:32PM - MARCUS brags', owner: 'Alex Reeves', significance: 'critical' },
+        { type: 'photo', filename: 'p2.jpg', caption: 'Alex at the ledger', characters: ['PHOTO CHARACTERS'] },
+        { type: 'quote', text: 'Worth it.', attribution: 'Marcus' }
+      ]
+    }];
+
+    const bundleIn = (prompt) => {
+      const start = prompt.indexOf('{', prompt.indexOf('CONTENT BUNDLE:\n'));
+      return JSON.parse(prompt.slice(start, prompt.indexOf('\n}\n', start) + 2));
+    };
+
+    it('the journalist article judge reads only what the page prints', () => {
+      const prompt = userFor('article', stateFor('journalist', { contentBundle: clone(PRINTED_BUNDLE) }));
+      for (const never of ['SELF CHECK', 'PULL QUOTE TEXT', 'TOP LEVEL PHOTO CAPTION', 'TRACKER ENTRY', 'REVISION HISTORY',
+        'SIDEBAR CONTENT', 'SIDEBAR OWNER', 'PHOTO CHARACTERS', '"location"', '"date": "Feb 22"', 'generatedAt']) {
+        expect([never, prompt.includes(never)]).toEqual([never, false]);
+      }
+      const shown = bundleIn(prompt);
+      expect(Object.keys(shown).sort()).toEqual(['byline', 'evidenceCards', 'headline', 'heroImage', 'sections']);
+      expect(shown.byline).toEqual({ author: 'Cass Nova | NovaNews', title: 'Senior Investigative Correspondent', guestReporter: 'Ashe Motoko | Contributing Reporter' });
+      expect(shown.heroImage).toEqual({ filename: 'hero.jpg', caption: 'The room at the vote' });
+      expect(shown.evidenceCards).toEqual([{ tokenId: 'mor001', headline: 'The envelope', summary: 'Morgan pays Riley', significance: 'supporting' }]);
+      expect(shown.sections[0].content).toEqual([
+        { type: 'paragraph', text: 'Marcus bragged.' },
+        { type: 'evidence-card', tokenId: 'ale003', headline: 'The brag', content: 'ALE003 - 11:32PM - MARCUS brags', owner: 'Alex Reeves' },
+        { type: 'photo', filename: 'p2.jpg', caption: 'Alex at the ledger' },
+        { type: 'quote', text: 'Worth it.', attribution: 'Marcus' }
+      ]);
+    });
+
+    // Fix 3.4b (review finding 5): with no ledger account above zero, the page prints the
+    // writer's tracker (TemplateAssembler.overrideFinancialTracker passes it through), so
+    // the judge reads its printed fields: each entry's description and amount, and the total.
+    it('keeps the writer\'s tracker when no ledger account has a positive total, as the page prints it', () => {
+      const bundle = clone(PRINTED_BUNDLE);
+      bundle.financialTracker = {
+        entries: [{ date: 'NOT PRINTED DATE', description: 'TRACKER ENTRY', amount: '$1', category: 'shell-account' }],
+        totalExposed: '$1'
+      };
+      const printed = { entries: [{ description: 'TRACKER ENTRY', amount: '$1' }], totalExposed: '$1' };
+      for (const shellAccounts of [[], [{ name: 'Melanie', total: 0, tokenCount: 0 }], undefined]) {
+        const shown = bundleIn(userFor('article', stateFor('journalist', { contentBundle: clone(bundle), shellAccounts })));
+        expect([shellAccounts, shown.financialTracker]).toEqual([shellAccounts, printed]);
+      }
+      // A ledger account above zero: the page prints the ledger, so the writer's tracker stays out.
+      const ledger = bundleIn(userFor('article', stateFor('journalist', { contentBundle: clone(bundle) })));
+      expect(ledger.financialTracker).toBeUndefined();
+      // A writer's tracker with no entry: the page prints no tracker at all.
+      const empty = { ...clone(bundle), financialTracker: { entries: [], totalExposed: '$0' } };
+      expect(bundleIn(userFor('article', stateFor('journalist', { contentBundle: empty, shellAccounts: [] }))).financialTracker).toBeUndefined();
+    });
+
+    it('the detective article judge keeps today\'s bundle', () => {
+      const prompt = userFor('article', stateFor('detective', { contentBundle: clone(PRINTED_BUNDLE) }));
+      expect(prompt).toContain(JSON.stringify(PRINTED_BUNDLE, null, 2));
+    });
+  });
+
+  describe('the arc judge reads the morning timeline (3.5\'s), not a list of its own', () => {
+    it('the journalist arc judge reads the whole record view with the session config', () => {
+      const state = stateFor();
+      const prompt = userFor('arcs', state);
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }));
+      expect(prompt).toContain('<morning-timeline>');
+      expect(prompt).not.toContain('BURIED TRANSACTIONS (');
+      expect(prompt).not.toContain('"accountName"');
+    });
+
+    it('the detective arc judge keeps its own list', () => {
+      const state = stateFor('detective');
+      const prompt = userFor('arcs', state);
+      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { buried: false }));
+      expect(prompt).toContain('BURIED TRANSACTIONS (1 - for amount/account verification):');
+    });
+  });
+
+  describe('the detective judges are unchanged', () => {
+    // sha256 of `${systemPrompt}\n<<USER>>\n${prompt}` as each node sends it, for the
+    // detective fixture state, taken at 9286ec6 before 3.4 changed a line. The bundle
+    // carries fields the page never prints, which the detective judge still reads.
+    // Task 3.11 moved all three by one line of the director's notes block they share
+    // with the writers (renderDirectorEnrichmentBlock): the fixture's stored quote has
+    // no context or correction naming Riley, so <QUOTE_BANK> prints "(speaker not
+    // recorded)" for "Riley". Restoring that line gives back the 9286ec6 hashes.
+    // Task 3.9 moved all three by the two lines of the OUTPUT FORMAT both themes share
+    // (outputFormat; the integrator's ruling on the judge's contract): "fix" is written
+    // only below the bar, and "revisionGuidance" holds one step per structural issue.
+    // Restoring those two lines gives back the 3.11 hashes (a41aadbd..., fcdacdb8...,
+    // a45757c8...).
+    const PINNED = {
+      arcs: '0faa4ba3cbdf058f6ac32675c7d657cbf844a6f86388968ecc3cab6757ae8d57',
+      outline: '5282b08c81ad69cb8ab69f95eaa7aee15ca81deea7e2c14af1740dd406a7db8c',
+      article: '6e6ee008220dffdcd408efa5d463b91ef7b523e4ccca9f1b256e2f52a0943692'
+    };
+    const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
+    const JUDGES = {
+      arcs: [evaluateArcs, { selectedArcs: [] }],
+      outline: [evaluateOutline, { outlineApproved: false }],
+      article: [evaluateArticle, { articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE }]
+    };
+
+    it.each(Object.keys(PINNED))('the detective %s judge sends byte for byte what it sent before 3.4', async (phase) => {
+      const [node, extra] = JUDGES[phase];
+      const state = {
+        ...reworkFixtureState('detective'),
+        contentBundle: { ...clone(PREVIOUS_BUNDLE), voice_self_check: { overall_assessment: 'SELF CHECK' }, pullQuotes: [{ text: 'PQ' }] },
+        evaluationHistory: [],
+        ...extra
+      };
+      let sent;
+      await node(clone(state), { configurable: { sdkClient: async (o) => { sent = o; return clone(VERDICT); }, theme: 'detective' } });
+      const hash = crypto.createHash('sha256').update(`${sent.systemPrompt}\n<<USER>>\n${sent.prompt}`).digest('hex');
+      expect(hash).toBe(PINNED[phase]);
+    });
+
+    it('the detective criteria are today\'s', () => {
+      expect(getArcCriteria('detective')).toEqual({
+        rosterCoverage: { description: 'Does every roster member have a placement in at least one arc?', weight: 0.30, type: 'structural' },
+        evidenceIdValidity: { description: 'Are all keyEvidence IDs valid (exist in evidence bundle)?', weight: 0.25, type: 'structural' },
+        accusationArcPresent: { description: 'Is there an arc with arcSource="accusation" addressing the player accusation?', weight: 0.20, type: 'structural' },
+        coherence: { description: 'Do arcs tell a consistent story without contradictions?', weight: 0.15, type: 'advisory' },
+        evidenceConfidenceBalance: { description: 'Are there arcs with strong/moderate evidence (not all speculative)?', weight: 0.10, type: 'advisory' }
+      });
+      expect(getOutlineCriteria('detective')).toEqual({
+        arcCoverage: { description: 'Does outline address all selected narrative threads?', weight: 0.25, type: 'structural' },
+        requiredSections: { description: 'Are all required sections present (executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment)?', weight: 0.25, type: 'structural' },
+        sectionDifferentiation: { description: 'Does each section answer a DIFFERENT question about the case? No fact should repeat across sections.', weight: 0.20, type: 'structural' },
+        sectionBalance: { description: 'Are sections appropriately weighted within the ~750 word budget?', weight: 0.10, type: 'advisory' },
+        flowLogic: { description: 'Does the report flow logically from summary through evidence to assessment?', weight: 0.05, type: 'advisory' },
+        evidenceSynthesis: { description: 'Is evidence grouped thematically and synthesized (not listed individually)?', weight: 0.10, type: 'advisory' },
+        wordBudget: { description: 'Are section word budgets reasonable for a ~750 word report?', weight: 0.05, type: 'advisory' }
+      });
+      expect(getArticleCriteria('detective')).toEqual({
+        voiceConsistency: { description: 'Does report maintain third-person investigative detective voice (professional, analytical)?', weight: 0.20, type: 'structural' },
+        antiPatterns: { description: 'Are anti-patterns avoided? (token terminology, game mechanics, character sheet references; the in-world phrase "memory token" is allowed)', weight: 0.15, type: 'structural' },
+        visualDistribution: { description: 'Are visual components distributed for compelling narrative flow (not clustered)? Goal is a compelling GIFT for players, not quota compliance.', weight: 0.10, type: 'advisory' },
+        arcThreading: { description: 'Does each section answer a DIFFERENT QUESTION about the same underlying facts? Sections should be analytically distinct, not repetitive.', weight: 0.10, type: 'structural' },
+        evidenceIntegration: { description: 'Is evidence woven in naturally?', weight: 0.15, type: 'advisory' },
+        characterPlacement: { description: 'Are all roster members mentioned?', weight: 0.15, type: 'advisory' },
+        emotionalResonance: { description: 'Does article deliver the promised experience?', weight: 0.15, type: 'advisory' }
+      });
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3, brief 3.9: the judges are the newsroom's editors. They hold a draft for a
+// definite error only (R22), check the money against the figures the writers were
+// given, ask for the must-fix work alone, and see every photo the article places
+// (spec round 7; the ledger's rulings of 2026-10-02).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('the judges and the money line (phase 3, 3.9)', () => {
+  const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
+  const { renderPhotoEntry } = require('../../../lib/prompt-renderers/director-words-renderer');
+  const { _testing: { getPhaseCriteria, EVALUATION_JSON_SCHEMA } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+  const {
+    generateContentBundle, reviseContentBundle, getPromptBuilder,
+    _testing: { articleWriterInputs, buildAvailablePhotos }
+  } = require('../../../lib/workflow/nodes/ai-nodes');
+  const { _testing: graph } = require('../../../lib/workflow/graph');
+  const { buildRollbackState } = require('../../../lib/api-helpers');
+
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const count = (text, part) => text.split(part).length - 1;
+  const stateFor = (theme = 'journalist', extra = {}) => ({ ...reworkFixtureState(theme), contentBundle: clone(PREVIOUS_BUNDLE), ...extra });
+  const systemFor = (phase, state) => buildEvaluationSystemPrompt(
+    phase, getPhaseCriteria(phase, state.theme), state.theme, { sessionConfig: state.sessionConfig }
+  );
+  const userFor = (phase, state) => buildEvaluationUserPrompt(phase, state, { factCheck: null });
+
+  describe('the money line (T5)', () => {
+    // At the gate five of eight outline and article verdicts flagged the code-made
+    // $7,495,000 as a figure the writer computed, and the writers asked the director to
+    // confirm it at two stops: no judge saw the summary the writers were given.
+    it.each(['outline', 'article'])('the %s judge reads the writers\' FINANCIAL_SUMMARY, from the same builder and input, once, after the record', (phase) => {
+      const state = stateFor();
+      const prompt = userFor(phase, state);
+      const block = getPromptBuilder(null, state)._buildFinancialSummary(state.shellAccounts).trim();
+      expect(block.startsWith('<FINANCIAL_SUMMARY>')).toBe(true);
+      expect(count(prompt, block)).toBe(1);
+      expect(count(prompt, '<FINANCIAL_SUMMARY>')).toBe(1);
+      expect(prompt.indexOf(block)).toBeGreaterThan(prompt.indexOf('</RECORD>'));
+    });
+
+    it('the arc judge, whose writer is given no summary, and the detective judges read none', () => {
+      expect(userFor('arcs', stateFor())).not.toContain('FINANCIAL_SUMMARY');
+      for (const phase of ['arcs', 'outline', 'article']) {
+        expect([phase, userFor(phase, stateFor('detective')).includes('FINANCIAL_SUMMARY')]).toEqual([phase, false]);
+      }
+    });
+
+    it('a session with no account above zero gives the judges no summary, as it gives the writers none', () => {
+      const state = stateFor('journalist', { shellAccounts: [{ name: 'Melanie', total: 0, tokenCount: 0 }] });
+      for (const phase of ['outline', 'article']) expect(userFor(phase, state)).not.toContain('FINANCIAL_SUMMARY');
+    });
+
+    it('moneyTruth asks whether the money runs from the buyer, with NeurAI and its board Nova\'s suspicion', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
+        expect(description).toContain("run from the buyer to the seller's chosen account");
+        expect(description).toContain("NeurAI and its board written as Nova's suspicion");
+        expect(description).toContain('the morning\'s payments for erasure');
+        expect(description).toMatch(/\bT5\b/);
+        expect(description).not.toContain("run from NeurAI's board");
+        expect(description).not.toContain('other wealth');
+      }
+    });
+
+    it('moneyTruth reads the timeline and the notes at every judge, and FINANCIAL_SUMMARY where its writer had it', () => {
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes']);
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
+      for (const phase of ['outline', 'article']) {
+        const { reads } = getPhaseCriteria(phase, 'journalist').moneyTruth;
+        expect(reads).toEqual(['timeline', 'financialSummary', 'notes']);
+      }
+    });
+
+    // Final review (judges-factcheck[0]): the outline and article judges now hold
+    // FINANCIAL_SUMMARY, whose totals are each account's at the close of the morning,
+    // while the director's notes record balances said or shown in the room earlier
+    // (092026's read-out, 092626's "$4 million in the RW account"). The criterion names
+    // each source by what it gives, so a judge never "corrects" a player's line to a
+    // closing total (T1).
+    it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the room', () => {
+      const LEDGER = 'Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;';
+      const IN_THE_ROOM = "a balance the director's notes record as said or shown in the room as that moment's figure (T1).";
+      for (const phase of ['outline', 'article']) {
+        const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
+        expect(description).toContain(LEDGER);
+        expect(description).toContain('each total at the close of the morning as FINANCIAL_SUMMARY gives it;');
+        expect(description).toContain(IN_THE_ROOM);
+        expect(description).not.toContain('as the ledger or FINANCIAL_SUMMARY gives it');
+      }
+      const arcs = getPhaseCriteria('arcs', 'journalist').moneyTruth.description;
+      expect(arcs).toContain(`${LEDGER} and ${IN_THE_ROOM}`);
+    });
+  });
+
+  describe('the truth criteria follow the truth lines of round 7', () => {
+    const truthOf = (phase, key) => getPhaseCriteria(phase, 'journalist')[key].description;
+
+    it('evidenceTruth (T4): a person is tied to an account as fact only on the director\'s sight of the sale or an open sale, never by its name', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const description = truthOf(phase, 'evidenceTruth');
+        expect(description).toContain('only where the director saw the sale or it was made openly in front of the room');
+        expect(description).toContain('never a reason to suspect its namesake (T4)');
+        expect(description).not.toContain('read as proof of who holds it');
+      }
+    });
+
+    it('stagesTruth (T7): what NovaNews is still chasing is Nova\'s intent and needs no epilogue', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        expect(truthOf(phase, 'stagesTruth')).toContain("What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue");
+      }
+    });
+
+    it('novaPositionTruth (T8): Nova never votes, joins the room\'s accusation or exposes a memory', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const description = truthOf(phase, 'novaPositionTruth');
+        expect(description).toContain("never votes, joins the room's accusation or exposes a memory");
+        expect(description).not.toContain('accusations and exposures');
+      }
+    });
+
+    it('reporterMode follows the remote mode block and T8', () => {
+      const { description } = getArticleCriteria('journalist').reporterMode;
+      expect(description).toMatch(/\bT8\b/);
+      expect(description).toContain("Nova voting, joining the room's accusation or exposing a memory");
+      expect(description).toContain('a claim to have seen or heard the room');
+      expect(description).toContain('told as scenes, with attribution where it matters: a line someone was overheard saying, a claim about a person');
+      expect(description).not.toContain('by attribution to the people in the room');
+      expect(description).not.toContain('first-person claim to have been in the warehouse');
+    });
+
+    it('the comment beside the article judge\'s mode line no longer says the room reaches Nova by attribution', () => {
+      const source = require('fs').readFileSync(require.resolve('../../../lib/workflow/nodes/evaluator-nodes'), 'utf8');
+      expect(source).not.toContain('the room\'s events by attribution)');
+    });
+
+    it('two criteria that restated a craft item name it instead', () => {
+      const coherence = getPhaseCriteria('arcs', 'journalist').coherence.description;
+      expect(coherence).toMatch(/\bC16\b/);
+      const visual = getArticleCriteria('journalist').visualDistribution.description;
+      expect(visual).toMatch(/\bC9\b/);
+      expect(visual).not.toContain('a budget and never a quota');
+    });
+  });
+
+  // Gate 2: the article judge still told every judge that three cards beat ten, against
+  // C9's budget of three to five. The detective is parked (D13) and keeps it.
+  it('the journalist article judge has no card-count line; the detective\'s keeps it', () => {
+    const LINE = 'A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.';
+    expect(systemFor('article', stateFor())).not.toContain(LINE);
+    expect(systemFor('article', stateFor('detective'))).toContain(LINE);
+  });
+
+  describe('craft findings are the editor\'s notes for the director (R22)', () => {
+    it.each(['arcs', 'outline', 'article'])('the %s judge files a craft finding as an editor\'s note for the director, never a blocker', (phase) => {
+      const prompt = systemFor(phase, stateFor());
+      const section = prompt.slice(prompt.indexOf('CRAFT FINDINGS'), prompt.indexOf('EVALUATION RULES'));
+      expect(section).toContain("an editor's note for the director, never a blocker");
+      expect(section).not.toContain('for the rework');
+    });
+
+    it('a truth-labelled advisory stays an advisory: nothing holds the draft on it', async () => {
+      const advisory = 'T1: "Remi watched the money go" says more than the emails; the director may want it softened.';
+      const mockClient = jest.fn().mockResolvedValue({
+        ready: true, structuralPassed: true, overallScore: 0.9,
+        criteriaScores: { evidenceTruth: { score: 0.9 } }, structuralIssues: [], advisoryWarnings: [advisory]
+      });
+      const result = await evaluateOutline(stateFor('journalist', { outlineApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+      expect(result.evaluationHistory.ready).toBe(true);
+      expect(result.evaluationHistory.structuralIssues).toEqual([]);
+      expect(result.evaluationHistory.advisoryWarnings).toEqual([advisory]);
+      expect(result.validationResults.passed).toBe(true);
+    });
+  });
+
+  // Final review judges-factcheck[1]: every passing criterion carried a fix and the
+  // guidance carried optional steps, and the reworks acted on them. The contract is
+  // shared by both themes, so the detective's judges change with it (the ruling).
+  describe('the judge\'s output contract asks for the must-fix work only (both themes)', () => {
+    it('the schema asks for a criterion\'s fix only below the bar, and guidance only for the structural issues', () => {
+      const { fix } = EVALUATION_JSON_SCHEMA.properties.criteriaScores.additionalProperties.properties;
+      expect(fix.description).toContain('Only for a score below 0.8');
+      expect(fix.description).not.toContain('raise this score');
+      const { revisionGuidance } = EVALUATION_JSON_SCHEMA.properties;
+      expect(revisionGuidance.type).toBe('string');
+      expect(revisionGuidance.description).toContain('One step per structural issue');
+    });
+
+    it.each(['journalist', 'detective'])('the %s judges\' OUTPUT FORMAT asks for a fix only below the bar and one step per structural issue', (theme) => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const prompt = systemFor(phase, stateFor(theme));
+        const format = prompt.slice(prompt.indexOf('OUTPUT FORMAT (JSON):'));
+        expect([phase, format]).toEqual([phase, expect.stringContaining('"fix": "only for a score below 0.8:')]);
+        expect([phase, format]).toEqual([phase, expect.stringContaining('"revisionGuidance": "one step per structural issue')]);
+        expect([phase, /optional/i.test(format)]).toEqual([phase, false]);
+      }
+    });
+  });
+
+  // The 4b fix batch (3.9 review minor 4): each journalist judge's "MUST be actionable"
+  // block asked for "CONCRETE fixes" in general, a few lines above the OUTPUT FORMAT that
+  // asks for a fix only below the bar and one step per structural issue, so it could pull
+  // fix work back into the notes and the advisories. Its fixes are now the contract's.
+  // The detective's blocks are unchanged (pinned by hash in "the detective judges are
+  // unchanged").
+  describe('the judges ask for fixes the way the contract does (the 4b fix batch)', () => {
+    const { STRUCTURAL_PASS_SCORE } = require('../../../lib/workflow/nodes/node-helpers');
+    const fixesLine = (prompt) => prompt.split('\n').find((line) => line.startsWith('- CONCRETE fixes'));
+
+    it.each(['arcs', 'outline', 'article'])('the journalist %s judge asks for concrete fixes for the criteria below the bar and the structural issues', (phase) => {
+      const prompt = systemFor(phase, stateFor());
+      const block = prompt.slice(prompt.indexOf('CRITICAL: Your feedback MUST be actionable'), prompt.indexOf('OUTPUT FORMAT (JSON):'));
+      expect(fixesLine(block)).toContain(`- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "`);
+    });
+
+    it('the detective judges keep their blocks', () => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        expect([phase, fixesLine(systemFor(phase, stateFor('detective'))).startsWith('- CONCRETE fixes (not "')]).toEqual([phase, true]);
+      }
+    });
+
+    it('judge prompt text writes the bar through STRUCTURAL_PASS_SCORE, never as a number; the prompts read the same', () => {
+      const source = require('fs').readFileSync(require.resolve('../../../lib/workflow/nodes/evaluator-nodes'), 'utf8');
+      expect(source).not.toMatch(/MUST score >= 0\.8|score it below 0\.8/);
+      expect(systemFor('arcs', stateFor())).toContain('STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements); a truth criterion with any breach fails.');
+      expect(systemFor('arcs', stateFor())).toContain('One breach fails it: score it below 0.8.');
+      expect(systemFor('arcs', stateFor('detective'))).toContain('2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)\n');
+    });
+  });
+
+  // The ledger's Gate 3 finding: a replay from START at a stop escalated at the cap paid
+  // for its evaluation again, because the skip read only a ready entry.
+  describe('a replay does not re-pay an escalated evaluation', () => {
+    const escalated = (phase) => ({ phase, ready: false, escalatedToHuman: true, escalationReason: 'Reached revision cap (2)', timestamp: 't' });
+    /** The state after an update, as the graph's reducers apply it (evaluationHistory appends). */
+    const apply = (state, update) => ({
+      ...state, ...update,
+      evaluationHistory: [...(state.evaluationHistory || []), ...[].concat(update.evaluationHistory || [])]
+    });
+    const STOPS = {
+      arcs: { node: evaluateArcs, route: 'routeArcEvaluation', increment: 'incrementArcRevision', counter: 'arcRevisionCount', cap: REVISION_CAPS.ARCS, feedback: '_arcFeedback', output: 'narrativeArcs', open: { selectedArcs: [] } },
+      outline: { node: evaluateOutline, route: 'routeOutlineEvaluation', increment: 'incrementOutlineRevision', counter: 'outlineRevisionCount', cap: REVISION_CAPS.OUTLINE, feedback: '_outlineFeedback', output: 'outline', open: { outlineApproved: false } },
+      article: { node: evaluateArticle, route: 'routeArticleEvaluation', increment: 'incrementArticleRevision', counter: 'articleRevisionCount', cap: REVISION_CAPS.ARTICLE, feedback: '_articleFeedback', output: 'contentBundle', open: { articleApproved: false } }
+    };
+    const atStop = (phase) => stateFor('journalist', { ...STOPS[phase].open, [STOPS[phase].counter]: STOPS[phase].cap, evaluationHistory: [escalated(phase)] });
+    const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [] };
+
+    it.each(Object.keys(STOPS))('a replay at the escalated %s stop makes no model call and routes to the stop', async (phase) => {
+      const { node, route } = STOPS[phase];
+      const state = atStop(phase);
+      const sdk = jest.fn();
+      const update = await node(clone(state), { configurable: { sdkClient: sdk } });
+      expect(sdk).not.toHaveBeenCalled();
+      expect(update.evaluationHistory).toBeUndefined();
+      expect(graph[route](apply(state, update))).toBe('checkpoint');
+    });
+
+    it.each(Object.keys(STOPS))('the director\'s send back at the escalated %s stop: the rework is evaluated', async (phase) => {
+      const { node, increment, feedback, output } = STOPS[phase];
+      const state = atStop(phase);
+      // The send back's increment appends the not-ready stub; the rework writes the output.
+      const stubbed = apply(state, await graph[increment]({ ...state, [feedback]: 'Lead with the vote.' }));
+      const reworked = { ...stubbed, [output]: clone(state[output]), [feedback]: null };
+      const sdk = jest.fn().mockResolvedValue(clone(VERDICT));
+      await node(reworked, { configurable: { sdkClient: sdk } });
+      expect(sdk).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['outline', 'article'])('a rollback to %s after the escalation appends the stub, so the regenerated output is evaluated', async (phase) => {
+      const { node, output, open } = STOPS[phase];
+      const state = atStop(phase);
+      const rolled = apply(state, buildRollbackState(phase));
+      const regenerated = { ...rolled, ...open, [output]: clone(state[output]) };
+      const sdk = jest.fn().mockResolvedValue(clone(VERDICT));
+      await node(regenerated, { configurable: { sdkClient: sdk } });
+      expect(sdk).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // The ruling of 2026-10-02: T13's every-photo check is the article's. The outline has
+  // one photo slot per arc and one in FOLLOW THE MONEY (092026: nine photos, six slots),
+  // so the article writer gets the outline writer's whole set through
+  // articleWriterInputs, and the judge's PHOTOS is built from the same input.
+  describe('every photo reaches the page (T13)', () => {
+    /** The fixture with a kept photo no arc package lists, and a stored hero. */
+    const withKeptPhoto = () => {
+      const state = stateFor('journalist', { heroImage: 'hero.jpg' });
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];
+      return state;
+    };
+    const ENTRIES = (state) => [
+      `1. [hero image] ${renderPhotoEntry({ filename: 'hero.jpg', names: ['Alex', 'Morgan', 'Sarah'] }, state.photoDescriptions, '   ')}`,
+      `2. ${renderPhotoEntry({ filename: 'p2.jpg', names: ['Alex'] }, state.photoDescriptions, '   ')}`,
+      `3. ${renderPhotoEntry({ filename: 'p9.jpg', names: [] }, state.photoDescriptions, '   ')}`
+    ];
+    /** The writer's answer: the fixture bundle with a third inline card, so the node logs no card-count warning. */
+    const answer = () => {
+      const bundle = clone(PREVIOUS_BUNDLE);
+      bundle.sections[0].content.push({ type: 'evidence-card', tokenId: 'mor001', headline: 'The envelope', content: 'Morgan hands Riley an envelope by the bar.', owner: 'Morgan Reed', significance: 'supporting' });
+      return bundle;
+    };
+    const recordingSdk = () => jest.fn(async () => answer());
+    const cfg = (sdk) => ({ configurable: { sdkClient: sdk, theme: 'journalist' } });
+
+    it('articleWriterInputs passes the hero, then every photo the outline writer could place', () => {
+      const state = withKeptPhoto();
+      const inputs = articleWriterInputs(state);
+      const { photos } = inputs[inputs.length - 1];
+      expect(photos[0]).toEqual({ filename: 'hero.jpg', identifiedCharacters: ['Alex', 'Morgan', 'Sarah'], hero: true });
+      expect(photos.slice(1)).toEqual(buildAvailablePhotos(state, 'hero.jpg', 'whiteboard.jpg'));
+      expect(photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
+    });
+
+    it('the article writer and its reworker list every photo once, under PHOTOS, and the packages point at theirs by filename', async () => {
+      const state = withKeptPhoto();
+      state.arcEvidencePackages[1].photos = [{ filename: 'whiteboard.jpg', characters: ['Riley'] }];
+      const writer = recordingSdk();
+      await generateContentBundle({ ...state, contentBundle: null }, cfg(writer));
+      const rework = recordingSdk();
+      await reviseContentBundle({ ...state, contentBundle: null, _previousContentBundle: clone(PREVIOUS_BUNDLE), articleRevisionCount: 1 }, cfg(rework));
+      for (const prompt of [writer.mock.calls[0][0].prompt, rework.mock.calls[0][0].prompt]) {
+        const photos = prompt.slice(prompt.indexOf('\nPHOTOS ('), prompt.indexOf('<RECORD>'));
+        expect(photos).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
+        expect(count(prompt, 'p2.jpg: Alex')).toBe(1);
+        expect(prompt).toContain('ARC PHOTOS:\n- p2.jpg\n');
+        // The whiteboard photo a package names is neither listed nor pointed at.
+        expect(prompt).not.toContain('whiteboard.jpg');
+      }
+    });
+
+    it('the article judge\'s PHOTOS are the same entries, built from the article writer\'s inputs', () => {
+      const state = withKeptPhoto();
+      const prompt = userFor('article', state);
+      const section = prompt.slice(prompt.indexOf('\nPHOTOS ('), prompt.indexOf('CONTENT BUNDLE:'));
+      expect(section).toContain('PHOTOS (the 3 photos the article writer was given');
+      expect(section).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
+    });
+
+    it('with no stored hero, the writer and the judge list every kept photo and mark none as the hero', () => {
+      const state = withKeptPhoto();
+      delete state.heroImage;
+      const inputs = articleWriterInputs(state);
+      expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
+      expect(userFor('article', state)).not.toContain('[hero image]');
+    });
+
+    // T13: "an excluded photo never does" appear. The director excludes a photo at the
+    // character-IDs stop, and finalizePhotoAnalyses (photo-nodes.js) marks its analysis
+    // `excluded: true` with no names. buildAvailablePhotos did not read the mark, so the
+    // article's set listed the photo under a header that calls it kept, and photosTruth
+    // then asked for it in print (3.9 fix round 1). Since the 4b fix batch it reads the
+    // one rule, isPhotoExcluded: the director's decision first, and the mark for a photo
+    // no mapping names, as here.
+    const markExcluded = (state, filename) => {
+      state.photoAnalyses.analyses = [
+        ...state.photoAnalyses.analyses.filter((a) => a.filename !== filename),
+        { filename, excluded: true, identifiedCharacters: [], characterDescriptions: [{ description: 'a player mid-sentence' }] }
+      ];
+      return state;
+    };
+    /** The writer's and the reworker's user prompts, and the article judge's, for one state. */
+    const articlePrompts = async (state) => {
+      const writer = recordingSdk();
+      await generateContentBundle({ ...state, contentBundle: null }, cfg(writer));
+      const rework = recordingSdk();
+      await reviseContentBundle({ ...state, contentBundle: null, _previousContentBundle: clone(PREVIOUS_BUNDLE), articleRevisionCount: 1 }, cfg(rework));
+      return { writer: writer.mock.calls[0][0].prompt, rework: rework.mock.calls[0][0].prompt, judge: userFor('article', state) };
+    };
+
+    it('a photo the director excluded reaches neither the writer, its reworker nor the judge', async () => {
+      const state = markExcluded(withKeptPhoto(), 'p3-excluded.jpg');
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p3-excluded.jpg'];
+      state.photoDescriptions = { ...state.photoDescriptions, 'p3-excluded.jpg': 'Morgan mid-sentence, eyes half shut.' };
+      const inputs = articleWriterInputs(state);
+      expect(inputs[2]).toBe('hero.jpg');
+      expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
+      const prompts = await articlePrompts(state);
+      expect(prompts.judge).toContain('PHOTOS (the 3 photos the article writer was given');
+      for (const prompt of Object.values(prompts)) {
+        expect(prompt).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
+        expect(prompt).not.toContain('p3-excluded.jpg');
+        expect(prompt).not.toContain('Morgan mid-sentence, eyes half shut.');
+      }
+    });
+
+    it('a stored hero the director excluded is no hero: the writer is told none was chosen, and nothing lists it', async () => {
+      const state = markExcluded(withKeptPhoto(), 'hero.jpg');
+      const inputs = articleWriterInputs(state);
+      expect(inputs[2]).toBeNull();
+      expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['p2.jpg', 'p9.jpg']);
+      const prompts = await articlePrompts(state);
+      expect(prompts.writer).toContain('HERO IMAGE: none chosen: use the first photo the outline places');
+      expect(prompts.rework).toContain('HERO IMAGE: none chosen: use the first photo the outline places');
+      expect(prompts.judge).toContain('PHOTOS (the 2 photos the article writer was given: every photo the director has not excluded');
+      for (const prompt of Object.values(prompts)) {
+        expect(prompt).not.toContain('hero.jpg');
+        expect(prompt).not.toContain('[hero image]');
+      }
+      // The detective is parked (spec D13): its writer keeps the hero it was given.
+      const detective = markExcluded(stateFor('detective', { heroImage: 'hero.jpg' }), 'hero.jpg');
+      expect(articleWriterInputs(detective)[2]).toBe('hero.jpg');
     });
   });
 });

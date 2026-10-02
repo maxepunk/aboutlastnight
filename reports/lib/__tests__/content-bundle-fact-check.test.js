@@ -246,7 +246,9 @@ describe('photo references (class 7)', () => {
     expect(result.structuralIssues.join(' ')).toContain('aln0627-3.jpg');
   });
 
-  it('(g) flags an inline photo block and a top-level photos entry', () => {
+  // Phase 3 (3.4, HY1): the top-level `photos` list never prints, so the check no
+  // longer reads it; an inline photo block and the hero do print.
+  it('(g) flags an inline photo block, and never reads the top-level photos list, which does not print', () => {
     const result = factCheckContentBundle(baseArgs({
       sessionPhotos: ['/data/071126/photos/aln0711-1.jpg'],
       contentBundle: {
@@ -255,7 +257,7 @@ describe('photo references (class 7)', () => {
         photos: [{ filename: 'also-missing.png', caption: 'y' }]
       }
     }));
-    expect(result.photoReferences.invalid.sort()).toEqual(['also-missing.png', 'ghost.jpg']);
+    expect(result.photoReferences.invalid).toEqual(['ghost.jpg']);
   });
 
   it('accepts a reference that matches a session photo basename', () => {
@@ -278,6 +280,105 @@ describe('photo references (class 7)', () => {
     }));
     expect(result.structuralIssues).toEqual([]);
     expect(result.advisoryWarnings.join(' ')).toMatch(/could not verify/i);
+  });
+
+  // The 4b fix batch (T13: an excluded photo never appears; the integrator's ruling): one
+  // rule decides a kept photo, and the evaluator passes the photos it excludes
+  // (buildFactCheckArgs). An excluded photo is no usable reference, and a fix line offers
+  // only the kept photos: it used to offer every session photo, so a rework could be told
+  // to place one the director pulled.
+  describe('a photo the director excluded', () => {
+    const PHOTOS = ['/data/071126/photos/aln0711-1.jpg', '/data/071126/photos/aln0711-2.jpg', '/data/071126/photos/aln0711-3.jpg'];
+    const placing = (...filenames) => ({
+      sections: [{ id: 'lede', type: 'narrative', content: filenames.map((filename) => ({ type: 'photo', filename, caption: 'x' })) }],
+      evidenceCards: [],
+      heroImage: { filename: 'aln0711-1.jpg' }
+    });
+
+    it('is an invalid reference, and the fix line offers only the kept photos', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, excludedPhotos: ['/data/071126/photos/aln0711-2.jpg'], contentBundle: placing('aln0711-2.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['aln0711-2.jpg']);
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "aln0711-2.jpg": the director excluded this photo. Use one of [aln0711-1.jpg, aln0711-3.jpg] or remove the reference.'
+      ]);
+    });
+
+    it("is left out of the photos a reference to no session photo is offered", () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, excludedPhotos: ['aln0711-2.jpg'], contentBundle: placing('ghost.jpg')
+      }));
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "ghost.jpg": not one of this session\'s photos. Use one of [aln0711-1.jpg, aln0711-3.jpg] or remove the reference.'
+      ]);
+    });
+
+    it('with every photo excluded, a fix line asks only for the reference to go', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, excludedPhotos: PHOTOS, contentBundle: placing('aln0711-3.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['aln0711-1.jpg', 'aln0711-3.jpg']);
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "aln0711-1.jpg": the director excluded this photo. Remove the reference.',
+        'Invalid photo reference "aln0711-3.jpg": the director excluded this photo. Remove the reference.'
+      ]);
+    });
+  });
+
+  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays
+  // out of the article): the whiteboard photo is never a usable reference. A printed one
+  // is an invalid reference whose message says what it is, and no fix line offers it.
+  // The evaluator passes its filename from where the writers get it (buildFactCheckArgs,
+  // whiteboardFilenameOf). It used to be offered as a photo to use.
+  describe('the whiteboard photo', () => {
+    const PHOTOS = ['/data/071126/photos/aln0711-1.jpg', '/data/071126/photos/aln0711-2.jpg', '/data/071126/photos/whiteboard.jpg'];
+    const placing = (...filenames) => ({
+      sections: [{ id: 'lede', type: 'narrative', content: filenames.map((filename) => ({ type: 'photo', filename, caption: 'x' })) }],
+      evidenceCards: [],
+      heroImage: { filename: 'aln0711-1.jpg' }
+    });
+    const WORKING_NOTES = "this is the whiteboard, the room's working notes, and its photo stays out of the article.";
+
+    it("is an invalid reference when printed, with a message that says it is the room's working notes", () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, whiteboardPhoto: 'whiteboard.jpg', contentBundle: placing('aln0711-2.jpg', 'whiteboard.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+      expect(result.structuralIssues).toEqual([
+        `Invalid photo reference "whiteboard.jpg": ${WORKING_NOTES} Use one of [aln0711-1.jpg, aln0711-2.jpg] or remove the reference.`
+      ]);
+    });
+
+    it('is an invalid reference as the hero too, matched by its basename from a path', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS,
+        whiteboardPhoto: '/data/071126/photos/whiteboard.jpg',
+        contentBundle: { sections: [], evidenceCards: [], heroImage: { filename: 'whiteboard.jpg' } }
+      }));
+      expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+      expect(result.structuralIssues[0]).toContain(WORKING_NOTES);
+    });
+
+    it('is offered by no fix line', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, whiteboardPhoto: 'whiteboard.jpg', excludedPhotos: ['aln0711-2.jpg'], contentBundle: placing('ghost.jpg')
+      }));
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "ghost.jpg": not one of this session\'s photos. Use one of [aln0711-1.jpg] or remove the reference.'
+      ]);
+    });
+
+    it("is an invalid reference even when the session's photo list is empty, which leaves the other references unverified", () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: [], whiteboardPhoto: 'whiteboard.jpg', contentBundle: placing('whiteboard.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+      expect(result.structuralIssues).toEqual([`Invalid photo reference "whiteboard.jpg": ${WORKING_NOTES} Remove the reference.`]);
+      expect(result.advisoryWarnings.filter((text) => /could not verify/i.test(text))).toEqual([
+        "Could not verify 1 photo reference(s): this session's photo list is empty in state, so there is nothing to check the filenames against."
+      ]);
+    });
   });
 });
 
@@ -380,12 +481,17 @@ describe('advisory-only checks (I2b)', () => {
 
   it('names exactly the uncalibrated checks', () => {
     // 'repeatedAbsence' joined in phase 2 (2.6): a phrase count with no live session behind it.
-    expect(FACT_CHECK_ADVISORY_ONLY).toEqual(['npcPronouns', 'leakedExample', 'repeatedAbsence']);
+    // Phase 3 (3.4) added five code checks, each advisory until a live session shows it right.
+    expect(FACT_CHECK_ADVISORY_ONLY).toEqual([
+      'npcPronouns', 'leakedExample', 'repeatedAbsence', 'emDash', 'productionWords', 'novaPronoun', 'length', 'headCount'
+    ]);
   });
 
   it('reports an NPC pronoun contradiction as an advisory, not a structural failure', () => {
+    // Phase 3 (3.4): the check reads the theme's NPC entries (`npcs`), so it can also
+    // scan an NPC with no declared pronoun (Blake).
     const result = factCheckContentBundle(baseArgs({
-      npcPronouns: { Marcus: 'he/him' },
+      npcs: [{ name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him' }],
       contentBundle: {
         sections: [{
           id: 'lede',
@@ -592,8 +698,15 @@ describe('ellipsis normalisation', () => {
   });
 });
 
-describe('the remote reporter-mode message asks for attribution (phase 2, 2.6)', () => {
-  it('keeps its prefix and tells the rework to attribute and to state the absence at most once', () => {
+describe('the remote reporter-mode message follows the remote mode block (phase 2, 2.6)', () => {
+  // Phase 3 (3.4): exposed memories reach Nova by turn-in (spec T6, T8; plan review I6).
+  // The line used to send every exposure through "the people who told you", which pushes
+  // a rework to name or invent exposers.
+  // Phase 3 (3.9): a rework reads this line as must-fix, so it says what mode-remote says
+  // since round 7 (R13): Nova never claims to have seen or heard the room, and the event
+  // is told as a scene, attributed where it matters. It no longer sends every room event
+  // through an attribution.
+  it('keeps its prefix and tells the rework to tell the event as a scene, attributed where it matters', () => {
     const result = factCheckContentBundle(baseArgs({
       reportingMode: 'remote',
       contentBundle: {
@@ -605,8 +718,11 @@ describe('the remote reporter-mode message asks for attribution (phase 2, 2.6)',
     const [message] = result.structuralIssues;
     // The console groups this message under reporter-mode violations by this prefix.
     expect(message.startsWith('Reporter-mode violation (remote): "i was in the room".')).toBe(true);
-    expect(message).toContain('attributing it to the people who told you');
-    expect(message).toContain('state your absence at most once');
+    expect(message).toContain('never claims to have seen or heard the room (T8)');
+    expect(message).toContain('Tell the moment as a scene, with attribution where it matters: a line someone was overheard saying, a claim about a person.');
+    expect(message).not.toContain("attributing the room's events to the people in it");
+    expect(message).not.toContain("the room's events reached Nova from people in it");
+    expect(message).not.toContain('at most once');
   });
 });
 
@@ -634,9 +750,25 @@ describe('repeated absence statements, remote only (phase 2, 2.6)', () => {
     const advisories = absenceAdvisories(result);
     expect(advisories).toHaveLength(1);
     expect(advisories[0]).toMatch(/^Absence stated 2 times \(remote\): "I was not there", "I was not in that room"\./);
-    expect(advisories[0]).toContain('attributing it to the people who told you');
+    // Phase 3 (3.9): the remote mode block of round 7 (R13): said once, early, then scenes.
+    expect(advisories[0]).toContain('Nova says so once, early; after that, the room\'s events are told as scenes (T8).');
+    expect(advisories[0]).not.toContain("attributing the room's events to the people in it");
+    expect(advisories[0]).not.toContain('at most once');
     expect(result.structuralIssues).toEqual([]);
     expect(result.reporterMode.violations).toEqual([]);
+  });
+
+  it('the detective keeps its own wording', () => {
+    const result = factCheckContentBundle(baseArgs({
+      theme: 'detective',
+      reportingMode: 'remote',
+      contentBundle: bundle({ deck: 'I was not there.', paragraphs: ['I was not in that room.'] })
+    }));
+    expect(absenceAdvisories(result)[0]).toBe(
+      'Absence stated 2 times (remote): "I was not there", "I was not in that room". ' +
+      'Say that you were not in the room at most once in the whole article, or not at all; ' +
+      'everywhere else, show where each fact came from by attributing it to the people who told you.'
+    );
   });
 
   it('allows one statement', () => {
@@ -1005,5 +1137,431 @@ describe('roster coverage counts printed text only (slice 2.5)', () => {
   it('reads the journalist page when no theme is given', () => {
     expect(coverage({ headline: { main: 'Mel and the ledger' } })).toEqual([]);
     expect(visibleText({ headline: { main: 'Mel' } })).toBe(visibleText({ headline: { main: 'Mel' } }, 'journalist'));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3, brief 3.4: the new code checks. Each is an advisory until a live
+// session shows it right, has its own message prefix, and reads the narrator's
+// text (headline, kicker, deck, paragraphs) with quoted spans stripped: never a
+// card, a quote block, a caption or a player's quoted line.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('the new advisory checks (phase 3, 3.4)', () => {
+  const { FACT_CHECK_ADVISORY_ONLY } = require('../content-bundle-fact-check');
+
+  // The canon as phase 3 states it (spec T9, T15): Marcus he/him, Blake and Nova
+  // with no pronoun, the Valet another name for Blake.
+  const NPCS = [
+    { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him' },
+    { name: 'Nova', fullName: 'Nova' },
+    { name: 'Blake', fullName: 'Blake' },
+    { name: 'Valet', aliasOf: 'Blake' }
+  ];
+  const ROSTER9 = ['Alex', 'Ashe', 'Jess', 'Kai', 'Mel', 'Remi', 'Sam', 'Sarah', 'Vic'];
+  const PREFIXES = {
+    emDash: "Em-dash in the narrator's prose:",
+    productionWords: 'Production word in print:',
+    novaPronoun: 'Gendered pronoun for Nova:',
+    npcPronouns: 'Pronoun error:',
+    length: 'Over length:',
+    headCount: 'Head count:'
+  };
+
+  const paragraphs = (...texts) => ({
+    headline: { main: 'The Room Chose Vic', kicker: 'NovaNews', deck: 'A verdict, a ledger.' },
+    sections: [{ id: 'the-story', type: 'narrative', content: texts.map((text) => ({ type: 'paragraph', text })) }],
+    evidenceCards: []
+  });
+  const withBlocks = (...blocks) => ({
+    headline: { main: 'h', kicker: 'k', deck: 'd' },
+    sections: [{ id: 'the-story', type: 'narrative', content: blocks }],
+    evidenceCards: []
+  });
+  const run = (contentBundle, over = {}) => factCheckContentBundle(baseArgs({ contentBundle, theme: 'journalist', npcs: NPCS, ...over }));
+  const flagged = (result, key) => result.advisoryWarnings.filter((w) => w.startsWith(PREFIXES[key]));
+  const words = (n) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+
+  it('adds each new check to the advisory-only list', () => {
+    expect(FACT_CHECK_ADVISORY_ONLY).toEqual([
+      'npcPronouns', 'leakedExample', 'repeatedAbsence', 'emDash', 'productionWords', 'novaPronoun', 'length', 'headCount'
+    ]);
+  });
+
+  describe('em-dashes', () => {
+    it('flags one in a narrator paragraph, saying where', () => {
+      const result = run(paragraphs('The ledger moved — twice — before noon.'));
+      const [message] = flagged(result, 'emDash');
+      expect(message).toBeDefined();
+      expect(message).toContain('section "the-story", paragraph 1');
+      expect(message).toContain('2 em-dashes');
+    });
+
+    it('flags one in the deck', () => {
+      const result = run({ ...paragraphs('Plain prose.'), headline: { main: 'h', deck: 'A verdict — and a ledger.' } });
+      expect(flagged(result, 'emDash')[0]).toContain('the deck');
+    });
+
+    it('stays silent on an em-dash inside a quoted span, a card or a quote block', () => {
+      const result = run(withBlocks(
+        { type: 'paragraph', text: 'Vic said it plainly: “It was mine — all of it.”' },
+        inlineCard({ content: 'You leave — you never come back.' }),
+        { type: 'quote', text: 'Worth it — finally.', attribution: 'Marcus' }
+      ));
+      expect(flagged(result, 'emDash')).toEqual([]);
+    });
+  });
+
+  describe('production words (T14)', () => {
+    it('flags a bare token, the GM, a tier and the director in narrator prose', () => {
+      const result = run(paragraphs(
+        'Every token on the board told a story.',
+        'The GM called time, and the director watched the tier three memories go.'
+      ));
+      const [message] = flagged(result, 'productionWords');
+      expect(message).toMatch(/"token"/);
+      expect(message).toMatch(/"GM"/);
+      expect(message).toMatch(/"tier"/);
+      expect(message).toMatch(/"director"/);
+      expect(message).toContain('section "the-story", paragraph 2');
+    });
+
+    it('stays silent on the fiction\'s own words', () => {
+      const result = run(paragraphs(
+        'Six memory tokens went up on the Evidence Board, and three were buried.',
+        'NeurAI\'s board of directors paid for every memory sold.'
+      ));
+      expect(flagged(result, 'productionWords')).toEqual([]);
+    });
+
+    it('never flags a quoted memory\'s "token", in a quoted span or a card', () => {
+      const result = run(withBlocks(
+        { type: 'paragraph', text: 'Alex wrote it down: “I held the token too long, and the timer ran out.”' },
+        inlineCard({ content: 'You turn the token over in your hand and the GM laughs.' }),
+        { type: 'quote', text: 'Tier one, tops.', attribution: 'Vic' }
+      ));
+      expect(flagged(result, 'productionWords')).toEqual([]);
+    });
+  });
+
+  describe('Nova is never gendered (T9)', () => {
+    it('flags a gendered pronoun for Nova', () => {
+      const result = run(paragraphs('Nova filed her story before dawn.'));
+      const [message] = flagged(result, 'novaPronoun');
+      expect(message).toContain('"Nova filed her"');
+      expect(message).toContain('section "the-story", paragraph 1');
+    });
+
+    it('holds whatever pronoun an NPC list declares for Nova', () => {
+      const npcs = [{ name: 'Nova', fullName: 'Nova', pronouns: 'she/her' }, ...NPCS.filter((e) => e.name !== 'Nova')];
+      const result = run(paragraphs('Nova filed her story before dawn.'), { npcs });
+      expect(flagged(result, 'novaPronoun')).toHaveLength(1);
+      // Never also reported against a declared pronoun.
+      expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    it('stays silent on NovaNews, on another person in the sentence, and on a quoted line', () => {
+      const result = run(paragraphs(
+        'NovaNews ran his statement in full.',
+        'Nova asked Mel whether her vote had moved.',
+        'Mel told the room, “Nova will print what she likes.”'
+      ));
+      expect(flagged(result, 'novaPronoun')).toEqual([]);
+    });
+  });
+
+  describe('Blake and Marcus (T9, extending the NPC check)', () => {
+    it('flags a gendered pronoun for Blake that neither the notes nor the roster give', () => {
+      const result = run(paragraphs('Blake said he would pay double.'));
+      const [message] = flagged(result, 'npcPronouns');
+      expect(message).toMatch(/^Pronoun error: Blake /);
+      expect(message).toContain('"Blake said he"');
+    });
+
+    it('reads the Valet as Blake', () => {
+      const result = run(paragraphs('The Valet said he would pay double.'));
+      expect(flagged(result, 'npcPronouns')[0]).toMatch(/^Pronoun error: Blake /);
+    });
+
+    it('stays silent on a Blake pronoun the director\'s notes give', () => {
+      const result = run(paragraphs('Blake said he would pay double.'), {
+        directorText: 'Blake worked the corner by the bar all morning. Later Blake told Sam he was out of cash.'
+      });
+      expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    it('stays silent on a Blake pronoun the roster gives', () => {
+      const result = run(paragraphs('Blake said he would pay double.'), { rosterPronouns: { Blake: 'he/him' } });
+      expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    it('flags a pronoun the notes do not give, beside one they do', () => {
+      const result = run(paragraphs('Blake said she would pay double.'), { directorText: 'Blake said he was leaving.' });
+      expect(flagged(result, 'npcPronouns')[0]).toContain('"Blake said she"');
+    });
+
+    it('stays silent on a player\'s quoted line and on a card', () => {
+      const result = run(withBlocks(
+        { type: 'paragraph', text: 'Mel put it this way: “Blake told me he would pay.”' },
+        inlineCard({ content: 'Blake leans in and he names a number.' })
+      ));
+      expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    // Fix 3.4b (review finding 3): the scans read a possessive after the name, with
+    // findPronounNear's conditions, and keep the object forms (him) out. Fix 3.4c (the
+    // integrator's ruling of 2026-10-01): the possessive read is "his" alone. On the 53
+    // published reports a "her" after Marcus was someone else's ("Marcus buried her
+    // exposé"): 5 false flags in 4 reports and no true one.
+    it('reads "his" after Blake as Blake\'s, and never flags it after Marcus', () => {
+      const blake = flagged(run(paragraphs('Blake counted his money.')), 'npcPronouns');
+      expect(blake).toHaveLength(1);
+      expect(blake[0]).toMatch(/^Pronoun error: Blake /);
+      expect(blake[0]).toContain('"Blake counted his"');
+      expect(flagged(run(paragraphs('Marcus signed his name to the transfer.')), 'npcPronouns')).toEqual([]);
+    });
+
+    // Fix 3.4cb: "hers" goes with "her". In "Marcus took what was hers" the word is
+    // someone else's.
+    it('never reads "her" or "hers" after Marcus or Blake as theirs (3.4c)', () => {
+      const sentences = [
+        'Marcus buried her exposé.',
+        'Marcus had cleaned out her bank account.',
+        'Marcus signed her name to the transfer.',
+        'The Valet bought her memory.',
+        'Marcus took what was hers.'
+      ];
+      expect(sentences.map((s) => [s, flagged(run(paragraphs(s)), 'npcPronouns')]))
+        .toEqual(sentences.map((s) => [s, []]));
+    });
+
+    it('reads the "his" after a "her" as Blake\'s, and never the "her" (3.4c)', () => {
+      const blake = flagged(run(paragraphs('Blake showed her his ledger.')), 'npcPronouns');
+      expect(blake).toHaveLength(1);
+      expect(blake[0]).toMatch(/^Pronoun error: Blake /);
+      expect(blake[0]).toContain('"Blake showed her his"');
+    });
+
+    // 092626's article: "her" belongs to the reporter, the subject of the clause; Marcus
+    // is the object of "about". A possessive after a name a preposition governs is not
+    // read as that person's: "his" after "to Blake" is the buyer's.
+    it('stays silent on 092626\'s sentence, where the possessive belongs to the clause\'s subject', () => {
+      const result = run(paragraphs(
+        'The last reporter who wrote about Marcus had her exposé buried.',
+        'The last reporter who tried to tell the truth about Marcus had her exposé buried and lost her job over it.',
+        'The last buyer who sold to Blake spent his cut by noon.'
+      ));
+      expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    it('never reads an object pronoun after Marcus or Blake as theirs', () => {
+      const result = run(paragraphs(
+        'Blake paid him well for the memory.',
+        'Blake paid her well for the memory.',
+        'Marcus hired her as his assistant.',
+        'Marcus told her to sell.'
+      ));
+      expect(flagged(result, 'npcPronouns')).toEqual([]);
+    });
+
+    it('a pronoun passed over does not hide a later one in the same sentence', () => {
+      const result = run(paragraphs('Blake paid her well, and then he left.'));
+      expect(flagged(result, 'npcPronouns')[0]).toContain('"Blake paid her well, and then he"');
+      const governed = run(paragraphs('The deal with Blake cost his buyers more than he admitted.'));
+      expect(flagged(governed, 'npcPronouns')[0]).toContain('"Blake cost his buyers more than he"');
+    });
+
+    it('flags Marcus written she, and still flags Marcus written they', () => {
+      const she = run(paragraphs('Marcus said she would sell the company.'));
+      expect(flagged(she, 'npcPronouns')[0]).toMatch(/^Pronoun error: Marcus takes he\/him/);
+      const they = run(paragraphs('Marcus signed their own name to the transfer.'));
+      expect(flagged(they, 'npcPronouns')[0]).toMatch(/^Pronoun error: Marcus takes he\/him/);
+      expect(flagged(run(paragraphs('Marcus said he would sell the company.')), 'npcPronouns')).toEqual([]);
+    });
+  });
+
+  describe('length (C4, R4)', () => {
+    it('flags the narrator\'s prose above 1,800 words, with the count and where the words are', () => {
+      const result = run({ headline: { main: 'one two', deck: 'three four' }, sections: [
+        { id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text: words(300) }] },
+        { id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: words(1497) }] }
+      ], evidenceCards: [] });
+      const [message] = flagged(result, 'length');
+      expect(message).toContain('1,801 words');
+      expect(message).toContain('lede 300');
+      expect(message).toContain('the-story 1,497');
+    });
+
+    it('stays silent at 1,800, and never counts a card or a quote block', () => {
+      const result = run({ headline: { main: 'one two', deck: 'three four' }, sections: [
+        { id: 'the-story', type: 'narrative', content: [
+          { type: 'paragraph', text: words(1796) },
+          inlineCard({ content: words(500) }),
+          { type: 'quote', text: words(200), attribution: 'Vic' }
+        ] }
+      ], evidenceCards: [] });
+      expect(flagged(result, 'length')).toEqual([]);
+    });
+  });
+
+  describe('head count (T10)', () => {
+    const roster = ROSTER9;
+
+    it('flags a statement of how many were in the room that disagrees with the roster', () => {
+      const result = run(paragraphs('There were ten people in the room when the vote turned.'), { roster });
+      const [message] = flagged(result, 'headCount');
+      expect(message).toMatch(/ten people in the room/);
+      expect(message).toContain('9 players');
+    });
+
+    it('stays silent when it agrees', () => {
+      const result = run(paragraphs('Nine people were in that room, and nine stories left it.'), { roster });
+      expect(flagged(result, 'headCount')).toEqual([]);
+    });
+
+    it('never reads a vote count or an account count as a head count', () => {
+      const result = run(paragraphs(
+        'Six votes went to an accidental overdose.',
+        'Eight accounts took money before noon, and two people in the room never sold at all.'
+      ), { roster });
+      expect(flagged(result, 'headCount')).toEqual([]);
+    });
+
+    it('never reads a player\'s quoted line', () => {
+      const result = run(paragraphs('Sam was blunt: “There were ten of us in the room, and nobody talked.”'), { roster });
+      expect(flagged(result, 'headCount')).toEqual([]);
+    });
+
+    // Fix 3.4b (review finding 2): a relative clause after "the N people in the room",
+    // or what only they did after "N players sat in the room", picks out part of the room.
+    it('never reads a statement about part of the room as a head count', () => {
+      const result = run(paragraphs(
+        'The two people in the room who never sold walked out clean.',
+        'Three players sat in the room and never said a word.',
+        'The two players in the room that Marcus had hired kept quiet.',
+        'Two people stood in that room while the rest voted.'
+      ), { roster });
+      expect(flagged(result, 'headCount')).toEqual([]);
+    });
+
+    it('still flags a whole-room head count in those forms', () => {
+      for (const text of [
+        'The eight people in the room voted.',
+        'The eight people in the room that morning voted.',
+        'Eight players sat in the room.',
+        'Eight people stood in the warehouse; the vote was close.'
+      ]) {
+        const [message] = flagged(run(paragraphs(text), { roster }), 'headCount');
+        expect([text, message]).toEqual([text, expect.stringContaining('9 players')]);
+      }
+    });
+
+    it('counts a guest reporter on the roster once, as one of the players', () => {
+      const guestReporter = { name: 'Ashe Motoko', role: 'Contributing Reporter' };
+      expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporter }), 'headCount')).toEqual([]);
+      const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporter }), 'headCount');
+      expect(message).toContain('Ashe Motoko');
+      expect(message).toContain('9 players');
+    });
+
+    it('does not count a guest reporter who plays no character on the roster', () => {
+      const guestReporter = { name: 'Jordan Lee', role: 'Contributing Reporter' };
+      expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporter }), 'headCount')).toEqual([]);
+      const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporter }), 'headCount');
+      expect(message).toContain('Jordan Lee');
+    });
+  });
+
+  it('none of the new checks is structural, and each message has its own prefix', () => {
+    const result = run(paragraphs(
+      'There were ten people in the room — every token counted. Nova filed her story. Blake said he was done.',
+      'Marcus said she would sell.'
+    ), { roster: ROSTER9 });
+    // One message per check, and one per character for the pronoun check (Blake, Marcus).
+    const expected = { emDash: 1, productionWords: 1, novaPronoun: 1, npcPronouns: 2, length: 0, headCount: 1 };
+    for (const key of Object.keys(PREFIXES)) {
+      expect([key, flagged(result, key).length]).toEqual([key, expected[key]]);
+      expect(result.structuralIssues.some((s) => s.startsWith(PREFIXES[key]))).toBe(false);
+    }
+  });
+
+  it('the detective theme keeps today\'s checks only', () => {
+    const result = factCheckContentBundle(baseArgs({
+      theme: 'detective',
+      npcs: NPCS,
+      roster: ROSTER9,
+      contentBundle: paragraphs('There were ten people in the room — every token counted. Nova filed her story. Blake said he was done.')
+    }));
+    for (const key of ['emDash', 'productionWords', 'novaPronoun', 'length', 'headCount']) {
+      expect([key, flagged(result, key)]).toEqual([key, []]);
+    }
+    expect(result.advisoryWarnings.some((w) => w.startsWith('Pronoun error: Blake'))).toBe(false);
+  });
+});
+
+describe('the fix lines follow the rules (phase 3, 3.4)', () => {
+  const remote = (text) => factCheckContentBundle(baseArgs({
+    reportingMode: 'remote',
+    contentBundle: { headline: { main: 'h', deck: 'd' }, sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text }] }], evidenceCards: [] }
+  }));
+
+  it('the vote fix line never sends the rework to name the person who acted', () => {
+    const [message] = remote('Six memories went to the market and one of them was mine.').structuralIssues;
+    expect(message.startsWith('Reporter-mode violation: "one of them was mine".')).toBe(true);
+    expect(message).not.toMatch(/whoever/i);
+    expect(message).not.toMatch(/Attribute the action/);
+    expect(message).toMatch(/\bT8\b/);
+    expect(message).toMatch(/anonymous/);
+  });
+
+  // Phase 3 (3.9): the vote fix line states T8 as round 7 words it (R21): "accuses" means
+  // joining the room's accusation.
+  it('the vote fix line says what T8 says: Nova never votes, joins the room\'s accusation or exposes a memory', () => {
+    const [message] = remote('I voted with the room.').structuralIssues;
+    expect(message.startsWith('Reporter-mode violation: "i voted".')).toBe(true);
+    expect(message).toContain("Nova reports on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and is never one of the room (T8).");
+    expect(message).not.toContain('accuses or exposes');
+  });
+
+  it('the remote fix line has exposures reach Nova by turn-in, never as tips', () => {
+    const [message] = remote('I was in the room when the vote turned.').structuralIssues;
+    expect(message.startsWith('Reporter-mode violation (remote): "i was in the room".')).toBe(true);
+    expect(message).not.toMatch(/\btips?\b/i);
+    expect(message).toMatch(/turned in to Nova/);
+  });
+
+  it('the detective keeps its reporter-mode wording', () => {
+    const detective = (text) => factCheckContentBundle(baseArgs({
+      theme: 'detective',
+      reportingMode: 'remote',
+      contentBundle: { headline: { main: 'h', deck: 'd' }, sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text }] }], evidenceCards: [] }
+    }));
+    expect(detective('I voted with the room.').structuralIssues).toContain(
+      'Reporter-mode violation: "i voted". The reporter covers the room, they are not a member of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.'
+    );
+    expect(detective('I was in the room when the vote turned.').structuralIssues).toContain(
+      'Reporter-mode violation (remote): "i was in the room". This session was covered remotely: every exposure, observation and the verdict arrived as a tip from someone who was there. Show where each fact came from by attributing it to the people who told you, and state your absence at most once.'
+    );
+  });
+
+  it('no message carries an em-dash', () => {
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote',
+      roster: ['Mel'],
+      sessionPhotos: ['a.jpg'],
+      npcs: [{ name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him' }, { name: 'Blake', fullName: 'Blake' }],
+      contentBundle: {
+        headline: { main: 'h', deck: 'I was not there.' },
+        sections: [{ id: 'lede', type: 'narrative', content: [
+          { type: 'paragraph', text: 'I was in the room and I voted. I was not in that room. Marcus signed their name. Blake said he was done — for good.' },
+          { type: 'photo', filename: 'not-ours.jpg', caption: 'x' },
+          inlineCard({ tokenId: 'vic001', content: 'A sentence that appears nowhere in the source text at all.' }),
+          inlineCard({ tokenId: 'nope999', content: 'Whatever this is, no session item carries that id.' })
+        ] }],
+        evidenceCards: []
+      }
+    }));
+    const messages = [...result.structuralIssues, ...result.advisoryWarnings];
+    expect(messages.length).toBeGreaterThan(6);
+    messages.forEach((m) => expect([m, m.includes('—')]).toEqual([m, false]));
   });
 });

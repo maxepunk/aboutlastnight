@@ -12,6 +12,18 @@
 const { getSdkClient } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { renderRecordView } = require('../../prompt-renderers/record-view');
+const { getThemeNPCEntries } = require('../../theme-config');
+
+/**
+ * The NPCs as the canon states them (theme-config.js, spec T15; M26). The journalist
+ * entries hold the canon, written theme-neutral; the detective's are parked with the
+ * detective (spec D13) and still carry the old wording, so this shared call reads the
+ * journalist's whatever the session's theme.
+ */
+const CANON_NPC_LINES = getThemeNPCEntries('journalist')
+  .filter(entry => entry && typeof entry === 'object' && !entry.aliasOf)
+  .map(entry => `- ${entry.fullName || entry.name}: ${entry.role}`)
+  .join('\n');
 
 const CHARACTER_EXTRACTION_SCHEMA = {
   type: 'object',
@@ -25,19 +37,23 @@ const CHARACTER_EXTRACTION_SCHEMA = {
           groups: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Named groups this character belongs to (e.g., "Stanford Four", "Ezra\'s mentees")'
+            // A placeholder, not a real in-game group: an example teaches the shape (3.6b
+            // fix batch, finding 8).
+            description: 'Named groups this character is a member of (e.g., "<group name>")'
           },
           relationships: {
             type: 'object',
             additionalProperties: { type: 'string' },
-            description: 'Map of other character names to relationship description'
+            description: 'Map of another character\'s name to this character\'s relationship to them'
           },
           role: {
             type: 'string',
-            description: 'Professional or social role (e.g., "Attorney", "Bartender", "Investor")'
+            description: 'Their professional or social role (e.g., "Attorney", "Investor")'
           }
         },
-        required: ['groups', 'relationships', 'role']
+        // Phase 3 (3.6): no field the record may not give is required. A role was,
+        // so the model gave every character one.
+        required: ['groups', 'relationships']
       }
     }
   },
@@ -73,30 +89,39 @@ async function extractCharacterData(state, config) {
     { buried: false }
   );
 
+  // Phase 3 (3.6): every field rests on a document's own words. The prompt used to
+  // accept relationships "strongly implied", ask for ALL members of a group, and give
+  // Blake as "the Black Market operator"; Blake and Marcus are now the canon lines
+  // (T15, D7). The document-only rule is stated once, last, with its reason (3.6 fix
+  // batch, item 5): the schema and the system prompt only name the fields. The field
+  // list defines a relationship as one a document states, to another character, so
+  // the list itself asks for nothing inferred (3.6b fix batch, finding 2: "their
+  // relationship to each other character" asked for one entry per character), and
+  // its group example is a placeholder, not a real in-game group (finding 8). Phase
+  // 3 (3.2; M26): the NPC lines are theme-config's canon lines, read from there, so
+  // the canon is worded once for this call and every writer and judge.
   const prompt = `Extract character relationship data from these documents and memories.
 
 ROSTER (characters in this session): ${roster.join(', ')}
 
-NPCs (not on roster, do NOT create top-level entries for these):
-- Marcus Blackwood: the deceased victim, founder of NeurAI
-- Blake/Valet: the Black Market operator
-- Nova: the journalist narrator
-NPCs may appear as relationship targets (e.g., "Marcus": "old friend") but should not have their own character entries.
+NPCs (not on the roster, so the result gives them no entry of their own):
+${CANON_NPC_LINES}
+NPCs may appear as relationship targets (e.g., "Marcus": "old friend").
 
 THE PAPER DOCUMENTS AND EXPOSED MEMORIES:
 ${record}
 
-For each ROSTER character mentioned in the evidence, extract:
-1. Named groups they belong to (e.g., "Stanford Four" — include ALL members of the group)
-2. Key relationships with other characters (role-based: "attorney for", "mentor to", "friend of")
-3. Their professional/social role
+For each ROSTER character the documents mention, give:
+1. groups: the named groups (e.g., "<group name>") they are a member of.
+2. relationships: each relationship a document states between them and another character (e.g., "attorney for", "mentor to", "friend of").
+3. role: their professional or social role.
 
-Only include data explicitly stated or strongly implied by the evidence. Do not infer or speculate.`;
+Take each entry from what a document states about that character, and leave a field empty when no document states it. The writers read these entries as what the documents say about each character, so an inferred group, relationship or role would reach the article as a claim no document makes.`;
 
   try {
     const result = await sdk({
       prompt,
-      systemPrompt: 'You extract structured character data from narrative evidence. Be factual and precise. Only report what the evidence explicitly states.',
+      systemPrompt: 'You extract structured character data from narrative evidence.',
       model: 'haiku',
       jsonSchema: CHARACTER_EXTRACTION_SCHEMA,
       // Inherits the standardized 10-min model default (lib/llm/client.js).

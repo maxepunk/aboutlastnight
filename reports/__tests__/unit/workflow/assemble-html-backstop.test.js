@@ -16,11 +16,11 @@
  *
  * Mock pattern matches the working arc-specialist-nodes-failloud.test.js: observability is
  * a full no-op shape so the exported (traceNode-wrapped) assembleHtml is callable directly.
- * The success path requires `./node-helpers` (validateFinancialData), which transitively
- * loads `lib/llm/index.js` → it destructures `createTracedSdkQuery`/`createProgressFromTrace`
- * from observability at load time and calls `createTracedSdkQuery(impl)`. So the mock MUST
- * provide those (as passthroughs) or the require crashes — a complete no-op shape, not a
- * partial one.
+ * The success path used to require `./node-helpers` (validateFinancialData, removed in
+ * phase 3, M29), which transitively loads `lib/llm/index.js` → it destructures
+ * `createTracedSdkQuery`/`createProgressFromTrace` from observability at load time. The
+ * mock keeps providing those (as passthroughs), so a later require of node-helpers cannot
+ * crash it — a complete no-op shape, not a partial one.
  *
  * Pollution guard: the success case injects a temp `baseDir` (mkdtempSync) via
  * config.configurable, so the node writes report-TEST.html into an OS temp dir, never the

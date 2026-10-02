@@ -16,7 +16,7 @@ const {
 describe('verdictView', () => {
   it('says a no-culprit verdict is one, so an empty accused is not "not parsed"', () => {
     expect(verdictView({ verdictKind: 'overdose', accused: [], charge: 'Accidental overdose' }))
-      .toEqual({ verdictKind: 'overdose', noCulprit: true, label: 'an overdose' });
+      .toEqual({ verdictKind: 'overdose', noCulprit: true, blamesNoCharacter: false, label: 'an overdose' });
     expect(verdictView({ verdictKind: 'accident' }).noCulprit).toBe(true);
     expect(verdictView({ verdictKind: 'self-harm' }).noCulprit).toBe(true);
     expect(verdictView({ verdictKind: 'other' }).noCulprit).toBe(true);
@@ -24,13 +24,13 @@ describe('verdictView', () => {
 
   it('a culprit verdict names someone', () => {
     expect(verdictView({ verdictKind: 'culprit', accused: ['Vic'] }))
-      .toEqual({ verdictKind: 'culprit', noCulprit: false, label: 'the room named a culprit' });
+      .toEqual({ verdictKind: 'culprit', noCulprit: false, blamesNoCharacter: false, label: 'the room named a culprit' });
   });
 
   it('a parse from before verdict kinds, or an unknown kind, reports none', () => {
-    expect(verdictView({ accused: ['Vic'] })).toEqual({ verdictKind: '', noCulprit: false, label: '' });
-    expect(verdictView({ verdictKind: 'suicide-pact' })).toEqual({ verdictKind: '', noCulprit: false, label: '' });
-    expect(verdictView(null)).toEqual({ verdictKind: '', noCulprit: false, label: '' });
+    expect(verdictView({ accused: ['Vic'] })).toEqual({ verdictKind: '', noCulprit: false, blamesNoCharacter: false, label: '' });
+    expect(verdictView({ verdictKind: 'suicide-pact' })).toEqual({ verdictKind: '', noCulprit: false, blamesNoCharacter: false, label: '' });
+    expect(verdictView(null)).toEqual({ verdictKind: '', noCulprit: false, blamesNoCharacter: false, label: '' });
   });
 });
 
@@ -45,9 +45,22 @@ describe('exposuresView', () => {
   });
 
   it('drops rows with no token id and blanks the fields the log did not carry', () => {
-    const view = exposuresView([{ exposer: 'Ashe' }, null, { tokenId: 'mel004' }]);
-    expect(view).toEqual({ rows: [{ tokenId: 'mel004', exposer: '', time: '', owner: '' }], count: 1 });
-    expect(exposuresView(undefined)).toEqual({ rows: [], count: 0 });
+    const view = exposuresView([{ exposer: 'Ashe' }, null, { tokenId: 'mel004' }], 1);
+    expect(view).toEqual({ rows: [{ tokenId: 'mel004', exposer: '', time: '', owner: '' }], count: 1, noneExposed: false, logEmpty: false });
+    expect(exposuresView(undefined, undefined)).toEqual({ rows: [], count: 0, noneExposed: false, logEmpty: false });
+  });
+
+  it('says every memory counts as buried from the exposed-memory list disposition reads, not the per-row log (fix batch, finding 4)', () => {
+    const row = { tokenId: 'ale003', exposer: 'Ashe', time: '09:06 PM' };
+    // exposedTokens empty: every memory is buried, whatever the per-row log holds.
+    expect(exposuresView([], 0)).toMatchObject({ noneExposed: true, logEmpty: false });
+    expect(exposuresView([row], 0)).toMatchObject({ noneExposed: true, count: 1 });
+    // exposedTokens held memories: no alarm, and an empty per-row log is its own line.
+    expect(exposuresView([], 3)).toMatchObject({ noneExposed: false, logEmpty: true });
+    expect(exposuresView([row], 3)).toMatchObject({ noneExposed: false, logEmpty: false });
+    // A parse from before the count: nothing to say about disposition.
+    expect(exposuresView([], undefined)).toMatchObject({ noneExposed: false, logEmpty: true });
+    expect(exposuresView(undefined, undefined)).toMatchObject({ noneExposed: false, logEmpty: false });
   });
 });
 
@@ -123,5 +136,42 @@ describe('arcNoteInitial: the arc stop keeps its note across a remount', () => {
     expect(arcNoteInitial(undefined, 'Last send-back note.')).toBe('Last send-back note.');
     expect(arcNoteInitial('', 'Last send-back note.')).toBe('Last send-back note.');
     expect(arcNoteInitial(undefined, undefined)).toBe('');
+  });
+});
+
+// ── Phase 3, brief 3.5: the split vote and the institution verdict ──
+
+const { votesView } = require('../checkpoint-view-logic');
+
+describe('verdictView: a culprit verdict that names no character', () => {
+  it('says the room blamed an institution or an unnamed person, so an empty accused is not "not parsed"', () => {
+    expect(verdictView({ verdictKind: 'culprit', accused: [], charge: 'NeurAI\'s board' })).toEqual({
+      verdictKind: 'culprit', noCulprit: false, blamesNoCharacter: true,
+      label: 'the room blamed an institution or an unnamed person'
+    });
+  });
+
+  it('a culprit parse with neither accused nor charge stays "not parsed" (fix batch, finding 6)', () => {
+    expect(verdictView({ verdictKind: 'culprit', accused: [], charge: '' })).toEqual({
+      verdictKind: 'culprit', noCulprit: false, blamesNoCharacter: false, label: 'the room named a culprit'
+    });
+    expect(verdictView({ verdictKind: 'culprit', accused: [] }).blamesNoCharacter).toBe(false);
+  });
+});
+
+describe('votesView: the split final vote', () => {
+  it('lists every option with its count, the adopted one marked', () => {
+    expect(votesView({ votes: [{ option: 'Remi', count: 7, adopted: true }, { option: 'Vic', count: 4, adopted: false }] }))
+      .toEqual({ split: true, line: 'Remi 7 (adopted by the group statement), Vic 4' });
+  });
+
+  it('says when the statement adopted none of them', () => {
+    expect(votesView({ votes: [{ option: 'Alex', count: 4, adopted: false }, { option: 'Vic', count: 4, adopted: false }] }))
+      .toEqual({ split: true, line: 'Alex 4, Vic 4 (the group statement adopted none of these)' });
+  });
+
+  it('is empty when there is no split vote', () => {
+    expect(votesView({ accused: ['Vic'] })).toEqual({ split: false, line: '' });
+    expect(votesView(null)).toEqual({ split: false, line: '' });
   });
 });

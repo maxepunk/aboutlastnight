@@ -9,10 +9,18 @@
  * produced from another tree (the pin's hashes were taken from df51bc0, before the
  * writers were split into section builders).
  *
+ * The rule set's files are stubs too (phase 3, task 3.1): the render points the rule
+ * set's default root at fixtures/rules/, one line per file, so an edit to the rule
+ * text never moves a pin. A tree without lib/rule-set.js renders without it.
+ *
  * Not a test file (jest's testMatch is *.test.js).
  */
 
+const path = require('path');
 const { reworkFixtureState } = require('./rework-state');
+
+/** One-line stand-ins for the rule set's files (lib/rule-set.js). */
+const STUB_RULES_ROOT = path.join(__dirname, 'rules');
 
 const TAIL_NOTES = [
   { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'PIN NOTE A', at: '2026-01-01T00:00:00.000Z' },
@@ -42,6 +50,18 @@ function recordingSdk(value) {
  * @returns {Promise<Object>} name -> "SYSTEM\n=====\nUSER" for each writer and theme
  */
 async function renderWriters(req) {
+  // Only a MISSING module is expected (a tree from before the rule set).
+  let ruleSet = null;
+  try { ruleSet = req('lib/rule-set.js'); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
+  const previousRoot = ruleSet ? ruleSet.setDefaultRulesRoot(STUB_RULES_ROOT) : null;
+  try {
+    return await renderAll(req);
+  } finally {
+    if (ruleSet) ruleSet.setDefaultRulesRoot(previousRoot);
+  }
+}
+
+async function renderAll(req) {
   const { PromptBuilder } = req('lib/prompt-builder.js');
   const { PHASE_REQUIREMENTS } = req('lib/theme-loader.js');
   const aiNodes = req('lib/workflow/nodes/ai-nodes.js');
@@ -50,8 +70,10 @@ async function renderWriters(req) {
   const out = {};
   for (const theme of ['journalist', 'detective']) {
     const base = reworkFixtureState(theme);
+    // Phase 3 (3.2): PHASE_REQUIREMENTS is keyed by theme; a tree from before that
+    // has the phases at its top level.
     const builder = new PromptBuilder(
-      stubThemeLoader(PHASE_REQUIREMENTS), theme, base.sessionConfig,
+      stubThemeLoader(PHASE_REQUIREMENTS[theme] || PHASE_REQUIREMENTS), theme, base.sessionConfig,
       base.canonicalCharacters, base.characterData.characters
     );
     const tail = { _outlineGuidance: 'PIN GUIDANCE: lead with the money.', directorGateNotes: TAIL_NOTES };
@@ -70,8 +92,9 @@ async function renderWriters(req) {
     );
     out[`article-${theme}`] = `${articleSdk.calls[0].systemPrompt}\n=====\n${articleSdk.calls[0].prompt}`;
 
-    // The arc writer, with its revision hook rendered (arcRevisionCount > 0) and
-    // standing notes, so both tail parts are pinned too.
+    // The arc writer, with arcRevisionCount > 0 and standing notes, so its tail is
+    // pinned too. Since phase 3 (3.3) only the detective arc writer renders a
+    // revision hook (buildArcRevisionContext); the journalist's tail is the notes alone.
     const arcSdk = recordingSdk({ narrativeArcs: [], synthesisNotes: '' });
     await arcNodes.generateCoreArcs(
       {
@@ -85,4 +108,4 @@ async function renderWriters(req) {
   return out;
 }
 
-module.exports = { renderWriters, stubThemeLoader, recordingSdk, TAIL_NOTES };
+module.exports = { renderWriters, stubThemeLoader, recordingSdk, TAIL_NOTES, STUB_RULES_ROOT };

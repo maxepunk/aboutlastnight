@@ -10,7 +10,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar, TracePanel } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar, TracePanel, WriterQuestionsPanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ArticleEditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
@@ -375,13 +375,16 @@ function PullQuoteEditor({ pq, idx, original, onSave, onCancel }) {
  * badge); its `content` never prints, so the editor offers the summary and not
  * the content. An existing `content` is carried through untouched by the
  * Object.assign on save.
+ *
+ * Phase 3 (3.2; HY1): nor does its `owner` print, so the editor no longer offers or
+ * seeds it, and the writer is no longer asked for it. An entry that has one keeps
+ * it through the same Object.assign; the schema keeps the field optional.
  */
 function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
     return {
       headline: card.headline || '',
       summary: card.summary || '',
-      owner: card.owner || '',
       significance: card.significance || 'supporting',
       placement: card.placement || 'sidebar'
     };
@@ -403,13 +406,6 @@ function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
         onChange: function (e) { setLocal(Object.assign({}, local, { summary: e.target.value })); },
         rows: 3,
         'aria-label': 'Sidebar entry summary'
-      }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Owner'),
-      React.createElement('input', {
-        className: 'input',
-        value: local.owner,
-        onChange: function (e) { setLocal(Object.assign({}, local, { owner: e.target.value })); },
-        'aria-label': 'Card owner'
       }),
       React.createElement('div', { className: 'flex gap-sm mt-sm' },
         React.createElement('div', { className: 'form-group', style: { flex: 1 } },
@@ -682,7 +678,12 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // off it and rendered null in every session.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
-  const trace = ViewLogic.traceView(data && data.trace);
+  // Final review (reworks[0]): the theme decides whether a pass's rework was given the
+  // evaluation's guidance, which the panel's label says.
+  const trace = ViewLogic.traceView(data && data.trace, theme);
+  // Brief 3.7: the article writer's questions for the director; task 3.11: the stop's
+  // hint says answers go with a send back, since Approve publishes the article as it is.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'article');
   // Absolute paths of this session's photos, for photoUrl (H13/F9).
   const sessionPhotos = (data && data.sessionPhotos) || [];
   // Task 3.6's programmatic fact-check of THIS bundle (baseline §5).
@@ -1419,6 +1420,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
     // The trace (brief 2.7): the automatic reworks of this round, before the director
     React.createElement(TracePanel, { view: trace }),
+
+    // The writer's questions (brief 3.7), above the article
+    React.createElement(WriterQuestionsPanel, { view: writerQuestions }),
 
     // Fact-check defect list, above the article body
     React.createElement(FactCheckPanel, { summary: factCheck, cardHeadlines: cardHeadlines }),

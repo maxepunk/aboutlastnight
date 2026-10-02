@@ -25,6 +25,7 @@ const {
     buildOutlineRevisionPrompt,
     buildArticleRevisionPrompt,
     OUTLINE_REVISION_RULES,
+    ARTICLE_REVISION_RULES,
     articleRevisionRules
   },
   createMockPromptBuilder
@@ -99,15 +100,19 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
     }
   });
 
-  it('both lists stay consecutively numbered after the removal', () => {
+  it('both lists stay consecutively numbered after the removal (the detective\'s; the journalist\'s have none since phase 3)', () => {
+    const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
+    const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
     const numbered = (text) => text
       .split('\n')
       .map((line) => line.match(/^(\d+)\. /))
       .filter(Boolean)
       .map((match) => Number(match[1]));
 
-    expect(numbered(OUTLINE_REVISION_RULES)).toEqual([1, 2, 3, 4, 5]);
-    expect(numbered(ARC_REVISION_RULES.evaluator)).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(outlineRevisionRules('detective'))).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(arcRevisionRules(false, 'detective'))).toEqual([1, 2, 3, 4, 5]);
+    expect(numbered(OUTLINE_REVISION_RULES)).toEqual([]);
+    expect(numbered(ARC_REVISION_RULES.evaluator)).toEqual([]);
   });
 });
 
@@ -230,18 +235,40 @@ describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoad
   });
 
   it('has no revision phase to check any more', () => {
-    expect(PHASE_REQUIREMENTS.revision).toBeUndefined();
+    expect(PHASE_REQUIREMENTS.journalist.revision).toBeUndefined();
+    expect(PHASE_REQUIREMENTS.detective.revision).toBeUndefined();
   });
 
-  it('FAILS LOUD, naming the phase and the files, when a craft file is missing', async () => {
+  it('FAILS LOUD, naming the phase and the files, when a detective craft file is missing', async () => {
     const builder = new PromptBuilder(
-      createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
-      'journalist'
+      createThemeLoader({ theme: 'detective', customPath: '/definitely/not/a/skill' }),
+      'detective'
     );
     await expect(builder.requirePhasePrompts('outlineGeneration'))
-      .rejects.toThrow(/Missing outlineGeneration prompts for theme "journalist": section-rules, editorial-design/);
+      .rejects.toThrow(/Missing outlineGeneration prompts for theme "detective": section-rules, editorial-design/);
     await expect(builder.requirePhasePrompts('articleGeneration'))
       .rejects.toThrow(/Missing articleGeneration prompts/);
+  });
+
+  // Phase 3 (3.2): the journalist's writers read the rule set, so its check is the
+  // rule-set loader's, which names every missing rule file.
+  it('FAILS LOUD, naming the call and the files, when a journalist rule file is missing', async () => {
+    const os = require('os');
+    const path = require('path');
+    const fs = require('fs');
+    const { setDefaultRulesRoot } = require('../rule-set');
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'no-rules-'));
+    const builder = createPromptBuilder({ theme: 'journalist' });
+    setDefaultRulesRoot(empty);
+    try {
+      await expect(builder.requirePhasePrompts('outlineGeneration'))
+        .rejects.toThrow(/Missing or empty rule files for call "outline": world\.md, truth-rules\.md/);
+      await expect(builder.requirePhasePrompts('articleGeneration'))
+        .rejects.toThrow(/Missing or empty rule files for call "article"/);
+    } finally {
+      setDefaultRulesRoot(null);
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
   });
 });
 
@@ -251,14 +278,26 @@ describe('a missing craft file becomes the node error contract, not a graph reje
   // return is what clears the _previous* scratch and leaves the run resumable.
   const { reviseOutline, reviseContentBundle } = require('../workflow/nodes/ai-nodes');
   const { PHASES } = require('../workflow/state');
-  const { createThemeLoader } = require('../theme-loader');
-  const { PromptBuilder } = require('../prompt-builder');
+  const { createPromptBuilder } = require('../prompt-builder');
+  const { setDefaultRulesRoot } = require('../rule-set');
+  const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
 
-  /** A PromptBuilder whose craft files cannot be read. */
-  const brokenBuilder = () => new PromptBuilder(
-    createThemeLoader({ theme: 'journalist', customPath: '/definitely/not/a/skill' }),
-    'journalist'
-  );
+  // Phase 3 (3.2): the journalist's writers read the rule set, so a builder whose
+  // rule files cannot be read is one whose rule root is an empty folder.
+  let empty;
+  beforeEach(() => {
+    empty = fs.mkdtempSync(path.join(os.tmpdir(), 'no-rules-'));
+    setDefaultRulesRoot(empty);
+  });
+  afterEach(() => {
+    setDefaultRulesRoot(null);
+    fs.rmSync(empty, { recursive: true, force: true });
+  });
+
+  /** A PromptBuilder whose rule files cannot be read. */
+  const brokenBuilder = () => createPromptBuilder({ theme: 'journalist' });
 
   const config = () => ({
     configurable: {
@@ -280,7 +319,7 @@ describe('a missing craft file becomes the node error contract, not a graph reje
     expect(result._previousOutline).toBeNull();
     expect(result._outlineFeedback).toBeNull();
     expect(result.errors[0].type).toBe('outline-revision-failed');
-    expect(result.errors[0].message).toMatch(/Missing outlineGeneration prompts/);
+    expect(result.errors[0].message).toMatch(/Missing or empty rule files for call "outline"/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
   });
 
@@ -296,7 +335,7 @@ describe('a missing craft file becomes the node error contract, not a graph reje
     expect(result._previousContentBundle).toBeNull();
     expect(result._articleFeedback).toBeNull();
     expect(result.errors[0].type).toBe('article-revision-failed');
-    expect(result.errors[0].message).toMatch(/Missing articleGeneration prompts/);
+    expect(result.errors[0].message).toMatch(/Missing or empty rule files for call "article"/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
   });
 });
@@ -355,5 +394,155 @@ describe('a prompt build that throws becomes the node error contract, for the ju
     } finally {
       PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan = plan;
     }
+  });
+});
+
+/**
+ * Phase 3, brief 3.3 (TH7; coverage rows 51 to 58, 88 to 92): the rework rules.
+ *
+ * Every rework carried fixed text ("You are IMPROVING, not regenerating", "PRESERVE
+ * everything that's working well", "Make minimal, surgical fixes"), on the director's
+ * send back as on an automatic pass, so a "rethink it from scratch" came back as a
+ * relabel. The article rework fixed "Low-scoring criteria" and every flagged
+ * anti-pattern ("WHAT TO FIX") though most criteria are advisory. Now the director's
+ * note governs how much a rework keeps, a rework's first line names the task its
+ * revision context gives it, and an advisory criterion is a suggestion. The detective
+ * keeps today's rules (D13).
+ */
+describe('the rework rules (phase 3, 3.3)', () => {
+  const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
+  const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
+  const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
+  const promptBuilder = createMockPromptBuilder();
+  const ARC_STATE = {
+    theme: 'journalist',
+    canonicalCharacters: {},
+    sessionConfig: { roster: ['Vic'] },
+    playerFocus: { accusation: { accused: ['Vic'], charge: 'x' } },
+    directorNotes: { rawProse: 'Vic left early.' },
+    evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } }
+  };
+
+  const FIXED_PRESERVE = /preserve|not regenerat|IMPROVING|TARGETED FIX|surgical|WHAT TO FIX|Low-scoring criteria|working well/i;
+  const contextFor = (phase, humanFeedback) => buildRevisionContext({
+    phase, revisionCount: 1, previousOutput: {}, humanFeedback,
+    validationResults: { phase, passed: false, structuralIssues: ['one defect'] }
+  });
+  /** The rework part of a reworker's user prompt: everything after its writer's sections. */
+  const after = (text, marker) => text.slice(text.indexOf(marker));
+
+  it('no journalist rework carries fixed "preserve" or "do not regenerate" text, in its rules or its task', async () => {
+    const texts = {
+      'arc rules (send back)': arcRevisionRules(true, 'journalist'),
+      'arc rules (automated)': arcRevisionRules(false, 'journalist'),
+      'outline rules': outlineRevisionRules('journalist'),
+      'article rules': articleRevisionRules('journalist')
+    };
+    for (const humanFeedback of [null, 'Rethink it from scratch.']) {
+      const kind = humanFeedback ? 'send back' : 'automated';
+      const arcs = contextFor('arcs', humanFeedback);
+      const outline = contextFor('outline', humanFeedback);
+      const article = contextFor('article', humanFeedback);
+      texts[`arc task (${kind})`] = after(
+        buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: humanFeedback }, arcs.contextSection, arcs.previousOutputSection),
+        '# Arc Revision Request'
+      );
+      texts[`outline task (${kind})`] = after(
+        await buildOutlineRevisionPrompt({ selectedArcs: [] }, outline.contextSection, outline.previousOutputSection, promptBuilder),
+        '# Outline Revision Request'
+      );
+      texts[`article task (${kind})`] = after(
+        await buildArticleRevisionPrompt({}, article.contextSection, article.previousOutputSection, promptBuilder),
+        '## REVISION CONTEXT'
+      );
+    }
+    Object.entries(texts).forEach(([name, text]) => {
+      expect(`${name}: ${(text.match(FIXED_PRESERVE) || [''])[0]}`).toBe(`${name}: `);
+    });
+  });
+
+  it("a rework's first line names the task its revision context gives it", () => {
+    const firstLine = (text) => text.split('\n')[0];
+    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/reworking the arcs/);
+    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/director sent them back/);
+    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/reworking the arcs/);
+    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/automatic check or evaluation/);
+    expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/reworking the outline/);
+    expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/revision context/);
+    // The article rework's first line is its own (3.10, fix round 1). It was the
+    // theme's revision framing (3.2's string), which named the automatic task "the
+    // evaluation's findings": every finding the context lists, the SHOULD CONSIDER items
+    // and the suggestions among them. R23 makes that task the must-fix items, and the
+    // revision context's WHAT THIS REWORK DOES states it once, so the line points there.
+    expect(articleRevisionRules('journalist').startsWith(`${ARTICLE_REVISION_RULES}\n`)).toBe(true);
+    // 3.3's finding 4 (fix 3.2b): that line, the first of the rework rules, right
+    // after the writer's system prompt, names the task the revision context gives.
+    const articleLine = firstLine(articleRevisionRules('journalist'));
+    expect(articleLine).toBe(ARTICLE_REVISION_RULES);
+    expect(articleLine).toMatch(/reworking your article/);
+    expect(articleLine).toMatch(/REVISION CONTEXT/);
+    expect(articleLine).toMatch(/the director's note on a send back/);
+    expect(articleLine).toMatch(/automatic check or evaluation/);
+    expect(articleLine).toMatch(/under WHAT THIS REWORK DOES/);
+    expect(articleLine).not.toMatch(/findings/);
+    expect(articleLine).not.toMatch(/voice issues|you identified/);
+    expect(getArticleRevisionSystemPrompt('W1\nW2', 'journalist').split('\n')[3]).toBe(articleLine);
+  });
+
+  // 3.10, fix round 1 (R23): an automatic rework fixes the must-fix items, and the
+  // revision context's WHAT THIS REWORK DOES states that once. A rework rule that
+  // called the automatic task "the evaluation's findings" handed it every finding the
+  // context lists, the suggestions among them, from the system prompt. Each rule names
+  // the revision context as the task's source and states no scope of its own.
+  it('no journalist rework rule names the findings as the automatic task: each points at the revision context', () => {
+    const rules = {
+      'arc rules (send back)': arcRevisionRules(true, 'journalist'),
+      'arc rules (automatic)': arcRevisionRules(false, 'journalist'),
+      'outline rules': outlineRevisionRules('journalist'),
+      'article rules': articleRevisionRules('journalist')
+    };
+    Object.entries(rules).forEach(([name, text]) => {
+      expect(`${name}: ${(text.match(/[^.\n]*\bfindings?\b[^.\n]*/i) || [''])[0]}`).toBe(`${name}: `);
+      expect(`${name}: ${/revision context/i.test(text)}`).toBe(`${name}: true`);
+    });
+  });
+
+  it('the article rework rules give no advisory criterion as a defect to fix', () => {
+    const rules = articleRevisionRules('journalist');
+    expect(rules).not.toContain('WHAT TO FIX');
+    expect(rules).not.toMatch(/Low-scoring criteria/i);
+    expect(rules).not.toMatch(/anti-patterns flagged/i);
+  });
+
+  // Post-merge fix (3.3 review, finding 2): each rule once. The arc send back's rules
+  // said "A note can call for a rethink" and its revision context said "a note that
+  // asks for a rethink gets a rethink". The rethink rule is the revision context's,
+  // the one place every reworker shares; the arc rules add only the mechanic line.
+  it("an arc send back states the rethink rule once, in the revision context, and a corrected mechanic reaches every arc", () => {
+    const rules = arcRevisionRules(true, 'journalist');
+    expect(rules).not.toMatch(/rethink/i);
+    expect(rules).toMatch(/corrects every arc it touches/);
+    const feedback = 'Merge the two money arcs.';
+    const context = buildRevisionContext({
+      phase: 'arcs', revisionCount: 0, round: 1, previousOutput: [], humanFeedback: feedback,
+      validationResults: { phase: 'arcs', passed: true, criteriaScores: { coherence: { score: 0.9, type: 'advisory' } } }
+    });
+    const system = getArcRevisionSystemPrompt(true, ARC_STATE.sessionConfig, 'journalist');
+    const user = buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: feedback }, context.contextSection, context.previousOutputSection);
+    const whole = `${system}\n${user}`;
+    expect(whole.match(/rethink/gi)).toHaveLength(2);
+    expect(whole.match(/a note that asks for a rethink gets a rethink/g)).toHaveLength(1);
+    expect(user.indexOf('rethink')).toBeGreaterThan(user.indexOf('WHAT THIS REWORK DOES'));
+  });
+
+  it('the detective keeps its rework rules and tasks (D13)', async () => {
+    expect(arcRevisionRules(true, 'detective')).toContain('Their feedback takes ABSOLUTE PRIORITY.');
+    expect(arcRevisionRules(false, 'detective')).toContain('1. You are IMPROVING existing arcs, not generating from scratch');
+    expect(outlineRevisionRules('detective')).toContain('1. You are IMPROVING an existing outline, not generating from scratch');
+    expect(articleRevisionRules('detective')).toContain('WHAT TO PRESERVE:');
+    const outline = await buildOutlineRevisionPrompt({ selectedArcs: [] }, 'c', 'p', promptBuilder, [], 'detective');
+    expect(outline).toContain('Remember: You are IMPROVING, not regenerating.');
+    const article = await buildArticleRevisionPrompt({}, 'c', 'p', promptBuilder, [], 'detective');
+    expect(article).toContain("4. PRESERVE everything that's working well");
   });
 });

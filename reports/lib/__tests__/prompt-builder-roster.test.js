@@ -21,13 +21,17 @@ describe('generateRosterSection — NPC pronoun line', () => {
     const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' });
     expect(section).toContain('Non-player characters');
     expect(section).toContain('Marcus Blackwood (he/him)');
-    expect(section).toContain('Nova (she/her)');
+    // Phase 3 (3.2; T9): Nova is never gendered, so the canon gives Nova no pronoun.
+    expect(section).toContain('- Nova - the NovaNews reporter who writes the article');
+    expect(section).not.toMatch(/Nova \([^)]*\)/);
   });
 
-  it('still defaults an un-entered roster member to they/them', () => {
+  // Phase 3 (3.2; T9): a roster member with no captured pronoun prints "pronoun not
+  // given", which the writer raises with the director, where it used to default to they/them.
+  it('prints "pronoun not given" for an un-entered roster member', () => {
     const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' }, ['Vic', 'Mel']);
     expect(section).toContain('Vic → Vic Kingsley (he/him)');
-    expect(section).toContain('Mel → Mel Nilsson (they/them)');
+    expect(section).toContain('Mel → Mel Nilsson (pronoun not given)');
   });
 
   it('omits Blake, whose pronouns the canon never states', () => {
@@ -64,34 +68,27 @@ describe('theme-config NPC entries', () => {
     const marcus = entries.find(e => e.name === 'Marcus');
     expect(marcus.fullName).toBe('Marcus Blackwood');
     expect(marcus.pronouns).toBe('he/him');
+    // Phase 3 (3.2; T9): Nova has no pronoun field.
     const nova = entries.find(e => e.name === 'Nova');
-    expect(nova.pronouns).toBe('she/her');
+    expect(nova.pronouns).toBeUndefined();
     // Valet is an alias of Blake and is not displayed on its own line.
     const valet = entries.find(e => e.name === 'Valet');
     expect(valet.aliasOf).toBe('Blake');
   });
 
   it('exposes a name -> pronouns map for the fact-check scan', () => {
-    expect(getThemeNPCPronouns('journalist')).toEqual({
-      Marcus: 'he/him',
-      Nova: 'she/her'
-    });
+    expect(getThemeNPCPronouns('journalist')).toEqual({ Marcus: 'he/him' });
     expect(getThemeNPCPronouns('detective')).toEqual({ Marcus: 'he/him' });
     expect(getThemeNPCPronouns('nope')).toEqual({});
   });
 });
 
+// Phase 3 (3.2): character-voice.md, which pointed at this block, is retired. The block
+// states its own authority, and T9 in the truth rules gives the pronoun rule.
 describe('the article prompt names the NPC line as authoritative', () => {
-  const fs = require('fs');
-  const path = require('path');
-
-  it('character-voice.md points at the roster AND the NPC line', () => {
-    const file = path.join(
-      __dirname, '..', '..', '.claude', 'skills', 'journalist-report',
-      'references', 'prompts', 'character-voice.md'
-    );
-    const text = fs.readFileSync(file, 'utf8');
-    expect(text).toContain('Non-player characters');
+  it("the roster block says the NPC pronouns are as authoritative as the roster's", () => {
+    const section = generateRosterSection('journalist', CANONICAL, null, { Vic: 'he/him' });
+    expect(section).toContain("these pronouns are as authoritative as the roster's");
   });
 });
 

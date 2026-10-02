@@ -2,8 +2,12 @@
  * The rendered prompts do not contradict the session's reporting mode (I3)
  *
  * `reportingMode` REPLACES the reporter's persona: `_buildReportingModeBlock` puts
- * one REPORTING_MODE_BLOCKS entry in the article SYSTEM prompt, right after the
- * identity line, and for `remote` it says "You were not in the room."
+ * one mode block in the article SYSTEM prompt, right after the identity line. Since
+ * phase 3 (task 3.1) the journalist's block is the mode file of the rule set
+ * (`references/rules/mode-on-site.md` / `mode-remote.md`, through `loadModeBlock`):
+ * T8's mode part, Nova's position as the uninterested third party and what Nova
+ * could witness. The detective keeps the old one-line blocks
+ * (DETECTIVE_REPORTING_MODE_BLOCKS).
  *
  * The craft prompts then said the opposite, several thousand tokens later and
  * LAST (the <RULES> block is placed last on purpose, for recency):
@@ -25,6 +29,8 @@
 
 const { createPromptBuilder } = require('../prompt-builder');
 const { _testing: { buildArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
+const { loadModeBlock } = require('../rule-set');
+const { findRemovedPhrases } = require('./fixtures/removed-phrases');
 
 /**
  * Director notes with prose, so the <INVESTIGATION_OBSERVATIONS> header renders:
@@ -120,12 +126,22 @@ describe('article prompt, remote session', () => {
   let rendered;
   beforeAll(async () => { rendered = await renderArticlePrompt('remote'); });
 
-  it('states the mode and defers to the system prompt for it', () => {
-    expect(rendered.userPrompt).toContain('reporting mode for this session is remote');
+  // Phase 3 (3.2): character-voice.md, whose POV section named the mode in the user
+  // prompt, is retired. The truth rules (T8, in the system prompt) defer to the block.
+  it('states the mode in the system prompt, where the truth rules defer to it', () => {
+    expect(rendered.systemPrompt).toContain('The reporting-mode block states what Nova could witness in this session.');
+    expect(rendered.userPrompt).not.toContain('<truth-rules>');
   });
 
   it('carries the remote mode block in the SYSTEM prompt', () => {
-    expect(rendered.systemPrompt).toContain('You were not in the room.');
+    expect(rendered.systemPrompt).toContain(loadModeBlock('remote'));
+  });
+
+  it('closes the block in its tag, then a blank line, before the rest of the system prompt', () => {
+    // Review of 3.1, finding 4: the block opens with "## T8, remote", and the article
+    // system prompt's next part (the roster) has no heading of its own.
+    expect(rendered.systemPrompt).toContain('<mode-remote>\n## T8, remote');
+    expect(rendered.systemPrompt).toContain('\n</mode-remote>\n\n');
   });
 
   it.each(ON_SITE_PERSONA)('does not assert: %s', (phrase) => {
@@ -137,9 +153,8 @@ describe('article prompt, remote session', () => {
   });
 
   it('states the remote block once, in the system prompt only', () => {
-    const { REPORTING_MODE_BLOCKS } = require('../prompt-builder');
-    expect(rendered.all.split(REPORTING_MODE_BLOCKS.remote).length - 1).toBe(1);
-    expect(rendered.userPrompt).not.toContain(REPORTING_MODE_BLOCKS.remote);
+    expect(rendered.all.split(loadModeBlock('remote')).length - 1).toBe(1);
+    expect(rendered.userPrompt).not.toContain(loadModeBlock('remote'));
   });
 });
 
@@ -147,12 +162,12 @@ describe('article prompt, on-site session', () => {
   let rendered;
   beforeAll(async () => { rendered = await renderArticlePrompt('on-site'); });
 
-  it('states the mode', () => {
-    expect(rendered.userPrompt).toContain('reporting mode for this session is on-site');
+  it('states the mode in the system prompt, where the truth rules defer to it', () => {
+    expect(rendered.systemPrompt).toContain('The reporting-mode block states what Nova could witness in this session.');
   });
 
   it('carries the on-site mode block in the SYSTEM prompt, which is where presence is asserted', () => {
-    expect(rendered.systemPrompt).toContain('You watched the investigation from inside the room');
+    expect(rendered.systemPrompt).toContain(loadModeBlock('on-site'));
   });
 
   it.each(ON_SITE_PERSONA)('does not assert it in the rules block either: %s', (phrase) => {
@@ -210,8 +225,10 @@ describe('article REVISION system prompt', () => {
     expect(revisionPrompt).not.toMatch(/I was there when/);
   });
 
-  it('still asks for the first-person participatory voice', () => {
-    expect(revisionPrompt).toMatch(/first-person participatory/i);
+  // Phase 3 (3.2): the first person stays; "participatory and implicated" went (T8, C12).
+  it('still asks for the first person, and nothing participatory', () => {
+    expect(revisionPrompt).toMatch(/in the first person/);
+    expect(revisionPrompt).not.toMatch(/participatory/i);
   });
 });
 
@@ -221,12 +238,13 @@ describe('article REVISION system prompt', () => {
  * The arc writer and the outline writer were never told the mode: the last
  * remote session's arc summaries said "I watched" and its outline carried six
  * presence claims, because the only place the mode was ever stated was the
- * ARTICLE system prompt, two paid calls later. The wording is one constant
- * (REPORTING_MODE_BLOCKS) rendered in the same position everywhere: right after
- * the identity line.
+ * ARTICLE system prompt, two paid calls later. The wording has one source (the
+ * journalist's mode files, through loadModeBlock), rendered in the same position
+ * everywhere: right after the identity line.
  */
 describe('the mode block reaches the arc and outline writers', () => {
-  const { REPORTING_MODE_BLOCKS, createPromptBuilder: makeBuilder } = require('../prompt-builder');
+  const { createPromptBuilder: makeBuilder } = require('../prompt-builder');
+  const REPORTING_MODE_BLOCKS = { 'on-site': loadModeBlock('on-site'), remote: loadModeBlock('remote') };
   const { _testing: { buildOutlineRevisionSystemPrompt, buildArticleRevisionSystemPrompt: articleReworkSystem } } = require('../workflow/nodes/ai-nodes');
   const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
 
@@ -276,16 +294,34 @@ describe('the mode block reaches the arc and outline writers', () => {
       );
 
       it('places the block after the identity line, not at the end', () => {
+        // Phase 3 (3.1): the block runs to several lines now, so it is found by its
+        // first line, and the whole block must follow the identity line and its blank.
+        const firstLine = REPORTING_MODE_BLOCKS[mode].split('\n')[0];
         Object.entries(prompts).forEach(([name, prompt]) => {
           const lines = prompt.split('\n');
-          const at = lines.findIndex((l) => l.includes(REPORTING_MODE_BLOCKS[mode]));
+          const at = lines.findIndex((l) => l === firstLine);
           expect(`${name}:${at}`).toBe(`${name}:2`);
+          expect(`${name}:${lines.slice(2).join('\n').startsWith(REPORTING_MODE_BLOCKS[mode])}`).toBe(`${name}:true`);
+        });
+      });
+
+      it('wraps the block in its tag, so the prompt\'s next part is not read as part of T8', () => {
+        // Review of 3.1, finding 4: the block opens with a "## T8" heading, and the text
+        // after it in the arc calls ("GAME CONTEXT:") has none of its own. The closing
+        // tag ends the block; the outline writer's next part is its own tagged section.
+        Object.entries(prompts).forEach(([name, prompt]) => {
+          const lines = prompt.split('\n');
+          const open = lines.indexOf(`<mode-${mode}>`);
+          const close = lines.indexOf(`</mode-${mode}>`);
+          expect(`${name}:${open}:${lines[open + 1]?.startsWith('## T8, ')}`).toBe(`${name}:2:true`);
+          expect(`${name}:${close > open}:${/^(|<[a-z-]+>)$/.test(lines[close + 1])}`).toBe(`${name}:true:true`);
         });
       });
 
       it("the article rework states it once, where the article writer's system prompt does", async () => {
-        // The article writer's identity runs to three lines, so its block sits after
-        // them. The rework system prompt opens with the writer's whole system prompt.
+        // Phase 3 (3.2): the article writer's identity is one line now (its temporal
+        // line went to the world and T7), so its block sits where every writer's does.
+        // The rework system prompt opens with the writer's whole system prompt.
         const builder = makeBuilder({
           theme: 'journalist',
           sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
@@ -297,7 +333,7 @@ describe('the mode block reaches the arc and outline writers', () => {
         expect(rework).not.toContain(REPORTING_MODE_BLOCKS[mode === 'remote' ? 'on-site' : 'remote']);
         const identityLines = writer.slice(0, writer.indexOf(REPORTING_MODE_BLOCKS[mode])).trimEnd().split('\n');
         expect(identityLines[0]).toMatch(/^You are Nova, writing/);
-        expect(identityLines).toHaveLength(3);
+        expect(identityLines).toHaveLength(1);
       });
     });
   });
@@ -311,36 +347,93 @@ describe('the mode block reaches the arc and outline writers', () => {
 });
 
 /**
- * Phase 2 (2.6): the remote block asks for attribution, and the absence is stated
- * at most once. 092026's remote article said "I was not there.", "I was not in
- * that room." and "This is the story they told me." and the article evaluation
- * scored it as good voice.
+ * The journalist's mode blocks are T8's mode part (phase 3, task 3.1; spec T8 and
+ * section 2). Each states Nova's position as the uninterested third party Fremont PD
+ * required and what Nova could witness in that mode. In both, exposed memories are
+ * turned in to Nova directly, anonymous unless the evidence log carries a name or the
+ * director's notes record who turned the memory in (T6's two conditions, word for
+ * word, so the block and T6 never disagree): the old remote block sent every exposure
+ * through a tipster ("Every exposure ... reached you as tips"), which pushed the
+ * article to name or invent exposers (plan review I6).
+ *
+ * Phase 2 (2.6) still holds for the remote block: the absence is said once, and
+ * attribution where it matters. 092026's remote article said "I was not there.", "I
+ * was not in that room." and "This is the story they told me." and the article
+ * evaluation scored it as good voice. Task 3.8 (spec round 7, R13): Nova says it once,
+ * early, as the start of Nova's questions, and the room's events are then told as
+ * scenes; a source tag on every room event turned the story into a disclaimer.
+ *
+ * What moved out of the block in 3.1: "you did not vote" is T8's mode-independent
+ * part and "you were not at the party" is T7, both in the truth rules, which every
+ * writer and judge reads from wave 2 on.
  */
-describe('the remote block asks for attribution and one statement of the absence', () => {
-  const { REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+describe("the journalist mode blocks state T8's mode part", () => {
+  const blocks = { 'on-site': loadModeBlock('on-site'), remote: loadModeBlock('remote') };
 
-  it('still opens with the absence and still says the reporter never voted', () => {
-    expect(REPORTING_MODE_BLOCKS.remote.startsWith('You were not in the room.')).toBe(true);
-    expect(REPORTING_MODE_BLOCKS.remote).toMatch(/You did not vote/);
-    expect(REPORTING_MODE_BLOCKS.remote).toMatch(/you were not at the party/);
+  it.each(['on-site', 'remote'])("%s: sits in its tag, opens with its T8 heading and states Nova's position", (mode) => {
+    expect(blocks[mode]).toMatch(new RegExp(`^<mode-${mode}>\\n## T8, ${mode === 'remote' ? 'remote' : 'on site'}:`));
+    expect(blocks[mode].endsWith(`\n</mode-${mode}>`)).toBe(true);
+    expect(blocks[mode]).toMatch(/uninterested third party Fremont PD required/);
   });
 
-  it('tells the writer to show each source through attribution', () => {
-    expect(REPORTING_MODE_BLOCKS.remote).toContain('show where each fact came from by attributing it to the people who told you');
-  });
-
-  it('allows the absence to be stated at most once', () => {
-    expect(REPORTING_MODE_BLOCKS.remote).toContain('State your absence at most once in the whole piece');
-  });
-
-  it('stays one line, so the position test can find it', () => {
-    expect(REPORTING_MODE_BLOCKS.remote).not.toMatch(/\n/);
-  });
-
-  it('leaves the on-site block as it was', () => {
-    expect(REPORTING_MODE_BLOCKS['on-site']).toBe(
-      'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.'
+  it.each(['on-site', 'remote'])("%s: exposed memories reach Nova directly, anonymous unless T6's records name who turned one in", (mode) => {
+    expect(blocks[mode]).toMatch(/Exposed memories were turned in to Nova directly/);
+    expect(blocks[mode]).toMatch(
+      /anonymous unless the evidence log carries a name or the director's notes record who turned the memory in/
     );
+  });
+
+  it.each(['on-site', 'remote'])('%s: carries nothing on the removed list, tips and a gendered Nova included', (mode) => {
+    expect(findRemovedPhrases(blocks[mode])).toEqual([]);
+    expect(blocks[mode]).not.toMatch(/\btips?\b/i);
+  });
+
+  it('on site: Nova saw and heard the investigation, and "we" takes in the room only for being there', () => {
+    expect(blocks['on-site']).toMatch(/saw and heard the investigation/);
+    expect(blocks['on-site']).toMatch(/"we" may also take in the room/);
+  });
+
+  it('remote: Nova says once, early, that Nova monitored from outside, and then tells the room in scenes (R13)', () => {
+    expect(blocks.remote).toMatch(/Nova monitored the investigation remotely, from outside the warehouse/);
+    expect(blocks.remote).toMatch(/Nova says so once, early, as the start of Nova's questions/);
+    expect(blocks.remote).toMatch(/After that the room's events are told as scenes/);
+  });
+
+  it('remote: attribution goes where it matters, and Nova never claims to have seen or heard the room (R13)', () => {
+    expect(blocks.remote).toMatch(/Attribution goes where it matters: a line someone was overheard saying, and a claim about a person/);
+    expect(blocks.remote).toMatch(/Nova never claims to have seen or heard the room/);
+    expect(blocks.remote).toMatch(/A person is named as Nova's source only where the record names them/);
+  });
+});
+
+/**
+ * buildReportingModeBlock(sessionConfig, theme): the journalist reads the mode files;
+ * the detective is parked (spec D13) and keeps today's strings, byte for byte.
+ */
+describe('buildReportingModeBlock', () => {
+  const { buildReportingModeBlock, DETECTIVE_REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+
+  it.each(['on-site', 'remote'])('journalist, %s: the mode file', (mode) => {
+    expect(buildReportingModeBlock({ reportingMode: mode }, 'journalist')).toBe(loadModeBlock(mode));
+  });
+
+  it('journalist: on site when the session carries no mode', () => {
+    expect(buildReportingModeBlock({}, 'journalist')).toBe(loadModeBlock('on-site'));
+    expect(buildReportingModeBlock(undefined, 'journalist')).toBe(loadModeBlock('on-site'));
+  });
+
+  it("detective: today's strings, unchanged", () => {
+    expect(DETECTIVE_REPORTING_MODE_BLOCKS).toEqual({
+      'on-site': 'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.',
+      remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there: show where each fact came from by attributing it to the people who told you. State your absence at most once in the whole piece; the attribution shows it everywhere else. You did not vote and you were not at the party.'
+    });
+    expect(buildReportingModeBlock({ reportingMode: 'remote' }, 'detective')).toBe(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
+    expect(buildReportingModeBlock({}, 'detective')).toBe(DETECTIVE_REPORTING_MODE_BLOCKS['on-site']);
+  });
+
+  it('throws on a theme it does not know, a missing one included', () => {
+    expect(() => buildReportingModeBlock({}, 'noir')).toThrow(/noir/);
+    expect(() => buildReportingModeBlock({})).toThrow(/theme/);
   });
 });
 
@@ -379,9 +472,10 @@ describe('presence lines outside the article prompt', () => {
       'CONTEXT', 'PREVIOUS', builder
     );
     const all = system + '\n' + user;
-    expect(all).toContain('<character-voice>');
-    expect(all).toContain('<evidence-boundaries>');
-    expect(all).toContain('<anti-patterns>');
+    // Phase 3 (3.2): the rule set in place of the retired craft files.
+    expect(all).toContain('<world>');
+    expect(all).toContain('<truth-rules>');
+    expect(all).toContain('<craft-voice>');
     expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');
     [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
       expect(`${mode}: ${phrase}: ${all.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);

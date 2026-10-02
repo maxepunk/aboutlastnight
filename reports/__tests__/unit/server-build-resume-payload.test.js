@@ -93,9 +93,10 @@ describe('buildResumePayload — outlineEdits validation', () => {
     expect(result.stateUpdates.outline).toBeUndefined();
   });
 
-  it('rejects a journalist outline missing required lede.primaryArc (B2)', () => {
+  // Phase 3 (3.2; TH4): the lede's fields are optional now, so B2 is pinned on the type.
+  it('rejects a journalist outline whose lede.primaryArc is not a string (B2)', () => {
     const edits = validJournalistOutline();
-    delete edits.lede.primaryArc;
+    edits.lede.primaryArc = 42;
     const result = buildResumePayload({ outline: true, outlineEdits: edits });
     expect(result.error).toEqual(expect.stringContaining('failed schema validation (outline)'));
     expect(result.error).toEqual(expect.stringContaining('primaryArc'));
@@ -151,7 +152,9 @@ describe('buildResumePayload — outlineEdits routing (regression, validation ac
     const result = buildResumePayload({
       outline: false,
       outlineFeedback: 'needs more detail',
-      outlineEdits: { lede: { hook: 'should not be applied' } }
+      // Phase 3 (3.2; TH4): a lede with only a hook is a valid outline now, so the
+      // malformed edit is one the schema still refuses.
+      outlineEdits: { lede: { hook: 42 } }
     });
     expect(result.error).toMatch(/Edited outline failed schema validation \(outline\)/);
     expect(result.stateUpdates.outline).toBeUndefined();
@@ -549,6 +552,39 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     expect(stateUpdates._outlineHandEditReport).toBeNull();
   });
 
+  // Fix 3.2b (finding 5): an outline written before phase 3 still carries
+  // thePlayers.buried and whatsMissing.buriedItems, which the editors drop before
+  // sending (dropRetiredOutlineFields). The diff must not record those two as
+  // removals the director made.
+  test('outline: an outline written before phase 3 diffs without the retired fields', () => {
+    const before = validJournalistOutline();
+    before.thePlayers.buried = ['the silent partner'];
+    before.whatsMissing.buriedItems = ['transfer-009'];
+    const edits = validJournalistOutline();
+    edits.lede.hook = 'A sharper hook.';
+    const { stateUpdates, error } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Tighten the lede', outlineEdits: edits },
+      { outline: before, directorGateNotes: [] }
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates._outlineHandEdits).toEqual({
+      kind: 'outline',
+      sections: [{ key: 'lede', changes: [{ path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }] }]
+    });
+    expect(before.thePlayers.buried).toEqual(['the silent partner']);   // the stored outline is not changed
+  });
+
+  test('outline: an outline written before phase 3, sent back unchanged, records no hand edit', () => {
+    const before = validJournalistOutline();
+    before.thePlayers.buried = ['the silent partner'];
+    before.whatsMissing.buriedItems = ['transfer-009'];
+    const { stateUpdates } = buildResumePayload(
+      { outline: false, outlineFeedback: 'Rework the closing', outlineEdits: validJournalistOutline() },
+      { outline: before }
+    );
+    expect(stateUpdates._outlineHandEdits).toBeNull();
+  });
+
   test('outline: edits identical to the current outline write the outline but a null diff', () => {
     const before = validJournalistOutline();
     const { stateUpdates } = buildResumePayload(
@@ -561,7 +597,7 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
 
   test('outline: invalid edits return the schema error and write nothing', () => {
     const edits = validJournalistOutline();
-    edits.lede = {};                                   // hook/keyTension/primaryArc required
+    edits.closing = 'collapsed';                       // a section must be an object (phase 3: slots are optional, not untyped)
     const { stateUpdates, error } = buildResumePayload(
       { outline: false, outlineFeedback: 'x', outlineEdits: edits },
       { outline: validJournalistOutline() }
@@ -679,7 +715,7 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
     expect(withEdits.error).toBeNull();
     expect(withEdits.stateUpdates.directorGateNotes).toHaveLength(1);
     const bad = buildResumePayload(
-      { outline: true, outlineEdits: { lede: {} }, outlineNote: 'Keep my lede.' },
+      { outline: true, outlineEdits: { lede: 'collapsed' }, outlineNote: 'Keep my lede.' },
       { outline: validJournalistOutline(), directorGateNotes: [] }
     );
     expect(bad.error).toContain('failed schema validation');
@@ -804,7 +840,7 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
 
   test('an invalid edit sent back writes nothing, the trace reset included', () => {
     const edits = validJournalistOutline();
-    edits.lede = {};
+    edits.lede = 'collapsed';  // phase 3 (3.2): an empty lede is valid; a section must still be an object
     const { stateUpdates, error } = buildResumePayload(
       { outline: false, outlineFeedback: 'x', outlineEdits: edits },
       { outline: validJournalistOutline(), _outlineTrace: [PASS] }

@@ -8,6 +8,10 @@
  * document text on the inline evidence card only, copied from the document with
  * that id in <RECORD>; the schema keeps `evidenceCards[].content` optional so
  * older bundles validate, and says it does not print.
+ *
+ * Phase 3 (3.2): the journalist instruction was rewritten to ask only for the fields
+ * the article prints, so these read its new field list. The sidebar entry is still a
+ * headline and a summary, and the card text is still the inline block's.
  */
 
 const { PromptBuilder } = require('../prompt-builder');
@@ -36,7 +40,7 @@ async function journalistArticlePrompt() {
 /** The text of the evidenceCards field list, up to the next numbered field. */
 function evidenceCardsFieldList(userPrompt) {
   const start = userPrompt.indexOf('2. "evidenceCards"');
-  const end = userPrompt.indexOf('3. "pullQuotes"', start);
+  const end = userPrompt.indexOf('3. "heroImage"', start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   return userPrompt.slice(start, end);
@@ -45,19 +49,18 @@ function evidenceCardsFieldList(userPrompt) {
 describe('article prompt: sidebar entries carry no document text (slice 2.5)', () => {
   it('no longer asks for verbatim content in a sidebar entry', async () => {
     const fields = evidenceCardsFieldList(await journalistArticlePrompt());
-    expect(fields).not.toContain('"content": VERBATIM');
+    expect(fields).not.toContain('"content"');
     expect(fields).not.toContain('arcEvidencePackages fullContent');
-    expect(fields).toContain('No "content": a sidebar entry prints its headline and summary only');
-    expect(fields).toContain('"summary": Brief 100-char summary');
+    expect(fields).toContain('a one-line "summary" under 100 characters');
+    expect(await journalistArticlePrompt()).toContain('a sidebar entry\'s "owner", "placement" and "content"');
   });
 
   it('describes "content" as the inline card\'s, copied from the document in <RECORD>', async () => {
-    const fields = evidenceCardsFieldList(await journalistArticlePrompt());
-    const dual = fields.slice(fields.indexOf('EVIDENCE CARD DUAL FIELDS:'));
-    expect(dual).toContain('on the BODY inline "evidence-card" block only (never on a sidebar entry)');
-    expect(dual).toContain(`COPY EXACTLY from ${DOCUMENT_POINTER}`);
-    expect(dual).not.toContain('arcEvidencePackages evidenceItems[].fullContent');
-    expect(dual).toContain('for the SIDEBAR entry, which is a headline and a summary');
+    const prompt = await journalistArticlePrompt();
+    const block = prompt.slice(prompt.indexOf('* {"type": "evidence-card"'), prompt.indexOf('* {"type": "evidence-reference"'));
+    expect(block).toContain(`"content" is copied from ${DOCUMENT_POINTER}`);
+    expect(block).not.toContain('arcEvidencePackages evidenceItems[].fullContent');
+    expect(evidenceCardsFieldList(prompt)).toContain('"evidenceCards": the sidebar\'s entries');
   });
 });
 

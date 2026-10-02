@@ -35,6 +35,7 @@ const http = require('http');
 const https = require('https');
 const { resolveCompletePayload } = require('./lib/sse-complete');
 const { loadPhotoDescriptionsFile, withPhotoDescriptions } = require('./lib/photo-descriptions');
+const { openingRequest, startsSessionOver, keepThreadCommands } = require('./lib/paused-stop');
 // The console's pure read side (dual-export), so the harness reads the stop payloads
 // the way the console does: the phase's last evaluation and the trace (brief 2.7).
 const ViewLogic = require('../console/checkpoint-view-logic');
@@ -514,12 +515,19 @@ ${color('OPTIONS:', 'cyan')}
   --resume           Continue existing session instead of starting fresh
   --input <file>     Load rawSessionInput from JSON file
   --override <file>  Load stateOverrides from JSON file (e.g., playerFocus)
-  --rollback <type>  Rollback to checkpoint before running
+  --rollback <type>  Roll the thread back to <type>, then continue it as --resume
+                     would; a rollback never starts the session over
   --auto             Auto-approve all checkpoints (for CI/testing)
   --profile <name>   Auto-approval profile (default: smart-defaults)
                      Available: smart-defaults, testing-fast, testing-full, ci-pipeline
   --step             Run one checkpoint, display data, exit (non-interactive)
-  --approve <type>   Approve the current checkpoint and advance to next
+  --approve <type>   Approve the checkpoint the thread is paused at and advance to
+                     the next. A thread paused at <type> is read through
+                     GET /checkpoint and approved without a /resume (a /resume
+                     replays the thread from the start). Without --resume or
+                     --rollback, a thread paused elsewhere or not paused is left
+                     as it is: the harness says where it is and stops, and never
+                     starts the session over
   --approve-file <f> Use custom JSON payload for approval (with --approve)
   --photo-descriptions <f>
                      JSON file of {"photo filename": "the director's description"},
@@ -1192,11 +1200,13 @@ function displayEvaluationStatus(evaluation, isEscalated = false) {
  * the stop, from the SAME view model as the console's panel
  * (console/checkpoint-view-logic.js#traceView). Nothing is shown when none ran.
  * The findings print in full: each is the self-contained sentence the rework was given.
+ * The view labels the evaluation's guidance by whether the rework was given it, which the
+ * theme decides (final review, reworks[0]), so it reads the theme this run uses.
  *
  * @param {Array|null} trace - checkpoint.trace at the outline or article stop
  */
 function displayTrace(trace) {
-  const view = ViewLogic.traceView(trace);
+  const view = ViewLogic.traceView(trace, THEME);
   if (!view.any) return;
   sectionBox(view.title, 'magenta');
   view.passes.forEach((pass, i) => {
@@ -1213,6 +1223,24 @@ function displayTrace(trace) {
     if (pass.guidance) console.log(color(`  ${pass.guidance}`, 'dim'));
   });
   sectionEnd('magenta');
+}
+
+/**
+ * The writer's questions for the director (phase 3, brief 3.7), from the SAME view
+ * model as the console's panel (console/checkpoint-view-logic.js#writerQuestionsView):
+ * one line per question, its kind (fix 3.7b) and what it is about first, then the
+ * stop's hint (task 3.11). Nothing is shown when there are none.
+ *
+ * @param {Array|null} questions - checkpoint.writerQuestions at the arc, outline or article stop
+ * @param {string} stop - 'arc-selection', 'outline' or 'article'
+ */
+function displayWriterQuestions(questions, stop) {
+  const view = ViewLogic.writerQuestionsView(questions, stop);
+  if (!view.any) return;
+  sectionBox(view.title, 'cyan');
+  view.items.forEach(item => console.log(`  ${item.kindLabel ? `[${item.kindLabel}] ` : ''}${color(item.about, 'bright')}: ${item.question}`));
+  console.log(color(`  ${view.hint}`, 'dim'));
+  sectionEnd('cyan');
 }
 
 /**
@@ -3254,6 +3282,7 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
         if (arc.hook) console.log(`     Hook: ${arc.hook.substring(0, 80)}...`);
         if (arc.evidence) console.log(color(`     Evidence: ${arc.evidence.length} items`, 'dim'));
       });
+      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
       break;
 
     case 'outline':
@@ -3325,6 +3354,7 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
         console.log(color(`┌─ CLOSING: ${outline.closing.theme || 'N/A'}`, 'yellow'));
       }
       console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
+      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
       break;
 
     case 'article':
@@ -3387,6 +3417,7 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
       if (htmlContent) {
         console.log(color(`HTML length: ${htmlContent.length} characters`, 'dim'));
       }
+      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
       break;
 
     default:
@@ -3403,7 +3434,8 @@ async function runWalkthrough() {
   header('E2E Walkthrough');
 
   console.log(`Mode: ${AUTO_MODE ? color('AUTO', 'yellow') : color('INTERACTIVE', 'green')}`);
-  console.log(`Resume: ${RESUME_MODE ? color('YES', 'yellow') : 'NO (new session)'}`);
+  // Task 4c-fix: a rollback continues the thread it names (startsSessionOver).
+  console.log(`Resume: ${RESUME_MODE ? color('YES', 'yellow') : ROLLBACK_TO ? 'NO (the rollback continues the thread)' : 'NO (new session)'}`);
   console.log(`Server: ${API_BASE}`);
   console.log(`Theme: ${THEME}`);
   if (VERBOSE) console.log(color('Verbose mode enabled', 'dim'));
@@ -3463,10 +3495,9 @@ async function runWalkthrough() {
     return;
   }
 
-  // Warn if overrides won't be applied (only work with --rollback or resume mode)
-  if (stateOverrides && !ROLLBACK_TO && inputData.rawSessionInput && !inputData.fromFiles) {
-    console.log(color('WARNING: --override only applies with --rollback or when resuming existing session', 'yellow'));
-  }
+  // Final review (data-harness-docs[2]): an --override run with neither --rollback nor
+  // --resume stops with its warning when the run opens (openingRequest), before anything
+  // is posted. It used to warn here and then start the session over, clearing the thread.
 
   console.log(color(`\nSession ID: ${sessionId}`, 'bright'));
 
@@ -3493,8 +3524,30 @@ async function runWalkthrough() {
   const maxIterations = 20; // Safety limit
   let currentData = null;
 
-  // Initial request - use /start for new sessions, /resume for existing
-  if (inputData.rawSessionInput && !RESUME_MODE) {
+  // Initial request (task 3.11). With --approve the harness reads GET /checkpoint first:
+  // a thread already paused at that stop is approved from that read, with no /resume
+  // (it replays the thread from START) and no /start (forced, it starts the session
+  // over). Without --resume or --rollback, an --approve never starts the session over:
+  // the harness says where the thread is and stops. Otherwise /start for a new session
+  // and /resume for an existing one. Task 4c-fix: a rollback names an existing thread,
+  // so after it the harness continues that thread as --resume would, and never posts
+  // /start (scripts/lib/paused-stop.js: startsSessionOver, openingRequest).
+  const opening = openingRequest({
+    approveType: APPROVE_TYPE,
+    startsOver: startsSessionOver({ rawSessionInput: inputData.rawSessionInput, resume: RESUME_MODE, rollbackTo: ROLLBACK_TO }),
+    checkpointRead: APPROVE_TYPE ? await apiGet(`/api/session/${sessionId}/checkpoint`) : undefined,
+    stateOverrides: Boolean(stateOverrides)
+  });
+
+  if (opening.kind === 'stop') {
+    console.error(color(`\n${opening.reason}`, 'red'));
+    return;
+  }
+
+  if (opening.kind === 'approve') {
+    console.log(color(`\n─── Paused at ${APPROVE_TYPE}: approving it without a /resume ───`, 'dim'));
+    currentData = opening.currentData;
+  } else if (opening.kind === 'start') {
     // Use /start endpoint for new sessions
     console.log(color(`\n─── Starting Session via /start ───`, 'dim'));
     const startBody = {
@@ -3502,7 +3555,8 @@ async function runWalkthrough() {
       rawSessionInput: inputData.rawSessionInput,
       // C1: /start 409s on a session id whose thread already exists, because in the
       // console Start Fresh is one destructive click. Reaching this branch is an
-      // explicit choice here (the harness ran without --resume), so it says so.
+      // explicit choice here (the harness ran without --resume or --approve), so it
+      // says so.
       force: true
     };
     const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/start`, startBody, 'POST', sessionId);
@@ -3604,7 +3658,12 @@ async function runWalkthrough() {
         if (APPROVE_TYPE) {
           if (APPROVE_TYPE !== checkpointType) {
             console.log(color(`\nError: --approve ${APPROVE_TYPE} does not match current checkpoint: ${checkpointType}`, 'red'));
-            console.log(color('Use --step without --approve to view current checkpoint', 'dim'));
+            // Final review (data-harness-docs[2]): only a run with --resume or --rollback
+            // gets here, so each printed command keeps the thread.
+            keepThreadCommands(sessionId, checkpointType).forEach(({ label, command }) => {
+              console.log(color(label, 'dim'));
+              console.log(color(`  ${command}`, 'cyan'));
+            });
             break;
           }
 

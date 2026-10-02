@@ -12,7 +12,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, safeStringify, editBtn, EvalBar, TracePanel } = window.Console.utils;
+const { Badge, safeStringify, editBtn, EvalBar, TracePanel, WriterQuestionsPanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const EditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
@@ -201,7 +201,7 @@ function photoPlacementLine(placement) {
   return line;
 }
 
-/** A labelled row of name badges (exposed / buried / buried items). */
+/** A labelled row of name badges (the exposed names). */
 function nameRow(label, names, color) {
   const list = Array.isArray(names) ? names.filter(Boolean) : [];
   if (list.length === 0) return null;
@@ -330,7 +330,7 @@ function FollowTheMoneyEditor({ section, onSave, onCancel }) {
   function handleSave() { onSave(EditLogic.buildFollowTheMoneyPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(ObjectListEditor, {
-      label: 'Arc Connections (required)',
+      label: 'Arc Connections (only the arcs this section carries)',
       value: state.arcConnections,
       makeRow: function () { return { arcName: '', financialAngle: '' }; },
       renderRow: function (row, idx, setField) {
@@ -349,7 +349,7 @@ function FollowTheMoneyEditor({ section, onSave, onCancel }) {
         return React.createElement('div', { className: 'flex flex-col gap-sm' },
           React.createElement(TextField, { label: 'Name', value: row.name, onChange: function (v) { setField(idx, 'name', v); } }),
           React.createElement(TextField, { label: 'Total (number or text e.g. $1.2M)', value: row.total == null ? '' : String(row.total), onChange: function (v) { setField(idx, 'total', v); } }),
-          React.createElement(TextField, { label: 'Inference', value: row.inference, multiline: true, onChange: function (v) { setField(idx, 'inference', v); } }),
+          React.createElement(TextField, { label: 'Inference (optional)', value: row.inference || '', multiline: true, onChange: function (v) { setField(idx, 'inference', v); } }),
           React.createElement(TextField, { label: 'Related Arc (optional)', value: row.relatedArc || '', onChange: function (v) { setField(idx, 'relatedArc', v); } })
         );
       },
@@ -365,7 +365,7 @@ function ThePlayersEditor({ section, onSave, onCancel }) {
   function handleSave() { onSave(EditLogic.buildThePlayersPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(ObjectListEditor, {
-      label: 'Arc Connections (required)',
+      label: 'Arc Connections (only the arcs this section carries)',
       value: state.arcConnections,
       makeRow: function () { return { arcName: '', characterAngle: '' }; },
       renderRow: function (row, idx, setField) {
@@ -377,7 +377,6 @@ function ThePlayersEditor({ section, onSave, onCancel }) {
       onChange: function (v) { setList('arcConnections', v); }
     }),
     React.createElement(StringListEditor, { label: 'Exposed (optional)', value: state.exposed, placeholder: 'character name', onChange: function (v) { setList('exposed', v); } }),
-    React.createElement(StringListEditor, { label: 'Buried (optional)', value: state.buried, placeholder: 'topic', onChange: function (v) { setList('buried', v); } }),
     React.createElement(KeyValueEditor, { label: 'Character Highlights (optional, name → note)', value: state.characterHighlights, onChange: function (v) { setList('characterHighlights', v); } }),
     actionsRow(handleSave, onCancel)
   );
@@ -389,7 +388,7 @@ function WhatsMissingEditor({ section, onSave, onCancel }) {
   function handleSave() { onSave(EditLogic.buildWhatsMissingPayload(state, section)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(ObjectListEditor, {
-      label: 'Arc Connections (required)',
+      label: 'Arc Connections (only the arcs this section carries)',
       value: state.arcConnections,
       makeRow: function () { return { arcName: '', openQuestion: '' }; },
       renderRow: function (row, idx, setField) {
@@ -402,7 +401,6 @@ function WhatsMissingEditor({ section, onSave, onCancel }) {
     }),
     React.createElement(StringListEditor, { label: 'Known Unknowns (optional)', value: state.knownUnknowns, onChange: function (v) { setList('knownUnknowns', v); } }),
     React.createElement(TextField, { label: 'Narrative Purpose (optional)', value: state.narrativePurpose, multiline: true, onChange: function (v) { setList('narrativePurpose', v); } }),
-    React.createElement(StringListEditor, { label: 'Buried Items (optional)', value: state.buriedItems, placeholder: 'token id', onChange: function (v) { setList('buriedItems', v); } }),
     actionsRow(handleSave, onCancel)
   );
 }
@@ -413,7 +411,7 @@ function ClosingEditor({ closing, onSave, onCancel }) {
   function handleSave() { onSave(EditLogic.buildClosingPayload(state, closing)); }
   return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(ObjectListEditor, {
-      label: 'Arc Resolutions (required)',
+      label: 'Arc Resolutions (only the arcs the closing carries)',
       value: state.arcResolutions,
       makeRow: function () { return { arcName: '', resolution: '' }; },
       renderRow: function (row, idx, setField) {
@@ -546,7 +544,12 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
   // lastEvaluationFrom keeps the array fallback for an older payload.
   const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'outline'));
   // Brief 2.7: what the automatic passes of this round did before the director arrived.
-  const trace = ViewLogic.traceView(data && data.trace);
+  // Final review (reworks[0]): the theme decides whether a pass's rework was given the
+  // evaluation's guidance, which the panel's label says.
+  const trace = ViewLogic.traceView(data && data.trace, theme);
+  // Brief 3.7: the outline writer's questions for the director, answered in the note box;
+  // task 3.11: the stop's hint says what an answer does here.
+  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'outline');
   const previousOutline = (revisionCache && revisionCache.outline) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -607,10 +610,13 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
   function getCurrentOutline() { return editedOutline || outline; }
 
+  // Phase 3 (3.2): an edit starts from the outline without the fields the schema
+  // retired (BU3), so an outline written before phase 3 can be edited and still
+  // pass the server's schema gate.
   function ensureEditedOutline() {
     setEditError('');
     if (editedOutline) return editedOutline;
-    const clone = JSON.parse(safeStringify(outline));
+    const clone = EditLogic.dropRetiredOutlineFields(JSON.parse(safeStringify(outline)));
     setEditedOutline(clone);
     return clone;
   }
@@ -653,7 +659,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
     }
     setMode(newMode);
     if (newMode === 'json') {
-      setJsonText(safeStringify(getCurrentOutline(), 2));
+      setJsonText(safeStringify(EditLogic.dropRetiredOutlineFields(getCurrentOutline()), 2));
       setJsonError('');
     }
   }
@@ -921,8 +927,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
             arcConnectionList(section.arcConnections, 'characterAngle'),
             characterHighlightList(section.characterHighlights),
             nameRow('Exposed', section.exposed, 'var(--layer-exposed)'),
-            nameRow('Buried', section.buried, 'var(--layer-buried)'),
-            emptyNote(section.arcConnections, section.exposed, section.buried,
+            emptyNote(section.arcConnections, section.exposed,
               EditLogic.mapToRows(section.characterHighlights))
           )
     );
@@ -949,8 +954,7 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
               React.createElement('strong', null, 'Narrative purpose: '),
               section.narrativePurpose
             ),
-            nameRow('Buried items', section.buriedItems, 'var(--layer-buried)'),
-            emptyNote(section.arcConnections, section.knownUnknowns, section.buriedItems)
+            emptyNote(section.arcConnections, section.knownUnknowns)
           )
     );
   }
@@ -1284,6 +1288,9 @@ function Outline({ data, onApprove, onReject, dispatch, revisionCache, theme, pe
 
     // The trace (brief 2.7): the automatic reworks of this round, before the director
     React.createElement(TracePanel, { view: trace }),
+
+    // The writer's questions (brief 3.7), above the outline
+    React.createElement(WriterQuestionsPanel, { view: writerQuestions }),
 
     // Outline sections (theme-aware)
     ...renderOutlineSections(),

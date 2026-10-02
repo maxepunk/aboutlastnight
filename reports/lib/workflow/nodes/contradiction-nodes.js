@@ -1,15 +1,60 @@
 /**
  * Contradiction Surfacing Node (PROGRAMMATIC — no LLM)
  *
- * Cross-references shell accounts vs roster and director observations
- * to surface narrative tensions. Respects evidence boundaries:
- * - CAN see: shell account names, amounts, timing
- * - CAN see: director observations about public behavior
+ * Gathers the director's own sentences about Blake and the Valet into one narrative
+ * tension the arc and article writers read. Respects evidence boundaries:
+ * - CAN see: director observations, as written
  * - CANNOT see: whose specific memories went to which accounts
  * - CANNOT reference: token IDs, buried content
+ *
+ * Phase 3 (3.6): the named-account and transparency tensions are gone. They read an
+ * account named after a roster character as that character's own ("used their own
+ * name for a burial account... a deliberate choice to be identifiable"), and an
+ * account's name is a message its seller chose, never a reason to suspect its
+ * namesake (T4).
+ * The ledger's accounts and totals reach the writers through the financial summary.
  */
 
 const { traceNode } = require('../../observability');
+
+/**
+ * The director's prose as sentences, each a verbatim piece of the notes. A sentence
+ * ends at whitespace after ".", "!" or "?" (or after one of them and a closing
+ * quotation mark) outside the director's quotation marks, and at a paragraph break
+ * (a blank line, LF or CRLF), which also closes a quotation left open. A full stop
+ * inside a quoted line does not end the director's sentence: on 092626 `Blake to
+ * Remi: "Remi, I hope that we can work together. I may have acquired something for
+ * you."` used to be cut after "together.".
+ *
+ * @param {string} rawProse
+ * @returns {string[]}
+ */
+function proseSentences(rawProse) {
+  const prose = String(rawProse || '');
+  const sentences = [];
+  let start = 0;
+  let inQuote = false;
+  for (let i = 0; i < prose.length; i++) {
+    const ch = prose[i];
+    // A blank line, with LF or CRLF line endings (notes pasted from Windows).
+    if (ch === '\n' && /^[ \t\r]*\n/.test(prose.slice(i + 1))) {
+      sentences.push(prose.slice(start, i));
+      start = i + 1;
+      inQuote = false;
+    } else if (ch === '"') {
+      inQuote = !inQuote;
+    } else if (ch === '“') {
+      inQuote = true;
+    } else if (ch === '”') {
+      inQuote = false;
+    } else if (/\s/.test(ch) && !inQuote && /[.!?]["”]?$/.test(prose.slice(Math.max(0, i - 2), i))) {
+      sentences.push(prose.slice(start, i));
+      start = i + 1;
+    }
+  }
+  sentences.push(prose.slice(start));
+  return sentences.map(s => s.trim()).filter(Boolean);
+}
 
 function surfaceContradictions(state) {
   if (state.narrativeTensions) {
@@ -17,59 +62,15 @@ function surfaceContradictions(state) {
     return {};
   }
 
-  const rawRoster = state.sessionConfig?.roster || [];
-  // Roster may contain strings or objects with .name — normalize to strings
-  const roster = rawRoster.map(r => (typeof r === 'string' ? r : r?.name || '')).filter(Boolean);
-  const shellAccounts = state.shellAccounts || [];
-  // Enriched schema (2026-04): search raw prose instead of the removed 3-bucket arrays.
-  // We split on sentence boundaries to preserve the per-sentence match semantics the
-  // old proseSentences array provided.
-  const rawProse = state.directorNotes?.rawProse || '';
-  const proseSentences = rawProse
-    .split(/(?<=[.!?])\s+/)
-    .map(s => s.trim())
-    .filter(Boolean);
-  const rosterLower = new Set(roster.map(r => r.toLowerCase()));
+  // Enriched schema (2026-04): search the director's raw prose, sentence by sentence.
+  const sentences = proseSentences(state.directorNotes?.rawProse || '');
 
   const tensions = [];
 
-  // 1. Flag named shell accounts matching roster members
-  for (const account of shellAccounts) {
-    if (account.total <= 0) continue;
-
-    const isNamed = rosterLower.has(account.name.toLowerCase());
-    if (!isNamed) continue;
-
-    const rosterName = roster.find(r => r.toLowerCase() === account.name.toLowerCase());
-
-    // Check for transparency contradiction: director noted public behavior + burial
-    const transparencyNotes = proseSentences.filter(p => {
-      const pLower = p.toLowerCase();
-      return pLower.includes(rosterName.toLowerCase()) &&
-        (pLower.includes('submit') || pLower.includes('expos') || pLower.includes('public') ||
-         pLower.includes('nothing to hide') || pLower.includes('boldly') || pLower.includes('transparent'));
-    });
-
-    if (transparencyNotes.length > 0) {
-      tensions.push({
-        type: 'transparency-vs-burial',
-        character: rosterName,
-        publicBehavior: transparencyNotes[0],
-        burialData: { accountName: account.name, total: account.total, tokenCount: account.tokenCount },
-        narrativeNote: `${rosterName} publicly demonstrated transparency while also maintaining a named burial account with $${account.total.toLocaleString('en-US')}. This contradiction is visible to Nova.`
-      });
-    } else {
-      tensions.push({
-        type: 'named-account',
-        character: rosterName,
-        burialData: { accountName: account.name, total: account.total, tokenCount: account.tokenCount },
-        narrativeNote: `${rosterName} used their own name for a burial account ($${account.total.toLocaleString('en-US')}). Unlike anonymous accounts, this is a deliberate choice to be identifiable.`
-      });
-    }
-  }
-
-  // 2. Flag Blake-proximity patterns from director observations
-  const blakeProximity = proseSentences.filter(p =>
+  // The director's sentences about Blake or the Valet, printed as written. The note
+  // used to say "Director observed multiple characters interacting with Blake" even
+  // when one sentence named one character.
+  const blakeProximity = sentences.filter(p =>
     p.toLowerCase().includes('blake') || p.toLowerCase().includes('valet')
   );
 
@@ -78,7 +79,8 @@ function surfaceContradictions(state) {
       type: 'blake-proximity',
       character: null, // No single character — pattern-level observation
       observations: blakeProximity,
-      narrativeNote: 'Director observed multiple characters interacting with Blake. Nova can note these patterns without knowing transaction details.'
+      // A sentence wrapped across lines prints on one line, so the list stays a list.
+      narrativeNote: `The director's notes name Blake or the Valet in these sentences:\n${blakeProximity.map(s => `  - ${s.replace(/\s*\n\s*/g, ' ')}`).join('\n')}`
     });
   }
 
@@ -94,7 +96,7 @@ function surfaceContradictions(state) {
 
 module.exports = {
   surfaceContradictions: traceNode(surfaceContradictions, 'surfaceContradictions', {
-    stateFields: ['shellAccounts', 'sessionConfig']
+    stateFields: ['directorNotes']
   }),
-  _testing: { surfaceContradictions }
+  _testing: { surfaceContradictions, proseSentences }
 };

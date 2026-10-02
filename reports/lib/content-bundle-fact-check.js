@@ -132,17 +132,22 @@ function isVerbatim(cardContent, sourceText) {
 /**
  * The checks that report ADVISORIES ONLY, until a live run calibrates them (I2b).
  *
- * Both are string heuristics that demonstrably fire on correct prose, and a
+ * Each is a string heuristic that can fire on correct prose, and a
  * structural verdict is expensive in a way an advisory is not: `evaluateArticle`
  * short-circuits the Opus evaluation on any structural issue and routes straight
  * to a revision, of which an article gets three, all paid. This module's standing
- * invariant is to err toward NOT flagging; these two could not honour it as
+ * invariant is to err toward NOT flagging; these could not honour it as
  * structural checks.
  *
  *   'npcPronouns'  - a they/them pronoun within six words of an NPC whose canon
  *                    pronouns differ. Two suppression rules already exist for
  *                    plural and shared referents, and correct prose still slipped
- *                    through the first cut.
+ *                    through the first cut. Phase 3 (3.4), journalist: also a
+ *                    pronoun of the other gender for an NPC with a declared one
+ *                    (Marcus written "she"), and a gendered pronoun for an NPC the
+ *                    canon gives none (Blake) that neither the director's words nor
+ *                    the roster give (spec T9), in the forms NPC_GENDERED_PRONOUNS
+ *                    lists.
  *   'leakedExample'- a two-word substring match on illustrative prompt strings.
  *                    The prompt files ship placeholders now, so a hit is far more
  *                    likely to be a session that legitimately wrote the sentence.
@@ -153,13 +158,30 @@ function isVerbatim(cardContent, sourceText) {
  *                    stated", which no console group claims, so a promotion lands
  *                    it in the ungrouped structural list instead of hiding it.
  *
+ * Phase 3 (3.4) added five, journalist only, each with its own message prefix and its
+ * own group in console/checkpoint-view-logic.js. Each reads the narrator's prose
+ * (narratorSegments: the headline, kicker, deck and paragraphs) with quoted spans
+ * stripped, never a card, a quote block, a caption or a quoted line:
+ *   'emDash'          - an em-dash ("Em-dash in the narrator's prose:", C4's house rule).
+ *   'productionWords' - director, GM, game master, tier, timer, or a bare "token"
+ *                       ("Production word in print:", T14).
+ *   'novaPronoun'     - a gendered pronoun for Nova ("Gendered pronoun for Nova:", T9).
+ *   'length'          - the narrator's prose above LENGTH_FLAG_WORDS ("Over length:",
+ *                       C4, R4). It counts narratorText whole, quoted lines included:
+ *                       the length is what the reader reads.
+ *   'headCount'       - a statement of how many people were in the room that disagrees
+ *                       with the roster ("Head count:", T10). Vote and account counts
+ *                       are not head counts.
+ *
  * To PROMOTE one back to structural after a live session's data supports it:
  * remove its name from this list and push its message to `structuralIssues`
  * instead of `advisoryWarnings` at the call site (both are marked with the key).
  * The message strings themselves must not change — `console/checkpoint-view-logic.js`
  * groups the fact-check by message PREFIX.
  */
-const FACT_CHECK_ADVISORY_ONLY = ['npcPronouns', 'leakedExample', 'repeatedAbsence'];
+const FACT_CHECK_ADVISORY_ONLY = [
+  'npcPronouns', 'leakedExample', 'repeatedAbsence', 'emDash', 'productionWords', 'novaPronoun', 'length', 'headCount'
+];
 
 /**
  * Illustrative strings shipped in the prompt files that a model has been
@@ -301,6 +323,236 @@ function scanNpcPronouns(prose, npcPronouns, otherNames = []) {
 
   return hits;
 }
+
+// ── The narrator's prose (phase 3, 3.4) ──────────────────────────────────────
+
+/** The journalist's narrator, written in the first person and never gendered (spec T9). */
+const NARRATOR = 'Nova';
+
+/** Gendered pronouns by gender: every form, for the Nova scan and for what the director's words give. */
+const GENDERED_PRONOUNS = {
+  masculine: ['he', 'him', 'his', 'himself'],
+  feminine: ['she', 'her', 'hers', 'herself']
+};
+
+/**
+ * The gendered forms an NPC scan reads: the subject and reflexive forms, and the
+ * possessive "his" ("Blake counted his money"). The object forms ("Blake paid him"),
+ * "her" and "hers" point at someone else, so the Marcus and Blake scans leave them out,
+ * erring toward not flagging: on the 53 published reports a "her" after Marcus was
+ * another person's ("Marcus buried her exposé", "Marcus had cleaned out her bank
+ * account"), five false flags and no true one (fix 3.4c), and "hers" goes with it
+ * ("Marcus took what was hers"; fix 3.4cb). The Nova scan reads every form: Nova seldom
+ * appears in the third person, and a gendered pronoun beside the name with no one else
+ * in the sentence is Nova's.
+ */
+const NPC_GENDERED_PRONOUNS = {
+  masculine: ['he', 'his', 'himself'],
+  feminine: ['she', 'herself']
+};
+
+/**
+ * The possessives an NPC scan reads, and when (findPronounNear's `possessives`): "his"
+ * alone. A possessive belongs to the clause's subject, so it is read only when the name
+ * is not the object of a preposition ("The last buyer who sold to Blake spent his cut":
+ * "his" is the buyer's).
+ */
+const NPC_POSSESSIVE_PRONOUNS = ['his'];
+
+/** The text before a name ends in a preposition that governs it ("about Marcus", "to the Valet"). */
+const GOVERNED_BY_PREPOSITION = new RegExp(
+  '\\b(?:about|against|among|around|at|behind|beside|between|by|for|from|in|into|near|of|on|onto|over|' +
+  'past|through|to|toward|towards|under|upon|with|without)\\s+(?:the\\s+)?$', 'i'
+);
+
+/** The genders a declared pronoun set names: 'he/him' -> ['masculine']; 'they/them' -> []. */
+function gendersOf(pronouns) {
+  const words = String(pronouns == null ? '' : pronouns).toLowerCase().split(/[^a-z]+/);
+  return Object.keys(GENDERED_PRONOUNS).filter(gender => GENDERED_PRONOUNS[gender].some(p => words.includes(p)));
+}
+
+/**
+ * Text with its quoted spans taken out: double quotes, straight or curly, and curly
+ * single quotes. A span the narrator quotes is someone else's words, which the
+ * narrator checks never judge.
+ */
+function stripQuotedSpans(text) {
+  return String(text == null ? '' : text)
+    .replace(/[“”]/g, '"')
+    .replace(/"[^"\n]*"/g, ' ')
+    .replace(/‘[^\n]*?’(?![A-Za-z])/g, ' ');
+}
+
+/**
+ * The narrator's prose, piece by piece, with where each piece prints: the headline,
+ * kicker and deck, then each paragraph block by section. narratorText joins them.
+ *
+ * @param {Object} contentBundle
+ * @returns {Array<{where: string, section: string|null, text: string}>}
+ */
+function narratorSegments(contentBundle) {
+  const bundle = contentBundle || {};
+  const headline = bundle.headline || {};
+  const segments = [];
+  for (const [key, where] of [['main', 'the headline'], ['kicker', 'the kicker'], ['deck', 'the deck']]) {
+    if (typeof headline[key] === 'string') segments.push({ where, section: null, text: headline[key] });
+  }
+  for (const section of asArray(bundle.sections)) {
+    if (!section || typeof section !== 'object') continue;
+    const sectionId = typeof section.id === 'string' && section.id.trim() ? section.id.trim() : null;
+    let paragraph = 0;
+    for (const block of asArray(section.content)) {
+      if (!block || typeof block !== 'object' || block.type !== 'paragraph') continue;
+      paragraph += 1;
+      if (typeof block.text !== 'string') continue;
+      const place = sectionId ? `section "${sectionId}"` : 'a section with no id';
+      segments.push({ where: `${place}, paragraph ${paragraph}`, section: sectionId || '(no id)', text: block.text });
+    }
+  }
+  return segments;
+}
+
+/** A short span of text for a message, with any em-dash spelled out (no message carries one). */
+function excerptOf(text) {
+  return String(text == null ? '' : text).replace(/\s+/g, ' ').trim().replace(/—/g, '[em-dash]');
+}
+
+/** The words in a text: whitespace-separated runs that hold a letter or a digit. */
+function wordCount(text) {
+  return String(text == null ? '' : text).split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).length;
+}
+
+/** "in X twice", "in X 3 times". */
+function times(n) {
+  return n === 2 ? ' twice' : n > 2 ? ` ${n} times` : '';
+}
+
+/**
+ * The first pronoun from `pronouns` within PRONOUN_WINDOW words after one of `names`,
+ * in a sentence of the narrator's (quote-stripped) prose, where it can only be about
+ * that person. Lenient, as the module is: a hit is skipped when another known person is
+ * named in the sentence, or another capitalised word stands between the name and the
+ * pronoun (an antecedent nearer than the name), or a conjunction joins another name to
+ * it ("Marcus and Alex ... their"). A pronoun in `possessives` is read only where it is
+ * that person's possessive (NPC_POSSESSIVE_PRONOUNS); one that is not is passed over for
+ * the next pronoun in the window.
+ *
+ * @param {Array<{where: string, text: string}>} segments - quotes already stripped
+ * @param {string[]} names - the person's names, matched case-sensitively
+ * @param {string[]} pronouns - the pronouns that would be wrong
+ * @param {string[]} others - every other known person
+ * @param {{possessives?: string[]}} [options] - the pronouns read only as a possessive
+ * @returns {{name: string, pronoun: string, excerpt: string, where: string}|null}
+ */
+function findPronounNear(segments, names, pronouns, others, { possessives = [] } = {}) {
+  const pronounRe = new RegExp(`\\b(${pronouns.map(escapeRegExp).join('|')})\\b`, 'gi');
+  const othersRe = others.length > 0 ? new RegExp(`\\b(?:${others.map(escapeRegExp).join('|')})\\b`, 'i') : null;
+  const possessive = new Set(possessives.map(p => p.toLowerCase()));
+  for (const segment of segments) {
+    for (const sentence of segment.text.split(/[.?!]+/)) {
+      if (othersRe && othersRe.test(sentence)) continue;
+      for (const name of names) {
+        // "Nova News" is the outlet; "NovaNews" never matches the word "Nova".
+        const nameRe = new RegExp(`\\b${escapeRegExp(name)}\\b(?!\\s*News\\b)((?:\\W+\\w+){0,${PRONOUN_WINDOW}})`, 'g');
+        let match;
+        while ((match = nameRe.exec(sentence)) !== null) {
+          const span = String(match[1] || '');
+          pronounRe.lastIndex = 0;
+          let hit;
+          while ((hit = pronounRe.exec(span)) !== null) {
+            const before = span.slice(0, hit.index);
+            if (/[A-Z][a-z]/.test(before) || /(?:\band\b|\bor\b|\bnor\b|,)\s+[A-Z]/.test(before)) break;
+            if (possessive.has(hit[1].toLowerCase()) && GOVERNED_BY_PREPOSITION.test(sentence.slice(0, match.index))) continue;
+            return { name, pronoun: hit[1], excerpt: excerptOf(`${name}${before}${hit[1]}`), where: segment.where };
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The genders the record gives a person with no canon pronoun: any gendered pronoun
+ * within PRONOUN_WINDOW words after one of their names in the director's words, and
+ * the roster's pronoun for them. Generous on purpose: a pronoun the director used is
+ * never flagged.
+ *
+ * @param {string[]} names
+ * @param {string} directorText
+ * @param {Object|null} rosterPronouns - name -> 'he/him'
+ * @returns {Set<string>}
+ */
+function givenGenders(names, directorText, rosterPronouns) {
+  const given = new Set();
+  const all = [...GENDERED_PRONOUNS.masculine, ...GENDERED_PRONOUNS.feminine];
+  const pronounRe = new RegExp(`\\b(${all.join('|')})\\b`, 'gi');
+  for (const sentence of String(directorText == null ? '' : directorText).split(/[.?!\n]+/)) {
+    for (const name of names) {
+      const nameRe = new RegExp(`\\b${escapeRegExp(name)}\\b((?:\\W+\\w+){0,${PRONOUN_WINDOW}})`, 'gi');
+      let match;
+      while ((match = nameRe.exec(sentence)) !== null) {
+        for (const pronoun of String(match[1] || '').match(pronounRe) || []) {
+          gendersOf(pronoun).forEach(g => given.add(g));
+        }
+      }
+    }
+  }
+  const map = rosterPronouns && typeof rosterPronouns === 'object' ? rosterPronouns : {};
+  for (const [key, value] of Object.entries(map)) {
+    if (names.some(name => name.toLowerCase() === key.toLowerCase())) gendersOf(value).forEach(g => given.add(g));
+  }
+  return given;
+}
+
+/** Production words (T14): the game's machinery, which never prints. "Memory token" is the fiction's own. */
+const PRODUCTION_WORDS = [
+  { word: 'game master', re: /\bgame[\s-]?masters?\b/gi },
+  { word: 'GM', re: /\bGMs?\b/g },
+  { word: 'director', re: /\b(?:the|our|a|game|session|show)\s+director\b(?!\s+of\b)|\bdirector['’]?s\s+(?:notes?|observations?|account)\b/gi },
+  { word: 'tier', re: /\btiers?\b/gi },
+  { word: 'timer', re: /\btimers?\b/gi },
+  { word: 'token', re: /(?<!\bmemory[\s-])\btokens?\b(?!\s+of\b)/gi }
+];
+
+/** The narrator's prose above this many words is flagged (C4, R4). */
+const LENGTH_FLAG_WORDS = 1800;
+
+const NUMBER_WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven',
+  'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'
+];
+
+/** A count as a number: digits, or a number word up to twenty. */
+function countOf(token) {
+  const text = String(token).toLowerCase();
+  return /^\d+$/.test(text) ? Number(text) : NUMBER_WORDS.indexOf(text);
+}
+
+/**
+ * Statements of how many people were in the room (T10), each with the count in group 1.
+ * Narrow on purpose: a count of people tied to the room or the warehouse, said as the
+ * whole ("there were nine people in the room", "the nine players in that room", "a
+ * room of nine", "nine people were in the room", "nine players sat in the room.").
+ * Statements about part of the room do not match: "two people in the room never sold";
+ * "the two people in the room who never sold", where a relative clause picks the two
+ * out; "three players sat in the room and never said a word", where the sentence goes on
+ * to what only they did (so "sat" and "stood" count only when the clause ends at the
+ * room). A vote or account count is not a head count either.
+ */
+const HEAD_COUNT_NUMBER = `(\\d{1,3}|${NUMBER_WORDS.join('|')})`;
+const HEAD_COUNT_WHO = '(?:people|players|investigators|guests|suspects|of us|of them)';
+const HEAD_COUNT_PLACE = '(?:in|inside)\\s+(?:the|that|this)\\s+(?:room|warehouse)';
+/** No relative clause follows ("who", "which", or a "that" that is not "that morning"). */
+const HEAD_COUNT_NO_RELATIVE_CLAUSE =
+  '(?!\\s+(?:who|whom|whose|which)\\b|\\s+that\\b(?!\\s+(?:morning|afternoon|evening|night|day)\\b))';
+const HEAD_COUNT_PATTERNS = [
+  new RegExp(`\\bthere\\s+were\\s+${HEAD_COUNT_NUMBER}\\s+${HEAD_COUNT_WHO}(?:\\s+[a-z]+){0,3}?\\s+${HEAD_COUNT_PLACE}\\b`, 'gi'),
+  new RegExp(`\\b(?:all\\s+of\\s+the|all\\s+the|all|the)\\s+${HEAD_COUNT_NUMBER}\\s+${HEAD_COUNT_WHO}\\s+${HEAD_COUNT_PLACE}\\b${HEAD_COUNT_NO_RELATIVE_CLAUSE}`, 'gi'),
+  new RegExp(`\\b(?:a|the|that)\\s+(?:room|warehouse)\\s+of\\s+${HEAD_COUNT_NUMBER}\\b`, 'gi'),
+  new RegExp(`\\b${HEAD_COUNT_NUMBER}\\s+(?:people|players)\\s+(?:were|gathered)\\s+${HEAD_COUNT_PLACE}\\b(?!\\s+(?:when|as|while|before|after)\\b)`, 'gi'),
+  new RegExp(`\\b${HEAD_COUNT_NUMBER}\\s+(?:people|players)\\s+(?:sat|stood)\\s+${HEAD_COUNT_PLACE}\\b(?=\\s*(?:[.;!?]|$))`, 'gi')
+];
 
 /** Basename of a path, tolerating both separators. */
 function basename(p) {
@@ -462,15 +714,7 @@ function visibleText(contentBundle, theme) {
  * @returns {string}
  */
 function narratorText(contentBundle) {
-  const bundle = contentBundle || {};
-  const headline = bundle.headline || {};
-  const parts = [headline.main, headline.kicker, headline.deck];
-
-  for (const block of contentBlocks(bundle)) {
-    if (block.type === 'paragraph') parts.push(block.text);
-  }
-
-  return parts.filter(v => typeof v === 'string').join('\n');
+  return narratorSegments(contentBundle).map(segment => segment.text).join('\n');
 }
 
 /**
@@ -568,10 +812,25 @@ function describeLocations(locations) {
  * @param {Object}   args.evidenceBundle       - curated three-layer bundle
  * @param {Array}    args.roster               - session roster (names or {name})
  * @param {Array}    args.sessionPhotos        - photo paths available to this session
+ * @param {Array}    [args.excludedPhotos]     - the session photos the director excluded
+ *                                               (T13; the evaluator's isPhotoExcluded): no
+ *                                               usable reference, and never offered in a fix
+ * @param {?string}  [args.whiteboardPhoto]    - the whiteboard photo's filename or path (T13;
+ *                                               the writers' whiteboardFilenameOf): the room's
+ *                                               working notes, so no usable reference, and
+ *                                               never offered in a fix
  * @param {string}   args.reportingMode        - 'on-site' | 'remote' (default 'on-site')
- * @param {Object}   [args.npcPronouns]        - name -> 'he/him' for NPCs (victim pronoun scan)
+ * @param {Array}    [args.npcs]               - the theme's NPC entries (theme-config
+ *                                               getThemeNPCEntries): {name, pronouns?, aliasOf?}
+ * @param {Object}   [args.npcPronouns]        - name -> 'he/him': the declared NPCs alone,
+ *                                               read when no `npcs` is given
+ * @param {Object}   [args.rosterPronouns]     - first name -> pronouns from the roster stop
+ * @param {string}   [args.directorText]       - the director's words (notes, corrections,
+ *                                               accusation): a pronoun they give is not invented
+ * @param {Object}   [args.guestReporter]      - {name}: named in the head-count message
  * @param {string}   [args.theme]              - 'journalist' (default) | 'detective': which
- *                                               page's printed text roster coverage reads
+ *                                               page's printed text roster coverage reads; the
+ *                                               phase 3 checks run for the journalist only
  * @see BASELINE.md §4 for the measured failure classes each check addresses
  * @returns {{structuralIssues: string[], advisoryWarnings: string[],
  *            cardFidelity: Array<{tokenId: string, ok: boolean, reason: string|null,
@@ -586,11 +845,25 @@ function factCheckContentBundle({
   evidenceBundle,
   roster,
   sessionPhotos,
+  excludedPhotos,
+  whiteboardPhoto,
   reportingMode,
+  npcs,
   npcPronouns,
+  rosterPronouns,
+  directorText,
+  guestReporter,
   theme
 } = {}) {
   const structuralIssues = [];
+  const journalist = theme !== 'detective';
+  const npcEntries = (Array.isArray(npcs)
+    ? npcs
+    : Object.entries(npcPronouns && typeof npcPronouns === 'object' ? npcPronouns : {}).map(([name, pronouns]) => ({ name, pronouns })))
+    .filter(entry => entry && typeof entry === 'object' && typeof entry.name === 'string');
+  // name -> declared pronouns, for the NPCs the canon gives one (as getThemeNPCPronouns).
+  const declaredPronouns = {};
+  npcEntries.filter(entry => entry.pronouns && !entry.aliasOf).forEach(entry => { declaredPronouns[entry.name] = entry.pronouns; });
   const advisoryWarnings = [];
   const cardFidelity = [];
 
@@ -693,7 +966,21 @@ function factCheckContentBundle({
   }
 
   // ── 3. Photo references (BASELINE class 7) ───────────────────────────────
+  // The 4b fix batch (T13: an excluded photo never appears): a photo the director
+  // excluded is no usable reference, and a fix line offers only the kept photos. It used
+  // to offer every session photo, so a rework could be told to place one the director
+  // pulled. The message keeps its prefix: the console groups by it.
+  //
+  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays out
+  // of the article): the whiteboard photo is no usable reference either, and no fix line
+  // offers it; a printed one says what it is. Its filename is known whatever the
+  // session's photo list holds, so it is checked even when that list is empty.
+  const whiteboard = basename(whiteboardPhoto);
+  const isWhiteboard = (name) => whiteboard !== '' && name === whiteboard;
   const available = new Set(asArray(sessionPhotos).map(basename).filter(Boolean));
+  const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
+  const kept = Array.from(available).filter(filename => !excluded.has(filename) && !isWhiteboard(filename));
+  const useKept = kept.length > 0 ? `Use one of [${kept.join(', ')}] or remove the reference.` : 'Remove the reference.';
   const referenced = [];
   if (bundle.heroImage && typeof bundle.heroImage === 'object' && bundle.heroImage.filename) {
     referenced.push(String(bundle.heroImage.filename));
@@ -701,30 +988,32 @@ function factCheckContentBundle({
   for (const block of contentBlocks(bundle)) {
     if (block.type === 'photo' && block.filename) referenced.push(String(block.filename));
   }
-  for (const p of asArray(bundle.photos)) {
-    if (p && typeof p === 'object' && p.filename) referenced.push(String(p.filename));
-  }
+  // The top-level `photos` list never prints, so it is not read (phase 3, 3.4; HY1).
 
   const invalidPhotos = [];
-  if (available.size === 0) {
-    if (referenced.length > 0) {
-      advisoryWarnings.push(
-        `Could not verify ${referenced.length} photo reference(s): this session's photo list is ` +
-        `empty in state, so there is nothing to check the filenames against.`
-      );
+  const unverified = [];
+  for (const filename of referenced) {
+    const name = basename(filename);
+    if (!isWhiteboard(name) && available.size === 0) {
+      unverified.push(filename);
+    } else if ((isWhiteboard(name) || !available.has(name) || excluded.has(name)) && !invalidPhotos.includes(filename)) {
+      invalidPhotos.push(filename);
     }
-  } else {
-    for (const filename of referenced) {
-      if (!available.has(basename(filename)) && !invalidPhotos.includes(filename)) {
-        invalidPhotos.push(filename);
-      }
-    }
-    for (const filename of invalidPhotos) {
-      structuralIssues.push(
-        `Invalid photo reference "${filename}": not one of this session's photos. Use one of ` +
-        `[${Array.from(available).join(', ')}] or remove the reference.`
-      );
-    }
+  }
+  if (unverified.length > 0) {
+    advisoryWarnings.push(
+      `Could not verify ${unverified.length} photo reference(s): this session's photo list is ` +
+      `empty in state, so there is nothing to check the filenames against.`
+    );
+  }
+  for (const filename of invalidPhotos) {
+    const name = basename(filename);
+    const reason = isWhiteboard(name)
+      ? "this is the whiteboard, the room's working notes, and its photo stays out of the article."
+      : excluded.has(name)
+        ? 'the director excluded this photo.'
+        : "not one of this session's photos.";
+    structuralIssues.push(`Invalid photo reference "${filename}": ${reason} ${useKept}`);
   }
 
   // ── 4. Reporter mode (BASELINE class 6) ──────────────────────────────────
@@ -737,9 +1026,17 @@ function factCheckContentBundle({
   for (const phrase of NEVER_VOTES) {
     if (normProse.includes(phrase)) {
       violations.push(phrase);
-      structuralIssues.push(
-        `Reporter-mode violation: "${phrase}". The reporter covers the room, they are not a member ` +
-        `of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.`
+      // Phase 3 (3.4): the fix never sends the rework to name who acted; an exposure
+      // stays anonymous unless the record names who turned it in (spec T6, T8).
+      // Phase 3 (3.9): T8's first sentence as round 7 words it (R21): "accuses" is
+      // joining the room's accusation. A rework reads this line as must-fix.
+      structuralIssues.push(journalist
+        ? `Reporter-mode violation: "${phrase}". Nova reports on the room from outside its choices: Nova never ` +
+          `votes, joins the room's accusation or exposes a memory, and is never one of the room (T8). Rewrite the ` +
+          `sentence without Nova in the vote or the exposure: the vote is the room's, and an exposure stays ` +
+          `anonymous unless the evidence log or the director's notes name who turned it in.`
+        : `Reporter-mode violation: "${phrase}". The reporter covers the room, they are not a member ` +
+          `of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.`
       );
     }
   }
@@ -747,23 +1044,36 @@ function factCheckContentBundle({
     for (const phrase of PRESENCE_CLAIMS) {
       if (normProse.includes(phrase)) {
         violations.push(phrase);
-        structuralIssues.push(
-          `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: every ` +
-          `exposure, observation and the verdict arrived as a tip from someone who was there. Show ` +
-          `where each fact came from by attributing it to the people who told you, and state your ` +
-          `absence at most once.`
+        // Phase 3 (3.4): exposed memories reach Nova by turn-in, never as tips (spec T6, T8).
+        // Phase 3 (3.9): the remote mode block of round 7 (R13): Nova never claims to have
+        // seen or heard the room, and the event is told as a scene, attributed where it
+        // matters, not sourced sentence by sentence.
+        structuralIssues.push(journalist
+          ? `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: Nova ` +
+            `monitored from outside the warehouse and never claims to have seen or heard the room (T8). Tell ` +
+            `the moment as a scene, with attribution where it matters: a line someone was overheard saying, a ` +
+            `claim about a person. Exposed memories were turned in to Nova directly, and a person is named as ` +
+            `Nova's source only where the record names them.`
+          : `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: every ` +
+            `exposure, observation and the verdict arrived as a tip from someone who was there. Show ` +
+            `where each fact came from by attributing it to the people who told you, and state your ` +
+            `absence at most once.`
         );
       }
     }
 
     // 'repeatedAbsence' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): one statement of
-    // the absence is allowed; the attribution shows it everywhere else.
+    // the absence is allowed. Phase 3 (3.9): for the journalist, as the remote mode
+    // block of round 7 says (R13): once, early, and the room's events told as scenes
+    // after it. The detective keeps its line.
     const absences = findAbsenceStatements(narratorText(bundle));
     if (absences.length > 1) {
       advisoryWarnings.push(
         `Absence stated ${absences.length} times (remote): ${absences.map(a => `"${a}"`).join(', ')}. ` +
-        `Say that you were not in the room at most once in the whole article, or not at all; ` +
-        `everywhere else, show where each fact came from by attributing it to the people who told you.`
+        (journalist
+          ? `Nova says so once, early; after that, the room's events are told as scenes (T8).`
+          : `Say that you were not in the room at most once in the whole article, or not at all; ` +
+            `everywhere else, show where each fact came from by attributing it to the people who told you.`)
       );
     }
   }
@@ -772,12 +1082,145 @@ function factCheckContentBundle({
   // 'npcPronouns' — ADVISORY (FACT_CHECK_ADVISORY_ONLY) until a live run
   // calibrates it: two suppression rules are in place and correct prose still
   // slipped through the first cut, and a structural verdict costs a paid revision.
-  for (const hit of scanNpcPronouns(prose, npcPronouns, names)) {
-    advisoryWarnings.push(
-      `Pronoun error: ${hit.name} takes ${npcPronouns[hit.name]}, but the article writes ` +
-      `"${hit.excerpt}". The roster block's non-player-character line is the authority. ` +
-      `Correct every pronoun used of ${hit.name}.`
-    );
+  if (!journalist) {
+    for (const hit of scanNpcPronouns(prose, declaredPronouns, names)) {
+      advisoryWarnings.push(
+        `Pronoun error: ${hit.name} takes ${declaredPronouns[hit.name]}, but the article writes ` +
+        `"${hit.excerpt}". The roster block's non-player-character line is the authority. ` +
+        `Correct every pronoun used of ${hit.name}.`
+      );
+    }
+  } else {
+    const segments = narratorSegments(bundle).map(segment => ({ ...segment, text: stripQuotedSpans(segment.text) }));
+    const npcNames = npcEntries.map(entry => entry.name);
+    const allPeople = [...new Set([...npcNames, NARRATOR, ...names])];
+    const othersThan = (own) => allPeople.filter(person => !own.some(name => name.toLowerCase() === person.toLowerCase()));
+
+    // ── 5, phase 3 (3.4). NPC pronouns, read in the narrator's prose (spec T9).
+    // 'npcPronouns' ADVISORY. Marcus: they/them or the other gender against his canon
+    // pronoun. Blake (no canon pronoun): any gendered pronoun the director's words and
+    // the roster do not give. Nova is never scanned here: Nova's rule is its own check.
+    for (const entry of npcEntries.filter(e => !e.aliasOf && e.name !== NARRATOR)) {
+      const own = [entry.name, ...npcEntries.filter(alias => alias.aliasOf === entry.name).map(alias => alias.name)];
+      const declared = gendersOf(entry.pronouns);
+      if (entry.pronouns) {
+        if (String(entry.pronouns).toLowerCase().includes('they')) continue;
+        const wrong = [...THEY_THEM, ...Object.keys(GENDERED_PRONOUNS).filter(g => !declared.includes(g)).flatMap(g => NPC_GENDERED_PRONOUNS[g])];
+        const hit = findPronounNear(segments, own, wrong, othersThan(own), { possessives: NPC_POSSESSIVE_PRONOUNS });
+        if (hit) {
+          advisoryWarnings.push(
+            `Pronoun error: ${entry.name} takes ${entry.pronouns}, but the article writes "${hit.excerpt}" ` +
+            `(in ${hit.where}). The roster block's non-player-character line is the authority. ` +
+            `Correct every pronoun used of ${entry.name}.`
+          );
+        }
+        continue;
+      }
+      const given = givenGenders(own, directorText, rosterPronouns);
+      const wrong = Object.keys(GENDERED_PRONOUNS).filter(g => !given.has(g)).flatMap(g => NPC_GENDERED_PRONOUNS[g]);
+      if (wrong.length === 0) continue;
+      const hit = findPronounNear(segments, own, wrong, othersThan(own), { possessives: NPC_POSSESSIVE_PRONOUNS });
+      if (!hit) continue;
+      advisoryWarnings.push(given.size === 0
+        ? `Pronoun error: ${entry.name} has no pronoun in the record (neither the director's notes nor the ` +
+          `roster give one), but the article writes "${hit.excerpt}" (in ${hit.where}). Write ${entry.name} ` +
+          `by name (T9).`
+        : `Pronoun error: ${entry.name} takes only the pronoun the director's notes or the roster give, but ` +
+          `the article writes "${hit.excerpt}" (in ${hit.where}). Use the pronoun the record gives, or write ` +
+          `${entry.name} by name (T9).`
+      );
+    }
+
+    // 'novaPronoun' ADVISORY: Nova writes in the first person and is otherwise "Nova" (T9).
+    const novaHit = findPronounNear(segments, [NARRATOR],
+      [...GENDERED_PRONOUNS.masculine, ...GENDERED_PRONOUNS.feminine], othersThan([NARRATOR]));
+    if (novaHit) {
+      advisoryWarnings.push(
+        `Gendered pronoun for Nova: "${novaHit.excerpt}" (in ${novaHit.where}). Nova writes in the first ` +
+        `person and is otherwise "Nova", never a gendered pronoun (T9).`
+      );
+    }
+
+    // 'emDash' ADVISORY: C4's house rule.
+    const dashes = segments
+      .map(segment => ({ where: segment.where, n: (segment.text.match(/—/g) || []).length }))
+      .filter(d => d.n > 0);
+    if (dashes.length > 0) {
+      const total = dashes.reduce((sum, d) => sum + d.n, 0);
+      advisoryWarnings.push(
+        `Em-dash in the narrator's prose: ${total} em-dash${total === 1 ? '' : 'es'} ` +
+        `(${dashes.map(d => `in ${d.where}${times(d.n)}`).join('; ')}). House style puts a comma, a ` +
+        `colon or a full stop where an em-dash might go (C4).`
+      );
+    }
+
+    // 'productionWords' ADVISORY: the fiction stays whole (T14).
+    const production = [];
+    for (const segment of segments) {
+      for (const { word, re } of PRODUCTION_WORDS) {
+        re.lastIndex = 0;
+        let match;
+        while ((match = re.exec(segment.text)) !== null) {
+          const from = Math.max(0, match.index - 30);
+          production.push(`"${word}" in ${segment.where} ("...${excerptOf(segment.text.slice(from, match.index + match[0].length + 30))}...")`);
+        }
+      }
+    }
+    if (production.length > 0) {
+      advisoryWarnings.push(
+        `Production word in print: ${production.join('; ')}. The article speaks the fiction's own words ` +
+        `(T14): rewrite each line in the world's terms.`
+      );
+    }
+
+    // 'length' ADVISORY: the narrator's prose above the flag (C4, R4), quoted lines
+    // included, by where the words are.
+    const unstripped = narratorSegments(bundle);
+    const totalWords = unstripped.reduce((sum, segment) => sum + wordCount(segment.text), 0);
+    if (totalWords > LENGTH_FLAG_WORDS) {
+      const bySection = new Map();
+      for (const segment of unstripped) {
+        const key = segment.section === null ? 'headline and deck' : segment.section;
+        bySection.set(key, (bySection.get(key) || 0) + wordCount(segment.text));
+      }
+      const fmt = (n) => n.toLocaleString('en-US');
+      advisoryWarnings.push(
+        `Over length: the narrator's prose (headline, deck and paragraphs) runs ${fmt(totalWords)} words, above ` +
+        `the ${fmt(LENGTH_FLAG_WORDS)}-word flag for an article of about 1,500 words (C4): ` +
+        `${[...bySection].map(([key, n]) => `${key} ${fmt(n)}`).join(', ')}. Cut what the thesis does not need.`
+      );
+    }
+
+    // 'headCount' ADVISORY: the room held the roster's players (T10).
+    if (names.length > 0) {
+      const counts = [];
+      for (const segment of segments) {
+        const seen = new Set();
+        for (const pattern of HEAD_COUNT_PATTERNS) {
+          pattern.lastIndex = 0;
+          let match;
+          while ((match = pattern.exec(segment.text)) !== null) {
+            if (seen.has(match.index)) continue;
+            if (/\b(?:only|just)\s+$/i.test(segment.text.slice(0, match.index))) continue;
+            seen.add(match.index);
+            if (countOf(match[1]) !== names.length) counts.push(`"${excerptOf(match[0])}" in ${segment.where}`);
+          }
+        }
+      }
+      if (counts.length > 0) {
+        const reporterName = guestReporter && typeof guestReporter === 'object' && typeof guestReporter.name === 'string'
+          ? guestReporter.name.trim() : '';
+        const reporterFirst = reporterName.split(/\s+/)[0] || '';
+        const reporterOnRoster = reporterFirst && names.some(name => name.toLowerCase() === reporterFirst.toLowerCase());
+        const reporterNote = !reporterName ? ''
+          : reporterOnRoster ? `, the guest reporter ${reporterName} among them`
+            : `; the guest reporter ${reporterName} plays no character on it and is not counted`;
+        advisoryWarnings.push(
+          `Head count: ${counts.join('; ')}, but the roster lists ${names.length} players at the investigation` +
+          `${reporterNote}. The head count is the players at the investigation (T10).`
+        );
+      }
+    }
   }
 
   return {
@@ -802,6 +1245,10 @@ module.exports = {
     scanNpcPronouns,
     visibleText,
     narratorText,
+    narratorSegments,
+    stripQuotedSpans,
+    findPronounNear,
+    givenGenders,
     findAbsenceStatements,
     cardOccurrences,
     describeLocations,

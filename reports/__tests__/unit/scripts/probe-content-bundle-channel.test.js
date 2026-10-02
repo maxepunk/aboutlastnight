@@ -138,4 +138,31 @@ describe('buildProbePrompt', () => {
     // The blank page is cited by no arc, so it is not in the probe's record.
     expect(userPrompt).not.toContain(PAPER[2].notionId);
   });
+
+  // The 4b fix batch (3.9 review minor 1): since 3.9 the article writer lists its photos
+  // under PHOTOS (options.photos, from articleWriterInputs), and an arc package points at
+  // its photos by filename, only at listed ones. The probe passed no photos, so its
+  // prompt printed "PHOTOS: none" and every package's "ARC PHOTOS: None", while its
+  // outline placed photos and its HERO IMAGE named one. Its photos now come from the
+  // writer's own inputs, so its prompt is the writer's.
+  test("the article prompt lists the writer's photos, from articleWriterInputs: the hero, then each package photo once", async () => {
+    const { userPrompt } = await buildProbePrompt({
+      sessionId: '092026',
+      sessionConfig: { roster: ['Sam', 'Quinn'], accusation: { accused: ['Sam'] } },
+      directorNotes: { observations: {} },
+      tokens: TOKENS,
+      paperEvidence: PAPER
+    });
+
+    expect(userPrompt).not.toContain('PHOTOS: none');
+    expect(userPrompt).toContain('PHOTOS (every photo the director has not excluded, without the whiteboard: the hero image, then the rest;');
+    expect(userPrompt).toContain('1. [hero image] aln0509 (10 of 10).jpg: Sam, Quinn');
+    ITEMS_PER_ARC.forEach((_, arcIdx) => {
+      const filename = `aln0509 (${arcIdx + 1} of 10).jpg`;
+      expect(userPrompt).toContain(`${arcIdx + 2}. ${filename}: Sam, Quinn`);
+      expect(userPrompt.split(`${filename}: Sam, Quinn`).length - 1).toBe(1);
+    });
+    expect(userPrompt).toContain('ARC PHOTOS:\n- aln0509 (1 of 10).jpg\n');
+    expect(userPrompt).not.toMatch(/ARC PHOTOS:\nNone/);
+  });
 });

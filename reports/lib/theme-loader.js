@@ -8,68 +8,86 @@
 const fs = require('fs').promises;
 const path = require('path');
 
-// Phase-specific prompt requirements
-// Each phase only loads what it needs to minimize context
+/**
+ * Each phase's prompt files, by theme. A phase loads only what it needs.
+ *
+ * Phase 3 (task 3.2): the journalist's outline and article writers, their reworkers
+ * and the judges read the rule set (lib/rule-set.js), and its eight craft files are
+ * deleted, so the journalist lists only the image calls' files. The detective is
+ * parked (spec D13) and keeps its craft files and these lists as they were. Its
+ * 'validation' list went with the dead validation builder that alone read it.
+ *
+ * Phase 2 (2.3): there is no 'revision' phase. Each reworker carries its writer's
+ * whole prompt, and checks its writer's phase (PromptBuilder.requirePhasePrompts).
+ */
 const PHASE_REQUIREMENTS = {
-  imageAnalysis: [
-    'whiteboard-analysis',
-    'photo-analysis',
-    'photo-enrichment'
-  ],
-  outlineGeneration: [
-    'section-rules',
-    'editorial-design',
-    'narrative-structure',
-    // 'formatting' removed - describes ContentBundle format, not Outline format (Fix 7.3)
-    'evidence-boundaries'
-  ],
-  articleGeneration: [
-    'character-voice',
-    'writing-principles',
-    'evidence-boundaries',
-    'section-rules',
-    'narrative-structure',
-    'formatting',
-    'anti-patterns',
-    'editorial-design'
-  ],
-  validation: [
-    'anti-patterns',
-    'character-voice',
-    'evidence-boundaries'
-  ]
-  // Phase 2 (2.3): there is no 'revision' phase any more. It was a three-file cut
-  // (character-voice, evidence-boundaries, anti-patterns) that the outline and
-  // article reworkers carried as their <RULES> in place of their writer's rules.
-  // Each reworker now carries its writer's whole prompt, and checks its writer's
-  // phase (PromptBuilder.requirePhasePrompts).
+  journalist: {
+    imageAnalysis: [
+      'whiteboard-analysis',
+      'photo-analysis',
+      'photo-enrichment'
+    ]
+  },
+  detective: {
+    outlineGeneration: [
+      'section-rules',
+      'editorial-design',
+      'narrative-structure',
+      // 'formatting' removed - describes ContentBundle format, not Outline format (Fix 7.3)
+      'evidence-boundaries'
+    ],
+    articleGeneration: [
+      'character-voice',
+      'writing-principles',
+      'evidence-boundaries',
+      'section-rules',
+      'narrative-structure',
+      'formatting',
+      'anti-patterns',
+      'editorial-design'
+    ]
+  }
 };
 
-// All prompt files that should exist
-const ALL_PROMPTS = [
-  'anti-patterns',
-  'character-voice',
-  'editorial-design',
-  'evidence-boundaries',
-  'formatting',
-  'narrative-structure',
-  'photo-analysis',
-  'photo-enrichment',
-  'section-rules',
-  'whiteboard-analysis',
-  'writing-principles'
-];
+/** Every prompt file each theme's skill should hold, checked by validate(). */
+const ALL_PROMPTS = {
+  journalist: [
+    'photo-analysis',
+    'photo-enrichment',
+    'whiteboard-analysis'
+  ],
+  detective: [
+    'anti-patterns',
+    'character-voice',
+    'editorial-design',
+    'evidence-boundaries',
+    'formatting',
+    'narrative-structure',
+    'photo-analysis',
+    'photo-enrichment',
+    'section-rules',
+    'whiteboard-analysis',
+    'writing-principles'
+  ]
+};
 
 class ThemeLoader {
   /**
-   * @param {string} skillPath - Path to journalist-report skill directory
+   * @param {string} skillPath - Path to the theme's skill directory
+   * @param {'journalist'|'detective'} [themeName] - whose phase lists apply
    */
-  constructor(skillPath) {
+  constructor(skillPath, themeName = 'journalist') {
     this.skillPath = skillPath;
+    this.themeName = themeName;
     this.promptsPath = path.join(skillPath, 'references', 'prompts');
     this.assetsPath = path.join(skillPath, 'assets');
     this.cache = new Map();
     this.validated = false;
+  }
+
+  /** This theme's phase lists. */
+  get phaseRequirements() {
+    return PHASE_REQUIREMENTS[this.themeName] || {};
   }
 
   /**
@@ -81,7 +99,7 @@ class ThemeLoader {
     const missing = [];
 
     // Check all prompt files
-    for (const name of ALL_PROMPTS) {
+    for (const name of ALL_PROMPTS[this.themeName] || []) {
       const filePath = path.join(this.promptsPath, `${name}.md`);
       try {
         await fs.access(filePath);
@@ -138,14 +156,20 @@ class ThemeLoader {
   }
 
   /**
-   * Load all prompts required for a phase
-   * @param {string} phase - Phase name (arcAnalysis, outlineGeneration, etc.)
+   * Load all prompts required for a phase of this theme
+   * @param {string} phase - Phase name (imageAnalysis, outlineGeneration, etc.)
    * @returns {Promise<Object>} - Map of prompt name to content
+   * @throws {Error} on a phase this theme does not list: since phase 3 that is the
+   *   journalist's outline and article phases, whose rules are the rule set
    */
   async loadPhasePrompts(phase) {
-    const requirements = PHASE_REQUIREMENTS[phase];
+    const phases = this.phaseRequirements;
+    const requirements = phases[phase];
     if (!requirements) {
-      throw new Error(`Unknown phase: ${phase}. Valid phases: ${Object.keys(PHASE_REQUIREMENTS).join(', ')}`);
+      throw new Error(
+        `Unknown phase: ${phase} for theme "${this.themeName}". Valid phases: ${Object.keys(phases).join(', ')}` +
+        (this.themeName === 'journalist' ? '. The journalist writers read the rule set (lib/rule-set.js).' : '')
+      );
     }
 
     const bundle = {};
@@ -241,19 +265,23 @@ class ThemeLoader {
   }
 
   /**
-   * Get phase requirements for configuration/debugging
-   * @returns {Object} - Phase requirements map
+   * Get one theme's phase requirements, for configuration/debugging
+   * @param {string} [theme='journalist']
+   * @returns {Object} - A copy of that theme's phase -> prompt names map
    */
-  static getPhaseRequirements() {
-    return { ...PHASE_REQUIREMENTS };
+  static getPhaseRequirements(theme = 'journalist') {
+    return Object.fromEntries(
+      Object.entries(PHASE_REQUIREMENTS[theme] || {}).map(([phase, names]) => [phase, [...names]])
+    );
   }
 
   /**
-   * Get list of all prompt names
+   * Get one theme's prompt names
+   * @param {string} [theme='journalist']
    * @returns {string[]} - Prompt names
    */
-  static getAllPrompts() {
-    return [...ALL_PROMPTS];
+  static getAllPrompts(theme = 'journalist') {
+    return [...(ALL_PROMPTS[theme] || [])];
   }
 }
 
@@ -273,7 +301,7 @@ function createThemeLoader(options = null) {
     'skills',
     `${theme}-report`
   );
-  return new ThemeLoader(skillPath);
+  return new ThemeLoader(skillPath, theme);
 }
 
 module.exports = {
@@ -305,8 +333,8 @@ if (require.main === module) {
     // Test loading
     console.log('Testing prompt loading...');
     try {
-      const prompts = await loader.loadPhasePrompts('articleGeneration');
-      console.log(`Loaded ${Object.keys(prompts).length} prompts for articleGeneration:`);
+      const prompts = await loader.loadPhasePrompts('imageAnalysis');
+      console.log(`Loaded ${Object.keys(prompts).length} prompts for imageAnalysis:`);
       Object.keys(prompts).forEach(name => {
         console.log(`  - ${name}: ${prompts[name].length} chars`);
       });

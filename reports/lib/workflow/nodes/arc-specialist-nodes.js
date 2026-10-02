@@ -55,18 +55,47 @@ const {
   CORE_ARC_SCHEMA,
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
+  // Phase 3 (3.10): the interweaving principles, which the arc reworker reads too
+  INTERWEAVING_PRINCIPLES,
+  // Task 4c-fix: keyCallbacks' description, printed in the interweaving call's task
+  KEY_CALLBACKS_DESCRIPTION,
   // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
-  PLAYER_FOCUS_GUIDED_SCHEMA
+  PLAYER_FOCUS_GUIDED_SCHEMA,
+  // Phase 3 (3.3): the detective's prompts and schemas, parked with its theme (D13)
+  DETECTIVE_CORE_ARC_SYSTEM_PROMPT,
+  DETECTIVE_CORE_ARC_SCHEMA,
+  DETECTIVE_INTERWEAVING_SYSTEM_PROMPT,
+  DETECTIVE_INTERWEAVING_SCHEMA,
+  DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA
   // Commit 8.xx: Removed legacy parallel architecture imports
   // (SPECIALIST_AGENT_NAMES, getSpecialistAgents, ORCHESTRATOR_*, SYNTHESIS_*, SPECIALIST_*)
 } = require('../../sdk-client/subagents');
 
-const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
+const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('../../prompt-renderers/director-notes-renderer');
 const { renderRecordView, recordIdOf, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
+const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
-const { isNoCulpritVerdict, directorAccusationText } = require('../../accusation-verdict');
-const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes } = require('../../prompt-builder');
+const { isNoCulpritVerdict, blamesNoCharacter, directorAccusationText } = require('../../accusation-verdict');
+// rosterWithPronounsSection: the roster with pronouns (phase 3, 3.10; T9), the one
+// builder the arc writer, the interweaving call and the outline writer print it with
+// (the 4b fix batch). At the gate these calls had first names alone, and the arc
+// writer asked the director five pronoun questions the roster stop had answered.
+const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes, rosterWithPronounsSection } = require('../../prompt-builder');
+const { loadRuleSet } = require('../../rule-set');
+const { WRITER_QUESTIONS_PROPERTY, writerQuestionsOf, carriedWriterQuestions, questionedRosterNames } = require('../../writer-questions');
+
+/**
+ * Whether a call keeps the detective's parked text (spec D13). The journalist reads
+ * the rule set; the detective keeps today's prompts, rules and schemas until a
+ * detective session is planned.
+ *
+ * @param {string} [theme]
+ * @returns {boolean}
+ */
+function isParkedDetective(theme) {
+  return theme === 'detective';
+}
 
 /**
  * The director's standing notes for the arc writer and the arc reworker (phase 2,
@@ -97,16 +126,43 @@ function buildArcStandingNotes(state) {
  * those summaries are what the outline and then the article are built from. The
  * block goes where the article's goes: immediately after the identity line.
  *
+ * Phase 3 (3.1): the block depends on the theme (the journalist's comes from the rule
+ * set's mode files, the detective keeps its own), so each composer takes it, with
+ * this file's default.
+ *
+ * Phase 3 (3.3): the journalist's prompt also carries the rule set's world and truth
+ * rules (loadRuleSet's `core`), after the mode block, by the placement ruling: the
+ * identity line, the mode block, <world>, <truth-rules>, then the prompt's own text.
+ * The call's craft files go in its user prompt. The detective keeps today's prompt.
+ *
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
+ * @param {string} [theme='journalist'] - state.theme
  * @returns {string}
  */
-function coreArcSystemPrompt(sessionConfig) {
-  return withReportingModeBlock(CORE_ARC_SYSTEM_PROMPT, sessionConfig);
+function coreArcSystemPrompt(sessionConfig, theme = 'journalist') {
+  if (isParkedDetective(theme)) return withReportingModeBlock(DETECTIVE_CORE_ARC_SYSTEM_PROMPT, sessionConfig, theme);
+  return withReportingModeBlock(withRuleSetCore(CORE_ARC_SYSTEM_PROMPT, 'arc'), sessionConfig, theme);
 }
 
 /** @see coreArcSystemPrompt */
-function interweavingSystemPrompt(sessionConfig) {
-  return withReportingModeBlock(INTERWEAVING_SYSTEM_PROMPT, sessionConfig);
+function interweavingSystemPrompt(sessionConfig, theme = 'journalist') {
+  if (isParkedDetective(theme)) return withReportingModeBlock(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT, sessionConfig, theme);
+  return withReportingModeBlock(withRuleSetCore(INTERWEAVING_SYSTEM_PROMPT, 'interweaving'), sessionConfig, theme);
+}
+
+/**
+ * A system prompt with the rule set's core (the world, then the truth rules) right
+ * after its identity line, where withReportingModeBlock then puts the mode block
+ * before it.
+ *
+ * @param {string} systemPrompt - a prompt whose first line is its identity
+ * @param {'arc'|'interweaving'} call - the rule set's call
+ * @returns {string}
+ */
+function withRuleSetCore(systemPrompt, call) {
+  const identityLine = systemPrompt.split('\n', 1)[0];
+  const rest = systemPrompt.slice(identityLine.length).replace(/^\n+/, '');
+  return `${identityLine}\n\n${loadRuleSet(call).core}\n\n${rest}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -204,6 +260,11 @@ function createDefaultInterweavingPlan() {
  * roster PC from a legitimately-absent NPC or non-roster PC, and "fixes" invented
  * placements for characters who were never in the session.
  *
+ * Phase 3 (3.7; C7, C15): the journalist's ROSTER PCs line counts a player covered by
+ * a placement the record shows or by a question of kind "player" to the director
+ * about them, as the arc check does (fix 3.7b). The detective keeps "MUST have
+ * placements" (D13).
+ *
  * @param {string[]} roster - session roster (first names)
  * @param {string} theme - 'journalist' | 'detective'
  * @param {string[]} allCharacters - every known game character (Notion-derived)
@@ -215,7 +276,7 @@ function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCha
 
   return `### Character Categories for characterPlacements
 
-**ROSTER PCs** (MUST have placements - ${theme === 'journalist' ? 'they were in the room; how Nova learned of them is set by the reporting mode' : 'present at the investigation'}):
+**ROSTER PCs** (${theme === 'journalist' ? 'each has a placement the record shows, or a writerQuestions entry of kind "player" about them - they were in the room; how Nova learned of them is set by the reporting mode' : 'MUST have placements - present at the investigation'}):
 ${JSON.stringify(roster)}
 
 **NPCs** (valid in placements, don't count for coverage):
@@ -244,21 +305,244 @@ ${nonRosterPCs.length > 0 ? `- These are valid game characters not playing this 
  * @returns {string} Prompt for core arc generation
  */
 function buildCoreArcPrompt(state) {
-  return `${buildCoreArcSections(state)}${buildArcRevisionContext(state)}${buildArcStandingNotes(state)}`;
+  // Phase 3 (3.3): the journalist writer carries no revision hook of its own. Its
+  // text ("Do not just regenerate - IMPROVE") was fixed rework text (TH7), and every
+  // rework goes through reviseArcs, whose revision context is buildRevisionContext's.
+  const hook = isParkedDetective(state.theme) ? buildArcRevisionContext(state) : '';
+  return `${buildCoreArcSections(state)}${hook}${buildArcStandingNotes(state)}`;
 }
 
 /**
  * The arc writer's user prompt up to, not including, its revision hook and its
- * <DIRECTOR_GUIDANCE>: the output format, what the players concluded (accusation,
- * whiteboard, the director's observations and corrections, the investigation focus,
- * the roster, the character categories and context), the generation rules, the
- * record and the valid ids, the evidence boundaries, temporal awareness, the
- * tensions and the three-lens requirement. Shared with the arc reworker (2.3).
+ * <DIRECTOR_GUIDANCE>. Shared with the arc reworker (2.3), so the reworker carries
+ * whatever the writer is given, the rule set's craft files included (M23).
  *
  * @param {Object} state - Current workflow state
  * @returns {string}
  */
 function buildCoreArcSections(state) {
+  return isParkedDetective(state.theme)
+    ? buildDetectiveCoreArcSections(state)
+    : buildJournalistCoreArcSections(state);
+}
+
+/**
+ * The journalist arc writer's label for the director's notes (phase 3, brief 3.3):
+ * T1's record for the room, and the one mapping T1 does not state, where backstory in
+ * the notes falls. Phase 3 (3.10; R12, rule-text read 2 section D): backstory is what
+ * Nova knows but the record cannot back, T1's third point, which the label names and
+ * does not restate; "reading", the rules' old noun for Nova's inference, is retired. The
+ * writer prints it as its notes heading; the arc judge (evaluator-nodes.js) imports it,
+ * so both name the notes in one text.
+ */
+const ARC_NOTES_LABEL = `The Director's Notes (the record for the room, under T1)
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is what Nova knows but the record cannot back: T1's third point.`;
+
+/**
+ * The journalist arc writer's OUTPUT FORMAT line for `writerQuestions` (fix 3.7b,
+ * finding 2): the list is optional and stays empty unless the record leaves
+ * something only the director can settle (C15), then one entry's shape in
+ * placeholders. `kind` lists the schema's values and `about` is shown in the schema's
+ * own wording (WRITER_QUESTIONS_PROPERTY), so the format and the schema say one thing.
+ *
+ * @returns {string}
+ */
+function writerQuestionsFormatLine() {
+  const { kind, about } = WRITER_QUESTIONS_PROPERTY.items.properties;
+  return `"writerQuestions" stays [] unless the record leaves something only the director can settle (C15). Each entry:
+{ "kind": ${kind.enum.map((value) => JSON.stringify(value)).join(' | ')}, "about": ${JSON.stringify(about.description)}, "question": "The question for the director" }`;
+}
+
+/**
+ * The journalist arc writer's sections (phase 3, brief 3.3): the output format; what
+ * the room concluded (the accusation, the whiteboard, the director's notes and
+ * corrections and their sentences about Blake and the Valet, the investigation
+ * focus, the roster, the character categories and context); the generation rules;
+ * the record with its morning timeline and the valid ids; the stages in a summary;
+ * the three lenses in analysisNotes; and the rule set's craft files, last, by the
+ * placement ruling.
+ *
+ * Phase 3 (3.7): the output format carries `writerQuestions`, the questions C15 has
+ * the writer raise to the director, and the roster lines count a player covered by a
+ * placement the record shows or by a question of kind "player" about them (C7; fix
+ * 3.7b).
+ *
+ * Phase 3 (3.10; T9): after the character categories, the roster with pronouns
+ * (rosterWithPronounsSection, heading included), so each player's pronoun reaches the
+ * writer once. The session roster stays as it was: its first names decide rosterCoverage.
+ *
+ * The truth rules (in the system prompt) state what the old SECTION 4 and 4.5 said
+ * about evidence and time, and contradicted parts of them: they named each memory's
+ * exposer, read an account's name for involvement, dated the party "the murder night"
+ * and called the notes "GROUND TRUTH". Those sections are gone, and the sales come
+ * from the record view's timeline instead of the writer's own buried list.
+ *
+ * @param {Object} state - Current workflow state
+ * @returns {string}
+ */
+function buildJournalistCoreArcSections(state) {
+  const context = extractPlayerFocusContext(state);
+  const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
+  const allCharacters = Object.keys(state.canonicalCharacters || {});
+  const { craft } = loadRuleSet('arc');
+  const blakeSentences = directorTensionSentences(state.narrativeTensions, context.directorProse);
+
+  // Output format at TOP for recency bias. Brief 1.2: the summary is the claim
+  // itself, in the third person, with no presence claim.
+  const outputFormat = buildOutputFormatSection(`{
+  "narrativeArcs": [
+    {
+      "id": "arc-[descriptive-slug]",
+      "title": "Compelling arc title",
+      "summary": "1 to 3 plain sentences stating what this thread claims happened. Third person, no reporter persona, no presence claims.",
+      "arcSource": "accusation" | "whiteboard" | "observation" | "discovered",
+      "keyEvidence": ["exact-id-1", "exact-id-2"],
+      "characterPlacements": { "RosterName": "Role in this arc" },
+      "evidenceStrength": "strong" | "moderate" | "weak" | "speculative",
+      "caveats": ["What complicates this arc"],
+      "unansweredQuestions": ["What gaps exist"],
+      "emotionalHook": "What makes this compelling",
+      "playerEmphasis": "high" | "medium" | "low",
+      "storyRelevance": "critical" | "supporting" | "contextual",
+      "analysisNotes": {
+        "financial": "What the money lens shows for this arc",
+        "behavioral": "What the behaviour lens shows for this arc",
+        "victimization": "What the victimization lens shows for this arc"
+      }
+    }
+  ],
+  "synthesisNotes": "How you addressed player conclusions and what patterns emerged",
+  "writerQuestions": []
+}
+
+${writerQuestionsFormatLine()}`);
+
+  const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
+### Character Context (${DERIVED_LABELS.characterContext})
+${Object.entries(state.characterData.characters).map(([name, data]) => {
+  const parts = [];
+  if (data.groups?.length) parts.push(`Member of: ${data.groups.join(', ')}`);
+  if (data.role) parts.push(`Role: ${data.role}`);
+  if (data.relationships) {
+    const rels = Object.entries(data.relationships).slice(0, 4).map(([k, v]) => `${k} (${v})`).join(', ');
+    if (rels) parts.push(`Relationships: ${rels}`);
+  }
+  return parts.length > 0 ? `- ${name}: ${parts.join(' | ')}` : null;
+}).filter(Boolean).join('\n')}
+
+IMPORTANT: Take group memberships from the paper documents in <RECORD>, not from memory content. Where this list differs from those documents, the documents decide.
+` : '';
+
+  // The director's sentences about Blake and the Valet, the one tension the code
+  // gathers since 3.6 (directorTensionSentences drops the retired types).
+  const blakeSection = blakeSentences.length > 0 ? `
+### Blake and the Valet in the director's notes
+${DERIVED_LABELS.narrativeTensions}
+
+${blakeSentences.map(sentence => `- ${sentence}`).join('\n')}
+` : '';
+
+  return `# Core Arc Generation
+
+${outputFormat}
+
+---
+
+## SECTION 1: WHAT PLAYERS CONCLUDED (PRIMARY - Your arcs must address this)
+
+### The Accusation (REQUIRED ARC)
+${renderArcAccusation(context.accusation, directorAccusationText(state), "Players' Reasoning")}
+
+You MUST generate an arc that addresses this accusation. Even if evidence is weak, include this arc and mark it appropriately with evidenceStrength="speculative" if needed.
+
+${renderWhiteboardConnections(context.whiteboard)}
+
+### ${ARC_NOTES_LABEL}
+
+${renderDirectorEnrichmentBlock({
+  rawProse: context.directorProse,
+  quotes: context.directorQuotes,
+  transactionReferences: context.directorTransactionLinks,
+  postInvestigationDevelopments: context.directorPostInvestigation,
+  corrections: state.inputReviewCorrections || [],
+  sessionConfig: withSessionClock(state.sessionConfig, state.evidenceBundle)
+})}
+${blakeSection}
+### Primary Investigation Focus
+${context.primaryInvestigation}
+
+### Session Roster (the players at the investigation)
+${JSON.stringify(context.roster)}
+
+${buildCharacterCategoriesBlock(context.roster, 'journalist', allCharacters).trimEnd()}
+
+${rosterWithPronounsSection(state.sessionConfig, state.canonicalCharacters)}
+${characterContext}
+---
+
+## SECTION 2: ARC GENERATION RULES
+
+Generate 3-5 narrative arcs following this priority:
+
+### Priority 1: ACCUSATION ARC (Required)
+- Must directly address the accusation above
+- arcSource: "accusation"
+- Include even if evidenceStrength is "speculative"
+- If evidence is thin, use caveats to acknowledge uncertainty
+
+### Priority 2: WHITEBOARD/OBSERVATION ARCS (1-3 arcs)
+- Generated from significant whiteboard connections or director observations
+- arcSource: "whiteboard" or "observation"
+- Should have at least "weak" evidenceStrength
+
+### Priority 3: DISCOVERED ARC (Optional, max 1)
+- A pattern in the record that the room did not take up, framed as just that
+- arcSource: "discovered"
+- Must have evidenceStrength "strong" or "moderate"
+
+---
+
+## SECTION 3: THE RECORD
+
+The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents in full, then the morning timeline: every sale, exposure, bonus and transfer, in time order on the morning clock.
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
+
+### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)
+${JSON.stringify(evidenceSummary.allEvidenceIds)}
+
+CRITICAL: keyEvidence arrays MUST contain IDs from this list ONLY.
+
+---
+
+## SECTION 4: STAGES IN AN ARC SUMMARY
+
+Each arc summary says which stage each of its events belongs to (T7): the party, as what a memory shows; the investigation, in the third person, as the reporting mode allows; Nova's day, only as the epilogue gives it.
+
+---
+
+## SECTION 5: THE THREE LENSES IN analysisNotes
+
+Write each arc's three lenses, as C16 (<craft-story>) sets them out, into analysisNotes, one field per lens. Where the record holds nothing for a lens, write that it holds nothing.
+- financial: the money lens, read from the morning timeline
+- behavioral: the behaviour lens
+- victimization: the victimization lens
+
+---
+
+## SECTION 6: CRAFT GUIDANCE
+
+${craft}
+`;
+}
+
+/**
+ * The detective arc writer's sections: today's text, parked with its theme (spec D13).
+ * Phase 3 rewrote the journalist's (buildJournalistCoreArcSections).
+ *
+ * @param {Object} state - Current workflow state
+ * @returns {string}
+ */
+function buildDetectiveCoreArcSections(state) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
 
@@ -322,7 +606,8 @@ ${renderDirectorEnrichmentBlock({
   quotes: context.directorQuotes,
   transactionReferences: context.directorTransactionLinks,
   postInvestigationDevelopments: context.directorPostInvestigation,
-  corrections: state.inputReviewCorrections || []
+  corrections: state.inputReviewCorrections || [],
+  sessionConfig: withSessionClock(state.sessionConfig, state.evidenceBundle)
 })}
 
 ### Primary Investigation Focus
@@ -474,10 +759,17 @@ For each arc, analyze through all three lenses and document in analysisNotes:
  * @param {Array} coreArcs - Generated arcs from Call 1 (required, non-empty)
  * @param {Array} roster - Character roster (defaults to empty array if invalid)
  * @param {Object|null} [evidenceBundle] - the curated bundle the record view renders
+ * @param {Object|null} [sessionConfig] - the session's parse, for the record view's
+ *   morning timeline (its exposures, adjustments and clock; phase 3, brief 3.5)
+ * @param {string} [theme='journalist'] - the session's theme: the journalist's prompt
+ *   ends with the rule set's craft files (phase 3, brief 3.3); the detective keeps
+ *   today's text (D13)
+ * @param {Object|null} [canonicalCharacters] - state.canonicalCharacters, for the
+ *   journalist's roster with pronouns (phase 3, brief 3.10)
  * @returns {string} Prompt for interweaving enrichment
  * @throws {Error} If coreArcs is not a non-empty array
  */
-function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null) {
+function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null, sessionConfig = null, theme = 'journalist', canonicalCharacters = null) {
   // M2: Input validation
   if (!Array.isArray(coreArcs) || coreArcs.length === 0) {
     throw new Error('buildInterweavingPrompt: coreArcs must be a non-empty array');
@@ -496,6 +788,8 @@ function buildInterweavingPrompt(coreArcs, roster, evidenceBundle = null) {
     characterPlacements: arc.characterPlacements
   }));
 
+  if (!isParkedDetective(theme)) return journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig, canonicalCharacters);
+
   return `# Interweaving Enrichment
 
 Analyze the following narrative arcs and identify how they can interweave for compulsive readability.
@@ -510,7 +804,7 @@ ${JSON.stringify(roster)}
 
 ## THE RECORD (the documents the arcs rest on)
 
-${renderRecordView(evidenceBundle)}
+${renderRecordView(evidenceBundle, { sessionConfig })}
 
 ## YOUR TASK
 
@@ -561,6 +855,103 @@ Also provide an **interweavingPlan** with:
 }`;
 }
 
+/**
+ * The journalist's interweaving prompt (phase 3, brief 3.3): the arcs, the roster, the
+ * whole record view, the task and the output format, then the rule set's craft files
+ * for this call, last, by the placement ruling. The bridge types are the system
+ * prompt's principles; the convergence and the order are C16's, in <craft-story>. The
+ * task names the fields that hold each and restates none of them (spec section 8:
+ * each rule appears once).
+ *
+ * Phase 3 (3.10): the roster with pronouns follows the session roster, and the task's
+ * field lines leave the principles to the system prompt (INTERWEAVING_PRINCIPLES). The
+ * 4b fix batch: the roster with pronouns is rosterWithPronounsSection's, under the
+ * heading the arc writer and the outline writer give it, a subsection of the roster.
+ *
+ * Task 4c-fix (4b-fix concern 2): the OUTPUT FORMAT's callbackSeeds placeholder says what
+ * the field holds and points at C16. It said "A detail from the record that can come back
+ * changed later", C16's payoff restated without the condition C16 puts on it.
+ *
+ * Its fix round: the prompt opens on the arcs, because the system prompt's task line is
+ * the call's one statement of its task; the prompt used to open by asking how the arcs
+ * "can interweave for compulsive readability". keyCallbacks' task line prints
+ * KEY_CALLBACKS_DESCRIPTION, the description the call's schema gives the field, where it
+ * asked for "Specific [plant → payoff] opportunities", C16's payoff without its
+ * condition. The placeholder's detail, "Specific callback opportunity", is "The planted
+ * detail".
+ *
+ * @param {Array} compactArcs - the arcs, as buildInterweavingPrompt cuts them
+ * @param {Array} roster
+ * @param {Object|null} evidenceBundle
+ * @param {Object|null} sessionConfig
+ * @param {Object|null} canonicalCharacters
+ * @returns {string}
+ */
+function journalistInterweavingPrompt(compactArcs, roster, evidenceBundle, sessionConfig, canonicalCharacters) {
+  return `# Interweaving Enrichment
+
+## GENERATED ARCS
+
+${JSON.stringify(compactArcs, null, 2)}
+
+## ROSTER (for identifying shared characters)
+
+${JSON.stringify(roster)}
+
+${rosterWithPronounsSection(sessionConfig, canonicalCharacters)}
+
+## THE RECORD (the documents the arcs rest on, and the morning timeline)
+
+${renderRecordView(evidenceBundle, { sessionConfig })}
+
+## YOUR TASK
+
+For each arc, provide:
+
+1. **sharedCharacters** - Which characters in this arc also appear in OTHER arcs?
+
+2. **bridgeOpportunities** - How can this arc connect to others? Each bridge has one of the four bridge types: shared_character, causal_chain, temporal or contradiction.
+
+3. **callbackSeeds** - Which details in this arc are callback seeds?
+
+4. **convergenceRole** - What does this arc bring to the convergence?
+
+Also provide an **interweavingPlan** with:
+- suggestedOrder: the arc ids, in the order C16 (<craft-story>) gives the arcs
+- convergencePoint: this session's convergence point, as C16 (<craft-story>) describes the convergence
+- keyCallbacks: ${KEY_CALLBACKS_DESCRIPTION}
+
+## OUTPUT FORMAT
+
+{
+  "arcInterweaving": [
+    {
+      "arcId": "arc-id-from-above",
+      "interweaving": {
+        "sharedCharacters": ["Character1", "Character2"],
+        "bridgeOpportunities": [
+          { "toArc": "other-arc-id", "bridgeType": "shared_character", "bridgeDetail": "..." }
+        ],
+        "callbackSeeds": ["A detail in this arc that is a callback seed (C16)"],
+        "convergenceRole": "What this arc brings to the convergence"
+      }
+    }
+  ],
+  "interweavingPlan": {
+    "suggestedOrder": ["arc-id-1", "arc-id-2", ...],
+    "convergencePoint": "Where this session's threads converge",
+    "keyCallbacks": [
+      { "plantIn": "arc-id-1", "payoffIn": "arc-id-3", "detail": "The planted detail" }
+    ]
+  }
+}
+
+## CRAFT GUIDANCE
+
+${loadRuleSet('interweaving').craft}
+`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SPLIT-CALL SDK HELPERS (Commit 8.28)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -589,9 +980,10 @@ async function generateCoreArcs(state, config) {
   try {
     const result = await sdkClient({
       prompt,
-      systemPrompt: coreArcSystemPrompt(state.sessionConfig),
+      systemPrompt: coreArcSystemPrompt(state.sessionConfig, state.theme),
       model: 'opus',
-      jsonSchema: CORE_ARC_SCHEMA,
+      // Phase 3 (3.7): the detective's copy leaves out the writer's questions (D13).
+      jsonSchema: isParkedDetective(state.theme) ? DETECTIVE_CORE_ARC_SCHEMA : CORE_ARC_SCHEMA,
       disableTools: true,  // Commit 8.xx: Pure structured output, no tool access needed
       label: 'Core arc generation (Call 1)'
     });
@@ -628,28 +1020,32 @@ async function generateCoreArcs(state, config) {
  * @param {Object} config - Graph config with SDK client
  * @param {Object} [sessionConfig] - state.sessionConfig, for the reporting-mode block
  * @param {Object|null} [evidenceBundle] - state.evidenceBundle, for the record view (brief 2.1)
+ * @param {Object|null} [canonicalCharacters] - state.canonicalCharacters, for the
+ *   journalist's roster with pronouns (phase 3, brief 3.10)
  * @returns {Promise<Object>} Interweaving result on success containing:
  *   - arcInterweaving: Array of { arcId, interweaving } objects
  *   - interweavingPlan: { suggestedOrder, convergencePoint, keyCallbacks }
  *   On failure (graceful degradation - the caller uses defaults): { _failed: true, _error }
  *   where _error is the thrown message, so a declined request stays named in state.
  */
-async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, evidenceBundle = null) {
+async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, evidenceBundle = null, canonicalCharacters = null) {
   console.log('[enrichWithInterweaving] Starting Call 2: Interweaving enrichment');
   const startTime = Date.now();
 
   const sdkClient = getSdkClient(config, 'enrichWithInterweaving');
-  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle);
+  // No state here: the graph config carries the session's theme (createGraphAndConfig).
+  const theme = config?.configurable?.theme;
+  const prompt = buildInterweavingPrompt(coreArcs, roster, evidenceBundle, sessionConfig, theme, canonicalCharacters);
 
   console.log(`[enrichWithInterweaving] Prompt built: ${prompt.length} characters`);
 
   try {
     const result = await sdkClient({
       prompt,
-      systemPrompt: interweavingSystemPrompt(sessionConfig),
+      systemPrompt: interweavingSystemPrompt(sessionConfig, theme),
       model: 'opus',
       disableTools: true,          // H21: pure analysis over the arcs in the prompt
-      jsonSchema: INTERWEAVING_SCHEMA,
+      jsonSchema: isParkedDetective(theme) ? DETECTIVE_INTERWEAVING_SCHEMA : INTERWEAVING_SCHEMA,
       label: 'Interweaving enrichment (Call 2)'
     });
 
@@ -675,7 +1071,8 @@ async function enrichWithInterweaving(coreArcs, roster, config, sessionConfig, e
  *   - narrativeArcs: Array of arc objects with id, title, summary, etc.
  *   - synthesisNotes: String describing synthesis approach
  * @param {Object|null} interweavingResult - Result from enrichWithInterweaving ({_failed, _error} or null on failure)
- * @returns {Object} Merged result with all arc fields including interweaving metadata
+ * @returns {Object} Merged result with all arc fields including interweaving metadata,
+ *   and the arc writer's `writerQuestions` (phase 3, 3.7; the interweaving call has none)
  * @throws {Error} If coreResult is invalid or narrativeArcs is not an array
  */
 function mergeArcsWithInterweaving(coreResult, interweavingResult) {
@@ -686,6 +1083,8 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
   }
 
   const { narrativeArcs, synthesisNotes } = coreResult;
+  // Phase 3 (3.7): the arc writer's questions for the director (C15) survive the merge.
+  const writerQuestions = writerQuestionsOf(coreResult.writerQuestions);
 
   // H1: Validate narrativeArcs is an array before calling .map()
   if (!Array.isArray(narrativeArcs)) {
@@ -703,6 +1102,7 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
       })),
       synthesisNotes,
       interweavingPlan: createDefaultInterweavingPlan(),
+      writerQuestions,
       _interweavingFailed: true,
       _interweavingError: interweavingResult?._error || null
     };
@@ -735,7 +1135,8 @@ function mergeArcsWithInterweaving(coreResult, interweavingResult) {
   return {
     narrativeArcs: mergedArcs,
     synthesisNotes,
-    interweavingPlan: interweavingResult.interweavingPlan || createDefaultInterweavingPlan()
+    interweavingPlan: interweavingResult.interweavingPlan || createDefaultInterweavingPlan(),
+    writerQuestions
   };
 }
 
@@ -834,7 +1235,9 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
   console.log(`[analyzeArcsPlayerFocusGuided] Input data check:`);
   console.log(`  - accusation.accused: ${JSON.stringify(acc.accused || [])}`);
   console.log(`  - accusation.charge: ${acc.charge || 'MISSING'}`);
-  console.log(`  - whiteboard.suspectsExplored: ${JSON.stringify(wbCtx.suspectsExplored || [])}`);
+  // Phase 3 (3.5): the whiteboard parse keeps the board's regions, each under the
+  // players' own heading; suspectsExplored is no longer written.
+  console.log(`  - whiteboard.regions: ${JSON.stringify((wbCtx.regions || []).map(r => r?.label || ''))}`);
   console.log(`  - director: ${(directorNotes.rawProse || '').length} chars prose, ${(directorNotes.quotes || []).length} quotes, ${(directorNotes.transactionReferences || []).length} tx refs`);
   console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
   console.log(`  - roster: ${JSON.stringify(state.sessionConfig?.roster || [])}`);
@@ -881,7 +1284,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // ═══════════════════════════════════════════════════════════════════════
     const call2Start = Date.now();
     const roster = state.sessionConfig?.roster || [];
-    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig, state.evidenceBundle);
+    const interweavingResult = await enrichWithInterweaving(coreResult.narrativeArcs, roster, config, state.sessionConfig, state.evidenceBundle, state.canonicalCharacters);
     const call2Duration = ((Date.now() - call2Start) / 1000).toFixed(1);
 
     if (interweavingResult && !interweavingResult._failed) {
@@ -894,7 +1297,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     // MERGE: Combine results from both calls
     // ═══════════════════════════════════════════════════════════════════════
     const mergedResult = mergeArcsWithInterweaving(coreResult, interweavingResult);
-    const { narrativeArcs, synthesisNotes, interweavingPlan } = mergedResult;
+    const { narrativeArcs, synthesisNotes, interweavingPlan, writerQuestions } = mergedResult;
 
     const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[analyzeArcsPlayerFocusGuided] Complete: ${narrativeArcs?.length || 0} arcs in ${totalDuration}s (Call1: ${call1Duration}s, Call2: ${call2Duration}s)`);
@@ -920,6 +1323,8 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
         synthesizedAt: new Date().toISOString(),
         synthesisNotes: synthesisNotes || '',
         interweavingPlan: interweavingPlan || {},
+        // Phase 3 (3.7): the arc stop shows them; no later prompt prints them
+        writerQuestions: writerQuestions || [],
         arcCount: narrativeArcs?.length || 0,
         architecture: 'split-call',
         interweavingFailed: mergedResult._interweavingFailed || false,
@@ -1015,19 +1420,20 @@ async function reviseArcs(state, config) {
       round: (state.humanArcRevisionCount || 0) + 1,
       validationResults: state.validationResults,
       previousOutput: previousArcs,
-      humanFeedback: state._arcFeedback || null
+      humanFeedback: state._arcFeedback || null,
+      theme: state.theme
     });
     const revisionPrompt = buildArcRevisionPrompt(state, contextSection, previousOutputSection);
     const result = await sdkClient({
       prompt: revisionPrompt,
-      systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback, state.sessionConfig),
+      systemPrompt: getArcRevisionSystemPrompt(!!state._arcFeedback, state.sessionConfig, state.theme),
       model: 'opus',
-      jsonSchema: PLAYER_FOCUS_GUIDED_SCHEMA,
+      jsonSchema: arcReworkSchema(state.theme),
       disableTools: true,        // Pure analytical task — no tool access needed
       label: `Arc revision ${revisionCount}`
     });
 
-    const { narrativeArcs, synthesisNotes, interweavingPlan: revisedPlan } = result || {};
+    const { narrativeArcs, synthesisNotes, interweavingPlan: revisedPlan, writerQuestions: returnedQuestions } = result || {};
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseArcs] Complete: ${narrativeArcs?.length || 0} arcs in ${duration}s`);
@@ -1061,6 +1467,12 @@ async function reviseArcs(state, config) {
         synthesisNotes: synthesisNotes || '',
         interweavingPlan: planReturned ? revisedPlan : (keptPrevious ? previousPlan : createDefaultInterweavingPlan()),
         ...(keptPrevious && { interweavingFromPreviousRound: true }),
+        // Phase 3 (3.7; R5): only the director's note answers a question, so an
+        // automatic pass keeps every previous subject; the rework's question replaces
+        // the earlier ones of its kind and `about` (3.10).
+        writerQuestions: carriedWriterQuestions(returnedQuestions, state._arcAnalysisCache?.writerQuestions, {
+          afterDirectorNote: Boolean(state._arcFeedback)
+        }),
         arcCount: narrativeArcs?.length || 0,
         architecture: 'player-focus-guided-revision',
         revisionNumber: revisionCount,
@@ -1090,6 +1502,8 @@ async function reviseArcs(state, config) {
           synthesizedAt: new Date().toISOString(),
           // Brief 2.2: the previous arcs are kept, so their plan is kept with them.
           ...(state._arcAnalysisCache?.interweavingPlan && { interweavingPlan: state._arcAnalysisCache.interweavingPlan }),
+          // Phase 3 (3.7): and their questions.
+          writerQuestions: writerQuestionsOf(state._arcAnalysisCache?.writerQuestions),
           _revisionTimedOut: true,
           _revisionAttempt: revisionCount,
           _consecutiveTimeouts: consecutiveTimeouts,
@@ -1127,13 +1541,37 @@ async function reviseArcs(state, config) {
 
 /**
  * The rules the arc reworker's system prompt adds after its writer's, one set per
- * kind of rework. Fixed text: the "preserve, do not regenerate" wording waits for
- * phase 3's ruling (X28).
+ * kind of rework: the journalist's (phase 3, brief 3.3; TH7).
+ *
+ * The first line says why the rework runs and where its task is: on a send back, the
+ * director's note in the revision context is the task; on an automatic pass, after a
+ * check or an evaluation, the revision context lists what it found and what the rework
+ * fixes. How much of the previous arcs a rework keeps is the revision context's to say
+ * (buildRevisionContext), from the director's note, so no fixed
+ * "preserve" or "do not regenerate" text is here: on 091826 that text turned the
+ * director's "rethink" into a relabel. The rethink rule is the revision context's too,
+ * the one place every reworker shares, so the send back's rules add only what it
+ * does not say: a corrected game mechanic reaches every arc (3.3 review, finding 2).
+ *
+ * Phase 3 (3.10; R23): the automatic pass's line names its task and leaves the scope
+ * to the revision context, which states it once. It used to end "and this rework
+ * answers it", every finding the context lists, the suggestions among them.
+ */
+const ARC_REVISION_RULES = {
+  human: `You are reworking the arcs you wrote: the director sent them back, and the director's note in the revision context is the task.
+
+The director knows the game, so a note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every arc it touches, not only the one it names.`,
+
+  evaluator: `You are reworking the arcs you wrote after an automatic check or evaluation; the revision context lists what it found and what this rework fixes.`
+};
+
+/**
+ * The detective's arc rework rules, today's text, parked with its theme (spec D13).
  *
  * Human feedback: allows conceptual arc replacement.
  * Evaluator feedback: targeted fixes only.
  */
-const ARC_REVISION_RULES = {
+const DETECTIVE_ARC_REVISION_RULES = {
   human: `You are revising narrative arcs based on human reviewer feedback for "About Last Night."
 
 The human reviewer has domain expertise about the game mechanics. Their feedback takes ABSOLUTE PRIORITY.
@@ -1185,11 +1623,34 @@ DO:
  *
  * @param {boolean} hasHumanFeedback - Whether revision is driven by human rejection
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
+ * @param {string} [theme] - state.theme; coreArcSystemPrompt's default when absent
  * @returns {string} System prompt
  */
-function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined) {
-  const rules = hasHumanFeedback ? ARC_REVISION_RULES.human : ARC_REVISION_RULES.evaluator;
-  return `${coreArcSystemPrompt(sessionConfig)}\n\n${rules}`;
+function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined, theme = undefined) {
+  return `${coreArcSystemPrompt(sessionConfig, theme)}\n\n${arcRevisionRules(hasHumanFeedback, theme)}`;
+}
+
+/**
+ * The arc rework rules for one kind of rework and theme.
+ *
+ * @param {boolean} hasHumanFeedback - a send back (true) or an automatic pass
+ * @param {string} [theme='journalist']
+ * @returns {string}
+ */
+function arcRevisionRules(hasHumanFeedback, theme = 'journalist') {
+  const rules = isParkedDetective(theme) ? DETECTIVE_ARC_REVISION_RULES : ARC_REVISION_RULES;
+  return hasHumanFeedback ? rules.human : rules.evaluator;
+}
+
+/**
+ * The arc reworker's output schema for a theme: the detective's keeps today's wording
+ * for the convergence and the order (D13).
+ *
+ * @param {string} [theme]
+ * @returns {Object}
+ */
+function arcReworkSchema(theme) {
+  return isParkedDetective(theme) ? DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA : PLAYER_FOCUS_GUIDED_SCHEMA;
 }
 
 /**
@@ -1244,13 +1705,21 @@ function describeSchemaField(name, spec) {
  * fields in the schema's own words: the lines are generated from the schema's
  * properties and descriptions, so there is one wording.
  *
+ * Phase 3 (3.10; final review rules-writers[2]): the journalist's addendum carries the
+ * interweaving principles, the one text the interweaving call writes these fields by
+ * (INTERWEAVING_PRINCIPLES), once. The reworker used to get only the schema's
+ * descriptions for the bridges and callback seeds it rewrites. The detective keeps its
+ * addendum (D13).
+ *
  * @param {boolean} hasPlan - whether the prompt shows a PREVIOUS INTERWEAVING PLAN
+ * @param {string} [theme] - the schema whose words it prints (arcReworkSchema)
  * @returns {string}
  * @throws {Error} when the schema no longer defines either field
  */
-function buildArcReworkOutputAddendum(hasPlan) {
-  const arcFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties?.narrativeArcs?.items?.properties?.interweaving?.properties;
-  const planFields = PLAYER_FOCUS_GUIDED_SCHEMA.properties?.interweavingPlan?.properties;
+function buildArcReworkOutputAddendum(hasPlan, theme = 'journalist') {
+  const schema = arcReworkSchema(theme);
+  const arcFields = schema.properties?.narrativeArcs?.items?.properties?.interweaving?.properties;
+  const planFields = schema.properties?.interweavingPlan?.properties;
   if (!arcFields || !planFields) {
     throw new Error('buildArcReworkOutputAddendum: PLAYER_FOCUS_GUIDED_SCHEMA no longer defines interweaving / interweavingPlan');
   }
@@ -1258,6 +1727,13 @@ function buildArcReworkOutputAddendum(hasPlan) {
   const planRule = hasPlan
     ? 'A PREVIOUS INTERWEAVING PLAN is shown above: keep it, or update it for the revised arcs. Do not drop it.'
     : 'No previous plan is shown: write one for the revised arcs.';
+  const principles = isParkedDetective(theme)
+    ? ''
+    : `The interweaving and the plan follow these principles:
+
+${INTERWEAVING_PRINCIPLES}
+
+`;
   return `## WHAT THIS REWORK RETURNS
 
 The OUTPUT FORMAT at the top is the arc writer's. A rework returns that object with two more fields, as its schema defines them.
@@ -1268,7 +1744,7 @@ ${lines(arcFields)}
 The top-level "interweavingPlan" object:
 ${lines(planFields)}
 
-${planRule}`;
+${principles}${planRule}`;
 }
 
 /**
@@ -1301,6 +1777,13 @@ function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
   const keepPlan = hasPlan
     ? ' Keep the PREVIOUS INTERWEAVING PLAN where the arcs it names still stand, and change it only where the revision changed those arcs.'
     : '';
+  // Phase 3 (3.7; R5): the questions the previous arcs raised to the director, so the
+  // rework sees them in the version it starts from and returns those it did not
+  // answer (C15). Left out when there are none; the detective has none (D13).
+  const previousQuestions = isParkedDetective(state.theme) ? [] : writerQuestionsOf(state._arcAnalysisCache?.writerQuestions);
+  const questionsSection = previousQuestions.length > 0
+    ? `\n\n### PREVIOUS QUESTIONS FOR THE DIRECTOR (writerQuestions)\n${JSON.stringify(previousQuestions, null, 2)}`
+    : '';
 
   return `${buildCoreArcSections(state)}
 ---
@@ -1311,15 +1794,36 @@ ${contextSection}
 
 ---
 
-${previousOutputSection}${planSection}
+${previousOutputSection}${planSection}${questionsSection}
 
 ---
 
-${buildArcReworkOutputAddendum(hasPlan)}
+${buildArcReworkOutputAddendum(hasPlan, state.theme)}
 
 ---
 
-## YOUR TASK
+${arcReworkTask(state.theme, keepPlan)}${buildArcStandingNotes(state)}`;
+}
+
+/**
+ * The arc rework's task, the last section before the standing notes.
+ *
+ * The journalist's (phase 3, brief 3.3; TH7) defers to the revision context for what
+ * the rework changes and how far; the detective's keeps today's fixed text (D13).
+ *
+ * @param {string} [theme]
+ * @param {string} keepPlan - the sentence about keeping a previous plan, or ''
+ * @returns {string}
+ */
+function arcReworkTask(theme, keepPlan) {
+  if (!isParkedDetective(theme)) {
+    return `## YOUR TASK
+
+1. Rework the PREVIOUS ARCS OUTPUT as the revision context above directs.
+2. Return the whole arc set in the same JSON format, every arc with all its required fields.
+3. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.${keepPlan}`;
+  }
+  return `## YOUR TASK
 
 1. Review the PREVIOUS ARCS OUTPUT above
 2. Review the ISSUES TO ADDRESS in the revision context
@@ -1328,7 +1832,7 @@ ${buildArcReworkOutputAddendum(hasPlan)}
 5. Return the complete updated arc set in the same JSON format
 6. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.${keepPlan}
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${buildArcStandingNotes(state)}`;
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1428,21 +1932,31 @@ const VALID_EVIDENCE_STRENGTHS = ['strong', 'moderate', 'weak', 'speculative'];
  * Build revision guidance string for programmatic validation failures
  * Commit 8.27: Short-circuit expensive evaluator for obvious structural issues
  *
+ * Phase 3 (3.7; C7, C15): the journalist's fix line offers both ways a player is
+ * covered: a placement through what the record shows, or, where the record holds
+ * nothing about them, a question of kind "player" to the director (fix 3.7b). It used to demand a placement,
+ * which pushed the rework to invent one. The detective keeps its line (D13).
+ *
  * @param {Array} issues - Array of structural issues with type/message/severity
  * @param {Array} missingRoster - Array of roster member names not covered in arcs
+ * @param {string} [theme='journalist']
  * @returns {string} Formatted guidance for revision node
  */
-function buildValidationRevisionGuidance(issues, missingRoster) {
+function buildValidationRevisionGuidance(issues, missingRoster, theme = 'journalist') {
   const lines = ['PROGRAMMATIC VALIDATION FAILED - Fix these structural issues:'];
 
   issues.forEach(issue => {
     lines.push(`\n• ${issue.message}`);
   });
 
-  if (missingRoster.length > 0) {
+  if (missingRoster.length > 0 && isParkedDetective(theme)) {
     lines.push(`\nMissing roster members that MUST appear in characterPlacements:`);
     missingRoster.forEach(name => lines.push(`  - ${name}`));
     lines.push(`\nEnsure each missing member appears in at least one arc's characterPlacements.`);
+  } else if (missingRoster.length > 0) {
+    lines.push(`\nRoster members with no placement and no writerQuestions entry of kind "player" about them:`);
+    missingRoster.forEach(name => lines.push(`  - ${name}`));
+    lines.push(`\nGive each one a placement in an arc's characterPlacements through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry of kind "player" about them for the director (C15).`);
   }
 
   return lines.join('\n');
@@ -1457,11 +1971,17 @@ function buildValidationRevisionGuidance(issues, missingRoster) {
  * Runs AFTER analyzeArcsPlayerFocusGuided to:
  * - Validate keyEvidence IDs exist in evidence bundle
  * - Validate characterPlacements use roster names
- * - Warn on contradictory character roles
  * - Filter arcs that lost all evidence
  * - Validate arcSource and evidenceStrength enums (8.15)
  * - Check for required accusation arc (8.15)
  * - Ensure caveats/unansweredQuestions are arrays (8.15)
+ *
+ * Phase 3 (brief 3.3): an arc with a missing or invalid source label is sent back for
+ * a label (V5). It used to be relabelled "discovered", which the outline writer frames
+ * as something the room missed, so a thread from the director's notes or the
+ * whiteboard could reach print as the room's blind spot. The note that called a role
+ * naming both victim and operator a "contradiction" is gone (V4): a character can be
+ * both wronged and complicit.
  *
  * @param {Object} state - Current state with narrativeArcs, evidenceBundle, sessionConfig
  * @param {Object} config - Graph config (unused)
@@ -1515,6 +2035,7 @@ function validateArcStructure(state, config) {
   let totalEvidenceRemoved = 0;
   let totalCharactersRemoved = 0;
   let totalCharactersCorrected = 0;
+  const unlabelledArcs = [];  // arcs with a missing or invalid arcSource (V5)
 
   const validatedArcs = arcs.map((arc, index) => {
     const issues = [];
@@ -1548,7 +2069,6 @@ function validateArcStructure(state, config) {
     // 2. Validate characterPlacements use roster names
     // ═══════════════════════════════════════════════════════════════════════
     const validatedPlacements = {};
-    const placementRoles = {};  // Track roles for coherence check
 
     Object.entries(arc.characterPlacements || {}).forEach(([name, role]) => {
       // Use fuzzy matching helper (now uses Notion-derived canonical characters map)
@@ -1558,7 +2078,6 @@ function validateArcStructure(state, config) {
       if (matchedName) {
         // Roster member or canonical full name - preserve as-is
         validatedPlacements[matchedName] = role;
-        placementRoles[matchedName.toLowerCase()] = role;
 
         // Note: since validateRosterName now returns the input name unchanged,
         // this "correction" logging will rarely trigger (only for case normalization)
@@ -1570,7 +2089,7 @@ function validateArcStructure(state, config) {
         // Commit 8.17: Known NPC from theme config - preserve as-is
         // NPCs are valid in characterPlacements but don't count toward roster coverage
         validatedPlacements[name] = role;
-        // Don't add to placementRoles - NPCs don't affect roster coverage checks
+        // NPCs don't affect roster coverage checks
       } else if (isNonRosterPC(name, roster, allCharacters, themeNPCs)) {
         // Commit 8.xx: Non-roster PC - valid game character not playing this session
         // They appear in evidence about them but Nova didn't observe their behavior
@@ -1580,7 +2099,7 @@ function validateArcStructure(state, config) {
         arc._nonRosterPCs = arc._nonRosterPCs || [];
         arc._nonRosterPCs.push(name);
         issues.push(`Character "${name}" is non-roster PC (evidence-based mention - valid)`);
-        // Don't add to placementRoles - non-roster PCs don't affect roster coverage checks
+        // Non-roster PCs don't affect roster coverage checks
       } else {
         issues.push(`Removed unknown character: ${name}`);
         totalCharactersRemoved++;
@@ -1588,27 +2107,14 @@ function validateArcStructure(state, config) {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // 3. Check for role coherence (warn on contradictions)
-    // ═══════════════════════════════════════════════════════════════════════
-    Object.entries(placementRoles).forEach(([name, role]) => {
-      const roleLower = role.toLowerCase();
-      const isVictim = roleLower.includes('victim');
-      const isOperator = roleLower.includes('operator') || roleLower.includes('perpetrator');
-
-      if (isVictim && isOperator) {
-        issues.push(`Role contradiction for ${name}: "${role}" contains both victim and operator`);
-      }
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 4. Validate new player-focus-guided fields (Commit 8.15)
+    // 3. Validate new player-focus-guided fields (Commit 8.15)
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Validate arcSource enum (default to 'discovered' if invalid/missing)
-    let validatedArcSource = arc.arcSource;
-    if (!validatedArcSource || !VALID_ARC_SOURCES.includes(validatedArcSource)) {
-      issues.push(`Invalid arcSource "${arc.arcSource || 'missing'}" - defaulting to "discovered"`);
-      validatedArcSource = 'discovered';
+    // A missing or invalid arcSource stays as the writer gave it and the arc goes
+    // back for a label (phase 3, V5): see the invalid-arc-source issue below.
+    const labelled = VALID_ARC_SOURCES.includes(arc.arcSource);
+    if (!labelled) {
+      issues.push(`Invalid arcSource "${arc.arcSource || 'missing'}" - sent back for a label`);
     }
 
     // Validate evidenceStrength enum (default to 'weak' if invalid/missing)
@@ -1642,7 +2148,6 @@ function validateArcStructure(state, config) {
       ...arc,
       keyEvidence: validatedEvidence,
       characterPlacements: validatedPlacements,
-      arcSource: validatedArcSource,
       evidenceStrength: validatedEvidenceStrength,
       caveats: validatedCaveats,
       unansweredQuestions: validatedQuestions,
@@ -1656,6 +2161,7 @@ function validateArcStructure(state, config) {
       issues.forEach(issue => console.log(`    - ${issue}`));
     }
 
+    if (!labelled) unlabelledArcs.push(validatedArc);
     return validatedArc;
   });
 
@@ -1665,7 +2171,11 @@ function validateArcStructure(state, config) {
 
   // Brief 2.2: a verdict that names no culprit (an accident, an overdose, self-harm).
   // Its accusation arc is about the verdict itself and may have no one to place.
-  const noCulpritVerdict = isNoCulpritVerdict(state.sessionConfig?.accusation || state.playerFocus?.accusation);
+  // Phase 3 (3.3): so may a verdict that blames an institution and names no character
+  // (blamesNoCharacter, 3.5's parse of it).
+  const verdict = state.sessionConfig?.accusation || state.playerFocus?.accusation;
+  const noCulpritVerdict = isNoCulpritVerdict(verdict);
+  const verdictNamesNoCharacter = noCulpritVerdict || blamesNoCharacter(verdict);
 
   // Filter arcs that lost all evidence AND characters
   // NOTE: For speculative arcs, we allow no evidence if arcSource is 'accusation'
@@ -1678,9 +2188,9 @@ function validateArcStructure(state, config) {
     if (isAccusationArc && !hasEvidence) {
       console.log(`[validateArcStructure] Accusation arc "${arc.title}" has no evidence - allowed (speculative)`);
       arc._noEvidence = true;
-      // Still needs characters, unless the verdict names no culprit: then an arc
+      // Still needs characters, unless the verdict names no character: then an arc
       // about the verdict with no one to place is the arc the rule asks for.
-      return hasCharacters || noCulpritVerdict;
+      return hasCharacters || verdictNamesNoCharacter;
     }
 
     if (!hasEvidence && !hasCharacters) {
@@ -1735,6 +2245,17 @@ function validateArcStructure(state, config) {
     });
   });
 
+  // Phase 3 (3.7; C7, C15): a roster member a question of kind "player" to the
+  // director names counts as covered, by first name or full name
+  // (questionedRosterNames; a pronoun or ledger question covers no one, fix 3.7b). A
+  // player the record says nothing about is asked about, not placed by invention.
+  // Journalist only: the detective's writer raises no questions (D13).
+  const questionedRoster = isParkedDetective(theme)
+    ? []
+    : questionedRosterNames(state._arcAnalysisCache?.writerQuestions, roster, canonicalCharsForCoverage);
+  const rosterCoveredByQuestion = questionedRoster.filter(name => !coveredRoster.has(name.toLowerCase()));
+  rosterCoveredByQuestion.forEach(name => coveredRoster.add(name.toLowerCase()));
+
   const missingRoster = roster.filter(name => !coveredRoster.has(name.toLowerCase()));
   const rosterCoverage = roster.length > 0 ? coveredRoster.size / roster.length : 1;
 
@@ -1751,6 +2272,17 @@ function validateArcStructure(state, config) {
     structuralIssues.push({
       type: 'missing-roster-coverage',
       message: `Missing roster members: ${missingRoster.join(', ')}`,
+      severity: 'structural'
+    });
+  }
+
+  const unlabelledViable = unlabelledArcs.filter(arc => viableArcs.includes(arc));
+  if (unlabelledViable.length > 0) {
+    structuralIssues.push({
+      type: 'invalid-arc-source',
+      message: 'Arcs with no valid source label: ' +
+        unlabelledViable.map(arc => `"${arc.title}" (${arc.id}), ${arc.arcSource ? `labelled "${arc.arcSource}"` : 'with no label'}`).join('; ') +
+        '. Give each arc the arcSource for where its thread came from: accusation, whiteboard, observation or discovered.',
       severity: 'structural'
     });
   }
@@ -1776,7 +2308,7 @@ function validateArcStructure(state, config) {
     ready: false,
     structuralPassed: false,
     issues: structuralIssues,
-    revisionGuidance: buildValidationRevisionGuidance(structuralIssues, missingRoster),
+    revisionGuidance: buildValidationRevisionGuidance(structuralIssues, missingRoster, theme),
     criteriaScores: {
       rosterCoverage: rosterCoverage,
       accusationArcPresent: hasAccusationArc ? 1.0 : 0.0
@@ -1809,7 +2341,7 @@ function validateArcStructure(state, config) {
   console.log(`  - Arc sources: ${JSON.stringify(arcSourceCounts)}`);
   console.log(`  - Evidence strengths: ${JSON.stringify(evidenceStrengthCounts)}`);
   console.log(`  - Accusation arc present: ${hasAccusationArc}`);
-  console.log(`  - Roster coverage: ${(rosterCoverage * 100).toFixed(0)}% (${missingRoster.length} missing)`);
+  console.log(`  - Roster coverage: ${(rosterCoverage * 100).toFixed(0)}% (${missingRoster.length} missing, ${rosterCoveredByQuestion.length} by a question)`);
   console.log(`  - Non-roster PCs in arcs: ${nonRosterPCs.length > 0 ? nonRosterPCs.join(', ') : '(none)'}`);
   console.log(`  - Structural passed: ${structuralPassed}`);
 
@@ -1826,6 +2358,7 @@ function validateArcStructure(state, config) {
       hasAccusationArc,
       rosterCoverage,
       missingRoster,
+      rosterCoveredByQuestion,  // Phase 3 (3.7): covered by a question to the director, not a placement
       nonRosterPCs,  // Commit 8.xx: Valid game characters not in roster (evidence-based mentions)
       structuralPassed,  // Commit 8.27: gates routing to evaluator vs revision
       validatedAt: new Date().toISOString()
@@ -1941,6 +2474,8 @@ module.exports = {
   // valid-id list and buried transactions).
   hasInterweavingPlan,
   extractEvidenceSummary,
+  // The arc writer's director-notes label, which the arc judge prints too.
+  ARC_NOTES_LABEL,
 
   // Export for testing
   _testing: {
@@ -1975,7 +2510,10 @@ module.exports = {
     buildCoreArcSections,
     ARC_REVISION_RULES,
     hasInterweavingPlan,
-    buildArcReworkOutputAddendum
+    buildArcReworkOutputAddendum,
+    // Phase 3 (3.3): the rework rules and schema by theme
+    arcRevisionRules,
+    arcReworkSchema
   }
 };
 

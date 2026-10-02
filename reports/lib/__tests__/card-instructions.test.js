@@ -39,7 +39,7 @@ describe('the schema\'s evidenceCards description', () => {
 describe.each(['journalist', 'detective'])('the %s article writer', (theme) => {
   let userPrompt;
   beforeAll(async () => {
-    const builder = new PromptBuilder(stubThemeLoader(PHASE_REQUIREMENTS), theme, { roster: [] }, {}, null);
+    const builder = new PromptBuilder(stubThemeLoader(PHASE_REQUIREMENTS[theme]), theme, { roster: [] }, {}, null);
     ({ userPrompt } = await builder.buildArticlePrompt({ lede: {} }, [], null, [], null, null, null));
   });
 
@@ -50,8 +50,9 @@ describe.each(['journalist', 'detective'])('the %s article writer', (theme) => {
   it('says evidenceCards[] holds the sidebar entries, and only the inline block carries content', () => {
     expect(userPrompt).toContain(schema.properties.evidenceCards.description);
     if (theme === 'journalist') {
-      expect(userPrompt).toContain('2. "evidenceCards" - Array of sidebar entries, each a headline and a summary');
-      expect(userPrompt).toContain('evidenceCards[] = the sidebar entries');
+      // Phase 3 (3.2): the rewritten field list.
+      expect(userPrompt).toContain('2. "evidenceCards": the sidebar\'s entries.');
+      expect(userPrompt).toContain('"content" is copied from the document with that id in <RECORD>');
     }
   });
 });

@@ -18,10 +18,16 @@ You identify narrative arcs for the NovaNews article, prioritizing what PLAYERS 
 
 ## First: Load Reference Files
 
-Read for narrative guidance:
+Read the rule set first: the world, the truth rules, the craft guidance for this task, and the reporting mode. Where anything below differs from it, the rule set decides.
 ```
-.claude/skills/journalist-report/references/prompts/narrative-structure.md
-.claude/skills/journalist-report/references/prompts/character-voice.md
+.claude/skills/journalist-report/references/rules/world.md
+.claude/skills/journalist-report/references/rules/truth-rules.md
+.claude/skills/journalist-report/references/rules/craft-story.md
+.claude/skills/journalist-report/references/rules/craft-form.md
+.claude/skills/journalist-report/references/rules/craft-material.md
+.claude/skills/journalist-report/references/rules/craft-judgement.md
+.claude/skills/journalist-report/references/rules/craft-questions.md
+.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, for a remote session)
 ```
 
 ## CRITICAL PRINCIPLE: Director Notes Hierarchy

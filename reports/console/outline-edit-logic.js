@@ -170,12 +170,15 @@
     };
   }
 
+  // Phase 3 (3.2; BU3): thePlayers.buried and whatsMissing.buriedItems left the
+  // outline schema, because whose memory was sold never appears. They are neither
+  // shown nor edited, and an outline written before phase 3 loses them on any edit
+  // (dropRetiredOutlineFields), so its edits still pass the schema.
   function initThePlayers(section) {
     var s = section || {};
     return {
       arcConnections: deepClone(Array.isArray(s.arcConnections) ? s.arcConnections : []),
       exposed: Array.isArray(s.exposed) ? s.exposed.slice() : [],
-      buried: Array.isArray(s.buried) ? s.buried.slice() : [],
       characterHighlights: mapToRows(s.characterHighlights)
     };
   }
@@ -185,9 +188,26 @@
     return {
       arcConnections: deepClone(Array.isArray(s.arcConnections) ? s.arcConnections : []),
       knownUnknowns: Array.isArray(s.knownUnknowns) ? s.knownUnknowns.slice() : [],
-      narrativePurpose: typeof s.narrativePurpose === 'string' ? s.narrativePurpose : '',
-      buriedItems: Array.isArray(s.buriedItems) ? s.buriedItems.slice() : []
+      narrativePurpose: typeof s.narrativePurpose === 'string' ? s.narrativePurpose : ''
     };
+  }
+
+  /** The fields phase 3 retired from the outline schema, by section (BU3). */
+  var RETIRED_OUTLINE_FIELDS = { thePlayers: ['buried'], whatsMissing: ['buriedItems'] };
+
+  /**
+   * A copy of the outline without the fields phase 3 retired. The editors start
+   * from it, so an outline written before phase 3 can still be edited and pass the
+   * schema; the original is untouched.
+   */
+  function dropRetiredOutlineFields(outline) {
+    var next = deepClone(outline);
+    if (!isPlainObject(next)) return next;
+    Object.keys(RETIRED_OUTLINE_FIELDS).forEach(function (sectionKey) {
+      if (!isPlainObject(next[sectionKey])) return;
+      RETIRED_OUTLINE_FIELDS[sectionKey].forEach(function (field) { delete next[sectionKey][field]; });
+    });
+    return next;
   }
 
   function initClosing(section) {
@@ -244,8 +264,10 @@
       return { arcName: row.arcName || '', financialAngle: row.financialAngle || '' };
     });
     var accounts = (Array.isArray(formState.shellAccounts) ? formState.shellAccounts : []).map(function (row) {
-      var acct = { name: row.name || '', total: coerceTotal(row.total), inference: row.inference || '' };
+      var acct = { name: row.name || '', total: coerceTotal(row.total) };
       if (acct.total === undefined) acct.total = '';
+      // Phase 3 (3.2): an account's inference is optional (outline.schema.json).
+      if (nonEmpty(row.inference)) acct.inference = row.inference;
       if (nonEmpty(row.relatedArc)) acct.relatedArc = row.relatedArc;
       return acct;
     });
@@ -259,7 +281,7 @@
       return { arcName: row.arcName || '', characterAngle: row.characterAngle || '' };
     });
     setOrDeleteArray(out, 'exposed', Array.isArray(formState.exposed) ? formState.exposed.filter(nonEmpty) : splitCsv(formState.exposed));
-    setOrDeleteArray(out, 'buried', Array.isArray(formState.buried) ? formState.buried.filter(nonEmpty) : splitCsv(formState.buried));
+    delete out.buried;  // Phase 3 (3.2; BU3): retired from the outline schema
     delete out.pullQuotes;  // F3/X-5: pullQuotes removed from the outline contract (article phase ignores planned quotes; crystallization flows through inline quote content-blocks)
     var map = rowsToMap(formState.characterHighlights);
     if (Object.keys(map).length > 0) { out.characterHighlights = map; } else { delete out.characterHighlights; }
@@ -273,7 +295,7 @@
     });
     setOrDeleteArray(out, 'knownUnknowns', Array.isArray(formState.knownUnknowns) ? formState.knownUnknowns.filter(nonEmpty) : splitCsv(formState.knownUnknowns));
     setOrDeleteString(out, 'narrativePurpose', formState.narrativePurpose);
-    setOrDeleteArray(out, 'buriedItems', Array.isArray(formState.buriedItems) ? formState.buriedItems.filter(nonEmpty) : splitCsv(formState.buriedItems));
+    delete out.buriedItems;  // Phase 3 (3.2; BU3): retired from the outline schema
     return out;
   }
 
@@ -476,10 +498,21 @@
     closing: { key: 'arcResolutions', subFields: ['arcName', 'resolution'] }
   };
   var JOURNALIST_ROOT_KEYS = ['lede', 'theStory', 'followTheMoney', 'thePlayers', 'whatsMissing', 'closing'];
+  // Phase 3 (3.7): the outline writer's questions for the director, a list beside the
+  // six slots (outline.schema.json), never a section.
+  var JOURNALIST_QUESTIONS_KEY = 'writerQuestions';
+  // Fix 3.7b: a question's kind, one of the schema's three (lib/writer-questions.js
+  // WRITER_QUESTION_KINDS; a test holds the two lists equal).
+  var WRITER_QUESTION_KINDS = ['player', 'pronoun', 'ledger'];
   var DETECTIVE_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'memoryAnalysis', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
   var DETECTIVE_REQUIRED_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
 
-  function validateObjectArray(errors, path, value, subFields) {
+  /**
+   * An array of objects, each with every listed field a string. `allowEmpty`
+   * accepts '' as the schema does (the journalist outline since phase 3); the
+   * detective's gate keeps requiring non-empty text.
+   */
+  function validateObjectArray(errors, path, value, subFields, allowEmpty) {
     if (!Array.isArray(value)) {
       errors.push({ path: path, message: 'must be an array of objects (was ' + (value === null ? 'null' : typeof value) + ')' });
       return;
@@ -487,47 +520,80 @@
     value.forEach(function (item, i) {
       if (!isPlainObject(item)) { errors.push({ path: path + '/' + i, message: 'must be an object' }); return; }
       subFields.forEach(function (f) {
-        if (!isNonEmptyString(item[f])) {
+        var ok = allowEmpty ? typeof item[f] === 'string' : isNonEmptyString(item[f]);
+        if (!ok) {
           errors.push({ path: path + '/' + i + '/' + f, message: "must have required string '" + f + "'" });
         }
       });
     });
   }
 
+  /**
+   * Each question's `kind` is one of WRITER_QUESTION_KINDS, as the schema requires
+   * (fix 3.7b). A list or an entry of the wrong type is validateObjectArray's to report.
+   */
+  function validateQuestionKinds(errors, path, questions) {
+    if (!Array.isArray(questions)) return;
+    questions.forEach(function (q, i) {
+      if (isPlainObject(q) && WRITER_QUESTION_KINDS.indexOf(q.kind) === -1) {
+        errors.push({ path: path + '/' + i + '/kind', message: "must have 'kind', one of " + WRITER_QUESTION_KINDS.join(', ') });
+      }
+    });
+  }
+
+  /**
+   * The journalist outline's client gate. Phase 3 (3.2; TH4): it follows
+   * outline.schema.json and is never stricter. The six section keys are optional
+   * slots, a slot may be empty, a section lists only the arcs it carries, and the
+   * lede's fields and the convergence point are optional. So this checks that each
+   * key is allowed, that each slot present is an object, and that each field
+   * present has the schema's type. A required string may be empty, as the schema
+   * allows; the editors write '' for a cleared field.
+   *
+   * Phase 3 (3.7): `writerQuestions`, the outline writer's questions for the director,
+   * is allowed beside the six slots: a list of objects, each with a `kind` (player,
+   * pronoun or ledger; fix 3.7b), a string `about` and a string `question`, as the
+   * schema has it.
+   */
   function validateJournalistOutlineShape(outline, errors) {
     Object.keys(outline).forEach(function (k) {
-      if (JOURNALIST_ROOT_KEYS.indexOf(k) === -1) {
+      if (JOURNALIST_ROOT_KEYS.indexOf(k) === -1 && k !== JOURNALIST_QUESTIONS_KEY) {
         errors.push({ path: '/' + k, message: 'is not an allowed top-level outline key' });
       }
     });
-    if (!isPlainObject(outline.lede)) {
-      errors.push({ path: '/lede', message: 'must be an object' });
-    } else {
-      ['hook', 'keyTension', 'primaryArc'].forEach(function (f) {
-        if (!isNonEmptyString(outline.lede[f])) {
-          errors.push({ path: '/lede/' + f, message: "must have required string '" + f + "'" });
-        }
-      });
+    if (outline[JOURNALIST_QUESTIONS_KEY] !== undefined) {
+      validateObjectArray(errors, '/' + JOURNALIST_QUESTIONS_KEY, outline[JOURNALIST_QUESTIONS_KEY], ['about', 'question'], true);
+      validateQuestionKinds(errors, '/' + JOURNALIST_QUESTIONS_KEY, outline[JOURNALIST_QUESTIONS_KEY]);
     }
-    if (!isPlainObject(outline.theStory)) {
-      errors.push({ path: '/theStory', message: 'must be an object' });
-    } else {
-      var ai = outline.theStory.arcInterweaving;
-      if (!isPlainObject(ai)) {
-        errors.push({ path: '/theStory/arcInterweaving', message: 'must be an object (interleavingPlan + convergencePoint)' });
-      } else {
-        ['interleavingPlan', 'convergencePoint'].forEach(function (f) {
-          if (!isNonEmptyString(ai[f])) {
-            errors.push({ path: '/theStory/arcInterweaving/' + f, message: "must have required string '" + f + "'" });
-          }
-        });
+    JOURNALIST_ROOT_KEYS.forEach(function (k) {
+      if (outline[k] !== undefined && !isPlainObject(outline[k])) {
+        errors.push({ path: '/' + k, message: 'must be an object' });
       }
-      if (!Array.isArray(outline.theStory.arcs)) {
+    });
+    function stringIfPresent(obj, path, f) {
+      if (obj[f] !== undefined && typeof obj[f] !== 'string') {
+        errors.push({ path: path + '/' + f, message: "must be a string '" + f + "'" });
+      }
+    }
+    if (isPlainObject(outline.lede)) {
+      ['hook', 'keyTension', 'primaryArc'].forEach(function (f) { stringIfPresent(outline.lede, '/lede', f); });
+    }
+    if (isPlainObject(outline.theStory)) {
+      var ai = outline.theStory.arcInterweaving;
+      if (ai !== undefined) {
+        if (!isPlainObject(ai)) {
+          errors.push({ path: '/theStory/arcInterweaving', message: 'must be an object (interleavingPlan + convergencePoint)' });
+        } else {
+          ['interleavingPlan', 'convergencePoint'].forEach(function (f) { stringIfPresent(ai, '/theStory/arcInterweaving', f); });
+        }
+      }
+      var arcs = outline.theStory.arcs;
+      if (arcs !== undefined && !Array.isArray(arcs)) {
         errors.push({ path: '/theStory/arcs', message: 'must be an array' });
-      } else {
-        outline.theStory.arcs.forEach(function (arc, i) {
+      } else if (Array.isArray(arcs)) {
+        arcs.forEach(function (arc, i) {
           if (!isPlainObject(arc)) { errors.push({ path: '/theStory/arcs/' + i, message: 'must be an object' }); return; }
-          if (!isNonEmptyString(arc.name)) {
+          if (typeof arc.name !== 'string') {
             errors.push({ path: '/theStory/arcs/' + i + '/name', message: "must have required string 'name'" });
           }
           if (!Number.isInteger(arc.paragraphCount)) {
@@ -539,8 +605,8 @@
     Object.keys(JOURNALIST_ARC_FIELDS).forEach(function (sectionKey) {
       var spec = JOURNALIST_ARC_FIELDS[sectionKey];
       var section = outline[sectionKey];
-      if (!isPlainObject(section)) { errors.push({ path: '/' + sectionKey, message: 'must be an object' }); return; }
-      validateObjectArray(errors, '/' + sectionKey + '/' + spec.key, section[spec.key], spec.subFields);
+      if (!isPlainObject(section) || section[spec.key] === undefined) return;
+      validateObjectArray(errors, '/' + sectionKey + '/' + spec.key, section[spec.key], spec.subFields, true);
     });
     if (isPlainObject(outline.thePlayers) && outline.thePlayers.characterHighlights != null && !isPlainObject(outline.thePlayers.characterHighlights)) {
       errors.push({ path: '/thePlayers/characterHighlights', message: 'must be an object map of string values' });
@@ -733,11 +799,13 @@
     mergeSection: mergeSection,
     mergeArc: mergeArc,
     mergeArcInterweaving: mergeArcInterweaving,
+    dropRetiredOutlineFields: dropRetiredOutlineFields,
 
     validateOutline: validateOutline,
     validateOutlineShape: validateOutlineShape,
     validateBundleShape: validateBundleShape,
-    CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES
+    CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES,
+    WRITER_QUESTION_KINDS: WRITER_QUESTION_KINDS
   };
 
   if (typeof window !== 'undefined') {

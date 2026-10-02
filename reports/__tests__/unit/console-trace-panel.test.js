@@ -38,8 +38,10 @@ describe.each([
     expect(line).toMatch(/\bTracePanel\b/);
   });
 
-  it('builds the panel model from the payload key through the view logic', () => {
-    expect(count(src, 'ViewLogic.traceView(data && data.trace)')).toBe(1);
+  // Final review (reworks[0]): the view labels the evaluation's guidance by whether the
+  // rework was given it, which depends on the theme, so each stop passes its theme prop.
+  it('builds the panel model from the payload key and the stop\'s theme through the view logic', () => {
+    expect(count(src, 'ViewLogic.traceView(data && data.trace, theme)')).toBe(1);
   });
 
   it('renders the panel once, right after the evaluation bar', () => {

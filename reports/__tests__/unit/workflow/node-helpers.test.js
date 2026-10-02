@@ -8,7 +8,7 @@
  * to provide targeted revision context instead of full regeneration.
  */
 
-const { buildRevisionContext, validateFinancialData } = require('../../../lib/workflow/nodes/node-helpers');
+const { buildRevisionContext } = require('../../../lib/workflow/nodes/node-helpers');
 
 describe('buildRevisionContext', () => {
   describe('with humanFeedback', () => {
@@ -120,62 +120,20 @@ describe('buildRevisionContext', () => {
   });
 });
 
-describe('validateFinancialData', () => {
-  it('should flag financial tracker entries that deviate from shell account totals', () => {
-    const financialTracker = {
-      entries: [
-        { name: 'Cayman', amount: '$1,455,000' },
-        { name: 'Sarah', amount: '$125,000' }  // WRONG
-      ]
-    };
-    const shellAccounts = [
-      { name: 'Cayman', total: 1455000 },
-      { name: 'Sarah', total: 350000 }
-    ];
-
-    const issues = validateFinancialData(financialTracker, shellAccounts);
-    expect(issues.length).toBe(1);
-    expect(issues[0]).toContain('Sarah');
-    expect(issues[0]).toContain('350,000');
-  });
-
-  it('should return empty array when all amounts match', () => {
-    const financialTracker = {
-      entries: [
-        { name: 'Cayman', amount: '$1,455,000' },
-        { name: 'Sarah', amount: '$350,000' }
-      ]
-    };
-    const shellAccounts = [
-      { name: 'Cayman', total: 1455000 },
-      { name: 'Sarah', total: 350000 }
-    ];
-
-    const issues = validateFinancialData(financialTracker, shellAccounts);
-    expect(issues).toEqual([]);
-  });
-
-  it('should handle numeric amount values', () => {
-    const financialTracker = {
-      entries: [{ name: 'Cayman', amount: 1455000 }]
-    };
-    const shellAccounts = [{ name: 'Cayman', total: 1455000 }];
-
-    expect(validateFinancialData(financialTracker, shellAccounts)).toEqual([]);
-  });
-
-  it('should return empty when inputs are null/empty', () => {
-    expect(validateFinancialData(null, [])).toEqual([]);
-    expect(validateFinancialData({}, [{ name: 'X', total: 100 }])).toEqual([]);
-    expect(validateFinancialData({ entries: [] }, [])).toEqual([]);
-  });
-
-  it('should be case-insensitive on account names', () => {
-    const financialTracker = {
-      entries: [{ name: 'CAYMAN', amount: '$1,455,000' }]
-    };
-    const shellAccounts = [{ name: 'Cayman', total: 1455000 }];
-
-    expect(validateFinancialData(financialTracker, shellAccounts)).toEqual([]);
+/**
+ * M29 (phase 3, brief 3.3): validateFinancialData read the tracker entries' `name` and
+ * `account`, which the content-bundle schema forbids (an entry names its account in
+ * `description`), so it matched nothing. The assembler replaces the tracker from the
+ * ledger anyway (template-assembler.js overrideFinancialTracker), and the writer is no
+ * longer asked for tracker entries (3.2), so the check goes with its one caller in
+ * assembleHtml.
+ */
+describe('validateFinancialData (M29)', () => {
+  it('is gone, with its caller', () => {
+    const fs = require('fs');
+    const path = require('path');
+    expect(require('../../../lib/workflow/nodes/node-helpers').validateFinancialData).toBeUndefined();
+    const source = fs.readFileSync(path.join(__dirname, '../../../lib/workflow/nodes/template-nodes.js'), 'utf8');
+    expect(source).not.toContain('validateFinancialData');
   });
 });

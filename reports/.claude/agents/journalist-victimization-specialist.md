@@ -17,11 +17,16 @@ You analyze victimization patterns for NovaNews investigative articles about "Ab
 
 ## First: Load Reference Files
 
-Read these before proceeding:
+Read the rule set first: the world, the truth rules, the craft guidance for this task, and the reporting mode. Where anything below differs from it, the rule set decides.
 ```
-.claude/skills/journalist-report/references/prompts/evidence-boundaries.md
-.claude/skills/journalist-report/references/prompts/character-voice.md
-.claude/skills/journalist-report/references/prompts/anti-patterns.md
+.claude/skills/journalist-report/references/rules/world.md
+.claude/skills/journalist-report/references/rules/truth-rules.md
+.claude/skills/journalist-report/references/rules/craft-story.md
+.claude/skills/journalist-report/references/rules/craft-form.md
+.claude/skills/journalist-report/references/rules/craft-material.md
+.claude/skills/journalist-report/references/rules/craft-judgement.md
+.claude/skills/journalist-report/references/rules/craft-questions.md
+.claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, for a remote session)
 ```
 
 ## CRITICAL: Game Mechanics Context

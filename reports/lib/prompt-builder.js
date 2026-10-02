@@ -6,13 +6,47 @@
  */
 
 const { createThemeLoader, PHASE_REQUIREMENTS } = require('./theme-loader');
-const { renderDirectorEnrichmentBlock } = require('./prompt-renderers/director-notes-renderer');
+const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('./prompt-renderers/director-notes-renderer');
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
+const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
-const { renderSessionFactsVerdict, renderPhotoEntry } = require('./prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderPhotoEntry, renderPhotoListEntry, photoKey } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
+// The journalist outline writer embeds this file as its <SCHEMA> (fix 3.2b), the one
+// the SDK channel enforces (ai-nodes.js), as the article writer embeds the schema above.
+const outlineSchema = require('./schemas/outline.schema.json');
+// The detective is parked (spec D13) and its prompt keeps today's text, the <SCHEMA>
+// it embeds included. Phase 3 (3.2) cut the schema's descriptions down to shape only,
+// so the detective prints this copy of the schema as it was before that cut. It is
+// printed, never validated against: the schema above is the one every check uses.
+// lib/__tests__/content-bundle-detective-copy.test.js holds the copy to the live
+// schema's shape. The copy carries no $id, so it can never be registered as the live
+// schema (fix 3.2b); the printed text puts back the id line it printed before (D13).
+// Phase 3 (3.7): the copy carries the live schema's writerQuestions, to keep its
+// shape, and the detective's print leaves it out, so its <SCHEMA> stays as it was.
+const detectivePromptSchema = require('./schemas/content-bundle.detective-prompt.json');
+const { withoutWriterQuestions, schemaWithoutWriterQuestions } = require('./writer-questions');
+const DETECTIVE_PRINTED_SCHEMA = (({ $schema, ...rest }) => ({ $schema, $id: 'content-bundle', ...rest }))(schemaWithoutWriterQuestions(detectivePromptSchema));
 const { getThemeNPCEntries } = require('./theme-config');
+const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
+
+/** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */
+const PRONOUN_NOT_GIVEN = 'pronoun not given';
+
+/** The rule-set call each journalist writer phase reads (lib/rule-set.js), for requirePhasePrompts. */
+const JOURNALIST_RULE_SET_CALLS = Object.freeze({
+  outlineGeneration: 'outline',
+  articleGeneration: 'article'
+});
+
+/**
+ * What the arc packages' excerpts are, in the journalist outline and article
+ * prompts (phase 3, 3.2). They are fragments buildArcEvidencePackages cuts at
+ * sentence breaks; their label used to send them to pull quotes, which never print.
+ */
+const ARC_EXCERPTS_LABEL =
+  "Excerpts are fragments code cut from each document's text at its sentence breaks, in the document's own words: pointers to lines worth reading in its full text.";
 
 /**
  * Generate canonical character roster section
@@ -21,8 +55,13 @@ const { getThemeNPCEntries } = require('./theme-config');
  * Each character gets at most one pronoun, and none is guessed (phase 2 final fix
  * wave; the director's ruling): an NPC is listed once, in the NPC block, with its
  * canon pronoun or none; a canonical character not on this session's roster prints
- * no pronoun; a roster character with no captured pronoun keeps they/them.
- * Pronouns show for the journalist theme only.
+ * no pronoun. Pronouns show for the journalist theme only.
+ *
+ * Phase 3 (3.2; spec T9): a roster character with no captured pronoun prints
+ * "pronoun not given", which the writer raises as a question to the director, in
+ * place of the they/them default. The pronoun the roster stop sets is the
+ * director's choice, they/them included (R3), and prints as set. Nova has no
+ * pronoun in the canon, Marcus is he/him, and Blake has none.
  *
  * @param {string} theme - Theme name (e.g., 'journalist') — kept for signature compatibility
  * @param {Object|null} canonicalCharacters - Notion-derived map of firstName -> fullName
@@ -63,7 +102,7 @@ function generateRosterSection(theme = 'journalist', canonicalCharacters = null,
   const showPronouns = theme === 'journalist';
   const pronounOf = (first) => {
     if (!showPronouns || !onRoster(first)) return null;
-    return capturedPronouns(first) || 'they/them';
+    return capturedPronouns(first) || PRONOUN_NOT_GIVEN;
   };
   const entries = Object.entries(characters).filter(([first]) => !npcNames.has(lower(first)));
   const lines = entries
@@ -122,14 +161,18 @@ ${npcLines.join('\n')}`;
 }
 
 /**
- * Wrap prompt content with XML tags for AI cross-referencing
+ * Wrap prompt content in one XML tag named after it.
  *
- * Uses XML tags for consistency with Claude's training and token efficiency.
- * Cross-references use tag names: "See <narrative-structure> Section 8"
+ * Uses XML tags for consistency with Claude's training and token efficiency. It wraps
+ * the sections both themes add by name (<SHOULD_CONSIDER>, <DIRECTOR_GUIDANCE>) and the
+ * parked detective's prompt files, each under its file name (spec D13). The
+ * journalist's rule files come wrapped from lib/rule-set.js, and a journalist prompt
+ * points at a rule by its id and its file's tag, as in "C16 (<craft-story>)".
  *
- * @param {string} filename - The prompt file name (e.g., 'narrative-structure')
- * @param {string} content - The prompt file content
- * @returns {string} XML-wrapped content
+ * @param {string} filename - the tag: a section's name (e.g. 'DIRECTOR_GUIDANCE') or a
+ *   detective prompt file's name
+ * @param {string} content - the section's or the file's content
+ * @returns {string} XML-wrapped content, or '' when the content is empty
  */
 function labelPromptSection(filename, content) {
   if (!content || !content.trim()) return '';
@@ -203,8 +246,11 @@ function filterGateNotes(gateNotes, currentFeedback, gate) {
  * fix, and advisory warnings, which are suggestions. Concatenated into one list the
  * suggestions read as defects; dropped — as they were until this slice — the outline
  * evaluation's warnings about frontloading never reached the article writer at all.
- * The same two lines introduce the list wherever it appears: here in a generation
- * prompt, and in buildRevisionContext's SHOULD CONSIDER block in a rework prompt.
+ * These two lines introduce the list in a generation prompt's <SHOULD_CONSIDER>, and in
+ * the detective rework's SHOULD CONSIDER block (buildRevisionContext). Since phase 3
+ * (3.10) a journalist rework introduces its list with REWORK_SHOULD_CONSIDER_LINE
+ * (node-helpers.js) alone: "Apply them where they serve the piece" would give a
+ * suggestion a scope of its own, and WHAT THIS REWORK DOES states that scope once (R23).
  */
 const SHOULD_CONSIDER_PREAMBLE =
   'These came from the evaluation that ran before this pass. Apply them where they\n' +
@@ -269,28 +315,38 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * the system prompt, immediately after the identity line.
  *
  * I3 finished the job: the craft prompts no longer assert presence at all, in
- * either direction, and character-voice.md's one POV section names
- * {{REPORTING_MODE}} and defers here. This block is the only place the reporter's
+ * either direction. Since phase 3 (3.2) the journalist's craft files are retired and
+ * T8 in the truth rules defers here. This block is the only place the reporter's
  * whereabouts are stated. Pinned by prompt-reporting-mode-neutral.test.js.
  *
- * "You did not vote" is in both blocks. The reporter covers the room; they are
- * never a member of it. hardConstraints used to say the opposite in so many words
- * (`use "We decided"`).
+ * "You did not vote" is in both of the detective's blocks below. The reporter covers
+ * the room and is never a member of it; hardConstraints used to say the opposite in
+ * so many words (`use "We decided"`). The journalist's blocks said it too until
+ * phase 3 (task 3.1); for the journalist it is now T8's shared part in
+ * truth-rules.md, which the outline and article writers carry in their system
+ * prompts since 3.2 (the arc calls and judges from 3.3 and 3.4).
  *
  * Phase 2 (2.6): the remote block asks for attribution and allows the absence to
  * be stated at most once. 092026's remote article announced it five times ("I was
  * not there.", "I was not in that room.", "This is the story they told me.") and
  * the article evaluation praised it as voice. The prompt lines that restated where
- * the reporter was now defer to this block instead. Keep each block ONE line: the
- * position test finds it by line.
+ * the reporter was now defer to this block instead.
+ *
+ * Phase 3 (task 3.1): these two strings are the DETECTIVE's blocks only, kept as they
+ * were while the detective is parked (spec D13). The journalist's block is the rule
+ * set's mode file, `references/rules/mode-on-site.md` or `mode-remote.md`, read
+ * through lib/rule-set.js: T8's mode part, Nova's position as the uninterested
+ * third party and what Nova could witness. Its remote file sends exposures to Nova
+ * by turn-in, never as tips; "never votes" moved to the truth rules (T8's shared
+ * part) and the party to T7.
  */
-const REPORTING_MODE_BLOCKS = {
+const DETECTIVE_REPORTING_MODE_BLOCKS = {
   'on-site': 'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.',
   remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there: show where each fact came from by attributing it to the people who told you. State your absence at most once in the whole piece; the attribution shows it everywhere else. You did not vote and you were not at the party.'
 };
 
 /**
- * The block for one session, defaulting to on-site.
+ * The block for one session and theme, defaulting to on-site.
  *
  * The single source of the wording for all eight system prompts that carry it:
  * the article's (PromptBuilder._buildReportingModeBlock) and the article rework's,
@@ -300,12 +356,47 @@ const REPORTING_MODE_BLOCKS = {
  * phase 2 (2.3) every rework system prompt opens with its writer's, so each rework
  * carries the block its writer does, once, in the writer's position.
  *
+ * The journalist reads the rule set's mode file (loadModeBlock), wrapped in one tag
+ * named after the file (`<mode-remote>`), so the system prompt's text after the block
+ * is not read as part of its "## T8" section; the detective keeps
+ * DETECTIVE_REPORTING_MODE_BLOCKS. The theme is required: a missing one would
+ * silently give one theme the other's block.
+ *
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
+ * @param {'journalist'|'detective'} theme
+ * @returns {string}
+ * @throws {Error} on any other theme, a missing one included
+ */
+function buildReportingModeBlock(sessionConfig, theme) {
+  const mode = sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
+  if (theme === 'journalist') return loadModeBlock(mode);
+  if (theme === 'detective') return DETECTIVE_REPORTING_MODE_BLOCKS[mode];
+  throw new Error(
+    `buildReportingModeBlock: unknown theme "${theme}"; the theme is required ('journalist' or 'detective')`
+  );
+}
+
+/**
+ * The roster with pronouns under its heading, without the character context: the
+ * section the arc writer, the interweaving call and the outline writer print (phase 3,
+ * 3.10; T9), each player with the pronoun the roster stop gave and the NPCs' canon
+ * lines, as the article writer's system prompt and the judges print them
+ * (generateRosterSection). None of the three reads the character data with it: the arc
+ * writer prints its own character context, and the other two read none.
+ *
+ * The 4b fix batch (3.10 review minor 5): one builder, heading included. The section
+ * was built at two sites with two constructions, and the outline printed it bare while
+ * the arc writer and the interweaving call each gave it a heading of their own.
+ * Journalist only: the detective's prompts print no such section (D13).
+ *
+ * @param {Object|null} sessionConfig - its roster and rosterPronouns
+ * @param {Object|null} canonicalCharacters - first name -> full name
  * @returns {string}
  */
-function buildReportingModeBlock(sessionConfig) {
-  const mode = sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
-  return REPORTING_MODE_BLOCKS[mode];
+function rosterWithPronounsSection(sessionConfig, canonicalCharacters) {
+  const config = sessionConfig || {};
+  return `### Names and Pronouns
+${generateRosterSection('journalist', canonicalCharacters || null, null, config.rosterPronouns, config.roster)}`;
 }
 
 /**
@@ -319,24 +410,31 @@ function buildReportingModeBlock(sessionConfig) {
  *
  * @param {string} systemPrompt - a system prompt whose FIRST LINE is its identity
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
+ * @param {'journalist'|'detective'} theme - see buildReportingModeBlock
  * @returns {string}
  */
-function withReportingModeBlock(systemPrompt, sessionConfig) {
+function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
   const text = String(systemPrompt || '');
   const identityLine = text.split('\n', 1)[0];
   const rest = text.slice(identityLine.length).replace(/^\n+/, '');
-  return `${identityLine}\n\n${buildReportingModeBlock(sessionConfig)}\n\n${rest}`;
+  return `${identityLine}\n\n${buildReportingModeBlock(sessionConfig, theme)}\n\n${rest}`;
 }
 
-// Theme-specific system prompt framing
+/**
+ * Theme-specific system prompt framing.
+ *
+ * Phase 3 (3.2): the journalist's identity lines say who is writing and nothing
+ * more: the world, the truth rules and the craft guidance (lib/rule-set.js) carry
+ * the rest. The journalist has no revision line: the article rework's first line is
+ * its rework rules' own (ai-nodes.js ARTICLE_REVISION_RULES, since 3.10's fix round
+ * 1), and the string that held the old one went in the 4b fix batch. The detective is
+ * parked (spec D13) and keeps its lines, its revision line among them. The
+ * 'validation' lines went with the dead validation builder.
+ */
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
     outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
-    articleGeneration: `You are Nova, writing a NovaNews investigative article. First-person participatory voice.
-
-CRITICAL: THE PARTY = LAST NIGHT. THE INVESTIGATION = THIS MORNING. See <TEMPORAL_DISCIPLINE> in the prompt for detailed rules.`,
-    revision: `You are Nova, revising your investigative article to fix voice issues you identified.`,
-    validation: 'You are validating a NovaNews article against anti-patterns and voice requirements.'
+    articleGeneration: 'You are Nova, writing a NovaNews investigative article in the first person.'
   },
   detective: {
     outlineGeneration: 'You are planning the structure of Detective Anondono\'s case report. Each section answers a DIFFERENT QUESTION about the same underlying facts.',
@@ -344,41 +442,24 @@ CRITICAL: THE PARTY = LAST NIGHT. THE INVESTIGATION = THIS MORNING. See <TEMPORA
 
 TONE: Professional, analytical, with a distinct noir flair. Economical with words. Every sentence earns its place.
 FORMAT: HTML (body content only, NO <html>, <head>, or <body> tags).`,
-    revision: 'You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only. Keep the third-person investigative case-report voice.',
-    validation: 'You are validating a detective case report against anti-patterns and section differentiation requirements.'
+    revision: 'You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only. Keep the third-person investigative case-report voice.'
   }
 };
 
-// Theme-specific hard constraints and voice guidance
+/**
+ * Theme-specific hard constraints and voice guidance.
+ *
+ * Phase 3 (3.2): the journalist's hard constraints, voice checkpoint and voice
+ * question are gone. Each restated a rule the rule set now states once (C4's house
+ * style, T14's words, C10's "name who acted") or reversed one ("no buried memories,
+ * no bonus, no counted memories" against T5; "participatory and implicated" and a
+ * Nova the story "happened to" against T8 and C12). The voice is craft-voice, which
+ * the article writer and its reworker carry in the user prompt. revisionVoice stays
+ * as an empty slot because articleRevisionRules (ai-nodes.js, 3.3's) still prints it.
+ */
 const THEME_CONSTRAINTS = {
   journalist: {
-    hardConstraints: `HARD CONSTRAINTS (violations = failure):
-- NO em-dashes (use commas or periods)
-- NO "tokens" - say "extracted memories" or "memories"
-- NO game mechanics ("buried memories", "first-buried bonus")
-- NO countable memories ("5 memories") - memories are experiences, not inventory
-- NO passive observer voice ("The group decided") - name who acted, in whatever way your REPORTING MODE allows
-- NO inventing last names - use ONLY canonical names from the roster above`,
-    voiceCheckpoint: `Before generating, internalize Nova's voice:`,
-    // I3: mode-neutral. These two strings are rendered for BOTH reporting modes —
-    // voiceQuestion in the article prompt, revisionVoice in the revision SYSTEM
-    // prompt, which carries no mode block at all — so a presence claim here
-    // contradicts the remote mode block and does it in the place a remote article
-    // gets "corrected" back into an on-site one.
-    voiceQuestion: 'Ask yourself: "Am I writing AS Nova, who has a stake in this, or ABOUT events that reached her (the reporting mode says how)?"\nThe answer must be AS Nova. Every sentence should feel like it\'s coming from someone this story happened to, not from a wire service.',
-    revisionVoice: `VOICE INFLUENCES TO EMBODY:
-- Hunter S. Thompson: Participatory and implicated, part of the story
-- Kara Swisher: Directness, calling out BS, no corporate spin
-- Casey Newton: Tech fluency, accessible explanations
-- Heather Cox Richardson: Connects to bigger patterns
-- Marisa Kabas: Moral clarity without preaching
-
-VOICE MECHANICS:
-- First-person participatory, reported the way your REPORTING MODE allows
-- NOT observer mode: "The group decided", "They concluded", "It was noted"
-- Transform: "The group came to a conclusion" -> "<who> pushed the room to its verdict" (name who acted; claim only what your REPORTING MODE lets you witness)
-- Transform: "From my notes that night" -> remove attribution or use "- Nova"
-- Sentence rhythm: Short punchy, then longer building, then short again`
+    revisionVoice: ''
   },
   detective: {
     hardConstraints: `CRITICAL WRITING PRINCIPLES:
@@ -442,7 +523,7 @@ class PromptBuilder {
    * @returns {string}
    */
   _buildReportingModeBlock() {
-    return buildReportingModeBlock(this.sessionConfig);
+    return buildReportingModeBlock(this.sessionConfig, this.themeName);
   }
 
   /**
@@ -456,22 +537,35 @@ class PromptBuilder {
    * @param {Object|null} directorNotes - enriched director notes
    * @param {string[]|null} [corrections] - the director's input-review corrections, in
    *   order (brief 2.2): rendered right after the notes, which are never rewritten
+   * @param {Object|null} [evidenceBundle] - the curated bundle, whose sales decide the
+   *   session clock of a thread with no stamp, as the record view's timeline does
+   *   (brief 3.5): the transaction links print their times on that one decision
    * @returns {string} the XML section, or '' when the director wrote no prose
+   *
+   * Phase 3 (3.2): the header no longer dates every line to "this morning" (the
+   * notes hold the director's read of the session and the epilogue as well), and
+   * no longer prescribes wire phrasing ("It has just been announced…") for the
+   * follow-up: T7 says the follow-up is Nova's own reporting, from the epilogue
+   * alone. The header points at <EPILOGUE> only when the notes carry one, so a
+   * session with no epilogue gets no post-investigation section at all.
    */
-  _buildInvestigationObservations(directorNotes, corrections = null) {
+  _buildInvestigationObservations(directorNotes, corrections = null, evidenceBundle = null) {
     if (!directorNotes?.rawProse) return '';
+    const notes = renderDirectorEnrichmentBlock({
+      rawProse: directorNotes.rawProse,
+      quotes: directorNotes.quotes,
+      transactionReferences: directorNotes.transactionReferences,
+      postInvestigationDevelopments: directorNotes.postInvestigationDevelopments,
+      corrections,
+      sessionConfig: withSessionClock(this.sessionConfig, evidenceBundle)
+    });
+    const epilogueLine = notes.includes('\n<EPILOGUE>\n')
+      ? "\nThe follow-up from Nova's day is the <EPILOGUE> below; T7 says how Nova reports it."
+      : '';
     return `<INVESTIGATION_OBSERVATIONS>
-What happened during the investigation this morning. How it reached you is set by the reporting mode in your system prompt.
-These ground your behavioral claims — who talked to whom, notable moments, recurring patterns.
-For the POST_INVESTIGATION_NEWS sub-block below (if present), write with distinct epistemic language: "It has just been announced…", "Currently…", "Following the investigation…" — do NOT conflate these with this morning's investigation.
+The director's notes on the session, as written. Each block below says what it is.${epilogueLine}
 
-${renderDirectorEnrichmentBlock({
-  rawProse: directorNotes.rawProse,
-  quotes: directorNotes.quotes,
-  transactionReferences: directorNotes.transactionReferences,
-  postInvestigationDevelopments: directorNotes.postInvestigationDevelopments,
-  corrections
-})}
+${notes}
 </INVESTIGATION_OBSERVATIONS>`;
   }
 
@@ -507,10 +601,33 @@ ${renderDirectorEnrichmentBlock({
   }
 
   /**
-   * Generate FINANCIAL_SUMMARY XML section from shell account data
-   * Returns empty string if no accounts with positive totals
+   * The FINANCIAL_SUMMARY section: the ledger's accounts with code-computed figures.
+   * Returns '' when no account has a positive total. Journalist only.
    *
-   * @param {Array} shellAccounts - Array of {name, total, tokenCount} objects
+   * Phase 3 (3.2): the figures are 3.5's (lib/session-ledger.js buildLedger). An
+   * account's total is its sales plus the first-burial bonus and the transfers it
+   * received, less those it sent, so the sum of the totals is the sales and the
+   * bonus: it is labelled for what it sums, where "Total buried" overstated the
+   * sales. Each account's count is its sales (tokenCount), never "tokens" (T14).
+   * The block it replaces ("HOW THE BLACK MARKET WORKS") said Blake keeps every
+   * buried memory and that each total was its holder's pay for their own secrets,
+   * both against the world and T3, T4 and T5, which now say how the money moves.
+   *
+   * Phase 3 (3.9; T5, R11): the total is what the buyer paid out. Who the buyer is,
+   * NeurAI and its board, is Nova's suspicion, so the figures the writers copy name no
+   * payer. The outline and article judges print this same block (evaluator-nodes.js
+   * renderJudgeFinancialSummary), so a judge checks a writer's money against the
+   * figures that writer was given.
+   *
+   * Final review (data-harness-docs[0]): where the session report's Final Standings
+   * disagree with an account's rows, or credit an account no row reached, its total is
+   * the standings' figure and buildLedger keeps the rows' sum as `computedTotal`. That
+   * account's line says its figure is the session report's final total, so a writer or
+   * a judge never reads it as sales plus transfers, and the grand total adds up the
+   * rows, so it stays the sales and the bonus, and says so. A ledger whose standings
+   * agree prints as before.
+   *
+   * @param {Array} shellAccounts - Array of {name, total, tokenCount, computedTotal?} objects
    * @returns {string} XML section or empty string
    */
   _buildFinancialSummary(shellAccounts) {
@@ -518,26 +635,60 @@ ${renderDirectorEnrichmentBlock({
     const nonZero = shellAccounts.filter(a => a.total > 0);
     if (nonZero.length === 0) return '';
 
-    const total = shellAccounts.reduce((sum, a) => sum + (a.total || 0), 0);
+    const isFinalFigure = (a) => Number.isFinite(a.computedTotal);
+    const total = shellAccounts.reduce((sum, a) => sum + ((isFinalFigure(a) ? a.computedTotal : a.total) || 0), 0);
+    const sales = (count) => {
+      const n = Number.isFinite(count) ? count : 0;
+      return `${n} sale${n === 1 ? '' : 's'}`;
+    };
+    const finalFigure = (a) => (isFinalFigure(a)
+      ? "; the session report's final total for this account, which the ledger's sales, bonus and transfers do not add up to"
+      : '');
+    const sumSource = shellAccounts.some(isFinalFigure) ? ", by the ledger's sales, bonus and transfers" : '';
 
     return `
 <FINANCIAL_SUMMARY>
-HOW THE BLACK MARKET WORKS:
-Blake's network collects memories and buries them — removing them from the public record.
-In exchange, account holders are PAID for surrendering their memories.
-Shell account totals represent how much each account holder RECEIVED for burying secrets.
-The total ($${total.toLocaleString('en-US')}) is the combined VALUE of secrets Blake acquired.
-Blake now possesses all buried memories and the leverage they contain.
-Nova CANNOT know whose specific memories went to which accounts — only the account names, amounts, and timing.
-
-AUTHORITATIVE SHELL ACCOUNT DATA (use these exact figures in financialTracker):
-${nonZero.map(a =>
-  `- ${a.name}: $${a.total.toLocaleString('en-US')} (${a.tokenCount} token${a.tokenCount !== 1 ? 's' : ''})`
-).join('\n')}
-Total buried: $${total.toLocaleString('en-US')}
-
-These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use exact values.
+The ledger's accounts, with figures code computed from the session report. Each account's total is its sales, plus the first-burial bonus and the transfers it received, less the transfers it sent; beside it, how many sales it took.
+${nonZero.map(a => `- ${a.name}: $${a.total.toLocaleString('en-US')} (${sales(a.tokenCount)}${finalFigure(a)})`).join('\n')}
+All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is what the buyer paid out this morning, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.
 </FINANCIAL_SUMMARY>`;
+  }
+
+  /**
+   * The SESSION_FACTS section of the journalist outline and article writers, one
+   * builder for both: the roster, the verdict, and who was where.
+   *
+   * Phase 3 (3.2): the agency rule is rewritten, not deleted. It used to say no
+   * character off the roster acts or speaks during the investigation, which wrote
+   * Blake out of the room he works (the world; plan review I11). Only the roster's
+   * players were at the investigation, every other character reaches the article
+   * through the memories and documents, Blake acts in the room, and Nova is not one
+   * of the players. The head count is the roster's (T10), a guest reporter who
+   * plays a character included, since that character is on the roster. Fix 3.2b
+   * (finding 7): "every other character except Blake", so the line does not put
+   * Blake among the absent and then in the room, and the count is in T10's words,
+   * of the people at the investigation (Blake, and Nova on site, were in the room).
+   *
+   * Final review (rules-writers[0]; R11, T5, T14): Blake's line says what world.md says
+   * Blake does in the room, making deals, and nothing about whom the deals serve. "Working
+   * it for NeurAI" stated as fact who stands behind the market, which is Nova's
+   * suspicion, and the gate's outline carried it into FOLLOW THE MONEY.
+   *
+   * @param {Object|null} sessionFacts - ai-nodes.js buildSessionFacts
+   * @returns {string} the XML section, or '' without facts
+   */
+  _sessionFactsSection(sessionFacts) {
+    if (!sessionFacts) return '';
+    const n = sessionFacts.playerCount;
+    return `
+<SESSION_FACTS>
+INVESTIGATION ROSTER (${n} players):
+${sessionFacts.roster.join('\n')}
+
+${renderSessionFactsVerdict(sessionFacts)}
+
+Only the ${n} players above were at the investigation. Every other character except Blake appears only through the memories and documents. Blake was in the room too, making deals, and acts and speaks there as the record shows. Nova is not one of the players. When the article counts the people at the investigation, it counts these ${n} players.
+</SESSION_FACTS>`;
   }
 
   /**
@@ -598,12 +749,24 @@ These figures are DETERMINISTIC — do not estimate, round, or recalculate. Use 
    * @returns {Promise<string>}
    */
   async buildOutlineSystemPrompt() {
-    const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
-
     // The mode block sits where the article's does: right after the identity line,
-    // ahead of every craft rule (brief 1.5). The outline planner used to be told
-    // nothing about where the reporter was, and planned presence beats for a
-    // reporter who was never in the room.
+    // ahead of every rule (brief 1.5). The outline planner used to be told nothing
+    // about where the reporter was, and planned presence beats for a reporter who
+    // was never in the room.
+    //
+    // Phase 3 (3.2): the journalist's system prompt then carries the world and the
+    // truth rules, the stable frame every writer and judge reads first (the
+    // integrator's placement ruling); its craft files go last in the user prompt.
+    // The detective is parked (spec D13) and keeps its craft files here.
+    if (this.themeName === 'journalist') {
+      return `${THEME_SYSTEM_PROMPTS.journalist.outlineGeneration}
+
+${this._buildReportingModeBlock()}
+
+${loadRuleSet('outline').core}`;
+    }
+
+    const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
     return `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
 
 ${this._buildReportingModeBlock()}
@@ -621,8 +784,6 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
    * @returns {Promise<string>}
    */
   async buildOutlineUserSections(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
-    const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
-
     // <arc-metadata> below renders every arc, trimmed to the fields the outline
     // needs. <arc-analysis> then dumped the SAME arcs again, untrimmed, so every
     // arc title, summary and evidence list was serialized twice in one prompt.
@@ -641,16 +802,17 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
       analysisNotes: arc.analysisNotes || {}  // Financial/behavioral/victimization insights
     }));
 
-    const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections);
+    const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections, options.evidenceBundle);
 
     // Brief 2.1: every usable document in full, once, ahead of the per-arc lists that
     // name them by id. The planner used to read the text of at most five documents
     // per arc, and on 092026 never saw 12 of the 37 the article writer later used.
-    const recordSection = renderRecordView(options.evidenceBundle);
+    const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
 
     let userPrompt;
 
     if (this.themeName === 'detective') {
+      const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
       userPrompt = `Generate a case report outline using these selected narrative threads.
 
 SELECTED THREADS (in order of significance):
@@ -769,92 +931,61 @@ Return JSON with the following structure:
       // The director's observations sit with the data and BEFORE the arc metadata
       // (brief 1.5). They are not guidance and must not compete with it:
       // <DIRECTOR_GUIDANCE> is appended last, and keeps the last word. Journalist
-      // only, as in the article prompt — the detective report has no such section,
+      // only, as in the article prompt: the detective report has no such section,
       // and an outline must not plan on material its writer never sees.
-      userPrompt = `Generate an article outline using these selected arcs.
+      //
+      // Phase 3 (3.2): the data, then the craft files last (the integrator's
+      // placement ruling; the world and the truth rules are in the system prompt).
+      // Gone, because the rule set states each once or contradicted it: the arc
+      // metadata's framing rules ("state conclusions confidently", a discovered arc
+      // "framed as revelation"), <arc-interweaving> and <arc-section-flow> (every arc
+      // in every section, the convergence in THE STORY), <visual-rules> and
+      // <visual-principles> (pull quotes, a fixed section table, photos as pacing),
+      // <TEMPORAL_DISCIPLINE> (the world and T7), the old agency rule, and the JSON
+      // shape restated in the prompt's own words (M27). The shape comes from
+      // outline.schema.json alone: the SDK channel enforces it, and since fix 3.2b
+      // (finding 10) the prompt embeds the same file as <SCHEMA>, after the data and
+      // before the craft files, a backstop for the channel (SDK #277) as the article
+      // writer's <SCHEMA> is.
+      //
+      // The 4b fix batch (spec section 7, R12): <arc-metadata> says what an arc is in
+      // C16's words, one thread of the story the arc writer found. It called an arc "the
+      // arc writer's reading", and "reading" is retired as the rules' noun for an inference.
+      //
+      // Phase 3 (3.10; T9): after SESSION_FACTS, the roster with pronouns, the section
+      // the article writer's system prompt and the judges print, so each player's
+      // pronoun reaches this writer once: at the gate it planned from first names alone.
+      // The section is built without the character data, so it adds the roster and the
+      // NPCs' canon lines and none of the character context the article writer reads
+      // beside them. The 4b fix batch: built by rosterWithPronounsSection, under the
+      // heading the arc writer and the interweaving call print it with.
+      //
+      // Task 4c-fix (T13): when the director kept no photo but the whiteboard there is no
+      // hero (ai-nodes.js selectHeroImage), and HERO IMAGE says none, as the article
+      // writer's line does.
+      //
+      // Task 4c-fix (4b-fix review minor 4): <available-photos> builds each entry with
+      // renderPhotoListEntry, the builder the outline judge lists the same photos with.
+      // The list never holds the hero, so no entry carries the hero mark.
+      const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
+      userPrompt = `Plan the outline of the article from these selected arcs. Write the plan in the third person: the article writer gives it Nova's voice.
 
-SELECTED ARCS (in order of appearance):
+SELECTED ARCS:
 ${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
 
-HERO IMAGE: ${heroImage}
+HERO IMAGE: ${heroImage || 'none'}
 ${observationsSection ? `\n${observationsSection}\n` : ''}
 <arc-metadata>
 ${JSON.stringify(arcsWithMetadata, null, 2)}
 
-USING ARC METADATA IN THE OUTLINE:
-
-1. **arcSource** determines framing:
-   - "accusation": This is what players concluded. Frame as "The group accused..."
-   - "whiteboard": Players explored this. Frame as investigation thread.
-   - "observation": Director saw this. Frame as behavioral evidence.
-   - "discovered": Evidence pattern players missed. Frame as revelation.
-
-2. **evidenceStrength** determines confidence:
-   - "strong": State conclusions confidently
-   - "moderate": Use "suggests", "indicates"
-   - "weak": Use "hints at", "raises questions about"
-   - "speculative": Use "The group believed..." with uncertainty markers
-
-3. **caveats** become "But questions remain..." sections
-   - Each caveat is a complication to weave into the narrative
-   - Don't ignore complications - acknowledge them
-
-4. **unansweredQuestions** create narrative tension in "What's Missing"
-   - These become hooks for the reader
-   - Nova can explicitly say "I don't know why..."
+Each arc above is one thread of the story, as the arc writer found it. Its arcSource says where the thread came from: "accusation" (the verdict), "whiteboard" (a theory the room worked through), "observation" (the director's notes) or "discovered" (a pattern in the record the room did not take up, which C3 governs). Its evidenceStrength, caveats and unansweredQuestions say how far the record carries it; T1 says how each claim is written.
 </arc-metadata>
-
-<arc-interweaving>
-See <narrative-structure> "Arc Flow & Interweaving" section for complete philosophy. Key points:
-- Arcs are THREADS, not CHAPTERS
-- Plan callback opportunities (details planted in Arc A that pay off in Arc C)
-- All arcs must converge at a specific point in THE STORY
-</arc-interweaving>
-
-<visual-rules>
-See <narrative-structure> Section 8 for complete visual component rules.
-
-**Pull Quotes (Key Points):**
-- VERBATIM: Exact quote from evidence WITH character attribution
-- CRYSTALLIZATION: Journalist insight, NO attribution (NEVER "— Nova")
-
-**Photo Placement:**
-- Humanize BEFORE damning revelation about that character
-- ONLY use filenames from AVAILABLE PHOTOS below
-</visual-rules>
-
-<visual-principles>
-**Each component must EARN its place:**
-- Evidence cards: CLOSE or OPEN a narrative loop (not just illustrate)
-- Photos: Create emotional beats (humanize before revelation, breathe after intensity)
-- Pull quotes: Crystallize powerful moments (verbatim, not summaries)
-
-**Anti-Clustering:** See <narrative-structure> Visual Rhythm Rules (rules 6-8)
-
-**Section Appropriateness:**
-- LEDE: Pure prose hook (hero image optional)
-- THE STORY: Primary home for evidence cards and photos
-- FOLLOW THE MONEY: Financial tracker required, evidence cards optional
-- THE PLAYERS: Pull quotes for standout moments
-- WHAT'S MISSING: Prose-driven (photos optional for emotional beats)
-- CLOSING: Evidence cards optional, pull quotes for final crystallization
-
-**Quality Over Quantity:**
-A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
-The goal is a compelling GIFT for players, not quota compliance.
-</visual-principles>
 
 <available-photos>
 
-${availablePhotos.length > 0 ? availablePhotos.map((p, i) => `${i + 1}. ${renderPhotoEntry({ filename: p.filename, names: p.identifiedCharacters }, options.photoDescriptions, '   ')}`).join('\n\n') : 'No session photos available'}
+${availablePhotos.length > 0 ? availablePhotos.map((p, i) => renderPhotoListEntry(p, i, options.photoDescriptions)).join('\n\n') : 'No session photos available'}
 
-IMPORTANT: When specifying photoPlacement, use the EXACT filename from above (e.g., "IMG_1234.jpg").
-Do NOT use paths like "character-photos/vic.png" - these files do not exist.
-
-**Evidence Cards:**
-- Every card must CLOSE or OPEN a loop (not just illustrate)
-- CLOSER: proves what was hinted
-- OPENER: raises new question while answering old
+A photo placement names its photo by the exact filename above.
 </available-photos>
 
 ${recordSection}
@@ -864,118 +995,34 @@ ${recordSection}
 ${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
 ### ${pkg.arcId} - ${pkg.arcTitle}
 
-**Evidence Items (${pkg.evidenceItems?.length || 0} items; each one's full text is ${DOCUMENT_POINTER}):**
+**Documents (${pkg.evidenceItems?.length || 0}; each one's full text is ${DOCUMENT_POINTER}):**
 ${(pkg.evidenceItems || []).map(item => `- ${item.id}: ${item.type}
-  Quotable: ${(item.quotableExcerpts || []).slice(0, 2).map(q => `"${q}"`).join(' | ') || 'None extracted'}`).join('\n')}
+  Excerpts: ${(item.quotableExcerpts || []).slice(0, 2).map(q => `"${q}"`).join(' | ') || 'none'}`).join('\n')}
 
-**Arc-Relevant Photos (${pkg.photos?.length || 0} photos):**
-${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown characters'}`).join('\n') || 'No arc-specific photos'}
-`).join('\n') : 'No arc evidence packages available - using evidence bundle directly'}
+**Photos in which this arc's characters were identified (${pkg.photos?.length || 0}):**
+${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown characters'}`).join('\n') || 'None'}
+`).join('\n') : 'No arc evidence packages; every document is in <RECORD>.'}
 
-**Using Arc Evidence Packages:**
-1. For pull quotes, use **quotableExcerpts** - these are pre-extracted verbatim text
-2. For evidence cards, use **evidenceItems**: each item's full text is ${DOCUMENT_POINTER}
-3. For photo placement, use **arc-relevant photos** that feature arc characters
+${ARC_EXCERPTS_LABEL}
 </arc-evidence>
 
 <arc-analysis>
 ${JSON.stringify(arcAnalysisOnly, null, 2)}
-
-${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
-${labelPromptSection('formatting', prompts['formatting'])}
-${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
 </arc-analysis>
-
-<arc-section-flow>
-CRITICAL: Arcs are THREADS that weave through the entire article, not chapters isolated to THE STORY.
-
-Each arc should appear in multiple sections with different focus:
-- LEDE: Hooks with arc's central tension
-- THE STORY: Full arc development with evidence
-- FOLLOW THE MONEY: Financial angles of the arc
-- THE PLAYERS: Character revelations that advance the arc
-- WHAT'S MISSING: Gaps/questions raised by the arc
-- CLOSING: Arc resolution or haunting continuation
-
-Every section (except LEDE) must have "arcConnections" showing which arcs it advances.
-</arc-section-flow>
-
-<TEMPORAL_DISCIPLINE>
-CRITICAL: FOUR STAGES. THE PARTY (LAST NIGHT), THE INVESTIGATION (THIS MORNING), THE DELIBERATION (THIS MORNING), THE ARTICLE (NOW).
-- Memory CONTENT describes party events from LAST NIGHT. Nova was NOT at the party.
-- Director observations describe THIS-MORNING events: the investigation and the deliberation; how Nova learned of them is set by the reporting mode in your system prompt.
-- The verdict is the DELIBERATION outcome (this morning). It is the room's conclusion, which may diverge from what the record implies. That gap is the article's spine.
-- This-morning behavior (investigation and deliberation) is told in the reporting mode, in the third person; never a first-person presence claim.
-- "The memory shows" / "In the recording" = party events from last night.
-- Burial transactions are INVESTIGATION actions (this morning), NOT party events (last night).
-- NEVER treat a party event and a this-morning event as simultaneous.
-- NEVER say "tonight". The party was last night, the investigation and deliberation were this morning.
-</TEMPORAL_DISCIPLINE>
 ${this._buildFinancialSummary(shellAccounts)}
-${sessionFacts ? `
-<SESSION_FACTS>
-INVESTIGATION ROSTER (${sessionFacts.playerCount} players):
-${sessionFacts.roster.join('\n')}
+${this._sessionFactsSection(sessionFacts)}
 
-${renderSessionFactsVerdict(sessionFacts)}
+${rosterSection}
 
-CRITICAL - CHARACTER AGENCY RULE:
-ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
-Use exactly ${sessionFacts.playerCount} when referencing how many people were present.
-</SESSION_FACTS>` : ''}
-Return JSON with the following structure:
-{
-  "lede": {
-    "hook": "Opening hook text",
-    "keyTension": "Central conflict",
-    "primaryArc": "Which arc drives the hook"
-  },
-  "theStory": {
-    "arcInterweaving": {
-      "interleavingPlan": "How arcs will be intercut (not sequential)",
-      "callbackOpportunities": [
-        {"plantIn": "Arc A", "payoffIn": "Arc C", "detail": "What's planted and paid off"}
-      ],
-      "convergencePoint": "Where all arcs meet (paragraph/section location)"
-    },
-    "arcs": [
-      {
-        "name": "Arc name",
-        "paragraphCount": 3,
-        "evidenceCards": [{"tokenId": "xxx", "placement": "after para 1", "loopFunction": "CLOSER|OPENER"}],
-        "photoPlacement": {"filename": "xxx.png", "afterParagraph": 2, "purpose": "breathing|humanize|bridge"} or null
-      }
-    ]
-  },
-  "followTheMoney": {
-    "arcConnections": [
-      {"arcName": "Arc A", "financialAngle": "How this arc's financial thread continues here"}
-    ],
-    "shellAccounts": [{"name": "X", "total": 123, "inference": "What it means", "relatedArc": "Arc name"}],
-    "photoPlacement": {"filename": "xxx.png"} or null
-  },
-  "thePlayers": {
-    "arcConnections": [
-      {"arcName": "Arc A", "characterAngle": "How this arc advances through character revelation"}
-    ],
-    "exposed": ["names"],
-    "buried": ["names"]
-  },
-  "whatsMissing": {
-    "arcConnections": [
-      {"arcName": "Arc A", "openQuestion": "What gap in this arc creates tension"}
-    ],
-    "knownUnknowns": ["Questions Nova explicitly noticed but couldn't answer - NOT buried evidence IDs"],
-    "narrativePurpose": "How these gaps create tension and pull the reader forward"
-  },
-  "closing": {
-    "arcResolutions": [
-      {"arcName": "Arc A", "resolution": "How this arc concludes or haunts"}
-    ],
-    "systemicAngle": "What broader point to make",
-    "accusationHandling": "How to present the accusation"
-  }
-}`;
+<SCHEMA>
+The outline is JSON in this shape: field names, types, enum values and required fields.
+
+\`\`\`json
+${JSON.stringify(outlineSchema, null, 2)}
+\`\`\`
+</SCHEMA>
+
+${loadRuleSet('outline').craft}`;
     }
 
     return userPrompt;
@@ -1025,12 +1072,26 @@ Return JSON with the following structure:
 
   /**
    * The article writer's system prompt, shared with the article reworker (2.3): the
-   * identity, the mode block, the roster with pronouns, the hard constraints and the
-   * evidence boundaries.
+   * identity, the mode block, and then, for the journalist, the world, the truth
+   * rules and the roster with pronouns (phase 3, 3.2: the integrator's placement
+   * ruling). The journalist's hard constraints and evidence-boundaries file are gone:
+   * the rule set states what they said that holds. The roster prints here alone
+   * (M20: the user prompt's <RULES> carried a second copy). The detective is parked
+   * and keeps its constraints and craft file.
    *
    * @returns {Promise<string>}
    */
   async buildArticleSystemPrompt() {
+    if (this.themeName === 'journalist') {
+      return `${THEME_SYSTEM_PROMPTS.journalist.articleGeneration}
+
+${this._buildReportingModeBlock()}
+
+${loadRuleSet('article').core}
+
+${this._rosterSection()}`;
+    }
+
     const prompts = await this._loadResolvedPhasePrompts('articleGeneration');
 
     // System prompt: Identity and hard constraints (kept short for salience)
@@ -1056,6 +1117,17 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
    * @returns {Promise<string>}
    */
   async buildArticleUserSections(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+    // Brief 2.1: the record, once, in the data part. The packages name each arc's
+    // documents by id instead of repeating their text.
+    const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
+
+    if (this.themeName === 'journalist') {
+      return this._journalistArticleUserSections(
+        outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
+      );
+    }
+
+    // The detective is parked (spec D13): everything below is its text as it was.
     const prompts = await this._loadResolvedPhasePrompts('articleGeneration');
     const constraints = THEME_CONSTRAINTS[this.themeName];
 
@@ -1080,12 +1152,7 @@ ${(pkg.photos || []).map(p => `- ${renderPhotoEntry({ filename: p.filename, name
 `).join('\n---\n')}
 ` : '';
 
-    // Brief 2.1: the record, once, in the data part. The packages above name each
-    // arc's documents by id instead of repeating their text.
-    const recordSection = renderRecordView(options.evidenceBundle);
-
     // User prompt: Data first, then template, then RULES LAST (recency bias)
-    // Branch by theme — detective gets simplified case report prompt, journalist gets full article prompt
     let userPrompt;
 
     if (this.themeName === 'detective') {
@@ -1193,306 +1260,7 @@ TARGET LENGTH: ~750 words (+-50 words acceptable). Be economical. Every sentence
 Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields. Note: the schema permits pullQuotes/evidenceCards/financialTracker as optional properties, but the detective theme excludes them per the rule above; if anything else contradicts the schema, the schema wins.
 
 \`\`\`json
-${JSON.stringify(contentBundleSchema, null, 2)}
-\`\`\`
-</SCHEMA>
-</GENERATION_INSTRUCTION>`;
-    } else {
-      // Journalist (NovaNews article) prompt — full article with visual components
-      userPrompt = `<DATA_CONTEXT>
-APPROVED OUTLINE:
-${JSON.stringify(outline, null, 2)}
-
-HERO IMAGE (CRITICAL - do NOT duplicate):
-Filename: ${heroImage || 'Use first available photo from outline'}
-This image is the HERO IMAGE at the top of the article.
-- Emit "heroImage" as an OBJECT: { "filename": "<exact filename>", "caption": "...", "characters": [...] }
-- Do NOT emit "heroImage" as a bare filename string — the schema requires an object.
-- Do NOT include this filename in the "photos" array (it would cause duplication)
-- Inline photos must use DIFFERENT photos from the session
-
-TEMPORAL CONTEXT KEY (evidence items carry a temporalContext field):
-- "PARTY" = RECOVERED MEMORY from the night of the party. It reached you the way your REPORTING MODE says.
-  USE: "The memory shows..." / "Recovered footage from [time] captures..." / "A memory from [time] reveals..."
-  NEVER: "I watched [character] do X" for party events. You were NOT at the party.
-- "INVESTIGATION" = Something that occurred during this morning's investigation. How it reached you is set by your REPORTING MODE.
-  USE: "This morning..." with first-person witness or attribution, as your REPORTING MODE allows.
-- "BACKGROUND" = Document or evidence that predates the party.
-  USE: "Records show..." / "Documents reveal..."
-
-${recordSection}
-${arcEvidenceSection}
-${this._buildFinancialSummary(shellAccounts)}
-${this._buildInvestigationObservations(directorNotes, options.directorCorrections)}
-${(narrativeTensions?.tensions?.length > 0) ? `
-<NARRATIVE_TENSIONS>
-These possible contradictions between public behavior and Black Market activity are
-strong narrative opportunities — weave the ones the record supports into the narrative
-where appropriate. ${DERIVED_LABELS.narrativeTensions}
-${narrativeTensions.tensions.map(t => `- [${t.type}] ${t.narrativeNote}`).join('\n')}
-</NARRATIVE_TENSIONS>` : ''}
-</DATA_CONTEXT>
-
-<RULES>
-${labelPromptSection('section-rules', prompts['section-rules'])}
-${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
-${labelPromptSection('formatting', prompts['formatting'])}
-${labelPromptSection('editorial-design', prompts['editorial-design'])}
-
-${this._rosterSection()}
-
-<TEMPORAL_DISCIPLINE>
-CRITICAL: FOUR STAGES. Get them right or the article makes no sense.
-
-1. THE PARTY (LAST NIGHT): Marcus's party where the death occurred. Events known ONLY through extracted memories. Nova was NOT there.
-2. THE INVESTIGATION (THIS MORNING): Party attendees woke up with holes in their memories. Memories were exposed to the Detective or buried via the Black Market. How Nova learned of it is set by the REPORTING MODE in your system prompt.
-3. THE DELIBERATION (THIS MORNING, after the investigation): The room weighed the evidence and settled on a verdict, who they accused and why. The conclusion formed here may diverge from what the full record implies. That divergence is the article's central tension.
-4. THE ARTICLE (NOW): Written immediately after the deliberation concluded.
-
-LANGUAGE RULES:
-- Party events: "Last night..." / "The memory shows..." / "In the recording..." Nova was NOT at the party.
-- Investigation and deliberation events: "This morning..." How each one reached Nova, and how she shows it, is set by the REPORTING MODE in your system prompt.
-- Burial transactions are INVESTIGATION actions (this morning), NOT party events (last night).
-- The verdict is a DELIBERATION outcome (this morning). Frame it as the room's conclusion, which the record may or may not support.
-- NEVER treat a party event and a this-morning event as simultaneous.
-- NEVER say "tonight". The party was last night, the investigation and deliberation were this morning.
-</TEMPORAL_DISCIPLINE>
-</RULES>
-
-<ARC_FLOW>
-CRITICAL: Arcs are THREADS that weave through the entire article.
-
-Use the outline's arcConnections in each section:
-- THE STORY: Interweave arcs per the interleavingPlan
-- FOLLOW THE MONEY: Continue arc threads through financial lens per arcConnections
-- THE PLAYERS: Advance arcs through character revelations per arcConnections
-- WHAT'S MISSING: Honor the knownUnknowns - gaps Nova noticed, NOT buried evidence IDs
-- CLOSING: Resolve or haunt per arcResolutions
-
-If the reader can identify where one arc ends and another begins, you've failed.
-Arc boundaries should feel like a conversation topic shifting, not a chapter break.
-</ARC_FLOW>
-
-<VISUAL_DISTRIBUTION>
-Visual components EARN their place by serving the narrative.
-
-PRINCIPLES:
-- Evidence cards: CLOSE or OPEN a narrative loop (not just illustrate)
-- Photos: Create emotional beats (humanize before revelation, breathe after intensity)
-- Pull quotes: Crystallize powerful moments (verbatim, not summaries)
-
-ANTI-CLUSTERING: See <narrative-structure> Visual Rhythm Rules (rules 6-8)
-
-SECTION APPROPRIATENESS (authoritative):
-| Section          | Evidence Cards | Photos    | Pull Quotes |
-|------------------|----------------|-----------|-------------|
-| LEDE             | No             | Hero only | No          |
-| THE STORY        | Yes            | Yes       | Yes         |
-| FOLLOW THE MONEY | Optional       | Optional  | Yes         |
-| THE PLAYERS      | Optional       | Yes       | Yes         |
-| WHAT'S MISSING   | No             | Yes       | Optional    |
-| CLOSING          | Optional       | Optional  | Yes (1 max) |
-
-Quality over quantity. A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
-</VISUAL_DISTRIBUTION>
-
-<VISUAL_COMPONENT_TYPES>
-CRITICAL: Understand the difference between evidence-card and evidence-reference.
-
-EVIDENCE-CARD (inline, full display — use sparingly, 3-5 per article):
-- Goes in sections[].content[] array
-- type: "evidence-card"
-- REQUIRES: tokenId, headline, content (VERBATIM from ${DOCUMENT_POINTER}), owner, significance
-- SHOWS: Full evidence as styled card in article body
-- USE FOR: Narrative climax moments, proving claims, CLOSING or OPENING a loop
-- The surrounding prose should set up WHY this evidence matters, then the card delivers the proof.
-
-EVIDENCE-REFERENCE (lightweight link — use freely):
-- Goes in sections[].content[] array
-- type: "evidence-reference"
-- REQUIRES: tokenId only (plus optional caption)
-- SHOWS: Small diamond icon linking to sidebar
-- USE FOR: Supporting mentions, corroboration, threading evidence through prose without interrupting flow
-
-IF YOU WANT EVIDENCE DISPLAYED INLINE: You MUST use "evidence-card" type.
-Using "evidence-reference" will NOT display content - it only creates a link.
-
-EVIDENCE-CARD INLINE EXAMPLE:
-{
-  "id": "the-story",
-  "type": "narrative",
-  "content": [
-    {"type": "paragraph", "text": "They circled each other, [Character A]'s composure finally cracking..."},
-    {"type": "evidence-card", "tokenId": "tok001", "headline": "The Moment of Truth", "content": "[Token ID] - [timestamp] - [Full verbatim text of ${DOCUMENT_POINTER} - do NOT truncate or summarize]", "owner": "[Character A]", "significance": "critical"},
-    {"type": "paragraph", "text": "After that, nothing was the same between them..."}
-  ]
-}
-
-CRYSTALLIZATION & VERBATIM MOMENTS:
-- For a damning verbatim line from evidence, use an inline "quote" content block (type: "quote", with attribution) inside the relevant section — it renders in the article body.
-- For a crystallizing journalist insight, use an inline "quote" content block with attribution omitted (no "— Nova").
-- These are OPTIONAL. Use them where a line earns a pause, not to fill a quota.
-
-MINIMUM REQUIREMENTS:
-- At least 3 evidence-card blocks across sections (in sections[].content[], NOT just evidenceCards[])
-- No two evidence-cards adjacent (separate with prose)
-</VISUAL_COMPONENT_TYPES>
-
-${sessionFacts ? `
-<SESSION_FACTS>
-INVESTIGATION ROSTER (${sessionFacts.playerCount} players):
-${sessionFacts.roster.join('\n')}
-
-${renderSessionFactsVerdict(sessionFacts)}
-
-CRITICAL - CHARACTER AGENCY RULE:
-ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
-Characters who appear in memory content but are NOT listed above were subjects
-of memories from the party - they were NOT at the investigation.
-NEVER give non-roster characters actions, decisions, or dialogue during
-investigation events.
-
-Use exactly ${sessionFacts.playerCount} when referencing how many people were present.
-</SESSION_FACTS>` : ''}
-<ANTI_PATTERNS>
-${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
-</ANTI_PATTERNS>
-
-<VOICE_CHECKPOINT>
-${constraints.voiceCheckpoint}
-${labelPromptSection('character-voice', prompts['character-voice'])}
-${labelPromptSection('writing-principles', prompts['writing-principles'])}
-${constraints.voiceQuestion}
-</VOICE_CHECKPOINT>
-
-<GENERATION_INSTRUCTION>
-Generate structured article content as JSON matching the ContentBundle schema.
-
-SCHEMA STRICTNESS — READ THIS FIRST:
-The ContentBundle schema sets "additionalProperties: false" at every level. Any field name not listed below causes rejection. Do NOT invent top-level fields (no "subtitle", "summary", "lede") or per-block fields ("loopFunction", "afterParagraph", "advancesArc" — those belong to the OUTLINE, not the bundle). Do NOT invent content-block "type" values (no "callout", "epigraph", "divider", "pullquote", "subheading"). Stick to the exact field names and exact enum values listed below.
-
-TARGET LENGTH: 1000-1500 words of prose (excluding visual component markup). Quality over quantity.
-
-STRUCTURE:
-1. "sections" - Array of article sections, each with:
-   - "id": Section identifier (lede, the-story, follow-the-money, the-players, whats-missing, closing)
-   - "type": EXACT one of "narrative" | "evidence-highlight" | "investigation-notes" | "conclusion"
-   - "heading": Optional section heading
-   - "content": Array of content blocks. Each block must match EXACTLY one of these 6 shapes — schema rejects any other "type":
-     * {"type": "paragraph", "text": "..."}
-     * {"type": "quote", "text": "...", "attribution": "..."}   ← attribution REQUIRED
-     * {"type": "evidence-reference", "tokenId": "...", "caption": "..."}
-     * {"type": "list", "items": ["..."], "ordered": false}
-     * {"type": "photo", "filename": "...", "caption": "...", "characters": [...]}   ← INLINE photo block; only "filename" is required here
-     * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "VERBATIM full text", "owner": "...", "significance": "critical"|"supporting"|"contextual"}
-
-2. "evidenceCards" - Array of sidebar entries, each a headline and a summary (the verbatim "content" belongs to the inline "evidence-card" block in sections only):
-   - "tokenId": ID matching evidence-reference blocks
-   - "headline": Card headline (compelling, not just descriptive)
-   - No "content": a sidebar entry prints its headline and summary only, never document text
-   - "summary": Brief 100-char summary for sidebar display
-   - "owner": Character canonical full name
-   - "significance": EXACT one of "critical" | "supporting" | "contextual"
-   - "placement": EXACT one of "sidebar" | "inline" (default "sidebar"). DO NOT use outline-style placement vocabulary like "after para 2" here — that belongs to the outline, not the bundle.
-
-   CRITICAL: Cards are VISUAL COMPONENTS for compulsive readability:
-   - Each card is a CLOSER (proves what was hinted) or OPENER (raises new question)
-   - The prose BEFORE sets up tension, prose AFTER draws implications
-   - Distribute across sections per the outline - NOT all in THE STORY
-
-   EVIDENCE CARD DUAL FIELDS:
-   - "content" = VERBATIM document text, on the BODY inline "evidence-card" block only (never on a sidebar entry)
-     * COPY EXACTLY from ${DOCUMENT_POINTER}
-     * Include tokenId prefix and timestamp (e.g., "[Token ID] - [timestamp] - ...")
-     * Do NOT paraphrase or summarize
-
-   - "summary" = Brief 100-char summary for the SIDEBAR entry, which is a headline and a summary
-     * Write your own concise summary
-     * Keep under 100 characters
-
-   Template rendering:
-   - Body cards: content-blocks/evidence-card.hbs uses {{content}}
-   - Sidebar cards: sidebar/evidence-card.hbs uses {{summary}}
-
-   EVIDENCE PLACEMENT (Commit 8.26):
-   - evidenceCards[] = the sidebar entries: a headline and a summary each, no document text. A body card is an "evidence-card" block in sections, and only it carries "content"
-   - evidence-reference in sections = References to inline body cards
-   - Body evidence MUST be a SUBSET of evidenceCards (same tokenIds)
-   - Sidebar: 5-8 cards as navigation/reference
-   - Body: Reference only cards already in evidenceCards array
-
-3. "pullQuotes" - OPTIONAL legacy array; NOT rendered by the current template. Prefer inline "quote" content blocks (see VISUAL_COMPONENT_TYPES) for crystallization and verbatim moments. May be omitted entirely.
-
-4. "photos" - Top-level session photos array (DIFFERENT shape than the inline "photo" content block in sections):
-   - "filename": EXACT filename from available photos (do NOT include hero image filename here)
-   - "caption": REQUIRED at top level
-   - "characters": Array of character names visible
-   - "placement": EXACT one of "inline" | "sidebar"
-   - "afterSection": Section ID after which photo appears
-
-5. "heroImage" - Featured image at top of article (OBJECT, not string):
-   - "filename": EXACT filename of the hero image (matches HERO IMAGE above)
-   - "caption": Hero image caption
-   - "characters": Array of character names visible in the image
-
-6. "financialTracker" - Shell-account LEDGER (required for FOLLOW THE MONEY).
-   Each entry represents ONE shell account, NOT a narrative description.
-   - "entries": Array — one entry per row of AUTHORITATIVE SHELL ACCOUNT DATA above. Map 1:1:
-     * "description": the account NAME exactly as listed (e.g., "Jamie", "Person", "Sarah"). NOT prose.
-     * "amount": the clean dollar string from the authoritative data (e.g., "$1,299,997"). NOT prose like "largest concentration" or "substantial routing".
-     * "category": optional, "shell-account".
-   - "totalExposed": the "Total buried: $X,XXX,XXX" value from AUTHORITATIVE SHELL ACCOUNT DATA. Clean dollar string.
-   - The template renders a bar chart with bar widths computed from "amount" — if amount isn't a parseable dollar string, the chart breaks.
-   - DO NOT add other top-level fields here — schema rejects unknown properties.
-
-7. "headline" - Article headline with main, kicker, deck
-
-8. "metadata" - Required top-level metadata object:
-   - "sessionId": session identifier (will be overwritten by state value)
-   - "theme": "journalist"
-   - "generatedAt": ISO 8601 timestamp
-
-9. "voice_self_check" - Self-assessment OBJECT (not a string, not an array). Emit as:
-   {
-     "influences_check": { "thompson": "...", "swisher": "...", "newton": "...", "richardson": "...", "kabas": "..." },
-     "mechanics_check": { "first_person": "...", "rhythm": "...", "em_dashes": "...", "tokens_language": "...", "moral_clarity": "...", "systemic_critique": "..." },
-     "anti_pattern_check": { "passive_voice": "...", "game_mechanics": "...", "generic_praise": "..." },
-     "issues_found": ["short string of any issue to fix"],
-     "overall_assessment": "one-sentence summary"
-   }
-
-   Use the bullet criteria below as guidance for what to populate in each sub-object's string values.
-
-   VOICE INFLUENCES CHECK:
-   - Hunter S. Thompson: Am I participatory and implicated, part of this story? NOT a neutral distance from it?
-   - Kara Swisher: Am I direct, calling out BS, no corporate spin tolerance?
-   - Casey Newton: Am I explaining tech clearly, accessible but not dumbed down?
-   - Heather Cox Richardson: Am I connecting to bigger patterns, systemic meaning?
-   - Marisa Kabas: Am I maintaining moral clarity without preaching?
-
-   VOICE MECHANICS CHECK:
-   - First person, reported the way my REPORTING MODE allows, NOT "The group decided"
-   - Sentence rhythm: Short punchy, then longer building, then short again
-   - No em-dashes (commas or periods instead)
-   - "Extracted memories" NOT "tokens"
-   - Celebrating sources who exposed, understanding those who buried
-   - Systemic critique woven throughout, not just in closing
-
-   ANTI-PATTERN CHECK:
-   - Any passive/observer voice that slipped through?
-   - Any game mechanics language?
-   - Any generic praise or vague attribution?
-
-10. "byline" - Article byline object:
-   - "author": "${this.sessionConfig.journalistFirstName || DEFAULT_JOURNALIST_FIRST_NAME} Nova | NovaNews"
-   - "title": "Senior Investigative Correspondent"${this.sessionConfig.guestReporter ? `
-   - "guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"` : ''}
-
-<SCHEMA>
-Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields. If anything above this point contradicts the schema, the schema wins.
-
-\`\`\`json
-${JSON.stringify(contentBundleSchema, null, 2)}
+${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
 \`\`\`
 </SCHEMA>
 </GENERATION_INSTRUCTION>`;
@@ -1502,191 +1270,173 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
   }
 
   /**
-   * Build revision prompt
-   * Phase 4b: Revise article based on voice self-check findings
+   * The journalist article writer's user prompt up to <SHOULD_CONSIDER> and
+   * <DIRECTOR_GUIDANCE>: the data, the roster and verdict, the generation instruction
+   * with its schema, and the craft files last (phase 3, 3.2: the integrator's
+   * placement ruling; the world and the truth rules are in the system prompt).
    *
-   * Uses Sonnet for targeted fixes (faster than Opus for surgical edits)
-   * Accepts either ContentBundle JSON or assembled HTML as input.
+   * Gone, because the rule set states each once or contradicted it: the temporal
+   * context key (M11: no document carries the field) and <TEMPORAL_DISCIPLINE> (the
+   * world and T7; its "memories were exposed to the Detective" and "written
+   * immediately after" with them), <RULES> and its second roster (M20), <ARC_FLOW>
+   * (every arc in every section; "the reader must not see where an arc ends"),
+   * <VISUAL_DISTRIBUTION> (a fixed section table, pull quotes), <ANTI_PATTERNS>,
+   * <VOICE_CHECKPOINT> ("participatory and implicated", a Nova the story "happened
+   * to"), the voice self-check, the old agency rule, the card text's id and timestamp
+   * prefix (T12), and the schema's "the schema wins" line and SDK note (M24).
    *
-   * @param {string} articleContent - Generated article (ContentBundle JSON or HTML)
-   * @param {string} voiceSelfCheck - Self-assessment from initial generation
-   * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
+   * The instruction asks only for the fields the article prints. The schema keeps
+   * the rest as optional (HY1, the integrator's ruling): the article stop's sidebar
+   * editor writes a sidebar entry's owner, and the parked detective asks for photos
+   * and voice_self_check. The money tracker prints itself from the ledger (M2). An
+   * evidence reference is described as the template prints it, a caption naming a
+   * document (M1).
+   *
+   * Phase 3 (3.7): APPROVED OUTLINE leaves out the outline writer's questions, which
+   * were the director's to answer at the outline stop.
+   *
+   * Phase 3 (3.9; T13, the integrator's ruling): the article places every photo the
+   * director has not excluded, and the outline only what its photo slots hold, so the
+   * writer is given the outline writer's whole set less the excluded photos
+   * (options.photos, from articleWriterInputs): the hero image, then every other photo
+   * the director kept but the whiteboard. A hero the director excluded comes as none.
+   * PHOTOS prints each one's entry once (renderPhotoListEntry, the entry the article
+   * judge lists too: the 4b fix batch); an arc package points at its photos by filename,
+   * and only at listed ones, so the whiteboard a package names never reaches the writer.
+   * It used to see only the photos the arc packages listed.
+   *
+   * @returns {string}
    */
-  async buildRevisionPrompt(articleContent, voiceSelfCheck) {
-    const prompts = await this.theme.loadPhasePrompts('articleGeneration');
+  _journalistArticleUserSections(outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
+    const photos = Array.isArray(options.photos) ? options.photos.filter(photo => photo && photo.filename) : [];
+    const listed = new Set(photos.map(photo => photoKey(photo.filename)));
+    const photoSection = photos.length > 0
+      ? `PHOTOS (every photo the director has not excluded, without the whiteboard${photos[0].hero ? ': the hero image, then the rest' : ''}; each gives the names identified in it and the director's description):
 
-    const revisionConstraints = THEME_CONSTRAINTS[this.themeName];
-    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].revision}
+${photos.map((photo, i) => renderPhotoListEntry(photo, i, options.photoDescriptions)).join('\n\n')}`
+      : 'PHOTOS: none';
+    /** One arc package's photos that PHOTOS lists, by filename, each once. */
+    const arcPhotoPointers = (pkg) => [...new Map((pkg.photos || [])
+      .filter(p => p && p.filename && listed.has(photoKey(p.filename)))
+      .map(p => [photoKey(p.filename), p.filename])).values()];
 
-REVISION RULES:
-- Make TARGETED fixes only - do not rewrite sections that are working
-- Preserve structure: ${this.themeName === 'detective' ? 'sections, photos' : 'sections, evidence cards, photos, pull quotes, financial tracker'}
-- Focus on the specific issues you identified in your self-check
+    const packages = arcEvidencePackages.length > 0 ? `
+ARC EVIDENCE PACKAGES: each selected arc's documents by id, and its photos by filename. Each document's full text is ${DOCUMENT_POINTER}, and each photo's entry is in PHOTOS above. ${ARC_EXCERPTS_LABEL}
+${arcEvidencePackages.map(pkg => `
+### ${pkg.arcId} - ${pkg.arcTitle}
 
-${revisionConstraints.revisionVoice}
+EXCERPTS:
+${(pkg.evidenceItems || []).flatMap(item =>
+  (item.quotableExcerpts || []).map(q => `- "${q}" (from ${item.id})`)
+).join('\n') || 'None'}
 
-${this._rosterSection()}`;
+DOCUMENTS:
+${(pkg.evidenceItems || []).map(item =>
+  `${item.id} (${item.type})`
+).join('\n')}
 
-    const revisionChecklist = this.themeName === 'detective'
-      ? `Fix the issues you identified in your self-check. Also check for:
-- Any game mechanics terminology (the bare system label "token"/"tokens" [the in-world phrase "memory token" is allowed], "character sheets", "Act 1/2/3")
-- Repeated facts across sections (each section must answer a DIFFERENT question)
-- Names missing <strong> tags or evidence missing <em> tags
-- Any first-person voice that slipped in ("I saw", "I discovered")
-- Section headings that don't clearly signal different analytical angles`
-      : `Fix the issues you identified in your self-check. Also check for:
-- "From my notes that night" -> "- Nova" or remove
-- Any remaining passive/observer voice patterns
-- Any em-dashes that slipped through
-- Generic praise or vague attributions
-- Game mechanics language (the bare system label "token"/"tokens" [the in-world phrase "memory token" is allowed], "buried memories", "buried bonus")`;
+ARC PHOTOS:
+${arcPhotoPointers(pkg).map(filename => `- ${filename}`).join('\n') || 'None'}
+`).join('\n---\n')}
+` : '';
 
-    const userPrompt = `<YOUR_SELF_CHECK>
-${voiceSelfCheck}
-</YOUR_SELF_CHECK>
+    // T4: the director's sentences about Blake and the Valet, through the filter the
+    // arc writer's section uses (fix 3.2b): each stored sentence prints only when the
+    // notes hold it word for word.
+    const tensions = directorTensionSentences(narrativeTensions, directorNotes?.rawProse || '');
+    const tensionsSection = tensions.length > 0 ? `
+<NARRATIVE_TENSIONS>
+${DERIVED_LABELS.narrativeTensions}
+${tensions.map(sentence => `- ${sentence}`).join('\n')}
+</NARRATIVE_TENSIONS>` : '';
 
-<ARTICLE_TO_REVISE>
-${articleContent}
-</ARTICLE_TO_REVISE>
+    const byline = [
+      `"author": "${this.sessionConfig.journalistFirstName || DEFAULT_JOURNALIST_FIRST_NAME} Nova | NovaNews"`,
+      '"title": "Senior Investigative Correspondent"',
+      ...(this.sessionConfig.guestReporter
+        ? [`"guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"`]
+        : [])
+    ].join(', ');
 
-<ANTI_PATTERNS_REFERENCE>
-${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
-</ANTI_PATTERNS_REFERENCE>
+    return `<DATA_CONTEXT>
+APPROVED OUTLINE:
+${JSON.stringify(withoutWriterQuestions(outline), null, 2)}
+
+HERO IMAGE: ${heroImage || 'none chosen: use the first photo the outline places'}
+It prints at the top of the article, as "heroImage". The other photos in PHOTOS print as inline photo blocks.
+
+${photoSection}
+
+${recordSection}
+${packages}
+${this._buildFinancialSummary(shellAccounts)}
+${this._buildInvestigationObservations(directorNotes, options.directorCorrections, options.evidenceBundle)}
+${tensionsSection}
+</DATA_CONTEXT>
+${this._sessionFactsSection(sessionFacts)}
+
+<GENERATION_INSTRUCTION>
+Write the article as a ContentBundle: JSON in the shape of the schema at the end of this instruction. Every object takes only the fields the schema lists for it, and every "type" only the values listed.
+
+1. "sections": the article's sections, in reading order. Each has:
+   - "id": the slot the section fills, one of lede, the-story, follow-the-money, the-players, whats-missing or closing. A slot the article does not use has no section.
+   - "type": one of "narrative", "evidence-highlight", "investigation-notes" or "conclusion".
+   - "heading": optional. A section with none prints untitled.
+   - "content": an array of blocks, each one of these:
+     * {"type": "paragraph", "text": "..."}
+     * {"type": "quote", "text": "...", "attribution": "..."}: "attribution" is the speaker.
+     * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "...", "owner": "...", "significance": "critical" | "supporting" | "contextual"}: an inline card, printed whole in the body. "content" is copied from ${DOCUMENT_POINTER}, and "owner" is that document's owner as the record gives it.
+     * {"type": "evidence-reference", "tokenId": "...", "caption": "..."}: a one-line caption naming a document, printed in the body with none of the document's text. Give it a caption; with none, the article prints the bare id.
+     * {"type": "photo", "filename": "...", "caption": "..."}: an inline photo, by its exact filename.
+     * {"type": "list", "items": ["..."], "ordered": false}
+2. "evidenceCards": the sidebar's entries. Each names a document by its id in "tokenId", with a "headline", a one-line "summary" under 100 characters, and its "significance".
+3. "heroImage": {"filename": "<the HERO IMAGE filename>", "caption": "..."}.
+4. "headline": {"main": "...", "kicker": "...", "deck": "..."}.
+5. "byline": {${byline}}.
+6. "metadata": {"sessionId": "...", "theme": "journalist", "generatedAt": "<an ISO 8601 timestamp>"}. The server stamps these values.
+
+These are the fields the article prints, and the money tracker prints itself from the ledger. The schema also allows fields that nothing prints, and the bundle leaves them out: "financialTracker", "photos", "pullQuotes" and "voice_self_check"; a sidebar entry's "owner", "placement" and "content"; and the "characters" of a photo or of the hero image.
 
 <SCHEMA>
-Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields.
+The ContentBundle's shape: field names, types, enum values and required fields.
 
 \`\`\`json
 ${JSON.stringify(contentBundleSchema, null, 2)}
 \`\`\`
 </SCHEMA>
+</GENERATION_INSTRUCTION>
 
-<REVISION_INSTRUCTION>
-${revisionChecklist}
-
-Return JSON with:
-1. "contentBundle" - Revised ContentBundle (if input was JSON) with all ${this.themeName === 'detective' ? 'sections and photos' : 'sections, evidenceCards, pullQuotes, photos'} preserved
-2. "html" - Revised HTML (if input was HTML)
-3. "fixes_applied" - List of specific fixes you made (be specific about what changed and which voice influence guided each fix)
-</REVISION_INSTRUCTION>`;
-
-    return { systemPrompt, userPrompt };
+${loadRuleSet('article').craft}`;
   }
 
   /**
-   * Build validation prompt
-   * Phase 5: Validate article against anti-patterns
-   *
-   * @param {string} articleHtml - Generated article HTML
-   * @param {string[]} roster - Character roster for coverage check
-   * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
-   */
-  async buildValidationPrompt(articleHtml, roster) {
-    const prompts = await this.theme.loadPhasePrompts('validation');
-
-    const systemPrompt = `${THEME_SYSTEM_PROMPTS[this.themeName].validation}
-
-ANTI-PATTERNS CHECKLIST:
-${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
-VOICE REQUIREMENTS:
-${labelPromptSection('character-voice', prompts['character-voice'])}
-EVIDENCE BOUNDARIES:
-${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
-
-    const validationChecklist = this.themeName === 'detective'
-      ? `Check for:
-1. Game mechanics language: the bare system label "token" (the in-world phrase "memory token" is ALLOWED), "Act 3", "final call", "character sheet"
-2. First-person voice (should be third-person investigative)
-3. Repeated facts appearing in multiple sections (section differentiation)
-4. Missing roster members
-5. Names not in <strong> tags
-6. Evidence artifacts not in <em> tags
-7. Report exceeds ~800 words (target ~750)`
-      : `Check for:
-1. Em-dashes (— or --)
-2. The bare system label "token"/"tokens" instead of "memory token" or "extracted memory" (the in-world phrase "memory token" is ALLOWED and correct)
-3. Game mechanics language ("Act 3", "final call", "first burial")
-4. Vague attribution ("from my notes", "sources say")
-5. Passive/neutral voice (should be participatory)
-6. Missing roster members
-7. Blake condemned (should be suspicious but nuanced)
-8. Missing systemic critique in CLOSING`;
-
-    const validationReturnFormat = this.themeName === 'detective'
-      ? `Return JSON:
-{
-  "passed": true|false,
-  "issues": [
-    {
-      "type": "game_mechanics|first_person_voice|fact_repetition|missing_character|formatting",
-      "line": 123,
-      "text": "the problematic text",
-      "fix": "suggested fix"
-    }
-  ],
-  "voice_score": 1-5,
-  "voice_notes": "assessment of voice consistency",
-  "roster_coverage": {
-    "featured": ["names"],
-    "mentioned": ["names"],
-    "missing": ["names"]
-  },
-  "section_differentiation": true|false,
-  "word_count_acceptable": true|false
-}`
-      : `Return JSON:
-{
-  "passed": true|false,
-  "issues": [
-    {
-      "type": "em_dash|token_language|game_mechanics|vague_attribution|passive_voice|missing_character|blake_condemned",
-      "line": 123,
-      "text": "the problematic text",
-      "fix": "suggested fix"
-    }
-  ],
-  "voice_score": 1-5,
-  "voice_notes": "assessment of voice consistency",
-  "roster_coverage": {
-    "featured": ["names"],
-    "mentioned": ["names"],
-    "missing": ["names"]
-  },
-  "systemic_critique_present": true|false,
-  "blake_handled_correctly": true|false
-}`;
-
-    const userPrompt = `Validate this article against all anti-patterns.
-
-CHARACTER ROSTER (all must be mentioned):
-${roster.join(', ')}
-
-ARTICLE HTML:
-${articleHtml}
-
-${validationChecklist}
-
-${validationReturnFormat}`;
-
-    return { systemPrompt, userPrompt };
-  }
-
-  /**
-   * Fail loud when a writer's craft files did not load.
+   * Fail loud when a writer's rules did not load.
    *
    * ThemeLoader.loadPrompt WARNS and returns '' for a file it cannot read. A
    * reworker built on that would run without the craft rules its writer had, and
    * nothing in the output would show it. Phase 2 (2.3): each reworker is its
    * writer's prompt plus a revision block, so the reworkers check their writer's
-   * phase. (Until 2.3 they checked a smaller 'revision' set of three files, which
-   * they carried as their <RULES> instead of the writer's rules.)
+   * phase (ai-nodes.js buildOutlineRevisionPrompt, buildArticleRevisionPrompt).
    *
-   * @param {string} phase - the writer's PHASE_REQUIREMENTS key
-   * @throws {Error} if any of the phase's prompt files is empty or missing
+   * Phase 3 (3.2): the journalist's writers read the rule set, so its check is the
+   * rule-set loader's own, which throws naming every missing or empty rule file. The
+   * detective is parked and checks its craft files as before.
+   *
+   * @param {'outlineGeneration'|'articleGeneration'} phase - the writer's phase
+   * @throws {Error} if any of the phase's rule or prompt files is empty or missing
    */
   async requirePhasePrompts(phase) {
+    if (this.themeName === 'journalist') {
+      const call = JOURNALIST_RULE_SET_CALLS[phase];
+      if (!call) {
+        throw new Error(`[PromptBuilder] No journalist writer reads phase "${phase}"; phases: ${Object.keys(JOURNALIST_RULE_SET_CALLS).join(', ')}`);
+      }
+      loadRuleSet(call);
+      return;
+    }
+    const required = this.getPhaseRequirements(phase);
     const rawPrompts = await this.theme.loadPhasePrompts(phase);
-    const empty = PHASE_REQUIREMENTS[phase].filter(
+    const empty = required.filter(
       name => !rawPrompts[name] || !String(rawPrompts[name]).trim()
     );
     if (empty.length > 0) {
@@ -1699,12 +1449,13 @@ ${validationReturnFormat}`;
   }
 
   /**
-   * Get required prompts for a phase (for debugging/logging)
+   * Get this theme's prompt files for a phase (for debugging/logging). The
+   * journalist's writers list none: they read the rule set.
    * @param {string} phase - Phase name
    * @returns {string[]} - List of required prompt names
    */
   getPhaseRequirements(phase) {
-    return PHASE_REQUIREMENTS[phase] || [];
+    return (PHASE_REQUIREMENTS[this.themeName] || {})[phase] || [];
   }
 
   /**
@@ -1749,13 +1500,17 @@ module.exports = {
   PromptBuilder,
   createPromptBuilder,
   generateRosterSection,
+  // The roster with pronouns, without the character context, for the arc writer, the
+  // interweaving call and the outline writer (the 4b fix batch)
+  rosterWithPronounsSection,
   buildDirectorGuidanceSection,
   buildShouldConsiderSection,
-  // Shared with buildRevisionContext (node-helpers.js) so a rework prompt and a
-  // generation prompt introduce the advisory list in the same words (brief 1.3).
+  // Shared with buildRevisionContext (node-helpers.js), which introduces the detective
+  // rework's advisory list with it; a journalist rework's list has its own line,
+  // REWORK_SHOULD_CONSIDER_LINE (phase 3, 3.10).
   SHOULD_CONSIDER_PREAMBLE,
   filterGateNotes,
-  REPORTING_MODE_BLOCKS,
+  DETECTIVE_REPORTING_MODE_BLOCKS,
   buildReportingModeBlock,
   // Consumed by the system prompts assembled outside PromptBuilder (the two arc
   // calls, and through the arc writer's the two arc rework branches), so the
@@ -1783,7 +1538,7 @@ if (require.main === module) {
 
     // Show phase requirements
     console.log('Phase requirements:');
-    Object.keys(PHASE_REQUIREMENTS).forEach(phase => {
+    Object.keys(PHASE_REQUIREMENTS[builder.themeName] || {}).forEach(phase => {
       const reqs = builder.getPhaseRequirements(phase);
       console.log(`  ${phase}: ${reqs.length} prompts`);
     });

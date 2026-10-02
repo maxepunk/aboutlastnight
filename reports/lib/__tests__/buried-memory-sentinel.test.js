@@ -87,11 +87,26 @@ const OLD_LINK = {
   linkReasoning: 'The time and the account converge.'
 };
 
+/**
+ * The evidence log as the model-filled parse could leave it (phase 3, brief 3.5;
+ * Review Focus 3): an entry for the buried memory, with its owner as the name on the
+ * turn-in, beside a real exposure. The morning timeline reads exposures only for
+ * memories the bundle holds as exposed.
+ */
+const EXPOSURES_WITH_BURIED = [
+  { tokenId: SENTINEL_ID, exposer: SENTINEL_OWNER, time: '08:16 PM', owner: SENTINEL_OWNER },
+  { tokenId: 'ale003', exposer: 'NovaNews (Anonymous)', time: '07:37 PM', owner: 'Alex Reeves' }
+];
+
 /** The session state every writer, reworker and judge is built from. */
 function sentinelState(theme = 'journalist') {
   const state = reworkFixtureState(theme);
   state.evidenceBundle.buried.transactions.push(clone(HOSTILE_BURIED_ROW));
   state.directorNotes.transactionReferences = [clone(OLD_LINK)];
+  // A stored link prints only when the notes hold its observation word for word (3.6b
+  // fix batch), so the notes hold this one, and the prompts print it.
+  state.directorNotes.rawProse = `${state.directorNotes.rawProse} ${OLD_LINK.excerpt}`;
+  state.sessionConfig.exposures = clone(EXPOSURES_WITH_BURIED);
   return state;
 }
 
@@ -107,6 +122,7 @@ describe('the fixture plants the buried memory where it can enter', () => {
     const state = sentinelState();
     expect(leaksIn(JSON.stringify(state.evidenceBundle.buried))).toEqual(SENTINELS);
     expect(leaksIn(JSON.stringify(state.directorNotes))).toEqual([SENTINEL_ID, 'Quillfeather', 'Octavia']);
+    expect(leaksIn(JSON.stringify(state.sessionConfig.exposures))).toEqual([SENTINEL_ID, 'Quillfeather', 'Octavia']);
   });
 });
 
@@ -119,7 +135,11 @@ describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge pro
     const prompts = promptsOf(sdk);
     expect(prompts).toHaveLength(2);
     expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
-    expect(prompts[1]).toContain('<buried-transactions>');
+    // Phase 3 (3.5): the interweaving call reads the morning timeline, with the sale
+    // and the real exposure on it, and the buried memory's evidence-log entry left out.
+    expect(prompts[1]).toContain('<morning-timeline>');
+    expect(prompts[1]).toContain('| sale | account: Gorlan | amount: $125,000');
+    expect(prompts[1]).toContain('| exposure | document: ale003 | anonymous');
     prompts.forEach((p) => expect(leaksIn(p)).toEqual([]));
   });
 
@@ -141,6 +161,8 @@ describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge pro
     for (const prompt of [...promptsOf(writer), ...promptsOf(rework)]) {
       // The detective writers carry no director-notes block at all.
       expect(prompt.includes('<TRANSACTION_LINKS>')).toBe(theme === 'journalist');
+      // Both themes read the record view, so both get the morning timeline (3.5).
+      expect(prompt).toContain('<morning-timeline>');
       expect(leaksIn(prompt)).toEqual([]);
     }
   });
@@ -154,6 +176,7 @@ describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge pro
     for (const prompt of [...promptsOf(writer), ...promptsOf(rework)]) {
       // The detective writers carry no director-notes block at all.
       expect(prompt.includes('<TRANSACTION_LINKS>')).toBe(theme === 'journalist');
+      expect(prompt).toContain('<morning-timeline>');
       expect(leaksIn(prompt)).toEqual([]);
     }
   });
@@ -174,6 +197,11 @@ describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge pro
       expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
       expect(leaksIn(prompts[0])).toEqual([]);
     }
+    // The outline and article judges read the whole record view, timeline included;
+    // since 3.4 so does the journalist arc judge, and the detective's keeps its own list.
+    expect(promptsOf(outline)[0]).toContain('<morning-timeline>');
+    expect(promptsOf(article)[0]).toContain('<morning-timeline>');
+    expect(promptsOf(arcs)[0].includes('<morning-timeline>')).toBe(theme === 'journalist');
   });
 });
 

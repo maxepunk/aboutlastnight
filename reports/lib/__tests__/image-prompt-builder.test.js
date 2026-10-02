@@ -97,7 +97,10 @@ describe('ImagePromptBuilder', () => {
         whiteboardPhotoPath: '/path/to/whiteboard.jpg'
       });
 
-      expect(result.userPrompt).toContain('CHARACTER ROSTER');
+      // Phase 3 (3.5): the roster sits beside every character and the NPCs. What each
+      // list is, and how names are matched against them, is the system file's to say
+      // (fix batch, finding 7), so the label is the list's name alone.
+      expect(result.userPrompt).toContain('THE ROSTER:\nnone given');
     });
   });
 

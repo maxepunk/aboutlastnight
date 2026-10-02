@@ -2,7 +2,7 @@
  * ImagePromptBuilder - Assemble image analysis prompts from ThemeLoader + session data
  *
  * Handles prompt construction for all image processing phases:
- * - Whiteboard analysis (OCR with roster-based name disambiguation)
+ * - Whiteboard analysis (names matched against the roster, every character and the NPCs)
  * - Photo analysis (generic descriptions, no names)
  * - Photo enrichment (character name replacement after user mapping)
  *
@@ -28,11 +28,17 @@ class ImagePromptBuilder {
   /**
    * Build whiteboard analysis prompt
    *
-   * Provides roster context for OCR name disambiguation and structure
-   * discovery guidance for spatial interpretation.
+   * Gives the names to match handwriting against and asks for the whiteboard's
+   * regions under the players' own headings.
+   *
+   * Phase 3 (brief 3.5): names are matched against the roster, every character in
+   * the game and the NPCs, and kept as written when unsure. Matching against the
+   * roster alone rewrote an absent suspect's name into the nearest player's.
    *
    * @param {Object} sessionData - Session data
-   * @param {string[]} sessionData.roster - Character names for OCR disambiguation
+   * @param {string[]} sessionData.roster - the characters played this session
+   * @param {string[]} [sessionData.characters] - every character in the game (full names)
+   * @param {string[]} [sessionData.npcs] - the NPCs' names
    * @param {string} sessionData.whiteboardPhotoPath - Path to whiteboard image
    * @param {string[]|string|null} [sessionData.corrections] - the director's input-review
    *   corrections (phase 2, brief 2.2). This parse was the one that never received them.
@@ -40,29 +46,24 @@ class ImagePromptBuilder {
    */
   async buildWhiteboardPrompt(sessionData) {
     const prompts = await this.theme.loadPhasePrompts('imageAnalysis');
-
-    // Build roster list for disambiguation
-    const rosterList = (sessionData.roster || []).join(', ');
+    const listOf = (names) => (Array.isArray(names) && names.length > 0 ? names.join(', ') : 'none given');
 
     const systemPrompt = prompts['whiteboard-analysis'];
 
+    // The reading rules (name matching included) are the system file's, and the output
+    // fields are WHITEBOARD_SCHEMA's (fix batch, finding 7): the user prompt carries the
+    // photo, the session's lists and the corrections, so each rule is stated once.
     const userPrompt = `First, use the Read tool to view the whiteboard photograph at:
 ${sessionData.whiteboardPhotoPath}
 
-CHARACTER ROSTER (use for name disambiguation):
-${rosterList}
+THE ROSTER:
+${listOf(sessionData.roster)}
 
-Analyze the whiteboard and extract all visible information. When transcribing handwritten names,
-use the roster above to correct OCR errors (e.g., "Vik" should be corrected to "Vic"
-if Vic is in the roster).
+EVERY CHARACTER IN THE GAME:
+${listOf(sessionData.characters)}
 
-Return structured JSON with:
-- names: All character names found (roster-corrected)
-- connections: Any lines/arrows between elements
-- groups: Any boxed or circled clusters
-- notes: Text content not part of connections
-- structureType: Overall organization observed
-- ambiguities: Unclear elements that may need verification${buildParseCorrectionsBlock(sessionData.corrections)}`;
+THE NPCS:
+${listOf(sessionData.npcs)}${buildParseCorrectionsBlock(sessionData.corrections)}`;
 
     return { systemPrompt, userPrompt };
   }
@@ -296,7 +297,7 @@ IMPORTANT: Include an entry for EACH photo the user provides mappings for. Use E
    * @returns {string[]} List of required prompt names
    */
   getPhaseRequirements() {
-    return PHASE_REQUIREMENTS.imageAnalysis || [];
+    return PHASE_REQUIREMENTS.journalist.imageAnalysis || [];
   }
 }
 
@@ -352,7 +353,7 @@ module.exports = {
   createMockImagePromptBuilder,
   // Expose for testing
   _testing: {
-    PHASE_REQUIREMENTS: PHASE_REQUIREMENTS.imageAnalysis
+    PHASE_REQUIREMENTS: PHASE_REQUIREMENTS.journalist.imageAnalysis
   }
 };
 

@@ -162,6 +162,34 @@ describe('getCheckpointData — enrichment counts (H25)', () => {
   });
 });
 
+describe('getCheckpointData — the ledger at the input review (phase 3, brief 3.5)', () => {
+  const { ledgerReviewOf } = require('../../lib/session-ledger');
+
+  it('carries the clock, the adjustments, the accounts and the totals check, from the one pure function', async () => {
+    const state = {
+      sessionConfig: {
+        sessionClock: { decided: true, evening: true, firstTime: '07:37 PM' },
+        adjustments: [{ time: '07:50 PM', kind: 'bonus', amount: 50000, toAccount: 'Ember' }],
+        ledgerCheck: { adjustmentsParsed: true, mismatches: [], unclassified: [] }
+      },
+      shellAccounts: [{ name: 'Ember', total: 925000, tokenCount: 2, rank: 1 }]
+    };
+    const data = await getCheckpointData(CHECKPOINT_TYPES.INPUT_REVIEW, state);
+    expect(data.ledger).toEqual(ledgerReviewOf(state));
+    expect(data.ledger.clock.evening).toBe(true);
+    expect(data.ledger.adjustmentsParsed).toBe(true);
+  });
+
+  it('says a thread from before phase 3 has no adjustments parsed, and decides its clock from its exposures', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.INPUT_REVIEW, {
+      sessionConfig: { exposures: [{ tokenId: 'nat002', time: '02:25 PM' }] },
+      shellAccounts: []
+    });
+    expect(data.ledger.adjustmentsParsed).toBe(false);
+    expect(data.ledger.clock).toEqual({ decided: true, evening: false, firstTime: '02:25 PM' });
+  });
+});
+
 describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
   const NOTES = [{ gate: 'outline', kind: 'rejection', round: 1, text: 'x', at: 't' }];
 
@@ -373,5 +401,89 @@ describe('trace (phase 2, brief 2.7)', () => {
     const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline, evaluationHistory: [] }, state);
     expect(merged.trace).toHaveLength(1);
     expect(merged.trace[0].changedScopes).toEqual(['lede']);
+  });
+});
+
+// Phase 3, brief 3.7 (spec C15): each of the three stops sends the current output's
+// questions for the director as `writerQuestions`, a key no interrupt payload uses.
+// The arcs keep theirs in the arc cache; the outline and the article carry theirs at
+// their top level. An entry without both strings is not a question and is not sent.
+describe('writerQuestions (phase 3, brief 3.7)', () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const Q1 = { about: 'Sarah', question: 'The record holds nothing about Sarah: where was Sarah?' };
+  const Q2 = { about: 'The 10:02 AM sale', question: 'Is this a duplicate?' };
+
+  it('the arc stop sends the arc cache\'s questions', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
+      narrativeArcs: [], _arcAnalysisCache: { writerQuestions: [Q1, Q2] }
+    });
+    expect(data.writerQuestions).toEqual([Q1, Q2]);
+  });
+
+  it('the outline stop sends the outline\'s questions', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
+      evaluationHistory: [], outline: { lede: { hook: 'h' }, writerQuestions: [Q2] }
+    });
+    expect(data.writerQuestions).toEqual([Q2]);
+  });
+
+  it('the article stop sends the article\'s questions', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q1] }
+    });
+    expect(data.writerQuestions).toEqual([Q1]);
+  });
+
+  it('is an empty list at each stop when the output has none, or there is no output yet', async () => {
+    const arcs = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { _arcAnalysisCache: null });
+    const outline = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], outline: null });
+    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: VALID_BUNDLE() });
+    expect([arcs.writerQuestions, outline.writerQuestions, article.writerQuestions]).toEqual([[], [], []]);
+  });
+
+  it('sends only entries with both an about and a question', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
+      _arcAnalysisCache: { writerQuestions: [Q1, { about: 'Alex' }, { about: '  ', question: 'x' }, 'loose', null] }
+    });
+    expect(data.writerQuestions).toEqual([Q1]);
+  });
+
+  it('survives the merge with the interrupt payload', async () => {
+    const state = { evaluationHistory: [], outline: { writerQuestions: [Q1] } };
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline, evaluationHistory: [] }, state);
+    expect(merged.writerQuestions).toEqual([Q1]);
+  });
+
+  // Fix 3.7b (finding 5): a rollback to a stop clears that stop's questions with its
+  // output, through the field each stop reads them from (ROLLBACK_CLEARS clears
+  // _arcAnalysisCache, outline and contentBundle), and keeps the questions of the
+  // stops before it, whose output it keeps.
+  describe('a rollback clears a stop\'s questions with its output', () => {
+    const { buildRollbackState } = require('../../lib/api-helpers');
+    const Q3 = { kind: 'ledger', about: 'The 10:14 AM sale of $50,000', question: 'Is this a second entry for one sale?' };
+    const withQuestions = () => ({
+      evaluationHistory: [],
+      _arcAnalysisCache: { writerQuestions: [Q1] },
+      outline: { lede: { hook: 'h' }, writerQuestions: [Q2] },
+      contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q3] }
+    });
+    const questionsAtEachStop = async (state) => ({
+      'arc-selection': (await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).writerQuestions,
+      outline: (await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state)).writerQuestions,
+      article: (await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, state)).writerQuestions
+    });
+
+    it('every stop shows its questions before the rollback', async () => {
+      expect(await questionsAtEachStop(withQuestions())).toEqual({ 'arc-selection': [Q1], outline: [Q2], article: [Q3] });
+    });
+
+    it.each([
+      ['arc-selection', { 'arc-selection': [], outline: [], article: [] }],
+      ['outline', { 'arc-selection': [Q1], outline: [], article: [] }],
+      ['article', { 'arc-selection': [Q1], outline: [Q2], article: [] }]
+    ])('a rollback to %s', async (point, expected) => {
+      const state = { ...withQuestions(), ...buildRollbackState(point) };
+      expect(await questionsAtEachStop(state)).toEqual(expected);
+    });
   });
 });

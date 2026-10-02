@@ -34,9 +34,11 @@ describe('theme-config', () => {
       expect(getThemeNPCs('journalist')).toContain('Nova');
     });
 
-    it('journalist should have outlineRules object', () => {
-      expect(THEME_CONFIGS.journalist.outlineRules).toBeDefined();
-      expect(typeof THEME_CONFIGS.journalist.outlineRules).toBe('object');
+    // Fix 3.2b (finding 6): the journalist's outline rules (a fixed list of required
+    // sections and per-section word budgets) had no reader and stated the contract
+    // TH4 and C2 retired. The detective's stay (D13).
+    it('journalist has no outlineRules', () => {
+      expect(THEME_CONFIGS.journalist).not.toHaveProperty('outlineRules');
     });
 
 
@@ -62,7 +64,7 @@ describe('theme-config', () => {
       const config = getThemeConfig('journalist');
       expect(config).toBeDefined();
       expect(config.npcs).toBeDefined();
-      expect(config.outlineRules).toBeDefined();
+      expect(config.outlineRules).toBeUndefined();
     });
 
     it('should return null for unknown theme', () => {
@@ -82,35 +84,8 @@ describe('theme-config', () => {
   });
 
   describe('getOutlineRules', () => {
-    it('should return outline rules for journalist theme', () => {
-      const rules = getOutlineRules('journalist');
-      expect(rules).toBeDefined();
-      expect(rules.requiredSections).toBeDefined();
-    });
-
-    it('should include required sections', () => {
-      const rules = getOutlineRules('journalist');
-      expect(rules.requiredSections).toContain('lede');
-      expect(rules.requiredSections).toContain('theStory');
-      expect(rules.requiredSections).toContain('thePlayers');
-      expect(rules.requiredSections).toContain('closing');
-    });
-
-    it('should include optional sections', () => {
-      const rules = getOutlineRules('journalist');
-      expect(rules.optionalSections).toContain('followTheMoney');
-      expect(rules.optionalSections).toContain('whatsMissing');
-    });
-
-    it('should include word budgets for all sections', () => {
-      const rules = getOutlineRules('journalist');
-      expect(rules.wordBudgets).toBeDefined();
-      expect(rules.wordBudgets.lede).toEqual({ min: 75, max: 150 });
-      expect(rules.wordBudgets.theStory).toEqual({ min: 350, max: 550 });
-      expect(rules.wordBudgets.followTheMoney).toEqual({ min: 75, max: 200 });
-      expect(rules.wordBudgets.thePlayers).toEqual({ min: 150, max: 250 });
-      expect(rules.wordBudgets.whatsMissing).toEqual({ min: 75, max: 150 });
-      expect(rules.wordBudgets.closing).toEqual({ min: 75, max: 150 });
+    it('returns no outline rules for the journalist theme (fix 3.2b)', () => {
+      expect(getOutlineRules('journalist')).toEqual({});
     });
 
     it('should return empty object for unknown theme', () => {

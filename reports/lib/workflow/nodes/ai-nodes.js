@@ -5,7 +5,6 @@
  * - curateEvidenceBundle: Curate evidence into three-layer structure (1.8)
  * - generateOutline: Generate article outline from selected arcs (3)
  * - generateContentBundle: Generate structured content JSON (4)
- * - validateArticle: Validate voice and anti-patterns (5.1)
  * - reviseContentBundle: Revise content based on validation feedback (4.2)
  *
  * All nodes follow the LangGraph pattern:
@@ -52,6 +51,10 @@ const {
 } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { directorAccusationText } = require('../../accusation-verdict');
+const { photoKey } = require('../../prompt-renderers/director-words-renderer');
+// Phase 3 (3.7): the writers' questions for the director (C15), kept through a rework
+// (R5) and out of every later prompt.
+const { withCarriedWriterQuestions, schemaWithoutWriterQuestions } = require('../../writer-questions');
 
 /**
  * Get PromptBuilder from config or create default
@@ -721,6 +724,17 @@ function extractQuotableExcerpts(fullContent) {
  *
  * Runs after arc selection checkpoint, before outline generation.
  *
+ * The 4b fix batch, fix round 1 (T13): an arc's photos never include one the director
+ * excluded (isPhotoExcluded). The outline writer and its reworker print them in
+ * <arc-evidence>, and the parked detective article writer under ARC PHOTOS. Matching by
+ * the analyses' names alone listed such a photo again after a rollback to character-ids:
+ * finalizePhotoAnalyses skips there, so the excluded photo's analysis keeps its names.
+ *
+ * Final review (rules-writers[1]; T13: the whiteboard photo is never placed): an arc's
+ * photos leave out the whiteboard, as buildAvailablePhotos does (whiteboardFilenameOf).
+ * Every session photo is analysed, the whiteboard included, so a whiteboard on which the
+ * director named players was listed under every arc with those players.
+ *
  * @param {Object} state - Current state with selectedArcs, evidenceBundle, photoAnalyses
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update with arcEvidencePackages
@@ -750,6 +764,7 @@ async function buildArcEvidencePackages(state, config) {
   const allArcs = state.narrativeArcs || [];
   const evidenceBundle = state.evidenceBundle || { exposed: { tokens: [], paperEvidence: [] } };
   const photoAnalyses = state.photoAnalyses || { analyses: [] };
+  const whiteboardFilename = whiteboardFilenameOf(state);
 
   console.log(`[buildArcEvidencePackages] Building packages for ${selectedArcIds.length} selected arcs`);
 
@@ -796,6 +811,8 @@ async function buildArcEvidencePackages(state, config) {
     // Include enriched photo analyses for characters in this arc
     const arcCharacters = Object.keys(arc.characterPlacements || {});
     const relevantPhotos = (photoAnalyses.analyses || [])
+      .filter(p => !whiteboardFilename || photoFilenameOf(p.filename) !== whiteboardFilename)  // T13: never the whiteboard
+      .filter(p => !isPhotoExcluded(state, p.filename))  // T13: the director's exclusions
       .filter(p => {
         const photoCharacters = p.identifiedCharacters || p.characterDescriptions || [];
         return photoCharacters.some(c => {
@@ -886,9 +903,9 @@ function advisoriesFromPreviousStage(state, previousPhase) {
  * One builder for both writers: the two copies this replaced printed only
  * `ACCUSATION: <accused>`, so an overdose verdict reached the writers as
  * `ACCUSATION: Marcus`, with no charge. The facts now carry the parsed accusation
- * whole (accused, charge, verdict kind), the director's accusation word for word,
- * and the players' whiteboard connections; renderSessionFactsVerdict
- * (director-words-renderer.js) prints them.
+ * whole (accused, charge, verdict kind, and since phase 3 (brief 3.5) a split final
+ * vote), the director's accusation word for word, and the whiteboard parse;
+ * renderSessionFactsVerdict (director-words-renderer.js) prints them.
  *
  * @param {Object} state
  * @returns {Object|null} null when there is no roster
@@ -914,11 +931,66 @@ function buildSessionFacts(state) {
     accusation: {
       accused: ensureArray(accusation.accused),
       charge: accusation.charge || '',
-      ...(accusation.verdictKind && { verdictKind: accusation.verdictKind })
+      ...(accusation.verdictKind && { verdictKind: accusation.verdictKind }),
+      ...(Array.isArray(accusation.votes) && { votes: accusation.votes })
     },
     accusationText: directorAccusationText(state),
     whiteboard: state.playerFocus?.whiteboardContext || null,
     playerCount: roster.length
+  };
+}
+
+/**
+ * Whether the director excluded a photo (T13: every photo the director has not excluded
+ * appears, and an excluded photo never does). The one rule (the 4b fix batch; the
+ * integrator's ruling) for every list a writer or judge may place photos from:
+ * buildAvailablePhotos (the outline writer, its reworker, the outline judge, and the
+ * article writer's and judge's PHOTOS), each arc package's photos (buildArcEvidencePackages:
+ * the outline writer's and reworker's <arc-evidence>, the detective article's ARC PHOTOS)
+ * and the hero entry (heroPhotoEntry). It also decides the hero choice (selectHeroImage)
+ * and the fact check's usable photos (evaluator-nodes.js buildFactCheckArgs).
+ *
+ * The director excludes a photo at the character-IDs stop, and the parse stores the
+ * decision as characterIdMappings[<filename>].exclude. That decision is read first. The
+ * analysis's `excluded` mark, which finalizePhotoAnalyses sets from it, is the fallback
+ * for a photo no mapping names: after a rollback to character-ids the analyses are kept
+ * and the mappings parsed again, so the mark can be stale. Both are matched by photoKey
+ * (basename, case-insensitive), as the parse's keys need not match a filename's case.
+ *
+ * @param {Object} state
+ * @param {string} filename - a photo's filename or path
+ * @returns {boolean}
+ */
+function isPhotoExcluded(state, filename) {
+  const key = photoKey(filename);
+  if (!key) return false;
+  const mappings = state.characterIdMappings && typeof state.characterIdMappings === 'object' ? state.characterIdMappings : {};
+  const mapped = Object.keys(mappings).find(name => photoKey(name) === key);
+  if (mapped !== undefined && mappings[mapped] && typeof mappings[mapped] === 'object') {
+    return Boolean(mappings[mapped].exclude);
+  }
+  const analysis = (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoKey(a.filename) === key);
+  return analysis?.excluded === true;
+}
+
+/**
+ * The hero image as a photo entry: its filename, the names identified in it, and
+ * `hero: true`; null when there is no hero or the director excluded it (T13). One
+ * builder for the article writer's photos (articleWriterInputs) and the outline judge's
+ * (evaluator-nodes.js renderJudgePhotos), its analysis found by photoKey (the 4b fix batch).
+ *
+ * @param {Object} state
+ * @param {string|null} heroImage - the hero's filename
+ * @returns {{filename: string, identifiedCharacters: string[], hero: true}|null}
+ */
+function heroPhotoEntry(state, heroImage) {
+  if (!heroImage || isPhotoExcluded(state, heroImage)) return null;
+  const key = photoKey(heroImage);
+  const analysis = (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoKey(a.filename) === key);
+  return {
+    filename: heroImage,
+    identifiedCharacters: Array.isArray(analysis?.identifiedCharacters) ? analysis.identifiedCharacters : [],
+    hero: true
   };
 }
 
@@ -929,6 +1001,12 @@ function buildSessionFacts(state) {
  * writer's text about the photo is the director's own description, which the prompt
  * builder joins by filename (options.photoDescriptions); Haiku's pre-identification
  * descriptions no longer go to the writer.
+ *
+ * The 4b fix batch (T13): a photo the director excluded is left out (isPhotoExcluded).
+ * The outline writer, its reworker and the outline judge build their lists here, and so
+ * do the article writer's and judge's PHOTOS (articleWriterInputs). The outline writer
+ * and its reworker also print each arc's photos, which buildArcEvidencePackages filters
+ * with the same predicate (fix round 1).
  *
  * @param {Object} state
  * @param {string} heroImage - excluded (it has its own slot)
@@ -950,6 +1028,7 @@ function buildAvailablePhotos(state, heroImage, whiteboardFilename) {
   return (state.sessionPhotos || [])
     .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
     .filter(photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)  // Exclude whiteboard
+    .filter(photo => !isPhotoExcluded(state, getPhotoFilename(photo)))  // T13: the director's exclusions
     .map((photoPath, i) => {
       const filename = getPhotoFilename(photoPath) || `photo-${i}.jpg`;
       const analysis = analysisByFilename.get(filename.toLowerCase()) || {};
@@ -970,6 +1049,10 @@ function photoFilenameOf(photo) {
  * The whiteboard photo's filename, or null. The whiteboard is Layer 3 (director)
  * data and is excluded from the article photos entirely.
  *
+ * Task 4c-fix (T13): the fact check reads the same filename (evaluator-nodes.js
+ * buildFactCheckArgs), so a printed whiteboard is an invalid reference and no fix line
+ * offers it.
+ *
  * @param {Object} state
  * @returns {string|null}
  */
@@ -979,13 +1062,23 @@ function whiteboardFilenameOf(state) {
 
 /**
  * The hero image the outline writer is given: the photo with the most identified
- * characters, else the first non-whiteboard photo.
+ * characters, else the first non-whiteboard photo; none when the director kept no photo
+ * but the whiteboard.
  *
  * generateOutline selects it and stores it in state.heroImage. The outline reworker
  * reads that (phase 2, 2.3) and selects again only when it is missing.
  *
+ * The 4b fix batch (T13): it never picks a photo the director excluded (isPhotoExcluded).
+ * An excluded photo's analysis still counts its character descriptions, so it could top
+ * the count.
+ *
+ * Task 4c-fix (T13): with no kept photo there is no hero. It fell back to the
+ * placeholder 'evidence-board.png', which is no session photo: the article judge then
+ * required it as the hero and the fact check flagged it in print, a loop no rework could
+ * end. The outline and article writers' HERO IMAGE lines say when there is none.
+ *
  * @param {Object} state
- * @returns {string} filename
+ * @returns {string|null} filename, or null when the director kept no photo but the whiteboard
  */
 function selectHeroImage(state) {
   const getPhotoFilename = photoFilenameOf;
@@ -994,12 +1087,17 @@ function selectHeroImage(state) {
   // Select hero image: prefer largest group photo, fallback to first non-whiteboard photo
   // Group photos better represent the ensemble cast as hero images
   const nonWhiteboardPhotos = (state.sessionPhotos || []).filter(
-    photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename
+    photo => (!whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)
+      && !isPhotoExcluded(state, getPhotoFilename(photo))
   );
+  if (nonWhiteboardPhotos.length === 0) {
+    console.log('[generateOutline] No hero image: the director kept no photo but the whiteboard');
+    return null;
+  }
 
   let heroImage;
   const analyses = state.photoAnalyses?.analyses || [];
-  if (analyses.length > 0 && nonWhiteboardPhotos.length > 0) {
+  if (analyses.length > 0) {
     // Score each photo by number of identified characters (more = better group photo)
     // Uses identifiedCharacters (post-enrichment) with characterDescriptions as fallback
     const scored = nonWhiteboardPhotos.map(photo => {
@@ -1013,10 +1111,10 @@ function selectHeroImage(state) {
     });
     // Sort by character count descending, take first
     scored.sort((a, b) => b.characterCount - a.characterCount);
-    heroImage = scored[0]?.filename || getPhotoFilename(nonWhiteboardPhotos[0]) || 'evidence-board.png';
+    heroImage = scored[0]?.filename || getPhotoFilename(nonWhiteboardPhotos[0]) || null;
     console.log(`[generateOutline] Hero image selected: ${heroImage} (${scored[0]?.characterCount || 0} characters identified)`);
   } else {
-    heroImage = getPhotoFilename(nonWhiteboardPhotos[0]) || 'evidence-board.png';
+    heroImage = getPhotoFilename(nonWhiteboardPhotos[0]) || null;
     console.log(`[generateOutline] Hero image fallback: ${heroImage} (no photo analyses available)`);
   }
   return heroImage;
@@ -1043,8 +1141,9 @@ function outlineWriterInputs(state, heroImage) {
   // fallback never fired and <arc-metadata> rendered [] in every real session.
   // `timing`, `architecture` and `interweavingFromPreviousRound` (reviseArcs's note
   // that it kept the previous plan) are our own bookkeeping and are not the model's
-  // business (<arc-analysis> dumped them verbatim).
-  const { timing, architecture, interweavingFromPreviousRound, ...cache } = state._arcAnalysisCache || {};
+  // business (<arc-analysis> dumped them verbatim). Phase 3 (3.7): nor are the arc
+  // writer's questions, which are the director's to answer at the arc stop.
+  const { timing, architecture, interweavingFromPreviousRound, writerQuestions, ...cache } = state._arcAnalysisCache || {};
   const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
 
   // Build available photos list for outline generation (Commit 8.24)
@@ -1177,6 +1276,7 @@ async function reviseOutline(state, config) {
   // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
   // round. This node never clears them (C3) — the gate does, on approve.
   const handEdits = state._outlineHandEdits || null;
+  const theme = config?.configurable?.theme || 'journalist';
 
   // Build revision context using centralized helper (DRY)
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
@@ -1187,7 +1287,8 @@ async function reviseOutline(state, config) {
     validationResults: state.validationResults,
     previousOutput: previousOutline,
     humanFeedback: state._outlineFeedback || null,
-    handEdits
+    handEdits,
+    theme
   });
 
   // Get SDK client and prompt builder
@@ -1200,7 +1301,6 @@ async function reviseOutline(state, config) {
   // an approval note reusing the same sentence must survive.
   const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback, 'outline');
 
-  const theme = config?.configurable?.theme || 'journalist';
   const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
 
   try {
@@ -1208,8 +1308,8 @@ async function reviseOutline(state, config) {
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousOutline / _outlineFeedback and leaves the run resumable.
-    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
-    const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder);
+    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
+    const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder, theme);
 
     const result = await sdk({
       prompt: revisionPrompt,
@@ -1228,7 +1328,10 @@ async function reviseOutline(state, config) {
     console.log(`[reviseOutline] Complete: ${arcCount} ${outlineTheme === 'detective' ? 'evidence groups' : 'arcs'} in ${duration}s`);
 
     return {
-      outline: result || {},
+      // Phase 3 (3.7; R5): only the director's note answers a question, so an automatic
+      // pass keeps every previous subject; the rework's question replaces the earlier
+      // ones of its kind and `about` (3.10).
+      outline: withCarriedWriterQuestions(result || {}, previousOutline, { afterDirectorNote: Boolean(state._outlineFeedback) }),
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
       // Spec §4.4 (C3): verify on EVERY pass and rewrite the report; never clear
@@ -1279,10 +1382,18 @@ function assertWriterSystemPrompt(writerSystemPrompt, caller, builder) {
 }
 
 /**
- * The rules the outline reworker's system prompt adds after its writer's. Fixed
- * text: the "preserve, do not regenerate" wording waits for phase 3's ruling (X28).
+ * The rules the outline reworker's system prompt adds after its writer's: the
+ * journalist's (phase 3, brief 3.3; TH7). Its first line names the task the
+ * revision context gives the rework; how much of the previous outline the rework
+ * keeps is the revision context's to say, from the director's note
+ * (buildRevisionContext), so no fixed "preserve" text is here.
  */
-const OUTLINE_REVISION_RULES = `You are REVISING that outline, not writing it from scratch.
+const OUTLINE_REVISION_RULES = 'You are reworking the outline you wrote, for the reason the revision context in the prompt gives: the director\'s note when the director sent it back, or what an automatic check or evaluation found.';
+
+/**
+ * The detective's outline rework rules, today's text, parked with its theme (D13).
+ */
+const DETECTIVE_OUTLINE_REVISION_RULES = `You are REVISING that outline, not writing it from scratch.
 
 CRITICAL REVISION RULES:
 1. You are IMPROVING an existing outline, not generating from scratch
@@ -1316,21 +1427,33 @@ DO:
  * design the reworker used to go without.
  *
  * @param {string} writerSystemPrompt - PromptBuilder.buildOutlineSystemPrompt()
+ * @param {string} [theme='journalist'] - selects the rework rules (outlineRevisionRules)
  * @returns {string}
  */
-function getOutlineRevisionSystemPrompt(writerSystemPrompt) {
+function getOutlineRevisionSystemPrompt(writerSystemPrompt, theme = 'journalist') {
   assertWriterSystemPrompt(writerSystemPrompt, 'getOutlineRevisionSystemPrompt', 'buildOutlineSystemPrompt');
-  return `${writerSystemPrompt}\n\n${OUTLINE_REVISION_RULES}`;
+  return `${writerSystemPrompt}\n\n${outlineRevisionRules(theme)}`;
+}
+
+/**
+ * The outline rework rules for a theme: the detective keeps today's (D13).
+ *
+ * @param {string} [theme='journalist']
+ * @returns {string}
+ */
+function outlineRevisionRules(theme = 'journalist') {
+  return theme === 'detective' ? DETECTIVE_OUTLINE_REVISION_RULES : OUTLINE_REVISION_RULES;
 }
 
 /**
  * The outline reworker's system prompt, built from its writer's builder.
  *
  * @param {Object} promptBuilder - the PromptBuilder the writer used
+ * @param {string} [theme='journalist']
  * @returns {Promise<string>}
  */
-async function buildOutlineRevisionSystemPrompt(promptBuilder) {
-  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt());
+async function buildOutlineRevisionSystemPrompt(promptBuilder, theme = 'journalist') {
+  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt(), theme);
 }
 
 /**
@@ -1360,10 +1483,11 @@ function reworkHeroImage(state) {
  * @param {string} previousOutputSection - Formatted previous output from helper
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
+ * @param {string} [theme='journalist'] - selects the task (reworkTask)
  * @returns {Promise<string>} Complete revision prompt
  * @throws {Error} when one of the writer's craft files did not load
  */
-async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
+async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], theme = 'journalist') {
   await promptBuilder.requirePhasePrompts('outlineGeneration');
   const writerSections = await promptBuilder.buildOutlineUserSections(
     ...outlineWriterInputs(state, reworkHeroImage(state))
@@ -1384,15 +1508,36 @@ ${previousOutputSection}
 
 ---
 
-## YOUR TASK
+${reworkTask('outline', theme)}${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
+}
 
-1. Review the PREVIOUS OUTLINE OUTPUT above
+/**
+ * The outline and article reworks' task, the last section before <DIRECTOR_GUIDANCE>.
+ *
+ * The journalist's (phase 3, brief 3.3; TH7) defers to the revision context for what
+ * the rework changes and how far; the detective's keeps today's fixed text (D13).
+ *
+ * @param {'outline'|'article'} phase
+ * @param {string} [theme='journalist']
+ * @returns {string}
+ */
+function reworkTask(phase, theme = 'journalist') {
+  const PHASE = phase.toUpperCase();
+  if (theme !== 'detective') {
+    return `## YOUR TASK
+
+1. Rework the PREVIOUS ${PHASE} OUTPUT as the revision context above directs.
+2. Return the whole ${phase} in the same JSON format.`;
+  }
+  return `## YOUR TASK
+
+1. Review the PREVIOUS ${PHASE} OUTPUT above
 2. Review the ISSUES TO ADDRESS in the revision context
 3. Make TARGETED FIXES to address those specific issues
 4. PRESERVE everything that's working well
-5. Return the complete updated outline in the same JSON format
+5. Return the complete updated ${phase} in the same JSON format
 
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
+Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 /**
@@ -1401,15 +1546,36 @@ Remember: You are IMPROVING, not regenerating. The previous work was valuable - 
  * session facts are computed and never stored; they are recomputed here by the
  * writer's own builder.
  *
+ * Phase 3 (3.9; T13, the integrator's ruling): `options.photos` is every photo the
+ * article places, the outline writer's whole set less the photos the director
+ * excluded: the hero image first (`hero: true`, with the names identified in it), then
+ * buildAvailablePhotos, every other session photo without the whiteboard. The outline
+ * has one photo slot per arc and one in FOLLOW THE MONEY, so it places only some
+ * (092026: nine photos, six slots); the article places the rest. The article judge's
+ * PHOTOS is built from this same list (evaluator-nodes.js renderArticleJudgePhotos).
+ *
+ * T13 (3.9 fix round 1): an excluded photo never appears. A stored hero the director
+ * excluded is no hero: the writer is told none was chosen. The detective is parked
+ * (spec D13) and keeps its stored hero. The 4b fix batch: which photos the director
+ * excluded is the one rule's (isPhotoExcluded, which buildAvailablePhotos and the hero
+ * entry read too); this list used to read the analysis's mark alone.
+ *
  * @param {Object} state
  * @returns {Array} [outline, arcEvidencePackages, heroImage, shellAccounts,
  *   sessionFacts, directorNotes, narrativeTensions, options]
  */
 function articleWriterInputs(state) {
+  const parked = (state.theme || 'journalist') !== 'journalist';
+  const heroImage = state.heroImage && isPhotoExcluded(state, state.heroImage) && !parked ? null : state.heroImage;
+  const hero = heroPhotoEntry(state, heroImage);
+  const photos = [
+    ...(hero ? [hero] : []),
+    ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))
+  ];
   return [
     state.outline || {},
     state.arcEvidencePackages || [],  // per-arc document ids, quotable excerpts and photos
-    state.heroImage,  // Hero image filename (prevents duplicate in photos array)
+    heroImage,  // Hero image filename (prevents duplicate in photos array)
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
     buildSessionFacts(state),
@@ -1417,14 +1583,16 @@ function articleWriterInputs(state) {
     state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
     // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
     // brief 1.3: the outline evaluation's advisory findings; brief 2.2: the director's
-    // input-review corrections and photo descriptions.
+    // input-review corrections and photo descriptions; phase 3 (3.9): every photo the
+    // article places.
     {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
       shouldConsider: advisoriesFromPreviousStage(state, 'outline'),
       evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
       directorCorrections: state.inputReviewCorrections || [],
-      photoDescriptions: state.photoDescriptions || null
+      photoDescriptions: state.photoDescriptions || null,
+      photos
     }
   ];
 }
@@ -1466,9 +1634,13 @@ async function generateContentBundle(state, config) {
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(...articleWriterInputs(state));
 
-  // Get JSON schema for structured output
-  const contentBundleSchema = config?.configurable?.contentBundleSchema ||
+  // Get JSON schema for structured output. Phase 3 (3.7): the detective's leaves out
+  // the writer's questions (D13).
+  const writerSchema = config?.configurable?.contentBundleSchema ||
     require('../../schemas/content-bundle.schema.json');
+  const contentBundleSchema = (config?.configurable?.theme || state.theme) === 'detective'
+    ? schemaWithoutWriterQuestions(writerSchema)
+    : writerSchema;
 
   // SDK returns parsed object directly when jsonSchema is provided
   // Commit 8.23: disableTools prevents tool use during pure generation
@@ -1574,78 +1746,6 @@ async function validateContentBundle(state, config) {
 }
 
 /**
- * Validate article against voice requirements and anti-patterns
- *
- * Uses Claude to check:
- * - First-person participatory voice
- * - No em-dashes
- * - No game mechanics language
- * - Character roster coverage
- *
- * @param {Object} state - Current state with contentBundle or assembledHtml, sessionConfig
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with validationResults, currentPhase, voiceRevisionCount
- */
-async function validateArticle(state, config) {
-  const sdk = getSdkClient(config, 'validateArticle');
-  const promptBuilder = getPromptBuilder(config, state);
-
-  // Get roster for coverage check
-  const roster = state.sessionConfig?.roster?.map(p => p.name) || [];
-
-  // Use assembled HTML if available, otherwise stringify contentBundle
-  const articleContent = state.assembledHtml ||
-    JSON.stringify(state.contentBundle, null, 2);
-
-  const { systemPrompt, userPrompt } = await promptBuilder.buildValidationPrompt(
-    articleContent,
-    roster
-  );
-
-  const validationResults = await sdk({
-    prompt: userPrompt,
-    systemPrompt,
-    model: 'opus',
-    disableTools: true,
-    jsonSchema: {
-      type: 'object',
-      properties: {
-        passed: { type: 'boolean' },
-        issues: { type: 'array' },
-        voice_score: { type: 'number' },
-        voice_notes: { type: 'string' },
-        roster_coverage: { type: 'object' },
-        systemic_critique_present: { type: 'boolean' },
-        blake_handled_correctly: { type: 'boolean' }
-      },
-      required: ['passed', 'issues']
-    }
-  });
-
-  // Determine next phase based on validation
-  const passed = validationResults.passed;
-  const currentRevisions = state.voiceRevisionCount || 0;
-  const maxRevisions = 2;
-
-  // Calculate new revision count first to align phase with routing logic
-  const newRevisionCount = currentRevisions + (passed ? 0 : 1);
-
-  let nextPhase;
-  if (passed || newRevisionCount >= maxRevisions) {
-    // Complete if passed OR max revisions reached (including this one)
-    nextPhase = PHASES.COMPLETE;
-  } else {
-    nextPhase = PHASES.REVISE_CONTENT;
-  }
-
-  return {
-    validationResults,
-    currentPhase: nextPhase,
-    voiceRevisionCount: newRevisionCount
-  };
-}
-
-/**
  * Revise ContentBundle based on validation feedback
  *
  * Called after incrementArticleRevision when evaluator says article needs work.
@@ -1686,6 +1786,7 @@ async function reviseContentBundle(state, config) {
   // Spec 2026-09-19 §4.3: the director's hand edits ride along on EVERY pass of the
   // round. This node never clears them (C3) — the gate does, on approve.
   const handEdits = state._articleHandEdits || null;
+  const theme = config?.configurable?.theme || state?.theme || 'journalist';
 
   // Build revision context using centralized helper (DRY)
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
@@ -1696,7 +1797,8 @@ async function reviseContentBundle(state, config) {
     validationResults: state.validationResults,
     previousOutput: previousContentBundle,
     humanFeedback: state._articleFeedback || null,
-    handEdits
+    handEdits,
+    theme
   });
 
   const sdk = getSdkClient(config, 'reviseContent');
@@ -1713,25 +1815,28 @@ async function reviseContentBundle(state, config) {
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousContentBundle / _articleFeedback and leaves the run resumable.
-    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
-    const systemPrompt = await buildArticleRevisionSystemPrompt(
-      promptBuilder, config?.configurable?.theme || state?.theme || 'journalist'
-    );
+    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
+    const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder, theme);
 
     const revised = await sdk({
       prompt: revisionPrompt,
       systemPrompt,
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
-      jsonSchema: contentBundleSchema,  // Use full schema (Fix 3)
+      // Use full schema (Fix 3); the detective's leaves out the writer's questions (3.7, D13)
+      jsonSchema: theme === 'detective' ? schemaWithoutWriterQuestions(contentBundleSchema) : contentBundleSchema,
       label: `Article revision ${revisionCount}`
     });
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseContentBundle] Complete in ${duration}s`);
 
-    // Update contentBundle with revision history
-    const updatedBundle = revised || previousContentBundle;
+    // Update contentBundle with revision history. Phase 3 (3.7; R5): only the director's
+    // note answers a question, so an automatic pass keeps every previous subject; the
+    // rework's question replaces the earlier ones of its kind and `about` (3.10).
+    const updatedBundle = withCarriedWriterQuestions(revised || previousContentBundle, previousContentBundle, {
+      afterDirectorNote: Boolean(state._articleFeedback)
+    });
 
     return {
       contentBundle: {
@@ -1777,9 +1882,31 @@ async function reviseContentBundle(state, config) {
 }
 
 /**
+ * The journalist article rework's first line, the first of the rules its system
+ * prompt adds after its writer's (phase 3; TH7). It names the task the revision
+ * context gives the rework and points at WHAT THIS REWORK DOES, the one section of
+ * that context that states the task (R23), so it states no scope of its own.
+ *
+ * Phase 3 (3.10, fix round 1): the line used to be the theme's revision framing
+ * (THEME_SYSTEM_PROMPTS.journalist.revision, 3.2's string), which named the automatic
+ * task "the evaluation's findings": every finding the context lists, the SHOULD
+ * CONSIDER items and the suggestions among them. At the gate an automatic article
+ * rework changed 20 of 27 paragraphs to fix one pronoun. The 4b fix batch removed that
+ * string, which nothing read.
+ */
+const ARTICLE_REVISION_RULES = "You are Nova, reworking your article after the director's note on a send back, or after an automatic check or evaluation. The task is the one the REVISION CONTEXT in the user prompt gives, under WHAT THIS REWORK DOES.";
+
+/**
  * The rules the article reworker's system prompt adds after its writer's: the
- * theme's revision framing, its revision voice, and the rework rules. Fixed text:
- * the "preserve, do not regenerate" wording waits for phase 3's ruling (X28).
+ * rework's first line, the theme's revision voice, and the rework rules.
+ *
+ * The journalist's (phase 3, brief 3.3; TH7): the first line (ARTICLE_REVISION_RULES
+ * since 3.10's fix round 1, the theme's revision framing before it) names the task,
+ * and the voice follows it. The fixed "preserve" lists and the "WHAT TO FIX" list,
+ * which made every low-scoring criterion and every flagged anti-pattern a defect
+ * though most criteria are advisory, are gone: the revision context says what the
+ * rework changes (buildRevisionContext). The detective keeps today's rules, its
+ * framing first (D13).
  *
  * @param {string} [theme]
  * @returns {string}
@@ -1787,6 +1914,11 @@ async function reviseContentBundle(state, config) {
 function articleRevisionRules(theme = 'journalist') {
   const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
   const constraints = THEME_CONSTRAINTS[theme] || THEME_CONSTRAINTS.journalist;
+  if (theme !== 'detective') {
+    return `${ARTICLE_REVISION_RULES}
+
+${constraints.revisionVoice}`;
+  }
   return `${framing.revision || framing.articleGeneration}
 
 ${constraints.revisionVoice}
@@ -1862,10 +1994,11 @@ async function buildArticleRevisionSystemPrompt(promptBuilder, theme = 'journali
  * @param {string} previousOutputSection - Formatted previous output
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
+ * @param {string} [theme='journalist'] - selects the task (reworkTask)
  * @returns {Promise<string>} Complete revision prompt
  * @throws {Error} when one of the writer's craft files did not load
  */
-async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
+async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], theme = 'journalist') {
   await promptBuilder.requirePhasePrompts('articleGeneration');
   const writerSections = await promptBuilder.buildArticleUserSections(...articleWriterInputs(state));
   const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
@@ -1885,15 +2018,7 @@ ${previousOutputSection}
 
 ---
 
-## YOUR TASK
-
-1. Review the PREVIOUS ARTICLE OUTPUT above
-2. Review the ISSUES TO ADDRESS in the revision context
-3. Make TARGETED FIXES to address those specific issues
-4. PRESERVE everything that's working well
-5. Return the complete updated article in the same JSON format
-
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.${guidanceSection ? `
+${reworkTask('article', theme)}${guidanceSection ? `
 
 ${guidanceSection}` : ''}`;
 }
@@ -1964,20 +2089,6 @@ function createMockPromptBuilder() {
         systemPrompt: 'Mock system prompt for article generation',
         userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`
       };
-    },
-
-    async buildValidationPrompt(articleHtml, roster) {
-      return {
-        systemPrompt: 'Mock system prompt for validation',
-        userPrompt: `Validate article for roster: ${roster?.join(', ') || 'unknown roster'}`
-      };
-    },
-
-    async buildRevisionPrompt(articleHtml, voiceSelfCheck) {
-      return {
-        systemPrompt: 'Mock system prompt for revision',
-        userPrompt: `Revise based on: ${voiceSelfCheck}`
-      };
     }
   };
 }
@@ -2002,7 +2113,6 @@ module.exports = {
     stateFields: ['outline', 'selectedArcs']
   }),
   validateContentBundle: traceNode(validateContentBundle, 'validateContentBundle'),
-  validateArticle: traceNode(validateArticle, 'validateArticle'),
   reviseContentBundle: traceNode(reviseContentBundle, 'reviseContentBundle'),
 
   // Testing utilities
@@ -2011,12 +2121,19 @@ module.exports = {
   // The writers' builders the judges share, by name (final fix wave): the
   // PromptBuilder factory (its roster section), the writers' SESSION_FACTS, the
   // outline writer's inputs and photo list, and the hero the writer and its
-  // reworker used.
+  // reworker used. Phase 3 (3.9): the article writer's inputs, its photos among them.
+  // The 4b fix batch: the one rule for a kept photo (the fact check's arguments read
+  // it) and the one hero entry (the outline judge prints it). Task 4c-fix: the
+  // whiteboard's filename, which the fact check's arguments read too.
   getPromptBuilder,
   buildSessionFacts,
   buildAvailablePhotos,
   outlineWriterInputs,
+  articleWriterInputs,
   reworkHeroImage,
+  isPhotoExcluded,
+  heroPhotoEntry,
+  whiteboardFilenameOf,
 
   // Internal functions for testing
   _testing: {
@@ -2032,6 +2149,9 @@ module.exports = {
     buildOutlineRevisionSystemPrompt,
     buildArticleRevisionSystemPrompt,
     OUTLINE_REVISION_RULES,
+    outlineRevisionRules,
+    reworkTask,
+    ARTICLE_REVISION_RULES,
     articleRevisionRules,
     outlineWriterInputs,
     articleWriterInputs,

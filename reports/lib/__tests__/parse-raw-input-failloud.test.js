@@ -184,13 +184,14 @@ describe('parseRawInput sessionId authority (B1)', () => {
   });
 });
 
-describe('SESSION_CONFIG_SCHEMA sessionId description (B1)', () => {
+describe('SESSION_CONFIG_SCHEMA and the session id (B1)', () => {
   const { _testing } = require('../workflow/nodes/input-nodes');
 
-  test('tells the model to copy the provided sessionId rather than derive MMDD', () => {
-    const desc = _testing.SESSION_CONFIG_SCHEMA.properties.sessionId.description;
-    expect(desc).toMatch(/verbatim/i);
-    expect(desc).not.toMatch(/MMDD/);
+  test('never asks the model for a session id: code stamps the caller\'s (phase 3, brief 3.5)', () => {
+    // B1: a model-derived "0711" once sent session 071126's inputs to data/0711/. The
+    // model used to be told to copy the id verbatim; since 3.5 it is not asked at all.
+    expect(_testing.SESSION_CONFIG_SCHEMA.properties.sessionId).toBeUndefined();
+    expect(JSON.stringify(_testing.SESSION_CONFIG_SCHEMA)).not.toMatch(/MMDD/);
   });
 });
 

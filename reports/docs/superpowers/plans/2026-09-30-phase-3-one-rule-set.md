@@ -707,3 +707,68 @@ Sources: `coverage-judges.md` (every row, and section 7's list of rules no crite
 - **The shared test files belong to the integrator.** Parallel slices otherwise collide on every pinned hash. Cost: the integrator's time at each merge.
 - **The gate proves the pipeline works, not that the article improved** (the director's ruling of 2026-10-01). The test of the rules is the director's next new session. The end-to-end run uses a copy of 092026 because it is an evening session with a guest reporter, an epilogue and the director's own correction to replay. Cost if wrong: about an hour and a half of model calls.
 - **Three waves.** 3.7 needs the writers' schemas, the arc check and the arc judge that 3.2, 3.3 and 3.4 own, so it runs alone after them. Cost if wrong: about a day of wall time.
+
+---
+
+## Completing phase 3 (2026-10-02): the craft rebuilt around the form
+
+**Why.** The gate's live run worked: every call completed, every stop loaded, and the article had none of the old factual errors. The director then read the article beside the published 092026 and edited it. The edits showed the rule set pushing the writers toward defensibility. There were disclaimers that explained the game, a source tag on almost every sentence, details placed where they made no sense, a buyer stated as fact, and a thesis held back until the closing. The judges' fixes pushed the same way, and the outline scripted it all. The director approved an account of the article's form and the rule text rewritten from it (spec round 7, R11 to R24). The craft is now the engine and the truth rules the floor. The guidance is tested in the director's next session and refined in phase 4 (R20).
+
+**The rule text** is the director-approved read (`.superpowers/sdd/2026-09-30-phase-3-one-rule-set/rule-text-read-2.md`, kept locally), and spec sections 2, 4, 5 and 8 state it. The craft files become eight: craft-story, craft-form, craft-material, craft-voice, craft-judgement, craft-telling, craft-cards and craft-questions. The truth floor changes T1 to T5, T7, T8, T14, the world file and the remote-mode block.
+
+**Four slices, built in parallel and each reviewed, then the docs:**
+- **3.8 The rule files.**
+  - Writes the rule files from the read.
+  - Retires craft-thesis, craft-sections, craft-arcs, craft-room and craft-tracing.
+  - Sets `RULE_SET_CALLS` to spec section 8.
+  - Updates the loader's tests and stub fixtures.
+  - Adds the retired wording to the removed-phrase fixture.
+  - Owns `references/rules/`, `lib/rule-set.js` and their tests.
+- **3.9 The judges and the money line.**
+  - The money judge asks whether money runs from the buyer, and the money summary names the buyer.
+  - The structural criteria lose the craft clauses the final review found: antiPatterns names only the em-dash house rule and T14's production words.
+  - The outline judge's convergence criterion follows C16.
+  - The plant-and-payoff criterion rewards a plant only when its payoff moves the throughline.
+  - The article judge loses the old card-count line.
+  - The judge step skips a phase whose latest verdict escalated to the director.
+  - The outline places every photo the director has not excluded. The article writer and judge get every photo the outline placed.
+  - Owns `evaluator-nodes.js`, and in `prompt-builder.js` the money summary and the article writer's photo list.
+- **3.10 The reworks and the writers' inputs.**
+  - An automatic rework is given the must-fix items as its task, and acts on a suggestion only where it touches a line it is already fixing; a passing criterion's note is never presented as must-fix (R23).
+  - The interweaving principles become one text, which the arc reworker also gets for the fields it returns.
+  - Prompt text and schema descriptions that name `<craft-arcs>` follow the new file names.
+  - The arc notes label stops calling backstory "Nova's reading".
+  - On an automatic pass, the rework's questions replace earlier questions of the same kind and subject.
+  - The arc writer, the interweaving call and the outline writer get the roster with pronouns, through the section the article writer uses.
+  - Owns `node-helpers.js`, `arc-specialist-nodes.js`, `subagents.js`, `writer-questions.js`, the rework rules, and in `prompt-builder.js` the outline writer's roster.
+- **3.11 Session data, the console and the harness.**
+  - A first-burial bonus in 061226's row shape is read as the bonus, and a transfer source with no sale and no standings row is reported, never invented as an account.
+  - A director's correction that matches a quote's words overrides the speaker even when the enricher attached none.
+  - A stored quote's speaker prints only when a checked line names them.
+  - The questions panel's hint suits each stop: at the article stop, answers go with a send-back.
+  - The harness approves a stop the thread is already paused at without a `/resume`.
+  - Owns `session-ledger.js`, `director-enricher.js`, `director-notes-renderer.js`, `console/checkpoint-view-logic.js` and `scripts/e2e-walkthrough.js`.
+- **3.12 Docs,** after the slices land: `CLAUDE.md` and the deep dive describe the code as it now is.
+
+The integrator owns the pinned renders and merges in the order 3.8, 3.11, 3.9, 3.10.
+
+**Deferred, after phase 3:**
+- code checks at the arc stage for quotes and the Blake and Marcus pronouns (R24);
+- tension sentences stored on old threads;
+- the input review of a thread parsed before phase 3;
+- the render tool rendering an automatic rework.
+
+**The gate** proves function, as before:
+1. The suite.
+2. The prompt checks:
+   - each call reads its section 8 files, once;
+   - the retired wording is absent from every instruction text;
+   - the detective is unchanged apart from the named hunks;
+   - sizes are recorded.
+3. One live run on a copy of 092026, from arc selection with the director's guidance to the published page, with one send-back at the article stop. It passes when:
+   - every call completes on its pinned model with valid output;
+   - every stop loads;
+   - every prompt carries its files.
+   For each automatic pass, the share of sentences it kept is recorded.
+4. The questions panel's hint at the article stop, on a fixture.
+5. A final review of this pass, on Opus 5.5.

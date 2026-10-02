@@ -1,0 +1,391 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ContentBundle",
+  "description": "Structured content for report generation - prose only, no HTML",
+  "type": "object",
+  "required": ["metadata", "headline", "sections"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["sessionId", "theme", "generatedAt"],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Unique session identifier"
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["journalist", "detective"],
+          "description": "Report theme determining template selection"
+        },
+        "generatedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of generation (server-stamped; see ai-nodes.js generateContentBundle). NO format:date-time — that keyword disables the SDK constrained-decoding channel (#277)."
+        },
+        "version": {
+          "type": "string",
+          "default": "1.0.0",
+          "description": "Schema version for future compatibility"
+        },
+        "storyDate": {
+          "type": "string",
+          "description": "In-world article date (e.g., 2027-02-22 for journalist theme)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "headline": {
+      "type": "object",
+      "required": ["main"],
+      "properties": {
+        "main": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 200,
+          "description": "Primary headline text"
+        },
+        "kicker": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Small text above main headline"
+        },
+        "deck": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Subheadline summarizing the article"
+        }
+      },
+      "additionalProperties": false
+    },
+    "byline": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "type": "string",
+          "description": "Author name"
+        },
+        "title": {
+          "type": "string",
+          "description": "Author title/role"
+        },
+        "location": {
+          "type": "string",
+          "description": "Reporting location"
+        },
+        "date": {
+          "type": "string",
+          "description": "Publication date display string"
+        },
+        "guestReporter": {
+          "type": "string",
+          "description": "Optional guest-reporter credit (rendered by templates/journalist/partials/header.hbs). Produced by lib/prompt-builder.js when sessionConfig.guestReporter is set; emit as 'Name | Role'."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered list of article sections",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "content"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique section identifier"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["narrative", "evidence-highlight", "investigation-notes", "conclusion", "case-summary"],
+            "description": "Section type for styling"
+          },
+          "heading": {
+            "type": "string",
+            "description": "Optional section heading"
+          },
+          "content": {
+            "type": "array",
+            "description": "Content blocks within section",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": ["type", "text"],
+                  "properties": {
+                    "type": { "const": "paragraph" },
+                    "text": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["type", "text"],
+                  "properties": {
+                    "type": { "const": "quote" },
+                    "text": { "type": "string", "minLength": 1 },
+                    "attribution": {
+                      "type": "string",
+                      "description": "Speaker name for a verbatim quote. OMIT for a crystallization quote (the narrator's own crystallized insight, with no speaker attribution). See lib/prompt-builder.js CRYSTALLIZATION & VERBATIM MOMENTS."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["type", "tokenId"],
+                  "properties": {
+                    "type": { "const": "evidence-reference" },
+                    "tokenId": { "type": "string" },
+                    "caption": { "type": "string" }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["type", "items"],
+                  "properties": {
+                    "type": { "const": "list" },
+                    "ordered": { "type": "boolean", "default": false },
+                    "items": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "minItems": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["type", "filename"],
+                  "properties": {
+                    "type": { "const": "photo" },
+                    "filename": { "type": "string", "description": "Photo filename" },
+                    "caption": { "type": "string", "description": "Photo caption" },
+                    "characters": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Character names visible in photo"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["type", "tokenId", "headline", "content"],
+                  "properties": {
+                    "type": { "const": "evidence-card" },
+                    "tokenId": { "type": "string" },
+                    "headline": { "type": "string" },
+                    "content": { "type": "string", "description": "Full quotable evidence text" },
+                    "owner": { "type": "string", "description": "Evidence owner name" },
+                    "significance": {
+                      "type": "string",
+                      "enum": ["critical", "supporting", "contextual"],
+                      "default": "supporting"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "pullQuotes": {
+      "type": "array",
+      "description": "Featured quotes - verbatim (from evidence, with attribution) or crystallization (the narrator's insight, no attribution)",
+      "items": {
+        "type": "object",
+        "required": ["type", "text"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["verbatim", "crystallization"],
+            "description": "verbatim = exact quote from evidence (has attribution), crystallization = the narrator's insight echoing article prose (NO attribution)"
+          },
+          "text": { "type": "string", "description": "The quote text" },
+          "attribution": {
+            "type": ["string", "null"],
+            "description": "Character name for verbatim quotes (e.g., 'Skyler'), null for crystallization"
+          },
+          "sourceTokenId": {
+            "type": "string",
+            "description": "For verbatim quotes: the tokenId of the evidence being quoted"
+          },
+          "placement": {
+            "type": "string",
+            "enum": ["left", "right", "center"],
+            "default": "right"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evidenceCards": {
+      "type": "array",
+      "description": "The sidebar's evidence entries, each a headline and a summary. Document text belongs on the inline evidence-card block in sections, not here.",
+      "items": {
+        "type": "object",
+        "required": ["tokenId", "headline"],
+        "properties": {
+          "tokenId": { "type": "string", "description": "Unique evidence identifier" },
+          "headline": { "type": "string", "description": "Compelling headline for the evidence card" },
+          "content": { "type": "string", "description": "Not printed: a sidebar entry prints only its headline and summary. Leave it out; document text belongs on the inline evidence-card block." },
+          "summary": { "type": "string", "description": "Brief summary for sidebar display" },
+          "owner": { "type": "string", "description": "Character who owns this evidence (e.g., 'Riley Torres')" },
+          "significance": {
+            "type": "string",
+            "enum": ["critical", "supporting", "contextual"],
+            "default": "supporting",
+            "description": "How important this evidence is to the narrative"
+          },
+          "placement": {
+            "type": "string",
+            "enum": ["sidebar", "inline"],
+            "default": "sidebar",
+            "description": "Where this evidence card should appear"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "financialTracker": {
+      "type": "object",
+      "description": "Shell-account ledger for FOLLOW THE MONEY. Each entry is ONE shell account, not a narrative description. Values are server-overridden from authoritative shellAccounts when available (see lib/template-assembler.js#overrideFinancialTracker).",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description", "amount"],
+            "properties": {
+              "date": { "type": "string", "description": "Optional. Usually omitted for shell-account entries." },
+              "description": { "type": "string", "description": "The shell-account NAME exactly as it appears in AUTHORITATIVE SHELL ACCOUNT DATA — e.g., 'Jamie', 'Person', 'Sarah'. Not a narrative description." },
+              "amount": { "type": "string", "description": "Clean dollar string parseable as currency — e.g., '$1,299,997', '$385,003'. Not prose like 'largest concentration'." },
+              "category": { "type": "string", "description": "Optional. Usually 'shell-account'." }
+            },
+            "additionalProperties": false
+          }
+        },
+        "totalExposed": { "type": "string", "description": "Sum of all entries as a clean dollar string — e.g., '$3,569,997'." }
+      },
+      "additionalProperties": false
+    },
+    "photos": {
+      "type": "array",
+      "description": "Session photos for inline article placement",
+      "items": {
+        "type": "object",
+        "required": ["filename", "caption"],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Photo filename in photos/ directory"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Photo caption for figcaption element"
+          },
+          "characters": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Character names visible in photo"
+          },
+          "placement": {
+            "type": "string",
+            "enum": ["inline", "sidebar"],
+            "default": "inline",
+            "description": "Where photo appears in article layout"
+          },
+          "afterSection": {
+            "type": "string",
+            "description": "Section ID after which photo appears"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "heroImage": {
+      "type": "object",
+      "description": "Featured image at top of article",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "Photo filename in photos/ directory"
+        },
+        "caption": {
+          "type": "string",
+          "description": "Hero image caption"
+        },
+        "characters": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Character names visible in hero image"
+        }
+      },
+      "additionalProperties": false
+    },
+    "voice_self_check": {
+      "type": "object",
+      "description": "Self-assessment of voice requirements compliance during generation",
+      "properties": {
+        "influences_check": {
+          "type": "object",
+          "description": "Check against each voice influence",
+          "additionalProperties": { "type": "string" }
+        },
+        "mechanics_check": {
+          "type": "object",
+          "description": "Check against voice mechanics requirements",
+          "additionalProperties": { "type": "string" }
+        },
+        "anti_pattern_check": {
+          "type": "object",
+          "description": "Check for anti-patterns",
+          "additionalProperties": { "type": "string" }
+        },
+        "issues_found": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of specific issues to fix in revision"
+        },
+        "overall_assessment": {
+          "type": "string",
+          "description": "Summary of voice compliance"
+        }
+      },
+      "additionalProperties": false
+    },
+    "_revisionHistory": {
+      "type": "array",
+      "description": "Internal: tracks revision iterations for debugging",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string" },
+          "revisionNumber": { "type": "integer" },
+          "duration": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "writerQuestions": {
+      "type": "array",
+      "description": "Questions for the director (C15), each with its kind, what it is about and the question",
+      "items": {
+        "type": "object",
+        "required": ["kind", "about", "question"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["player", "pronoun", "ledger"], "description": "The C15 case the question raises" },
+          "about": { "type": "string", "description": "The player's name, or for a ledger question the entry's time and amount" },
+          "question": { "type": "string" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
