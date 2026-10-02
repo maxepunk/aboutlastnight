@@ -730,6 +730,11 @@ function extractQuotableExcerpts(fullContent) {
  * the analyses' names alone listed such a photo again after a rollback to character-ids:
  * finalizePhotoAnalyses skips there, so the excluded photo's analysis keeps its names.
  *
+ * Final review (rules-writers[1]; T13: the whiteboard photo is never placed): an arc's
+ * photos leave out the whiteboard, as buildAvailablePhotos does (whiteboardFilenameOf).
+ * Every session photo is analysed, the whiteboard included, so a whiteboard on which the
+ * director named players was listed under every arc with those players.
+ *
  * @param {Object} state - Current state with selectedArcs, evidenceBundle, photoAnalyses
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update with arcEvidencePackages
@@ -759,6 +764,7 @@ async function buildArcEvidencePackages(state, config) {
   const allArcs = state.narrativeArcs || [];
   const evidenceBundle = state.evidenceBundle || { exposed: { tokens: [], paperEvidence: [] } };
   const photoAnalyses = state.photoAnalyses || { analyses: [] };
+  const whiteboardFilename = whiteboardFilenameOf(state);
 
   console.log(`[buildArcEvidencePackages] Building packages for ${selectedArcIds.length} selected arcs`);
 
@@ -805,6 +811,7 @@ async function buildArcEvidencePackages(state, config) {
     // Include enriched photo analyses for characters in this arc
     const arcCharacters = Object.keys(arc.characterPlacements || {});
     const relevantPhotos = (photoAnalyses.analyses || [])
+      .filter(p => !whiteboardFilename || photoFilenameOf(p.filename) !== whiteboardFilename)  // T13: never the whiteboard
       .filter(p => !isPhotoExcluded(state, p.filename))  // T13: the director's exclusions
       .filter(p => {
         const photoCharacters = p.identifiedCharacters || p.characterDescriptions || [];

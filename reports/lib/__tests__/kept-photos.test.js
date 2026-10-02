@@ -208,6 +208,52 @@ describe("each arc package's photos, after a rollback to character-ids excludes 
   });
 });
 
+/**
+ * Final review (rules-writers[1]; T13: the whiteboard photo is never placed). An arc
+ * package's photos are matched by the names identified in them, so a whiteboard on which
+ * the director named players at the character-IDs stop was listed under every arc with
+ * those players, and the outline writer and its reworker print the packages as they are,
+ * in <arc-evidence>. buildArcEvidencePackages leaves the whiteboard out, as
+ * buildAvailablePhotos does (whiteboardFilenameOf), so no writer's list can name it.
+ */
+describe('each arc package leaves out the whiteboard photo, whatever names it carries', () => {
+  /** The fixture with its whiteboard analysed and named: Alex and Morgan, one in each arc. */
+  function namedWhiteboard() {
+    const state = clone(reworkFixtureState('journalist'));
+    state.arcEvidencePackages = null;
+    state.heroImage = null;
+    state.outline = null;
+    state.photoAnalyses.analyses.push({ filename: 'whiteboard.jpg', identifiedCharacters: ['Alex', 'Morgan'] });
+    return state;
+  }
+
+  it('buildArcEvidencePackages lists no whiteboard under any arc', async () => {
+    const state = namedWhiteboard();
+    expect(aiNodes.whiteboardFilenameOf(state)).toBe('whiteboard.jpg');
+    const { arcEvidencePackages } = await buildArcEvidencePackages(state, {});
+    expect(arcEvidencePackages.map((pkg) => [pkg.arcId, filenames(pkg.photos)])).toEqual([
+      ['arc-sale', ['hero.jpg', 'p2.jpg']],
+      ['arc-envelope', ['hero.jpg']]
+    ]);
+  });
+
+  it('the outline writer and its reworker name it nowhere in <arc-evidence>', async () => {
+    const state = namedWhiteboard();
+    Object.assign(state, await buildArcEvidencePackages(state, {}));
+    const writer = recordingSdk(OUTLINE);
+    const { heroImage } = await generateOutline(state, cfg(writer));
+    const rework = recordingSdk(OUTLINE);
+    await reviseOutline({ ...state, heroImage, _previousOutline: OUTLINE, outlineRevisionCount: 1, _outlineFeedback: 'Rethink it.' }, cfg(rework));
+    const prompts = [...promptsOf(writer), ...promptsOf(rework)];
+    expect(prompts).toHaveLength(2);
+    for (const prompt of prompts) {
+      const arcEvidence = prompt.slice(prompt.indexOf('<arc-evidence>'), prompt.indexOf('</arc-evidence>'));
+      expect(arcEvidence).toContain('- hero.jpg: Alex, Morgan, Sarah');
+      expect(arcEvidence).not.toContain('whiteboard.jpg');
+    }
+  });
+});
+
 describe('the hero entry', () => {
   it('is built once, by its filename, with the names identified in it; an excluded hero has none', () => {
     const state = photoState();
