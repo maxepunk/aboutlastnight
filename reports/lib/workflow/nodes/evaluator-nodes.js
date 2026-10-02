@@ -680,21 +680,25 @@ function judgedEdits(phase, state) {
  * An issue moves to the concerns, under DIRECTOR_EDIT_PREFIX and the edit's id, when it
  * quotes the text of an edit the output carries, or the text a cut removed, and quotes
  * none of the writer's text (lib/hand-edit-diff.js locateQuotedText); an issue the judge
- * filed under the prefix and a standing id moves as it is. Every other issue stays
- * structural. A failed truth criterion holds the output only while an issue under its
- * rule ids is still structural, or while its own notes quote the writer's text. With no
- * edits, nothing moves and every failed truth criterion holds, as before F1.
+ * filed under the prefix and a standing id moves as it is. A record passage the writer's
+ * text prints is a citation of the record, not the writer's text (`record`; fix round 1,
+ * finding 2). Every other issue stays structural. A failed truth criterion holds the
+ * output only while an issue under its rule ids is still structural, or while its own
+ * notes quote the writer's text. With no edits, nothing moves and every failed truth
+ * criterion holds, as before F1.
  *
  * @param {Object} args
  * @param {string[]} args.issues - the judge's structural issues, then truthIssueLines'
  * @param {Array} args.failedTruth - failedTruthCriteria
  * @param {Object[]} args.edits - judgedEdits
  * @param {Object|null} args.output - judgedOutput
+ * @param {string[]} [args.record] - recordTexts, the record as the judge read it
  * @returns {{kept: string[], moved: string[], holding: Array}}
  */
-function guardDirectorEdits({ issues, failedTruth, edits, output }) {
+function guardDirectorEdits({ issues, failedTruth, edits, output, record = [] }) {
   if (!Array.isArray(edits) || edits.length === 0) return { kept: issues, moved: [], holding: failedTruth };
   const standing = new Set(edits.map((edit) => edit.id));
+  const locate = (text) => locateQuotedText(text, edits, output, { record });
   const kept = [];
   const moved = [];
   for (const issue of issues) {
@@ -702,19 +706,57 @@ function guardDirectorEdits({ issues, failedTruth, edits, output }) {
       moved.push(issue);
       continue;
     }
-    const { editIds, writer } = locateQuotedText(issue, edits, output);
+    const { editIds, writer } = locate(issue);
     if (editIds.length > 0 && !writer) moved.push(directorEditConcern(editIds, issue));
     else kept.push(issue);
   }
   const holding = failedTruth.filter(({ rules, notes }) =>
     kept.some((issue) => leadingRuleIds(issue).some((id) => rules.includes(id)))
-    || locateQuotedText(notes, edits, output).writer);
+    || locate(notes).writer);
   return { kept, moved, holding };
 }
 
 /** Not a concern about one of the director's edits: what a rework may read (validationResults). */
 function forTheRework(warning) {
   return !(typeof warning === 'string' && warning.startsWith(DIRECTOR_EDIT_PREFIX));
+}
+
+/**
+ * The director's words: the notes, the input-review corrections and the accusation. The
+ * fact check's pronoun check reads them (buildFactCheckArgs), and the verdict guard reads
+ * them as record (recordTexts).
+ *
+ * @param {Object} state
+ * @returns {string[]}
+ */
+function directorWords(state) {
+  const notes = state.directorNotes || {};
+  return [
+    notes.rawProse,
+    ...(Array.isArray(state.inputReviewCorrections) ? state.inputReviewCorrections : []),
+    directorAccusationText(state)
+  ].filter(text => typeof text === 'string' && text.trim());
+}
+
+/**
+ * The record as the outline and article judges read it, for the verdict guard (F1, fix
+ * round 1, finding 2): the documents and the morning timeline (renderRecordView), the
+ * director's words and the director's photo descriptions. A passage a finding quotes from
+ * here that the writer's text also prints is the record the finding cites, not the
+ * writer's text (lib/hand-edit-diff.js locateQuotedText).
+ *
+ * @param {Object} state
+ * @returns {string[]}
+ */
+function recordTexts(state) {
+  const descriptions = state.photoDescriptions && typeof state.photoDescriptions === 'object'
+    ? Object.values(state.photoDescriptions)
+    : [];
+  return [
+    renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }),
+    ...directorWords(state),
+    ...descriptions
+  ].filter(text => typeof text === 'string' && text.trim());
 }
 
 /**
@@ -744,12 +786,7 @@ function forTheRework(warning) {
 function buildFactCheckArgs(state) {
   const theme = state.theme || 'journalist';
   const config = state.sessionConfig || {};
-  const notes = state.directorNotes || {};
-  const directorText = [
-    notes.rawProse,
-    ...(Array.isArray(state.inputReviewCorrections) ? state.inputReviewCorrections : []),
-    directorAccusationText(state)
-  ].filter(text => typeof text === 'string' && text.trim()).join('\n');
+  const directorText = directorWords(state).join('\n');
   return {
     contentBundle: state.contentBundle,
     arcEvidencePackages: state.arcEvidencePackages,
@@ -2256,6 +2293,8 @@ function createEvaluator(phase, options = {}) {
       // output only while an issue under its rules is still structural or its notes
       // quote the writer's text. When every structural issue moved and no truth
       // criterion holds, the output is ready. With no edits, this is the rule above.
+      // Fix round 1, finding 2: a record passage the writer's card prints is a citation,
+      // not the writer's text (recordTexts).
       const guard = guardDirectorEdits({
         issues: [
           ...(evaluation.structuralIssues || []),
@@ -2263,7 +2302,8 @@ function createEvaluator(phase, options = {}) {
         ],
         failedTruth,
         edits: directorEdits,
-        output: judgedOutput(phase, state)
+        output: judgedOutput(phase, state),
+        record: directorEdits.length > 0 ? recordTexts(state) : []
       });
       const judgeStructuralIssues = guard.kept;
       const isReady = guard.holding.length > 0
@@ -2586,6 +2626,7 @@ module.exports = {
     judgedEdits,
     renderJudgeDirectorEdits,
     guardDirectorEdits,
+    recordTexts,
     getNpcDescriptions,
     getSdkClient,
     buildEvaluationSystemPrompt,

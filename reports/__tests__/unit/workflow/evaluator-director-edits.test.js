@@ -241,4 +241,21 @@ describe('the verdict guard (F1)', () => {
     const arcs = await evaluateArcs({ ...reworkFixtureState('journalist'), selectedArcs: [], evaluationHistory: [] }, cfg(judging(verdict({ structuralIssues: [issue] }))));
     expect(arcs.evaluationHistory.structuralIssues).toEqual([issue]);
   });
+
+  // Fix round 1, finding 2: a finding names the record it contradicts, and the writer's
+  // evidence card prints that record passage word for word. The citation is the
+  // record's, so the finding is about the director's line alone.
+  it('a finding that cites a record passage a writer\'s card prints still moves, and its criterion is released', async () => {
+    const TEST_RESULT = 'The probability of paternity is 99.9 percent.';   // the p-dna document, word for word
+    const state = articleState();
+    state.contentBundle.sections[0].content.push({ type: 'evidence-card', tokenId: 'p-dna', headline: 'The test', content: TEST_RESULT });
+    const cited = `T1: "${CLOSING}" states Alex's motive as fact; the record holds only the test result, "${TEST_RESULT}"`;
+    const result = await evaluateArticle(state, cfg(judging(verdict({
+      criteriaScores: { evidenceTruth: { score: 0.3, type: 'structural', notes: `The closing outruns "${TEST_RESULT}"`, fix: 'Attribute the motive.' } },
+      structuralIssues: [cited]
+    }))));
+    expect(result.evaluationHistory.structuralIssues).toEqual([]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: ${cited}`]);
+    expect(result.evaluationHistory.ready).toBe(true);
+  });
 });

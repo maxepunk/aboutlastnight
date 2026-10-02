@@ -556,18 +556,40 @@ function writerLeaves(output, edits) {
 /** An elision inside a quoted passage. */
 const ELLIPSIS = /\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3}|…)\s*/;
 
+/** The record's texts, each folded once, by the list they came in (locateQuotedText). */
+const FOLDED_RECORDS = new WeakMap();
+
+function foldedRecord(record) {
+  if (!Array.isArray(record)) return [];
+  let folded = FOLDED_RECORDS.get(record);
+  if (!folded) {
+    folded = record.filter((text) => typeof text === 'string' && text.trim()).map(fold);
+    FOLDED_RECORDS.set(record, folded);
+  }
+  return folded;
+}
+
 /**
  * Whose text a finding quotes. Each passage the finding quotes (grounding.js
- * quotedPassages, split at an elision) of three words or more is the writer's when the
- * writer's text holds it, and an edit's when that edit's text, or the text a cut
- * removed, does (isVerbatimIn, in any case). A passage in both is the writer's.
+ * quotedPassages, split at an elision) of three words or more is, matched as
+ * isVerbatimIn does, in any case:
+ * - the writer's, when the writer's text holds it and the record does not;
+ * - a citation, when the writer's text holds it and so does the record. A finding names
+ *   the record it contradicts, and an evidence card prints its document word for word,
+ *   so a record passage the writer's text prints is the record cited, not the text at
+ *   fault (fix round 1, finding 2);
+ * - an edit's, when the writer's text does not hold it and that edit's text, or the
+ *   text a cut removed, does, the record or not.
  *
  * @param {string} text - a finding, or a criterion's notes
  * @param {Object[]} edits - the edits `output` carries
  * @param {Object} output - the outline or bundle the finding is about
+ * @param {Object} [options]
+ * @param {string[]} [options.record] - the record's texts as the judge read them: the
+ *   documents and the director's words (evaluator-nodes.js recordTexts)
  * @returns {{editIds: string[], writer: boolean}} the edits quoted, in id order
  */
-function locateQuotedText(text, edits, output) {
+function locateQuotedText(text, edits, output, { record = [] } = {}) {
   const list = (Array.isArray(edits) ? edits : []).filter(isEdit);
   const passages = quotedPassages(text)
     .flatMap((p) => p.split(ELLIPSIS))
@@ -575,10 +597,18 @@ function locateQuotedText(text, edits, output) {
     .filter((p) => wordsIn(p) >= MIN_LOCATING_WORDS);
   if (passages.length === 0) return { editIds: [], writer: false };
   const writer = writerLeaves(output, list);
+  const recorded = foldedRecord(record);
+  const inRecord = (passage) => {
+    const folded = fold(passage);
+    return folded.length > 0 && recorded.some((source) => source.includes(folded));
+  };
   const quoted = new Set();
   let writerQuoted = false;
   for (const passage of passages) {
-    if (writer.some((leaf) => holds(leaf, passage))) { writerQuoted = true; continue; }
+    if (writer.some((leaf) => holds(leaf, passage))) {
+      if (!inRecord(passage)) writerQuoted = true;
+      continue;
+    }
     const edit = list.find((e) => stringLeaves(isCut(e) ? e.before : e.after).some((leaf) => holds(leaf, passage)));
     if (edit) quoted.add(edit.id);
   }

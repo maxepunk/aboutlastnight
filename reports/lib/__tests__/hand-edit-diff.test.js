@@ -468,6 +468,43 @@ describe('locateQuotedText (F1): whose text an issue quotes', () => {
     expect(D.locateQuotedText('T9: "Alex" and "the vote" are named.', edits, output)).toEqual({ editIds: [], writer: false });
     expect(D.locateQuotedText('T1: the closing states a motive.', edits, output)).toEqual({ editIds: [], writer: false });
   });
+
+  // Fix round 1, finding 2: a finding names the record it contradicts, and an evidence
+  // card prints its document word for word, so a record passage the writer's card
+  // prints is a citation, not the writer's text.
+  describe('the record a finding cites', () => {
+    const DEMAND = 'Marcus out by the end of January, and Alex as CTO.';
+    const RECORD = [`<RECORD>\n<document id="alr004" kind="memory">ALR004 - 9:40PM - Alex reads the term sheet aloud. ${DEMAND} Marcus laughs.</document>\n</RECORD>`];
+    const withCard = () => {
+      const a = directorsVersion();
+      a.sections[1].content.push({ type: 'evidence-card', tokenId: 'alr004', headline: "Alex's demand", content: DEMAND });
+      return a;
+    };
+    const FINDING = `T1: "${CLOSING_EDIT}" states a motive as fact; the record holds only the January demand, "${DEMAND}"`;
+
+    test('a record passage a writer\'s card prints is a citation: the finding is about the director\'s line alone', () => {
+      const article = withCard();
+      const carried = D.carriedEdits(roundOne(), article);
+      expect(D.locateQuotedText(FINDING, carried, article, { record: RECORD })).toEqual({ editIds: ['E2'], writer: false });
+      // Without the record, the card's text reads as the writer's, as before.
+      expect(D.locateQuotedText(FINDING, carried, article)).toEqual({ editIds: ['E2'], writer: true });
+    });
+
+    test('the writer\'s own words stay the writer\'s beside a record citation', () => {
+      const article = withCard();
+      const finding = `T12: "${SARAH_LINE}" is in no document; the record holds "${DEMAND}"`;
+      expect(D.locateQuotedText(finding, D.carriedEdits(roundOne(), article), article, { record: RECORD })).toEqual({ editIds: [], writer: true });
+    });
+
+    test('a passage the director\'s edit holds is the edit\'s, even when the record holds it too', () => {
+      const notes = [`The director's notes: ${CLOSING_EDIT}`];
+      expect(D.locateQuotedText(`T1: "${CLOSING_EDIT}" states a motive.`, edits, output, { record: notes })).toEqual({ editIds: ['E2'], writer: false });
+    });
+
+    test('a record passage that only the record holds locates nothing', () => {
+      expect(D.locateQuotedText(`T1: the record holds only "${DEMAND}"`, edits, output, { record: RECORD })).toEqual({ editIds: [], writer: false });
+    });
+  });
 });
 
 describe('directorEditConcern (F1)', () => {
