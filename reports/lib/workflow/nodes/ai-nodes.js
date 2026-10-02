@@ -1055,7 +1055,8 @@ function whiteboardFilenameOf(state) {
 
 /**
  * The hero image the outline writer is given: the photo with the most identified
- * characters, else the first non-whiteboard photo.
+ * characters, else the first non-whiteboard photo; none when the director kept no photo
+ * but the whiteboard.
  *
  * generateOutline selects it and stores it in state.heroImage. The outline reworker
  * reads that (phase 2, 2.3) and selects again only when it is missing.
@@ -1064,8 +1065,13 @@ function whiteboardFilenameOf(state) {
  * An excluded photo's analysis still counts its character descriptions, so it could top
  * the count.
  *
+ * Task 4c-fix (T13): with no kept photo there is no hero. It fell back to the
+ * placeholder 'evidence-board.png', which is no session photo: the article judge then
+ * required it as the hero and the fact check flagged it in print, a loop no rework could
+ * end. The outline and article writers' HERO IMAGE lines say when there is none.
+ *
  * @param {Object} state
- * @returns {string} filename
+ * @returns {string|null} filename, or null when the director kept no photo but the whiteboard
  */
 function selectHeroImage(state) {
   const getPhotoFilename = photoFilenameOf;
@@ -1077,10 +1083,14 @@ function selectHeroImage(state) {
     photo => (!whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)
       && !isPhotoExcluded(state, getPhotoFilename(photo))
   );
+  if (nonWhiteboardPhotos.length === 0) {
+    console.log('[generateOutline] No hero image: the director kept no photo but the whiteboard');
+    return null;
+  }
 
   let heroImage;
   const analyses = state.photoAnalyses?.analyses || [];
-  if (analyses.length > 0 && nonWhiteboardPhotos.length > 0) {
+  if (analyses.length > 0) {
     // Score each photo by number of identified characters (more = better group photo)
     // Uses identifiedCharacters (post-enrichment) with characterDescriptions as fallback
     const scored = nonWhiteboardPhotos.map(photo => {
@@ -1094,10 +1104,10 @@ function selectHeroImage(state) {
     });
     // Sort by character count descending, take first
     scored.sort((a, b) => b.characterCount - a.characterCount);
-    heroImage = scored[0]?.filename || getPhotoFilename(nonWhiteboardPhotos[0]) || 'evidence-board.png';
+    heroImage = scored[0]?.filename || getPhotoFilename(nonWhiteboardPhotos[0]) || null;
     console.log(`[generateOutline] Hero image selected: ${heroImage} (${scored[0]?.characterCount || 0} characters identified)`);
   } else {
-    heroImage = getPhotoFilename(nonWhiteboardPhotos[0]) || 'evidence-board.png';
+    heroImage = getPhotoFilename(nonWhiteboardPhotos[0]) || null;
     console.log(`[generateOutline] Hero image fallback: ${heroImage} (no photo analyses available)`);
   }
   return heroImage;

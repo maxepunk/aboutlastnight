@@ -934,13 +934,17 @@ Return JSON with the following structure:
       // NPCs' canon lines and none of the character context the article writer reads
       // beside them. The 4b fix batch: built by rosterWithPronounsSection, under the
       // heading the arc writer and the interweaving call print it with.
+      //
+      // Task 4c-fix (T13): when the director kept no photo but the whiteboard there is no
+      // hero (ai-nodes.js selectHeroImage), and HERO IMAGE says none, as the article
+      // writer's line does.
       const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
       userPrompt = `Plan the outline of the article from these selected arcs. Write the plan in the third person: the article writer gives it Nova's voice.
 
 SELECTED ARCS:
 ${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
 
-HERO IMAGE: ${heroImage}
+HERO IMAGE: ${heroImage || 'none'}
 ${observationsSection ? `\n${observationsSection}\n` : ''}
 <arc-metadata>
 ${JSON.stringify(arcsWithMetadata, null, 2)}

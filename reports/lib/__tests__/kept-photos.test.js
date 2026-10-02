@@ -259,3 +259,52 @@ describe('the fact check reads an excluded photo as not a usable reference', () 
     ]);
   });
 });
+
+/**
+ * Task 4c-fix (4b-fix review minor 1): with no kept photo there is no hero. When every
+ * photo but the whiteboard was excluded, selectHeroImage fell back to the placeholder
+ * 'evidence-board.png', which is no session photo. The article writer and judge then
+ * listed it as the hero, the judge's photosTruth required it in print, and the fact check
+ * flagged it there: a loop no rework could end.
+ */
+describe('with no kept photo there is no hero', () => {
+  /** photoState with every photo but the whiteboard excluded (p3 and p5 already are). */
+  function allExcluded() {
+    const state = photoState();
+    state.heroImage = null;
+    state.outline = null;
+    ['hero.jpg', 'p2.jpg', 'p4.jpg'].forEach((filename) => {
+      state.characterIdMappings[filename] = { characterMappings: [], additionalCharacters: [], corrections: {}, exclude: true };
+    });
+    return state;
+  }
+
+  it('selectHeroImage picks none: every photo but the whiteboard excluded, only the whiteboard, or no photo', () => {
+    expect(selectHeroImage(allExcluded())).toBeNull();
+    expect(selectHeroImage({ ...photoState(), sessionPhotos: ['photos/whiteboard.jpg'] })).toBeNull();
+    expect(selectHeroImage({ ...photoState(), sessionPhotos: [], photoAnalyses: { analyses: [] } })).toBeNull();
+  });
+
+  it('the outline writer is told there is none, and the article writer and judge are given no photo', async () => {
+    const state = allExcluded();
+    const outlineSdk = recordingSdk(OUTLINE);
+    const { heroImage } = await generateOutline(state, cfg(outlineSdk));
+    expect(heroImage).toBeNull();
+    const [outlinePrompt] = promptsOf(outlineSdk);
+    expect(outlinePrompt).toContain('\nHERO IMAGE: none\n');
+    expect(outlinePrompt).toContain('No session photos available');
+
+    const articleState = { ...state, heroImage, outline: OUTLINE };
+    const inputs = articleWriterInputs(articleState);
+    expect(inputs[2]).toBeNull();
+    expect(inputs[inputs.length - 1].photos).toEqual([]);
+    const articleSdk = recordingSdk(PREVIOUS_BUNDLE);
+    await generateContentBundle({ ...articleState, contentBundle: null }, cfg(articleSdk));
+    const [articlePrompt] = promptsOf(articleSdk);
+    expect(articlePrompt).toContain('\nHERO IMAGE: none chosen');
+    expect(articlePrompt).toContain('\nPHOTOS: none\n');
+    expect(buildEvaluationUserPrompt('article', { ...articleState, contentBundle: PREVIOUS_BUNDLE }))
+      .toContain('PHOTOS (the article writer was given none)');
+    for (const prompt of [outlinePrompt, articlePrompt]) expect(prompt).not.toContain('evidence-board.png');
+  });
+});
