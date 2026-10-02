@@ -35,7 +35,7 @@ const http = require('http');
 const https = require('https');
 const { resolveCompletePayload } = require('./lib/sse-complete');
 const { loadPhotoDescriptionsFile, withPhotoDescriptions } = require('./lib/photo-descriptions');
-const { pausedStopToApprove } = require('./lib/paused-stop');
+const { openingRequest } = require('./lib/paused-stop');
 // The console's pure read side (dual-export), so the harness reads the stop payloads
 // the way the console does: the phase's last evaluation and the trace (brief 2.7).
 const ViewLogic = require('../console/checkpoint-view-logic');
@@ -520,10 +520,13 @@ ${color('OPTIONS:', 'cyan')}
   --profile <name>   Auto-approval profile (default: smart-defaults)
                      Available: smart-defaults, testing-fast, testing-full, ci-pipeline
   --step             Run one checkpoint, display data, exit (non-interactive)
-  --approve <type>   Approve the current checkpoint and advance to next; with --resume,
-                     a thread already paused at that checkpoint is read through
+  --approve <type>   Approve the checkpoint the thread is paused at and advance to
+                     the next. A thread paused at <type> is read through
                      GET /checkpoint and approved without a /resume (a /resume
-                     replays from the start and re-runs an escalated judge)
+                     replays from the start and re-runs an escalated judge).
+                     Without --resume, a thread paused elsewhere or not paused is
+                     left as it is: the harness says where it is and stops, and
+                     never starts the session over
   --approve-file <f> Use custom JSON payload for approval (with --approve)
   --photo-descriptions <f>
                      JSON file of {"photo filename": "the director's description"},
@@ -3518,8 +3521,28 @@ async function runWalkthrough() {
   const maxIterations = 20; // Safety limit
   let currentData = null;
 
-  // Initial request - use /start for new sessions, /resume for existing
-  if (inputData.rawSessionInput && !RESUME_MODE) {
+  // Initial request (task 3.11). With --approve the harness reads GET /checkpoint first:
+  // a thread already paused at that stop is approved from that read, with no /resume
+  // (it replays from START and re-runs a judge whose last verdict escalated) and no
+  // /start (forced, it starts the session over). Without --resume, an --approve never
+  // starts the session over: the harness says where the thread is and stops. Otherwise
+  // /start for a new session and /resume for an existing one (scripts/lib/paused-stop.js).
+  const opening = openingRequest({
+    approveType: APPROVE_TYPE,
+    startsOver: Boolean(inputData.rawSessionInput && !RESUME_MODE),
+    checkpointRead: APPROVE_TYPE ? await apiGet(`/api/session/${sessionId}/checkpoint`) : undefined,
+    stateOverrides: Boolean(stateOverrides)
+  });
+
+  if (opening.kind === 'stop') {
+    console.error(color(`\n${opening.reason}`, 'red'));
+    return;
+  }
+
+  if (opening.kind === 'approve') {
+    console.log(color(`\n─── Paused at ${APPROVE_TYPE}: approving it without a /resume ───`, 'dim'));
+    currentData = opening.currentData;
+  } else if (opening.kind === 'start') {
     // Use /start endpoint for new sessions
     console.log(color(`\n─── Starting Session via /start ───`, 'dim'));
     const startBody = {
@@ -3527,7 +3550,8 @@ async function runWalkthrough() {
       rawSessionInput: inputData.rawSessionInput,
       // C1: /start 409s on a session id whose thread already exists, because in the
       // console Start Fresh is one destructive click. Reaching this branch is an
-      // explicit choice here (the harness ran without --resume), so it says so.
+      // explicit choice here (the harness ran without --resume or --approve), so it
+      // says so.
       force: true
     };
     const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/start`, startBody, 'POST', sessionId);
@@ -3542,34 +3566,23 @@ async function runWalkthrough() {
     }
     currentData = data;
   } else {
-    // Task 3.11: --approve on a thread already paused at that stop approves it from GET
-    // /checkpoint. A /resume replays from START, and re-runs a judge whose last verdict
-    // escalated before it pauses at the same stop again (scripts/lib/paused-stop.js).
-    const pausedStop = APPROVE_TYPE
-      ? pausedStopToApprove(APPROVE_TYPE, await apiGet(`/api/session/${sessionId}/checkpoint`), { stateOverrides: Boolean(stateOverrides) })
-      : null;
-    if (pausedStop) {
-      console.log(color(`\n─── Paused at ${APPROVE_TYPE}: approving it without a /resume ───`, 'dim'));
-      currentData = pausedStop;
-    } else {
-      // Use /resume for existing sessions
-      console.log(color(`\n─── Resuming Session via /resume ───`, 'dim'));
-      const requestBody = {};
-      if (stateOverrides) {
-        requestBody.stateOverrides = stateOverrides;
-      }
-      const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/resume`, requestBody, 'POST', sessionId);
-
-      if (!VERBOSE) {
-        console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
-      }
-
-      if (status !== 200) {
-        console.error(color(`Resume failed: ${data?.error || error}`, 'red'));
-        return;
-      }
-      currentData = data;
+    // Use /resume for existing sessions
+    console.log(color(`\n─── Resuming Session via /resume ───`, 'dim'));
+    const requestBody = {};
+    if (stateOverrides) {
+      requestBody.stateOverrides = stateOverrides;
     }
+    const { status, data, error, durationMs } = await apiCall(`/api/session/${sessionId}/resume`, requestBody, 'POST', sessionId);
+
+    if (!VERBOSE) {
+      console.log(color(`Response: ${status} (${durationMs}ms)`, status === 200 ? 'green' : 'red'));
+    }
+
+    if (status !== 200) {
+      console.error(color(`Resume failed: ${data?.error || error}`, 'red'));
+      return;
+    }
+    currentData = data;
   }
 
   // Main checkpoint loop

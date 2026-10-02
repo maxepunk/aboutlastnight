@@ -38,16 +38,15 @@ PROBE_SESSION_ID=092026 node scripts/probe-content-bundle-channel.js   # exit 1 
 node scripts/check-model-freshness.js                    # every MODEL_IDS entry resolves and serves as pinned
 
 # E2E Pipeline Testing (primary testing tool)
-node scripts/e2e-walkthrough.js --session 1221           # Resume existing session
+node scripts/e2e-walkthrough.js --session 1221 --resume  # Resume existing session
 node scripts/e2e-walkthrough.js --session 1225 --fresh   # Fresh start
 node scripts/e2e-walkthrough.js --session 1225 --auto    # Auto-approve all checkpoints
 node scripts/e2e-walkthrough.js --help                   # Full CLI options
 
-# Step-by-step mode (non-interactive, for collaborative debugging)
-node scripts/e2e-walkthrough.js --session 1225 --step    # View current checkpoint
-node scripts/e2e-walkthrough.js --session 1225 --approve input-review --step
+# Step-by-step mode (non-interactive, for collaborative debugging). Without --resume or --approve, --session starts the session over (POST /start with force).
+node scripts/e2e-walkthrough.js --session 1225 --resume --step   # View the stop the thread reaches (a /resume replays from START to it)
+node scripts/e2e-walkthrough.js --session 1225 --approve input-review --step   # Approve the stop the thread is paused at, read through GET /checkpoint with no /resume (which replays from START and re-runs a judge whose verdict escalated); a thread paused elsewhere or not paused is left as it is, and the harness says where it is (scripts/lib/paused-stop.js)
 node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --photo-descriptions descriptions.json --step   # {"photo.jpg": "the director's description"}, sent as photoDescriptions with every character-IDs approval
-node scripts/e2e-walkthrough.js --session 1225 --resume --approve outline --step   # a thread already paused at that stop is read through GET /checkpoint and approved without a /resume, which replays from START and re-runs a judge whose verdict escalated (scripts/lib/paused-stop.js)
 
 # Remote access
 start-everything.bat   # Windows: Start server + Cloudflare tunnel
