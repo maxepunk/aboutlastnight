@@ -246,8 +246,11 @@ function filterGateNotes(gateNotes, currentFeedback, gate) {
  * fix, and advisory warnings, which are suggestions. Concatenated into one list the
  * suggestions read as defects; dropped — as they were until this slice — the outline
  * evaluation's warnings about frontloading never reached the article writer at all.
- * The same two lines introduce the list wherever it appears: here in a generation
- * prompt, and in buildRevisionContext's SHOULD CONSIDER block in a rework prompt.
+ * These two lines introduce the list in a generation prompt's <SHOULD_CONSIDER>, and in
+ * the detective rework's SHOULD CONSIDER block (buildRevisionContext). Since phase 3
+ * (3.10) a journalist rework introduces its list with REWORK_SHOULD_CONSIDER_LINE
+ * (node-helpers.js) alone: "Apply them where they serve the piece" would give a
+ * suggestion a scope of its own, and WHAT THIS REWORK DOES states that scope once (R23).
  */
 const SHOULD_CONSIDER_PREAMBLE =
   'These came from the evaluation that ran before this pass. Apply them where they\n' +
@@ -1502,8 +1505,9 @@ module.exports = {
   rosterWithPronounsSection,
   buildDirectorGuidanceSection,
   buildShouldConsiderSection,
-  // Shared with buildRevisionContext (node-helpers.js) so a rework prompt and a
-  // generation prompt introduce the advisory list in the same words (brief 1.3).
+  // Shared with buildRevisionContext (node-helpers.js), which introduces the detective
+  // rework's advisory list with it; a journalist rework's list has its own line,
+  // REWORK_SHOULD_CONSIDER_LINE (phase 3, 3.10).
   SHOULD_CONSIDER_PREAMBLE,
   filterGateNotes,
   DETECTIVE_REPORTING_MODE_BLOCKS,
