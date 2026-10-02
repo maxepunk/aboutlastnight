@@ -93,9 +93,9 @@ describe('the retired journalist craft files', () => {
    * RULE_SET_CALLS. Every call reads the world and the truth rules, then its craft files
    * in RULE_SET_CALLS order, then the reporting-mode block (spec section 8). The evidence
    * curator and the image analyzer write no story text, so they read the world file
-   * alone, for the game's facts: what each memory became, and what the photos show.
-   * The three specialists left the skill path when the standalone path was rewritten
-   * (57a73c2): nothing started them.
+   * alone, for the game's facts and what each memory became. The three specialists left
+   * the skill path when the standalone path was rewritten to defer to the rule set:
+   * nothing started them.
    */
   const AGENT_CALLS = {
     'journalist-arc-analyzer.md': 'arc',
