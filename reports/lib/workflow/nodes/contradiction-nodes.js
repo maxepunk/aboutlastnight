@@ -10,7 +10,8 @@
  * Phase 3 (3.6): the named-account and transparency tensions are gone. They read an
  * account named after a roster character as that character's own ("used their own
  * name for a burial account... a deliberate choice to be identifiable"), and an
- * account's name is a message its seller chose, never proof of who holds it (T4).
+ * account's name is a message its seller chose, never a reason to suspect its
+ * namesake (T4).
  * The ledger's accounts and totals reach the writers through the financial summary.
  */
 

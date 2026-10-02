@@ -161,14 +161,18 @@ ${npcLines.join('\n')}`;
 }
 
 /**
- * Wrap prompt content with XML tags for AI cross-referencing
+ * Wrap prompt content in one XML tag named after it.
  *
- * Uses XML tags for consistency with Claude's training and token efficiency.
- * Cross-references use tag names: "See <narrative-structure> Section 8"
+ * Uses XML tags for consistency with Claude's training and token efficiency. It wraps
+ * the sections both themes add by name (<SHOULD_CONSIDER>, <DIRECTOR_GUIDANCE>) and the
+ * parked detective's prompt files, each under its file name (spec D13). The
+ * journalist's rule files come wrapped from lib/rule-set.js, and a journalist prompt
+ * points at a rule by its id and its file's tag, as in "C16 (<craft-story>)".
  *
- * @param {string} filename - The prompt file name (e.g., 'narrative-structure')
- * @param {string} content - The prompt file content
- * @returns {string} XML-wrapped content
+ * @param {string} filename - the tag: a section's name (e.g. 'DIRECTOR_GUIDANCE') or a
+ *   detective prompt file's name
+ * @param {string} content - the section's or the file's content
+ * @returns {string} XML-wrapped content, or '' when the content is empty
  */
 function labelPromptSection(filename, content) {
   if (!content || !content.trim()) return '';

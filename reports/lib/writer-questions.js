@@ -234,7 +234,7 @@ function namesWord(text, name) {
  * name or the character's full name as a whole word, so a question about "Sarah
  * Blackwood" covers "Sarah". A pronoun or ledger question covers no one (fix 3.7b): a
  * ledger question about an account named after a player is about the account, and an
- * account's name never proves who holds it (T4).
+ * account's name is never a reason to suspect its namesake (T4).
  *
  * @param {*} questions - writerQuestions
  * @param {string[]} roster - the session roster (first names)

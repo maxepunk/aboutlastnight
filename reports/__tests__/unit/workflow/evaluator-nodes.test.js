@@ -2931,9 +2931,11 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
 
     // T13: "an excluded photo never does" appear. The director excludes a photo at the
     // character-IDs stop, and finalizePhotoAnalyses (photo-nodes.js) marks its analysis
-    // `excluded: true` with no names. buildAvailablePhotos does not read the mark, so the
+    // `excluded: true` with no names. buildAvailablePhotos did not read the mark, so the
     // article's set listed the photo under a header that calls it kept, and photosTruth
-    // then asked for it in print (3.9 fix round 1).
+    // then asked for it in print (3.9 fix round 1). Since the 4b fix batch it reads the
+    // one rule, isPhotoExcluded: the director's decision first, and the mark for a photo
+    // no mapping names, as here.
     const markExcluded = (state, filename) => {
       state.photoAnalyses.analyses = [
         ...state.photoAnalyses.analyses.filter((a) => a.filename !== filename),
