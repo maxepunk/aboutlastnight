@@ -351,6 +351,27 @@ function renderPhotoEntry({ filename, names = [] }, photoDescriptions, indent = 
   return `${entry}\n${indent}${descriptionLine}`;
 }
 
+/**
+ * One numbered entry of a PHOTOS list: its number, "[hero image]" on the hero, then the
+ * photo's entry (renderPhotoEntry). The article writer and the article and outline
+ * judges list their photos with it, each under its own header, so "every photo in
+ * PHOTOS" names the same entries at the writer and the judge (the 4b fix batch; 3.9
+ * review minor 2: the article writer and the article judge each wrote the template).
+ *
+ * @param {Object} photo
+ * @param {string} photo.filename
+ * @param {string[]} [photo.identifiedCharacters]
+ * @param {boolean} [photo.hero]
+ * @param {number} index - the photo's position in the list, from 0
+ * @param {Object|null} photoDescriptions - {filename: text}, or null when none was collected
+ * @returns {string}
+ */
+function renderPhotoListEntry(photo, index, photoDescriptions) {
+  return `${index + 1}. ${photo.hero ? '[hero image] ' : ''}${renderPhotoEntry(
+    { filename: photo.filename, names: photo.identifiedCharacters }, photoDescriptions, '   '
+  )}`;
+}
+
 module.exports = {
   VERDICT_KIND_PHRASES,
   formatAccused,
@@ -366,5 +387,6 @@ module.exports = {
   renderWhiteboardConnections,
   photoKey,  // the outline judge pairs each photo with its analysis by this key (brief 2.4)
   photoDescriptionFor,
-  renderPhotoEntry
+  renderPhotoEntry,
+  renderPhotoListEntry
 };

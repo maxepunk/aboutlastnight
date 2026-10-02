@@ -51,6 +51,7 @@ const {
 } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { directorAccusationText } = require('../../accusation-verdict');
+const { photoKey } = require('../../prompt-renderers/director-words-renderer');
 // Phase 3 (3.7): the writers' questions for the director (C15), kept through a rework
 // (R5) and out of every later prompt.
 const { withCarriedWriterQuestions, schemaWithoutWriterQuestions } = require('../../writer-questions');
@@ -926,12 +927,66 @@ function buildSessionFacts(state) {
 }
 
 /**
+ * Whether the director excluded a photo (T13: every photo the director has not excluded
+ * appears, and an excluded photo never does). The one rule for every list a writer or
+ * judge may place photos from, the hero choice and the fact check (the 4b fix batch; the
+ * integrator's ruling).
+ *
+ * The director excludes a photo at the character-IDs stop, and the parse stores the
+ * decision as characterIdMappings[<filename>].exclude. That decision is read first. The
+ * analysis's `excluded` mark, which finalizePhotoAnalyses sets from it, is the fallback
+ * for a photo no mapping names: after a rollback to character-ids the analyses are kept
+ * and the mappings parsed again, so the mark can be stale. Both are matched by photoKey
+ * (basename, case-insensitive), as the parse's keys need not match a filename's case.
+ *
+ * @param {Object} state
+ * @param {string} filename - a photo's filename or path
+ * @returns {boolean}
+ */
+function isPhotoExcluded(state, filename) {
+  const key = photoKey(filename);
+  if (!key) return false;
+  const mappings = state.characterIdMappings && typeof state.characterIdMappings === 'object' ? state.characterIdMappings : {};
+  const mapped = Object.keys(mappings).find(name => photoKey(name) === key);
+  if (mapped !== undefined && mappings[mapped] && typeof mappings[mapped] === 'object') {
+    return Boolean(mappings[mapped].exclude);
+  }
+  const analysis = (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoKey(a.filename) === key);
+  return analysis?.excluded === true;
+}
+
+/**
+ * The hero image as a photo entry: its filename, the names identified in it, and
+ * `hero: true`; null when there is no hero or the director excluded it (T13). One
+ * builder for the article writer's photos (articleWriterInputs) and the outline judge's
+ * (evaluator-nodes.js renderJudgePhotos), its analysis found by photoKey (the 4b fix batch).
+ *
+ * @param {Object} state
+ * @param {string|null} heroImage - the hero's filename
+ * @returns {{filename: string, identifiedCharacters: string[], hero: true}|null}
+ */
+function heroPhotoEntry(state, heroImage) {
+  if (!heroImage || isPhotoExcluded(state, heroImage)) return null;
+  const key = photoKey(heroImage);
+  const analysis = (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoKey(a.filename) === key);
+  return {
+    filename: heroImage,
+    identifiedCharacters: Array.isArray(analysis?.identifiedCharacters) ? analysis.identifiedCharacters : [],
+    hero: true
+  };
+}
+
+/**
  * The photos the outline writer may place, beyond the hero (phase 2, brief 2.2).
  *
  * Each carries its filename and the names the director identified in it. The
  * writer's text about the photo is the director's own description, which the prompt
  * builder joins by filename (options.photoDescriptions); Haiku's pre-identification
  * descriptions no longer go to the writer.
+ *
+ * The 4b fix batch (T13): a photo the director excluded is left out (isPhotoExcluded),
+ * so the outline writer, its reworker, the outline judge and the article side, which
+ * all build their lists here, never list one.
  *
  * @param {Object} state
  * @param {string} heroImage - excluded (it has its own slot)
@@ -953,6 +1008,7 @@ function buildAvailablePhotos(state, heroImage, whiteboardFilename) {
   return (state.sessionPhotos || [])
     .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
     .filter(photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)  // Exclude whiteboard
+    .filter(photo => !isPhotoExcluded(state, getPhotoFilename(photo)))  // T13: the director's exclusions
     .map((photoPath, i) => {
       const filename = getPhotoFilename(photoPath) || `photo-${i}.jpg`;
       const analysis = analysisByFilename.get(filename.toLowerCase()) || {};
@@ -987,6 +1043,10 @@ function whiteboardFilenameOf(state) {
  * generateOutline selects it and stores it in state.heroImage. The outline reworker
  * reads that (phase 2, 2.3) and selects again only when it is missing.
  *
+ * The 4b fix batch (T13): it never picks a photo the director excluded (isPhotoExcluded).
+ * An excluded photo's analysis still counts its character descriptions, so it could top
+ * the count.
+ *
  * @param {Object} state
  * @returns {string} filename
  */
@@ -997,7 +1057,8 @@ function selectHeroImage(state) {
   // Select hero image: prefer largest group photo, fallback to first non-whiteboard photo
   // Group photos better represent the ensemble cast as hero images
   const nonWhiteboardPhotos = (state.sessionPhotos || []).filter(
-    photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename
+    photo => (!whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)
+      && !isPhotoExcluded(state, getPhotoFilename(photo))
   );
 
   let heroImage;
@@ -1459,32 +1520,23 @@ Remember: You are IMPROVING, not regenerating. The previous work was valuable - 
  * (092026: nine photos, six slots); the article places the rest. The article judge's
  * PHOTOS is built from this same list (evaluator-nodes.js renderArticleJudgePhotos).
  *
- * T13 (3.9 fix round 1): an excluded photo never appears. The director excludes a
- * photo at the character-IDs stop, and finalizePhotoAnalyses marks its analysis
- * `excluded: true`; buildAvailablePhotos does not read the mark, so the list leaves
- * those photos out here. A stored hero the director excluded is no hero: the writer
- * is told none was chosen. The detective is parked (spec D13) and keeps its stored hero.
+ * T13 (3.9 fix round 1): an excluded photo never appears. A stored hero the director
+ * excluded is no hero: the writer is told none was chosen. The detective is parked
+ * (spec D13) and keeps its stored hero. The 4b fix batch: which photos the director
+ * excluded is the one rule's (isPhotoExcluded, which buildAvailablePhotos and the hero
+ * entry read too); this list used to read the analysis's mark alone.
  *
  * @param {Object} state
  * @returns {Array} [outline, arcEvidencePackages, heroImage, shellAccounts,
  *   sessionFacts, directorNotes, narrativeTensions, options]
  */
 function articleWriterInputs(state) {
-  const analyses = state.photoAnalyses?.analyses || [];
-  const keyOf = (filename) => photoFilenameOf(filename).toLowerCase();
-  const excludedKeys = new Set(analyses.filter(a => a?.excluded && a.filename).map(a => keyOf(a.filename)));
-  const kept = (filename) => !excludedKeys.has(keyOf(filename));
   const parked = (state.theme || 'journalist') !== 'journalist';
-  const heroImage = state.heroImage && !kept(state.heroImage) && !parked ? null : state.heroImage;
-  const heroKey = heroImage ? keyOf(heroImage) : null;
-  const heroAnalysis = heroKey ? analyses.find(a => a?.filename && keyOf(a.filename) === heroKey) : null;
+  const heroImage = state.heroImage && isPhotoExcluded(state, state.heroImage) && !parked ? null : state.heroImage;
+  const hero = heroPhotoEntry(state, heroImage);
   const photos = [
-    ...(heroImage && kept(heroImage) ? [{
-      filename: heroImage,
-      identifiedCharacters: Array.isArray(heroAnalysis?.identifiedCharacters) ? heroAnalysis.identifiedCharacters : [],
-      hero: true
-    }] : []),
-    ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state)).filter(photo => kept(photo.filename))
+    ...(hero ? [hero] : []),
+    ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))
   ];
   return [
     state.outline || {},
@@ -2036,12 +2088,16 @@ module.exports = {
   // PromptBuilder factory (its roster section), the writers' SESSION_FACTS, the
   // outline writer's inputs and photo list, and the hero the writer and its
   // reworker used. Phase 3 (3.9): the article writer's inputs, its photos among them.
+  // The 4b fix batch: the one rule for a kept photo (the fact check's arguments read
+  // it) and the one hero entry (the outline judge prints it).
   getPromptBuilder,
   buildSessionFacts,
   buildAvailablePhotos,
   outlineWriterInputs,
   articleWriterInputs,
   reworkHeroImage,
+  isPhotoExcluded,
+  heroPhotoEntry,
 
   // Internal functions for testing
   _testing: {

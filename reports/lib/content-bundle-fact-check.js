@@ -812,6 +812,9 @@ function describeLocations(locations) {
  * @param {Object}   args.evidenceBundle       - curated three-layer bundle
  * @param {Array}    args.roster               - session roster (names or {name})
  * @param {Array}    args.sessionPhotos        - photo paths available to this session
+ * @param {Array}    [args.excludedPhotos]     - the session photos the director excluded
+ *                                               (T13; the evaluator's isPhotoExcluded): no
+ *                                               usable reference, and never offered in a fix
  * @param {string}   args.reportingMode        - 'on-site' | 'remote' (default 'on-site')
  * @param {Array}    [args.npcs]               - the theme's NPC entries (theme-config
  *                                               getThemeNPCEntries): {name, pronouns?, aliasOf?}
@@ -838,6 +841,7 @@ function factCheckContentBundle({
   evidenceBundle,
   roster,
   sessionPhotos,
+  excludedPhotos,
   reportingMode,
   npcs,
   npcPronouns,
@@ -957,7 +961,14 @@ function factCheckContentBundle({
   }
 
   // ── 3. Photo references (BASELINE class 7) ───────────────────────────────
+  // The 4b fix batch (T13: an excluded photo never appears): a photo the director
+  // excluded is no usable reference, and a fix line offers only the kept photos. It used
+  // to offer every session photo, so a rework could be told to place one the director
+  // pulled. The message keeps its prefix: the console groups by it.
   const available = new Set(asArray(sessionPhotos).map(basename).filter(Boolean));
+  const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
+  const kept = Array.from(available).filter(filename => !excluded.has(filename));
+  const useKept = kept.length > 0 ? `Use one of [${kept.join(', ')}] or remove the reference.` : 'Remove the reference.';
   const referenced = [];
   if (bundle.heroImage && typeof bundle.heroImage === 'object' && bundle.heroImage.filename) {
     referenced.push(String(bundle.heroImage.filename));
@@ -977,15 +988,16 @@ function factCheckContentBundle({
     }
   } else {
     for (const filename of referenced) {
-      if (!available.has(basename(filename)) && !invalidPhotos.includes(filename)) {
+      const name = basename(filename);
+      if ((!available.has(name) || excluded.has(name)) && !invalidPhotos.includes(filename)) {
         invalidPhotos.push(filename);
       }
     }
     for (const filename of invalidPhotos) {
-      structuralIssues.push(
-        `Invalid photo reference "${filename}": not one of this session's photos. Use one of ` +
-        `[${Array.from(available).join(', ')}] or remove the reference.`
-      );
+      const reason = excluded.has(basename(filename))
+        ? 'the director excluded this photo.'
+        : "not one of this session's photos.";
+      structuralIssues.push(`Invalid photo reference "${filename}": ${reason} ${useKept}`);
     }
   }
 

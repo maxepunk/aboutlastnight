@@ -10,7 +10,7 @@ const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('./p
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
-const { renderSessionFactsVerdict, renderPhotoEntry, photoKey } = require('./prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderPhotoEntry, renderPhotoListEntry, photoKey } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // The journalist outline writer embeds this file as its <SCHEMA> (fix 3.2b), the one
 // the SDK channel enforces (ai-nodes.js), as the article writer embeds the schema above.
@@ -1240,9 +1240,10 @@ ${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
    * writer is given the outline writer's whole set less the excluded photos
    * (options.photos, from articleWriterInputs): the hero image, then every other photo
    * the director kept but the whiteboard. A hero the director excluded comes as none.
-   * PHOTOS prints each one's entry once (renderPhotoEntry); an arc package points at its
-   * photos by filename, and only at listed ones, so the whiteboard a package names never
-   * reaches the writer. It used to see only the photos the arc packages listed.
+   * PHOTOS prints each one's entry once (renderPhotoListEntry, the entry the article
+   * judge lists too: the 4b fix batch); an arc package points at its photos by filename,
+   * and only at listed ones, so the whiteboard a package names never reaches the writer.
+   * It used to see only the photos the arc packages listed.
    *
    * @returns {string}
    */
@@ -1252,9 +1253,7 @@ ${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
     const photoSection = photos.length > 0
       ? `PHOTOS (every photo the director has not excluded, without the whiteboard${photos[0].hero ? ': the hero image, then the rest' : ''}; each gives the names identified in it and the director's description):
 
-${photos.map((photo, i) => `${i + 1}. ${photo.hero ? '[hero image] ' : ''}${renderPhotoEntry(
-    { filename: photo.filename, names: photo.identifiedCharacters }, options.photoDescriptions, '   '
-  )}`).join('\n\n')}`
+${photos.map((photo, i) => renderPhotoListEntry(photo, i, options.photoDescriptions)).join('\n\n')}`
       : 'PHOTOS: none';
     /** One arc package's photos that PHOTOS lists, by filename, each once. */
     const arcPhotoPointers = (pkg) => [...new Map((pkg.photos || [])

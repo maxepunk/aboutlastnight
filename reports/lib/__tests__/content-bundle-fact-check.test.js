@@ -281,6 +281,50 @@ describe('photo references (class 7)', () => {
     expect(result.structuralIssues).toEqual([]);
     expect(result.advisoryWarnings.join(' ')).toMatch(/could not verify/i);
   });
+
+  // The 4b fix batch (T13: an excluded photo never appears; the integrator's ruling): one
+  // rule decides a kept photo, and the evaluator passes the photos it excludes
+  // (buildFactCheckArgs). An excluded photo is no usable reference, and a fix line offers
+  // only the kept photos: it used to offer every session photo, so a rework could be told
+  // to place one the director pulled.
+  describe('a photo the director excluded', () => {
+    const PHOTOS = ['/data/071126/photos/aln0711-1.jpg', '/data/071126/photos/aln0711-2.jpg', '/data/071126/photos/aln0711-3.jpg'];
+    const placing = (...filenames) => ({
+      sections: [{ id: 'lede', type: 'narrative', content: filenames.map((filename) => ({ type: 'photo', filename, caption: 'x' })) }],
+      evidenceCards: [],
+      heroImage: { filename: 'aln0711-1.jpg' }
+    });
+
+    it('is an invalid reference, and the fix line offers only the kept photos', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, excludedPhotos: ['/data/071126/photos/aln0711-2.jpg'], contentBundle: placing('aln0711-2.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['aln0711-2.jpg']);
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "aln0711-2.jpg": the director excluded this photo. Use one of [aln0711-1.jpg, aln0711-3.jpg] or remove the reference.'
+      ]);
+    });
+
+    it("is left out of the photos a reference to no session photo is offered", () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, excludedPhotos: ['aln0711-2.jpg'], contentBundle: placing('ghost.jpg')
+      }));
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "ghost.jpg": not one of this session\'s photos. Use one of [aln0711-1.jpg, aln0711-3.jpg] or remove the reference.'
+      ]);
+    });
+
+    it('with every photo excluded, a fix line asks only for the reference to go', () => {
+      const result = factCheckContentBundle(baseArgs({
+        sessionPhotos: PHOTOS, excludedPhotos: PHOTOS, contentBundle: placing('aln0711-3.jpg')
+      }));
+      expect(result.photoReferences.invalid).toEqual(['aln0711-1.jpg', 'aln0711-3.jpg']);
+      expect(result.structuralIssues).toEqual([
+        'Invalid photo reference "aln0711-1.jpg": the director excluded this photo. Remove the reference.',
+        'Invalid photo reference "aln0711-3.jpg": the director excluded this photo. Remove the reference.'
+      ]);
+    });
+  });
 });
 
 describe('reporter mode (class 6)', () => {

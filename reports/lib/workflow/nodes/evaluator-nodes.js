@@ -47,17 +47,20 @@ const { withReportingModeBlock } = require('../../prompt-builder');
 const { renderRecordView, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
 const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
-const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
 // The writers' own builders: the arc writer's valid-id list, the writers'
 // SESSION_FACTS, the outline writer's inputs (its photo list among them) with the
-// hero it used, the article writer's inputs (its photos, 3.9), and the PromptBuilder
+// hero it used, the article writer's inputs (its photos, 3.9), the PromptBuilder
 // (whose roster method gives the roster section, and whose money summary the outline
-// and article judges print, 3.9).
+// and article judges print, 3.9), and the one rule for a kept photo with the one hero
+// entry (the 4b fix batch).
 // ARC_NOTES_LABEL is the arc writer's label for the director's notes, which the arc
 // judge's directorNotes line prints (one source, fix 3.4b).
 const { hasInterweavingPlan, extractEvidenceSummary, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
-const { buildSessionFacts, outlineWriterInputs, articleWriterInputs, reworkHeroImage, getPromptBuilder } = require('./ai-nodes');
+const {
+  buildSessionFacts, outlineWriterInputs, articleWriterInputs, reworkHeroImage, getPromptBuilder, isPhotoExcluded, heroPhotoEntry
+} = require('./ai-nodes');
 // Phase 3 (3.7): the writers' questions for the director. The arc judge reads the arc
 // writer's, for rosterCoverage; every judge's JSON of an output leaves them out.
 const { writerQuestionsOf, withoutWriterQuestions } = require('../../writer-questions');
@@ -630,6 +633,10 @@ function truthIssueLines(failed, written) {
  * corrections and the accusation) for the pronoun check, and the guest reporter for
  * the head count.
  *
+ * The 4b fix batch (T13): the session photos the director excluded, by the one rule
+ * (ai-nodes.js isPhotoExcluded), so the photo check reads an excluded photo as no
+ * usable reference and its fix lines offer only the kept photos.
+ *
  * @param {Object} state
  * @returns {Object}
  */
@@ -648,6 +655,8 @@ function buildFactCheckArgs(state) {
     evidenceBundle: state.evidenceBundle,
     roster: config.roster,
     sessionPhotos: state.sessionPhotos,
+    excludedPhotos: (Array.isArray(state.sessionPhotos) ? state.sessionPhotos : [])
+      .filter(photo => typeof photo === 'string' && isPhotoExcluded(state, photo)),
     reportingMode: config.reportingMode,
     npcs: getThemeNPCEntries(theme),
     rosterPronouns: config.rosterPronouns || null,
@@ -1233,10 +1242,15 @@ function interweavingPlanOf(state) {
  * generateOutline would select). Any exclusion the writer's list gains therefore
  * reaches the judge too.
  *
- * Each photo is the entry the outline writer gets (`renderPhotoEntry`: the
- * filename, the names identified in it, and the director's description from the
- * character-IDs stop, joined by filename), then its analysis, paired by the
- * renderer's one join key (`photoKey`).
+ * Each photo is the PHOTOS entry the article writer and judge list too
+ * (`renderPhotoListEntry`: the filename, the names identified in it, and the
+ * director's description from the character-IDs stop, joined by filename), then its
+ * analysis, paired by the renderer's one join key (`photoKey`).
+ *
+ * The 4b fix batch (T13): a photo the director excluded is in neither the writer's list
+ * nor the hero entry (isPhotoExcluded, through buildAvailablePhotos and heroPhotoEntry),
+ * and the journalist header says the list holds what the director kept. The detective
+ * keeps its header (D13).
  *
  * @param {Object} state
  * @returns {string}
@@ -1245,7 +1259,7 @@ function renderJudgePhotos(state) {
   // outlineWriterInputs returns buildOutlinePrompt's arguments, in order: the hero
   // image is the third, the available photos the fourth, the options the last.
   const writerInputs = outlineWriterInputs(state, reworkHeroImage(state));
-  const heroImage = writerInputs[2] || null;
+  const hero = heroPhotoEntry(state, writerInputs[2] || null);
   const availablePhotos = writerInputs[3] || [];
   const { photoDescriptions } = writerInputs[writerInputs.length - 1] || {};
   const analysisByKey = new Map(
@@ -1253,29 +1267,37 @@ function renderJudgePhotos(state) {
       .filter(analysis => analysis && analysis.filename)
       .map(analysis => [photoKey(analysis.filename), analysis])
   );
-  const heroAnalysis = heroImage ? analysisByKey.get(photoKey(heroImage)) : null;
-  const heroNames = Array.isArray(heroAnalysis?.identifiedCharacters) ? heroAnalysis.identifiedCharacters : [];
-  const photos = [
-    ...(heroImage ? [{ filename: heroImage, identifiedCharacters: heroNames, hero: true }] : []),
-    ...availablePhotos
-  ];
+  const photos = [...(hero ? [hero] : []), ...availablePhotos];
   if (photos.length === 0) return 'PHOTOS:\nNo session photos available';
 
   const entries = photos.map((photo, i) => {
-    const entry = renderPhotoEntry(
-      { filename: photo.filename, names: photo.identifiedCharacters },
-      photoDescriptions || null,
-      '   '
-    );
     const analysis = analysisByKey.get(photoKey(photo.filename));
     const analysisText = analysis
       ? JSON.stringify(analysis, null, 2).split('\n').join('\n   ')
       : 'none recorded for this photo';
-    return `${i + 1}. ${photo.hero ? '[hero image] ' : ''}${entry}\n   Photo analysis: ${analysisText}`;
+    return `${renderPhotoListEntry(photo, i, photoDescriptions || null)}\n   Photo analysis: ${analysisText}`;
   });
-  return `PHOTOS (all ${photos.length} photos the outline could place: the hero image, then every other session photo except the whiteboard; each gives the names identified in it, the director's description joined by filename, and its photo analysis):
+  // The detective's header is today's whenever its list has a hero, which only a stored
+  // hero the director excluded takes away.
+  const holds = (state.theme || 'journalist') === 'detective'
+    ? `${hero ? 'the hero image, then every other session photo' : 'every session photo'} except the whiteboard`
+    : `${judgePhotosOrder(photos)}, except the whiteboard`;
+  return `PHOTOS (all ${photos.length} photos the outline could place: ${holds}; each gives the names identified in it, the director's description joined by filename, and its photo analysis):
 
 ${entries.join('\n\n')}`;
+}
+
+/**
+ * What a judge's PHOTOS list holds, in order (T13): the article judge's and the
+ * journalist outline judge's one phrase (the 4b fix batch).
+ *
+ * @param {Array<{hero?: boolean}>} photos - the list, hero first when there is one
+ * @returns {string}
+ */
+function judgePhotosOrder(photos) {
+  return photos[0]?.hero
+    ? 'the hero image, then every other photo the director has not excluded'
+    : 'every photo the director has not excluded';
 }
 
 /**
@@ -1286,8 +1308,9 @@ ${entries.join('\n\n')}`;
  * inputs (ai-nodes.js articleWriterInputs, options.photos): the hero image, then every
  * other photo the director kept, without the whiteboard, each once. It used to be the
  * arc packages' photos, so a kept photo no package listed reached neither the writer
- * nor the judge. Each is the writer's entry: the names identified in it and the
- * director's description, joined by filename (renderPhotoEntry).
+ * nor the judge. Each is the writer's entry, from the writer's own builder: the names
+ * identified in it and the director's description, joined by filename
+ * (renderPhotoListEntry, the 4b fix batch).
  *
  * @param {Object} state
  * @returns {string}
@@ -1297,13 +1320,8 @@ function renderArticleJudgePhotos(state) {
   const { photos = [], photoDescriptions = null } = writerInputs[writerInputs.length - 1] || {};
   if (photos.length === 0) return 'PHOTOS (the article writer was given none)';
 
-  const entries = photos.map((photo, i) => `${i + 1}. ${photo.hero ? '[hero image] ' : ''}${renderPhotoEntry(
-    { filename: photo.filename, names: photo.identifiedCharacters },
-    photoDescriptions,
-    '   '
-  )}`);
-  const order = photos[0].hero ? 'the hero image, then every other photo the director has not excluded' : 'every photo the director has not excluded';
-  return `PHOTOS (the ${photos.length} photos the article writer was given: ${order}, without the whiteboard photo; each gives the names identified in it and the director's description, joined by filename):
+  const entries = photos.map((photo, i) => renderPhotoListEntry(photo, i, photoDescriptions));
+  return `PHOTOS (the ${photos.length} photos the article writer was given: ${judgePhotosOrder(photos)}, without the whiteboard photo; each gives the names identified in it and the director's description, joined by filename):
 
 ${entries.join('\n\n')}`;
 }

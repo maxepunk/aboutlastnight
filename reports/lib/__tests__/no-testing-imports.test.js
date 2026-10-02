@@ -46,7 +46,9 @@ describe('no production module imports another module\'s _testing', () => {
 describe('the helpers the judges share are named exports', () => {
   it.each([
     // Phase 3 (3.9): the article judge's PHOTOS is built from the article writer's inputs.
-    ['lib/workflow/nodes/ai-nodes.js', ['getPromptBuilder', 'buildSessionFacts', 'buildAvailablePhotos', 'outlineWriterInputs', 'articleWriterInputs', 'reworkHeroImage']],
+    // The 4b fix batch: the one rule for a kept photo, which the evaluator's fact check
+    // arguments read, and the one hero entry the outline judge prints.
+    ['lib/workflow/nodes/ai-nodes.js', ['getPromptBuilder', 'buildSessionFacts', 'buildAvailablePhotos', 'outlineWriterInputs', 'articleWriterInputs', 'reworkHeroImage', 'isPhotoExcluded', 'heroPhotoEntry']],
     ['lib/workflow/nodes/arc-specialist-nodes.js', ['extractEvidenceSummary', 'hasInterweavingPlan']]
   ])('%s', (file, names) => {
     const mod = require(path.join(ROOT, file));
