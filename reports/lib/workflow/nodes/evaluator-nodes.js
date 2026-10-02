@@ -652,6 +652,12 @@ function buildFactCheckArgs(state) {
  * asks for actually survive into the revision prompt.
  *
  * NOTE: no `format` keyword anywhere (SDK #277 — see reports/CLAUDE.md).
+ *
+ * Phase 3 (3.9; final review judges-factcheck[1], the integrator's ruling): the judge
+ * writes a criterion's `fix` only below the bar, and `revisionGuidance` holds only the
+ * steps that fix the structural issues. Every passing criterion used to carry a fix and
+ * the guidance optional steps, and the automatic reworks acted on them. Shared by both
+ * themes, as outputFormat is.
  */
 const EVALUATION_JSON_SCHEMA = {
   type: 'object',
@@ -669,7 +675,7 @@ const EVALUATION_JSON_SCHEMA = {
           score: { type: 'number' },
           type: { type: 'string', description: 'structural or advisory' },
           notes: { type: 'string', description: 'Specific explanation naming the characters, IDs or sections at fault' },
-          fix: { type: 'string', description: 'One concrete action that would raise this score' }
+          fix: { type: 'string', description: `Only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}` }
         }
       }
     },
@@ -683,7 +689,10 @@ const EVALUATION_JSON_SCHEMA = {
       items: { type: 'string' },
       description: 'Suggestions, not blockers, one self-contained sentence each'
     },
-    revisionGuidance: { type: 'string' },
+    revisionGuidance: {
+      type: 'string',
+      description: 'One step per structural issue, each the fix for that issue; empty when there is none'
+    },
     confidence: { type: 'string' }
   },
   required: ['ready', 'overallScore', 'structuralPassed']
@@ -749,7 +758,13 @@ function boxedHeading(title) {
   return `${SECTION_RULE}\n${title}\n${SECTION_RULE}`;
 }
 
-/** The judges' JSON shape, restated in the prompt (the schema itself is EVALUATION_JSON_SCHEMA). */
+/**
+ * The judges' JSON shape, restated in the prompt (the schema itself is EVALUATION_JSON_SCHEMA).
+ *
+ * Phase 3 (3.9): the must-fix work only, as the schema asks it. Shared by both themes,
+ * so the parked detective's judges change with it (the integrator's ruling; a named
+ * detective hunk).
+ */
 function outputFormat(notes) {
   return `OUTPUT FORMAT (JSON):
 {
@@ -761,12 +776,12 @@ function outputFormat(notes) {
       "score": number,
       "type": "structural" | "advisory",
       "notes": "${notes}",
-      "fix": "concrete action to improve this criterion"
+      "fix": "only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}"
     }
   },
   "structuralIssues": [ "issues that MUST be fixed" ],
   "advisoryWarnings": [ "issues that are suggestions, not blockers" ],
-  "revisionGuidance": "Step 1: Fix structural issue. Step 2: Optional advisory fix.",
+  "revisionGuidance": "one step per structural issue, each the fix for that issue (Step 1: ..., Step 2: ...); empty when there is none",
   "confidence": "high" | "medium" | "low"
 }`;
 }

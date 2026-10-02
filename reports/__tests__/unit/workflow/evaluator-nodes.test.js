@@ -2507,10 +2507,15 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // with the writers (renderDirectorEnrichmentBlock): the fixture's stored quote has
     // no context or correction naming Riley, so <QUOTE_BANK> prints "(speaker not
     // recorded)" for "Riley". Restoring that line gives back the 9286ec6 hashes.
+    // Task 3.9 moved all three by the two lines of the OUTPUT FORMAT both themes share
+    // (outputFormat; the integrator's ruling on the judge's contract): "fix" is written
+    // only below the bar, and "revisionGuidance" holds one step per structural issue.
+    // Restoring those two lines gives back the 3.11 hashes (a41aadbd..., fcdacdb8...,
+    // a45757c8...).
     const PINNED = {
-      arcs: 'a41aadbdbd1e01db9b0410941c6c023f49c51712d42a1f775b8ee058784972f6',
-      outline: 'fcdacdb890c56c3d0d5eeda4849e717f948ab42ed9e4593a1eb868c92a3b8e5a',
-      article: 'a45757c839678980bcd547dc96e7387315fb8344f33fcd843d79e4aa0b3dbd9f'
+      arcs: '0faa4ba3cbdf058f6ac32675c7d657cbf844a6f86388968ecc3cab6757ae8d57',
+      outline: '5282b08c81ad69cb8ab69f95eaa7aee15ca81deea7e2c14af1740dd406a7db8c',
+      article: '6e6ee008220dffdcd408efa5d463b91ef7b523e4ccca9f1b256e2f52a0943692'
     };
     const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
     const JUDGES = {
@@ -2587,6 +2592,30 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     phase, getPhaseCriteria(phase, state.theme), state.theme, { sessionConfig: state.sessionConfig }
   );
   const userFor = (phase, state) => buildEvaluationUserPrompt(phase, state, { factCheck: null });
+
+  // Final review judges-factcheck[1]: every passing criterion carried a fix and the
+  // guidance carried optional steps, and the reworks acted on them. The contract is
+  // shared by both themes, so the detective's judges change with it (the ruling).
+  describe('the judge\'s output contract asks for the must-fix work only (both themes)', () => {
+    it('the schema asks for a criterion\'s fix only below the bar, and guidance only for the structural issues', () => {
+      const { fix } = EVALUATION_JSON_SCHEMA.properties.criteriaScores.additionalProperties.properties;
+      expect(fix.description).toContain('Only for a score below 0.8');
+      expect(fix.description).not.toContain('raise this score');
+      const { revisionGuidance } = EVALUATION_JSON_SCHEMA.properties;
+      expect(revisionGuidance.type).toBe('string');
+      expect(revisionGuidance.description).toContain('One step per structural issue');
+    });
+
+    it.each(['journalist', 'detective'])('the %s judges\' OUTPUT FORMAT asks for a fix only below the bar and one step per structural issue', (theme) => {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const prompt = systemFor(phase, stateFor(theme));
+        const format = prompt.slice(prompt.indexOf('OUTPUT FORMAT (JSON):'));
+        expect([phase, format]).toEqual([phase, expect.stringContaining('"fix": "only for a score below 0.8:')]);
+        expect([phase, format]).toEqual([phase, expect.stringContaining('"revisionGuidance": "one step per structural issue')]);
+        expect([phase, /optional/i.test(format)]).toEqual([phase, false]);
+      }
+    });
+  });
 
   // The ledger's Gate 3 finding: a replay from START at a stop escalated at the cap paid
   // for its evaluation again, because the skip read only a ready entry.
