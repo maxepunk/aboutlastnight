@@ -19,6 +19,7 @@
 const { evaluateArticle, evaluateOutline, evaluateArcs, _testing: { buildEvaluationUserPrompt, buildFactCheckArgs } } =
   require('../../../lib/workflow/nodes/evaluator-nodes');
 const { standingAfterSendBack, DIRECTOR_EDIT_PREFIX } = require('../../../lib/hand-edit-diff');
+const { buildRevisionContext } = require('../../../lib/workflow/nodes/node-helpers');
 const { reworkFixtureState, PREVIOUS_BUNDLE, OUTLINE } = require('../../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -257,5 +258,148 @@ describe('the verdict guard (F1)', () => {
     expect(result.evaluationHistory.structuralIssues).toEqual([]);
     expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: ${cited}`]);
     expect(result.evaluationHistory.ready).toBe(true);
+  });
+});
+
+// Fix round 1, finding 1: the rework reads validationResults. A verdict whose findings
+// about the director's edits moved must not hand the automatic pass that follows a fix
+// located in the director's text: not in CRITERIA SCORES, not in the judge's guidance,
+// and not as a truth criterion restated as a must-fix line.
+describe('what the rework reads of a verdict about the director\'s edits (F1, fix round 1)', () => {
+  const CLOSING_ISSUE = `T1: "${CLOSING}" states Alex's motive as fact; the record holds only the January demand. State it as the room's suspicion.`;
+  const WRITER_ISSUE = `T12: "${WRITER_LINE}" is not in the record. Cut the line.`;
+  const verdict = (overrides) => ({
+    ready: false, structuralPassed: false, overallScore: 0.7, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [],
+    revisionGuidance: '', confidence: 'high', ...overrides
+  });
+
+  /** The part of a rework's context that carries the evaluation: from its summary to <HAND_EDITS>. */
+  function evaluationPart(validationResults, state, theme) {
+    const { contextSection } = buildRevisionContext({
+      phase: 'article', revisionCount: 1, validationResults, previousOutput: state.contentBundle,
+      humanFeedback: null, handEdits: state._articleHandEdits, theme
+    });
+    expect(contextSection).toContain('<HAND_EDITS>');
+    return contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY'), contextSection.indexOf('<HAND_EDITS>'));
+  }
+
+  it('journalist, a mixed verdict: the automatic pass reads the writer\'s fixes and none located in the director\'s text', async () => {
+    const state = articleState();
+    const result = await evaluateArticle(state, cfg(judging(verdict({
+      criteriaScores: {
+        evidenceTruth: { score: 0.3, type: 'structural', notes: 'The closing states Alex\'s motive as fact.', fix: 'Rewrite the closing so the motive is the room\'s suspicion.' },
+        wordsTruth: { score: 0.4, type: 'structural', notes: 'A line no document holds.', fix: 'Cut the line.' }
+      },
+      structuralIssues: [CLOSING_ISSUE, WRITER_ISSUE],
+      revisionGuidance: 'Step 1: rewrite the closing as the room\'s suspicion. Step 2: cut the Riley line.'
+    }))));
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: ${CLOSING_ISSUE}`]);
+    // The released criterion keeps its score; its notes and fix stay with the concern.
+    expect(result.validationResults.criteriaScores).toEqual({
+      evidenceTruth: { score: 0.3, type: 'structural' },
+      wordsTruth: { score: 0.4, type: 'structural', notes: 'A line no document holds.', fix: 'Cut the line.' }
+    });
+    expect(result.validationResults.structuralIssues).toEqual([WRITER_ISSUE]);
+    expect(result.validationResults.revisionGuidance).toBe('');
+    expect(result.validationResults.feedback).toBe('');
+
+    const part = evaluationPart(result.validationResults, state, 'journalist');
+    expect(part).toContain(WRITER_ISSUE);
+    expect(part).toContain('fix: Cut the line.');
+    expect(part).not.toContain(CLOSING);
+    expect(part).not.toContain('the closing');
+    expect(part).not.toContain('The closing');
+  });
+
+  it('detective, a mixed verdict: no criterion\'s notes or the judge\'s guidance about the director\'s line reach the automatic pass', async () => {
+    const state = articleState('detective');
+    const result = await evaluateArticle(state, cfg(judging(verdict({
+      criteriaScores: {
+        antiPatterns: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" names a game mechanic.`, fix: `Rewrite "${CLOSING}" in the case file's words.` },
+        voiceConsistency: { score: 0.9, type: 'structural', notes: `The closing "${CLOSING}" keeps the third person.` },
+        evidenceIntegration: { score: 0.6, type: 'advisory', notes: 'The cards cluster in one section.', fix: 'Spread them.' }
+      },
+      structuralIssues: [`The closing "${CLOSING}" names a game mechanic.`, `"${WRITER_LINE}" is not in the record. Cut the line.`],
+      revisionGuidance: 'Step 1: rewrite the closing. Step 2: cut the Riley line.'
+    })), 'detective'));
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.criteriaScores).toEqual({
+      antiPatterns: { score: 0.5, type: 'structural' },
+      voiceConsistency: { score: 0.9, type: 'structural' },
+      evidenceIntegration: { score: 0.6, type: 'advisory', notes: 'The cards cluster in one section.', fix: 'Spread them.' }
+    });
+    expect(result.validationResults.revisionGuidance).toBe('');
+    // The judge's issue already says what antiPatterns says about the same edit: one concern.
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: The closing "${CLOSING}" names a game mechanic.`]);
+
+    const part = evaluationPart(result.validationResults, state, 'detective');
+    expect(part).toContain(`"${WRITER_LINE}" is not in the record. Cut the line.`);
+    expect(part).toContain('fix: Spread them.');
+    expect(part).toContain('EVALUATOR FEEDBACK:\n(no specific feedback provided)');
+    expect(part).not.toContain(CLOSING);
+    expect(part).not.toContain('rewrite the closing');
+  });
+
+  it('a truth criterion the judge wrote up as a concern is not restated as a must-fix, and the output is ready', async () => {
+    const concern = `${DIRECTOR_EDIT_PREFIX}E2: T1: "${CLOSING}" states Alex's motive as fact.`;
+    const lowTruth = { evidenceTruth: { score: 0.3, type: 'structural', notes: 'The closing states a motive as fact.', fix: 'Attribute it.' } };
+    for (const filed of [{ advisoryWarnings: [concern] }, { structuralIssues: [concern] }]) {
+      const result = await evaluateArticle(articleState(), cfg(judging(verdict({ criteriaScores: lowTruth, ...filed }))));
+      expect(result.evaluationHistory.ready).toBe(true);
+      expect(result.evaluationHistory.structuralIssues).toEqual([]);
+      expect(result.evaluationHistory.advisoryWarnings).toEqual([concern]);
+      expect(result.validationResults.structuralIssues).toEqual([]);
+      expect(result.validationResults.criteriaScores).toEqual({ evidenceTruth: { score: 0.3, type: 'structural' } });
+    }
+    // A concern may name the criterion instead of its rules.
+    const byName = `${DIRECTOR_EDIT_PREFIX}E2: evidenceTruth: the closing states a motive as fact.`;
+    const named = await evaluateArticle(articleState(), cfg(judging(verdict({ criteriaScores: lowTruth, advisoryWarnings: [byName] }))));
+    expect(named.evaluationHistory.ready).toBe(true);
+    expect(named.evaluationHistory.structuralIssues).toEqual([]);
+  });
+
+  it('beside a writer\'s issue, a truth criterion written up as a concern adds no must-fix line', async () => {
+    const concern = `${DIRECTOR_EDIT_PREFIX}E2: T1: "${CLOSING}" states Alex's motive as fact.`;
+    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
+      criteriaScores: {
+        evidenceTruth: { score: 0.3, type: 'structural', notes: 'The closing states a motive as fact.', fix: 'Attribute it.' },
+        wordsTruth: { score: 0.4, type: 'structural', notes: `"${WRITER_LINE}" is in no document.`, fix: 'Cut the line.' }
+      },
+      structuralIssues: [WRITER_ISSUE],
+      advisoryWarnings: [concern]
+    }))));
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toEqual([WRITER_ISSUE]);
+    expect(result.validationResults.criteriaScores.evidenceTruth).toEqual({ score: 0.3, type: 'structural' });
+    expect(result.validationResults.criteriaScores.wordsTruth.fix).toBe('Cut the line.');
+  });
+
+  it('a criterion whose notes quote only the director\'s text joins the concerns, and alone it does not hold the output', async () => {
+    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
+      criteriaScores: { antiPatterns: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" breaks the house rule.`, fix: 'Rewrite it without the dash.' } }
+    }))));
+    expect(result.evaluationHistory.ready).toBe(true);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([
+      `${DIRECTOR_EDIT_PREFIX}E2: antiPatterns: The closing "${CLOSING}" breaks the house rule. Rewrite it without the dash.`
+    ]);
+    expect(result.validationResults.criteriaScores).toEqual({ antiPatterns: { score: 0.5, type: 'structural' } });
+    expect(result.validationResults.advisoryWarnings).toEqual([]);
+  });
+
+  it('with no standing edits the rework reads the judge\'s criteria and guidance as they came', async () => {
+    const criteriaScores = {
+      evidenceTruth: { score: 0.3, type: 'structural', notes: 'The closing states a motive as fact.', fix: 'Attribute it.' },
+      antiPatterns: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" breaks the house rule.`, fix: 'Rewrite it.' }
+    };
+    const guidance = 'Step 1: rewrite the closing.';
+    const result = await evaluateArticle(articleState('journalist', { _articleHandEdits: null }), cfg(judging(verdict({
+      criteriaScores, structuralIssues: [CLOSING_ISSUE], revisionGuidance: guidance
+    }))));
+    expect(result.validationResults.criteriaScores).toEqual(criteriaScores);
+    expect(result.validationResults.revisionGuidance).toBe(guidance);
+    expect(result.validationResults.feedback).toBe(guidance);
+    expect(result.validationResults.structuralIssues).toEqual([CLOSING_ISSUE]);
+    expect(result.evaluationHistory.ready).toBe(false);
   });
 });

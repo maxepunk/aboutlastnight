@@ -621,12 +621,23 @@ function directorEditConcern(ids, text) {
   return finding.startsWith(DIRECTOR_EDIT_PREFIX) ? finding : `${DIRECTOR_EDIT_PREFIX}${ids.join(', ')}: ${finding}`;
 }
 
+/** The ids after the prefix ("E1, E3: "), with the colon and the space after it. */
+const CONCERN_IDS = /^((?:E\d+)(?:\s*,\s*E\d+)*)\s*:\s*/;
+
 /** The ids a finding filed under the prefix names ("Director's edit E1, E3: ..."), or none. */
 function concernEditIds(text) {
   const finding = String(text == null ? '' : text);
   if (!finding.startsWith(DIRECTOR_EDIT_PREFIX)) return [];
-  const m = /^((?:E\d+)(?:\s*,\s*E\d+)*)\s*:/.exec(finding.slice(DIRECTOR_EDIT_PREFIX.length));
+  const m = CONCERN_IDS.exec(finding.slice(DIRECTOR_EDIT_PREFIX.length));
   return m ? m[1].split(',').map((id) => id.trim()) : [];
+}
+
+/** What a finding filed under the prefix says after its ids ("T1: ..."), or null for any other text. */
+function concernFinding(text) {
+  const finding = String(text == null ? '' : text);
+  if (!finding.startsWith(DIRECTOR_EDIT_PREFIX)) return null;
+  const m = CONCERN_IDS.exec(finding.slice(DIRECTOR_EDIT_PREFIX.length));
+  return m ? finding.slice(DIRECTOR_EDIT_PREFIX.length + m[0].length) : null;
 }
 
 /**
@@ -752,6 +763,6 @@ module.exports = {
   // F1: the director's edits are final
   DIRECTOR_EDIT_PREFIX, SEND_BACK_PASS, CHANGED_EDITS_KEY,
   standingEditsOf, standingAfterSendBack, carriedEdits, formatEditLines, editValueText,
-  locateQuotedText, directorEditConcern, concernEditIds, editLocator, reportAfterPass, handEditReportOf,
+  locateQuotedText, directorEditConcern, concernEditIds, concernFinding, editLocator, reportAfterPass, handEditReportOf,
   _testing: { matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole, OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS }
 };

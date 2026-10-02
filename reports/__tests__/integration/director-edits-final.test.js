@@ -200,4 +200,64 @@ describe('0926262\'s shape: the judge flags the director\'s edits after a send-b
     // The edits still stand for the next round.
     expect(next.values._articleHandEdits.edits.map((e) => e.id)).toEqual(['E1', 'E2']);
   });
+
+  // Fix round 1, finding 1: a mixed verdict (one finding on the director's closing, one
+  // on the writer's line) sends the article to an automatic pass. That pass reads the
+  // writer's must-fix items and no fix located in the director's text: not the truth
+  // criterion the guard released, and not the judge's guidance about the closing.
+  it('after a mixed verdict, the automatic pass reads no fix located in the director\'s text', async () => {
+    const WRITERS_LINE = 'Sarah pointed the room at the baby mama, and the vote followed.';
+    const WRITER_FINDING = `T12: "${WRITERS_LINE}" puts the line in Sarah's mouth; no document or note gives it to her. Cut it.`;
+    const MIXED = {
+      ready: false, structuralPassed: false, overallScore: 0.7,
+      criteriaScores: {
+        evidenceTruth: { score: 0.3, type: 'structural', notes: 'The closing states a motive as fact.', fix: 'Rewrite the closing as the room\'s suspicion.' },
+        wordsTruth: { score: 0.4, type: 'structural', notes: `"${WRITERS_LINE}" is in no document.`, fix: 'Cut the line.' }
+      },
+      structuralIssues: [CLOSING_FINDING, WRITER_FINDING],
+      advisoryWarnings: [],
+      revisionGuidance: 'Step 1: write the closing as the room\'s suspicion. Step 2: cut the line about the vote.',
+      confidence: 'high'
+    };
+    const sdk = scriptedSdk({ evaluations: [PASSING, MIXED, PASSING], revised: reworkedArticle() });
+    const graph = createReportGraphWithCheckpointer(saver);
+    const thread = {
+      configurable: {
+        thread_id: 'edits-mixed', sessionId: 'edits-mixed', theme: 'journalist',
+        sdkClient: sdk, promptBuilder: mocks.createMockPromptBuilder(), dataDir: dir
+      }
+    };
+    const run = { ...thread, recursionLimit: RECURSION_LIMIT, durability: 'sync' };
+
+    await graph.updateState(thread, {
+      theme: 'journalist',
+      sessionId: 'edits-mixed',
+      sessionConfig: { roster: ['Alex', 'Jess', 'Mel', 'Sarah'], reportingMode: 'on-site' },
+      sessionPhotos: ['photos/p1.jpg', 'photos/p2.jpg', 'photos/p3.jpg'],
+      contentBundle: writersArticle(),
+      outlineApproved: true,
+      evaluationHistory: [{ phase: 'arcs', ready: true }, { phase: 'outline', ready: true }]
+    }, 'generateContentBundle');
+    await graph.invoke(null, run);
+    const atStop = await graph.getState(thread);
+    const { resume, stateUpdates } = buildResumePayload(
+      { article: false, articleFeedback: 'Move the photos so that no two sit together. Keep my copy as it is.', articleEdits: directorsArticle() },
+      atStop.values
+    );
+    await graph.invoke(new Command({ resume, update: stateUpdates }), run);
+    const next = await graph.getState(thread);
+
+    // The send-back's rework, the mixed verdict, one automatic pass, then the stop.
+    expect(sdk.calls).toEqual(['evaluation', 'Article revision 0', 'evaluation', 'Article revision 1', 'evaluation']);
+    expect(next.next).toEqual(['checkpointArticle']);
+
+    const automaticPass = sdk.sent[3].prompt;
+    const evaluation = automaticPass.slice(automaticPass.indexOf('EVALUATION SUMMARY'), automaticPass.indexOf('<HAND_EDITS>'));
+    expect(evaluation).toContain(WRITER_FINDING);
+    expect(evaluation).toContain('fix: Cut the line.');
+    expect(evaluation).not.toContain(DIRECTORS_CLOSING);
+    expect(evaluation).not.toContain('closing');
+    // The pass is told the director's closing stands.
+    expect(automaticPass).toContain(`E2 (section "closing", paragraph): "${DIRECTORS_CLOSING}"`);
+  });
 });

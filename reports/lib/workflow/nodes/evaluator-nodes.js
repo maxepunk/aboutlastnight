@@ -71,7 +71,7 @@ const { TemplateAssembler } = require('../../template-assembler');
 // judges read the edits the judged output carries, and the verdict guard moves a finding
 // about one of them to advisoryWarnings under the one prefix.
 const {
-  carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, DIRECTOR_EDIT_PREFIX
+  carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, concernFinding, DIRECTOR_EDIT_PREFIX
 } = require('../../hand-edit-diff');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -673,36 +673,103 @@ function judgedEdits(phase, state) {
   return [];
 }
 
+/** A criterion's notes and fix, as one text. */
+function criterionText(value) {
+  if (!value || typeof value !== 'object') return '';
+  return [value.notes, value.fix].filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()).join(' ');
+}
+
+/** A criterion score below the structural bar. */
+function scoredBelowBar(value) {
+  return Boolean(value && typeof value === 'object' && typeof value.score === 'number' && value.score < STRUCTURAL_PASS_SCORE);
+}
+
+/** Does a finding open with this criterion's name ("evidenceTruth: ...")? */
+function opensWithName(finding, key) {
+  return new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(String(finding || ''));
+}
+
 /**
- * The verdict guard (F1): an edit is the final word on its text, so a structural issue
- * about the director's text is the director's to weigh, never an automatic pass's task.
+ * The verdict guard (F1): an edit is the final word on its text, so a finding about the
+ * director's text is the director's to weigh, never an automatic pass's task. It decides
+ * what reaches the stop, what reaches the rework and whether the output is ready. With
+ * no edits, nothing moves: the judge's issues and the truth lines are the structural
+ * issues, a failed truth criterion holds the output, and the rework reads the judge's
+ * criteria and guidance as they came, as before F1.
  *
- * An issue moves to the concerns, under DIRECTOR_EDIT_PREFIX and the edit's id, when it
- * quotes the text of an edit the output carries, or the text a cut removed, and quotes
- * none of the writer's text (lib/hand-edit-diff.js locateQuotedText); an issue the judge
- * filed under the prefix and a standing id moves as it is. A record passage the writer's
- * text prints is a citation of the record, not the writer's text (`record`; fix round 1,
- * finding 2). Every other issue stays structural. A failed truth criterion holds the
- * output only while an issue under its rule ids is still structural, or while its own
- * notes quote the writer's text. With no edits, nothing moves and every failed truth
- * criterion holds, as before F1.
+ * - The judge's own findings about a standing edit (an advisory, or a misfiled structural
+ *   issue, opening with DIRECTOR_EDIT_PREFIX and a standing id) are written: a misfiled
+ *   one moves as it is, and each counts as the finding under the rule ids, or the
+ *   criterion name, it opens with. A failed truth criterion gets a truth line
+ *   (truthIssueLines) only when the judge wrote no finding under it at all, so a truth
+ *   criterion the judge wrote up as a concern is never restated as a must-fix.
+ * - A structural issue moves to the concerns, under the prefix and the edit's id, when it
+ *   quotes the text of an edit the output carries, or the text a cut removed, and none of
+ *   the writer's text (lib/hand-edit-diff.js locateQuotedText). A record passage the
+ *   writer's text prints is a citation of the record, not the writer's text (`record`;
+ *   fix round 1, finding 2). Every other issue stays structural.
+ * - A failed truth criterion holds the output only while an issue under its rule ids is
+ *   still structural, or while its own notes quote the writer's text. One that does not
+ *   hold is released.
+ * - The director's criteria: each released truth criterion, and each criterion whose
+ *   notes and fix quote an edit's text and none of the writer's. The rework reads their
+ *   scores without their notes and fix (fix round 1, finding 1). A released criterion's
+ *   point is already a concern, the finding under its rule ids that moved or that the
+ *   judge wrote as one. Another of the director's criteria that failed joins the concerns
+ *   unless a concern already covers it: one under its rule ids or its name or, for a
+ *   criterion that scores no rule ids, one about the same edit.
+ * - The judge's guidance (one step per structural issue) stays out of the rework when an
+ *   issue moved, or when it quotes an edit's text: its steps would fix the director's text.
+ * - Ready: no truth criterion holds, every structural issue moved, and the guard found the
+ *   judge's findings in the director's text (an issue moved, or one of the director's
+ *   criteria is a structural one that failed). Otherwise not ready when a truth criterion
+ *   holds, else the judge's own word (structuralPassed, else ready).
  *
  * @param {Object} args
- * @param {string[]} args.issues - the judge's structural issues, then truthIssueLines'
- * @param {Array} args.failedTruth - failedTruthCriteria
+ * @param {Object} args.evaluation - the judge's output
+ * @param {Object} args.criteria - the criteria the judge was given
  * @param {Object[]} args.edits - judgedEdits
  * @param {Object|null} args.output - judgedOutput
  * @param {string[]} [args.record] - recordTexts, the record as the judge read it
- * @returns {{kept: string[], moved: string[], holding: Array}}
+ * @returns {{kept: string[], moved: string[], concerns: string[], failedTruth: Array,
+ *            holding: Array, ready: boolean, criteriaScores: Object, revisionGuidance: string}}
+ *   `kept`: the structural issues; `moved` and `concerns`: the findings about the
+ *   director's edits for the stop, after the judge's own advisories; `criteriaScores` and
+ *   `revisionGuidance`: what the rework reads (validationResults)
  */
-function guardDirectorEdits({ issues, failedTruth, edits, output, record = [] }) {
-  if (!Array.isArray(edits) || edits.length === 0) return { kept: issues, moved: [], holding: failedTruth };
+function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }) {
+  const judged = evaluation && typeof evaluation === 'object' ? evaluation : {};
+  const issues = judged.structuralIssues || [];
+  const failedTruth = failedTruthCriteria(judged, criteria);
+  const judgeReady = judged.structuralPassed !== undefined ? judged.structuralPassed : judged.ready;
+  if (!Array.isArray(edits) || edits.length === 0) {
+    return {
+      kept: [...issues, ...truthIssueLines(failedTruth, issues)],
+      moved: [],
+      concerns: [],
+      failedTruth,
+      holding: failedTruth,
+      ready: failedTruth.length > 0 ? false : judgeReady,
+      criteriaScores: judged.criteriaScores,
+      revisionGuidance: judged.revisionGuidance
+    };
+  }
+
   const standing = new Set(edits.map((edit) => edit.id));
+  const aboutStanding = (text) => concernEditIds(text).some((id) => standing.has(id));
   const locate = (text) => locateQuotedText(text, edits, output, { record });
+
+  const filed = [...issues, ...(Array.isArray(judged.advisoryWarnings) ? judged.advisoryWarnings : [])].filter(aboutStanding);
+  const filedFindings = filed.map(concernFinding);
+  const truthLines = truthIssueLines(
+    failedTruth.filter(({ key }) => !filedFindings.some((finding) => opensWithName(finding, key))),
+    [...issues, ...filedFindings]
+  );
+
   const kept = [];
   const moved = [];
-  for (const issue of issues) {
-    if (concernEditIds(issue).some((id) => standing.has(id))) {
+  for (const issue of [...issues, ...truthLines]) {
+    if (aboutStanding(issue)) {
       moved.push(issue);
       continue;
     }
@@ -710,10 +777,62 @@ function guardDirectorEdits({ issues, failedTruth, edits, output, record = [] })
     if (editIds.length > 0 && !writer) moved.push(directorEditConcern(editIds, issue));
     else kept.push(issue);
   }
+
   const holding = failedTruth.filter(({ rules, notes }) =>
-    kept.some((issue) => leadingRuleIds(issue).some((id) => rules.includes(id)))
-    || locate(notes).writer);
-  return { kept, moved, holding };
+    kept.some((issue) => leadingRuleIds(issue).some((id) => rules.includes(id))) || locate(notes).writer);
+  const released = failedTruth.filter((criterion) => !holding.includes(criterion)).map(({ key }) => key);
+
+  const scores = judged.criteriaScores && typeof judged.criteriaScores === 'object' ? judged.criteriaScores : {};
+  const directors = new Map(released.map((key) => [key, []]));   // criterion -> the edits its notes quote
+  Object.entries(scores).forEach(([key, value]) => {
+    if (directors.has(key)) return;
+    const { editIds, writer } = locate(criterionText(value));
+    if (editIds.length > 0 && !writer) directors.set(key, editIds);
+  });
+
+  const written = [...filed, ...moved];
+  const covered = (key, ids) => {
+    const rules = (criteria && criteria[key] && Array.isArray(criteria[key].rules)) ? criteria[key].rules : [];
+    return written.some((concern) => {
+      const finding = concernFinding(concern) || '';
+      if (opensWithName(finding, key)) return true;
+      return rules.length > 0
+        ? leadingRuleIds(finding).some((id) => rules.includes(id))
+        : concernEditIds(concern).some((id) => ids.includes(id));
+    });
+  };
+  const concerns = [...directors]
+    .filter(([key, ids]) => !released.includes(key) && scoredBelowBar(scores[key]) && criterionText(scores[key]) && !covered(key, ids))
+    .map(([key, ids]) => {
+      const rules = (criteria && criteria[key] && Array.isArray(criteria[key].rules)) ? criteria[key].rules : [];
+      return directorEditConcern(ids, `${rules.length > 0 ? rules.join(', ') : key}: ${criterionText(scores[key])}`);
+    });
+
+  const criteriaScores = judged.criteriaScores && typeof judged.criteriaScores === 'object'
+    ? Object.fromEntries(Object.entries(judged.criteriaScores).map(([key, value]) => {
+      if (!directors.has(key) || !value || typeof value !== 'object') return [key, value];
+      const { notes, fix, ...score } = value;
+      return [key, score];
+    }))
+    : judged.criteriaScores;
+
+  const guidance = judged.revisionGuidance;
+  const guidanceAboutEdits = moved.length > 0 || (typeof guidance === 'string' && locate(guidance).editIds.length > 0);
+
+  const directorsFailure = moved.length > 0 || [...directors.keys()]
+    .some((key) => criteria && criteria[key] && criteria[key].type === 'structural' && scoredBelowBar(scores[key]));
+  const ready = holding.length > 0 ? false : (kept.length === 0 && directorsFailure ? true : judgeReady);
+
+  return {
+    kept,
+    moved,
+    concerns,
+    failedTruth,
+    holding,
+    ready,
+    criteriaScores,
+    revisionGuidance: guidanceAboutEdits ? '' : guidance
+  };
 }
 
 /** Not a concern about one of the director's edits: what a rework may read (validationResults). */
@@ -2278,42 +2397,35 @@ function createEvaluator(phase, options = {}) {
       // Commit 8.21: All phases use structuralPassed to determine readiness
       // Advisory issues become warnings, not blockers
       // Backward compat: if structuralPassed not provided, fall back to ready field
-      const judgeReady = evaluation.structuralPassed !== undefined
-        ? evaluation.structuralPassed
-        : evaluation.ready;
-
+      // (guardDirectorEdits reads it).
+      //
       // Phase 3 (3.4, R2): a truth-rule breach goes back automatically. A truth
       // criterion the judge scored below the structural bar holds the output to
       // not-ready, whatever the judge's own structuralPassed says, and each breach
       // reaches the rework and the evaluation bar under its rule ids: the judge's own
       // sentence when it wrote one under them, else its criterion notes and fix.
-      const failedTruth = failedTruthCriteria(evaluation, criteria);
-      // F1 (spec 2026-10-02 section 7), the verdict guard: an issue about the director's
-      // text moves to the concerns (guardDirectorEdits), and a truth criterion holds the
-      // output only while an issue under its rules is still structural or its notes
-      // quote the writer's text. When every structural issue moved and no truth
-      // criterion holds, the output is ready. With no edits, this is the rule above.
-      // Fix round 1, finding 2: a record passage the writer's card prints is a citation,
-      // not the writer's text (recordTexts).
+      //
+      // F1 (spec 2026-10-02 section 7), the verdict guard: a finding about the director's
+      // text moves to the concerns, and a truth criterion holds the output only while an
+      // issue under its rules is still structural or its notes quote the writer's text.
+      // When every structural issue moved and no truth criterion holds, the output is
+      // ready. Fix round 1: the rework reads no criterion notes, fix or guidance located
+      // in the director's text, and a record passage the writer's card prints is a
+      // citation, not the writer's text (recordTexts). With no edits, this is the rule above.
       const guard = guardDirectorEdits({
-        issues: [
-          ...(evaluation.structuralIssues || []),
-          ...truthIssueLines(failedTruth, evaluation.structuralIssues || [])
-        ],
-        failedTruth,
+        evaluation,
+        criteria,
         edits: directorEdits,
         output: judgedOutput(phase, state),
         record: directorEdits.length > 0 ? recordTexts(state) : []
       });
       const judgeStructuralIssues = guard.kept;
-      const isReady = guard.holding.length > 0
-        ? false
-        : (guard.moved.length > 0 && guard.kept.length === 0 ? true : judgeReady);
-      if (failedTruth.length > 0) {
-        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Truth criteria failed: ${failedTruth.map(f => f.key).join(', ')}`);
+      const isReady = guard.ready;
+      if (guard.failedTruth.length > 0) {
+        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Truth criteria failed: ${guard.failedTruth.map(f => f.key).join(', ')}`);
       }
-      if (guard.moved.length > 0) {
-        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Findings on the director's edits, moved to the concerns: ${guard.moved.length}`);
+      if (guard.moved.length + guard.concerns.length > 0) {
+        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Findings on the director's edits, moved to the concerns: ${guard.moved.length + guard.concerns.length}`);
       }
       // A truth criterion the judge left out of its scores is not scored: logged by
       // name, never a hold on the output.
@@ -2329,9 +2441,10 @@ function createEvaluator(phase, options = {}) {
         ready: isReady,
         overallScore: evaluation.overallScore,
         // Commit 8.15: Separate structural issues from advisory warnings. F1: the
-        // findings the guard moved follow the judge's own advisories, for the stop.
+        // findings the guard moved, then the director's criteria it carried to the
+        // concerns, follow the judge's own advisories, for the stop.
         structuralIssues: judgeStructuralIssues,
-        advisoryWarnings: [...(evaluation.advisoryWarnings || []), ...guard.moved],
+        advisoryWarnings: [...(evaluation.advisoryWarnings || []), ...guard.moved, ...guard.concerns],
         issues: evaluation.issues || judgeStructuralIssues,  // Backward compat
         confidence: evaluation.confidence || 'medium',
         revisionNumber: currentRevisions
@@ -2371,10 +2484,12 @@ function createEvaluator(phase, options = {}) {
           ...((factCheck && factCheck.advisoryWarnings) || [])
         ].filter(forTheRework),
         issues: evaluation.issues,
-        criteriaScores: evaluation.criteriaScores,
+        // F1, fix round 1: the judge's criteria and guidance as the guard leaves them for
+        // the rework, with no notes, fix or guidance step located in the director's text.
+        criteriaScores: guard.criteriaScores,
         confidence: evaluation.confidence || 'medium',
-        revisionGuidance: evaluation.revisionGuidance,
-        feedback: evaluation.revisionGuidance
+        revisionGuidance: guard.revisionGuidance,
+        feedback: guard.revisionGuidance
       });
 
       // Debug: Log evaluation result details
