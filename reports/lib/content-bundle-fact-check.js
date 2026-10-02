@@ -1001,11 +1001,13 @@ function factCheckContentBundle({
       violations.push(phrase);
       // Phase 3 (3.4): the fix never sends the rework to name who acted; an exposure
       // stays anonymous unless the record names who turned it in (spec T6, T8).
+      // Phase 3 (3.9): T8's first sentence as round 7 words it (R21): "accuses" is
+      // joining the room's accusation. A rework reads this line as must-fix.
       structuralIssues.push(journalist
-        ? `Reporter-mode violation: "${phrase}". Nova covers the room from outside its choices: Nova never ` +
-          `votes, accuses or exposes, and no exposed memory is Nova's (T8). Rewrite the sentence without Nova in ` +
-          `the vote or the exposure: the vote is the room's, and an exposure stays anonymous unless the evidence ` +
-          `log or the director's notes name who turned it in.`
+        ? `Reporter-mode violation: "${phrase}". Nova reports on the room from outside its choices: Nova never ` +
+          `votes, joins the room's accusation or exposes a memory, and is never one of the room (T8). Rewrite the ` +
+          `sentence without Nova in the vote or the exposure: the vote is the room's, and an exposure stays ` +
+          `anonymous unless the evidence log or the director's notes name who turned it in.`
         : `Reporter-mode violation: "${phrase}". The reporter covers the room, they are not a member ` +
           `of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.`
       );
@@ -1016,12 +1018,15 @@ function factCheckContentBundle({
       if (normProse.includes(phrase)) {
         violations.push(phrase);
         // Phase 3 (3.4): exposed memories reach Nova by turn-in, never as tips (spec T6, T8).
+        // Phase 3 (3.9): the remote mode block of round 7 (R13): Nova never claims to have
+        // seen or heard the room, and the event is told as a scene, attributed where it
+        // matters, not sourced sentence by sentence.
         structuralIssues.push(journalist
           ? `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: Nova ` +
-            `monitored from outside the warehouse. Exposed memories were turned in to Nova directly, and the ` +
-            `room's events reached Nova from people in it. Show where each event came from by attributing the ` +
-            `room's events to the people in it, naming a person only where the record does, and state the ` +
-            `absence at most once (T8).`
+            `monitored from outside the warehouse and never claims to have seen or heard the room (T8). Tell ` +
+            `the moment as a scene, with attribution where it matters: a line someone was overheard saying, a ` +
+            `claim about a person. Exposed memories were turned in to Nova directly, and a person is named as ` +
+            `Nova's source only where the record names them.`
           : `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: every ` +
             `exposure, observation and the verdict arrived as a tip from someone who was there. Show ` +
             `where each fact came from by attributing it to the people who told you, and state your ` +
@@ -1031,15 +1036,17 @@ function factCheckContentBundle({
     }
 
     // 'repeatedAbsence' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): one statement of
-    // the absence is allowed; the attribution shows it everywhere else.
+    // the absence is allowed. Phase 3 (3.9): for the journalist, as the remote mode
+    // block of round 7 says (R13): once, early, and the room's events told as scenes
+    // after it. The detective keeps its line.
     const absences = findAbsenceStatements(narratorText(bundle));
     if (absences.length > 1) {
       advisoryWarnings.push(
         `Absence stated ${absences.length} times (remote): ${absences.map(a => `"${a}"`).join(', ')}. ` +
-        `Say that you were not in the room at most once in the whole article, or not at all; ` +
         (journalist
-          ? `everywhere else, attributing the room's events to the people in it shows the absence.`
-          : `everywhere else, show where each fact came from by attributing it to the people who told you.`)
+          ? `Nova says so once, early; after that, the room's events are told as scenes (T8).`
+          : `Say that you were not in the room at most once in the whole article, or not at all; ` +
+            `everywhere else, show where each fact came from by attributing it to the people who told you.`)
       );
     }
   }

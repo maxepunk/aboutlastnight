@@ -599,11 +599,15 @@ describe('ellipsis normalisation', () => {
   });
 });
 
-describe('the remote reporter-mode message asks for attribution (phase 2, 2.6)', () => {
-  // Phase 3 (3.4): the room's events reach Nova by attribution, and exposed memories
-  // by turn-in (spec T6, T8; plan review I6). The line used to send every exposure
-  // through "the people who told you", which pushes a rework to name or invent exposers.
-  it('keeps its prefix and tells the rework to attribute and to state the absence at most once', () => {
+describe('the remote reporter-mode message follows the remote mode block (phase 2, 2.6)', () => {
+  // Phase 3 (3.4): exposed memories reach Nova by turn-in (spec T6, T8; plan review I6).
+  // The line used to send every exposure through "the people who told you", which pushes
+  // a rework to name or invent exposers.
+  // Phase 3 (3.9): a rework reads this line as must-fix, so it says what mode-remote says
+  // since round 7 (R13): Nova never claims to have seen or heard the room, and the event
+  // is told as a scene, attributed where it matters. It no longer sends every room event
+  // through an attribution.
+  it('keeps its prefix and tells the rework to tell the event as a scene, attributed where it matters', () => {
     const result = factCheckContentBundle(baseArgs({
       reportingMode: 'remote',
       contentBundle: {
@@ -615,8 +619,11 @@ describe('the remote reporter-mode message asks for attribution (phase 2, 2.6)',
     const [message] = result.structuralIssues;
     // The console groups this message under reporter-mode violations by this prefix.
     expect(message.startsWith('Reporter-mode violation (remote): "i was in the room".')).toBe(true);
-    expect(message).toContain("attributing the room's events to the people in it");
-    expect(message).toContain('state the absence at most once');
+    expect(message).toContain('never claims to have seen or heard the room (T8)');
+    expect(message).toContain('Tell the moment as a scene, with attribution where it matters: a line someone was overheard saying, a claim about a person.');
+    expect(message).not.toContain("attributing the room's events to the people in it");
+    expect(message).not.toContain("the room's events reached Nova from people in it");
+    expect(message).not.toContain('at most once');
   });
 });
 
@@ -644,9 +651,25 @@ describe('repeated absence statements, remote only (phase 2, 2.6)', () => {
     const advisories = absenceAdvisories(result);
     expect(advisories).toHaveLength(1);
     expect(advisories[0]).toMatch(/^Absence stated 2 times \(remote\): "I was not there", "I was not in that room"\./);
-    expect(advisories[0]).toContain("attributing the room's events to the people in it");
+    // Phase 3 (3.9): the remote mode block of round 7 (R13): said once, early, then scenes.
+    expect(advisories[0]).toContain('Nova says so once, early; after that, the room\'s events are told as scenes (T8).');
+    expect(advisories[0]).not.toContain("attributing the room's events to the people in it");
+    expect(advisories[0]).not.toContain('at most once');
     expect(result.structuralIssues).toEqual([]);
     expect(result.reporterMode.violations).toEqual([]);
+  });
+
+  it('the detective keeps its own wording', () => {
+    const result = factCheckContentBundle(baseArgs({
+      theme: 'detective',
+      reportingMode: 'remote',
+      contentBundle: bundle({ deck: 'I was not there.', paragraphs: ['I was not in that room.'] })
+    }));
+    expect(absenceAdvisories(result)[0]).toBe(
+      'Absence stated 2 times (remote): "I was not there", "I was not in that room". ' +
+      'Say that you were not in the room at most once in the whole article, or not at all; ' +
+      'everywhere else, show where each fact came from by attributing it to the people who told you.'
+    );
   });
 
   it('allows one statement', () => {
@@ -1391,12 +1414,34 @@ describe('the fix lines follow the rules (phase 3, 3.4)', () => {
     expect(message).toMatch(/anonymous/);
   });
 
+  // Phase 3 (3.9): the vote fix line states T8 as round 7 words it (R21): "accuses" means
+  // joining the room's accusation.
+  it('the vote fix line says what T8 says: Nova never votes, joins the room\'s accusation or exposes a memory', () => {
+    const [message] = remote('I voted with the room.').structuralIssues;
+    expect(message.startsWith('Reporter-mode violation: "i voted".')).toBe(true);
+    expect(message).toContain("Nova reports on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and is never one of the room (T8).");
+    expect(message).not.toContain('accuses or exposes');
+  });
+
   it('the remote fix line has exposures reach Nova by turn-in, never as tips', () => {
     const [message] = remote('I was in the room when the vote turned.').structuralIssues;
     expect(message.startsWith('Reporter-mode violation (remote): "i was in the room".')).toBe(true);
     expect(message).not.toMatch(/\btips?\b/i);
     expect(message).toMatch(/turned in to Nova/);
-    expect(message).toContain('at most once');
+  });
+
+  it('the detective keeps its reporter-mode wording', () => {
+    const detective = (text) => factCheckContentBundle(baseArgs({
+      theme: 'detective',
+      reportingMode: 'remote',
+      contentBundle: { headline: { main: 'h', deck: 'd' }, sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text }] }], evidenceCards: [] }
+    }));
+    expect(detective('I voted with the room.').structuralIssues).toContain(
+      'Reporter-mode violation: "i voted". The reporter covers the room, they are not a member of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.'
+    );
+    expect(detective('I was in the room when the vote turned.').structuralIssues).toContain(
+      'Reporter-mode violation (remote): "i was in the room". This session was covered remotely: every exposure, observation and the verdict arrived as a tip from someone who was there. Show where each fact came from by attributing it to the people who told you, and state your absence at most once.'
+    );
   });
 
   it('no message carries an em-dash', () => {
