@@ -59,7 +59,7 @@ Copy the session report's rows into `inputs/orchestrator-parsed.json`, figures a
 - each transfer, which the report books as two rows, a credit on the receiving account and a debit on the sending account whose detail reads "To<account>". Copy the pair as one adjustment, from the sender to the receiver, at the credit row's time;
 - the Final Standings, each account with its total, without the bonus's holding account.
 
-The report writes an anonymous turn-in as "NovaNews (Anonymous)", in whatever spelling, and lists that label among the Final Standings too. The label marks an exposure anonymous and is never an account, so its Final Standings row stays out.
+The report names an anonymous turn-in with a label of one form: the newsroom's name, "NovaNews" or a misspelling of it, followed by "(Anonymous)". The Final Standings list that label too, at zero. The label marks an exposure anonymous and is never an account, so its Final Standings row stays out. An account that a sale, the bonus or a transfer paid stays, whatever its name, "Anonymous" included.
 
 A row that fits none of these, or a figure that looks wrong, goes in `questions`.
 
