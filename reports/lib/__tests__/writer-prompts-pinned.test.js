@@ -172,11 +172,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   HERO IMAGE line points at the list, the packages' header says they name their photos
  *   by filename, and ARC PHOTOS gives filenames only (article-journalist 27913 ->
  *   28269). The other pins do not move.
+ * - Phase 3 (task 3.10), the arc writer's notes label and lenses line: the label's
+ *   backstory sentence names T1's third point in place of "Nova's reading under T1",
+ *   and SECTION 5 points at C16 in <craft-story> in place of the retired <craft-arcs>
+ *   (10772 -> 10816). arcs-journalist only.
  */
 const PINNED = {
   'outline-journalist': ['43090a0768e66a909fbc417d637d33392a6912dc683f0a434d3daa6a8c046ed6', 20638],
   'article-journalist': ['2cd5992037eec2f125bc6e7882e1f65688ed37a93c88235ab18ec983b6b042de', 28269],
-  'arcs-journalist': ['84a3d0bda40156b8cd638c43f1e031d1666da2670839b5ea070031a770f1374b', 10772],
+  'arcs-journalist': ['9f9ba8cd8e32677813784a2add89bdb668105ab61585eeb56851be2aac9ccfa8', 10816],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
   'arcs-detective': ['57b57b954a3193cbd067cbe41bfc7ffcbbc4338430eb1af8503d2cdca16fee60', 14747]

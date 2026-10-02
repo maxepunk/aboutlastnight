@@ -525,10 +525,11 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
   });
 
   describe("what stays, in C16's terms, stated once", () => {
-    // Spec section 8: each rule appears once. C16, in <craft-arcs>, states the lenses,
-    // the order (TH2) and the convergence with their reason; the inline text maps them
-    // onto the output fields (analysisNotes, suggestedOrder, convergencePoint) and
-    // states none of them again, so an edit to the rule file leaves no stale copy.
+    // Spec section 8: each rule appears once. C16, in <craft-story> since task 3.8,
+    // states the lenses, the order (TH2) and the convergence with their reason; the
+    // inline text maps them onto the output fields (analysisNotes, suggestedOrder,
+    // convergencePoint) and states none of them again, so an edit to the rule file
+    // leaves no stale copy. Task 3.10: each pointer names the file C16 is in now.
     const C16_TERMS = [
       /bears? on the room's verdict/g, /cuts? against/g, /its own material/g,
       /culmination/g, /where the thesis lands/g, /near (its|the) end/g
@@ -539,41 +540,70 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       .map(String);
     const { INTERWEAVING_SYSTEM_PROMPT, INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
 
-    it('the arc writer reads the three lenses from <craft-arcs> and writes them into analysisNotes', () => {
+    it('the arc writer reads the three lenses from C16 in <craft-story> and writes them into analysisNotes', () => {
       const prompt = buildCoreArcSections(journalistState());
       const { craft } = loadRuleSet('arc');
-      expect(craft).toMatch(/## C16\./);
+      expect(craft).toMatch(/<craft-story>\n[\s\S]*## C16\.[\s\S]*<\/craft-story>/);
       expect(count(prompt, craft)).toBe(1);
       expect(restated(prompt, craft)).toEqual([]);
       const section = prompt.slice(prompt.indexOf('## SECTION 5'), prompt.indexOf('## SECTION 6'));
-      expect(section).toContain('<craft-arcs>');
+      expect(section).toContain('as C16 (<craft-story>) sets them out');
       ['financial', 'behavioral', 'victimization'].forEach((field) => expect(section).toMatch(new RegExp(`^- ${field}: `, 'm')));
     });
 
-    it('the interweaving call reads the convergence and the order from <craft-arcs>, and its task names the fields that hold them', () => {
+    it('the interweaving call reads the convergence and the order from C16 in <craft-story>, and its task names the fields that hold them', () => {
       const state = journalistState();
       const system = interweavingSystemPrompt(state.sessionConfig, 'journalist');
       const user = buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist');
       const { core, craft } = loadRuleSet('interweaving');
       expect(restated(`${system}\n${user}`, `${core}\n${craft}`)).toEqual([]);
-      expect(INTERWEAVING_SYSTEM_PROMPT).not.toMatch(/CONVERGENCE|\bORDER\b/);
+      // Task 3.10: the principles hold a convergence role that points at C16, and no
+      // order of their own.
+      expect(INTERWEAVING_SYSTEM_PROMPT).not.toMatch(/\bORDER\b/);
       const task = user.slice(user.indexOf('## YOUR TASK'), user.indexOf('## OUTPUT FORMAT'));
-      expect(task).toMatch(/^- suggestedOrder: .*<craft-arcs>/m);
-      expect(task).toMatch(/^- convergencePoint: .*<craft-arcs>/m);
+      expect(task).toMatch(/^- suggestedOrder: .*C16 \(<craft-story>\)/m);
+      expect(task).toMatch(/^- convergencePoint: .*C16 \(<craft-story>\)/m);
       // The interweaving call's own mechanics stay, as the brief keeps them: bridges, callback seeds, the bridge types.
       ['SHARED CHARACTERS ARE BRIDGES', 'CALLBACK SEEDS', 'shared_character', 'causal_chain', 'temporal', 'contradiction']
         .forEach((s) => expect(`${system}\n${user}`).toContain(s));
     });
 
-    it('the schema descriptions refer to C16 for the order and the convergence, and restate neither', () => {
+    it('the schema descriptions refer to C16 in <craft-story> for the order and the convergence, and restate neither', () => {
       for (const schema of [INTERWEAVING_SCHEMA, PLAYER_FOCUS_GUIDED_SCHEMA]) {
         const plan = schema.properties.interweavingPlan.properties;
         for (const field of ['suggestedOrder', 'convergencePoint']) {
-          expect(plan[field].description).toMatch(/C16/);
+          expect(plan[field].description).toMatch(/C16 \(<craft-story>\)/);
           expect(plan[field].description).not.toMatch(/verdict|culmination|thesis|end of the article/);
         }
         expect(JSON.stringify(schema)).not.toMatch(/murder|maximum/i);
       }
+    });
+
+    // Task 3.10: craft-arcs, craft-thesis, craft-sections, craft-room and craft-tracing
+    // are gone (task 3.8). No prompt text, schema description or comment in the code
+    // names one; the tests that pin their retirement name them, as they must.
+    it('no code in lib/ or scripts/ names a retired craft file', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const RETIRED = ['craft-thesis', 'craft-sections', 'craft-arcs', 'craft-room', 'craft-tracing'];
+      const root = path.join(__dirname, '..', '..');
+      const files = [];
+      const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== '__tests__' && entry.name !== 'node_modules') walk(full);
+        } else if (/\.(js|json|md)$/.test(entry.name)) {
+          files.push(full);
+        }
+      });
+      walk(path.join(root, 'lib'));
+      walk(path.join(root, 'scripts'));
+      expect(files.length).toBeGreaterThan(50);
+      const naming = files.flatMap((file) => {
+        const text = fs.readFileSync(file, 'utf8');
+        return RETIRED.filter((name) => text.includes(name)).map((name) => `${path.relative(root, file)}: ${name}`);
+      });
+      expect(naming).toEqual([]);
     });
 
     it('the arc rework carries C16 once too: its output addendum prints the schema descriptions', async () => {
@@ -611,16 +641,21 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
   });
 
   describe("the director's notes, under T1", () => {
-    it("the label names the notes T1's record for the room and backstory in them Nova's reading, and restates no rule", () => {
+    // Task 3.10 (spec R12; rule-text read 2, section D): backstory in the notes is what
+    // Nova knows but the record cannot back, T1's third point. "Reading" is retired as
+    // the rules' word for Nova's inference: it came back as a tic in print.
+    it("the label names the notes T1's record for the room and backstory in them T1's third point, and restates no rule", () => {
       const state = journalistState();
       const prompt = buildCoreArcSections(state);
       const label = prompt.slice(prompt.indexOf("### The Director's Notes"), prompt.indexOf('<DIRECTOR_NOTES>'));
       expect(label).toMatch(/^### The Director's Notes \(the record for the room, under T1\)$/m);
-      expect(label).toMatch(/[Bb]ackstory[^.]*Nova's reading under T1/);
+      expect(label).toMatch(/[Bb]ackstory[^.]*what Nova knows but the record cannot back: T1's third point\./);
+      expect(label).not.toMatch(/\breading\b/i);
       expect(prompt).not.toMatch(/ground truth/i);
-      // T1 says how the room's record and a reading are written, and T12 and the world
-      // say the director's words stay exact: the label states none of it again.
-      expect(label).not.toMatch(/what happened and was said|never changed|as written|unproven claim|open question/);
+      // T1 says how the room's record and what the record cannot back are written, and
+      // T12 and the world say the director's words stay exact: the label states none
+      // of it again.
+      expect(label).not.toMatch(/what happened and was said|never changed|as written|unproven claim|open question|suspicion|allegation|careful reporter|worded fresh/);
       const system = coreArcSystemPrompt(state.sessionConfig, 'journalist');
       expect(count(`${system}\n${prompt}`, "as the director's notes record it")).toBe(1);
     });
@@ -630,10 +665,76 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     it('the label is ARC_NOTES_LABEL, the one text the arc writer prints and the arc judge imports', () => {
       const { ARC_NOTES_LABEL } = arcModule;
       expect(typeof ARC_NOTES_LABEL).toBe('string');
-      expect(ARC_NOTES_LABEL).toMatch(/^The Director's Notes \(the record for the room, under T1\)\n[Bb]ackstory[^.]*Nova's reading under T1\.$/);
+      expect(ARC_NOTES_LABEL).toMatch(/^The Director's Notes \(the record for the room, under T1\)\n[Bb]ackstory[^.]*what Nova knows but the record cannot back: T1's third point\.$/);
+      expect(ARC_NOTES_LABEL).not.toContain("Nova's reading");
       const prompt = buildCoreArcSections(journalistState());
       expect(count(prompt, ARC_NOTES_LABEL)).toBe(1);
       expect(prompt).toContain(`### ${ARC_NOTES_LABEL}\n`);
+      const { buildEvaluationSystemPrompt, getPhaseCriteria } = require('../workflow/nodes/evaluator-nodes')._testing;
+      const judge = buildEvaluationSystemPrompt('arcs', getPhaseCriteria('arcs', 'journalist'), 'journalist', { sessionConfig: journalistState().sessionConfig });
+      expect(judge).toContain(`- directorNotes: ${ARC_NOTES_LABEL}\n`);
+    });
+  });
+
+  /**
+   * Task 3.10 (final review rules-writers[2]): the interweaving principles are one text.
+   * The interweaving call writes each arc's shared characters, bridges, callback seeds
+   * and convergence role by them, and the arc reworker returns the same fields, so it
+   * gets the same text, once, beside the fields. At the gate the reworker had only the
+   * schema's field descriptions, and six of the nine breaches the judge found in
+   * reworked arcs sat in bridges or callback seeds. The principles point at C16 for its
+   * craft: the plant and payoff, and where the threads can meet.
+   */
+  describe('the interweaving principles, one text for the call and the reworker', () => {
+    const { INTERWEAVING_PRINCIPLES, INTERWEAVING_SYSTEM_PROMPT, DETECTIVE_INTERWEAVING_SYSTEM_PROMPT } = require('../sdk-client/subagents');
+    const C16_TERMS = [
+      /bears? on the room's verdict/, /cuts? against/, /its own material/,
+      /culmination/, /where the thesis lands/, /near (its|the) end/, /comes? back changed later/
+    ];
+
+    it('holds the principles for every interweaving field, and points at C16 for its craft', () => {
+      expect(typeof INTERWEAVING_PRINCIPLES).toBe('string');
+      expect(INTERWEAVING_PRINCIPLES).toMatch(/^INTERWEAVING PRINCIPLES:\n/);
+      ['1. SHARED CHARACTERS ARE BRIDGES', '2. CALLBACK SEEDS', '3. BRIDGE TYPES', '4. CONVERGENCE ROLE']
+        .forEach((heading) => expect(INTERWEAVING_PRINCIPLES).toContain(heading));
+      expect(INTERWEAVING_PRINCIPLES).toMatch(/A seed is a detail the record holds[^\n]*C16[^\n]*the payoff stays true to it/);
+      expect(INTERWEAVING_PRINCIPLES).toContain("A memory's time is the party's clock and the timeline's is the morning's, so the two never line up");
+      expect(INTERWEAVING_PRINCIPLES).toMatch(/4\. CONVERGENCE ROLE\n {3}- [^\n]*where the threads can meet \(C16\)/);
+      C16_TERMS.forEach((term) => expect(`${term}: ${term.test(INTERWEAVING_PRINCIPLES)}`).toBe(`${term}: false`));
+    });
+
+    it('the interweaving call carries it once, in its system prompt, and finds where the threads can meet', () => {
+      const state = journalistState();
+      const system = interweavingSystemPrompt(state.sessionConfig, 'journalist');
+      const user = buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle, state.sessionConfig, 'journalist');
+      expect(count(INTERWEAVING_SYSTEM_PROMPT, INTERWEAVING_PRINCIPLES)).toBe(1);
+      expect(count(`${system}\n${user}`, INTERWEAVING_PRINCIPLES)).toBe(1);
+      expect(INTERWEAVING_SYSTEM_PROMPT.split('\n')[0]).toMatch(/and find where they can meet\.$/);
+      // The task names the fields and leaves their principles to the system prompt.
+      const task = user.slice(user.indexOf('## YOUR TASK'), user.indexOf('## OUTPUT FORMAT'));
+      expect(task).not.toMatch(/natural bridge points|changed later/);
+      expect(task).toContain('3. **callbackSeeds** - Which details in this arc are callback seeds?');
+    });
+
+    it('the arc rework carries it once, beside the interweaving fields it returns, on a send back and an automatic pass', async () => {
+      const state = journalistState();
+      for (const overrides of [SEND_BACK, AUTOMATED]) {
+        const { systemPrompt, prompt } = await arcRework(state, overrides);
+        expect(count(`${systemPrompt}\n${prompt}`, INTERWEAVING_PRINCIPLES)).toBe(1);
+        const addendum = prompt.slice(prompt.indexOf('## WHAT THIS REWORK RETURNS'), prompt.indexOf('## YOUR TASK'));
+        expect(addendum).toContain(`The interweaving and the plan follow these principles:\n\n${INTERWEAVING_PRINCIPLES}`);
+      }
+      // The arc writer returns no interweaving, so it reads none.
+      expect(buildCoreArcPrompt(state)).not.toContain('INTERWEAVING PRINCIPLES');
+    });
+
+    it("the detective keeps its interweaving prompt and its rework's addendum (D13)", async () => {
+      expect(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT).not.toContain(INTERWEAVING_PRINCIPLES);
+      expect(DETECTIVE_INTERWEAVING_SYSTEM_PROMPT).toContain('Example: "Vic\'s confident smile" planted early');
+      const state = reworkFixtureState('detective');
+      const { prompt } = await arcRework(state, SEND_BACK);
+      expect(prompt).not.toContain('INTERWEAVING PRINCIPLES');
+      expect(prompt).not.toContain('follow these principles');
     });
   });
 

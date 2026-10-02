@@ -21,3 +21,11 @@ describe('PLAYER_FOCUS_GUIDED_SYSTEM_PROMPT removal (X-8)', () => {
     expect(subagents.PLAYER_FOCUS_GUIDED_SCHEMA).toBeDefined();
   });
 });
+
+// Phase 3 (3.10): the interweaving call and the arc reworker read one principles text.
+describe('INTERWEAVING_PRINCIPLES', () => {
+  it('is exported once, and the interweaving system prompt is built on it', () => {
+    expect(typeof subagents.INTERWEAVING_PRINCIPLES).toBe('string');
+    expect(subagents.INTERWEAVING_SYSTEM_PROMPT.split(subagents.INTERWEAVING_PRINCIPLES)).toHaveLength(2);
+  });
+});

@@ -32,13 +32,47 @@ const { WRITER_QUESTIONS_KEY, WRITER_QUESTIONS_PROPERTY } = require('../writer-q
  * carry the fields, the interweaving call's and the arc reworker's, and the reworker's
  * prompt prints them (buildArcReworkOutputAddendum).
  *
- * C16, in <craft-arcs>, states the order (TH2) and the convergence with their reason,
- * and both calls that fill these fields read it, so a description names the rule and
- * restates none of it (spec section 8: each rule appears once).
+ * C16, in <craft-story> since task 3.8, states the order (TH2) and the convergence with
+ * their reason, and both calls that fill these fields read it, so a description names
+ * the rule and restates none of it (spec section 8: each rule appears once).
  */
 const CONVERGENCE_ROLE_DESCRIPTION = 'What this arc brings to the convergence point';
-const SUGGESTED_ORDER_DESCRIPTION = 'Arc ids, in the order C16 (<craft-arcs>) gives the arcs';
-const CONVERGENCE_POINT_DESCRIPTION = "This session's convergence point, as C16 (<craft-arcs>) describes the convergence";
+const SUGGESTED_ORDER_DESCRIPTION = 'Arc ids, in the order C16 (<craft-story>) gives the arcs';
+const CONVERGENCE_POINT_DESCRIPTION = "This session's convergence point, as C16 (<craft-story>) describes the convergence";
+
+/**
+ * The interweaving principles, the journalist's one text for the fields that bridge the
+ * arcs (phase 3, brief 3.10; final review rules-writers[2]): each arc's shared
+ * characters, bridges, callback seeds and convergence role, and the plan built from
+ * them. The interweaving call's system prompt is built on it, and the arc reworker,
+ * which returns the same fields, reads it once beside them
+ * (buildArcReworkOutputAddendum). At the gate the reworker had only the schema's field
+ * descriptions, and six of the nine breaches the judge found in reworked arcs sat in
+ * bridges or callback seeds.
+ *
+ * C16 (in <craft-story>) has the interweaving call find the threads and where they can
+ * meet, and leaves how the thesis lands there to the outline. A principle that would
+ * restate C16's craft points at C16 instead: the plant and payoff behind a callback
+ * seed, and the convergence. The detective keeps its own text (D13).
+ */
+const INTERWEAVING_PRINCIPLES = `INTERWEAVING PRINCIPLES:
+
+1. SHARED CHARACTERS ARE BRIDGES
+   - Characters appearing in multiple arcs create natural transition points
+   - The same person in different contexts creates curiosity
+   - Track who appears where for bridge opportunities
+
+2. CALLBACK SEEDS
+   - A seed is a detail the record holds, planted for the payoff C16 describes, so the payoff stays true to it
+
+3. BRIDGE TYPES
+   - shared_character: Same person, different context
+   - causal_chain: This arc explains WHY another happened
+   - temporal: Events close together within one stage: two memories from the same moment of the party, or two events on the morning timeline. A memory's time is the party's clock and the timeline's is the morning's, so the two never line up
+   - contradiction: This arc recontextualizes another
+
+4. CONVERGENCE ROLE
+   - What this arc brings to where the threads can meet (C16)`;
 
 /**
  * The detective's wording for the same three fields, parked with its theme (spec D13).
@@ -185,7 +219,7 @@ const PLAYER_FOCUS_GUIDED_SCHEMA = {
  * Phase 3 (brief 3.3): what the rule set does not say. coreArcSystemPrompt puts the
  * mode block, the world and the truth rules after the identity line, so the game, the
  * evidence boundaries, the stages and the anti-patterns this prompt used to restate
- * (and partly contradict) are gone from it; the three lenses are C16's (craft-arcs.md,
+ * (and partly contradict) are gone from it; the three lenses are C16's (craft-story.md,
  * in the user prompt). The roster line under OUTPUT is task 3.7's to change.
  */
 const CORE_ARC_SYSTEM_PROMPT = `You are the arc writer for a NovaNews investigative article about one session of "About Last Night": you find the arcs, the threads of this session's story that the outline and the article are built from.
@@ -330,36 +364,23 @@ const DETECTIVE_CORE_ARC_SCHEMA = withoutQuestionsField(CORE_ARC_SCHEMA);
  *
  * Phase 3 (brief 3.3): the bridges, the callback seeds and the bridge types stay here
  * because the brief keeps them: they are this call's own mechanics, the metadata its
- * output records. (C16 states the craft idea a callback seed plans, "Details planted
- * early come back changed later"; the seed is how this call carries it out.) The
- * convergence (C16's culmination near the end, where the thesis lands, not "the
- * central event (murder/accusation)") and the order (TH2: how each arc bears on the
- * verdict, not "maximum payoff") are C16's, which this call reads in <craft-arcs>; its
- * task names the fields that hold them. The callback example that gave Vic a pronoun
- * and a hidden truth is gone. interweavingSystemPrompt puts the mode block, the world
- * and the truth rules after the identity line.
+ * output records. The convergence (C16's, not "the central event (murder/accusation)")
+ * and the order (TH2: how each arc bears on the verdict, not "maximum payoff") are
+ * C16's, which this call reads in <craft-story>; its task names the fields that hold
+ * them. The callback example that gave Vic a pronoun and a hidden truth is gone.
+ * interweavingSystemPrompt puts the mode block, the world and the truth rules after
+ * the identity line.
+ *
+ * Phase 3 (brief 3.10): the principles are INTERWEAVING_PRINCIPLES, the one text the arc
+ * reworker reads too, and the identity line follows C16 as it now reads: this call
+ * finds where the threads can meet, and the outline decides how the thesis lands there.
  */
-const INTERWEAVING_SYSTEM_PROMPT = `You plan how the arcs of one "About Last Night" session intercut in a NovaNews investigative article, and where they converge.
+const INTERWEAVING_SYSTEM_PROMPT = `You plan how the arcs of one "About Last Night" session intercut in a NovaNews investigative article, and find where they can meet.
 
 YOUR TASK:
 For each arc provided, identify how it connects to other arcs to create compulsive readability through callbacks and bridges.
 
-INTERWEAVING PRINCIPLES:
-
-1. SHARED CHARACTERS ARE BRIDGES
-   - Characters appearing in multiple arcs create natural transition points
-   - The same person in different contexts creates curiosity
-   - Track who appears where for bridge opportunities
-
-2. CALLBACK SEEDS
-   - A detail from the record, planted early, comes back changed later: the reader's moment of recognition
-   - A seed is a detail the record holds, so the payoff stays true to it
-
-3. BRIDGE TYPES
-   - shared_character: Same person, different context
-   - causal_chain: This arc explains WHY another happened
-   - temporal: Events close together within one stage: two memories from the same moment of the party, or two events on the morning timeline. A memory's time is the party's clock and the timeline's is the morning's, so the two never line up
-   - contradiction: This arc recontextualizes another
+${INTERWEAVING_PRINCIPLES}
 
 OUTPUT:
 For each arc, provide interweaving metadata plus an overall interweaving plan.`;
@@ -518,6 +539,8 @@ module.exports = {
   CORE_ARC_SCHEMA,
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
+  // Phase 3 (3.10): the interweaving principles, which the arc reworker reads too
+  INTERWEAVING_PRINCIPLES,
 
   // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SCHEMA,

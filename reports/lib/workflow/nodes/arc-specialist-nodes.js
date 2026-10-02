@@ -55,6 +55,8 @@ const {
   CORE_ARC_SCHEMA,
   INTERWEAVING_SYSTEM_PROMPT,
   INTERWEAVING_SCHEMA,
+  // Phase 3 (3.10): the interweaving principles, which the arc reworker reads too
+  INTERWEAVING_PRINCIPLES,
   // Commit 8.15: Player-focus-guided schema (used by reviseArcs)
   PLAYER_FOCUS_GUIDED_SCHEMA,
   // Phase 3 (3.3): the detective's prompts and schemas, parked with its theme (D13)
@@ -320,12 +322,15 @@ function buildCoreArcSections(state) {
 
 /**
  * The journalist arc writer's label for the director's notes (phase 3, brief 3.3):
- * T1's record for the room, and the one mapping T1 does not state, that backstory in
- * the notes is Nova's reading. The writer prints it as its notes heading; the arc
- * judge (evaluator-nodes.js) imports it, so both name the notes in one text.
+ * T1's record for the room, and the one mapping T1 does not state, where backstory in
+ * the notes falls. Phase 3 (3.10; R12, rule-text read 2 section D): backstory is what
+ * Nova knows but the record cannot back, T1's third point, which the label names and
+ * does not restate; "reading", the rules' old noun for Nova's inference, is retired. The
+ * writer prints it as its notes heading; the arc judge (evaluator-nodes.js) imports it,
+ * so both name the notes in one text.
  */
 const ARC_NOTES_LABEL = `The Director's Notes (the record for the room, under T1)
-Backstory in the notes, what the director knows about the characters beyond what the session showed, is Nova's reading under T1.`;
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is what Nova knows but the record cannot back: T1's third point.`;
 
 /**
  * The journalist arc writer's OUTPUT FORMAT line for `writerQuestions` (fix 3.7b,
@@ -505,7 +510,7 @@ Each arc summary says which stage each of its events belongs to (T7): the party,
 
 ## SECTION 5: THE THREE LENSES IN analysisNotes
 
-Write each arc's three lenses, as <craft-arcs> sets them out, into analysisNotes, one field per lens. Where the record holds nothing for a lens, write that it holds nothing.
+Write each arc's three lenses, as C16 (<craft-story>) sets them out, into analysisNotes, one field per lens. Where the record holds nothing for a lens, write that it holds nothing.
 - financial: the money lens, read from the morning timeline
 - behavioral: the behaviour lens
 - victimization: the victimization lens
@@ -840,7 +845,7 @@ Also provide an **interweavingPlan** with:
  * The journalist's interweaving prompt (phase 3, brief 3.3): the arcs, the roster, the
  * whole record view, the task and the output format, then the rule set's craft files
  * for this call, last, by the placement ruling. The bridge types are the system
- * prompt's principles; the convergence and the order are C16's, in <craft-arcs>. The
+ * prompt's principles; the convergence and the order are C16's, in <craft-story>. The
  * task names the fields that hold each and restates none of them (spec section 8:
  * each rule appears once).
  *
@@ -872,17 +877,16 @@ ${renderRecordView(evidenceBundle, { sessionConfig })}
 For each arc, provide:
 
 1. **sharedCharacters** - Which characters in this arc also appear in OTHER arcs?
-   These are natural bridge points for transitions.
 
 2. **bridgeOpportunities** - How can this arc connect to others? Each bridge has one of the four bridge types: shared_character, causal_chain, temporal or contradiction.
 
-3. **callbackSeeds** - Which details in this arc, from the record, could come back changed later?
+3. **callbackSeeds** - Which details in this arc are callback seeds?
 
 4. **convergenceRole** - What does this arc bring to the convergence?
 
 Also provide an **interweavingPlan** with:
-- suggestedOrder: the arc ids, in the order <craft-arcs> gives the arcs
-- convergencePoint: this session's convergence point, as <craft-arcs> describes the convergence
+- suggestedOrder: the arc ids, in the order C16 (<craft-story>) gives the arcs
+- convergencePoint: this session's convergence point, as C16 (<craft-story>) describes the convergence
 - keyCallbacks: Specific [plant → payoff] opportunities
 
 ## OUTPUT FORMAT
@@ -1665,6 +1669,12 @@ function describeSchemaField(name, spec) {
  * fields in the schema's own words: the lines are generated from the schema's
  * properties and descriptions, so there is one wording.
  *
+ * Phase 3 (3.10; final review rules-writers[2]): the journalist's addendum carries the
+ * interweaving principles, the one text the interweaving call writes these fields by
+ * (INTERWEAVING_PRINCIPLES), once. The reworker used to get only the schema's
+ * descriptions for the bridges and callback seeds it rewrites. The detective keeps its
+ * addendum (D13).
+ *
  * @param {boolean} hasPlan - whether the prompt shows a PREVIOUS INTERWEAVING PLAN
  * @param {string} [theme] - the schema whose words it prints (arcReworkSchema)
  * @returns {string}
@@ -1681,6 +1691,13 @@ function buildArcReworkOutputAddendum(hasPlan, theme = 'journalist') {
   const planRule = hasPlan
     ? 'A PREVIOUS INTERWEAVING PLAN is shown above: keep it, or update it for the revised arcs. Do not drop it.'
     : 'No previous plan is shown: write one for the revised arcs.';
+  const principles = isParkedDetective(theme)
+    ? ''
+    : `The interweaving and the plan follow these principles:
+
+${INTERWEAVING_PRINCIPLES}
+
+`;
   return `## WHAT THIS REWORK RETURNS
 
 The OUTPUT FORMAT at the top is the arc writer's. A rework returns that object with two more fields, as its schema defines them.
@@ -1691,7 +1708,7 @@ ${lines(arcFields)}
 The top-level "interweavingPlan" object:
 ${lines(planFields)}
 
-${planRule}`;
+${principles}${planRule}`;
 }
 
 /**
