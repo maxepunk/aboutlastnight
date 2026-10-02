@@ -8,11 +8,13 @@ What the article says, and how, is the rule set's (`references/rules/`). Two fil
 
 A **document** is any item of the record, an exposed memory or a piece of paper evidence, named by its `id`.
 
-A **question** for the director, wherever a file carries one:
+A **question** for the director, wherever a file carries one, has the shape the two JSON schemas give each item of `writerQuestions`:
 
 ```
-{"about": "<a player, a pronoun or a ledger line>", "question": "<the question>"}
+{"kind": "player | pronoun | ledger", "about": "<the player's name, or for a ledger question the entry's time and amount, or the account>", "question": "<the question>"}
 ```
+
+`kind` names the case: `player` when the record holds nothing about a player, `pronoun` when a roster pronoun is missing, `ledger` when a ledger entry or an account's total looks wrong.
 
 ## Inputs
 
