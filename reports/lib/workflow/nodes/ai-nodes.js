@@ -30,7 +30,7 @@ const {
   THEME_SYSTEM_PROMPTS,
   THEME_CONSTRAINTS
 } = require('../../prompt-builder');
-const { carriedEdits, reportAfterPass, SEND_BACK_PASS, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
+const { carriedEdits, settleEdits, SEND_BACK_PASS, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
 const outlineSchema = require('../../schemas/outline.schema.json');
 const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
@@ -1242,7 +1242,7 @@ async function generateOutline(state, config) {
  */
 const CHANGED_EDITS_PROPERTY = {
   type: 'array',
-  description: "Each of the director's edits in HAND_EDITS that this rework changed or removed, and each cut it brought back, with one sentence on why the structural change the director's note asks for meant it no longer fit. Empty when every edit stays as written and every cut stays out.",
+  description: "Each of the director's edits in HAND_EDITS that this rework changed or removed, and each cut or removed sentence it brought back, with one sentence on why the structural change the director's note asks for meant it no longer fit. Empty when every edit stays as written and every cut and removed sentence stays out.",
   items: {
     type: 'object',
     additionalProperties: false,
@@ -1392,17 +1392,20 @@ async function reviseOutline(state, config) {
     // pass keeps every previous subject; the rework's question replaces the earlier
     // ones of its kind and `about` (3.10).
     const outline = withCarriedWriterQuestions(result || {}, previousOutline, { afterDirectorNote: Boolean(state._outlineFeedback) });
+    // FA (spec 2026-10-02 section 7): after an automatic pass, code puts back any of the
+    // director's edits the pass changed, field by field; a send-back's rework is left as
+    // it is, with its reasons. Spec §4.4: verify on EVERY pass. F1: the report adds this
+    // pass's changes and restores to the round's (the server resets it at a send-back);
+    // the edits stay, for the gate to clear on approve.
+    const settled = settleEdits(state._outlineHandEditReport, {
+      edits: handEdits, before: previousOutline, after: outline,
+      pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
+    });
     return {
-      outline,
+      outline: settled.output,
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
-      // Spec §4.4: verify on EVERY pass. F1: the report adds this pass's changes to the
-      // round's (the server resets it at a send-back); the edits stay, for the gate to
-      // clear on approve.
-      _outlineHandEditReport: reportAfterPass(state._outlineHandEditReport, {
-        edits: handEdits, before: previousOutline, after: outline,
-        pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
-      }),
+      _outlineHandEditReport: settled.report,
       currentPhase: PHASES.GENERATE_OUTLINE
     };
 
@@ -1906,10 +1909,19 @@ async function reviseContentBundle(state, config) {
     const updatedBundle = withCarriedWriterQuestions(revised || previousContentBundle, previousContentBundle, {
       afterDirectorNote: Boolean(state._articleFeedback)
     });
+    // FA (spec 2026-10-02 section 7): after an automatic pass, code puts back any of the
+    // director's edits the pass changed, field by field; a send-back's rework is left as
+    // it is, with its reasons. Spec §4.4: verify on EVERY pass. F1: the report adds this
+    // pass's changes and restores to the round's (the server resets it at a send-back);
+    // the edits stay, for the gate to clear on approve.
+    const settled = settleEdits(state._articleHandEditReport, {
+      edits: handEdits, before: previousContentBundle, after: updatedBundle,
+      pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
+    });
 
     return {
       contentBundle: {
-        ...updatedBundle,
+        ...settled.output,
         _revisionHistory: [
           ...(previousContentBundle?._revisionHistory || []),
           {
@@ -1921,13 +1933,7 @@ async function reviseContentBundle(state, config) {
       },
       _previousContentBundle: null,  // Clear temporary field after use
       _articleFeedback: null,  // Clear human feedback after consumption
-      // Spec §4.4: verify on EVERY pass. F1: the report adds this pass's changes to the
-      // round's (the server resets it at a send-back); the edits stay, for the gate to
-      // clear on approve.
-      _articleHandEditReport: reportAfterPass(state._articleHandEditReport, {
-        edits: handEdits, before: previousContentBundle, after: updatedBundle,
-        pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
-      }),
+      _articleHandEditReport: settled.report,
       currentPhase: PHASES.GENERATE_CONTENT
     };
 

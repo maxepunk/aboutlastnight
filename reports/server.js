@@ -31,6 +31,9 @@ const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
 const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
 const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditReportOf } = require('./lib/hand-edit-diff');
+// FA (requirement 9): the roster's names as the coverage check reads them, which each
+// send-back records a cut's or a rewrite's names against.
+const { rosterNames } = require('./lib/content-bundle-fact-check');
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // The outline editors' own list of the fields phase 3 retired (BU3), so the server
@@ -550,6 +553,19 @@ function normalizePhotoDescriptions(value) {
     return { map: Object.keys(map).length > 0 ? map : null, error: null };
 }
 
+/**
+ * What a send-back records its edits with (FA, requirement 9): the roster's names, so a
+ * cut or a rewrite records which of them the director's version no longer names, and a
+ * roster gap is blamed on the director only for those. Nothing when there is no roster.
+ *
+ * @param {object} currentState
+ * @returns {{names?: string[]}}
+ */
+function sendBackRecordOptions(currentState) {
+    const names = rosterNames(currentState.sessionConfig && currentState.sessionConfig.roster);
+    return names.length > 0 ? { names } : {};
+}
+
 /** Schema-check a director's edited object the same way the approve path does. */
 function validateEdits(schemaName, edits, noun) {
     const { valid, errors } = outlineValidator.validate(schemaName, edits);
@@ -709,7 +725,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         // never made (fix 3.2b, finding 5).
         const shownOutline = dropRetiredOutlineFields(currentState.outline);
         stateUpdates._outlineHandEdits = standingAfterSendBack(currentState._outlineHandEdits, shownOutline,
-            hasEdits ? approvals.outlineEdits : shownOutline, 'outline');
+            hasEdits ? approvals.outlineEdits : shownOutline, 'outline', sendBackRecordOptions(currentState));
         // The report holds one round: a send back opens a new one.
         stateUpdates._outlineHandEditReport = null;
         // Brief 2.7: a send back opens a new round, and the trace shows only the
@@ -752,7 +768,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         appendGateNote(stateUpdates, currentState, 'article', resume.feedback, 'rejection');
         // F1: as at the outline stop, the director's edits stand across every send-back.
         stateUpdates._articleHandEdits = standingAfterSendBack(currentState._articleHandEdits, currentState.contentBundle,
-            hasEdits ? approvals.articleEdits : currentState.contentBundle, 'bundle');
+            hasEdits ? approvals.articleEdits : currentState.contentBundle, 'bundle', sendBackRecordOptions(currentState));
         stateUpdates._articleHandEditReport = null;
         stateUpdates._articleTrace = null;   // brief 2.7: a new round starts an empty trace
         if (hasEdits) {

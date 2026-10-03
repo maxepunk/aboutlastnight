@@ -86,7 +86,8 @@ describe('the judges read the director\'s edits (F1)', () => {
     expect(at("THE DIRECTOR'S EDITS (record: the director's own text")).toBeGreaterThan(at('CONTENT BUNDLE:'));
     expect(at("THE DIRECTOR'S EDITS")).toBeLessThan(at('\nOUTLINE:'));
     expect(prompt).toContain(`E1 (section "the-story", paragraph, cut): "${THEORY}"`);
-    expect(prompt).toContain(`E2 (section "closing", paragraph): "${CLOSING}"`);
+    expect(prompt).toContain(`E2 (section "closing", paragraph): "${CLOSING}"\n  removed: "Whether the verdict costs Alex anything is still open."`);
+    expect(prompt).toContain('A removed: line under an edit is a sentence the director took out of that text when rewriting it.');
     expect(prompt).toContain(`write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${DIRECTOR_EDIT_PREFIX}E1: `);
     expect(prompt).toContain('score each criterion, and write each structural issue, on the writer\'s text alone');
   });
@@ -169,12 +170,79 @@ describe('the verdict guard (F1)', () => {
     expect(result.evaluationHistory.structuralIssues).toEqual([]);
   });
 
-  it('a truth criterion whose own notes quote the writer\'s text still holds it', async () => {
-    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
+  // FA, requirement 5 (replacing F1's "notes that quote the writer's text hold"): a
+  // criterion a director concern covers keeps its notes and fix from the rework, and
+  // holds only while a structural issue under its rule ids remains.
+  it('a truth criterion a director concern covers holds only while a structural issue under its rules remains', async () => {
+    const covered = await evaluateArticle(articleState(), cfg(judging(verdict({
       criteriaScores: { wordsTruth: { score: 0.3, type: 'structural', notes: `"${WRITER_LINE}" is in no document.`, fix: 'Cut it.' } },
       structuralIssues: [`T12: "${CLOSING}" quotes no document.`]
     }))));
+    expect(covered.evaluationHistory.ready).toBe(true);
+    expect(covered.validationResults.criteriaScores).toEqual({ wordsTruth: { score: 0.3, type: 'structural' } });
+    const stillHeld = await evaluateArticle(articleState(), cfg(judging(verdict({
+      criteriaScores: { wordsTruth: { score: 0.3, type: 'structural', notes: `"${WRITER_LINE}" is in no document.`, fix: 'Cut it.' } },
+      structuralIssues: [`T12: "${CLOSING}" quotes no document.`, WRITER_ISSUE]
+    }))));
+    expect(stillHeld.evaluationHistory.ready).toBe(false);
+    expect(stillHeld.validationResults.structuralIssues).toEqual([WRITER_ISSUE]);
+    expect(stillHeld.validationResults.criteriaScores).toEqual({ wordsTruth: { score: 0.3, type: 'structural' } });
+  });
+
+  it('a failed truth criterion no concern covers holds the output, and its notes and fix reach the rework', async () => {
+    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
+      criteriaScores: { wordsTruth: { score: 0.3, type: 'structural', notes: `"${WRITER_LINE}" is in no document.`, fix: 'Cut it.' } },
+      structuralIssues: [CLOSING_ISSUE]
+    }))));
     expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toEqual([`T12: "${WRITER_LINE}" is in no document. Cut it.`]);
+    expect(result.validationResults.criteriaScores.wordsTruth.fix).toBe('Cut it.');
+  });
+
+  // FA, requirement 1: the director's text wins. 0926262's real T1 issue quoted the
+  // closing beside two of the writer's lines, and F1 kept it structural.
+  it('an issue that quotes the director\'s text moves to the concerns, whatever else it quotes', async () => {
+    const mixed = `T1: "${CLOSING}" says what "${WRITER_LINE.slice(0, -1)}" only implies.`;
+    const result = await evaluateArticle(articleState(), cfg(judging(verdict({ structuralIssues: [mixed] }))));
+    expect(result.evaluationHistory.structuralIssues).toEqual([]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: ${mixed}`]);
+    expect(result.evaluationHistory.ready).toBe(true);
+  });
+
+  // FA, requirement 5 and known item 1: director-located findings release the output only
+  // when no structural criterion failed outside them.
+  it('a structural criterion that failed on the writer\'s text holds the output beside a moved issue', async () => {
+    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
+      criteriaScores: { arcThreading: { score: 0.4, type: 'structural', notes: 'The money thread drops out after THE STORY.', fix: 'Thread the money through the closing.' } },
+      structuralIssues: [CLOSING_ISSUE]
+    }))));
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toEqual([]);
+    expect(result.validationResults.criteriaScores.arcThreading.fix).toBe('Thread the money through the closing.');
+  });
+
+  // Final review, finding 6: a judge that files its concern correctly and still sets
+  // structuralPassed false must not send the output to automatic passes with nothing to fix.
+  it('a judge\'s structuralPassed false with nothing left to fix does not hold the output', async () => {
+    const concern = `${DIRECTOR_EDIT_PREFIX}E2: T1: "${CLOSING}" states a motive as fact.`;
+    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
+      structuralPassed: false, ready: false,
+      criteriaScores: { evidenceTruth: { score: 0.85, type: 'structural', notes: 'Holds.' } },
+      advisoryWarnings: [concern]
+    }))));
+    expect(result.evaluationHistory.ready).toBe(true);
+    expect(result.validationResults.passed).toBe(true);
+  });
+
+  // FA, requirement 6: a judge's advisory that quotes the director's text is a concern,
+  // never SHOULD CONSIDER for the rework.
+  it('an advisory that quotes the director\'s text is a concern for the stop and never reaches the rework', async () => {
+    const advisory = `C14: "${CLOSING}" ends on a line the room never said.`;
+    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
+      ready: true, structuralPassed: true, overallScore: 0.9, advisoryWarnings: [advisory, 'C10: the lede runs long.']
+    }))));
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: ${advisory}`, 'C10: the lede runs long.']);
+    expect(result.validationResults.advisoryWarnings).toEqual(['C10: the lede runs long.']);
   });
 
   it('a failed truth criterion the judge wrote no issue for moves when its notes quote only the director\'s text', async () => {
@@ -401,5 +469,18 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     expect(result.validationResults.feedback).toBe(guidance);
     expect(result.validationResults.structuralIssues).toEqual([CLOSING_ISSUE]);
     expect(result.evaluationHistory.ready).toBe(false);
+  });
+
+  // FA, requirement 5 at a later send-back: the verdict carries each criterion's rule ids,
+  // so the send-back's rework can keep a criterion's notes and fix away when an issue under
+  // its rules is located in the director's newest edits (node-helpers.js withoutDirectorsFindings).
+  it.each(['journalist', 'detective'])('%s: the rework\'s verdict carries the rule ids each criterion scores', async (theme) => {
+    const result = await evaluateArticle(articleState(theme, { _articleHandEdits: null }), cfg(judging(verdict({ ready: true, structuralPassed: true })), theme));
+    const { getPhaseCriteria } = require('../../../lib/workflow/nodes/evaluator-nodes')._testing;
+    const expected = Object.fromEntries(Object.entries(getPhaseCriteria('article', theme))
+      .filter(([, criterion]) => Array.isArray(criterion.rules) && criterion.rules.length > 0)
+      .map(([key, criterion]) => [key, criterion.rules]));
+    expect(result.validationResults.criteriaRules || {}).toEqual(expected);
+    if (theme === 'journalist') expect(result.validationResults.criteriaRules.verdictTruth).toEqual(['T2']);
   });
 });

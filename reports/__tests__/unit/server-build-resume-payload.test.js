@@ -549,7 +549,10 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     expect(stateUpdates._outlineHandEdits).toEqual({
       kind: 'outline',
       issued: 1,
-      edits: [{ id: 'E1', scope: 'lede', path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }]
+      edits: [{
+        id: 'E1', scope: 'lede', path: 'lede.hook', at: [{ key: 'lede' }, { key: 'hook' }],
+        before: before.lede.hook, after: 'A sharper hook.', removed: [before.lede.hook]
+      }]
     });
     expect(stateUpdates._outlineHandEditReport).toBeNull();
   });
@@ -572,7 +575,10 @@ describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
     expect(stateUpdates._outlineHandEdits).toEqual({
       kind: 'outline',
       issued: 1,
-      edits: [{ id: 'E1', scope: 'lede', path: 'lede.hook', before: before.lede.hook, after: 'A sharper hook.' }]
+      edits: [{
+        id: 'E1', scope: 'lede', path: 'lede.hook', at: [{ key: 'lede' }, { key: 'hook' }],
+        before: before.lede.hook, after: 'A sharper hook.', removed: [before.lede.hook]
+      }]
     });
     expect(before.thePlayers.buried).toEqual(['the silent partner']);   // the stored outline is not changed
   });
@@ -728,7 +734,7 @@ describe('the director\'s edits stand across send-backs (F1)', () => {
     );
     expect(error).toBeNull();
     expect(stateUpdates._articleHandEdits.edits.map((e) => [e.id, e.path])).toEqual([
-      ['E1', 'sections[#intro].content[1]'], ['E2', 'sections[#conclusion].content[-]'], ['E3', 'headline.main']
+      ['E1', 'sections[#intro].content[1].text'], ['E2', 'sections[#conclusion].content[-]'], ['E3', 'headline.main']
     ]);
     expect(stateUpdates._articleHandEdits.issued).toBe(3);
   });
@@ -739,9 +745,22 @@ describe('the director\'s edits stand across send-backs (F1)', () => {
     edits.closing.arcResolutions[0].resolution = 'The ledger does not settle it.';
     const first = buildResumePayload({ outline: false, outlineFeedback: 'x', outlineEdits: edits }, { outline: shown });
     const standing = first.stateUpdates._outlineHandEdits;
-    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'closing.arcResolutions']]);
+    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'closing.arcResolutions[0].resolution']]);
     const second = buildResumePayload({ outline: false, outlineFeedback: 'y' }, { outline: edits, _outlineHandEdits: standing });
     expect(second.stateUpdates._outlineHandEdits).toEqual(standing);
+  });
+
+  test('the send-back records, from the session roster, the names a cut removed (FA)', () => {
+    const shown = bundleFixture();
+    shown.sections[3].content.push({ type: 'paragraph', text: 'Kai said nothing all night, and left before the vote.' });
+    const sentBack = JSON.parse(JSON.stringify(shown));
+    sentBack.sections[3].content.pop();
+    const { stateUpdates, error } = buildResumePayload(
+      { article: false, articleFeedback: 'Cut the Kai line.', articleEdits: sentBack },
+      { contentBundle: shown, sessionConfig: { roster: ['Kai', { name: 'Chen' }] } }
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates._articleHandEdits.edits).toEqual([expect.objectContaining({ id: 'E1', after: null, names: ['Kai'] })]);
   });
 
   test('approve and a rollback clear the standing edits', async () => {
@@ -979,3 +998,4 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
     });
   });
 });
+

@@ -1647,3 +1647,96 @@ describe('the director\'s edits are final (F1)', () => {
     expect(withNone.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
   });
 });
+
+// FA (requirements 2, 9, 10 and 12; known items 6 and 7): the fact check locates a hit in
+// the field the director changed, never the whole block; a sidebar card the director
+// edited is located like an inline card; the photo check and roster coverage's hero read
+// the photos the page prints (lib/publish-photos.js printedPhotos); a roster gap is the
+// director's only for a name the director's version no longer held when sent back.
+describe('the director\'s edits, field by field, at the fact check (FA)', () => {
+  const { standingAfterSendBack, carriedEdits, DIRECTOR_EDIT_PREFIX, sectionKey } = require('../hand-edit-diff');
+  const { _testing: { sectionKeyOf } } = require('../content-bundle-fact-check');
+  const paragraph = (text) => ({ type: 'paragraph', text });
+  const photo = (filename, caption) => ({ type: 'photo', filename, caption });
+  const NOT_VERBATIM = 'A sentence the director typed that appears nowhere in the memory itself.';
+  const editsFor = (writers, directors, options) => carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle', options), directors);
+  const run = (writers, directors, extra = {}, options) => factCheckContentBundle(baseArgs({
+    contentBundle: directors, directorEdits: editsFor(writers, directors, options), ...extra
+  }));
+
+  it('a card whose headline alone the director changed is the writer\'s card: content that is not verbatim stays structural', () => {
+    const writers = storyWith(inlineCard({ content: NOT_VERBATIM }));
+    const directors = storyWith(inlineCard({ content: NOT_VERBATIM, headline: 'The Offer, in her words' }));
+    const result = run(writers, directors);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Evidence card "vic001" \(in section "the-story"\) is not verbatim/)]);
+    expect(result.cardFidelity[0]).not.toHaveProperty('directorEdit');
+    expect(result.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
+  });
+
+  it('a card whose content the director wrote is a concern', () => {
+    const result = run(storyWith(inlineCard()), storyWith(inlineCard({ content: NOT_VERBATIM })));
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.advisoryWarnings).toEqual([
+      expect.stringMatching(new RegExp(`^${DIRECTOR_EDIT_PREFIX}E1: Evidence card "vic001" \\(in section "the-story"\\) is not verbatim`))
+    ]);
+  });
+
+  it('an unknown source on a card the director edited is a concern, inline or in the sidebar', () => {
+    const inline = run(
+      storyWith(inlineCard({ tokenId: 'nope999', content: 'x' })),
+      storyWith(inlineCard({ tokenId: 'nope999', content: 'x', headline: 'Her offer' }))
+    );
+    expect(inline.structuralIssues).toEqual([]);
+    expect(inline.advisoryWarnings).toEqual([
+      expect.stringMatching(new RegExp(`^${DIRECTOR_EDIT_PREFIX}E1: Evidence card "nope999" \\(in section "the-story"\\) has an unknown source`))
+    ]);
+    const sidebar = (summary) => ({ sections: [], evidenceCards: [card({ tokenId: 'nope999', summary })] });
+    const fromSidebar = run(sidebar('A threat'), sidebar('A threat to Marcus, signed by nobody.'));
+    expect(fromSidebar.structuralIssues).toEqual([]);
+    expect(fromSidebar.advisoryWarnings).toEqual([
+      expect.stringMatching(new RegExp(`^${DIRECTOR_EDIT_PREFIX}E1: Evidence card "nope999" \\(in the sidebar\\) has an unknown source`))
+    ]);
+    expect(fromSidebar.cardFidelity).toEqual([expect.objectContaining({ tokenId: 'nope999', directorEdit: 'E1' })]);
+  });
+
+  it('a photo whose caption alone the director changed is the writer\'s reference; one whose filename the director set is a concern', () => {
+    const captioned = run(
+      storyWith(photo('not-ours.jpg', 'The huddle')),
+      storyWith(photo('not-ours.jpg', 'Mel lays out the theory, and the room leans in.')),
+      { sessionPhotos: ['/photos/a.jpg'] }
+    );
+    expect(captioned.photoReferences.invalid).toEqual(['not-ours.jpg']);
+    expect(captioned.structuralIssues).toEqual([expect.stringMatching(/^Invalid photo reference "not-ours.jpg"/)]);
+    const placed = run(storyWith(photo('a.jpg', 'The huddle')), storyWith(photo('not-ours.jpg', 'The huddle')), { sessionPhotos: ['/photos/a.jpg'] });
+    expect(placed.photoReferences.invalid).toEqual([]);
+    expect(placed.advisoryWarnings).toEqual([
+      `${DIRECTOR_EDIT_PREFIX}E1: Invalid photo reference "not-ours.jpg": not one of this session's photos. Use one of [a.jpg] or remove the reference.`
+    ]);
+  });
+
+  it('a roster gap is the director\'s only for a name the director\'s version no longer held when sent back', () => {
+    const writers = storyWith(paragraph('Sarah kept the count.'), paragraph('Sarah left early.'), paragraph('Vic leaned in at the bar.'));
+    const directors = storyWith(paragraph('Sarah left early.'), paragraph('Vic leaned in at the bar.'));
+    const standing = standingAfterSendBack(null, writers, directors, 'bundle', { names: ['Sarah', 'Vic'] });
+    const later = storyWith(paragraph('Vic leaned in at the bar.'));   // a rework dropped the other mention
+    const result = factCheckContentBundle(baseArgs({ contentBundle: later, roster: ['Sarah', 'Vic'], directorEdits: carriedEdits(standing, later) }));
+    expect(result.rosterCoverage.missing).toEqual(['Sarah']);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Roster coverage gap: Sarah is on the session roster but never named/)]);
+    expect(result.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
+  });
+
+  it('a gap the director\'s cut caused, recorded at the send-back, is a concern', () => {
+    const writers = storyWith(paragraph('Vic leaned in at the bar.'), paragraph('Kai said nothing all night.'));
+    const directors = storyWith(paragraph('Vic leaned in at the bar.'));
+    const result = run(writers, directors, { roster: ['Vic', 'Kai'] }, { names: ['Vic', 'Kai'] });
+    expect(result.rosterCoverage.missing).toEqual([]);
+    expect(result.advisoryWarnings).toEqual([
+      `${DIRECTOR_EDIT_PREFIX}E1: Roster coverage gap: Kai is on the session roster, and the director's cut removed the only place the article named Kai.`
+    ]);
+  });
+
+  it('keys a section as the director\'s edits do', () => {
+    expect(typeof sectionKey).toBe('function');
+    expect(sectionKeyOf).toBe(sectionKey);
+  });
+});

@@ -10,7 +10,9 @@
 const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency, pairRepliesWithBatch } = require('../../evidence-preprocessor');
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
-const { carriedEdits, formatEditLines, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
+const {
+  carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE
+} = require('../../hand-edit-diff');
 const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -864,6 +866,72 @@ function codeCheckOf(validationResults) {
 }
 
 /**
+ * The rule ids a finding opens with ("T3: ...", "T4, T6: ..."), or none: the one reading,
+ * which the verdict guard (evaluator-nodes.js) and the rework's filter below both use.
+ *
+ * @param {*} finding
+ * @returns {string[]}
+ */
+function leadingRuleIds(finding) {
+  const lead = String(finding == null ? '' : finding).match(/^\s*((?:T\d{1,2}(?:\s*(?:,|&|\/|and)\s*)?)+)/);
+  return lead ? lead[1].match(/T\d{1,2}/g) : [];
+}
+
+/**
+ * A verdict as a rework may read it, beside the director's standing edits (FA,
+ * requirement 7): every finding located in the director's text left out (lib/hand-edit-diff.js
+ * locateQuotedText: a quote of an edit's text, of a cut, or of a sentence a rewrite
+ * removed). That is each structural issue and each suggestion that quotes it, a
+ * criterion's notes and fix that quote it or that sit under the rule ids of an issue left
+ * out (requirement 5; the verdict's `criteriaRules`), its score staying, and the judge's
+ * guidance once one of its issues was left out or it quotes the director's text, since
+ * its steps walk through those issues. At a send-back the verdict is the one the stop showed,
+ * which no judge wrote with the director's newest edits in view (final review, finding
+ * 3); after an evaluation the verdict guard has already left such findings out, so this
+ * is the same rule held at the rework's door.
+ *
+ * @param {Object|null} validationResults
+ * @param {Object[]} edits - the standing edits the rework's starting version carries
+ * @param {Object} output - that version
+ * @returns {Object|null}
+ */
+function withoutDirectorsFindings(validationResults, edits, output) {
+  if (!validationResults || typeof validationResults !== 'object' || edits.length === 0) return validationResults;
+  const located = (text) => typeof text === 'string' && locateQuotedText(text, edits, output).editIds.length > 0;
+  const keep = (finding) => !located(typeof finding === 'string' ? finding : (finding && finding.message));
+  const verdict = { ...validationResults };
+  let issueLeftOut = false;
+  const leftOutRules = new Set();
+  ['structuralIssues', 'issues'].forEach((key) => {
+    if (!Array.isArray(verdict[key])) return;
+    const kept = verdict[key].filter(keep);
+    verdict[key].filter((finding) => !kept.includes(finding)).forEach((finding) => {
+      issueLeftOut = true;
+      leadingRuleIds(typeof finding === 'string' ? finding : (finding && finding.message)).forEach((id) => leftOutRules.add(id));
+    });
+    verdict[key] = kept;
+  });
+  const rulesOf = (key) => (verdict.criteriaRules && Array.isArray(verdict.criteriaRules[key]) ? verdict.criteriaRules[key] : []);
+  if (Array.isArray(verdict.advisoryWarnings)) {
+    verdict.advisoryWarnings = verdict.advisoryWarnings
+      .filter((w) => keep(w) && !(typeof w === 'string' && w.startsWith(DIRECTOR_EDIT_PREFIX)));
+  }
+  if (verdict.criteriaScores && typeof verdict.criteriaScores === 'object') {
+    verdict.criteriaScores = Object.fromEntries(Object.entries(verdict.criteriaScores).map(([key, value]) => {
+      if (!value || typeof value !== 'object') return [key, value];
+      const covered = rulesOf(key).some((id) => leftOutRules.has(id));
+      if (!covered && !located([value.notes, value.fix].filter((t) => typeof t === 'string').join(' '))) return [key, value];
+      const { notes, fix, ...score } = value;
+      return [key, score];
+    }));
+  }
+  ['revisionGuidance', 'feedback'].forEach((key) => {
+    if (typeof verdict[key] === 'string' && verdict[key] && (issueLeftOut || located(verdict[key]))) verdict[key] = '';
+  });
+  return verdict;
+}
+
+/**
  * Build revision context for any phase (DRY helper)
  *
  * This solves the "whack-a-mole" revision problem by providing:
@@ -888,7 +956,8 @@ function codeCheckOf(validationResults) {
  * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
  * @param {Object|Array|null} [options.handEdits] - the director's standing edits at this stop
  *   (lib/hand-edit-diff.js: the state channel, a list of edits, or a diff stored before the
- *   edits had ids); those `previousOutput` carries are rendered as <HAND_EDITS> (F1)
+ *   edits had ids); those `previousOutput` carries are rendered as <HAND_EDITS> (F1), and
+ *   no finding located in their text reaches the rework (withoutDirectorsFindings; FA)
  * @param {number} [options.round] - the director's round a send back opens (the stop's
  *   "Round N"); named in the banner of a send-back rework (brief 2.3)
  * @param {string} [options.theme='journalist'] - the session's theme. The journalist's
@@ -913,8 +982,13 @@ function codeCheckOf(validationResults) {
  * });
  */
 function buildRevisionContext(options) {
-  const { phase, revisionCount, validationResults, previousOutput, humanFeedback, handEdits, round, theme = 'journalist' } = options;
+  const { phase, revisionCount, previousOutput, humanFeedback, handEdits, round, theme = 'journalist' } = options;
   const parkedDetective = theme === 'detective';
+
+  // F1: the director's edits the version this rework starts from carries, by id. FA
+  // (requirement 7): the rework reads the verdict without the findings located in them.
+  const standingEdits = carriedEdits(handEdits, previousOutput);
+  const validationResults = withoutDirectorsFindings(options.validationResults, standingEdits, previousOutput);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Build context section (feedback, issues, criteria)
@@ -1120,20 +1194,21 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`
   // instructions. Present on EVERY pass of the round, not only the first.
   //
   // F1 (spec 2026-10-02 section 7): the edits stand at the stop by id, and the block
-  // lists those the version this rework starts from carries, each with its section and
-  // the director's text. Its rule depends on the kind of rework. An automatic pass fixes
-  // the writer's text, so every edit stays as written. A send-back may change an edit
-  // only where the structural change the note asks for means it no longer fits, and
-  // returns each one it changed, with why (CHANGED_EDITS_KEY, which the rework call's
-  // schema carries; ai-nodes.js). The old block's line that the evaluator's notes
-  // predate the edits went: the judge now reads them (evaluator-nodes.js).
-  const standingEdits = carriedEdits(handEdits, previousOutput);
+  // lists those the version this rework starts from carries, each with its place and
+  // the director's text, and under a rewrite each sentence it removed (FA). Its rule
+  // depends on the kind of rework. An automatic pass fixes the writer's text, so every
+  // edit stays as written, and every cut and removed sentence stays out (and code puts
+  // back what it changes anyway; ai-nodes.js). A send-back may change an edit only
+  // where the structural change the note asks for means it no longer fits, and returns
+  // each one it changed, with why (CHANGED_EDITS_KEY, which the rework call's schema
+  // carries; ai-nodes.js). EDIT_LINES_GUIDE says how to read the lines, in the words
+  // the judges' section uses.
   const handEditsRule = humanFeedback
-    ? `An edit is the final word on its text, so each edit stays exactly as written and each cut stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
-    : 'This automatic pass fixes the writer\'s text. An edit is the final word on its text, so each edit stays exactly as written and each cut stays out.';
+    ? `An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
+    : 'This automatic pass fixes the writer\'s text. An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out.';
   const handEditsBlock = standingEdits.length > 0
     ? `<HAND_EDITS>
-The director's edits, by id: text the director wrote into the previous version, or cut from it (marked cut).
+The director's edits, by id: text the director wrote into the previous version, or cut from it (marked cut). ${EDIT_LINES_GUIDE}
 ${handEditsRule}
 
 ${formatEditLines(standingEdits)}
@@ -1429,6 +1504,8 @@ module.exports = {
 
   // Revision context helper (DRY)
   buildRevisionContext,
+  withoutDirectorsFindings,
+  leadingRuleIds,
 
   // The bar a criterion must reach: the judges' and the revision context's one constant
   // (phase 3, 3.10; evaluator-nodes.js imports it)

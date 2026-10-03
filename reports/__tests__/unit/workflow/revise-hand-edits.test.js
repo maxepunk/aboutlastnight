@@ -45,12 +45,17 @@ describe('reviseOutline', () => {
     expect(result._outlineHandEditReport).toEqual({ checked: ['E1'], changed: [] });
   });
 
-  it('reports a reverted edit, with the pass that changed it and no reason', async () => {
+  // FA, requirement 8: code puts back an edit an automatic pass changed, and the report records it.
+  it('puts back an edit an automatic pass reverted, and reports the pass and the restore', async () => {
     const sdk = sdkReturning(OUTLINE);           // the model put the old hook back
     const result = await reviseOutline({ _previousOutline: EDITED, _outlineHandEdits: diff, outlineRevisionCount: 1 }, cfg(sdk));
+    expect(result.outline.lede.hook).toBe('New hook');
     expect(result._outlineHandEditReport).toEqual({
       checked: ['E1'],
-      changed: [{ id: 'E1', scope: 'lede', cut: false, director: 'New hook', became: 'Old hook', pass: 1, automatic: true, reason: null }]
+      changed: [{
+        id: 'E1', scope: 'lede', where: 'lede, hook', cut: false, removed: false, moved: false,
+        director: 'New hook', became: 'Old hook', pass: 1, automatic: true, reason: null, restored: true
+      }]
     });
   });
 
@@ -104,12 +109,14 @@ describe('reviseContentBundle', () => {
     expect(result._articleHandEditReport).toEqual({ checked: ['E1'], changed: [] });
   });
 
-  it('reports a reverted headline', async () => {
+  it('puts back a headline an automatic pass reverted, and reports the restore', async () => {
     const sdk = sdkReturning(BUNDLE);
     const result = await reviseContentBundle({ _previousContentBundle: EDITED_BUNDLE, _articleHandEdits: diff, articleRevisionCount: 1 }, cfg(sdk));
-    expect(result._articleHandEditReport.changed).toEqual([
-      { id: 'E1', scope: 'headline', cut: false, director: 'New', became: 'Old', pass: 1, automatic: true, reason: null }
-    ]);
+    expect(result.contentBundle.headline.main).toBe('New');
+    expect(result._articleHandEditReport.changed).toEqual([{
+      id: 'E1', scope: 'headline', where: 'headline, main', cut: false, removed: false, moved: false,
+      director: 'New', became: 'Old', pass: 1, automatic: true, reason: null, restored: true
+    }]);
   });
 
   it('passes the standing notes, excluding the current article feedback', async () => {
@@ -183,13 +190,15 @@ describe('the list of changed edits lives only in the rework call (F1)', () => {
     const result = await reviseContentBundle(sendBack(), cfg(sdk));
     expect(result.contentBundle).not.toHaveProperty(CHANGED_EDITS_KEY);
     expect(JSON.stringify(result.contentBundle)).not.toContain(REASON);
+    // A send-back's rework is not restored (FA): the note may change an edit, and it says why.
+    expect(result.contentBundle.sections[1].content[0].text).toBe('Whether the January demand costs Alex anything is still open.');
     expect(result._articleHandEditReport).toEqual({
       checked: ['E1', 'E2'],
       changed: [{
-        id: 'E2', scope: 'section:closing', cut: false,
+        id: 'E2', scope: 'section:closing', where: 'section "closing", paragraph', cut: false, removed: false, moved: false,
         director: 'Alex wanted Marcus out of the company, and the January demand says so.',
         became: 'Whether the January demand costs Alex anything is still open.',
-        pass: SEND_BACK_PASS, automatic: false, reason: REASON
+        pass: SEND_BACK_PASS, automatic: false, reason: REASON, restored: false
       }]
     });
   });
@@ -220,9 +229,13 @@ describe('the list of changed edits lives only in the rework call (F1)', () => {
       checked: ['E1', 'E2'],
       changed: [
         first._articleHandEditReport.changed[0],
-        { id: 'E1', scope: 'headline', cut: false, director: HEADLINE, became: 'The Room Named Alex', pass: 1, automatic: true, reason: null }
+        {
+          id: 'E1', scope: 'headline', where: 'headline, main', cut: false, removed: false, moved: false,
+          director: HEADLINE, became: 'The Room Named Alex', pass: 1, automatic: true, reason: null, restored: true
+        }
       ]
     });
+    expect(second.contentBundle.headline.main).toBe(HEADLINE);
   });
 });
 

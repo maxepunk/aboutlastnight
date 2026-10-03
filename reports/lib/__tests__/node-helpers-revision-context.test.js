@@ -354,8 +354,8 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
     standing = standingAfterSendBack(null, { lede: { hook: 'Old' }, closing: { finalLine: 'The ledger never lies.' } }, { lede: { hook: 'New' }, closing: {} }, 'outline');
   });
   const base = { phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'New' }, closing: {} } };
-  const SEND_BACK_RULE = "An edit is the final word on its text, so each edit stays exactly as written and each cut stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
-  const AUTOMATIC_RULE = "This automatic pass fixes the writer's text. An edit is the final word on its text, so each edit stays exactly as written and each cut stays out.";
+  const SEND_BACK_RULE = "An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
+  const AUTOMATIC_RULE = "This automatic pass fixes the writer's text. An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out.";
 
   it('sits after HUMAN FEEDBACK and before the instructions (WHAT THIS REWORK DOES since phase 3)', () => {
     const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: standing });
@@ -405,6 +405,15 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
   it('reads a diff stored before the edits had ids', () => {
     const diff = diffOutline({ lede: { hook: 'Old' } }, { lede: { hook: 'New' } });
     expect(buildRevisionContext({ ...base, handEdits: diff }).contextSection).toContain('E1 (lede, hook): "New"');
+  });
+
+  // FA, requirement 3: a rewrite's removed sentences print under the edit.
+  it('lists the sentences an edit removed under it, and says what a removed line is', () => {
+    const rewritten = { lede: { hook: 'The party ended with one guest dead.' } };
+    const withRemoval = standingAfterSendBack(null, { lede: { hook: 'The party ended with one guest dead. The room ran out of time.' } }, rewritten, 'outline');
+    const { contextSection } = buildRevisionContext({ ...base, previousOutput: rewritten, humanFeedback: null, handEdits: withRemoval });
+    expect(contextSection).toContain('E1 (lede, hook): "The party ended with one guest dead."\n  removed: "The room ran out of time."');
+    expect(contextSection).toContain('A removed: line under an edit is a sentence the director took out of that text when rewriting it.');
   });
 
   it('is absent when handEdits is null, empty or missing, or when no edit is carried', () => {
@@ -912,5 +921,84 @@ describe("a code check's guidance reaches an automatic rework (the 4b fix batch)
     expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
     expect(contextSection).not.toContain('JUDGE-GUIDANCE');
     expect(contextSection).not.toContain('ARC CHECK GUIDANCE');
+  });
+});
+
+// FA, requirement 7 (final review, finding 3): a send-back rework reads the verdict the
+// stop showed, which no judge wrote with the director's newest edits in view. The
+// rework's context leaves out each of that verdict's findings located in the director's
+// text: its structural issues and suggestions, the notes and fix of a criterion, and the
+// judge's guidance once a step of it was about such a finding.
+describe('a rework never reads a finding located in the director\'s text (FA)', () => {
+  const { standingAfterSendBack } = require('../hand-edit-diff');
+  const CLAIM = 'Alex wanted Marcus out of the company.';
+  const WRITERS = 'Sarah pointed the room at the baby mama, and the vote followed.';
+  const article = (closing) => ({
+    headline: { main: 'The Room Voted' },
+    sections: [
+      { id: 'story', type: 'narrative', content: [{ type: 'paragraph', text: WRITERS }] },
+      { id: 'closing', type: 'narrative', content: [{ type: 'paragraph', text: closing }] }
+    ]
+  });
+  const shown = article(`${CLAIM} The January demand says so.`);
+  const sentBack = article(`${CLAIM} Nobody in the room asked why.`);   // the director kept the claim
+  const stored = {
+    phase: 'article', passed: false,
+    structuralIssues: [`T1: "${CLAIM}" states a motive as fact.`, `T12: "${WRITERS}" puts the line in Sarah's mouth.`],
+    advisoryWarnings: [`C14: "${CLAIM}" is a stock line.`, 'C10: the lede runs long.'],
+    criteriaScores: {
+      evidenceTruth: { score: 0.5, type: 'structural', notes: `The closing "${CLAIM}" states a motive.`, fix: 'Rewrite the closing as the room\'s suspicion.' },
+      wordsTruth: { score: 0.4, type: 'structural', notes: `"${WRITERS}" is in no document.`, fix: 'Cut the line.' }
+    },
+    revisionGuidance: 'Step 1: write the closing as the room\'s suspicion. Step 2: cut the line about Sarah.'
+  };
+  const evaluationOf = (contextSection) => contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY'), contextSection.indexOf('HUMAN FEEDBACK'));
+
+  it.each(['journalist', 'detective'])('%s: at a send-back, the stored verdict\'s findings that quote the newly standing edits are left out', (theme) => {
+    const standing = standingAfterSendBack(null, shown, sentBack, 'bundle');
+    const { contextSection } = buildRevisionContext({
+      phase: 'article', revisionCount: 0, round: 2, validationResults: stored, previousOutput: sentBack,
+      humanFeedback: 'Move the photos.', handEdits: standing, theme
+    });
+    const evaluation = evaluationOf(contextSection);
+    expect(evaluation).toContain(`T12: "${WRITERS}" puts the line in Sarah's mouth.`);
+    expect(evaluation).toContain('fix: Cut the line.');
+    expect(evaluation).toContain('C10: the lede runs long.');
+    expect(evaluation).not.toContain(CLAIM);
+    expect(evaluation).not.toContain('Rewrite the closing');
+    expect(evaluation).not.toContain('Step 1');
+    expect(evaluation).toContain('evidenceTruth: 0.50 [structural]');
+  });
+
+  // FA, requirement 5 at the send-back: a criterion under the rule ids of an issue left
+  // out keeps its notes and fix from the rework, quoted or not. Finding 3's case: the
+  // stop showed "T1: ... states Alex's motive as fact", the director rewrote the closing
+  // and kept the claim, and evidenceTruth's fix said to rewrite the closing.
+  it('a criterion under the rule ids of an issue left out keeps its notes and fix from the send-back rework', () => {
+    const covered = {
+      ...stored,
+      criteriaScores: {
+        evidenceTruth: { score: 0.5, type: 'structural', notes: 'The closing states a motive as fact.', fix: 'Rewrite the closing as the room\'s suspicion.' },
+        wordsTruth: { score: 0.4, type: 'structural', notes: 'A line no document holds.', fix: 'Cut the line.' }
+      },
+      criteriaRules: { evidenceTruth: ['T1', 'T3', 'T4', 'T6'], wordsTruth: ['T12'] }
+    };
+    const standing = standingAfterSendBack(null, shown, sentBack, 'bundle');
+    const { contextSection } = buildRevisionContext({
+      phase: 'article', revisionCount: 0, round: 2, validationResults: covered, previousOutput: sentBack,
+      humanFeedback: 'Move the photos.', handEdits: standing
+    });
+    const evaluation = evaluationOf(contextSection);
+    expect(evaluation).not.toContain('Rewrite the closing');
+    expect(evaluation).toContain('evidenceTruth: 0.50 [structural]');
+    expect(evaluation).toContain('fix: Cut the line.');
+  });
+
+  it('with no standing edits the stored verdict reaches the rework as it is', () => {
+    const { contextSection } = buildRevisionContext({
+      phase: 'article', revisionCount: 0, validationResults: stored, previousOutput: shown, humanFeedback: 'Move the photos.', handEdits: null
+    });
+    expect(evaluationOf(contextSection)).toContain(`T1: "${CLAIM}" states a motive as fact.`);
+    expect(evaluationOf(contextSection)).toContain('Step 1');
   });
 });

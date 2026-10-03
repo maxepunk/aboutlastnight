@@ -662,39 +662,64 @@
    * A hand-edit report as the server sends it since F1 (lib/hand-edit-diff.js
    * reportAfterPass): `checked`, the ids of the director's edits the round's passes
    * checked, and `changed`, one entry per edit a pass changed. A report from before F1
-   * named scopes, not edits, and reads as none.
+   * named scopes, not edits, and one that checked nothing says nothing: both read as
+   * none. The server's handEditReportOf reads a report by the same rule, and a test holds
+   * the two equal (FA, known item 7).
    */
   function editReportOf(report) {
-    if (!report || typeof report !== 'object' || !Array.isArray(report.checked) || report.checked.length === 0) return null;
+    if (!report || typeof report !== 'object' || Array.isArray(report)) return null;
+    if (!Array.isArray(report.checked) || !Array.isArray(report.changed) || report.checked.length === 0) return null;
     if (!report.checked.every(function (id) { return typeof id === 'string' && /^E\d+$/.test(id); })) return null;
-    if (!Array.isArray(report.changed) || !report.changed.every(function (c) { return c && typeof c === 'object' && typeof c.id === 'string'; })) return null;
+    if (!report.changed.every(function (c) { return c && typeof c === 'object' && !Array.isArray(c) && typeof c.id === 'string'; })) return null;
     return report;
   }
 
+  /** What the line says of text the director took out that came back: it stays for the director to cut. */
+  var STILL_IN_ARTICLE = 'It is still in the article: cut it again if it should go.';
+
   /**
-   * One line for an edit a rework changed (F1): its id and section, the director's text
-   * and what it became (or that it is gone, or for a cut that its text came back), which
-   * pass changed it, and the rework's reason. An automatic pass's change is flagged in
-   * the line, since an automatic pass keeps the director's edits as they are.
+   * One line for an edit a pass changed (F1, FA): its id and place (the field, since FA;
+   * an entry from before FA names its scope), what happened to the director's text, which
+   * pass did it, and what followed. Who made a change is the entry's own `automatic` flag
+   * (known item 7).
+   * - A field or element an automatic pass changed: code put it back (`restored`), and
+   *   the line says so; an entry from before FA says the pass should have kept it.
+   * - A cut, or a sentence a rewrite removed, that came back: it is still in the article,
+   *   because code never takes text out.
+   * - A block the director moved that a pass moved again: where it went, and whether code
+   *   put it back.
+   * - A change a send-back's rework made: the rework's reason, or that it gave none.
    */
   function changedEditLine(entry) {
+    var label = entry.id + ', ' + (asString(entry.where) ? entry.where : scopeLabel(entry.scope));
     var became = typeof entry.became === 'string' ? entry.became : null;
-    var what;
-    if (entry.cut === true) what = 'the text you cut came back' + (became !== null ? ' as "' + became + '"' : '');
-    else if (became !== null) what = 'your "' + asString(entry.director) + '" became "' + became + '"';
-    else what = 'your "' + asString(entry.director) + '" is gone';
-    var by = entry.pass === SEND_BACK_PASS
-      ? 'the rework of your send-back'
-      : 'automatic pass ' + entry.pass + ', which should have kept your edit';
+    var director = asString(entry.director);
+    var automatic = entry.automatic === true;
+    var by = automatic ? 'automatic pass ' + entry.pass : 'the rework of your send-back';
     var reason = asString(entry.reason).trim();
-    return entry.id + ', ' + scopeLabel(entry.scope) + ': ' + what + ' (' + by + '). ' + (reason ? 'Why: ' + reason : 'No reason given.');
+    var why = reason ? 'Why: ' + reason : 'No reason given.';
+    var cameBackAs = became !== null ? ' as "' + became + '"' : '';
+    if (entry.cut === true) return label + ': the text you cut came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
+    if (entry.removed === true) return label + ': a sentence you removed came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
+    if (entry.moved === true) {
+      var moved = became !== null ? 'moved the block you placed here to ' + became : 'removed the block you placed here';
+      if (!automatic) return label + ': ' + by + ' ' + moved + '. ' + why;
+      return label + ': ' + by + ' ' + moved + '. ' + (entry.restored === true ? 'It was put back.' : 'It could not be put back.');
+    }
+    if (automatic && entry.restored === true) {
+      return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' removed your "' + director + '"') + '. Your text was put back.';
+    }
+    var what = became !== null ? 'your "' + director + '" became "' + became + '"' : 'your "' + director + '" is gone';
+    if (automatic) return label + ': ' + what + ' (' + by + ', which should have kept your edit). No reason given.';
+    return label + ': ' + what + ' (' + by + '). ' + why;
   }
 
   /**
    * The hand-edit report and the standing notes as RevisionDiff renders them.
    *
-   * F1: `changedEdits` holds one line per edit a rework changed this round
-   * (changedEditLine), `automatic` marking a change an automatic pass made;
+   * F1: `changedEdits` holds one line per edit a pass changed this round
+   * (changedEditLine), `automatic` marking a change an automatic pass made and
+   * `restored` one code put back (FA), each read from the entry's own flags;
    * `keptCount` is the edits checked when none changed.
    */
   function steeringView(handEditReport, gateNotes) {
@@ -708,7 +733,7 @@
     return {
       any: !!report || notes.length > 0,
       changedEdits: changed.map(function (entry, index) {
-        return { key: entry.id + '-' + index, id: entry.id, automatic: entry.pass !== SEND_BACK_PASS, line: changedEditLine(entry) };
+        return { key: entry.id + '-' + index, id: entry.id, automatic: entry.automatic === true, restored: entry.restored === true, line: changedEditLine(entry) };
       }),
       keptCount: report && changed.length === 0 ? report.checked.length : 0,
       notes: notes
@@ -1322,6 +1347,7 @@
     approveLabel: approveLabel,
     wordTail: wordTail,
     steeringView: steeringView,
+    editReportOf: editReportOf,
     traceView: traceView,
     roundsBanner: roundsBanner,
     outlineReviewPayload: outlineReviewPayload,

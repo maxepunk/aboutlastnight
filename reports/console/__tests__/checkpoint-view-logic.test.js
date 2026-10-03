@@ -579,6 +579,7 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
       key: 'E2-0',
       id: 'E2',
       automatic: false,
+      restored: false,
       line: 'E2, Section "closing": your "Alex wanted Marcus out of the company." became "Whether the verdict costs Alex anything is still open." (the rework of your send-back). Why: The note asked the closing to end on the open question.'
     }]);
   });
@@ -593,9 +594,42 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
     const gone = { ...SEND_BACK_CHANGE, became: null };
     const v = steeringView({ checked: ['E2', 'E3'], changed: [CUT_BACK, gone] }, []);
     expect(v.changedEdits.map((c) => c.line)).toEqual([
-      'E3, Section "the-story": the text you cut came back as "The room also weighed whether Vic would replace Marcus." (automatic pass 2, which should have kept your edit). No reason given.',
+      'E3, Section "the-story": the text you cut came back as "The room also weighed whether Vic would replace Marcus." (automatic pass 2). It is still in the article: cut it again if it should go.',
       'E2, Section "closing": your "Alex wanted Marcus out of the company." is gone (the rework of your send-back). Why: The note asked the closing to end on the open question.'
     ]);
+  });
+
+  // FA, requirement 8: code puts back what an automatic pass changed; the report says so,
+  // names the field, and flags removed text that came back.
+  test('a change code put back, and removed text that came back, each read as what happened', () => {
+    const v = steeringView({
+      checked: ['E1', 'E2'],
+      changed: [
+        {
+          id: 'E2', scope: 'section:closing', where: 'section "closing", paragraph', cut: false, removed: false, moved: false,
+          director: 'Alex wanted Marcus out of the company.', became: 'Alex may have wanted Marcus out.', pass: 1, automatic: true, reason: null, restored: true
+        },
+        {
+          id: 'E1', scope: 'section:whats-missing', where: 'section "whats-missing", paragraph', cut: false, removed: true, moved: false,
+          director: 'And the Kowalski theory is still open.', became: 'And the Kowalski theory is still open.', pass: 1, automatic: true, reason: null, restored: false
+        },
+        {
+          id: 'E4', scope: 'section:closing', where: 'section "closing", photo p3.jpg, moved from section "the-story"', cut: false, removed: false, moved: true,
+          director: 'filename: p3.jpg; caption: Vic, Remi and Alex', became: 'section "the-story"', pass: 2, automatic: true, reason: null, restored: true
+        }
+      ]
+    }, []);
+    expect(v.changedEdits.map((c) => [c.id, c.automatic, c.restored, c.line])).toEqual([
+      ['E2', true, true, 'E2, section "closing", paragraph: automatic pass 1 changed your "Alex wanted Marcus out of the company." to "Alex may have wanted Marcus out.". Your text was put back.'],
+      ['E1', true, false, 'E1, section "whats-missing", paragraph: a sentence you removed came back as "And the Kowalski theory is still open." (automatic pass 1). It is still in the article: cut it again if it should go.'],
+      ['E4', true, true, 'E4, section "closing", photo p3.jpg, moved from section "the-story": automatic pass 2 moved the block you placed here to section "the-story". It was put back.']
+    ]);
+  });
+
+  // FA, known item 7: the screen reads who made a change from the entry's own flag.
+  test('a change is automatic when its entry says so', () => {
+    const [line] = steeringView({ checked: ['E1'], changed: [{ ...AUTOMATIC_CHANGE, automatic: false }] }, []).changedEdits;
+    expect(line.automatic).toBe(false);
   });
 
   test('a report with nothing changed reports the kept count', () => {
@@ -635,6 +669,18 @@ describe('concerns about the director\'s edits (F1)', () => {
     DIRECTOR_EDIT_CONCERNS_LABEL
   } = require('../checkpoint-view-logic');
   const CONCERN = "Director's edit E2: T1: the closing states Alex's motive as fact.";
+
+  // FA, known item 7: the console reads a report by the server's own rule.
+  test('editReportOf reads a report exactly as the server\'s handEditReportOf does', () => {
+    const { editReportOf } = require('../checkpoint-view-logic');
+    const { handEditReportOf } = require('../../lib/hand-edit-diff');
+    const corpus = [
+      null, undefined, 'x', [], {}, { checked: [], changed: [] }, { checked: ['E1'], changed: [] },
+      { checked: ['lede'], changed: ['lede'] }, { checked: ['E1'], changed: [{ id: 'E1' }] }, { checked: ['E1'], changed: [null] },
+      { checked: ['E1', 2], changed: [] }, { checked: ['E1'] }, { changed: [] }, { checked: 'E1', changed: [] }
+    ];
+    corpus.forEach((report) => expect([report, editReportOf(report)]).toEqual([report, handEditReportOf(report)]));
+  });
 
   test('the console\'s copies of the server constants are the server\'s', () => {
     const server = require('../../lib/hand-edit-diff');

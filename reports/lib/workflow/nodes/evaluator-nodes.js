@@ -33,7 +33,7 @@ const { PHASES, REVISION_CAPS } = require('../state');
 // checkpointInterrupt removed in Commit 8.26 (SRP - moved to checkpoint-nodes.js)
 const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
-const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs, STRUCTURAL_PASS_SCORE } = require('./node-helpers');
+const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCs, getThemeNPCEntries } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
@@ -71,7 +71,8 @@ const { TemplateAssembler } = require('../../template-assembler');
 // judges read the edits the judged output carries, and the verdict guard moves a finding
 // about one of them to advisoryWarnings under the one prefix.
 const {
-  carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, concernFinding, DIRECTOR_EDIT_PREFIX
+  carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, concernFinding, DIRECTOR_EDIT_PREFIX,
+  EDIT_LINES_GUIDE, PRINTED_FIELDS
 } = require('../../hand-edit-diff');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -620,12 +621,6 @@ function unscoredTruthCriteria(evaluation, criteria) {
     .map(([key]) => key);
 }
 
-/** The rule ids an issue opens with ("T3: ...", "T4, T6: ..."), or none. */
-function leadingRuleIds(issue) {
-  const lead = String(issue == null ? '' : issue).match(/^\s*((?:T\d{1,2}(?:\s*(?:,|&|\/|and)\s*)?)+)/);
-  return lead ? lead[1].match(/T\d{1,2}/g) : [];
-}
-
 /**
  * One structural issue for each failed truth criterion the judge wrote no issue for
  * under any of its rule ids: the rule ids, then the criterion's notes and fix.
@@ -673,6 +668,21 @@ function judgedEdits(phase, state) {
   return [];
 }
 
+/**
+ * The rule ids each criterion scores, by criterion: the truth criteria's (phase 3, 3.4).
+ * The verdict a rework reads carries them (`criteriaRules`), so a send-back's rework can
+ * keep a criterion's notes and fix away when an issue under its rules is located in the
+ * director's newest edits (FA, requirement 5; node-helpers.js withoutDirectorsFindings).
+ *
+ * @param {Object} criteria
+ * @returns {Object<string, string[]>}
+ */
+function criteriaRulesOf(criteria) {
+  return Object.fromEntries(Object.entries(criteria || {})
+    .filter(([, criterion]) => criterion && Array.isArray(criterion.rules) && criterion.rules.length > 0)
+    .map(([key, criterion]) => [key, [...criterion.rules]]));
+}
+
 /** A criterion's notes and fix, as one text. */
 function criterionText(value) {
   if (!value || typeof value !== 'object') return '';
@@ -690,40 +700,34 @@ function opensWithName(finding, key) {
 }
 
 /**
- * The verdict guard (F1): an edit is the final word on its text, so a finding about the
- * director's text is the director's to weigh, never an automatic pass's task. It decides
- * what reaches the stop, what reaches the rework and whether the output is ready. With
- * no edits, nothing moves: the judge's issues and the truth lines are the structural
- * issues, a failed truth criterion holds the output, and the rework reads the judge's
- * criteria and guidance as they came, as before F1.
+ * The verdict guard (F1, completed by FA): an edit is the final word on its text, so a
+ * finding about the director's text is the director's to weigh, never an automatic
+ * pass's task. It decides what reaches the stop, what reaches the rework and whether the
+ * output is ready. With no edits, nothing moves: the judge's issues and the truth lines
+ * are the structural issues, a failed truth criterion holds the output, and the rework
+ * reads the judge's criteria, advisories and guidance as they came, as before F1.
  *
- * - The judge's own findings about a standing edit (an advisory, or a misfiled structural
- *   issue, opening with DIRECTOR_EDIT_PREFIX and a standing id) are written: a misfiled
- *   one moves as it is, and each counts as the finding under the rule ids, or the
- *   criterion name, it opens with. A failed truth criterion gets a truth line
- *   (truthIssueLines) only when the judge wrote no finding under it at all, so a truth
- *   criterion the judge wrote up as a concern is never restated as a must-fix.
- * - A structural issue moves to the concerns, under the prefix and the edit's id, when it
- *   quotes the text of an edit the output carries, or the text a cut removed, and none of
- *   the writer's text (lib/hand-edit-diff.js locateQuotedText). A record passage the
- *   writer's text prints is a citation of the record, not the writer's text (`record`;
- *   fix round 1, finding 2). Every other issue stays structural.
- * - A failed truth criterion holds the output only while an issue under its rule ids is
- *   still structural, or while its own notes quote the writer's text. One that does not
- *   hold is released.
- * - The director's criteria: each released truth criterion, and each criterion whose
- *   notes and fix quote an edit's text and none of the writer's. The rework reads their
- *   scores without their notes and fix (fix round 1, finding 1). A released criterion's
- *   point is already a concern, the finding under its rule ids that moved or that the
- *   judge wrote as one. Another of the director's criteria that failed joins the concerns
- *   unless a concern already covers it: one under its rule ids or its name or, for a
- *   criterion that scores no rule ids, one about the same edit.
+ * With edits standing (lib/hand-edit-diff.js locateQuotedText finds whose text a finding
+ * quotes: an edit's text, the text a cut removed, a sentence a rewrite removed):
+ * - A structural issue that quotes the director's text moves to the concerns, under the
+ *   prefix and the edits' ids, whatever else it quotes (FA, requirement 1): in such an
+ *   issue a quote of the writer's text is usually where the problem sits or where a fix
+ *   would go. A finding the judge filed under the prefix and a standing id moves as it is.
+ * - A judge's advisory that quotes the director's text is a concern in its place, never a
+ *   suggestion for the rework (FA, requirement 6).
+ * - A criterion whose notes or fix quote the director's text keeps them from the rework
+ *   (final review, finding 1), and one that failed joins the concerns unless a concern
+ *   already covers it: one under its rule ids or its name or, for a criterion with no
+ *   rule ids, one about the same edit.
+ * - A criterion a concern covers keeps its notes and fix from the rework, and holds the
+ *   output only while a structural issue under its rule ids remains (FA, requirement 5).
+ *   A failed truth criterion that no finding names and no concern covers is a must-fix
+ *   line (truthIssueLines).
  * - The judge's guidance (one step per structural issue) stays out of the rework when an
- *   issue moved, or when it quotes an edit's text: its steps would fix the director's text.
- * - Ready: no truth criterion holds, every structural issue moved, and the guard found the
- *   judge's findings in the director's text (an issue moved, or one of the director's
- *   criteria is a structural one that failed). Otherwise not ready when a truth criterion
- *   holds, else the judge's own word (structuralPassed, else ready).
+ *   issue moved, or when it quotes the director's text: its steps would fix that text.
+ * - Ready: no structural issue remains, and every structural criterion that failed is one
+ *   a concern covers (FA, requirement 5). The judge's own structuralPassed does not hold
+ *   an output with nothing left to fix (final review, finding 6).
  *
  * @param {Object} args
  * @param {Object} args.evaluation - the judge's output
@@ -731,15 +735,18 @@ function opensWithName(finding, key) {
  * @param {Object[]} args.edits - judgedEdits
  * @param {Object|null} args.output - judgedOutput
  * @param {string[]} [args.record] - recordTexts, the record as the judge read it
- * @returns {{kept: string[], moved: string[], concerns: string[], failedTruth: Array,
- *            holding: Array, ready: boolean, criteriaScores: Object, revisionGuidance: string}}
- *   `kept`: the structural issues; `moved` and `concerns`: the findings about the
- *   director's edits for the stop, after the judge's own advisories; `criteriaScores` and
- *   `revisionGuidance`: what the rework reads (validationResults)
+ * @returns {{kept: string[], moved: string[], concerns: string[], advisories: string[],
+ *            failedTruth: Array, holding: string[], ready: boolean, criteriaScores: Object,
+ *            revisionGuidance: string}}
+ *   `kept`: the structural issues; `advisories`: the judge's advisories, each that quotes
+ *   the director's text as a concern in its place; `moved` and `concerns` (from criteria):
+ *   the other findings about the director's edits; `holding`: the criteria that hold the
+ *   output; `criteriaScores` and `revisionGuidance`: what the rework reads (validationResults)
  */
 function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }) {
   const judged = evaluation && typeof evaluation === 'object' ? evaluation : {};
   const issues = judged.structuralIssues || [];
+  const advisories = Array.isArray(judged.advisoryWarnings) ? judged.advisoryWarnings : [];
   const failedTruth = failedTruthCriteria(judged, criteria);
   const judgeReady = judged.structuralPassed !== undefined ? judged.structuralPassed : judged.ready;
   if (!Array.isArray(edits) || edits.length === 0) {
@@ -747,8 +754,9 @@ function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }
       kept: [...issues, ...truthIssueLines(failedTruth, issues)],
       moved: [],
       concerns: [],
+      advisories,
       failedTruth,
-      holding: failedTruth,
+      holding: failedTruth.map(({ key }) => key),
       ready: failedTruth.length > 0 ? false : judgeReady,
       criteriaScores: judged.criteriaScores,
       revisionGuidance: judged.revisionGuidance
@@ -757,79 +765,74 @@ function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }
 
   const standing = new Set(edits.map((edit) => edit.id));
   const aboutStanding = (text) => concernEditIds(text).some((id) => standing.has(id));
-  const locate = (text) => locateQuotedText(text, edits, output, { record });
-
-  const filed = [...issues, ...(Array.isArray(judged.advisoryWarnings) ? judged.advisoryWarnings : [])].filter(aboutStanding);
-  const filedFindings = filed.map(concernFinding);
-  const truthLines = truthIssueLines(
-    failedTruth.filter(({ key }) => !filedFindings.some((finding) => opensWithName(finding, key))),
-    [...issues, ...filedFindings]
-  );
+  const quotedEdits = (text) => locateQuotedText(text, edits, output, { record }).editIds;
 
   const kept = [];
   const moved = [];
-  for (const issue of [...issues, ...truthLines]) {
+  issues.forEach((issue) => {
     if (aboutStanding(issue)) {
       moved.push(issue);
-      continue;
+      return;
     }
-    const { editIds, writer } = locate(issue);
-    if (editIds.length > 0 && !writer) moved.push(directorEditConcern(editIds, issue));
+    const ids = quotedEdits(issue);
+    if (ids.length > 0) moved.push(directorEditConcern(ids, issue));
     else kept.push(issue);
-  }
-
-  const holding = failedTruth.filter(({ rules, notes }) =>
-    kept.some((issue) => leadingRuleIds(issue).some((id) => rules.includes(id))) || locate(notes).writer);
-  const released = failedTruth.filter((criterion) => !holding.includes(criterion)).map(({ key }) => key);
-
-  const scores = judged.criteriaScores && typeof judged.criteriaScores === 'object' ? judged.criteriaScores : {};
-  const directors = new Map(released.map((key) => [key, []]));   // criterion -> the edits its notes quote
-  Object.entries(scores).forEach(([key, value]) => {
-    if (directors.has(key)) return;
-    const { editIds, writer } = locate(criterionText(value));
-    if (editIds.length > 0 && !writer) directors.set(key, editIds);
+  });
+  const advisoriesOut = advisories.map((advisory) => {
+    if (aboutStanding(advisory)) return advisory;
+    const ids = quotedEdits(advisory);
+    return ids.length > 0 ? directorEditConcern(ids, advisory) : advisory;
   });
 
-  const written = [...filed, ...moved];
-  const covered = (key, ids) => {
-    const rules = (criteria && criteria[key] && Array.isArray(criteria[key].rules)) ? criteria[key].rules : [];
-    return written.some((concern) => {
-      const finding = concernFinding(concern) || '';
-      if (opensWithName(finding, key)) return true;
-      return rules.length > 0
-        ? leadingRuleIds(finding).some((id) => rules.includes(id))
-        : concernEditIds(concern).some((id) => ids.includes(id));
-    });
+  const scores = judged.criteriaScores && typeof judged.criteriaScores === 'object' ? judged.criteriaScores : {};
+  const rulesOf = (key) => (criteria && criteria[key] && Array.isArray(criteria[key].rules) ? criteria[key].rules : []);
+  const quoting = new Map();   // criterion -> the edits its notes and fix quote
+  Object.entries(scores).forEach(([key, value]) => {
+    const ids = quotedEdits(criterionText(value));
+    if (ids.length > 0) quoting.set(key, ids);
+  });
+  const covers = (concern, key) => {
+    const finding = concernFinding(concern) || '';
+    if (opensWithName(finding, key)) return true;
+    const rules = rulesOf(key);
+    return rules.length > 0
+      ? leadingRuleIds(finding).some((id) => rules.includes(id))
+      : concernEditIds(concern).some((id) => (quoting.get(key) || []).includes(id));
   };
-  const concerns = [...directors]
-    .filter(([key, ids]) => !released.includes(key) && scoredBelowBar(scores[key]) && criterionText(scores[key]) && !covered(key, ids))
-    .map(([key, ids]) => {
-      const rules = (criteria && criteria[key] && Array.isArray(criteria[key].rules)) ? criteria[key].rules : [];
-      return directorEditConcern(ids, `${rules.length > 0 ? rules.join(', ') : key}: ${criterionText(scores[key])}`);
-    });
+  const written = [...moved, ...advisoriesOut.filter((advisory) => !forTheRework(advisory))];
+  const concerns = [...quoting]
+    .filter(([key]) => scoredBelowBar(scores[key]) && criterionText(scores[key]) && !written.some((concern) => covers(concern, key)))
+    .map(([key, ids]) => directorEditConcern(ids, `${rulesOf(key).length > 0 ? rulesOf(key).join(', ') : key}: ${criterionText(scores[key])}`));
+  const covered = (key) => [...written, ...concerns].some((concern) => covers(concern, key));
 
   const criteriaScores = judged.criteriaScores && typeof judged.criteriaScores === 'object'
     ? Object.fromEntries(Object.entries(judged.criteriaScores).map(([key, value]) => {
-      if (!directors.has(key) || !value || typeof value !== 'object') return [key, value];
+      if (!(covered(key) || quoting.has(key)) || !value || typeof value !== 'object') return [key, value];
       const { notes, fix, ...score } = value;
       return [key, score];
     }))
     : judged.criteriaScores;
 
-  const guidance = judged.revisionGuidance;
-  const guidanceAboutEdits = moved.length > 0 || (typeof guidance === 'string' && locate(guidance).editIds.length > 0);
+  kept.push(...truthIssueLines(
+    failedTruth.filter(({ key }) => !covered(key)),
+    [...kept, ...written.map((concern) => concernFinding(concern) || '')]
+  ));
 
-  const directorsFailure = moved.length > 0 || [...directors.keys()]
-    .some((key) => criteria && criteria[key] && criteria[key].type === 'structural' && scoredBelowBar(scores[key]));
-  const ready = holding.length > 0 ? false : (kept.length === 0 && directorsFailure ? true : judgeReady);
+  const holding = Object.keys(scores).filter((key) => criteria && criteria[key] && criteria[key].type === 'structural'
+    && scoredBelowBar(scores[key])
+    && (!covered(key) || kept.some((issue) => leadingRuleIds(issue).some((id) => rulesOf(key).includes(id)))));
+
+  const guidance = judged.revisionGuidance;
+  const guidanceAboutEdits = moved.length > 0 || (typeof guidance === 'string' && quotedEdits(guidance).length > 0);
 
   return {
     kept,
     moved,
     concerns,
+    advisories: advisoriesOut,
     failedTruth,
     holding,
-    ready,
+    ready: kept.length === 0 && holding.length === 0,
     criteriaScores,
     revisionGuidance: guidanceAboutEdits ? '' : guidance
   };
@@ -1700,7 +1703,9 @@ ${advisory.text}`;
 /**
  * The director's edits in the judged output (F1; spec 2026-10-02 section 7), for the
  * outline and article judges of both themes, right after the output they judge: each by
- * id, with its section and the director's text, or for a cut the text removed. The text
+ * id, with its place and the director's text, or for a cut the text removed; under a
+ * rewrite, each sentence it removed (FA). EDIT_LINES_GUIDE says how to read the lines,
+ * in the same words the reworks' <HAND_EDITS> block uses. The text
  * is the director's own and record, so the judge scores the writer's text, and a
  * disagreement with an edit goes in advisoryWarnings under DIRECTOR_EDIT_PREFIX and the
  * edit's id, where the verdict guard and the console find it. The rule is about the
@@ -1718,7 +1723,7 @@ function renderJudgeDirectorEdits(edits, phase, theme) {
   const output = phase === 'outline' ? 'the outline above' : 'the content bundle above';
   const example = `${DIRECTOR_EDIT_PREFIX}E1: ${theme === 'detective' ? 'evidenceIntegration' : 'T1'}: <the concern>`;
   return `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
-Each edit below is text the director wrote into ${output}, or cut from it (marked cut). An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${example}.
+Each edit below is text the director wrote into ${output}, or cut from it (marked cut). ${EDIT_LINES_GUIDE} An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, or would bring back a cut or a removed sentence, write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${example}.
 
 ${formatEditLines(list)}`;
 }
@@ -1737,15 +1742,11 @@ function renderJudgeCraft(phase) {
 ${craft}`;
 }
 
-/** The printed fields of each content block, by type (templates/journalist/partials/content-blocks). */
-const PRINTED_BLOCK_FIELDS = {
-  paragraph: ['type', 'text'],
-  quote: ['type', 'text', 'attribution'],
-  'evidence-reference': ['type', 'tokenId', 'caption'],
-  list: ['type', 'ordered', 'items'],
-  photo: ['type', 'filename', 'caption'],
-  'evidence-card': ['type', 'tokenId', 'headline', 'content', 'owner']
-};
+/**
+ * The printed fields of each content block, by type: the one list (lib/hand-edit-diff.js
+ * PRINTED_FIELDS), which the director's edits read their text from too (FA, known item 6).
+ */
+const PRINTED_BLOCK_FIELDS = PRINTED_FIELDS.blocks;
 
 /** `source`'s own values for `keys`, in that order; a key it lacks is left out. */
 function pickFields(source, keys) {
@@ -1779,14 +1780,14 @@ function printedBundle(bundle, shellAccounts) {
   if (!bundle || typeof bundle !== 'object') return {};
   const out = {};
   const tracker = printedWriterTracker(bundle.financialTracker, shellAccounts);
-  if (bundle.headline && typeof bundle.headline === 'object') out.headline = pickFields(bundle.headline, ['main', 'kicker', 'deck']);
-  if (bundle.byline && typeof bundle.byline === 'object') out.byline = pickFields(bundle.byline, ['author', 'title', 'guestReporter']);
-  if (bundle.heroImage && typeof bundle.heroImage === 'object') out.heroImage = pickFields(bundle.heroImage, ['filename', 'caption']);
+  if (bundle.headline && typeof bundle.headline === 'object') out.headline = pickFields(bundle.headline, PRINTED_FIELDS.headline);
+  if (bundle.byline && typeof bundle.byline === 'object') out.byline = pickFields(bundle.byline, PRINTED_FIELDS.byline);
+  if (bundle.heroImage && typeof bundle.heroImage === 'object') out.heroImage = pickFields(bundle.heroImage, PRINTED_FIELDS.heroImage);
   if (Array.isArray(bundle.sections)) {
     out.sections = bundle.sections
       .filter(section => section && typeof section === 'object')
       .map(section => ({
-        ...pickFields(section, ['id', 'heading']),
+        ...pickFields(section, PRINTED_FIELDS.section),
         content: (Array.isArray(section.content) ? section.content : [])
           .filter(block => block && typeof block === 'object')
           .map(block => pickFields(block, PRINTED_BLOCK_FIELDS[block.type] || ['type', 'text']))
@@ -1795,7 +1796,7 @@ function printedBundle(bundle, shellAccounts) {
   if (Array.isArray(bundle.evidenceCards)) {
     out.evidenceCards = bundle.evidenceCards
       .filter(entry => entry && typeof entry === 'object')
-      .map(entry => pickFields(entry, ['tokenId', 'headline', 'summary', 'significance']));
+      .map(entry => pickFields(entry, PRINTED_FIELDS.sidebarCard));
   }
   if (tracker) out.financialTracker = tracker;
   return out;
@@ -1817,9 +1818,9 @@ function printedWriterTracker(tracker, shellAccounts) {
   if (TemplateAssembler.prototype.overrideFinancialTracker(tracker, shellAccounts || []) !== tracker) return null;
   const entries = (Array.isArray(tracker.entries) ? tracker.entries : [])
     .filter(entry => entry && typeof entry === 'object')
-    .map(entry => pickFields(entry, ['description', 'amount']));
+    .map(entry => pickFields(entry, PRINTED_FIELDS.trackerEntry));
   if (entries.length === 0) return null;
-  return { entries, ...pickFields(tracker, ['totalExposed']) };
+  return { entries, ...pickFields(tracker, PRINTED_FIELDS.tracker) };
 }
 
 /** The outline judge's momentum questions as the detective judge reads them (parked, spec D13). */
@@ -2442,9 +2443,10 @@ function createEvaluator(phase, options = {}) {
         overallScore: evaluation.overallScore,
         // Commit 8.15: Separate structural issues from advisory warnings. F1: the
         // findings the guard moved, then the director's criteria it carried to the
-        // concerns, follow the judge's own advisories, for the stop.
+        // concerns, follow the judge's own advisories, for the stop. FA: an advisory that
+        // quotes the director's text is a concern in its own place (guard.advisories).
         structuralIssues: judgeStructuralIssues,
-        advisoryWarnings: [...(evaluation.advisoryWarnings || []), ...guard.moved, ...guard.concerns],
+        advisoryWarnings: [...guard.advisories, ...guard.moved, ...guard.concerns],
         issues: evaluation.issues || judgeStructuralIssues,  // Backward compat
         confidence: evaluation.confidence || 'medium',
         revisionNumber: currentRevisions
@@ -2470,6 +2472,7 @@ function createEvaluator(phase, options = {}) {
       // so no rework prompt ever reads "Ready: YES" above its own ISSUES TO
       // ADDRESS list.
       const factCheckIssues = factCheck ? factCheck.structuralIssues : [];
+      const criteriaRules = criteriaRulesOf(criteria);
       const buildValidationResults = (passed) => ({
         phase,
         passed: passed && factCheckIssues.length === 0,
@@ -2480,13 +2483,15 @@ function createEvaluator(phase, options = {}) {
         // F1: the concerns about the director's edits are the director's (the history
         // entry and _articleFactCheck carry them to the stop); the rework reads the rest.
         advisoryWarnings: [
-          ...(evaluation.advisoryWarnings || []),
+          ...guard.advisories,
           ...((factCheck && factCheck.advisoryWarnings) || [])
         ].filter(forTheRework),
         issues: evaluation.issues,
         // F1, fix round 1: the judge's criteria and guidance as the guard leaves them for
         // the rework, with no notes, fix or guidance step located in the director's text.
         criteriaScores: guard.criteriaScores,
+        // FA: each criterion's rule ids, for a later send-back's rework (withoutDirectorsFindings).
+        ...(Object.keys(criteriaRules).length > 0 && { criteriaRules }),
         confidence: evaluation.confidence || 'medium',
         revisionGuidance: guard.revisionGuidance,
         feedback: guard.revisionGuidance

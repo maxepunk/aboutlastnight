@@ -27,9 +27,10 @@
 // The one wording that points a writer at a document's text (R1); the fix lines
 // below use it so they name the document the way every prompt does.
 const { DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
-// F1 (spec 2026-10-02 section 7): which printed piece is one of the director's edits,
-// and the one prefix a concern about an edit opens with.
-const { editLocator, directorEditConcern } = require('./hand-edit-diff');
+// F1 and FA (spec 2026-10-02 section 7): which printed field is one of the director's
+// edits, the one prefix a concern about an edit opens with, the one rule for a section's
+// key (known item 7) and the one roster-name test.
+const { editLocator, directorEditConcern, sectionKey, namesPerson } = require('./hand-edit-diff');
 
 /**
  * Normalise for substring comparison: every single and double quotation mark,
@@ -415,10 +416,8 @@ function narratorSegments(contentBundle) {
   return segments;
 }
 
-/** A section's key as the director's edits address it (lib/hand-edit-diff.js: its id, else its index). */
-function sectionKeyOf(section, index) {
-  return section && section.id != null ? String(section.id) : `index-${index}`;
-}
+/** A section's key as the director's edits address it: hand-edit-diff.js's own rule (known item 7). */
+const sectionKeyOf = sectionKey;
 
 /** A short span of text for a message, with any em-dash spelled out (no message carries one). */
 function excerptOf(text) {
@@ -853,12 +852,16 @@ function describeLocations(locations) {
  *                                               phase 3 checks run for the journalist only
  * @param {Array}    [args.directorEdits]      - the director's edits the bundle carries
  *                                               (F1; the evaluator's judgedEdits). A structural
- *                                               hit in one of them, or caused by a cut, is an
- *                                               advisory under its id: an inline card whose
- *                                               block is an edit, a reporter-mode phrase in a
- *                                               block the director wrote, a photo reference in
- *                                               a block the director placed, a player whose
- *                                               only mention the director cut
+ *                                               hit in a field the director wrote, or caused
+ *                                               by the director's cut or rewrite, is an
+ *                                               advisory under its id (FA, field by field): a
+ *                                               card whose content the director wrote, a card
+ *                                               (inline or in the sidebar) the director edited
+ *                                               with an unknown source, a reporter-mode phrase
+ *                                               in a paragraph the director wrote, a photo
+ *                                               whose filename the director set, a player
+ *                                               whose last mention the director's version
+ *                                               dropped (the names the edit recorded)
  * @see BASELINE.md §4 for the measured failure classes each check addresses
  * @returns {{structuralIssues: string[], advisoryWarnings: string[],
  *            cardFidelity: Array<{tokenId: string, ok: boolean, reason: string|null,
@@ -918,8 +921,12 @@ function factCheckContentBundle({
   // location, and one message. The console counts the messages and lists the
   // items, so the two numbers agree.
   //
-  // F1: an inline card whose block is one of the director's edits is its own item, with
-  // the edit's id (`directorEdit`), and its message is an advisory under that id.
+  // F1 and FA: a defect in a field the director wrote is its own item, with the edit's
+  // id (`directorEdit`), and its message is an advisory under that id. A card's content
+  // is the director's only when the director wrote it (requirement 2): a card whose
+  // headline alone the director changed is still the writer's card. An unknown source is
+  // the director's on any card the director edited, inline or in the sidebar
+  // (requirement 10), because its fix may drop the card.
   const verdicts = new Map();   // tokenId + outcome + edit -> its cardFidelity item
   const leaks = new Set();      // tokenId + leaked string, reported once
   const note = (tokenId, reason, location, editId) => {
@@ -933,11 +940,10 @@ function factCheckContentBundle({
     item.locations.push(location);
   };
 
-  for (const { card, location, sectionKey } of cardOccurrences(bundle)) {
+  for (const { card, location, sectionKey: key } of cardOccurrences(bundle)) {
     const tokenId = String(card.tokenId == null ? '' : card.tokenId);
     const inline = location.placement === 'inline';
     const content = inline ? String(card.content == null ? '' : card.content) : '';
-    const editId = inline ? edits.block(sectionKey, card) : null;
 
     // 'leakedExample' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): a two-word substring
     // match, on strings the prompt files no longer ship. Printed content only.
@@ -952,9 +958,9 @@ function factCheckContentBundle({
     }
 
     const source = sources.get(tokenId);
-    if (!source) note(tokenId, 'unknown source', location, editId);
-    else if (!inline || isVerbatim(content, source)) note(tokenId, null, location, editId);
-    else note(tokenId, 'not verbatim', location, editId);
+    if (!source) note(tokenId, 'unknown source', location, inline ? edits.blockEdited(key, card) : edits.sidebarCard(card));
+    else if (!inline || isVerbatim(content, source)) note(tokenId, null, location, null);
+    else note(tokenId, 'not verbatim', location, edits.blockField(key, card, 'content'));
   }
 
   for (const item of cardFidelity) {
@@ -996,16 +1002,20 @@ function factCheckContentBundle({
 
   // ── 2. Roster coverage (BASELINE class 2) ─────────────────────────────────
   // F1: a player whose only mention the director cut is the director's call: an
-  // advisory under the cut's id. `missing` lists the writer's gaps alone.
+  // advisory under the cut's id. FA (requirement 9): only for a name the director's
+  // version no longer held when sent back, which the cut, or the rewrite that removed
+  // it, recorded; a gap a later pass made is the writer's. `missing` lists the
+  // writer's gaps alone.
   const names = rosterNames(roster);
   const prose = visibleText(bundle, theme);
-  const unnamed = names.filter(name => !new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(prose));
+  const unnamed = names.filter(name => !namesPerson(prose, name));
   const cutBy = new Map(unnamed.map(name => [name, edits.cutNaming(name)]));
   const missing = unnamed.filter(name => !cutBy.get(name));
+  const isCutEdit = (id) => asArray(directorEdits).some(e => e && e.id === id && (e.after === null || e.after === undefined));
   for (const [cutId, cutNames] of groupBy(unnamed.filter(name => cutBy.get(name)), name => cutBy.get(name))) {
     directorHit(cutId,
       `Roster coverage gap: ${cutNames.join(', ')} ${cutNames.length === 1 ? 'is' : 'are'} on the session roster, and the ` +
-      `director's cut removed the only place the article named ${cutNames.length === 1 ? cutNames[0] : 'each of them'}.`
+      `director's ${isCutEdit(cutId) ? 'cut' : 'rewrite'} removed the only place the article named ${cutNames.length === 1 ? cutNames[0] : 'each of them'}.`
     );
   }
   if (missing.length > 0) {
@@ -1032,17 +1042,17 @@ function factCheckContentBundle({
   const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
   const kept = Array.from(available).filter(filename => !excluded.has(filename) && !isWhiteboard(filename));
   const useKept = kept.length > 0 ? `Use one of [${kept.join(', ')}] or remove the reference.` : 'Remove the reference.';
-  // F1: each reference with the director's edit it sits in, if any (a photo block the
-  // director placed, or the hero the director set).
+  // F1 and FA (requirement 2): each reference with the director's edit that set its
+  // filename, if any (the hero's, or a photo block's).
   const referenced = [];
   if (bundle.heroImage && typeof bundle.heroImage === 'object' && bundle.heroImage.filename) {
-    referenced.push({ filename: String(bundle.heroImage.filename), editId: edits.field('heroImage') });
+    referenced.push({ filename: String(bundle.heroImage.filename), editId: edits.field('heroImage.filename') });
   }
   asArray(bundle.sections).forEach((section, index) => {
     if (!section || typeof section !== 'object') return;
     for (const block of asArray(section.content)) {
       if (block && typeof block === 'object' && block.type === 'photo' && block.filename) {
-        referenced.push({ filename: String(block.filename), editId: edits.block(sectionKeyOf(section, index), block) });
+        referenced.push({ filename: String(block.filename), editId: edits.blockField(sectionKeyOf(section, index), block, 'filename') });
       }
     }
   });
@@ -1088,11 +1098,11 @@ function factCheckContentBundle({
   const normProse = normalize(narratorText(bundle));
   const violations = [];
   // F1: the director's edit a phrase sits in, when every narrator piece that holds it
-  // is one (a paragraph the director wrote, or a headline field the director set). A
-  // phrase in the writer's prose, or across two pieces, is the writer's.
+  // is one (a paragraph's text the director wrote, or a headline field the director
+  // set). A phrase in the writer's prose, or across two pieces, is the writer's.
   const segmentEdits = narratorSegments(bundle).map(segment => ({
     text: normalize(segment.text),
-    editId: segment.field ? edits.field(segment.field) : edits.block(segment.sectionKey, segment.block)
+    editId: segment.field ? edits.field(segment.field) : edits.blockField(segment.sectionKey, segment.block, 'text')
   }));
   const directorsPhrase = (phrase) => {
     const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
@@ -1320,6 +1330,9 @@ function factCheckContentBundle({
 module.exports = {
   factCheckContentBundle,
   FACT_CHECK_ADVISORY_ONLY,
+  // FA (requirement 9): the roster's names as the coverage check reads them, which the
+  // send-back records a cut's names against (server.js buildResumePayload).
+  rosterNames,
   // Exported for targeted unit tests and reuse
   _testing: {
     normalize,
@@ -1330,6 +1343,7 @@ module.exports = {
     visibleText,
     narratorText,
     narratorSegments,
+    sectionKeyOf,
     stripQuotedSpans,
     findPronounNear,
     givenGenders,
