@@ -29,11 +29,12 @@
 const Ajv = require('ajv');
 const { WEAVE_SCHEMA } = require('./sdk-client/subagents');
 const {
-  STRUCK_KEY, MEETING_ROUNDS, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark, repeatedIds
+  STRUCK_KEY, MEETING_ROUNDS, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
+  weaveIdOf, repeatedIds
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
 const {
-  standingAtMeeting, carriedEdits, concernEditIds, editWhere, weaveMarks, handEditReportOf
+  standingAtMeeting, carriedEdits, concernEditIds, editWhere, weaveMarks, handEditReportOf, weaveEditsBetween
 } = require('./hand-edit-diff');
 
 /** The meeting's three actions: approve, and the director's two rounds. */
@@ -59,30 +60,54 @@ const validateDirectorWeave = new Ajv({ allErrors: true, strict: true }).compile
 /** The weave's collections whose elements name themselves by an id. */
 const ID_COLLECTIONS = ['threads', 'connections', 'questions'];
 
+/** Words joined as a list is read: "a", "a and b", "a, b and c". */
+function listOf(words) {
+  return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words.join('');
+}
+
 /**
- * What the director-side schema finds wrong with a weave, each problem with where it is,
+ * What the director-side schema finds wrong with a weave, as one refusal that says where,
  * or null for a weave it accepts. Past the schema, every thread, connection and question
  * has an id of its own (ruling 3): the edits, the strikes and the answers each find their
  * element by its id, which a schema cannot hold an array of objects to. A repeat is read
  * by the rule the checks and the diff read (lib/weave.js repeatedIds; fix round 1,
- * finding 3), so "t6" and "t6 " are one id here as there.
+ * finding 3), so "t6" and "t6 " are one id here as there. The refusal names who made the
+ * repeat (fix round 1, finding 2):
+ * - a repeat the weave the meeting showed does not hold is the director's: refused;
+ * - a repeat it holds is the writer's, a defect the checks report and a rework fixes. It
+ *   passes while the director leaves the elements under it as the meeting showed them, so
+ *   every action works, a reweave and a send-back among them, and the meeting offers no id
+ *   editing. A change under it is refused, since no edit could find the element changed
+ *   by its id (lib/hand-edit-diff.js weaveEditsBetween flags it `repeatedId`).
+ * With no weave shown to tell them apart, every repeat counts as the director's.
  *
  * @param {*} weave - the weave as the director left it, without its code-owned keys
+ * @param {Object} [options]
+ * @param {Object|null} [options.shown] - the weave the meeting showed, without its code-owned keys
  * @returns {string|null}
  */
-function directorWeaveProblems(weave) {
+function directorWeaveProblems(weave, { shown = null } = {}) {
   if (!weave || typeof weave !== 'object' || Array.isArray(weave)) {
     return 'The weave must be an object: the weave as the director left it.';
   }
   if (!validateDirectorWeave(weave)) {
-    return (validateDirectorWeave.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
+    const errors = (validateDirectorWeave.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
+    return `The weave as the director left it failed the director-side schema: ${errors}`;
   }
-  const doubled = ID_COLLECTIONS.flatMap((collection) => (
-    repeatedIds(weave[collection]).map((id) => `two ${collection} share the id "${id}"`)
-  ));
-  if (doubled.length === 0) return null;
-  const text = doubled.join('; ');
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}. Give each an id of its own.`;
+  const shownWeave = isWeave(shown) ? shown : null;
+  const theirs = ID_COLLECTIONS.flatMap((collection) => {
+    const writers = new Set(shownWeave ? repeatedIds(shownWeave[collection]) : []);
+    return repeatedIds(weave[collection]).filter((id) => !writers.has(id)).map((id) => `two ${collection} share the id "${id}"`);
+  });
+  if (theirs.length > 0) {
+    const text = theirs.join('; ');
+    return `${text.charAt(0).toUpperCase()}${text.slice(1)}: the director's changes made ${theirs.length > 1 ? 'these repeats' : 'this repeat'}. Give each an id of its own.`;
+  }
+  const touched = new Set((shownWeave ? weaveEditsBetween(shownWeave, weave) : [])
+    .filter((change) => change.repeatedId)
+    .map((change) => `two ${change.scope} the id "${weaveIdOf(change.at[1].match)}"`));
+  if (touched.size === 0) return null;
+  return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and reweave or send back: the rework gives each an id of its own.`;
 }
 
 /**
@@ -123,12 +148,12 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
   if (action !== 'send-back' && (sent === undefined || sent === null)) {
     return refuse(`${action === 'approve' ? 'An approve' : 'A reweave'} carries the weave as the director left it.`);
   }
+  const shown = weaveForPrompt(currentState.weave);
   const left = weaveForPrompt(sent === undefined || sent === null ? currentState.weave : sent);
-  const problems = directorWeaveProblems(left);
-  if (problems) return refuse(`The weave as the director left it failed the director-side schema: ${problems}`);
+  const problems = directorWeaveProblems(left, { shown });
+  if (problems) return refuse(problems);
 
   const mark = factCheckMarkOf(currentState.weave);
-  const shown = weaveForPrompt(currentState.weave);
   const baseline = isWeave(currentState._weaveBaseline) ? currentState._weaveBaseline : shown;
   const stateUpdates = {
     weave: mark ? withFactCheckMark(left, mark) : left,

@@ -83,13 +83,17 @@ describe("the director-side schema (R12)", () => {
   });
 
   // Ruling 3: every id join at the meeting (the edits, the strikes, the answers) reads ids,
-  // so the director's weave gives each thread, connection and question an id of its own.
-  it('refuses a weave in which two threads, connections or questions share an id, naming each', () => {
+  // so the director's changes give each thread, connection and question an id of its own.
+  // Fix round 1, finding 2: the refusal says who made the repeat.
+  it("refuses the repeats the director's changes made, naming each and the director", () => {
     const doubled = clone(FIXTURE_WEAVE);
     doubled.threads.push({ id: 't3', claim: 'A thread the director added under a taken id.', role: 'grounds-it' });
     doubled.connections.push({ ...clone(FIXTURE_WEAVE.connections[0]) });
     doubled.questions.push({ ...clone(FIXTURE_WEAVE.questions[0]) });
-    expect(directorWeaveProblems(doubled)).toBe('Two threads share the id "t3"; two connections share the id "c1"; two questions share the id "q1". Give each an id of its own.');
+    const theirs = 'Two threads share the id "t3"; two connections share the id "c1"; two questions share the id "q1": the director\'s changes made these repeats. Give each an id of its own.';
+    expect(directorWeaveProblems(doubled, { shown: clone(FIXTURE_WEAVE) })).toBe(theirs);
+    // With no weave shown to tell them apart, every repeat counts as the director's.
+    expect(directorWeaveProblems(doubled)).toBe(theirs);
     expect(directorWeaveProblems(clone(FIXTURE_WEAVE))).toBeNull();
   });
 
@@ -100,6 +104,56 @@ describe("the director-side schema (R12)", () => {
     const left = leftByDirector();
     left.threads.push({ id: 't6 ', claim: 'Riley burned the second ledger.', role: 'grounds-it' });
     expect(directorWeaveProblems(left)).toMatch(/threads share the id "t6"/);
+  });
+});
+
+// Fix round 1, finding 2: a repeat the writer made (the fact check's fix can add a thread
+// under a taken id, and no check rework follows the fix) is the writer's defect, which the
+// checks report. Refusing it would leave the meeting with no working action, since the
+// meeting offers no id editing. The gate lets every action through while the director
+// leaves the elements under it as the meeting showed them, so a reweave or a send-back can
+// fix it, and refuses only a change under it, which no edit could find by its id.
+describe('a repeated id the writer made (fix round 1, finding 2)', () => {
+  /** The writer's weave with a second thread under t2, as the fact check's fix might leave it. */
+  const writersRepeat = () => {
+    const weave = clone(FIXTURE_WEAVE);
+    weave.threads.push({ id: 't2', claim: 'A second thread the fix put under a taken id.', role: 'grounds-it', receipt: 'ledger' });
+    return weave;
+  };
+  const atRepeat = () => atMeeting({ weave: withFactCheckMark(writersRepeat(), { at: 't', ready: true, fixes: 1 }), _weaveBaseline: writersRepeat() });
+
+  it.each([
+    ['an approve', { meeting: 'approve', weave: writersRepeat() }],
+    ['a reweave', { meeting: 'reweave', weave: writersRepeat() }],
+    ['a send-back that carries only a note', { meeting: 'send-back', note: 'Give the two money threads ids of their own.' }]
+  ])('lets %s through while the director leaves those threads as the meeting showed them', (_name, approvals) => {
+    const result = meetingResume(approvals, atRepeat());
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates.weave.threads.filter((t) => t.id === 't2')).toHaveLength(2);
+  });
+
+  it("lets the director's other changes through beside it, as edits", () => {
+    const left = writersRepeat();
+    left.threads = left.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
+    left.questions = left.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar.' }));
+    const result = meetingResume({ meeting: 'reweave', weave: left }, atRepeat());
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].role']);
+  });
+
+  it('refuses a change under it, naming the writer and saying how to go on', () => {
+    const left = writersRepeat();
+    left.threads[left.threads.length - 1].role = 'mirrors-it';
+    const { error, stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atRepeat());
+    expect(error).toBe('The writer gave two threads the id "t2", so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and reweave or send back: the rework gives each an id of its own.');
+    expect(stateUpdates).toEqual({});
+  });
+
+  it('refuses a repeat the director made beside it, naming the director', () => {
+    const left = writersRepeat();
+    left.threads.push({ id: 't3', claim: 'A thread the director put under a taken id.', role: 'grounds-it' });
+    expect(meetingResume({ meeting: 'approve', weave: left }, atRepeat()).error)
+      .toBe('Two threads share the id "t3": the director\'s changes made this repeat. Give each an id of its own.');
   });
 });
 

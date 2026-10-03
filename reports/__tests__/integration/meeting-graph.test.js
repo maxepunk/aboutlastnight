@@ -295,6 +295,30 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     expect(reopened.data.marks).toBeNull();
   });
 
+  // Fix round 1, finding 2: the fact check's fix adds a thread under a taken id; no check
+  // rework follows a fix, so the meeting opens with the check failing. Every action still
+  // works: a send-back that carries only a note goes through, and its rework fixes it.
+  it("a repeated id the fact check's fix made leaves the meeting's actions working: a send-back with only a note goes through, and its rework fixes it", async () => {
+    const doubled = (weave) => ({
+      ...weaveForPrompt(clone(weave)),
+      threads: [...weave.threads, { id: 't2', claim: 'A second money thread the fix put under a taken id.', role: 'grounds-it', receipt: 'ledger' }]
+    });
+    const { graph, thread } = await toMeeting(scriptedSdk({ reworks: [doubled(writersWeave())], verdicts: [BREACH] }));
+    const meeting = await stopOf(graph, thread);
+    expect(meeting.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
+    expect(meeting.data.checkFailures.map((f) => f.type)).toEqual(['duplicate-id']);
+    expect(meeting.data.weave.threads.filter((t) => t.id === 't2')).toHaveLength(2);
+
+    const scripted = scriptedSdk({ reworks: [writersWeave()], verdicts: [CLEAN] });
+    thread.configurable.sdkClient = scripted;
+    await act(graph, thread, { meeting: 'send-back', note: 'Give the second money thread an id of its own.' });
+    const reopened = await stopOf(graph, thread);
+    expect(reopened.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
+    expect(scripted.calls).toEqual(['Arc revision 0', 'fact check']);
+    expect(reopened.data.checkFailures).toEqual([]);
+    expect(reopened.data.weave.threads.filter((t) => t.id === 't2')).toHaveLength(1);
+  });
+
   it("an automatic pass that times out after a director's round is retried free, and the round's count stays (ruling 5)", async () => {
     const fixed = (weave) => ({ ...weaveForPrompt(clone(weave)), threads: weave.threads.map((t) => (t.id === 't3' ? { ...t, claim: 'Morgan paid Riley at the bar.' } : t)) });
     const { graph, thread, snapshot } = await toMeeting(scriptedSdk({ verdicts: [CLEAN] }));
