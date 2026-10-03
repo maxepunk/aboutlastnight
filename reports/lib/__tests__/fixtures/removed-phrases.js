@@ -313,7 +313,19 @@ const REMOVED_PHRASES = [
   '### All Valid Evidence IDs for keyEvidence',
   'THE THREE LENSES IN analysisNotes',
   'ROSTER COVERAGE: Every name in SESSION ROSTER',
-  'Character Categories for characterPlacements'
+  'Character Categories for characterPlacements',
+
+  // Phase 4, 4.5: the no-culprit sentence named an accusation arc (ruling 11), and the
+  // weave's task restated C1 and C16, which state those rules once (ruling 10).
+  'The accusation arc is about that verdict',
+  'Place no character as the accused',
+  'Place no one as the accused',
+  "When the director's notes end with their own read of the session, the story starts from it",
+  'When the notes end without a read, the story is your proposal from the record',
+  'Every thread you find stays in the weave',
+  "only when another thread would carry a stronger story as the main thread (C1): that thread's id",
+  'the weave C16 (<craft-story>) sets out',
+  'each saying what its answer changes in print'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
