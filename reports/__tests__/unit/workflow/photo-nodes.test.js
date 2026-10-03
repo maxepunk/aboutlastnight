@@ -675,3 +675,100 @@ const _testing = {
   safeParseJson,
   PHOTO_ANALYSIS_SCHEMA
 };
+
+/**
+ * The leave-out box (phase 4, brief 4.2): the character-ID parse writes an explicit
+ * `exclude` into the mapping of every photo the stop showed, in each of its paths, after
+ * it builds the mappings and before finalizePhotoAnalyses reads them: true when the photo
+ * is on the leave-out list (its box was ticked), otherwise the parse's own value,
+ * otherwise false. The mapping then decides for every photo the director saw.
+ */
+describe('parseCharacterIds: the explicit leave-out mark in each path (brief 4.2)', () => {
+  const { parseCharacterIds } = require('../../../lib/workflow/nodes/photo-nodes');
+  const analyses = { analyses: ['a.jpg', 'b.jpg', 'c.jpg'].map((filename) => ({ filename, characterDescriptions: [] })) };
+  const mapping = (exclude, extra = {}) => ({ characterMappings: [], additionalCharacters: [], corrections: {}, ...extra, exclude });
+  const config = (sdk) => ({ configurable: { sdkClient: sdk, imagePromptBuilder: mockImagePromptBuilder } });
+
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('no text to parse (the stop sent structured ids, as its Skip does): marks every photo, the ticked one true', async () => {
+    const sdk = jest.fn();
+    const result = await parseCharacterIds({
+      characterIdsRaw: null,
+      characterIdMappings: {},
+      leftOutPhotos: ['b.jpg'],
+      photoAnalyses: analyses
+    }, config(sdk));
+
+    expect(sdk).not.toHaveBeenCalled();
+    expect(result.currentPhase).toBe(PHASES.PARSE_CHARACTER_IDS);
+    expect(result.characterIdMappings).toEqual({ 'a.jpg': mapping(false), 'b.jpg': mapping(true), 'c.jpg': mapping(false) });
+  });
+
+  it('structured mappings already given: keeps each one\'s own value and adds the box\'s', async () => {
+    const sdk = jest.fn();
+    const result = await parseCharacterIds({
+      characterIdsRaw: 'text from an earlier round',
+      characterIdMappings: { 'a.jpg': mapping(true, { characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }] }) },
+      leftOutPhotos: ['c.jpg'],
+      photoAnalyses: analyses
+    }, config(sdk));
+
+    expect(sdk).not.toHaveBeenCalled();
+    expect(result.characterIdMappings).toEqual({
+      'a.jpg': mapping(true, { characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }] }),
+      'b.jpg': mapping(false),
+      'c.jpg': mapping(true)
+    });
+  });
+
+  it('the parse of the director\'s text: the box decides over the parse, the text decides where the box is clear, every other photo is kept', async () => {
+    const sdk = jest.fn().mockResolvedValue({
+      photos: [
+        { filename: 'A.JPG', characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }], exclude: false },
+        { filename: 'b.jpg', exclude: true }
+      ]
+    });
+    const result = await parseCharacterIds({
+      characterIdsRaw: 'Photo A: Vic by the bar. Photo B: leave this one out.',
+      characterIdMappings: null,
+      leftOutPhotos: ['a.jpg'],
+      photoAnalyses: analyses,
+      roster: ['Vic']
+    }, config(sdk));
+
+    expect(sdk).toHaveBeenCalledTimes(1);
+    expect(result.characterIdMappings).toEqual({
+      'A.JPG': mapping(true, { characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }] }),
+      'b.jpg': mapping(true),
+      'c.jpg': mapping(false)
+    });
+  });
+
+  it('no photo analyses: the stop showed no photo, and the mappings stay empty as before', async () => {
+    const sdk = jest.fn();
+    const result = await parseCharacterIds({
+      characterIdsRaw: 'Photo A: Vic', characterIdMappings: null, leftOutPhotos: ['a.jpg'], photoAnalyses: { analyses: [] }
+    }, config(sdk));
+    expect(sdk).not.toHaveBeenCalled();
+    expect(result.characterIdMappings).toEqual({});
+  });
+
+  it('finalizePhotoAnalyses then leaves the ticked photo out with no model call', async () => {
+    const parsed = await parseCharacterIds({
+      characterIdsRaw: null, characterIdMappings: {}, leftOutPhotos: ['b.jpg'], photoAnalyses: analyses
+    }, config(jest.fn()));
+    const sdk = jest.fn();
+    const result = await finalizePhotoAnalyses({
+      photoAnalyses: analyses, characterIdMappings: parsed.characterIdMappings, roster: []
+    }, config(sdk));
+
+    expect(sdk).not.toHaveBeenCalled();
+    expect(result.photoAnalyses.analyses.map((a) => [a.filename, a.excluded === true])).toEqual([
+      ['a.jpg', false], ['b.jpg', true], ['c.jpg', false]
+    ]);
+  });
+});

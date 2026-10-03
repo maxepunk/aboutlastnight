@@ -950,12 +950,15 @@ function buildSessionFacts(state) {
  * and the hero entry (heroPhotoEntry). It also decides the hero choice (selectHeroImage)
  * and the fact check's usable photos (evaluator-nodes.js buildFactCheckArgs).
  *
- * The director excludes a photo at the character-IDs stop, and the parse stores the
- * decision as characterIdMappings[<filename>].exclude. That decision is read first. The
- * analysis's `excluded` mark, which finalizePhotoAnalyses sets from it, is the fallback
- * for a photo no mapping names: after a rollback to character-ids the analyses are kept
- * and the mappings parsed again, so the mark can be stale. Both are matched by photoKey
- * (basename, case-insensitive), as the parse's keys need not match a filename's case.
+ * The director leaves a photo out at the character-IDs stop with its "leave this photo
+ * out" box (phase 4, brief 4.2), and the parse writes an explicit decision into the
+ * mapping of every photo the stop showed, characterIdMappings[<filename>].exclude
+ * (lib/photo-leave-out.js). That decision is read first, so the box decides for every
+ * photo the director saw. The analysis's `excluded` mark, which finalizePhotoAnalyses
+ * sets from the mapping, is the fallback for a photo no mapping names: after a rollback
+ * to character-ids the analyses are kept and finalizePhotoAnalyses skips, so the mark can
+ * be stale. Both are matched by photoKey (basename, case-insensitive), as the parse's
+ * keys need not match a filename's case.
  *
  * @param {Object} state
  * @param {string} filename - a photo's filename or path

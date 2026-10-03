@@ -281,6 +281,21 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     });
   });
 
+  // Brief 4.2: the leave-out list is the boxes' record of the mappings' exclusions, so it
+  // is cleared with them. A rollback that re-opens the character-IDs stop shows every box
+  // clear, and a photo the director unticks there comes back.
+  describe('the leave-out list (phase 4, brief 4.2)', () => {
+    test.each(Object.keys(ROLLBACK_CLEARS))('%s clears leftOutPhotos exactly where it clears characterIdMappings', (point) => {
+      const list = ROLLBACK_CLEARS[point];
+      expect(list.includes('leftOutPhotos')).toBe(list.includes('characterIdMappings'));
+    });
+
+    test('the four points that clear the mappings clear the list', () => {
+      ['paper-evidence-selection', 'await-roster', 'photos', 'character-ids']
+        .forEach((point) => expect(ROLLBACK_CLEARS[point]).toContain('leftOutPhotos'));
+    });
+  });
+
   // Brief 2.7: each stop's trace holds the automatic passes of the round that its
   // feedback slot belongs to, and follows that side's hand-edit fields through every
   // clear: send back (server-build-resume-payload.test.js), approve

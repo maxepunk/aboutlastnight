@@ -9,14 +9,15 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (80 total - includes revision context + human feedback):
+ * State Fields (81 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections,
  *     inputReviewCorrections
  *   - Fetched Data: memoryTokens, paperEvidence, sessionPhotos
  *   - User Selection (8.9): selectedPaperEvidence
- *   - Photo Analysis (8.6): photoAnalyses, characterIdMappings, photoDescriptions
+ *   - Photo Analysis (8.6): photoAnalyses, characterIdMappings, photoDescriptions,
+ *     leftOutPhotos (phase 4, brief 4.2)
  *   - Preprocessed Data: preprocessedEvidence (Commit 8.5)
  *   - Curated Data: evidenceBundle
  *   - Arc Specialists (8.6): specialistAnalyses
@@ -389,6 +390,22 @@ const ReportStateAnnotation = Annotation.Root({
    * same input.
    */
   photoDescriptions: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * The photos the director left out, each filename once (phase 4, brief 4.2; spec
+   * 2026-10-02 section 8). The character-IDs stop's "leave this photo out" boxes write it
+   * (buildResumePayload), and lib/photo-leave-out.js leavePhotosOut adds to it, setting
+   * each photo's mapping to exclude it. The character-ID parse writes an explicit
+   * `exclude` into the mapping of every photo the stop showed, true for each one on
+   * this list, and isPhotoExcluded reads the mapping first.
+   *
+   * Cleared at the same rollback points as characterIdMappings, whose exclusions it
+   * records.
+   */
+  leftOutPhotos: Annotation({
     reducer: replaceReducer,
     default: () => null
   }),
@@ -898,7 +915,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (80 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace)
+ * Get default state with all fields initialized (81 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -940,6 +957,7 @@ function getDefaultState() {
     characterIdMappings: null,
     characterIdsRaw: null,  // Natural language character ID input (Commit 8.9.x)
     photoDescriptions: null,  // Phase 2 brief 2.2: the director's photo descriptions by filename
+    leftOutPhotos: null,  // Phase 4 brief 4.2: the photos the director left out
     // Preprocessed data (Commit 8.5)
     preprocessedEvidence: null,
     characterData: null,  // Character groups, relationships, roles (pre-curation extraction)
@@ -1234,7 +1252,7 @@ const ROLLBACK_CLEARS = {
     // whiteboardPhotoPath/genericPhotoAnalyses) are NOT cleared here —
     // preprocessPhotos still skips on preprocessStats, so the resize is not re-paid,
     // only the analysis.
-    'photoAnalyses', 'characterIdMappings', 'photoDescriptions',
+    'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
@@ -1256,7 +1274,7 @@ const ROLLBACK_CLEARS = {
     'whiteboardAnalysis',
     // v2 I2: photoAnalyses travels with characterIdMappings. This gate captures the
     // roster, and both outputs are keyed to it.
-    'photoAnalyses', 'characterIdMappings', 'photoDescriptions',
+    'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
@@ -1358,7 +1376,7 @@ const ROLLBACK_CLEARS = {
   // stubs for outline + article instead (lib/api-helpers.js PHASES_INVALIDATED_BY).
   'photos': [
     'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses',
-    'photoAnalyses', 'characterIdMappings', 'photoDescriptions',
+    'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'heroImage', 'arcEvidencePackages',
     'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
@@ -1378,9 +1396,11 @@ const ROLLBACK_CLEARS = {
   // identifiedCharacters, so the re-entered mappings do NOT reach the captions. The
   // fix is either clearing photoAnalyses here too (a Haiku re-run) or making that
   // skip compare the mappings; it is out of scope and recorded in the plan's
-  // Follow-ups. Roll back to `photos` to actually redo them.
+  // Follow-ups. Roll back to `photos` to actually redo them. The exclusions do not wait
+  // on it: the parse writes each shown photo's explicit `exclude` into its mapping, which
+  // isPhotoExcluded reads before the analysis's mark (brief 4.2).
   'character-ids': [
-    'characterIdMappings', 'photoDescriptions',
+    'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'heroImage', 'arcEvidencePackages',
     'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
@@ -1487,7 +1507,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 80
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 81
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

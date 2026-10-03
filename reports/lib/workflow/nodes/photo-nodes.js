@@ -39,6 +39,8 @@ const { preprocessImages, formatFileSize } = require('../../image-preprocessor')
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 // Commit 8.11 fix: Import from shared module to break circular dependency
 const { CHARACTER_IDS_PHOTO_TEMPLATE, PARSED_CHARACTER_IDS_SCHEMA } = require('../../schemas/character-ids');
+// Brief 4.2: the leave-out box's explicit mark in every photo's mapping
+const { shownPhotos, withExplicitExclusions } = require('../../photo-leave-out');
 
 /**
  * Default data directory for session outputs
@@ -594,6 +596,20 @@ The caption should be suitable for a NovaNews investigative article - dramatic b
 // CHARACTER_IDS_PHOTO_TEMPLATE and PARSED_CHARACTER_IDS_SCHEMA imported from schemas/character-ids.js
 
 /**
+ * The leave-out box's explicit mark (phase 4, brief 4.2), as a state update: the
+ * mappings with an `exclude` in the mapping of every photo the character-IDs stop showed
+ * (lib/photo-leave-out.js withExplicitExclusions). Nothing when the stop showed no photo.
+ *
+ * @param {Object} state
+ * @param {Object|null} mappings
+ * @returns {Object}
+ */
+function explicitExclusions(state, mappings) {
+  if (shownPhotos(state).length === 0) return {};
+  return { characterIdMappings: withExplicitExclusions(mappings, state) };
+}
+
+/**
  * Parse natural language character IDs into structured format
  *
  * Converts user's natural language input (e.g., "Far left: Morgan, Center: Victoria")
@@ -603,7 +619,14 @@ The caption should be suitable for a NovaNews investigative article - dramatic b
  *
  * Skip logic: If characterIdMappings already exists and is structured, skip parsing.
  *
- * @param {Object} state - Current state with photoAnalyses, characterIdsRaw
+ * The leave-out box (phase 4, brief 4.2): in each path, once the mappings are built and
+ * before finalizePhotoAnalyses reads them, every photo the stop showed gets an explicit
+ * `exclude` in its mapping: true when it is on the leave-out list (its box was ticked),
+ * otherwise the parse's own value, otherwise false. isPhotoExcluded reads the mapping
+ * first, so the box decides, and a stale analysis mark never decides for a photo the
+ * director saw.
+ *
+ * @param {Object} state - Current state with photoAnalyses, characterIdsRaw, leftOutPhotos
  * @param {Object} config - Graph config with optional configurable.sdkClient
  * @returns {Object} Partial state update with characterIdMappings
  */
@@ -614,6 +637,7 @@ async function parseCharacterIds(state, config) {
   if (!state.characterIdsRaw) {
     console.log('[parseCharacterIds] Skipping - no characterIdsRaw to parse');
     return {
+      ...explicitExclusions(state, state.characterIdMappings),
       currentPhase: PHASES.PARSE_CHARACTER_IDS
     };
   }
@@ -622,6 +646,7 @@ async function parseCharacterIds(state, config) {
   if (state.characterIdMappings && Object.keys(state.characterIdMappings).length > 0 && !state._characterIdsParsed) {
     console.log('[parseCharacterIds] Skipping - structured characterIdMappings already provided');
     return {
+      ...explicitExclusions(state, state.characterIdMappings),
       currentPhase: PHASES.PARSE_CHARACTER_IDS
     };
   }
@@ -701,7 +726,8 @@ async function parseCharacterIds(state, config) {
     }
 
     return {
-      characterIdMappings,
+      // Brief 4.2: the parse's mappings with every shown photo's explicit mark.
+      characterIdMappings: withExplicitExclusions(characterIdMappings, state),
       _characterIdsParsed: true,  // Flag to indicate this came from parsing
       currentPhase: PHASES.PARSE_CHARACTER_IDS
     };

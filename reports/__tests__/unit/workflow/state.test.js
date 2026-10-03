@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 80 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 81 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -230,6 +230,7 @@ describe('ReportStateAnnotation', () => {
         'characterIdMappings',
         'characterIdsRaw',  // Commit 8.9.x
         'photoDescriptions',  // Phase 2 brief 2.2: the director's photo descriptions by filename
+        'leftOutPhotos',  // Phase 4 brief 4.2: the photos the director left out
         // Preprocessed data (Commit 8.5)
         'preprocessedEvidence',
         'characterData',  // Character groups, relationships, roles (pre-curation extraction)
@@ -465,7 +466,12 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(80);
+      expect(Object.keys(getDefaultState()).length).toBe(81);
+    });
+
+    it('declares the leave-out list (phase 4, brief 4.2)', () => {
+      expect(Object.keys(ReportStateAnnotation.spec)).toContain('leftOutPhotos');
+      expect(getDefaultState().leftOutPhotos).toBeNull();
     });
 
     it('declares the channels for the director\'s own words (phase 2, brief 2.2)', () => {
